@@ -5,19 +5,19 @@ declare module "react-router" {
 		cloudflare: {
 			env: Env;
 			ctx: ExecutionContext;
+			cf?: IncomingRequestCfProperties;
 		};
 	}
 }
 
-const requestHandler = createRequestHandler({
+export default createRequestHandler({
 	build: () => import("virtual:react-router/server-build"),
 	mode: import.meta.env.MODE,
-}) as any;
-
-export default {
-	async fetch(request, env, ctx) {
-		return requestHandler(request, {
-			cloudflare: { env, ctx },
-		});
-	},
-} satisfies ExportedHandler<Env>;
+	getLoadContext: ({ request, context }) => ({
+		cloudflare: {
+			env: (context as any).cloudflare?.env || {},
+			ctx: (context as any).cloudflare?.ctx || context,
+			cf: request.cf || {},
+		},
+	}),
+});

@@ -3,6 +3,7 @@ declare module "react-router" {
 		cloudflare: {
 			env: Env;
 			ctx: ExecutionContext;
+			cf?: IncomingRequestCfProperties;
 		};
 	}
 }

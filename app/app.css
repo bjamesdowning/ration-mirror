@@ -1,15 +1,25 @@
-@import "tailwindcss" source(".");
+@import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+:root {
+  --neon-green: #39FF14;
+  --void-dark: #051105;
 }
 
-html,
-body {
-  @apply bg-white dark:bg-gray-950;
+@theme {
+  --color-neon-green: var(--neon-green);
+  --color-void-dark: var(--void-dark);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+@layer base {
+  body {
+    background-color: var(--void-dark);
+    color: var(--neon-green);
+    font-family: var(--font-mono);
+  }
+
+  /* Brutalist Reset */
+  * {
+    border-radius: 0px !important;
   }
 }

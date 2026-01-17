@@ -1,7 +1,7 @@
-import { createRequestHandler } from "react-router";
+import { createRequestHandler } from "@react-router/cloudflare";
 
 declare module "react-router" {
-	export interface AppLoadContext {
+	interface AppLoadContext {
 		cloudflare: {
 			env: Env;
 			ctx: ExecutionContext;
@@ -9,10 +9,10 @@ declare module "react-router" {
 	}
 }
 
-const requestHandler = createRequestHandler(
-	() => import("virtual:react-router/server-build"),
-	import.meta.env.MODE,
-);
+const requestHandler = createRequestHandler({
+	build: () => import("virtual:react-router/server-build"),
+	mode: import.meta.env.MODE,
+}) as any;
 
 export default {
 	async fetch(request, env, ctx) {

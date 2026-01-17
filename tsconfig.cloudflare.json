@@ -6,7 +6,8 @@
 		"app/**/.server/**/*",
 		"app/**/.client/**/*",
 		"workers/**/*",
-		"worker-configuration.d.ts"
+		"worker-configuration.d.ts",
+		"load-context.ts"
 	],
 	"compilerOptions": {
 		"composite": true,
@@ -16,6 +17,7 @@
 		"target": "ES2022",
 		"module": "ES2022",
 		"moduleResolution": "bundler",
+		"customConditions": ["workerd", "worker", "browser", "react-server"],
 		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"rootDirs": [".", "./.react-router/types"],

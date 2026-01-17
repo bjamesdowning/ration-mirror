@@ -103,15 +103,15 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-	let message = "Oops!";
-	let details = "An unexpected error occurred.";
+	let message = "SYSTEM FAILURE";
+	let details = "UNEXPECTED ANOMALY DETECTED.";
 	let stack: string | undefined;
 
 	if (isRouteErrorResponse(error)) {
-		message = error.status === 404 ? "404" : "Error";
+		message = error.status === 404 ? "404 :: NOT FOUND" : "SYSTEM ERROR";
 		details =
 			error.status === 404
-				? "The requested page could not be found."
+				? "THE REQUESTED RESOURCE COULD NOT BE LOCATED IN THE DATABANKS."
 				: error.statusText || details;
 	} else if (import.meta.env.DEV && error && error instanceof Error) {
 		details = error.message;
@@ -119,14 +119,39 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 	}
 
 	return (
-		<main className="pt-16 p-4 container mx-auto text-white">
-			<h1 className="text-2xl font-bold">{message}</h1>
-			<p>{details}</p>
-			{stack && (
-				<pre className="w-full p-4 overflow-x-auto bg-black/50 mt-4 text-xs">
-					<code>{stack}</code>
-				</pre>
-			)}
+		<main className="min-h-screen bg-[#051105] text-red-500 font-mono flex flex-col items-center justify-center p-4 relative overflow-hidden">
+			{/* Scanline Effect */}
+			<div className="pointer-events-none fixed inset-0 z-50 bg-[linear-gradient(rgba(255,0,0,0.03)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(255,0,0,0.02),rgba(255,0,0,0.06))] bg-[length:100%_4px,3px_100%] bg-repeat" />
+
+			<div className="max-w-2xl w-full border border-red-500/50 p-8 relative bg-[#0f0505]">
+				<div className="absolute top-0 left-0 w-2 h-2 bg-red-500" />
+				<div className="absolute top-0 right-0 w-2 h-2 bg-red-500" />
+				<div className="absolute bottom-0 left-0 w-2 h-2 bg-red-500" />
+				<div className="absolute bottom-0 right-0 w-2 h-2 bg-red-500" />
+
+				<h1
+					className="text-4xl font-black mb-4 glitch-text"
+					data-text={message}
+				>
+					{message}
+				</h1>
+				<div className="h-px bg-red-500/30 w-full mb-6" />
+				<p className="text-lg mb-8 uppercase tracking-widest">{details}</p>
+
+				{stack && (
+					<pre className="w-full p-4 overflow-x-auto bg-black border border-red-900 mb-8 text-xs text-red-400">
+						<code>{stack}</code>
+					</pre>
+				)}
+
+				<button
+					type="button"
+					onClick={() => window.location.reload()}
+					className="group relative px-8 py-3 bg-transparent border border-red-500 text-red-500 uppercase tracking-[0.2em] hover:bg-red-500 hover:text-black transition-all duration-100"
+				>
+					<span className="relative z-10">REBOOT SYSTEM</span>
+				</button>
+			</div>
 		</main>
 	);
 }

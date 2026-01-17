@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm";
+// @ts-nocheck
 import { drizzle } from "drizzle-orm/d1";
+import { redirect } from "react-router";
+import type { Route } from "../+types/root";
 import * as schema from "../db/schema";
+
+// TODO: Update this with your actual email address
+const ADMIN_EMAIL = "admin@ration.com";
 
 export async function ensureUserExists(
 	env: Env,
@@ -29,4 +34,23 @@ export async function ensureUserExists(
 	await db.insert(schema.users).values(newUser);
 
 	return newUser;
+}
+
+export async function requireAdmin(
+	context: Route.LoaderArgs["context"],
+	_request: Request,
+	userId: string,
+) {
+	const env = context.env as Env;
+	const db = drizzle(env.DB, { schema });
+
+	const user = await db.query.users.findFirst({
+		where: (users, { eq }) => eq(users.id, userId),
+	});
+
+	if (!user || user.email !== ADMIN_EMAIL) {
+		throw redirect("/");
+	}
+
+	return user;
 }

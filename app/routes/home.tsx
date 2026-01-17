@@ -1,6 +1,6 @@
+import type { AppLoadContext } from "react-router";
 import { Welcome } from "../welcome/welcome";
 import type { Route } from "./+types/home";
-import type { AppLoadContext } from "react-router";
 import "../../load-context"; // Ensure augmentation is loaded
 
 export function meta(_: Route.MetaArgs) {

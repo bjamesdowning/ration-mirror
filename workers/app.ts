@@ -15,7 +15,9 @@ export default createRequestHandler({
 	mode: import.meta.env.MODE,
 	getLoadContext: ({ request, context }) => ({
 		cloudflare: {
+			// biome-ignore lint/suspicious/noExplicitAny: Worker context typing
 			env: (context as any).cloudflare?.env || {},
+			// biome-ignore lint/suspicious/noExplicitAny: Worker context typing
 			ctx: (context as any).cloudflare?.ctx || context,
 			cf: request.cf || {},
 		},

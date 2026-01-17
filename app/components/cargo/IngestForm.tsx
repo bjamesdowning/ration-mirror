@@ -27,6 +27,7 @@ export function IngestForm() {
 		if (
 			fetcher.state === "idle" &&
 			fetcher.data &&
+			// biome-ignore lint/suspicious/noExplicitAny: generic fetcher data
 			(fetcher.data as any).success
 		) {
 			formRef.current?.reset();

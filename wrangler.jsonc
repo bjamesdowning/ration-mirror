@@ -4,12 +4,9 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "application",
-	"compatibility_date": "2025-04-04",
+	"name": "ration",
+	"compatibility_date": "2026-01-17",
 	"main": "./workers/app.ts",
-	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	},
 	"observability": {
 		"enabled": true
 	},
@@ -39,6 +36,12 @@
 		{
 			"binding": "VECTOR_INDEX",
 			"index_name": "ration-index"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage"
 		}
 	],
 	"ai": {

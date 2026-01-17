@@ -70,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			.replace(/```/g, "")
 			.trim();
 
+		// biome-ignore lint/suspicious/noExplicitAny: JSON parse result
 		let detectedItems: any;
 		try {
 			detectedItems = JSON.parse(cleanedText);

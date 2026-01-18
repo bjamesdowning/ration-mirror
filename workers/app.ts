@@ -10,7 +10,7 @@ declare module "react-router" {
 	}
 }
 
-export default createRequestHandler({
+const handler = createRequestHandler({
 	build: () => import("virtual:react-router/server-build"),
 	mode: import.meta.env.MODE,
 	getLoadContext: ({ request, context }) => ({
@@ -19,7 +19,24 @@ export default createRequestHandler({
 			env: (context as any).cloudflare?.env || {},
 			// biome-ignore lint/suspicious/noExplicitAny: Worker context typing
 			ctx: (context as any).cloudflare?.ctx || context,
-			cf: request.cf || {},
+			// biome-ignore lint/suspicious/noExplicitAny: Worker context typing
+			cf: (context as any).cloudflare?.cf || request.cf || {},
 		},
 	}),
 });
+
+export default {
+	fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
+		return handler({
+			// biome-ignore lint/suspicious/noExplicitAny: Worker request typing
+			request: request as any,
+			env,
+			params: {},
+			waitUntil: ctx.waitUntil.bind(ctx),
+			passThroughOnException: ctx.passThroughOnException.bind(ctx),
+			next: () => Promise.resolve(new Response(null, { status: 404 })),
+			functionPath: "",
+			data: {},
+		});
+	},
+};

@@ -32,12 +32,11 @@ export const links: Route.LinksFunction = () => [
 	},
 ];
 
-export async function loader(args: Route.LoaderArgs) {
-	const { env } = args.context.cloudflare;
-
+export const loader = (args: Route.LoaderArgs) => {
 	return rootAuthLoader(
 		args,
-		async ({ auth }) => {
+		async ({ context, auth }) => {
+			const { env } = context.cloudflare;
 			let credits = 0;
 
 			// If user is authenticated, ensure they exist in our DB
@@ -76,11 +75,11 @@ export async function loader(args: Route.LoaderArgs) {
 			};
 		},
 		{
-			publishableKey: env.CLERK_PUBLISHABLE_KEY,
-			secretKey: env.CLERK_SECRET_KEY,
+			publishableKey: args.context.cloudflare.env.CLERK_PUBLISHABLE_KEY,
+			secretKey: args.context.cloudflare.env.CLERK_SECRET_KEY,
 		},
 	);
-}
+};
 
 export function Layout({ children }: { children: React.ReactNode }) {
 	const loaderData = useLoaderData<typeof loader>();

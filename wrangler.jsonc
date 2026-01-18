@@ -47,12 +47,18 @@
 	"ai": {
 		"binding": "AI"
 	},
-	/**
+	/*
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/
 	 */
 	"assets": {
 		"directory": "./build/client",
 		"binding": "ASSETS"
-	}
+	},
+	"routes": [
+		{
+			"pattern": "ration.mayutic.com",
+			"custom_domain": true
+		}
+	]
 }

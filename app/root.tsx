@@ -31,45 +31,53 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export async function loader(args: Route.LoaderArgs) {
-	return rootAuthLoader(args, async ({ context, auth }) => {
-		const { env } = context;
-		let credits = 0;
+	const { env } = args.context.cloudflare;
 
-		// If user is authenticated, ensure they exist in our DB
-		if (auth.userId) {
-			try {
-				const clerk = createClerkClient({
-					secretKey: env.CLERK_SECRET_KEY,
-					publishableKey: env.CLERK_PUBLISHABLE_KEY,
-				});
+	return rootAuthLoader(
+		args,
+		async ({ auth }) => {
+			let credits = 0;
 
-				const user = await clerk.users.getUser(auth.userId);
-				const primaryEmail = user.emailAddresses.find(
-					(e) => e.id === user.primaryEmailAddressId,
-				)?.emailAddress;
+			// If user is authenticated, ensure they exist in our DB
+			if (auth.userId) {
+				try {
+					const clerk = createClerkClient({
+						secretKey: env.CLERK_SECRET_KEY,
+						publishableKey: env.CLERK_PUBLISHABLE_KEY,
+					});
 
-				if (primaryEmail) {
-					try {
-						const dbUser = await ensureUserExists(
-							env,
-							auth.userId,
-							primaryEmail,
-						);
-						credits = dbUser.credits;
-					} catch (e) {
-						console.error("Failed to sync user", e);
+					const user = await clerk.users.getUser(auth.userId);
+					const primaryEmail = user.emailAddresses.find(
+						(e) => e.id === user.primaryEmailAddressId,
+					)?.emailAddress;
+
+					if (primaryEmail) {
+						try {
+							const dbUser = await ensureUserExists(
+								env,
+								auth.userId,
+								primaryEmail,
+							);
+							credits = dbUser.credits;
+						} catch (e) {
+							console.error("Failed to sync user", e);
+						}
 					}
+				} catch (e) {
+					console.error("Failed to fetch user from Clerk", e);
 				}
-			} catch (e) {
-				console.error("Failed to fetch user from Clerk", e);
 			}
-		}
 
-		return {
-			clerkPublishableKey: env.CLERK_PUBLISHABLE_KEY,
-			credits,
-		};
-	});
+			return {
+				clerkPublishableKey: env.CLERK_PUBLISHABLE_KEY,
+				credits,
+			};
+		},
+		{
+			publishableKey: env.CLERK_PUBLISHABLE_KEY,
+			secretKey: env.CLERK_SECRET_KEY,
+		},
+	);
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

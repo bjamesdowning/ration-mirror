@@ -13,9 +13,11 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { ClerkProvider } from "@clerk/react-router";
 import { createClerkClient } from "@clerk/react-router/api.server";
-import { rootAuthLoader } from "@clerk/react-router/ssr.server";
+import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { Status } from "./components/hud/Status";
 import { ensureUserExists } from "./lib/auth.server";
+
+export const middleware = [clerkMiddleware()];
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },

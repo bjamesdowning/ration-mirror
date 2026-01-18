@@ -10,14 +10,18 @@ trigger: always_on
 **Core Objective:** Zero-latency inventory tracking, AI-assisted logistical planning (recipes), and automated waste reduction.
 
 ## 2. Technology Stack (Strict Adherence, but always search and confirm the latest stable versions for each tool. Never use legacy tools)
-* **Framework:** React Router v7.11 (Framework Mode / `routes.ts`).
+* **Framework:** React Router v7.latest (Framework Mode / `routes.ts`).
 * **Runtime:** Cloudflare Workers (V8 Isolates). **NO Node.js APIs (fs, net).**
 * **Database:** Cloudflare D1 (SQLite) + Drizzle ORM.
+* **Object Store: Cloudflare R2 (S3 Compatible)
+* **Domain Zone Managment - DNS:** Cloudflare Domains
 * **Vector Search:** Cloudflare Vectorize (Semantic Search).
 * **Auth:** Clerk (@clerk/react-router) - Edge compatible.
 * **Styling:** Tailwind CSS v4.1.
-* **Language:** TypeScript v5.9 (Strict Mode).
-* **Package Manager:** pnpm v10.
+* **Language:** TypeScript (Strict Mode).
+* **Package Manager:** bun
+* **Linting:** biome.
+* **Payment Processing:** Stripe SDK
 
 ## 3. Functional Requirements (The "Manifest")
 * **Core:** User bio-safety (allergens), unit calibration (metric/imperial), and inventory CRUD (Dry/Frozen taxonomy).

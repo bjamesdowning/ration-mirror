@@ -5,14 +5,15 @@
 	"scripts": {
 		"build": "react-router build",
 		"cf-typegen": "wrangler types",
-		"deploy": "pnpm run build && wrangler deploy",
+		"deploy": "bun run build && wrangler deploy",
 		"dev": "react-router dev",
+		"dev:wrangler": "wrangler dev",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
-		"postinstall": "npm run cf-typegen",
-		"preview": "pnpm run build && vite preview",
+		"postinstall": "bun run cf-typegen",
+		"preview": "bun run build && vite preview",
 		"test:unit": "vitest run",
-		"typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
+		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b"
 	},
 	"dependencies": {
 		"@clerk/react-router": "^2.3.10",

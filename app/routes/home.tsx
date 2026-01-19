@@ -5,7 +5,10 @@ import "../../load-context"; // Ensure augmentation is loaded
 export function meta(_: Route.MetaArgs) {
 	return [
 		{ title: "RATION PROTOCOL /// INITIALIZE" },
-		{ name: "description", content: "Orbital Supply Chain Management System" },
+		{
+			name: "description",
+			content: "AI-Powered Pantry & Meal Planning System",
+		},
 	];
 }
 
@@ -36,7 +39,8 @@ export default function Home() {
 			<div className="relative z-50 bg-[#39FF14]/10 border-b border-[#39FF14] p-2 text-center">
 				<p className="text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold animate-pulse">
 					<span className="text-white">⚠ SYSTEM ALERT:</span> Construction in
-					Progress {"//"} v0.9.4-ALPHA
+					Progress {"//"} v0.9.4-ALPHA {"//"} DATA VOLATILITY: PERSISTENCE NOT
+					GUARANTEED
 				</p>
 			</div>
 
@@ -61,7 +65,7 @@ export default function Home() {
 								Ration<span className="text-white">.Protocol</span>
 							</h1>
 							<p className="text-[#39FF14]/80 text-lg md:text-xl tracking-widest uppercase max-w-2xl mx-auto border-l-2 border-[#39FF14] pl-4 text-left md:text-center md:border-l-0 md:border-t-0">
-								Orbital Supply Chain Management System
+								Orbital Pantry & Meal Planning Protocol
 							</p>
 						</div>
 
@@ -110,31 +114,32 @@ export default function Home() {
 						<div className="space-y-6 text-[#39FF14]/90">
 							<p className="text-lg leading-relaxed">
 								<strong className="text-white">Ration</strong> is a zero-latency
-								inventory tracking and logistics engine designed for
-								high-efficiency environments.
+								pantry management and meal planning engine designed to optimize
+								your kitchen's logistics.
 							</p>
 							<p className="leading-relaxed opacity-80">
-								The objective is simple: eliminate waste and streamline the
-								consumption cycle. Whether managing a single unit's daily intake
-								or a squadron's resupply manifest, Ration provides granular
-								control over your nutritional assets.
+								The objective is simple: eliminate domestic waste and streamline
+								your consumption cycle. By treating your pantry like a
+								high-stakes supply chain, Ration helps you manage inventory,
+								plan meals effectively, and ensure you never run out of critical
+								assets.
 							</p>
 							<ul className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 text-sm uppercase tracking-wider">
 								<li className="flex items-center gap-3">
 									<span className="w-1.5 h-1.5 bg-[#39FF14]" />
-									Inventory Tracking
+									Pantry Inventory
 								</li>
 								<li className="flex items-center gap-3">
 									<span className="w-1.5 h-1.5 bg-[#39FF14]" />
-									Unit Calibration
+									Meal Planning
 								</li>
 								<li className="flex items-center gap-3">
 									<span className="w-1.5 h-1.5 bg-[#39FF14]" />
-									Automated Logistics
+									AI Scaling (OCR)
 								</li>
 								<li className="flex items-center gap-3">
 									<span className="w-1.5 h-1.5 bg-[#39FF14]" />
-									Waste Reduction
+									Waste Metrics
 								</li>
 							</ul>
 						</div>
@@ -163,13 +168,16 @@ export default function Home() {
 								<div className="absolute top-0 right-0 p-2 text-[10px] opacity-40">
 									01
 								</div>
-								<h3 className="text-xl font-bold text-white mb-2 group-hover:translate-x-1 transition-transform">
+								<h3 className="text-xl font-bold text-white mb-0 group-hover:translate-x-1 transition-transform">
 									HULL
 								</h3>
+								<div className="text-[10px] text-[#39FF14]/60 mb-2 uppercase tracking-tighter">
+									[ User Profile ]
+								</div>
 								<div className="h-[1px] w-8 bg-[#39FF14] mb-4 group-hover:w-full transition-all duration-500" />
 								<p className="text-sm opacity-80 leading-relaxed">
-									The physical vessel. Your biological entity. Profile logic
-									captures allergens and biometric constraints here.
+									The biological entity. Your profile captures allergens,
+									dietary preferences, and caloric constraints here.
 								</p>
 							</div>
 
@@ -178,13 +186,16 @@ export default function Home() {
 								<div className="absolute top-0 right-0 p-2 text-[10px] opacity-40">
 									02
 								</div>
-								<h3 className="text-xl font-bold text-white mb-2 group-hover:translate-x-1 transition-transform">
+								<h3 className="text-xl font-bold text-white mb-0 group-hover:translate-x-1 transition-transform">
 									CARGO
 								</h3>
+								<div className="text-[10px] text-[#39FF14]/60 mb-2 uppercase tracking-tighter">
+									[ Food & Pantry ]
+								</div>
 								<div className="h-[1px] w-8 bg-[#39FF14] mb-4 group-hover:w-full transition-all duration-500" />
 								<p className="text-sm opacity-80 leading-relaxed">
-									Nutritional assets. Inventory items. Classified by storage
-									type (Dry / Frozen / Refrigerated).
+									Nutritional assets. Your inventory items classified by type
+									(Dry / Frozen / Fresh). This is your digital pantry.
 								</p>
 							</div>
 
@@ -193,13 +204,16 @@ export default function Home() {
 								<div className="absolute top-0 right-0 p-2 text-[10px] opacity-40">
 									03
 								</div>
-								<h3 className="text-xl font-bold text-white mb-2 group-hover:translate-x-1 transition-transform">
+								<h3 className="text-xl font-bold text-white mb-0 group-hover:translate-x-1 transition-transform">
 									HUD
 								</h3>
+								<div className="text-[10px] text-[#39FF14]/60 mb-2 uppercase tracking-tighter">
+									[ Live Dashboard ]
+								</div>
 								<div className="h-[1px] w-8 bg-[#39FF14] mb-4 group-hover:w-full transition-all duration-500" />
 								<p className="text-sm opacity-80 leading-relaxed">
-									Heads-Up Display. The primary dashboard for visualization of
-									stock levels and alerts.
+									Heads-Up Display. The primary interface for tracking stock
+									levels, meal schedules, and expiry alerts.
 								</p>
 							</div>
 
@@ -208,13 +222,16 @@ export default function Home() {
 								<div className="absolute top-0 right-0 p-2 text-[10px] opacity-40">
 									04
 								</div>
-								<h3 className="text-xl font-bold text-white mb-2 group-hover:translate-x-1 transition-transform">
+								<h3 className="text-xl font-bold text-white mb-0 group-hover:translate-x-1 transition-transform">
 									SCANNER
 								</h3>
+								<div className="text-[10px] text-[#39FF14]/60 mb-2 uppercase tracking-tighter">
+									[ Smart Ingest ]
+								</div>
 								<div className="h-[1px] w-8 bg-[#39FF14] mb-4 group-hover:w-full transition-all duration-500" />
 								<p className="text-sm opacity-80 leading-relaxed">
-									Ingest mechanism. Optical and manual input systems for logging
-									new Cargo into the Manifest.
+									The processing unit. Use AI vision to scan receipts or manual
+									input to log new groceries into your manifest.
 								</p>
 							</div>
 						</div>

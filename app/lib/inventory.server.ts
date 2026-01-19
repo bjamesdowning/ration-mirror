@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";

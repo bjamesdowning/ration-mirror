@@ -1,14 +1,61 @@
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const users = sqliteTable("users", {
-	id: text("id").primaryKey(), // Clerk ID
-	email: text("email").notNull(),
-	settings: text("settings", { mode: "json" }).notNull().default("{}"), // Allergens, units, etc.
-	credits: integer("credits").notNull().default(0),
-	createdAt: integer("created_at", { mode: "timestamp" })
+export const user = sqliteTable("user", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	email: text("email").notNull().unique(),
+	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+	image: text("image"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	// Extended fields
+	settings: text("settings", { mode: "json" }).default("{}"), // Allergens, units, etc.
+	credits: integer("credits").default(0),
+});
+
+export const session = sqliteTable("session", {
+	id: text("id").primaryKey(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	token: text("token").notNull().unique(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id")
 		.notNull()
-		.default(sql`(unixepoch())`),
+		.references(() => user.id),
+});
+
+export const account = sqliteTable("account", {
+	id: text("id").primaryKey(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: integer("access_token_expires_at", {
+		mode: "timestamp",
+	}),
+	refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+		mode: "timestamp",
+	}),
+	scope: text("scope"),
+	password: text("password"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const verification = sqliteTable("verification", {
+	id: text("id").primaryKey(),
+	identifier: text("identifier").notNull(),
+	value: text("value").notNull(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" }),
 });
 
 export const inventory = sqliteTable(
@@ -17,7 +64,9 @@ export const inventory = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id").notNull(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
 		name: text("name").notNull(),
 		quantity: integer("quantity").notNull(), // Normalised value
 		unit: text("unit").notNull(), // kg, g, l, ml, piece
@@ -36,7 +85,9 @@ export const ledger = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id").notNull(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
 		amount: integer("amount").notNull(), // Positive or negative
 		reason: text("reason").notNull(), // "scan", "top-up", "correction"
 		createdAt: integer("created_at", { mode: "timestamp" })

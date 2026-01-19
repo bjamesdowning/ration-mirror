@@ -1,28 +1,21 @@
 // @ts-nocheck
-import { getAuth } from "@clerk/react-router/ssr.server";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { redirect } from "react-router";
+
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
-	const { userId } = await getAuth(args);
-
-	if (!userId) {
-		throw redirect("/sign-in");
-	}
-
-	// Verify Admin Access
-	await requireAdmin(args.context, args.request, userId);
+	// Verify Admin Access (this handles auth check too)
+	await requireAdmin(args.context, args.request);
 
 	const env = args.context.env as Env;
 	const db = drizzle(env.DB, { schema });
 
 	// Metrics Queries
 	// 1. Total Users
-	const userCount = await db.$count(schema.users);
+	const userCount = await db.$count(schema.user);
 
 	// 2. Total Inventory Items
 	const inventoryCount = await db.$count(schema.inventory);

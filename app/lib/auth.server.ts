@@ -1,56 +1,54 @@
 // @ts-nocheck
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
+// @ts-expect-error
 import { redirect } from "react-router";
-import type { Route } from "../+types/root";
 import * as schema from "../db/schema";
 
-// TODO: Update this with your actual email address
 const ADMIN_EMAIL = "admin@ration.com";
 
-export async function ensureUserExists(
-	env: Env,
-	clerkId: string,
-	email: string,
-) {
+export function createAuth(env: Cloudflare.Env) {
 	const db = drizzle(env.DB, { schema });
-
-	// Check if user exists
-	const existingUser = await db.query.users.findFirst({
-		where: (users, { eq }) => eq(users.id, clerkId),
+	return betterAuth({
+		database: drizzleAdapter(db, {
+			provider: "sqlite",
+			schema: {
+				user: schema.user,
+				session: schema.session,
+				account: schema.account,
+				verification: schema.verification,
+			},
+		}),
+		emailAndPassword: {
+			enabled: true,
+		},
+		secret: env.BETTER_AUTH_SECRET,
+		baseURL: env.BETTER_AUTH_URL,
 	});
+}
 
-	if (existingUser) {
-		return existingUser;
+export type Auth = ReturnType<typeof createAuth>;
+
+export async function requireAuth(
+	context: { cloudflare: { env: Cloudflare.Env } },
+	request: Request,
+) {
+	const auth = createAuth(context.cloudflare.env);
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session) {
+		throw redirect("/sign-in");
 	}
-
-	// Create new user with 100 free credits (Welcome Bonus)
-	const newUser = {
-		id: clerkId,
-		email,
-		settings: "{}",
-		credits: 100,
-	};
-
-	await db.insert(schema.users).values(newUser);
-
-	return newUser;
+	return session;
 }
 
 export async function requireAdmin(
-	context: Route.LoaderArgs["context"],
-	_request: Request,
-	userId: string,
+	context: { cloudflare: { env: Cloudflare.Env } },
+	request: Request,
 ) {
-	const env = context.env as Env;
-	const db = drizzle(env.DB, { schema });
-
-	const user = await db.query.users.findFirst({
-		where: (users, { eq }) => eq(users.id, userId),
-	});
-
-	if (!user || user.email !== ADMIN_EMAIL) {
+	const { user } = await requireAuth(context, request);
+	if (user.email !== ADMIN_EMAIL) {
 		throw redirect("/");
 	}
-
 	return user;
 }

@@ -3,6 +3,7 @@ import { index, type RouteConfig, route } from "@react-router/dev/routes";
 export default [
 	index("routes/home.tsx"),
 	route("sign-in", "routes/sign-in.tsx"),
+	route("sign-up", "routes/sign-up.tsx"),
 
 	// Dashboard
 	route("dashboard", "routes/dashboard.tsx"), // Defines /dashboard
@@ -13,4 +14,5 @@ export default [
 
 	// API
 	route("api/user/purge", "routes/api/user/purge.tsx"),
+	route("api/auth/*", "routes/api.auth.$.ts"),
 ] satisfies RouteConfig;

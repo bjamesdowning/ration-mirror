@@ -1,18 +1,16 @@
 // @ts-nocheck
 
-import { getAuth } from "@clerk/react-router/ssr.server";
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { data } from "react-router";
+
 import { inventory } from "~/db/schema";
+import { requireAuth } from "~/lib/auth.server";
 import { querySimilarItems } from "~/lib/vector.server";
 import type { Route } from "./+types/search";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { userId } = await getAuth(request);
-	if (!userId) {
-		throw data({ error: "Unauthorized" }, { status: 401 });
-	}
+	const { user } = await requireAuth(context, request);
+	const userId = user.id;
 
 	const url = new URL(request.url);
 	const q = url.searchParams.get("q");

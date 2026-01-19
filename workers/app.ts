@@ -1,32 +1,26 @@
+import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
 
-declare module "react-router" {
-	interface AppLoadContext {
-		cloudflare: {
-			env: Env;
-			ctx: ExecutionContext;
-			cf?: IncomingRequestCfProperties;
-		};
-	}
-}
-
-const handler = createRequestHandler({
-	build: () => import("virtual:react-router/server-build"),
-	mode: import.meta.env.MODE,
-});
+const handleRequest = createRequestHandler({ build });
 
 export default {
-	fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
-		return handler({
-			// biome-ignore lint/suspicious/noExplicitAny: Worker request typing
-			request: request as any,
+	fetch(request, env, ctx) {
+		console.log("[Worker] Env Keys:", Object.keys(env));
+		const context = {
+			request,
 			env,
-			params: {},
 			waitUntil: ctx.waitUntil.bind(ctx),
 			passThroughOnException: ctx.passThroughOnException.bind(ctx),
-			next: () => Promise.resolve(new Response(null, { status: 404 })),
 			functionPath: "",
+			params: {},
 			data: {},
-		});
+			next: () => Promise.resolve(new Response("Not found", { status: 404 })),
+			cloudflare: {
+				env,
+				ctx,
+				cf: request.cf,
+			},
+		};
+		return handleRequest(context);
 	},
-};
+} satisfies ExportedHandler<Env>;

@@ -13,11 +13,15 @@
 		"postinstall": "bun run cf-typegen",
 		"preview": "bun run build && vite preview",
 		"test:unit": "vitest run",
-		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b"
+		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate:dev": "wrangler d1 migrations apply DB --local",
+		"db:migrate:prod": "wrangler d1 migrations apply DB --remote"
 	},
 	"dependencies": {
-		"@clerk/react-router": "^2.3.10",
+		"@better-auth/cli": "^1.4.15",
 		"@react-router/cloudflare": "^7.12.0",
+		"better-auth": "^1.4.15",
 		"drizzle-orm": "^0.45.1",
 		"isbot": "^5.1.31",
 		"lucide-react": "^0.562.0",

@@ -11,7 +11,7 @@ description: Role: Security Engineer Focus: Authentication, Authorization, Priva
 **Objective:** Protect the "Airlock" (API Boundary) and User Data (Privacy).
 
 ## Skills
-*   **Auth:** Clerk (JWT, Sessions), OAuth 2.0.
+*   **Auth:** Better Auth.
 *   **Headers:** CORS, CSP, Helmet.
 *   **Concepts:** OWASP Top 10, Zero Trust, Rate Limiting.
 *   **Compliance:** GDPR (Right to Delete).

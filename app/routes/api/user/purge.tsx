@@ -1,21 +1,14 @@
 // @ts-nocheck
-import { createClerkClient } from "@clerk/react-router/api.server";
-import { getAuth } from "@clerk/react-router/ssr.server";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { redirect } from "react-router";
 import * as schema from "~/db/schema";
+import { requireAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/purge";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { userId } = await getAuth({
-		request,
-		context,
-	});
-
-	if (!userId) {
-		throw redirect("/sign-in");
-	}
+	const { user } = await requireAuth(context, request);
+	const userId = user.id;
 
 	const env = context.env;
 	const db = drizzle(env.DB, { schema });
@@ -30,28 +23,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 		// Delete Ledger
 		await tx.delete(schema.ledger).where(eq(schema.ledger.userId, userId));
 
-		// Delete User
-		await tx.delete(schema.users).where(eq(schema.users.id, userId));
+		// Delete User (and sessions/accounts due to FK cascade if configured, or manual)
+		// Better auth tables: user, session, account.
+		// We should delete user from 'user' table.
+		// If FKs are set to CASCADE (schema default for references usually NO ACTION unless specified), we might need to delete children.
+		// But in our schema we didn't specify onDelete: 'cascade'.
+		// We should manually delete session and account to be safe, or just delete user and hope D1 supports FK enforcement/cascade if enabled.
+		// Let's delete user and assumes app logic handles it or we manually clean.
+		// Actually, Better Auth might need session deletion to "sign out" effectively if checking DB.
+
+		await tx.delete(schema.session).where(eq(schema.session.userId, userId));
+		await tx.delete(schema.account).where(eq(schema.account.userId, userId));
+		await tx.delete(schema.user).where(eq(schema.user.id, userId));
 	});
 
-	// 2. Sign out from Clerk (and optionally delete from Clerk if we had the permission, but for now just sign out)
-	// To truly delete from Clerk, we'd need the Backend API Key and proper permissions.
-	// For this MVP, we will rely on the user manually deleting their Clerk account if they wish,
-	// or we can attempt to delete it if we have the secret key.
-	// Let's at least sign them out.
-
-	try {
-		const clerk = createClerkClient({
-			secretKey: env.CLERK_SECRET_KEY,
-			publishableKey: env.CLERK_PUBLISHABLE_KEY,
-		});
-
-		// Delete user from Clerk (optional, but good for "Right to Delete")
-		await clerk.users.deleteUser(userId);
-	} catch (error) {
-		console.error("Failed to delete user from Clerk:", error);
-		// Continue anyway, D1 is purged.
-	}
+	// No Clerk deletion needed as we are self-hosted.
 
 	return redirect("/");
 }

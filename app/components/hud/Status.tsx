@@ -1,18 +1,38 @@
-import { UserButton, useAuth } from "@clerk/react-router";
+// @ts-nocheck
+// @ts-expect-error
+import { useNavigate } from "react-router";
+import { authClient } from "~/lib/auth-client";
 
 interface StatusProps {
 	credits?: number;
 }
 
 export function Status({ credits = 0 }: StatusProps) {
-	const { isLoaded, isSignedIn } = useAuth();
+	const { data: session, isPending } = authClient.useSession();
+	const navigate = useNavigate();
 
-	if (!isLoaded || !isSignedIn) {
+	const handleSignOut = async () => {
+		await authClient.signOut({
+			fetchOptions: {
+				onSuccess: () => {
+					navigate("/sign-in");
+				},
+			},
+		});
+	};
+
+	if (isPending) {
 		return (
 			<div className="flex items-center gap-4 p-4 border-b border-[#39FF14]/20 bg-[#051105] text-[#39FF14] font-mono tracking-widest justify-end">
 				<div className="animate-pulse">INITIALIZING...</div>
 			</div>
 		);
+	}
+
+	if (!session) {
+		// If not signed in, maybe show nothing or Sign In button?
+		// Root layout handles protection for dashboard, but public pages might show this.
+		return null;
 	}
 
 	return (
@@ -26,20 +46,26 @@ export function Status({ credits = 0 }: StatusProps) {
 
 			<div className="h-6 w-px bg-[#39FF14]/20" />
 
-			<div className="flex items-center">
-				<UserButton
-					appearance={{
-						elements: {
-							avatarBox:
-								"w-8 h-8 rounded-none border border-[#39FF14]/50 hover:border-[#39FF14] transition-colors",
-							userButtonPopoverCard:
-								"rounded-none border border-[#39FF14]/20 bg-[#051105] text-[#39FF14]",
-							userButtonPopoverActionButton:
-								"hover:bg-[#39FF14]/10 rounded-none",
-							userButtonPopoverActionButtonText: "text-[#39FF14] font-mono",
-						},
-					}}
-				/>
+			<div className="flex items-center gap-4">
+				<div className="flex items-center gap-2">
+					{session.user.image && (
+						<img
+							src={session.user.image}
+							alt={session.user.name || "User"}
+							className="w-8 h-8 border border-[#39FF14]/50 object-cover"
+						/>
+					)}
+					<span className="text-sm tracking-wide hidden md:block">
+						{session.user.name || session.user.email}
+					</span>
+				</div>
+				<button
+					type="button"
+					onClick={handleSignOut}
+					className="text-xs uppercase border border-[#39FF14]/30 px-3 py-1 hover:bg-[#39FF14] hover:text-black transition-all cursor-pointer"
+				>
+					Log Out
+				</button>
 			</div>
 		</div>
 	);

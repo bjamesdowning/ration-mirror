@@ -29,7 +29,7 @@ description: Role: Platform Engineer Focus: Infrastructure as Code, Edge Configu
 
 ### 3. Secrets Management
 *   **Protocol:** NEVER commit secrets to version control.
-*   **Action:** Use `wrangler secret put` for sensitive values (Stripe Keys, Clerk Keys).
+*   **Action:** Use `wrangler secret put` for sensitive values (Stripe Keys, Better Auth Secret).
 
 ### 4. Assets & Build
 *   **Static Assets:** Configure `assets` binding for serving the React Router build output.

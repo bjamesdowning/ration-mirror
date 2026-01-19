@@ -16,7 +16,7 @@ trigger: always_on
 * **Object Store: Cloudflare R2 (S3 Compatible)
 * **Domain Zone Managment - DNS:** Cloudflare Domains
 * **Vector Search:** Cloudflare Vectorize (Semantic Search).
-* **Auth:** Clerk (@clerk/react-router) - Edge compatible.
+* **Auth:** Better Auth - Edge compatible.
 * **Styling:** Tailwind CSS v4.1.
 * **Language:** TypeScript (Strict Mode).
 * **Package Manager:** bun

@@ -15,7 +15,7 @@ description: Role: Backend & API Architect Focus: Serverless Logic, API Design, 
 *   **Runtime:** Cloudflare Workers (V8 Isolate).
 *   **Framework:** React Router v7 (Loaders/Actions).
 *   **Validation:** Zod.
-*   **Integrations:** Stripe SDK, Clerk Backend SDK.
+*   **Integrations:** Stripe SDK, Better Auth.
 
 ## Directives
 

@@ -1,10 +1,9 @@
 // @ts-nocheck
 
-import { getAuth } from "@clerk/react-router/ssr.server";
-import { redirect, useFetcher } from "react-router";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { requireAuth } from "~/lib/auth.server";
 import {
 	addItem,
 	getInventory,
@@ -15,17 +14,15 @@ import type { Route } from "./+types/dashboard";
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { userId } = await getAuth(request);
-	if (!userId) throw redirect("/sign-in");
-
-	const inventory = await getInventory(context.cloudflare.env.DB, userId);
+	const { user } = await requireAuth(context, request);
+	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
 	return { inventory };
 }
 
 // --- ACTION ---
 export async function action({ request, context }: Route.ActionArgs) {
-	const { userId } = await getAuth(request);
-	if (!userId) throw redirect("/sign-in");
+	const { user } = await requireAuth(context, request);
+	const userId = user.id;
 
 	const formData = await request.formData();
 	const intent = formData.get("intent");

@@ -1,7 +1,6 @@
 // @ts-nocheck
-
-import { getAuth } from "@clerk/react-router/ssr.server";
 import { data } from "react-router";
+import { requireAuth } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import type { Route } from "./+types/scan";
 
@@ -9,10 +8,8 @@ import type { Route } from "./+types/scan";
 const SCAN_COST = 5;
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { userId } = await getAuth(request);
-	if (!userId) {
-		throw data({ error: "Unauthorized" }, { status: 401 });
-	}
+	const { user } = await requireAuth(context, request);
+	const userId = user.id;
 
 	// 1. Economy Check
 	const balance = await checkBalance(context.cloudflare.env, userId);

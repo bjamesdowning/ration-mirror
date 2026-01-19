@@ -1,21 +1,21 @@
 // @ts-nocheck
-import { getAuth } from "@clerk/react-router/ssr.server";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { Form, redirect, useNavigation } from "react-router";
+import { requireAuth } from "~/lib/auth.server";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
 import type { Route } from "./+types/settings";
 
 export async function loader(args: Route.LoaderArgs) {
-	const { userId } = await getAuth(args);
-	if (!userId) throw redirect("/sign-in");
+	const { user: authUser } = await requireAuth(args.context, args.request);
+	const userId = authUser.id;
 
 	const env = args.context.env as Env;
 	const db = drizzle(env.DB, { schema });
 
-	const user = await db.query.users.findFirst({
-		where: (users, { eq }) => eq(users.id, userId),
+	const user = await db.query.user.findFirst({
+		where: (user, { eq }) => eq(user.id, userId),
 	});
 
 	if (!user) throw redirect("/sign-in");
@@ -28,8 +28,8 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-	const { userId } = await getAuth(args);
-	if (!userId) throw redirect("/sign-in");
+	const { user: authUser } = await requireAuth(args.context, args.request);
+	const userId = authUser.id;
 
 	const formData = await args.request.formData();
 	const intent = formData.get("intent");
@@ -40,8 +40,8 @@ export async function action(args: Route.ActionArgs) {
 	if (intent === "update-units") {
 		const unitSystem = formData.get("unitSystem"); // "metric" | "imperial"
 
-		const user = await db.query.users.findFirst({
-			where: (users, { eq }) => eq(users.id, userId),
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
 		});
 
 		if (user) {
@@ -49,9 +49,9 @@ export async function action(args: Route.ActionArgs) {
 			const newSettings = { ...currentSettings, unitSystem };
 
 			await db
-				.update(schema.users)
+				.update(schema.user)
 				.set({ settings: JSON.stringify(newSettings) })
-				.where(eq(schema.users.id, userId));
+				.where(eq(schema.user.id, userId));
 		}
 
 		return { success: true };

@@ -12,7 +12,7 @@
 	},
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
-		"CLERK_PUBLISHABLE_KEY": "pk_test_bWludC1tYWxsYXJkLTMuY2xlcmsuYWNjb3VudHMuZGV2JA"
+		"BETTER_AUTH_URL": "http://localhost:5173"
 	},
 	/**
 	 * Smart Placement

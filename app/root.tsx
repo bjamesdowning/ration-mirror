@@ -11,13 +11,8 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { ClerkProvider } from "@clerk/react-router";
-import { createClerkClient } from "@clerk/react-router/api.server";
-import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { Status } from "./components/hud/Status";
-import { ensureUserExists } from "./lib/auth.server";
-
-export const middleware = [clerkMiddleware()];
+import { createAuth } from "./lib/auth.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -32,78 +27,44 @@ export const links: Route.LinksFunction = () => [
 	},
 ];
 
-export const loader = (args: Route.LoaderArgs) => {
-	return rootAuthLoader(
-		args,
-		async ({ context, auth }) => {
-			const { env } = context.cloudflare;
-			let credits = 0;
+export const loader = async ({ request, context }: Route.LoaderArgs) => {
+	const auth = createAuth(context.cloudflare.env);
+	const session = await auth.api.getSession({ headers: request.headers });
 
-			// If user is authenticated, ensure they exist in our DB
-			if (auth.userId) {
-				try {
-					const clerk = createClerkClient({
-						secretKey: env.CLERK_SECRET_KEY,
-						publishableKey: env.CLERK_PUBLISHABLE_KEY,
-					});
+	let credits = 0;
+	if (session?.user) {
+		// In Better Auth schema we added credits to user table, so it should be available in session.user
+		// but by default getSession returns basic user fields.
+		// Since we extended the schema, Better Auth might return it if typed correctly.
+		// However, for safety/guarantee, we might want to cast or it just works.
+		// For now let's assume it's in user object or 0.
+		credits = (session.user as any).credits || 0;
+	}
 
-					const user = await clerk.users.getUser(auth.userId);
-					const primaryEmail = user.emailAddresses.find(
-						(e) => e.id === user.primaryEmailAddressId,
-					)?.emailAddress;
-
-					if (primaryEmail) {
-						try {
-							const dbUser = await ensureUserExists(
-								env,
-								auth.userId,
-								primaryEmail,
-							);
-							credits = dbUser.credits;
-						} catch (e) {
-							console.error("Failed to sync user", e);
-						}
-					}
-				} catch (e) {
-					console.error("Failed to fetch user from Clerk", e);
-				}
-			}
-
-			return {
-				clerkPublishableKey: env.CLERK_PUBLISHABLE_KEY,
-				credits,
-			};
-		},
-		{
-			publishableKey: args.context.cloudflare.env.CLERK_PUBLISHABLE_KEY,
-			secretKey: args.context.cloudflare.env.CLERK_SECRET_KEY,
-		},
-	);
+	return {
+		user: session?.user,
+		credits,
+	};
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
 	const loaderData = useLoaderData<typeof loader>();
 
 	return (
-		<ClerkProvider
-			loaderData={loaderData}
-			publishableKey={loaderData?.clerkPublishableKey}
-		>
-			<html lang="en">
-				<head>
-					<meta charSet="utf-8" />
-					<meta name="viewport" content="width=device-width, initial-scale=1" />
-					<Meta />
-					<Links />
-				</head>
-				<body className="bg-[#051105] text-white">
-					<Status credits={loaderData?.credits} />
-					{children}
-					<ScrollRestoration />
-					<Scripts />
-				</body>
-			</html>
-		</ClerkProvider>
+		<html lang="en">
+			<head>
+				<meta charSet="utf-8" />
+				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<Meta />
+				<Links />
+			</head>
+			<body className="bg-[#051105] text-white">
+				<Status credits={loaderData?.credits} />
+				{children}
+				<ScrollRestoration />
+				<Scripts />
+			</body>
+		</html>
 	);
 }
 

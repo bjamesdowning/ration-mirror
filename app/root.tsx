@@ -38,7 +38,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		// Since we extended the schema, Better Auth might return it if typed correctly.
 		// However, for safety/guarantee, we might want to cast or it just works.
 		// For now let's assume it's in user object or 0.
-		credits = (session.user as any).credits || 0;
+		credits = (session.user as { credits?: number }).credits || 0;
 	}
 
 	return {

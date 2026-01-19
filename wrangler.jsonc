@@ -12,7 +12,7 @@
 	},
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
-		"BETTER_AUTH_URL": "http://localhost:5173"
+		"BETTER_AUTH_URL": "https://ration.mayutic.com"
 	},
 	/**
 	 * Smart Placement

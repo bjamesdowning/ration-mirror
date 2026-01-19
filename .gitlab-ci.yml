@@ -1,0 +1,68 @@
+image: oven/bun:1
+
+stages:
+  - install
+  - verify
+  - deploy
+
+variables:
+  # Caching configuration
+  BUN_INSTALL_CACHE_DIR: ".bun-install-cache"
+
+# Global Cache Definition
+cache:
+  key:
+    files:
+      - bun.lock
+  paths:
+    - node_modules/
+
+# Install Dependencies
+install_dependencies:
+  stage: install
+  script:
+    - bun install --frozen-lockfile
+  # Cache artifacts to pass node_modules to subsequent jobs if not using global cache/artifacts
+  # Using artifacts for node_modules is faster than re-downloading/caching sometimes in DAG
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+
+# Verification Jobs (DAG: ALL run in parallel after install)
+lint:
+  stage: verify
+  needs: ["install_dependencies"]
+  script:
+    - bun run lint
+
+typecheck:
+  stage: verify
+  needs: ["install_dependencies"]
+  script:
+    - bun run typecheck
+
+test_unit:
+  stage: verify
+  needs: ["install_dependencies"]
+  script:
+    - bun run test:unit
+
+# Production Deployment (Runs only on main branch, after verification passes)
+deploy_production:
+  stage: deploy
+  needs: ["lint", "typecheck", "test_unit"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    # Build the application
+    - bun run build
+    
+    # Run Database Migrations
+    # Note: Requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to be set in CI/CD Settings
+    - echo "Applying D1 Migrations to Production..."
+    - bun x wrangler d1 migrations apply DB --remote
+    
+    # Deploy Worker
+    - echo "Deploying to Cloudflare Workers..."
+    - bun run deploy

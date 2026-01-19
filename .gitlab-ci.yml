@@ -21,9 +21,12 @@ cache:
 install_dependencies:
   stage: install
   script:
-    - bun install --frozen-lockfile
-  # Cache artifacts to pass node_modules to subsequent jobs if not using global cache/artifacts
-  # Using artifacts for node_modules is faster than re-downloading/caching sometimes in DAG
+    # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
+    # This is safe because we target Cloudflare Workers and use D1 at runtime.
+    - bun install --frozen-lockfile --ignore-scripts
+    # Manually run cf-typegen since --ignore-scripts skips the postinstall hook.
+    # This ensures types for D1, R2, etc. are available for the 'verify' stage.
+    - bun run cf-typegen
   artifacts:
     paths:
       - node_modules/

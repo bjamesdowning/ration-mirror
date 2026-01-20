@@ -1,38 +1,10 @@
 // @ts-nocheck
 import { useState } from "react";
-// @ts-expect-error
-import { useNavigate } from "react-router";
 import { authClient } from "~/lib/auth-client";
 
 export default function SignUpPage() {
-	const navigate = useNavigate();
-	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setLoading(true);
-		setError("");
-		await authClient.signUp.email(
-			{
-				email,
-				password,
-				name,
-			},
-			{
-				onSuccess: () => {
-					navigate("/dashboard");
-				},
-				onError: (ctx) => {
-					setError(ctx.error.message);
-					setLoading(false);
-				},
-			},
-		);
-	};
 
 	return (
 		<div className="flex items-center justify-center min-h-screen bg-[#051105] text-[#39FF14] font-mono">
@@ -47,60 +19,11 @@ export default function SignUpPage() {
 					Protocol_Registration
 				</h1>
 
-				<form onSubmit={handleSubmit} className="space-y-6">
-					<div>
-						<label
-							htmlFor="name"
-							className="block text-xs uppercase tracking-widest mb-2 opacity-70"
-						>
-							Designation (Name)
-						</label>
-						<input
-							id="name"
-							type="text"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							className="w-full bg-black/50 border border-[#39FF14]/30 p-3 text-[#39FF14] focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14]/50 transition-all placeholder-[#39FF14]/20"
-							placeholder="UNIT-734"
-							required
-						/>
-					</div>
-
-					<div>
-						<label
-							htmlFor="email"
-							className="block text-xs uppercase tracking-widest mb-2 opacity-70"
-						>
-							Identity (Email)
-						</label>
-						<input
-							id="email"
-							type="email"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							className="w-full bg-black/50 border border-[#39FF14]/30 p-3 text-[#39FF14] focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14]/50 transition-all placeholder-[#39FF14]/20"
-							placeholder="OPERATOR@RATION.COM"
-							required
-						/>
-					</div>
-
-					<div>
-						<label
-							htmlFor="password"
-							className="block text-xs uppercase tracking-widest mb-2 opacity-70"
-						>
-							Access Key (Password)
-						</label>
-						<input
-							id="password"
-							type="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							className="w-full bg-black/50 border border-[#39FF14]/30 p-3 text-[#39FF14] focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14]/50 transition-all placeholder-[#39FF14]/20"
-							placeholder="••••••••"
-							required
-						/>
-					</div>
+				<div className="space-y-6">
+					<p className="text-sm opacity-70 leading-relaxed uppercase tracking-wider">
+						Access to the Orbital Supply Chain requires valid biometric
+						authentication. Please initialize via Google Identity Services.
+					</p>
 
 					{error && (
 						<div className="bg-red-900/20 border border-red-500/50 p-3 text-red-400 text-xs tracking-widest uppercase">
@@ -109,13 +32,42 @@ export default function SignUpPage() {
 					)}
 
 					<button
-						type="submit"
+						type="button"
+						onClick={async () => {
+							setLoading(true);
+							setError("");
+							try {
+								await authClient.signIn.social({
+									provider: "google",
+									callbackURL: "/dashboard",
+								});
+							} catch {
+								setError("Connection to Google Identity failed.");
+								setLoading(false);
+							}
+						}}
 						disabled={loading}
-						className="w-full bg-[#39FF14] text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-transparent hover:text-[#39FF14] border border-[#39FF14] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+						className="w-full bg-[#39FF14] text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-transparent hover:text-[#39FF14] border border-[#39FF14] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
 					>
-						{loading ? "Register Credentials" : "Initialize Account"}
+						{loading ? (
+							"Initializing..."
+						) : (
+							<>
+								<svg
+									viewBox="0 0 24 24"
+									className="w-5 h-5 fill-current"
+									xmlns="http://www.w3.org/2000/svg"
+									role="img"
+									aria-label="Google logo"
+								>
+									<title>Google Logo</title>
+									<path d="M12.48 10.92v3.28h7.84c-.24 1.84-.908 3.152-1.928 4.176-1.288 1.288-3.232 2.768-6.192 2.768-4.744 0-8.432-3.832-8.432-8.576s3.688-8.576 8.432-8.576c2.56 0 4.416.992 5.8 2.312l2.312-2.312C18.152 2.032 15.544.928 12.48.928c-6.136 0-11.232 4.968-11.232 11.104s5.096 11.104 11.232 11.104c3.312 0 5.8-1.088 7.792-3.152 2.056-2.056 2.712-4.904 2.712-7.232 0-.696-.056-1.352-.16-1.928h-8.064z" />
+								</svg>
+								Initialize via Google
+							</>
+						)}
 					</button>
-				</form>
+				</div>
 
 				<div className="mt-8 text-center text-xs opacity-50 uppercase tracking-widest">
 					Has clearance?{" "}

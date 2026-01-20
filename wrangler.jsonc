@@ -12,7 +12,8 @@
 	},
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
-		"BETTER_AUTH_URL": "https://ration.mayutic.com"
+		"BETTER_AUTH_URL": "https://ration.mayutic.com",
+		"ADMIN_EMAILS": "admin@ration.com"
 	},
 	/**
 	 * Smart Placement

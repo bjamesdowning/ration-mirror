@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
 
-const ADMIN_EMAIL = "admin@ration.com";
+const DEFAULT_ADMIN = "admin@ration.com";
 
 export function createAuth(env: Cloudflare.Env) {
 	const db = drizzle(env.DB, { schema });
@@ -50,7 +50,12 @@ export async function requireAdmin(
 	request: Request,
 ) {
 	const { user } = await requireAuth(context, request);
-	if (user.email !== ADMIN_EMAIL) {
+
+	const adminEmails = context.cloudflare.env.ADMIN_EMAILS
+		? context.cloudflare.env.ADMIN_EMAILS.split(",").map((e) => e.trim())
+		: [DEFAULT_ADMIN];
+
+	if (!adminEmails.includes(user.email)) {
 		throw redirect("/");
 	}
 	return user;

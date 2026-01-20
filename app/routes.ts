@@ -15,4 +15,9 @@ export default [
 	// API
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
+	// Legal
+	route("legal", "routes/legal.tsx", [
+		route("terms", "routes/legal.terms.tsx"),
+		route("privacy", "routes/legal.privacy.tsx"),
+	]),
 ] satisfies RouteConfig;

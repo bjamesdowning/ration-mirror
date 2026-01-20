@@ -57,15 +57,16 @@ deploy_production:
   needs: ["lint", "typecheck", "test_unit"]
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+  variables:
+    WRANGLER_SEND_METRICS: "false"
   script:
-    # Build the application
+    # Build the application once
     - bun run build
     
-    # Run Database Migrations
-    # Note: Requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to be set in CI/CD Settings
+    # Run Database Migrations (Pipe 'y' for non-interactive confirmation)
     - echo "Applying D1 Migrations to Production..."
-    - bun x wrangler d1 migrations apply DB --remote
+    - echo "y" | bun x wrangler d1 migrations apply DB --remote
     
-    # Deploy Worker
+    # Deploy Worker (Force non-interactive)
     - echo "Deploying to Cloudflare Workers..."
-    - bun run deploy
+    - bun x wrangler deploy build/server/index.js --non-interactive

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { Route } from "./+types/home";
 import "../../load-context"; // Ensure augmentation is loaded
+import { Link } from "react-router";
 
 export function meta(_: Route.MetaArgs) {
 	return [
@@ -84,19 +85,19 @@ export default function Home() {
 
 						{/* CTA Buttons */}
 						<div className="flex flex-col md:flex-row gap-6 w-full max-w-md mt-8">
-							<a
-								href="/sign-in"
+							<Link
+								to="/sign-in"
 								className="flex-1 bg-[#39FF14] text-[#051105] font-bold text-center py-4 px-8 uppercase tracking-widest hover:bg-white hover:text-black transition-all border border-[#39FF14] relative overflow-hidden group btn-clip"
 							>
 								<span className="relative z-10">Access Terminal</span>
 								<div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-							</a>
-							<a
-								href="/sign-up"
+							</Link>
+							<Link
+								to="/sign-up"
 								className="flex-1 bg-transparent text-[#39FF14] font-bold text-center py-4 px-8 uppercase tracking-widest hover:bg-[#39FF14]/10 transition-all border border-[#39FF14] relative overflow-hidden group btn-clip"
 							>
 								<span className="relative z-10">Initialize Unit</span>
-							</a>
+							</Link>
 						</div>
 					</div>
 
@@ -237,12 +238,44 @@ export default function Home() {
 						</div>
 					</section>
 				</div>
+
+				{/* Data Protocol Section (Transparency) */}
+				<section className="w-full max-w-2xl mx-auto border border-[#39FF14]/20 bg-[#39FF14]/5 p-8 mt-24 text-center">
+					<h2 className="text-xl font-black uppercase tracking-wider text-white mb-4">
+						Data Protocol
+					</h2>
+					<div className="text-[10px] uppercase tracking-widest opacity-60 mb-6">
+						Directive 03 {"//"} Transparency
+					</div>
+					<p className="text-xs md:text-sm text-[#39FF14]/80 leading-relaxed max-w-lg mx-auto">
+						RATION PROTOCOL utilizes Google OAuth for secure identity
+						verification. We access only your basic profile (ID, Email, Name) to
+						secure your command terminal. Your inventory data is persisted for
+						your operational benefit. We{" "}
+						<span className="text-white font-bold">do not sell</span>, trade, or
+						broadcast your bio-metrics or logistical metadata.
+					</p>
+				</section>
 			</main>
 
 			{/* Footer Status Bar */}
 			<footer className="relative z-20 border-t border-[#39FF14]/30 bg-[#051105]/90 backdrop-blur-sm p-4 mt-12">
-				<div className="flex justify-between items-center max-w-7xl mx-auto text-[10px] uppercase tracking-widest text-[#39FF14]/60">
-					<div>{"Build: v0.9.4-ALPHA // EDGE_NET"}</div>
+				<div className="flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto text-[10px] uppercase tracking-widest text-[#39FF14]/60 gap-4">
+					<div className="flex gap-6">
+						<span>{"Build: v0.9.4-ALPHA // EDGE_NET"}</span>
+						<Link
+							to="/legal/privacy"
+							className="hover:text-white transition-colors"
+						>
+							Privacy Policy
+						</Link>
+						<Link
+							to="/legal/terms"
+							className="hover:text-white transition-colors"
+						>
+							Terms of Service
+						</Link>
+					</div>
 					<div className="hidden md:block">
 						By{" "}
 						<a

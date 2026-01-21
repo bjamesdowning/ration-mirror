@@ -37,12 +37,19 @@ export function Status({ credits = 0 }: StatusProps) {
 
 	return (
 		<div className="flex items-center gap-6 p-4 border-b border-[#39FF14]/20 bg-[#051105]/80 backdrop-blur-sm text-[#39FF14] font-mono justify-end">
-			<div className="flex items-center gap-2">
-				<div className="text-xs uppercase opacity-70">CREDITS</div>
-				<div className="text-xl font-bold tabular-nums tracking-widest">
+			<button
+				type="button"
+				onClick={() => navigate("/dashboard/credits")}
+				className="flex items-center gap-2 hover:opacity-100 transition-opacity cursor-pointer group"
+			>
+				<div className="text-xs uppercase opacity-70 group-hover:opacity-100">
+					CREDITS
+				</div>
+				<div className="text-xl font-bold tabular-nums tracking-widest group-hover:text-[#39FF14]">
 					{credits.toString().padStart(4, "0")}
 				</div>
-			</div>
+				<div className="text-xs opacity-50 group-hover:opacity-100">+</div>
+			</button>
 
 			<div className="h-6 w-px bg-[#39FF14]/20" />
 

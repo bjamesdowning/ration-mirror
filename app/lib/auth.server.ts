@@ -1,8 +1,8 @@
-// @ts-nocheck
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
-// @ts-expect-error
+import type { AppLoadContext } from "react-router";
+// @ts-expect-error - redirect is exported but types aren't resolved correctly
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
 
@@ -22,8 +22,8 @@ export function createAuth(env: Cloudflare.Env) {
 		}),
 		socialProviders: {
 			google: {
-				clientId: env.GOOGLE_CLIENT_ID,
-				clientSecret: env.GOOGLE_CLIENT_SECRET,
+				clientId: (env as any).GOOGLE_CLIENT_ID as string,
+				clientSecret: (env as any).GOOGLE_CLIENT_SECRET as string,
 			},
 		},
 		secret: env.BETTER_AUTH_SECRET,
@@ -33,10 +33,7 @@ export function createAuth(env: Cloudflare.Env) {
 
 export type Auth = ReturnType<typeof createAuth>;
 
-export async function requireAuth(
-	context: { cloudflare: { env: Cloudflare.Env } },
-	request: Request,
-) {
+export async function requireAuth(context: AppLoadContext, request: Request) {
 	const auth = createAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session) {
@@ -45,10 +42,7 @@ export async function requireAuth(
 	return session;
 }
 
-export async function requireAdmin(
-	context: { cloudflare: { env: Cloudflare.Env } },
-	request: Request,
-) {
+export async function requireAdmin(context: AppLoadContext, request: Request) {
 	const { user } = await requireAuth(context, request);
 
 	const adminEmails = context.cloudflare.env.ADMIN_EMAILS

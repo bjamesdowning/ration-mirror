@@ -2,6 +2,7 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
+import { getStripe } from "./stripe.server";
 
 export async function checkBalance(env: Env, userId: string): Promise<number> {
 	const db = drizzle(env.DB, { schema });
@@ -58,4 +59,83 @@ export async function deductCredits(
 			reason,
 		});
 	});
+}
+
+export async function addCredits(
+	env: Env,
+	userId: string,
+	amount: number,
+	reason: string,
+	metadata?: { sessionId?: string },
+) {
+	const db = drizzle(env.DB, { schema });
+
+	await db.transaction(async (tx) => {
+		// 1. Check for idempotency: has this sessionId already been processed?
+		if (metadata?.sessionId) {
+			const existing = await tx.query.ledger.findFirst({
+				where: (ledger, { and, eq }) =>
+					and(
+						eq(ledger.userId, userId),
+						eq(ledger.reason, `${reason}:${metadata.sessionId}`),
+					),
+			});
+
+			if (existing) {
+				console.warn(
+					`Duplicate credit add attempt for session ${metadata.sessionId}`,
+				);
+				return; // Already processed, skip
+			}
+		}
+
+		// 2. Increment credits
+		await tx
+			.update(schema.user)
+			.set({ credits: sql`${schema.user.credits} + ${amount}` })
+			.where(eq(schema.user.id, userId));
+
+		// 3. Record in ledger (include sessionId for idempotency)
+		const ledgerReason = metadata?.sessionId
+			? `${reason}:${metadata.sessionId}`
+			: reason;
+
+		await tx.insert(schema.ledger).values({
+			userId,
+			amount, // Positive for addition
+			reason: ledgerReason,
+		});
+	});
+}
+
+export async function processCheckoutSession(env: Env, sessionId: string) {
+	const stripe = getStripe(env);
+
+	// 1. Fetch session from Stripe to verify status
+	const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+	if (session.payment_status !== "paid") {
+		throw new Error(`Session ${sessionId} is not paid`);
+	}
+
+	// 2. Extract metadata
+	const userId = session.metadata?.userId;
+	const creditsStr = session.metadata?.credits;
+
+	if (!userId || !creditsStr) {
+		throw new Error(`Session ${sessionId} missing metadata`);
+	}
+
+	const credits = Number.parseInt(creditsStr, 10);
+
+	// 3. Fulfill credits (Idempotent)
+	await addCredits(env, userId, credits, "Stripe Purchase", {
+		sessionId: session.id,
+	});
+
+	return {
+		success: true,
+		userId,
+		credits,
+	};
 }

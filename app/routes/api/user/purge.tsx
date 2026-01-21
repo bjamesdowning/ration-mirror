@@ -10,7 +10,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const userId = user.id;
 
-	const env = context.env;
+	const env = context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
 	// 1. Transactional Delete from D1

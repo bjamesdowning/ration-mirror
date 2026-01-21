@@ -47,7 +47,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 			{
 				image: imageArray,
 				prompt:
-					"Identify the food items in this image. Return a JSON object with a key 'items' containing an array of objects with 'name' (string), 'quantity' (number, estimated), and 'tags' (array of strings, e.g. ['Dry', 'Produce', 'can', 'bottle']). Do not include markdown formatting or explanations, just the raw JSON.",
+					"System: You are an orbital supply chain logistics officer. Analyze the provided image and identify all food items. \n" +
+					"Requirement: Return ONLY a valid JSON object. No preamble. No markdown code blocks. No postscript.\n" +
+					'Schema: { "items": [{ "name": "string", "quantity": number, "tags": ["Dry" | "Frozen" | "Fridge" | "Produce" | "Can" | "Bottle"] }] }\n' +
+					"Guidelines:\n" +
+					"- Name: Short, descriptive, uppercase (e.g., 'SYNTH-MEAT PASTE', 'OXYGENATED WATER').\n" +
+					"- Quantity: Numeric estimate of units seen.\n" +
+					"- Tags: Map to the most relevant categories.\n" +
+					'- If no food items are found, return { "items": [] }.',
 			},
 		);
 
@@ -61,19 +68,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 			rawText = JSON.stringify(response);
 		}
 
-		// Attempt to clean markdown code blocks if present (common LLM behavior)
-		const cleanedText = rawText
-			.replace(/```json/g, "")
-			.replace(/```/g, "")
-			.trim();
+		// Attempt to extract JSON if the AI included conversational text
+		let cleanedText = rawText;
+		const jsonStart = rawText.indexOf("{");
+		const jsonEnd = rawText.lastIndexOf("}");
+		if (jsonStart !== -1 && jsonEnd !== -1) {
+			cleanedText = rawText.substring(jsonStart, jsonEnd + 1);
+		}
 
 		// biome-ignore lint/suspicious/noExplicitAny: JSON parse result
 		let detectedItems: any;
 		try {
 			detectedItems = JSON.parse(cleanedText);
 		} catch (_e) {
-			console.error("Failed to parse AI JSON:", rawText);
-			throw new Error("AI returned invalid JSON format");
+			console.error("Failed to parse AI JSON. Raw response:", rawText);
+			throw new Error("AI response was not valid JSON");
 		}
 
 		if (!detectedItems.items || !Array.isArray(detectedItems.items)) {

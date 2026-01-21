@@ -12,8 +12,7 @@
 	},
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
-		"BETTER_AUTH_URL": "https://ration.mayutic.com",
-		"ADMIN_EMAILS": "admin@ration.com"
+		"BETTER_AUTH_URL": "https://ration.mayutic.com"
 	},
 	/**
 	 * Smart Placement
@@ -51,6 +50,16 @@
 	"ai": {
 		"binding": "AI"
 	},
+	/**
+	 * Secrets (set via CLI, not in this file)
+	 * Run: wrangler secret put <SECRET_NAME>
+	 * Required secrets:
+	 *   - STRIPE_SECRET_KEY: Stripe server-side API key
+	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
+	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
+	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
+	 *   - ADMIN_EMAILS: Comma-separated admin emails
+	 */
 	/*
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/

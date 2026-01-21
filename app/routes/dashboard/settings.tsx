@@ -1,17 +1,23 @@
-// @ts-nocheck
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+// @ts-expect-error - Form, redirect, useNavigation are exported but types aren't resolved correctly
 import { Form, redirect, useNavigation } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
 import type { Route } from "./+types/settings";
 
+interface Settings {
+	unitSystem?: "metric" | "imperial";
+}
+
 export async function loader(args: Route.LoaderArgs) {
+	// @ts-expect-error - Route.LoaderArgs context type resolution issue
 	const { user: authUser } = await requireAuth(args.context, args.request);
 	const userId = authUser.id;
 
-	const env = args.context.env as Env;
+	// @ts-expect-error - Route.LoaderArgs context type resolution issue
+	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
 	const user = await db.query.user.findFirst({
@@ -20,7 +26,8 @@ export async function loader(args: Route.LoaderArgs) {
 
 	if (!user) throw redirect("/sign-in");
 
-	const settings = JSON.parse(user.settings as string);
+	// Drizzle automatically parses JSON mode fields
+	const settings = (user.settings as Settings) || {};
 
 	return {
 		settings,
@@ -28,13 +35,15 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
+	// @ts-expect-error - Route.ActionArgs context type resolution issue
 	const { user: authUser } = await requireAuth(args.context, args.request);
 	const userId = authUser.id;
 
 	const formData = await args.request.formData();
 	const intent = formData.get("intent");
 
-	const env = args.context.env as Env;
+	// @ts-expect-error - Route.ActionArgs context type resolution issue
+	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
 	if (intent === "update-units") {
@@ -45,12 +54,16 @@ export async function action(args: Route.ActionArgs) {
 		});
 
 		if (user) {
-			const currentSettings = JSON.parse(user.settings as string);
-			const newSettings = { ...currentSettings, unitSystem };
+			// Drizzle automatically parses/stringifies JSON mode fields
+			const currentSettings = (user.settings as Settings) || {};
+			const newSettings: Settings = {
+				...currentSettings,
+				unitSystem: unitSystem as "metric" | "imperial",
+			};
 
 			await db
 				.update(schema.user)
-				.set({ settings: JSON.stringify(newSettings) })
+				.set({ settings: newSettings })
 				.where(eq(schema.user.id, userId));
 		}
 
@@ -133,7 +146,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					<Form
 						action="/api/user/purge"
 						method="post"
-						onSubmit={(e) => {
+						onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
 							if (
 								!confirm(
 									"WARNING: CONFIRM IDENTITY PURGE? THIS CANNOT BE UNDONE.",

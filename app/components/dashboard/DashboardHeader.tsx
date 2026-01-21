@@ -38,6 +38,16 @@ export function DashboardHeader({
 						Manifest
 					</Link>
 					<Link
+						to="/dashboard/credits"
+						className={
+							location.pathname === "/dashboard/credits"
+								? "text-[#39FF14] underline"
+								: "opacity-50 hover:opacity-100"
+						}
+					>
+						Supply Depot
+					</Link>
+					<Link
 						to="/dashboard/settings"
 						className={
 							location.pathname === "/dashboard/settings"

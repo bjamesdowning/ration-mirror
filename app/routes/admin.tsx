@@ -10,7 +10,7 @@ export async function loader(args: Route.LoaderArgs) {
 	// Verify Admin Access (this handles auth check too)
 	await requireAdmin(args.context, args.request);
 
-	const env = args.context.env as Env;
+	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
 	// Metrics Queries

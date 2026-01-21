@@ -8,11 +8,16 @@ export default [
 	// Dashboard
 	route("dashboard", "routes/dashboard.tsx"), // Defines /dashboard
 	route("dashboard/settings", "routes/dashboard/settings.tsx"), // Defines /dashboard/settings
+	route("dashboard/credits", "routes/dashboard/credits.tsx"), // Defines /dashboard/credits
 
 	// Admin
 	route("admin", "routes/admin.tsx"),
 
 	// API
+	route("api/scan", "routes/api/scan.tsx"),
+	route("api/search", "routes/api/search.tsx"),
+	route("api/checkout", "routes/api/checkout.tsx"),
+	route("api/webhook", "routes/api/webhook.tsx"),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 	// Legal

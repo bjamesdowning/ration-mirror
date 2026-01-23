@@ -1,7 +1,6 @@
-// @ts-nocheck
-import { data } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { data } from "~/lib/response";
 import { CREDIT_PACKS, getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
 
@@ -12,7 +11,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	// 2. Rate Limiting (Distributed via KV)
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.KV,
+		context.cloudflare.env.RATION_KV,
 		"checkout",
 		userId,
 	);

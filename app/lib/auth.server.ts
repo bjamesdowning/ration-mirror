@@ -2,7 +2,6 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
-// @ts-expect-error - redirect is exported but types aren't resolved correctly
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
 

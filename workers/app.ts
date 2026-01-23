@@ -1,7 +1,7 @@
 import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
 
-const handleRequest = createRequestHandler({ build });
+const handleRequest = createRequestHandler({ build: build as any });
 
 export default {
 	fetch(request, env, ctx) {

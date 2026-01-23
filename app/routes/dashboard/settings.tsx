@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-// @ts-expect-error - Form, redirect, useNavigation are exported but types aren't resolved correctly
+
 import { Form, redirect, useNavigation } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
@@ -12,11 +12,9 @@ interface Settings {
 }
 
 export async function loader(args: Route.LoaderArgs) {
-	// @ts-expect-error - Route.LoaderArgs context type resolution issue
 	const { user: authUser } = await requireAuth(args.context, args.request);
 	const userId = authUser.id;
 
-	// @ts-expect-error - Route.LoaderArgs context type resolution issue
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
@@ -35,14 +33,12 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-	// @ts-expect-error - Route.ActionArgs context type resolution issue
 	const { user: authUser } = await requireAuth(args.context, args.request);
 	const userId = authUser.id;
 
 	const formData = await args.request.formData();
 	const intent = formData.get("intent");
 
-	// @ts-expect-error - Route.ActionArgs context type resolution issue
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 

@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import { processCheckoutSession } from "~/lib/ledger.server";
 import { getStripe } from "~/lib/stripe.server";
@@ -37,7 +35,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		// 4. Idempotency: Check if event already processed (Distributed via KV)
 		const idempotencyCheck = await checkStripeWebhookProcessed(
-			context.cloudflare.env.KV,
+			context.cloudflare.env.RATION_KV,
 			event.id,
 		);
 

@@ -1,8 +1,7 @@
-// @ts-nocheck
-import { data } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { data } from "~/lib/response";
 import type { Route } from "./+types/scan";
 
 // Cost for a visual scan
@@ -14,7 +13,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	// 1. Rate Limiting (Distributed via KV)
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.KV,
+		context.cloudflare.env.RATION_KV,
 		"scan",
 		userId,
 	);

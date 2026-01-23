@@ -1,12 +1,9 @@
-// @ts-nocheck
-
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { data } from "react-router";
-
 import { inventory } from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { data } from "~/lib/response";
 import { querySimilarItems } from "~/lib/vector.server";
 import type { Route } from "./+types/search";
 
@@ -24,7 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	// 1. Rate Limiting (Distributed via KV)
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.KV,
+		context.cloudflare.env.RATION_KV,
 		"search",
 		userId,
 	);

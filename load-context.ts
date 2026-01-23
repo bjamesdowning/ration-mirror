@@ -1,9 +1,7 @@
+import type { PlatformProxy } from "wrangler";
+
 declare module "react-router" {
 	interface AppLoadContext {
-		cloudflare: {
-			env: Env;
-			ctx: ExecutionContext;
-			cf?: IncomingRequestCfProperties;
-		};
+		cloudflare: PlatformProxy<Env>;
 	}
 }

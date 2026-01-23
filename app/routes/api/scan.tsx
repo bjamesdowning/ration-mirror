@@ -2,6 +2,7 @@
 import { data } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/scan";
 
 // Cost for a visual scan
@@ -11,7 +12,32 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const userId = user.id;
 
-	// 1. Economy Check
+	// 1. Rate Limiting (Distributed via KV)
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.KV,
+		"scan",
+		userId,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many scan requests. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+				resetAt: rateLimitResult.resetAt,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
+			},
+		);
+	}
+
+	// 2. Economy Check
 	const balance = await checkBalance(context.cloudflare.env, userId);
 	if (balance < SCAN_COST) {
 		throw data(
@@ -20,7 +46,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 2. Parse Input
+	// 3. Parse Input
 	const formData = await request.formData();
 	const imageFile = formData.get("image");
 
@@ -33,14 +59,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
 	}
 
-	// 3. Prepare Image for AI
+	// 4. Prepare Image for AI
 	const arrayBuffer = await imageFile.arrayBuffer();
 	const uint8Array = new Uint8Array(arrayBuffer);
 	// Workers AI expects an array of numbers for the image input
 	const imageArray = Array.from(uint8Array);
 
 	try {
-		// 4. Run AI Inference
+		// 5. Run AI Inference
 		// Model: @cf/meta/llama-3.2-11b-vision-instruct
 		const response = await context.cloudflare.env.AI.run(
 			"@cf/meta/llama-3.2-11b-vision-instruct",
@@ -58,7 +84,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			},
 		);
 
-		// 5. Parse AI Response
+		// 6. Parse AI Response
 		// Llama vision returns { response: string }
 		let rawText = "";
 		if ("response" in response) {
@@ -89,7 +115,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw new Error("AI response missing 'items' array");
 		}
 
-		// 6. Deduct Credits (only on successful scan)
+		// 7. Deduct Credits (only on successful scan)
 		await deductCredits(
 			context.cloudflare.env,
 			userId,

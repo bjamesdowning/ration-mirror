@@ -50,7 +50,19 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "afafb8640ed44b6e9cfe5df204eb6a74",
+			"preview_id": "f00538f983d84810b478a6050a214963"
+		}
+	],
 	/**
+	 * KV Namespace Setup Instructions:
+	 * 1. Create production namespace: wrangler kv namespace create "RATION_KV"
+	 * 2. Create preview namespace: wrangler kv namespace create "RATION_KV" --preview
+	 * 3. Replace PLACEHOLDER_PRODUCTION_ID and PLACEHOLDER_PREVIEW_ID with actual IDs
+	 *
 	 * Secrets (set via CLI, not in this file)
 	 * Run: wrangler secret put <SECRET_NAME>
 	 * Required secrets:

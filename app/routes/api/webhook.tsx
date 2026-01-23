@@ -1,21 +1,11 @@
 // @ts-nocheck
 
+import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import { processCheckoutSession } from "~/lib/ledger.server";
 import { getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/webhook";
 
-// Track processed events to prevent replay attacks
-const processedEvents = new Set<string>();
 const EVENT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-
-// Cleanup old events periodically
-function cleanupProcessedEvents() {
-	// In a real production setup, use KV or Durable Objects for distributed tracking
-	// This simple implementation works for single-worker instances
-	if (processedEvents.size > 10000) {
-		processedEvents.clear(); // Prevent memory leak
-	}
-}
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const stripe = getStripe(context.cloudflare.env);
@@ -45,9 +35,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return new Response("Event too old", { status: 400 });
 		}
 
-		// 4. Idempotency: Check if event already processed
-		if (processedEvents.has(event.id)) {
-			console.warn(`Duplicate webhook event: ${event.id}`);
+		// 4. Idempotency: Check if event already processed (Distributed via KV)
+		const idempotencyCheck = await checkStripeWebhookProcessed(
+			context.cloudflare.env.KV,
+			event.id,
+		);
+
+		if (idempotencyCheck.alreadyProcessed) {
+			console.warn(
+				`Duplicate webhook event: ${event.id} (processed at ${new Date(idempotencyCheck.record?.processedAt || 0).toISOString()})`,
+			);
 			return new Response("Event already processed", { status: 200 });
 		}
 
@@ -61,12 +58,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				session.id,
 			);
 
-			// Mark event as processed
-			processedEvents.add(event.id);
-			cleanupProcessedEvents();
-
 			console.log(
-				`✅ Added ${result.credits} credits to user ${result.userId} (session: ${session.id})`,
+				`✅ Added ${result.credits} credits to user ${result.userId} (session: ${session.id}, event: ${event.id})`,
 			);
 		}
 

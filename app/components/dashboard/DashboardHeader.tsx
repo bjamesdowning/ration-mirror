@@ -48,6 +48,16 @@ export function DashboardHeader({
 						Galley Ops
 					</Link>
 					<Link
+						to="/dashboard/grocery"
+						className={
+							location.pathname === "/dashboard/grocery"
+								? "text-[#39FF14] underline"
+								: "opacity-50 hover:opacity-100"
+						}
+					>
+						Supply Depot
+					</Link>
+					<Link
 						to="/dashboard/credits"
 						className={
 							location.pathname === "/dashboard/credits"
@@ -55,7 +65,7 @@ export function DashboardHeader({
 								: "opacity-50 hover:opacity-100"
 						}
 					>
-						Supply Depot
+						Credits
 					</Link>
 					<Link
 						to="/dashboard/settings"
@@ -65,7 +75,7 @@ export function DashboardHeader({
 								: "opacity-50 hover:opacity-100"
 						}
 					>
-						Configuration
+						Config
 					</Link>
 				</nav>
 			</div>

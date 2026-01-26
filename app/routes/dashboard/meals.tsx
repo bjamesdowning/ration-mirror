@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealGrid } from "~/components/galley/MealGrid";
@@ -20,6 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const { meals, availableTags, currentTag } = loaderData;
 	const [, setSearchParams] = useSearchParams();
+	const [matchingEnabled, setMatchingEnabled] = useState(false);
 
 	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const selectedTag = e.target.value;
@@ -41,6 +43,21 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 			<div className="space-y-8">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+					{/* Matching Toggle */}
+					<div className="flex items-center gap-4">
+						<button
+							type="button"
+							onClick={() => setMatchingEnabled(!matchingEnabled)}
+							className={`px-4 py-2 border font-mono text-xs uppercase tracking-wider transition-all ${
+								matchingEnabled
+									? "border-[#39FF14] bg-[#39FF14] text-black font-bold"
+									: "border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10"
+							}`}
+						>
+							{matchingEnabled ? "✓ Match Mode Active" : "Enable Match Mode"}
+						</button>
+					</div>
+
 					{/* Tag Filter */}
 					<div className="flex items-center gap-2">
 						<label
@@ -80,7 +97,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					</Link>
 				</div>
 
-				<MealGrid meals={meals} />
+				<MealGrid meals={meals} enableMatching={matchingEnabled} />
 			</div>
 		</>
 	);

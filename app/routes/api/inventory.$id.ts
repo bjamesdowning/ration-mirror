@@ -1,10 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { z } from "zod";
 import { requireAuth } from "~/lib/auth.server";
-import {
-	InventoryItemSchema,
-	updateItem,
-} from "~/lib/inventory.server";
+import { InventoryItemSchema, updateItem } from "~/lib/inventory.server";
 import { data as json } from "~/lib/response";
 
 const PartialInventorySchema = InventoryItemSchema.partial();

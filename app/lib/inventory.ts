@@ -27,5 +27,7 @@ export function formatInventoryCategory(category?: string | null) {
 
 export function formatInventoryStatus(status?: string | null) {
 	if (!status) return INVENTORY_STATUS_LABELS.stable;
-	return INVENTORY_STATUS_LABELS[status] ?? status.replace(/_/g, " ").toUpperCase();
+	return (
+		INVENTORY_STATUS_LABELS[status] ?? status.replace(/_/g, " ").toUpperCase()
+	);
 }

@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { useFetcher } from "react-router";
-import { INVENTORY_CATEGORIES, formatInventoryCategory } from "~/lib/inventory";
+import type { useFetcher } from "react-router";
 import type { inventory } from "~/db/schema";
+import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 interface InventoryEditModalProps {
 	item: typeof inventory.$inferSelect;

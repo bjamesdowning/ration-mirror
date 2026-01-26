@@ -22,8 +22,7 @@ export type InventoryItemUpdateInput = Partial<InventoryItemInput>;
 export function calculateInventoryStatus(expiresAt?: Date | null) {
 	if (!expiresAt) return "stable";
 	const msPerDay = 1000 * 60 * 60 * 24;
-	const daysUntilExpiry =
-		(expiresAt.getTime() - Date.now()) / msPerDay;
+	const daysUntilExpiry = (expiresAt.getTime() - Date.now()) / msPerDay;
 	if (daysUntilExpiry < 0) return "biohazard";
 	if (daysUntilExpiry < 3) return "decay_imminent";
 	return "stable";

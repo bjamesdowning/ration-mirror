@@ -1,34 +1,34 @@
 {
-  "version": "7",
-  "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1768828274514,
-      "tag": "0000_initial_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1769433449226,
-      "tag": "0001_burly_corsair",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1769436369093,
-      "tag": "0002_sweet_rawhide_kid",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1769446683483,
-      "tag": "0003_spotty_zuras",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1768828274514,
+			"tag": "0000_initial_schema",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1769433449226,
+			"tag": "0001_burly_corsair",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "6",
+			"when": 1769436369093,
+			"tag": "0002_sweet_rawhide_kid",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1769446683483,
+			"tag": "0003_spotty_zuras",
+			"breakpoints": true
+		}
+	]
 }

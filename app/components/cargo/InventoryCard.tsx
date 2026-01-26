@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useFetcher } from "react-router";
+import { InventoryEditModal } from "~/components/cargo/InventoryEditModal";
+import { StatusGauge } from "~/components/cargo/StatusGauge";
 import type { inventory } from "~/db/schema";
 import {
 	formatInventoryCategory,
 	formatInventoryStatus,
 } from "~/lib/inventory";
-import { InventoryEditModal } from "~/components/cargo/InventoryEditModal";
-import { StatusGauge } from "~/components/cargo/StatusGauge";
 
 export function InventoryCard({
 	item,

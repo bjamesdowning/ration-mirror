@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Form, Link } from "react-router";
+import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
 
 interface MealDetailProps {
@@ -6,7 +8,123 @@ interface MealDetailProps {
 	isOwner: boolean;
 }
 
+interface IngredientAvailability {
+	name: string;
+	available: boolean;
+	availableQuantity: number;
+	requiredQuantity: number;
+	unit: string;
+}
+
 export function MealDetail({ meal, isOwner }: MealDetailProps) {
+	const [ingredientAvailability, setIngredientAvailability] = useState<
+		IngredientAvailability[]
+	>([]);
+	const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+
+	// Fetch ingredient availability for this meal
+	useEffect(() => {
+		const fetchAvailability = async () => {
+			try {
+				// Fetch matching data in strict mode to check if meal can be made
+				const params = new URLSearchParams({
+					mode: "strict",
+					limit: "1",
+				});
+
+				const response = await fetch(`/api/meals/match?${params}`);
+				const data = (await response.json()) as {
+					results: Array<{
+						meal: { id: string };
+						availableIngredients: IngredientMatch[];
+						missingIngredients: MissingIngredient[];
+					}>;
+				};
+
+				// Find our meal in the results
+				const matchResult = data.results.find(
+					(result) => result.meal.id === meal.id,
+				);
+
+				if (matchResult) {
+					// Build availability map
+					const availability: IngredientAvailability[] = [
+						...matchResult.availableIngredients.map((ing) => ({
+							name: ing.name,
+							available: true,
+							availableQuantity: ing.availableQuantity,
+							requiredQuantity: ing.requiredQuantity,
+							unit: ing.unit,
+						})),
+						...matchResult.missingIngredients.map((ing) => ({
+							name: ing.name,
+							available: false,
+							availableQuantity: 0,
+							requiredQuantity: ing.requiredQuantity,
+							unit: ing.unit,
+						})),
+					];
+					setIngredientAvailability(availability);
+				} else {
+					// If meal not in results, check with delta mode to get status for all ingredients
+					const deltaParams = new URLSearchParams({
+						mode: "delta",
+						minMatch: "0",
+						limit: "100",
+					});
+
+					const deltaResponse = await fetch(`/api/meals/match?${deltaParams}`);
+					const deltaData = (await deltaResponse.json()) as {
+						results: Array<{
+							meal: { id: string };
+							availableIngredients: IngredientMatch[];
+							missingIngredients: MissingIngredient[];
+						}>;
+					};
+
+					const deltaResult = deltaData.results.find(
+						(result) => result.meal.id === meal.id,
+					);
+
+					if (deltaResult) {
+						const availability: IngredientAvailability[] = [
+							...deltaResult.availableIngredients.map((ing) => ({
+								name: ing.name,
+								available: true,
+								availableQuantity: ing.availableQuantity,
+								requiredQuantity: ing.requiredQuantity,
+								unit: ing.unit,
+							})),
+							...deltaResult.missingIngredients.map((ing) => ({
+								name: ing.name,
+								available: false,
+								availableQuantity: 0,
+								requiredQuantity: ing.requiredQuantity,
+								unit: ing.unit,
+							})),
+						];
+						setIngredientAvailability(availability);
+					}
+				}
+			} catch (error) {
+				console.error("Failed to fetch ingredient availability:", error);
+			} finally {
+				setIsLoadingAvailability(false);
+			}
+		};
+
+		fetchAvailability();
+	}, [meal.id]);
+
+	// Helper to get availability status for an ingredient
+	const getAvailabilityStatus = (ingredientName: string) => {
+		const match = ingredientAvailability.find(
+			(ing) =>
+				ing.name.toLowerCase().trim() === ingredientName.toLowerCase().trim(),
+		);
+		return match;
+	};
+
 	return (
 		<div className="max-w-4xl mx-auto space-y-8 font-mono text-[#39FF14]">
 			{/* Header */}
@@ -75,23 +193,66 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						Manifest
 					</h3>
 					<ul className="space-y-3">
-						{meal.ingredients.map((ing) => (
-							<li
-								key={ing.ingredientName}
-								className="flex justify-between items-baseline border-b border-[#39FF14]/10 pb-2 last:border-0"
-							>
-								<span className="uppercase text-sm">
-									{ing.ingredientName}
-									{ing.isOptional && (
-										<span className="text-[10px] ml-2 opacity-50">(OPT)</span>
-									)}
-								</span>
-								<span className="font-bold">
-									{ing.quantity}{" "}
-									<span className="opacity-60 text-xs">{ing.unit}</span>
-								</span>
-							</li>
-						))}
+						{meal.ingredients.map((ing) => {
+							const availability = getAvailabilityStatus(ing.ingredientName);
+							const isAvailable = availability?.available ?? true;
+							const hasPartialStock =
+								availability &&
+								!availability.available &&
+								availability.availableQuantity > 0;
+
+							return (
+								<li
+									key={ing.ingredientName}
+									className="flex justify-between items-baseline border-b border-[#39FF14]/10 pb-2 last:border-0"
+								>
+									<div className="flex items-center gap-2 flex-1">
+										{/* Availability Indicator */}
+										{!isLoadingAvailability && (
+											<div
+												className={`w-2 h-2 flex-shrink-0 ${
+													isAvailable
+														? "bg-[#39FF14]"
+														: hasPartialStock
+															? "bg-yellow-500"
+															: "bg-red-500"
+												}`}
+												title={
+													isAvailable
+														? "Available in inventory"
+														: hasPartialStock
+															? "Partial stock available"
+															: "Not available"
+												}
+											/>
+										)}
+										<span
+											className={`uppercase text-sm ${!isAvailable ? "opacity-60" : ""}`}
+										>
+											{ing.ingredientName}
+											{ing.isOptional && (
+												<span className="text-[10px] ml-2 opacity-50">
+													(OPT)
+												</span>
+											)}
+										</span>
+									</div>
+									<div className="flex flex-col items-end">
+										<span className="font-bold">
+											{ing.quantity}{" "}
+											<span className="opacity-60 text-xs">{ing.unit}</span>
+										</span>
+										{availability && !availability.available && (
+											<span className="text-[9px] text-red-500/80 uppercase">
+												Need:{" "}
+												{availability.requiredQuantity -
+													availability.availableQuantity}
+											</span>
+										)}
+									</div>
+								</li>
+							);
+						})}
 					</ul>
 
 					{/* Cook Action */}

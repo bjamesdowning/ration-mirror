@@ -5,8 +5,8 @@ export const MealIngredientSchema = z.object({
 	quantity: z.coerce.number().positive("Quantity must be positive"),
 	unit: z.string().min(1, "Unit is required"),
 	inventoryId: z.string().optional().nullable(),
-	isOptional: z.boolean().default(false),
-	orderIndex: z.number().default(0),
+	isOptional: z.coerce.boolean().default(false),
+	orderIndex: z.coerce.number().default(0),
 });
 
 const MIN_SERVINGS = 1;

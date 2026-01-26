@@ -1,12 +1,29 @@
 /**
+ * Fields that should be parsed as comma-separated arrays.
+ * These are typically text inputs where users enter multiple values.
+ */
+const COMMA_SEPARATED_ARRAY_FIELDS = new Set(["tags", "equipment"]);
+
+/**
  * Utility to parse complex form data into objects/arrays.
  * Supports nested syntax like "ingredients[0].name".
+ * Also supports comma-separated values for specific array fields.
  */
 export function parseFormData(formData: FormData) {
 	const obj: Record<string, unknown> = {};
 	const MAX_ARRAY_SIZE = 100; // Prevent DDoS/Memory exhaustion
 
 	for (const [key, value] of formData.entries()) {
+		// Handle comma-separated array fields
+		if (COMMA_SEPARATED_ARRAY_FIELDS.has(key)) {
+			const stringValue = typeof value === "string" ? value : "";
+			obj[key] = stringValue
+				.split(",")
+				.map((item) => item.trim())
+				.filter((item) => item.length > 0);
+			continue;
+		}
+
 		// Handle simple fields
 		if (!key.includes("[")) {
 			obj[key] = value;

@@ -21,8 +21,10 @@ export function createAuth(env: Cloudflare.Env) {
 		}),
 		socialProviders: {
 			google: {
-				clientId: (env as any).GOOGLE_CLIENT_ID as string,
-				clientSecret: (env as any).GOOGLE_CLIENT_SECRET as string,
+				clientId: (env as Cloudflare.Env & { GOOGLE_CLIENT_ID: string })
+					.GOOGLE_CLIENT_ID,
+				clientSecret: (env as Cloudflare.Env & { GOOGLE_CLIENT_SECRET: string })
+					.GOOGLE_CLIENT_SECRET,
 			},
 		},
 		secret: env.BETTER_AUTH_SECRET,

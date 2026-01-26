@@ -6,14 +6,26 @@ export default [
 	route("sign-up", "routes/sign-up.tsx"),
 
 	// Dashboard
-	route("dashboard", "routes/dashboard.tsx"), // Defines /dashboard
-	route("dashboard/settings", "routes/dashboard/settings.tsx"), // Defines /dashboard/settings
-	route("dashboard/credits", "routes/dashboard/credits.tsx"), // Defines /dashboard/credits
+	// Dashboard
+	route("dashboard", "routes/dashboard.tsx", [
+		index("routes/dashboard/index.tsx"),
+		route("settings", "routes/dashboard/settings.tsx"),
+		route("credits", "routes/dashboard/credits.tsx"),
+
+		// Meals
+		route("meals", "routes/dashboard/meals.tsx"),
+		route("meals/new", "routes/dashboard/meals.new.tsx"),
+		route("meals/:id", "routes/dashboard/meals.$id.tsx"),
+		route("meals/:id/edit", "routes/dashboard/meals.$id.edit.tsx"),
+	]),
 
 	// Admin
 	route("admin", "routes/admin.tsx"),
 
 	// API
+	route("api/meals", "routes/api/meals.ts"),
+	route("api/meals/:id", "routes/api/meals.$id.ts"),
+	route("api/meals/:id/cook", "routes/api/meals.$id.cook.ts"),
 	route("api/scan", "routes/api/scan.tsx"),
 	route("api/search", "routes/api/search.tsx"),
 	route("api/checkout", "routes/api/checkout.tsx"),

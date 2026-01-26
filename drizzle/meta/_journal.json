@@ -8,6 +8,13 @@
 			"when": 1768828274514,
 			"tag": "0000_initial_schema",
 			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1769433449226,
+			"tag": "0001_burly_corsair",
+			"breakpoints": true
 		}
 	]
 }

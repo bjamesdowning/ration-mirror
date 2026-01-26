@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+	index,
+	integer,
+	sqliteTable,
+	text,
+	unique,
+} from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -95,4 +101,73 @@ export const ledger = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [index("ledger_user_idx").on(table.userId)],
+);
+
+export const meal = sqliteTable(
+	"meal",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
+		name: text("name").notNull(),
+		description: text("description"),
+		directions: text("directions"),
+		equipment: text("equipment", { mode: "json" }).default("[]"),
+		servings: integer("servings").default(1),
+		prepTime: integer("prep_time"),
+		cookTime: integer("cook_time"),
+		customFields: text("custom_fields", { mode: "json" }).default("{}"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [index("meal_user_idx").on(table.userId)],
+);
+
+export const mealIngredient = sqliteTable(
+	"meal_ingredient",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		mealId: text("meal_id")
+			.notNull()
+			.references(() => meal.id, { onDelete: "cascade" }),
+		inventoryId: text("inventory_id").references(() => inventory.id, {
+			onDelete: "set null",
+		}),
+		ingredientName: text("ingredient_name").notNull(),
+		quantity: integer("quantity").notNull(),
+		unit: text("unit").notNull(),
+		isOptional: integer("is_optional", { mode: "boolean" }).default(false),
+		orderIndex: integer("order_index").default(0),
+	},
+	(table) => [
+		index("meal_ingredient_meal_idx").on(table.mealId),
+		index("meal_ingredient_name_idx").on(table.ingredientName),
+	],
+);
+
+export const mealTag = sqliteTable(
+	"meal_tag",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		mealId: text("meal_id")
+			.notNull()
+			.references(() => meal.id, { onDelete: "cascade" }),
+		tag: text("tag").notNull(),
+	},
+	(table) => [
+		index("meal_tag_meal_idx").on(table.mealId),
+		index("meal_tag_tag_idx").on(table.tag),
+		unique("meal_tag_unique").on(table.mealId, table.tag),
+	],
 );

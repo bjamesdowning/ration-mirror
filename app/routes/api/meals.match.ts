@@ -55,7 +55,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 	try {
 		// Check KV cache first
 		const cacheKey = getMatchCacheKey(user.id, query);
-		const cached = await context.cloudflare.env.KV.get(cacheKey, "json");
+		const cached = await context.cloudflare.env.RATION_KV.get(cacheKey, "json");
 
 		if (cached) {
 			return Response.json({
@@ -68,7 +68,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		const results = await matchMeals(context.cloudflare.env.DB, user.id, query);
 
 		// Store in KV cache with 5-minute TTL
-		await context.cloudflare.env.KV.put(cacheKey, JSON.stringify(results), {
+		await context.cloudflare.env.RATION_KV.put(cacheKey, JSON.stringify(results), {
 			expirationTtl: CACHE_TTL,
 		});
 

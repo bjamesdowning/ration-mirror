@@ -9,6 +9,7 @@ import {
 	getInventory,
 	InventoryItemSchema,
 	jettisonItem,
+	updateItem,
 } from "~/lib/inventory.server";
 import type { Route } from "./+types/dashboard";
 
@@ -54,6 +55,47 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (!itemId) return { success: false, error: "Missing Item ID" };
 
 		await jettisonItem(context.cloudflare.env.DB, userId, itemId);
+		return { success: true };
+	}
+
+	if (intent === "update") {
+		const itemId = formData.get("itemId") as string;
+		if (!itemId) return { success: false, error: "Missing Item ID" };
+
+		// Parse tags: handle comma-separated string from edit form
+		const tagsValue = formData.get("tags") as string;
+		const rawTags = tagsValue
+			? tagsValue
+					.split(",")
+					.map((t) => t.trim())
+					.filter((t) => t.length > 0)
+			: [];
+		const expiresAtValue = formData.get("expiresAt");
+
+		// Construct object for validation
+		const rawData = {
+			name: formData.get("name"),
+			quantity: formData.get("quantity"),
+			unit: formData.get("unit"),
+			tags: rawTags,
+			expiresAt: expiresAtValue || undefined,
+		};
+
+		const result = InventoryItemSchema.safeParse(rawData);
+
+		if (!result.success) {
+			return { success: false, errors: result.error.flatten() };
+		}
+
+		const updated = await updateItem(
+			context.cloudflare.env,
+			userId,
+			itemId,
+			result.data,
+		);
+		if (!updated) {
+			return { success: false, error: "Item not found or unauthorized" };
+		}
 		return { success: true };
 	}
 

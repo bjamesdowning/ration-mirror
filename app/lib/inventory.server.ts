@@ -76,6 +76,39 @@ export async function addItem(
 }
 
 /**
+ * Update an existing inventory item.
+ * Security: Ensures the item belongs to the user requesting update.
+ * Also updates the vector embedding for semantic search.
+ */
+export async function updateItem(
+	env: Env,
+	userId: string,
+	itemId: string,
+	data: InventoryItemInput,
+) {
+	const d1 = drizzle(env.DB);
+
+	const [updatedItem] = await d1
+		.update(inventory)
+		.set({
+			name: data.name,
+			quantity: data.quantity,
+			unit: data.unit,
+			tags: data.tags,
+			expiresAt: data.expiresAt,
+		})
+		.where(and(eq(inventory.id, itemId), eq(inventory.userId, userId)))
+		.returning();
+
+	// Update vector embedding if item was found and updated
+	if (updatedItem) {
+		await updateItemEmbedding(env, userId, itemId, data);
+	}
+
+	return updatedItem;
+}
+
+/**
  * Delete (Jettison) an item from the inventory.
  * Security: Ensures the item belongs to the user requesting deletion.
  */

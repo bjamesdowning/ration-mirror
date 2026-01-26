@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 
@@ -7,6 +5,7 @@ import {
 	CameraInput,
 	type DetectedItem,
 } from "~/components/scanner/CameraInput";
+import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 export function IngestForm() {
 	const fetcher = useFetcher();
@@ -21,6 +20,7 @@ export function IngestForm() {
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
 	const unitInputRef = useRef<HTMLSelectElement>(null);
+	const categoryInputRef = useRef<HTMLSelectElement>(null);
 
 	// Reset form on success
 	useEffect(() => {
@@ -44,6 +44,7 @@ export function IngestForm() {
 
 			// Heuristic for unit or default to "unit"
 			if (unitInputRef.current) unitInputRef.current.value = "unit"; // Start with default
+			if (categoryInputRef.current) categoryInputRef.current.value = "other";
 
 			// Auto-check tags if they match?
 			// For MVP, simplistic name/qty fill is great "wow" factor.
@@ -124,6 +125,29 @@ export function IngestForm() {
 							<option value="pack">PACK</option>
 						</select>
 					</div>
+				</div>
+
+				{/* Category */}
+				<div className="flex flex-col">
+					<label
+						htmlFor="item-category"
+						className="text-xs uppercase opacity-70 mb-1"
+					>
+						Category
+					</label>
+					<select
+						id="item-category"
+						ref={categoryInputRef}
+						name="category"
+						defaultValue="other"
+						className="bg-black/50 border border-[#39FF14]/50 p-2 text-sm focus:border-[#39FF14] outline-none appearance-none"
+					>
+						{INVENTORY_CATEGORIES.map((category) => (
+							<option key={category} value={category}>
+								{formatInventoryCategory(category)}
+							</option>
+						))}
+					</select>
 				</div>
 
 				{/* Tags */}

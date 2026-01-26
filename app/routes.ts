@@ -26,6 +26,7 @@ export default [
 	route("api/meals", "routes/api/meals.ts"),
 	route("api/meals/:id", "routes/api/meals.$id.ts"),
 	route("api/meals/:id/cook", "routes/api/meals.$id.cook.ts"),
+	route("api/inventory/:id", "routes/api/inventory.$id.ts"),
 	route("api/scan", "routes/api/scan.tsx"),
 	route("api/search", "routes/api/search.tsx"),
 	route("api/checkout", "routes/api/checkout.tsx"),

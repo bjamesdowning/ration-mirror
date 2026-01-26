@@ -1,9 +1,11 @@
 // @ts-nocheck
+import { useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { requireAuth } from "~/lib/auth.server";
+import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import {
 	addItem,
 	getInventory,
@@ -37,6 +39,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
+			category: formData.get("category") ?? undefined,
 			tags: rawTags,
 		};
 
@@ -77,6 +80,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
+			category: formData.get("category") ?? undefined,
 			tags: rawTags,
 			expiresAt: expiresAtValue || undefined,
 		};
@@ -105,12 +109,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 // --- COMPONENT ---
 export default function DashboardIndex({ loaderData }: Route.ComponentProps) {
 	const { inventory: initialInventory } = loaderData;
+	const [categoryFilter, setCategoryFilter] = useState("all");
 
 	// Search Logic
 	const searchFetcher = useFetcher();
 	const searchResults = searchFetcher.data?.results;
 
 	const displayedInventory = searchResults || initialInventory;
+	const filteredInventory = useMemo(() => {
+		if (categoryFilter === "all") return displayedInventory;
+		return displayedInventory.filter(
+			(item) => item.category === categoryFilter,
+		);
+	}, [categoryFilter, displayedInventory]);
 
 	return (
 		<>
@@ -118,7 +129,7 @@ export default function DashboardIndex({ loaderData }: Route.ComponentProps) {
 				title="Cargo Hold"
 				subtitle="manifest_v3.0 // connected"
 				showSearch={true}
-				totalItems={displayedInventory.length}
+				totalItems={filteredInventory.length}
 			/>
 
 			<div className="grid lg:grid-cols-[350px_1fr] gap-8">
@@ -126,19 +137,33 @@ export default function DashboardIndex({ loaderData }: Route.ComponentProps) {
 				<aside className="space-y-8">
 					<IngestForm />
 
-					{/* Simple Stats / Filter Placeholder */}
-					<div className="border border-[#39FF14]/30 p-4 opacity-50">
-						<h3 className="uppercase text-xs mb-2">System Status</h3>
-						<div className="h-1 bg-[#39FF14]/20 w-full mb-1">
-							<div className="h-full bg-[#39FF14] w-[80%] animate-pulse"></div>
-						</div>
-						<p className="text-[10px]">Life Support: NOMINAL</p>
+					<div className="border border-[#39FF14]/30 p-4">
+						<h3 className="uppercase text-xs mb-3">Cargo Filters</h3>
+						<label
+							htmlFor="category-filter"
+							className="text-[10px] uppercase opacity-70"
+						>
+							Category
+						</label>
+						<select
+							id="category-filter"
+							value={categoryFilter}
+							onChange={(event) => setCategoryFilter(event.target.value)}
+							className="mt-2 w-full bg-[#051105] border border-[#39FF14]/50 p-2 text-xs uppercase tracking-widest"
+						>
+							<option value="all">ALL CATEGORIES</option>
+							{INVENTORY_CATEGORIES.map((category) => (
+								<option key={category} value={category}>
+									{formatInventoryCategory(category)}
+								</option>
+							))}
+						</select>
 					</div>
 				</aside>
 
 				{/* Right Col: Manifest Grid */}
 				<main>
-					<ManifestGrid items={displayedInventory} />
+					<ManifestGrid items={filteredInventory} />
 				</main>
 			</div>
 		</>

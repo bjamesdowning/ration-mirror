@@ -1,0 +1,1 @@
+CREATE INDEX `meal_user_id_idx` ON `meal` (`user_id`,`id`);

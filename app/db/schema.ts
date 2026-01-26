@@ -127,7 +127,10 @@ export const meal = sqliteTable(
 			.notNull()
 			.default(sql`(unixepoch())`),
 	},
-	(table) => [index("meal_user_idx").on(table.userId)],
+	(table) => [
+		index("meal_user_idx").on(table.userId),
+		index("meal_user_id_idx").on(table.userId, table.id),
+	],
 );
 
 export const mealIngredient = sqliteTable(

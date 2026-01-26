@@ -1,36 +1,12 @@
-import { data, redirect } from "react-router";
-import { z } from "zod";
+import { redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireAuth } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
+import { parseFormData } from "~/lib/form-utils";
 import { getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.$id.edit";
-
-// Reuse parseFormData from new.tsx or extract it.
-// Copying for now to be self-contained in route logic.
-function parseFormData(formData: FormData) {
-	const obj: Record<string, unknown> = {};
-	for (const [key, value] of formData.entries()) {
-		if (key.includes("[")) {
-			const match = key.match(/^(\w+)\[(\d+)\]\.(\w+)$/);
-			if (match) {
-				const [_, root, index, field] = match;
-				if (!obj[root]) obj[root] = [];
-				const rootArray = obj[root] as Record<string, unknown>[];
-				const idx = Number.parseInt(index, 10);
-				if (!rootArray[idx]) rootArray[idx] = {};
-				rootArray[idx][field] = value;
-				continue;
-			}
-		}
-		obj[key] = value;
-	}
-	if (Array.isArray(obj.ingredients)) {
-		obj.ingredients = obj.ingredients.filter(Boolean);
-	}
-	return obj;
-}
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const { user } = await requireAuth(context, request);
@@ -80,16 +56,11 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		}
 
 		const input = MealSchema.parse(inputData);
-		// Using meals service update
 		await updateMeal(context.cloudflare.env.DB, user.id, id, input);
 
 		return redirect(`/dashboard/meals/${id}`);
 	} catch (e) {
-		if (e instanceof z.ZodError) {
-			return data({ errors: e.flatten() }, { status: 400 });
-		}
-		console.error(e);
-		return data({ error: "Server Error" }, { status: 500 });
+		return handleApiError(e);
 	}
 }
 

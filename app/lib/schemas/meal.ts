@@ -9,12 +9,15 @@ export const MealIngredientSchema = z.object({
 	orderIndex: z.number().default(0),
 });
 
+const MIN_SERVINGS = 1;
+const DEFAULT_SERVINGS = 1;
+
 export const MealSchema = z.object({
 	name: z.string().min(1, "Meal name is required"),
 	description: z.string().optional(),
 	directions: z.string().optional(),
 	equipment: z.array(z.string()).default([]),
-	servings: z.coerce.number().int().min(1).default(1),
+	servings: z.coerce.number().int().min(MIN_SERVINGS).default(DEFAULT_SERVINGS),
 	prepTime: z.coerce.number().int().nonnegative().optional(),
 	cookTime: z.coerce.number().int().nonnegative().optional(),
 	customFields: z.record(z.string(), z.string()).default({}),

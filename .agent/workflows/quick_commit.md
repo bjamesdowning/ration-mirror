@@ -1,5 +1,5 @@
 ---
-description: Quick protocol to lint, test, typecheck, build, and commit changes
+description: Quick protocol to lint, test, typecheck, build, conduct DB migrations, and commit changes
 ---
 
 1. Ensure dependencies are up to date and the lockfile is synchronized.
@@ -18,17 +18,25 @@ description: Quick protocol to lint, test, typecheck, build, and commit changes
 // turbo
 8. Run `bun run typecheck`
 
-9. Check the git status to see what files will be committed.
+9. Generate SQL migration files from the current schema.
 // turbo
-10. Run `git status`
+10. Run `bun run db:generate`
 
-11. If all checks passed locally, add all changes to the staging area.
+11. Apply any pending SQL migrations to the remote (production) D1 database.
 // turbo
-12. Run `git add .`
+12. Run `bun run db:migrate:prod`
 
-13. Commit the changes. Please generate a descriptive commit message.
-14. Run `git commit -m "MESSAGE"`
-
-15. Push the changes to the remote repository.
+13. Check the git status to see what files will be committed.
 // turbo
-16. Run `git push`
+14. Run `git status`
+
+15. If all checks passed locally (and migrations are successful), add all changes to the staging area.
+// turbo
+16. Run `git add .`
+
+17. Commit the changes. Please generate a descriptive commit message.
+18. Run `git commit -m "MESSAGE"`
+
+19. Push the changes to the remote repository.
+// turbo
+20. Run `git push`

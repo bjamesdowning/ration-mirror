@@ -1,11 +1,8 @@
 import { useState } from "react";
 
-import type { inventory } from "~/db/schema";
 import type { MealIngredientInput } from "~/lib/schemas/meal"; // Implied type from schema
 
 type IngredientWithId = MealIngredientInput & { localId: string };
-
-
 
 interface IngredientPickerProps {
 	defaultValue?: MealIngredientInput[];
@@ -104,7 +101,11 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 							name={`ingredients[${idx}].quantity`}
 							value={ing.quantity}
 							onChange={(e) =>
-								updateIngredient(idx, "quantity", e.target.value)
+								updateIngredient(
+									idx,
+									"quantity",
+									Number.parseFloat(e.target.value) || 0,
+								)
 							}
 							placeholder="QTY"
 							className="w-full bg-transparent border-b border-[#39FF14]/30 text-[#39FF14] font-mono text-sm text-right focus:outline-none focus:border-[#39FF14]"

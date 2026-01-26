@@ -64,6 +64,40 @@ export function MealBuilder({
 					/>
 				</div>
 
+				<div className="flex flex-col gap-2">
+					<label htmlFor="tags" className="text-xs uppercase opacity-70">
+						Classification Tags
+					</label>
+					<input
+						type="text"
+						name="tags"
+						id="tags"
+						defaultValue={defaultValue.tags?.join(", ")}
+						className="bg-transparent border-b border-[#39FF14]/50 p-2 focus:outline-none focus:border-[#39FF14]"
+						placeholder="E.G. BREAKFAST, QUICK, VEGETARIAN (COMMA SEPARATED)"
+					/>
+					<span className="text-[10px] opacity-50">
+						COMMA-SEPARATED LIST FOR FILTERING
+					</span>
+				</div>
+
+				<div className="flex flex-col gap-2">
+					<label htmlFor="equipment" className="text-xs uppercase opacity-70">
+						Required Equipment
+					</label>
+					<input
+						type="text"
+						name="equipment"
+						id="equipment"
+						defaultValue={defaultValue.equipment?.join(", ")}
+						className="bg-transparent border-b border-[#39FF14]/50 p-2 focus:outline-none focus:border-[#39FF14]"
+						placeholder="E.G. OVEN, BLENDER, CAST IRON PAN (COMMA SEPARATED)"
+					/>
+					<span className="text-[10px] opacity-50">
+						COMMA-SEPARATED LIST OF TOOLS NEEDED
+					</span>
+				</div>
+
 				<div className="grid grid-cols-2 gap-4">
 					<div className="flex flex-col gap-2">
 						<label htmlFor="prepTime" className="text-xs uppercase opacity-70">

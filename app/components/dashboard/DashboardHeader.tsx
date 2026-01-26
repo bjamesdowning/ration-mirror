@@ -38,6 +38,16 @@ export function DashboardHeader({
 						Manifest
 					</Link>
 					<Link
+						to="/dashboard/meals"
+						className={
+							location.pathname.startsWith("/dashboard/meals")
+								? "text-[#39FF14] underline"
+								: "opacity-50 hover:opacity-100"
+						}
+					>
+						Galley Ops
+					</Link>
+					<Link
 						to="/dashboard/credits"
 						className={
 							location.pathname === "/dashboard/credits"

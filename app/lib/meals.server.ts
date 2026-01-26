@@ -291,3 +291,20 @@ export async function cookMeal(db: D1Database, userId: string, mealId: string) {
 
 	return { cooked: true, ingredientsDeducted: 0 };
 }
+
+/**
+ * Retrieves all unique tags for a user's meals.
+ * Useful for populating tag filter dropdowns.
+ */
+export async function getUserMealTags(db: D1Database, userId: string) {
+	const d1 = drizzle(db);
+
+	const tags = await d1
+		.selectDistinct({ tag: mealTag.tag })
+		.from(mealTag)
+		.innerJoin(meal, eq(mealTag.mealId, meal.id))
+		.where(eq(meal.userId, userId))
+		.orderBy(mealTag.tag);
+
+	return tags.map((t) => t.tag);
+}

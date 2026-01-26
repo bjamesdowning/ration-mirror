@@ -64,7 +64,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		// Check KV cache first
 		const cacheKey = getMatchCacheKey(user.id, query);
 		console.log("[Match API] Cache key:", cacheKey);
-		
+
 		const cached = await context.cloudflare.env.RATION_KV.get(cacheKey, "json");
 
 		if (cached) {
@@ -83,9 +83,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		console.log("[Match API] Match complete, results count:", results.length);
 
 		// Store in KV cache with 5-minute TTL
-		await context.cloudflare.env.RATION_KV.put(cacheKey, JSON.stringify(results), {
-			expirationTtl: CACHE_TTL,
-		});
+		await context.cloudflare.env.RATION_KV.put(
+			cacheKey,
+			JSON.stringify(results),
+			{
+				expirationTtl: CACHE_TTL,
+			},
+		);
 
 		console.log("[Match API] Results cached");
 
@@ -95,12 +99,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		});
 	} catch (error) {
 		console.error("[Match API] Error:", error);
-		console.error("[Match API] Error stack:", error instanceof Error ? error.stack : "No stack");
+		console.error(
+			"[Match API] Error stack:",
+			error instanceof Error ? error.stack : "No stack",
+		);
 		console.error("[Match API] Error details:", {
 			message: error instanceof Error ? error.message : String(error),
 			name: error instanceof Error ? error.name : "Unknown",
 		});
-		
+
 		return Response.json(
 			{
 				error: "Failed to match meals",

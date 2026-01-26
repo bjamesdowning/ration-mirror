@@ -182,3 +182,54 @@ export const mealTag = sqliteTable(
 		unique("meal_tag_unique").on(table.mealId, table.tag),
 	],
 );
+
+export const groceryList = sqliteTable(
+	"grocery_list",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
+		name: text("name").notNull().default("Shopping List"),
+		shareToken: text("share_token").unique(),
+		shareExpiresAt: integer("share_expires_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("grocery_list_user_idx").on(table.userId),
+		index("grocery_list_share_idx").on(table.shareToken),
+	],
+);
+
+export const groceryItem = sqliteTable(
+	"grocery_item",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		listId: text("list_id")
+			.notNull()
+			.references(() => groceryList.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		quantity: integer("quantity").notNull().default(1),
+		unit: text("unit").notNull().default("unit"),
+		category: text("category").notNull().default("other"),
+		isPurchased: integer("is_purchased", { mode: "boolean" })
+			.notNull()
+			.default(false),
+		sourceMealId: text("source_meal_id").references(() => meal.id, {
+			onDelete: "set null",
+		}),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [index("grocery_item_list_idx").on(table.listId)],
+);

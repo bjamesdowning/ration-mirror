@@ -247,7 +247,13 @@ export async function matchMeals(
 	const d1 = drizzle(db);
 	const { mode, minMatch = 50, limit = 20, tag } = query;
 
-	console.log("[matchMeals] Starting with params:", { userId, mode, minMatch, limit, tag });
+	console.log("[matchMeals] Starting with params:", {
+		userId,
+		mode,
+		minMatch,
+		limit,
+		tag,
+	});
 
 	// 1. Fetch user's meals (with optional tag filter)
 	const mealQuery = tag

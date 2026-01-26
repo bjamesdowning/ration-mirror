@@ -247,6 +247,8 @@ export async function matchMeals(
 	const d1 = drizzle(db);
 	const { mode, minMatch = 50, limit = 20, tag } = query;
 
+	console.log("[matchMeals] Starting with params:", { userId, mode, minMatch, limit, tag });
+
 	// 1. Fetch user's meals (with optional tag filter)
 	const mealQuery = tag
 		? d1
@@ -270,6 +272,7 @@ export async function matchMeals(
 		: d1.select().from(meal).where(eq(meal.userId, userId));
 
 	const meals = await mealQuery;
+	console.log("[matchMeals] Found meals:", meals.length);
 
 	if (meals.length === 0) {
 		return [];
@@ -278,12 +281,21 @@ export async function matchMeals(
 	// 2. Fetch all ingredients and tags for these meals in parallel
 	const mealIds = meals.map((m) => m.id);
 
+	// Handle empty mealIds array
+	if (mealIds.length === 0) {
+		return [];
+	}
+
 	const [ingredientsData, tagsData] = await Promise.all([
-		d1
-			.select()
-			.from(mealIngredient)
-			.where(inArray(mealIngredient.mealId, mealIds)),
-		d1.select().from(mealTag).where(inArray(mealTag.mealId, mealIds)),
+		mealIds.length > 0
+			? d1
+					.select()
+					.from(mealIngredient)
+					.where(inArray(mealIngredient.mealId, mealIds))
+			: Promise.resolve([]),
+		mealIds.length > 0
+			? d1.select().from(mealTag).where(inArray(mealTag.mealId, mealIds))
+			: Promise.resolve([]),
 	]);
 
 	// Group ingredients and tags by meal ID

@@ -51,15 +51,13 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 	};
 
 	return (
-		<div className="space-y-4 border border-[#39FF14]/30 p-4 bg-[#051105]/50">
+		<div className="glass-panel rounded-xl p-4 space-y-4">
 			<div className="flex justify-between items-center">
-				<h3 className="text-[#39FF14] font-mono text-sm uppercase">
-					Components
-				</h3>
+				<h3 className="text-label text-muted text-sm">Components</h3>
 				<button
 					type="button"
 					onClick={addIngredient}
-					className="px-2 py-1 bg-[#39FF14]/20 text-[#39FF14] border border-[#39FF14] text-xs font-mono uppercase hover:bg-[#39FF14]/30"
+					className="px-3 py-1.5 bg-hyper-green/10 text-hyper-green rounded-lg text-xs font-medium hover:bg-hyper-green/20 transition-colors"
 				>
 					+ Add Component
 				</button>
@@ -68,7 +66,7 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 			{ingredients.map((ing, idx) => (
 				<div
 					key={ing.localId}
-					className="grid grid-cols-12 gap-2 items-center border-b border-[#39FF14]/10 pb-2"
+					className="grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3"
 				>
 					{/* Hidden inputs for form submission */}
 					<input
@@ -77,8 +75,8 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 						value={idx}
 					/>
 
-					<div className="col-span-1 text-[#39FF14]/50 font-mono text-xs">
-						{(idx + 1).toString().padStart(2, "0")}
+					<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
+						{idx + 1}
 					</div>
 
 					<div className="col-span-5">
@@ -89,8 +87,8 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 							onChange={(e) =>
 								updateIngredient(idx, "ingredientName", e.target.value)
 							}
-							placeholder="COMPONENT NAME"
-							className="w-full bg-transparent border-b border-[#39FF14]/30 text-[#39FF14] font-mono text-sm focus:outline-none focus:border-[#39FF14]"
+							placeholder="Component name"
+							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
@@ -107,8 +105,8 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 									Number.parseFloat(e.target.value) || 0,
 								)
 							}
-							placeholder="QTY"
-							className="w-full bg-transparent border-b border-[#39FF14]/30 text-[#39FF14] font-mono text-sm text-right focus:outline-none focus:border-[#39FF14]"
+							placeholder="Qty"
+							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm text-right placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
@@ -118,8 +116,8 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 							name={`ingredients[${idx}].unit`}
 							value={ing.unit}
 							onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
-							placeholder="UNIT"
-							className="w-full bg-transparent border-b border-[#39FF14]/30 text-[#39FF14] font-mono text-xs focus:outline-none focus:border-[#39FF14]"
+							placeholder="Unit"
+							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-xs placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
@@ -127,16 +125,16 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 						<button
 							type="button"
 							onClick={() => removeIngredient(idx)}
-							className="text-red-500 hover:text-red-400 font-mono text-xs uppercase"
+							className="text-danger hover:text-danger/80 text-xs font-medium transition-colors"
 						>
-							[REM]
+							Remove
 						</button>
 					</div>
 				</div>
 			))}
 			{ingredients.length === 0 && (
-				<div className="text-center text-[#39FF14]/30 font-mono text-xs italic py-4">
-					{"//"} NO COMPONENTS ASSIGNED
+				<div className="text-center text-muted text-sm py-4 bg-platinum/50 rounded-lg">
+					No components assigned
 				</div>
 			)}
 		</div>

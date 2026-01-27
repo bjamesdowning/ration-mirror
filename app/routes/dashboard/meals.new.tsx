@@ -33,8 +33,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function NewMeal() {
 	return (
 		<>
-			<DashboardHeader title="NEW PROTOCOL" subtitle="INITIALIZATION" />
-			<div className="max-w-4xl mx-auto border border-[#39FF14]/30 bg-[#051105]/50 p-8">
+			<DashboardHeader title="New Recipe" subtitle="Create a new meal" />
+			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
 				<MealBuilder />
 			</div>
 		</>

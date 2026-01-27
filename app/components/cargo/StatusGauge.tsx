@@ -35,26 +35,26 @@ export function StatusGauge({ status, expiresAt }: StatusGaugeProps) {
 	const gaugeWidth = getGaugeWidth(parsedExpiry);
 	const gaugeColor =
 		resolvedStatus === "biohazard"
-			? "bg-red-500"
+			? "bg-danger"
 			: resolvedStatus === "decay_imminent"
-				? "bg-yellow-500"
-				: "bg-[#39FF14]";
+				? "bg-warning"
+				: "bg-hyper-green";
 
 	return (
 		<div className="mt-auto relative">
-			<div className="flex justify-between text-[10px] uppercase opacity-70 mb-1">
-				<span>Integrity</span>
-				<span>
-					{parsedExpiry ? parsedExpiry.toLocaleDateString() : "STABLE"}
+			<div className="flex justify-between text-sm text-muted mb-2">
+				<span>Freshness</span>
+				<span className="text-data text-carbon">
+					{parsedExpiry ? parsedExpiry.toLocaleDateString() : "No expiry"}
 				</span>
 			</div>
-			<div className="h-1 w-full bg-[#39FF14]/20">
+			<div className="h-2 w-full bg-platinum rounded-full overflow-hidden">
 				<div
-					className={`h-full ${gaugeColor} transition-all duration-500`}
+					className={`h-full ${gaugeColor} rounded-full transition-all duration-300`}
 					style={{ width: `${gaugeWidth}%` }}
 				/>
 			</div>
-			<div className="mt-2 text-[10px] uppercase tracking-widest opacity-70">
+			<div className="mt-2 text-sm text-muted">
 				{formatInventoryStatus(resolvedStatus)}
 			</div>
 		</div>

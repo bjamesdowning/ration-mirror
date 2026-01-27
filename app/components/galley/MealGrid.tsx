@@ -61,9 +61,9 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 
 	if (meals.length === 0) {
 		return (
-			<div className="p-8 border border-dashed border-[#39FF14]/30 text-center text-[#39FF14]/50 font-mono uppercase">
-				<p>NO MEAL DATA FOUND</p>
-				<p className="text-sm mt-2">INITIATE CREATION SEQUENCE</p>
+			<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
+				<p className="font-medium text-carbon">No meals found</p>
+				<p className="text-sm mt-2">Create your first recipe to get started</p>
 			</div>
 		);
 	}
@@ -73,21 +73,19 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 		return (
 			<div className="space-y-6">
 				{/* Matching Controls */}
-				<div className="border border-[#39FF14]/30 bg-[#051105]/50 p-4 font-mono">
+				<div className="glass-panel rounded-xl p-4">
 					<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 						{/* Mode Toggle */}
 						<div className="flex items-center gap-4">
-							<span className="text-xs text-[#39FF14]/70 uppercase tracking-wider">
-								Match Mode:
-							</span>
-							<div className="flex border border-[#39FF14]/50">
+							<span className="text-label text-muted text-sm">Match Mode:</span>
+							<div className="flex rounded-lg overflow-hidden border border-platinum">
 								<button
 									type="button"
 									onClick={() => setMatchMode("strict")}
-									className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors ${
+									className={`px-4 py-2 text-sm font-medium transition-colors ${
 										matchMode === "strict"
-											? "bg-[#39FF14] text-black font-bold"
-											: "text-[#39FF14] hover:bg-[#39FF14]/10"
+											? "bg-hyper-green text-carbon"
+											: "text-muted hover:bg-platinum/50"
 									}`}
 								>
 									Strict
@@ -95,10 +93,10 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 								<button
 									type="button"
 									onClick={() => setMatchMode("delta")}
-									className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors ${
+									className={`px-4 py-2 text-sm font-medium transition-colors ${
 										matchMode === "delta"
-											? "bg-[#39FF14] text-black font-bold"
-											: "text-[#39FF14] hover:bg-[#39FF14]/10"
+											? "bg-hyper-green text-carbon"
+											: "text-muted hover:bg-platinum/50"
 									}`}
 								>
 									Delta
@@ -111,7 +109,7 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 							<div className="flex items-center gap-4">
 								<label
 									htmlFor="minMatch"
-									className="text-xs text-[#39FF14]/70 uppercase tracking-wider"
+									className="text-label text-muted text-sm"
 								>
 									Min Match:
 								</label>
@@ -123,9 +121,9 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 									step="5"
 									value={minMatch}
 									onChange={(e) => setMinMatch(Number(e.target.value))}
-									className="w-32 h-1 bg-[#39FF14]/20 accent-[#39FF14]"
+									className="w-32 h-2 bg-platinum rounded-full accent-hyper-green"
 								/>
-								<span className="text-sm font-bold text-[#39FF14] w-12">
+								<span className="text-data text-sm font-bold text-hyper-green w-12">
 									{minMatch}%
 								</span>
 							</div>
@@ -135,25 +133,25 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 
 				{/* Loading State */}
 				{isLoading && (
-					<div className="p-8 border border-[#39FF14]/30 text-center text-[#39FF14]/70 font-mono uppercase">
-						<p className="animate-pulse">Processing Match Query...</p>
+					<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
+						<p className="animate-pulse">Processing match query...</p>
 					</div>
 				)}
 
 				{/* Error State */}
 				{error && (
-					<div className="p-4 border border-red-500/50 bg-red-500/10 text-red-500 font-mono text-xs">
-						<p className="uppercase">Match Error: {error}</p>
+					<div className="bg-danger/10 rounded-xl p-4 text-danger text-sm">
+						<p>Match Error: {error}</p>
 					</div>
 				)}
 
 				{/* Match Results Grid */}
 				{!isLoading && matchResults && (
 					<>
-						<div className="text-xs text-[#39FF14]/70 uppercase tracking-wider font-mono">
-							Found {matchResults.length} matching meal protocols
+						<div className="text-sm text-muted">
+							Found {matchResults.length} matching recipes
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 							{matchResults.map((result) => (
 								<div key={result.meal.id} className="relative">
 									<MealCard meal={result.meal} />
@@ -171,8 +169,10 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 				)}
 
 				{!isLoading && matchResults?.length === 0 && (
-					<div className="p-8 border border-dashed border-[#39FF14]/30 text-center text-[#39FF14]/50 font-mono uppercase">
-						<p>No meals match current criteria</p>
+					<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
+						<p className="font-medium text-carbon">
+							No meals match current criteria
+						</p>
 						<p className="text-sm mt-2">
 							{matchMode === "strict"
 								? "Try delta mode or add more inventory items"
@@ -186,7 +186,7 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 
 	// Regular grid without matching
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 			{meals.map((meal) => (
 				<MealCard key={meal.id} meal={meal} />
 			))}

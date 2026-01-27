@@ -137,21 +137,18 @@ export default function DashboardIndex({ loaderData }: Route.ComponentProps) {
 				<aside className="space-y-8">
 					<IngestForm />
 
-					<div className="border border-[#39FF14]/30 p-4">
-						<h3 className="uppercase text-xs mb-3">Cargo Filters</h3>
-						<label
-							htmlFor="category-filter"
-							className="text-[10px] uppercase opacity-70"
-						>
+					<div className="glass-panel rounded-xl p-4">
+						<h3 className="text-label text-carbon mb-3">Cargo Filters</h3>
+						<label htmlFor="category-filter" className="text-label text-muted">
 							Category
 						</label>
 						<select
 							id="category-filter"
 							value={categoryFilter}
 							onChange={(event) => setCategoryFilter(event.target.value)}
-							className="mt-2 w-full bg-[#051105] border border-[#39FF14]/50 p-2 text-xs uppercase tracking-widest"
+							className="mt-2 w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"
 						>
-							<option value="all">ALL CATEGORIES</option>
+							<option value="all">All Categories</option>
 							{INVENTORY_CATEGORIES.map((category) => (
 								<option key={category} value={category}>
 									{formatInventoryCategory(category)}

@@ -15,20 +15,16 @@ export function MealMatchBadge({
 }: MealMatchBadgeProps) {
 	// Determine color based on percentage
 	const getColorClass = () => {
-		if (percentage === 100)
-			return "bg-[#39FF14]/20 text-[#39FF14] border-[#39FF14]/50";
-		if (percentage >= 75)
-			return "bg-yellow-500/20 text-yellow-500 border-yellow-500/50";
-		if (percentage >= 50)
-			return "bg-orange-500/20 text-orange-500 border-orange-500/50";
-		return "bg-red-500/20 text-red-500 border-red-500/50";
+		if (percentage > 80) return "bg-success/10 text-success";
+		if (percentage >= 50) return "bg-warning/10 text-warning";
+		return "bg-danger/10 text-danger";
 	};
 
 	// Size classes
 	const getSizeClasses = () => {
 		switch (size) {
 			case "sm":
-				return "text-[10px] px-2 py-0.5";
+				return "text-xs px-2 py-1";
 			case "lg":
 				return "text-sm px-4 py-2";
 			default:
@@ -40,8 +36,7 @@ export function MealMatchBadge({
 		<div className="flex items-center gap-2">
 			<div
 				className={`
-					font-mono font-bold uppercase tracking-wider
-					border rounded
+					text-data font-bold rounded-full
 					${getColorClass()}
 					${getSizeClasses()}
 				`}
@@ -49,9 +44,7 @@ export function MealMatchBadge({
 				{percentage}%
 			</div>
 			{canMake && percentage === 100 && (
-				<span className="text-[10px] text-[#39FF14]/60 uppercase tracking-wide">
-					Ready
-				</span>
+				<span className="text-xs text-success">Ready</span>
 			)}
 		</div>
 	);

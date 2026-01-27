@@ -52,9 +52,9 @@ export function IngestForm() {
 	};
 
 	return (
-		<div className="border border-[#39FF14] bg-[#051105] p-4 font-mono text-[#39FF14]">
-			<div className="flex justify-between items-center mb-4 border-b border-[#39FF14]/50 pb-2">
-				<h2 className="text-xl font-bold uppercase">Ingest Station</h2>
+		<div className="glass-panel rounded-xl p-6">
+			<div className="flex justify-between items-center mb-6 border-b border-platinum pb-4">
+				<h2 className="text-xl font-bold text-carbon">Add New Item</h2>
 				<CameraInput onScanComplete={handleScanComplete} />
 			</div>
 
@@ -63,11 +63,8 @@ export function IngestForm() {
 
 				{/* Name */}
 				<div className="flex flex-col">
-					<label
-						htmlFor="item-name"
-						className="text-xs uppercase opacity-70 mb-1"
-					>
-						Item Ident
+					<label htmlFor="item-name" className="text-label text-muted mb-2">
+						Item Name
 					</label>
 					<input
 						id="item-name"
@@ -75,8 +72,8 @@ export function IngestForm() {
 						type="text"
 						name="name"
 						required
-						placeholder="RATION BLOCK A"
-						className="bg-black/50 border border-[#39FF14]/50 p-2 text-sm focus:border-[#39FF14] outline-none placeholder-[#39FF14]/20"
+						placeholder="Enter item name"
+						className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none placeholder-muted/50"
 					/>
 				</div>
 
@@ -85,7 +82,7 @@ export function IngestForm() {
 					<div className="flex flex-col">
 						<label
 							htmlFor="item-quantity"
-							className="text-xs uppercase opacity-70 mb-1"
+							className="text-label text-muted mb-2"
 						>
 							Quantity
 						</label>
@@ -98,41 +95,35 @@ export function IngestForm() {
 							min="0"
 							step="any"
 							defaultValue="1"
-							className="bg-black/50 border border-[#39FF14]/50 p-2 text-sm focus:border-[#39FF14] outline-none"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 					<div className="flex flex-col">
-						<label
-							htmlFor="item-unit"
-							className="text-xs uppercase opacity-70 mb-1"
-						>
+						<label htmlFor="item-unit" className="text-label text-muted mb-2">
 							Unit
 						</label>
 						<select
 							id="item-unit"
 							ref={unitInputRef}
 							name="unit"
-							className="bg-black/50 border border-[#39FF14]/50 p-2 text-sm focus:border-[#39FF14] outline-none appearance-none"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
 						>
-							<option value="unit">UNIT</option>
-							<option value="kg">KG</option>
-							<option value="g">G</option>
-							<option value="lb">LB</option>
-							<option value="oz">OZ</option>
+							<option value="unit">Unit</option>
+							<option value="kg">kg</option>
+							<option value="g">g</option>
+							<option value="lb">lb</option>
+							<option value="oz">oz</option>
 							<option value="l">L</option>
-							<option value="ml">ML</option>
-							<option value="can">CAN</option>
-							<option value="pack">PACK</option>
+							<option value="ml">mL</option>
+							<option value="can">Can</option>
+							<option value="pack">Pack</option>
 						</select>
 					</div>
 				</div>
 
 				{/* Category */}
 				<div className="flex flex-col">
-					<label
-						htmlFor="item-category"
-						className="text-xs uppercase opacity-70 mb-1"
-					>
+					<label htmlFor="item-category" className="text-label text-muted mb-2">
 						Category
 					</label>
 					<select
@@ -140,7 +131,7 @@ export function IngestForm() {
 						ref={categoryInputRef}
 						name="category"
 						defaultValue="other"
-						className="bg-black/50 border border-[#39FF14]/50 p-2 text-sm focus:border-[#39FF14] outline-none appearance-none"
+						className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
 					>
 						{INVENTORY_CATEGORIES.map((category) => (
 							<option key={category} value={category}>
@@ -152,26 +143,23 @@ export function IngestForm() {
 
 				{/* Tags */}
 				<div className="flex flex-col">
-					<label
-						htmlFor="tag-dry"
-						className="text-xs uppercase opacity-70 mb-1"
-					>
-						Classification (Tags)
+					<label htmlFor="tag-dry" className="text-label text-muted mb-2">
+						Tags
 					</label>
-					<div className="flex gap-4 text-xs">
+					<div className="flex flex-wrap gap-4 text-sm">
 						{["Dry", "Frozen", "Fridge", "Hazard"].map((tag) => (
 							<label
 								key={tag}
-								className="flex items-center cursor-pointer hover:opacity-100 opacity-70"
+								className="flex items-center cursor-pointer text-carbon hover:text-hyper-green transition-colors"
 							>
 								<input
 									type="checkbox"
 									id={tag === "Dry" ? "tag-dry" : undefined}
 									name="tags"
 									value={tag}
-									className="mr-2 accent-[#39FF14]"
+									className="mr-2 w-4 h-4 accent-hyper-green rounded"
 								/>
-								[{tag.toUpperCase()}]
+								{tag}
 							</label>
 						))}
 					</div>
@@ -181,9 +169,9 @@ export function IngestForm() {
 				<button
 					type="submit"
 					disabled={isSubmitting}
-					className="w-full bg-[#39FF14] text-black font-bold uppercase py-2 hover:bg-[#32cc12] disabled:opacity-50 mt-4 transition-colors"
+					className="w-full bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 mt-4"
 				>
-					{isSubmitting ? "Ingesting..." : "Execute Ingest"}
+					{isSubmitting ? "Adding..." : "Add Item"}
 				</button>
 			</fetcher.Form>
 		</div>

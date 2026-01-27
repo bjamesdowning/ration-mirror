@@ -9,6 +9,9 @@ import {
 	useLoaderData,
 } from "react-router";
 
+import "@fontsource/space-mono/400.css";
+import "@fontsource/space-mono/700.css";
+
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Status } from "./components/hud/Status";
@@ -58,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				<Meta />
 				<Links />
 			</head>
-			<body className="bg-[#051105] text-white">
+			<body className="bg-ceramic text-carbon">
 				<Status credits={loaderData?.credits} />
 				{children}
 				<ScrollRestoration />

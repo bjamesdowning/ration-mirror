@@ -18,10 +18,10 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 			<button
 				type="button"
 				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center gap-2 px-4 py-2 border border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10 font-mono text-sm uppercase transition-colors"
+				className="flex items-center gap-2 px-3 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors"
 			>
 				<svg
-					className="w-4 h-4"
+					className="w-4 h-4 text-muted"
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -58,16 +58,16 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 					/>
 
 					{/* Dropdown */}
-					<div className="absolute right-0 top-full mt-1 z-20 bg-[#051105] border border-[#39FF14]/50 min-w-[200px]">
+					<div className="absolute right-0 top-full mt-1 z-20 glass-panel rounded-xl shadow-lg p-2 min-w-[160px]">
 						<button
 							type="button"
 							onClick={() => handleExport("text")}
-							className="w-full px-4 py-3 text-left hover:bg-[#39FF14]/10 transition-colors flex items-center gap-3"
+							className="w-full px-4 py-2 rounded-lg text-left text-carbon hover:bg-platinum cursor-pointer transition-colors flex items-center gap-3"
 						>
-							<span className="text-lg">📄</span>
+							<span className="text-muted">📄</span>
 							<div>
-								<div className="font-mono text-sm uppercase">Plain Text</div>
-								<div className="text-xs opacity-50">
+								<div className="text-sm text-carbon">Plain Text</div>
+								<div className="text-xs text-muted">
 									Simple checklist format
 								</div>
 							</div>
@@ -75,12 +75,12 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 						<button
 							type="button"
 							onClick={() => handleExport("markdown")}
-							className="w-full px-4 py-3 text-left hover:bg-[#39FF14]/10 transition-colors flex items-center gap-3 border-t border-[#39FF14]/20"
+							className="w-full px-4 py-2 rounded-lg text-left text-carbon hover:bg-platinum cursor-pointer transition-colors flex items-center gap-3"
 						>
-							<span className="text-lg">📝</span>
+							<span className="text-muted">📝</span>
 							<div>
-								<div className="font-mono text-sm uppercase">Markdown</div>
-								<div className="text-xs opacity-50">For notes apps</div>
+								<div className="text-sm text-carbon">Markdown</div>
+								<div className="text-xs text-muted">For notes apps</div>
 							</div>
 						</button>
 					</div>

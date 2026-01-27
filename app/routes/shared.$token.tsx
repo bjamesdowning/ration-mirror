@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { getGroceryListByShareToken } from "~/lib/grocery.server";
 
 interface SharedItem {
@@ -71,20 +71,28 @@ export default function SharedListPage() {
 
 	const purchased = list.items.filter((i) => i.isPurchased).length;
 	const total = list.items.length;
+	const progressPercent = total > 0 ? Math.round((purchased / total) * 100) : 0;
 
 	return (
-		<div className="min-h-screen bg-black text-[#39FF14] font-mono">
+		<div className="min-h-screen bg-ceramic text-carbon">
 			{/* Header */}
-			<header className="border-b border-[#39FF14]/30 p-4">
+			<header className="border-b border-carbon/10 p-4 bg-ceramic/90 backdrop-blur sticky top-0 z-10">
 				<div className="max-w-2xl mx-auto">
-					<div className="text-xs opacity-70 uppercase tracking-widest mb-1">
-						SHARED MANIFEST
+					<div className="flex items-center gap-2 text-muted text-xs mb-1">
+						<span className="w-2 h-2 rounded-full bg-hyper-green" />
+						Shared List
 					</div>
-					<h1 className="text-2xl font-bold uppercase tracking-wider">
-						{list.name}
-					</h1>
-					<div className="mt-2 text-sm opacity-70">
-						Progress: {purchased}/{total} items acquired
+					<h1 className="text-display text-2xl text-carbon">{list.name}</h1>
+					<div className="mt-3 flex items-center gap-3">
+						<div className="flex-1 h-2 bg-platinum rounded-full overflow-hidden">
+							<div
+								className="h-full bg-hyper-green rounded-full transition-all duration-300"
+								style={{ width: `${progressPercent}%` }}
+							/>
+						</div>
+						<span className="text-sm text-muted">
+							{purchased}/{total} items
+						</span>
 					</div>
 				</div>
 			</header>
@@ -92,41 +100,59 @@ export default function SharedListPage() {
 			{/* Content */}
 			<main className="max-w-2xl mx-auto p-4 space-y-6">
 				{list.items.length === 0 ? (
-					<div className="text-center py-12 opacity-50">
-						<div className="text-4xl mb-4">📋</div>
-						<p>No items in this list</p>
+					<div className="text-center py-16 glass-panel rounded-2xl">
+						<div className="text-6xl mb-4">📋</div>
+						<p className="text-muted">No items in this list</p>
 					</div>
 				) : (
 					Object.entries(groupedItems).map(([category, items]) => (
-						<section key={category}>
-							<h2 className="text-xs uppercase tracking-widest opacity-70 mb-3 border-b border-[#39FF14]/20 pb-2">
+						<section key={category} className="glass-panel rounded-xl p-4">
+							<h2 className="text-label text-muted mb-3 pb-2 border-b border-carbon/10">
 								{categoryNames[category] || category}
 							</h2>
 							<ul className="space-y-2">
 								{items.map((item) => (
 									<li
 										key={item.id}
-										className={`flex items-center gap-3 p-2 border border-[#39FF14]/20 ${
-											item.isPurchased ? "opacity-50" : ""
+										className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+											item.isPurchased
+												? "bg-platinum/50 opacity-60"
+												: "bg-ceramic hover:bg-platinum/30"
 										}`}
 									>
 										<span
-											className={`w-5 h-5 flex items-center justify-center border ${
+											className={`w-5 h-5 flex items-center justify-center rounded-md border-2 ${
 												item.isPurchased
-													? "border-[#39FF14] bg-[#39FF14] text-black"
-													: "border-[#39FF14]/50"
+													? "border-hyper-green bg-hyper-green text-white"
+													: "border-carbon/30"
 											}`}
 										>
-											{item.isPurchased && "✓"}
+											{item.isPurchased && (
+												<svg
+													className="w-3 h-3"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke="currentColor"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={3}
+														d="M5 13l4 4L19 7"
+													/>
+												</svg>
+											)}
 										</span>
 										<span
-											className={`flex-1 ${item.isPurchased ? "line-through" : ""}`}
+											className={`flex-1 ${item.isPurchased ? "line-through text-muted" : "text-carbon"}`}
 										>
 											{item.name}
 										</span>
-										<span className="text-xs opacity-70">
-											{item.quantity > 1 && `${item.quantity} ${item.unit}`}
-										</span>
+										{item.quantity > 1 && (
+											<span className="text-sm text-muted">
+												{item.quantity} {item.unit}
+											</span>
+										)}
 									</li>
 								))}
 							</ul>
@@ -136,9 +162,15 @@ export default function SharedListPage() {
 			</main>
 
 			{/* Footer */}
-			<footer className="border-t border-[#39FF14]/30 p-4 mt-8">
-				<div className="max-w-2xl mx-auto text-center text-xs opacity-50">
-					<p>Powered by RATION — Resource Allocation Terminal</p>
+			<footer className="border-t border-carbon/10 p-4 mt-8 bg-ceramic">
+				<div className="max-w-2xl mx-auto text-center">
+					<p className="text-xs text-muted mb-2">Powered by Ration</p>
+					<Link
+						to="/"
+						className="text-sm text-hyper-green hover:text-hyper-green/80 transition-colors"
+					>
+						Create your own smart grocery lists →
+					</Link>
 				</div>
 			</footer>
 		</div>

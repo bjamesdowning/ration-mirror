@@ -84,8 +84,8 @@ export default function GroceryDashboard() {
 	return (
 		<>
 			<DashboardHeader
-				title="SUPPLY DEPOT"
-				subtitle="procurement // manifest"
+				title="Grocery Lists"
+				subtitle="Plan and track your shopping"
 				showSearch={false}
 				totalItems={lists.length}
 			/>
@@ -99,10 +99,10 @@ export default function GroceryDashboard() {
 								key={list.id}
 								type="button"
 								onClick={() => setActiveListId(list.id)}
-								className={`group relative px-4 py-2 font-mono text-sm uppercase tracking-wider transition-all ${
+								className={`group relative px-4 py-2 rounded-lg text-sm font-medium transition-all ${
 									activeListId === list.id
-										? "bg-[#39FF14] text-black font-bold"
-										: "border border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10"
+										? "bg-hyper-green text-carbon shadow-glow-sm"
+										: "bg-platinum text-carbon hover:bg-platinum/80"
 								}`}
 							>
 								{list.name}
@@ -113,7 +113,7 @@ export default function GroceryDashboard() {
 											e.stopPropagation();
 											handleDeleteList(list.id);
 										}}
-										className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+										className="absolute -top-1 -right-1 w-5 h-5 bg-danger text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
 										aria-label="Delete list"
 									>
 										×
@@ -131,20 +131,20 @@ export default function GroceryDashboard() {
 								value={newListName}
 								onChange={(e) => setNewListName(e.target.value)}
 								placeholder="List name..."
-								className="bg-black border border-[#39FF14]/50 px-3 py-2 font-mono text-sm text-[#39FF14] placeholder-[#39FF14]/30 focus:outline-none focus:border-[#39FF14]"
+								className="bg-ceramic border border-carbon/20 px-3 py-2 rounded-lg text-sm text-carbon placeholder-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
 								autoFocus
 							/>
 							<button
 								type="submit"
 								disabled={isPending}
-								className="px-4 py-2 bg-[#39FF14] text-black font-bold uppercase tracking-wider hover:bg-[#2bff00] disabled:opacity-50"
+								className="px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg hover:shadow-glow-sm transition-all disabled:opacity-50"
 							>
 								Create
 							</button>
 							<button
 								type="button"
 								onClick={() => setShowCreateForm(false)}
-								className="px-3 py-2 border border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10"
+								className="px-3 py-2 text-muted hover:text-carbon transition-colors"
 							>
 								Cancel
 							</button>
@@ -153,7 +153,7 @@ export default function GroceryDashboard() {
 						<button
 							type="button"
 							onClick={() => setShowCreateForm(true)}
-							className="px-4 py-2 border border-dashed border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10 font-mono text-sm uppercase transition-colors"
+							className="px-4 py-2 border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green rounded-lg text-sm font-medium transition-colors"
 						>
 							+ New List
 						</button>
@@ -168,18 +168,18 @@ export default function GroceryDashboard() {
 						onRefresh={() => revalidator.revalidate()}
 					/>
 				) : (
-					<div className="text-center py-16 border border-[#39FF14]/20 border-dashed">
+					<div className="text-center py-16 glass-panel rounded-2xl">
 						<div className="text-6xl mb-6">📋</div>
-						<h3 className="text-xl font-bold uppercase tracking-wider mb-2">
+						<h3 className="text-display text-xl text-carbon mb-2">
 							No Lists Yet
 						</h3>
-						<p className="text-sm opacity-70 mb-6">
+						<p className="text-sm text-muted mb-6">
 							Create a grocery list to start tracking your shopping needs
 						</p>
 						<button
 							type="button"
 							onClick={() => setShowCreateForm(true)}
-							className="px-6 py-3 bg-[#39FF14] text-black font-bold uppercase tracking-wider hover:bg-[#2bff00] shadow-[0_0_15px_rgba(57,255,20,0.5)] transition-all"
+							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:shadow-glow-sm transition-all"
 						>
 							Create Your First List
 						</button>

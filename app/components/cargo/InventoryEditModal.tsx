@@ -19,16 +19,14 @@ export function InventoryEditModal({
 	isUpdating,
 }: InventoryEditModalProps) {
 	return (
-		<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 font-mono">
-			<div className="bg-[#051105] border border-[#39FF14] p-6 max-w-md w-full mx-4 shadow-[0_0_30px_rgba(57,255,20,0.3)]">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-50">
+			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
 				<div className="flex justify-between items-center mb-6">
-					<h2 className="text-[#39FF14] uppercase text-lg tracking-widest">
-						Modify Cargo
-					</h2>
+					<h2 className="text-xl font-bold text-carbon">Edit Item</h2>
 					<button
 						type="button"
 						onClick={onClose}
-						className="text-[#39FF14]/50 hover:text-[#39FF14] text-xl"
+						className="text-muted hover:text-carbon text-2xl transition-colors"
 					>
 						×
 					</button>
@@ -41,9 +39,9 @@ export function InventoryEditModal({
 					<div className="flex flex-col gap-2">
 						<label
 							htmlFor={`name-${item.id}`}
-							className="text-xs uppercase opacity-70 text-[#39FF14]"
+							className="text-label text-muted"
 						>
-							Designation
+							Name
 						</label>
 						<input
 							type="text"
@@ -51,7 +49,7 @@ export function InventoryEditModal({
 							id={`name-${item.id}`}
 							defaultValue={item.name}
 							required
-							className="bg-transparent border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
@@ -59,7 +57,7 @@ export function InventoryEditModal({
 						<div className="flex flex-col gap-2">
 							<label
 								htmlFor={`quantity-${item.id}`}
-								className="text-xs uppercase opacity-70 text-[#39FF14]"
+								className="text-label text-muted"
 							>
 								Quantity
 							</label>
@@ -70,14 +68,14 @@ export function InventoryEditModal({
 								defaultValue={item.quantity}
 								min={0}
 								required
-								className="bg-transparent border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>
 						</div>
 
 						<div className="flex flex-col gap-2">
 							<label
 								htmlFor={`unit-${item.id}`}
-								className="text-xs uppercase opacity-70 text-[#39FF14]"
+								className="text-label text-muted"
 							>
 								Unit
 							</label>
@@ -85,7 +83,7 @@ export function InventoryEditModal({
 								name="unit"
 								id={`unit-${item.id}`}
 								defaultValue={item.unit}
-								className="bg-[#051105] border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
 							>
 								<option value="unit">unit</option>
 								<option value="kg">kg</option>
@@ -103,7 +101,7 @@ export function InventoryEditModal({
 					<div className="flex flex-col gap-2">
 						<label
 							htmlFor={`category-${item.id}`}
-							className="text-xs uppercase opacity-70 text-[#39FF14]"
+							className="text-label text-muted"
 						>
 							Category
 						</label>
@@ -111,7 +109,7 @@ export function InventoryEditModal({
 							name="category"
 							id={`category-${item.id}`}
 							defaultValue={item.category ?? "other"}
-							className="bg-[#051105] border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
 						>
 							{INVENTORY_CATEGORIES.map((category) => (
 								<option key={category} value={category}>
@@ -124,7 +122,7 @@ export function InventoryEditModal({
 					<div className="flex flex-col gap-2">
 						<label
 							htmlFor={`tags-${item.id}`}
-							className="text-xs uppercase opacity-70 text-[#39FF14]"
+							className="text-label text-muted"
 						>
 							Tags (comma separated)
 						</label>
@@ -133,7 +131,7 @@ export function InventoryEditModal({
 							name="tags"
 							id={`tags-${item.id}`}
 							defaultValue={tags.join(", ")}
-							className="bg-transparent border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							placeholder="e.g. perishable, dairy"
 						/>
 					</div>
@@ -141,7 +139,7 @@ export function InventoryEditModal({
 					<div className="flex flex-col gap-2">
 						<label
 							htmlFor={`expiresAt-${item.id}`}
-							className="text-xs uppercase opacity-70 text-[#39FF14]"
+							className="text-label text-muted"
 						>
 							Expiration Date
 						</label>
@@ -154,32 +152,32 @@ export function InventoryEditModal({
 									? new Date(item.expiresAt).toISOString().split("T")[0]
 									: ""
 							}
-							className="bg-[#051105] border-b border-[#39FF14]/50 p-2 text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
 					{fetcher.data?.errors && (
-						<div className="text-red-500 text-xs">
+						<div className="text-danger text-sm">
 							{Object.values(fetcher.data.errors.fieldErrors || {})
 								.flat()
 								.join(", ")}
 						</div>
 					)}
 
-					<div className="flex justify-end gap-4 pt-4 border-t border-[#39FF14]/30">
+					<div className="flex justify-end gap-3 pt-4 border-t border-platinum">
 						<button
 							type="button"
 							onClick={onClose}
-							className="px-4 py-2 text-[#39FF14]/50 hover:text-[#39FF14] uppercase text-xs tracking-wider"
+							className="bg-platinum text-carbon px-4 py-2 rounded-lg hover:bg-platinum/80 transition-colors"
 						>
 							Cancel
 						</button>
 						<button
 							type="submit"
 							disabled={isUpdating}
-							className="px-4 py-2 bg-[#39FF14] text-black font-bold uppercase text-xs tracking-wider hover:bg-[#2bff00] disabled:opacity-50 shadow-[0_0_15px_rgba(57,255,20,0.5)]"
+							className="bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
-							{isUpdating ? "Updating..." : "Update"}
+							{isUpdating ? "Saving..." : "Save Changes"}
 						</button>
 					</div>
 				</fetcher.Form>

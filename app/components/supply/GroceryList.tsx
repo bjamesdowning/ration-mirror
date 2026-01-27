@@ -62,14 +62,14 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 			<div className="flex flex-wrap items-center justify-between gap-4">
 				{/* Progress Bar */}
 				<div className="flex items-center gap-4">
-					<div className="text-xs uppercase opacity-70">Progress:</div>
-					<div className="w-32 h-2 bg-[#39FF14]/20 border border-[#39FF14]/30">
+					<div className="text-label text-muted">Progress:</div>
+					<div className="w-32 h-2 bg-platinum rounded-full overflow-hidden">
 						<div
-							className="h-full bg-[#39FF14] transition-all duration-300"
+							className="h-full bg-hyper-green transition-all duration-300"
 							style={{ width: `${progress}%` }}
 						/>
 					</div>
-					<div className="text-sm font-mono">
+					<div className="text-sm text-data text-carbon">
 						{purchased}/{total}
 					</div>
 				</div>
@@ -79,7 +79,7 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 					<button
 						type="button"
 						onClick={() => setShowShareModal(true)}
-						className="flex items-center gap-2 px-4 py-2 border border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10 font-mono text-sm uppercase transition-colors"
+						className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors"
 					>
 						<svg
 							className="w-4 h-4"
@@ -105,15 +105,15 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 
 			{/* Items List */}
 			{list.items.length === 0 ? (
-				<div className="text-center py-16 border border-[#39FF14]/20 border-dashed">
+				<div className="bg-platinum/50 rounded-xl p-8 text-center">
 					<div className="text-4xl mb-4">🛒</div>
-					<p className="text-lg opacity-70">No items in this list yet</p>
-					<p className="text-sm opacity-50 mt-2">
+					<p className="text-lg text-muted">No items in this list yet</p>
+					<p className="text-sm text-muted mt-2">
 						Add items using the form above
 					</p>
 				</div>
 			) : (
-				<div className="space-y-8">
+				<div className="glass-panel rounded-xl p-4 space-y-6">
 					{sortedCategories.map((category) => {
 						const items = groupedItems[category];
 						const categoryPurchased = items.filter((i) => i.isPurchased).length;
@@ -121,14 +121,14 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 						return (
 							<section key={category}>
 								<div className="flex items-center justify-between mb-3">
-									<h3 className="text-xs uppercase tracking-widest opacity-70 font-mono">
+									<h3 className="text-label text-muted">
 										{categoryNames[category] || category}
 									</h3>
-									<span className="text-xs opacity-50">
+									<span className="text-data text-muted">
 										{categoryPurchased}/{items.length}
 									</span>
 								</div>
-								<div className="space-y-2">
+								<div className="space-y-1">
 									{items.map((item) => (
 										<GroceryItem
 											key={item.id}

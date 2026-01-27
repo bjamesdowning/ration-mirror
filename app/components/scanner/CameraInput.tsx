@@ -79,11 +79,11 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 				onClick={() => inputRef.current?.click()}
 				disabled={isAnalyzing}
 				className={`
-                    flex items-center gap-2 px-4 py-2 
-                    bg-[#39FF14]/10 border border-[#39FF14] 
-                    text-[#39FF14] text-xs uppercase font-bold tracking-widest
-                    hover:bg-[#39FF14]/20 transition-all
+                    flex items-center gap-2 px-4 py-3 
+                    bg-hyper-green text-carbon font-semibold rounded-lg
+                    shadow-glow-sm hover:shadow-glow transition-all
                     disabled:opacity-50 disabled:cursor-not-allowed
+                    active:scale-95
                     ${isAnalyzing ? "animate-pulse" : ""}
                 `}
 			>
@@ -102,7 +102,7 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 
 			{/* Visual Flair for Analyzing State */}
 			{isAnalyzing && (
-				<div className="absolute inset-0 border-2 border-[#39FF14] animate-ping opacity-20 pointer-events-none" />
+				<div className="absolute inset-0 border-2 border-hyper-green/50 rounded-lg animate-ping opacity-20 pointer-events-none" />
 			)}
 		</div>
 	);

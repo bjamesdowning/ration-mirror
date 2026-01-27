@@ -18,18 +18,18 @@ export function MealCard({ meal }: MealCardProps) {
 	return (
 		<Link
 			to={`/dashboard/meals/${meal.id}`}
-			className="block relative group p-4 border border-[#39FF14] bg-[#051105]/90 font-mono text-[#39FF14] hover:bg-[#0a220a] transition-colors"
+			className="block relative glass-panel rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group p-4"
 		>
 			<div className="flex justify-between items-start mb-2">
 				<h3
-					className="text-lg font-bold uppercase tracking-wider truncate mr-2"
+					className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
 					title={meal.name}
 				>
 					{meal.name}
 				</h3>
 				<div className="text-right">
-					<span className="text-xs opacity-70 block">PREP</span>
-					<span className="text-sm font-bold">
+					<span className="text-label text-muted block text-xs">PREP</span>
+					<span className="text-data text-sm font-bold text-carbon">
 						{meal.prepTime ? `${meal.prepTime}m` : "--"}
 					</span>
 				</div>
@@ -39,7 +39,7 @@ export function MealCard({ meal }: MealCardProps) {
 				{(meal.tags || []).map((tag) => (
 					<span
 						key={tag}
-						className="text-[10px] px-1 py-0.5 border border-[#39FF14]/50 opacity-80 uppercase"
+						className="bg-hyper-green/10 text-hyper-green text-xs px-2 py-1 rounded-md"
 					>
 						{tag}
 					</span>
@@ -47,14 +47,14 @@ export function MealCard({ meal }: MealCardProps) {
 			</div>
 
 			<div className="flex justify-between items-end mt-4">
-				<div className="text-xs opacity-70">
-					<div>SERVINGS: {meal.servings}</div>
-					<div>COMPLEXITY: {meal.ingredients?.length || 0} ITEMS</div>
+				<div className="text-sm text-muted">
+					<div>Servings: {meal.servings}</div>
+					<div>Ingredients: {meal.ingredients?.length || 0}</div>
 				</div>
 
 				<div className="absolute top-4 right-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-					<span className="px-2 py-1 bg-[#39FF14] text-black text-xs font-bold uppercase">
-						ACCESS DATA
+					<span className="bg-hyper-green text-carbon px-4 py-2 rounded-lg shadow-glow-sm hover:shadow-glow text-xs font-bold">
+						View Recipe
 					</span>
 				</div>
 			</div>

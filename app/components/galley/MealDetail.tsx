@@ -126,18 +126,18 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 	};
 
 	return (
-		<div className="max-w-4xl mx-auto space-y-8 font-mono text-[#39FF14]">
+		<div className="max-w-4xl mx-auto space-y-8">
 			{/* Header */}
-			<div className="border-b-2 border-[#39FF14] pb-6 flex justify-between items-start">
+			<div className="border-b border-platinum pb-6 flex justify-between items-start">
 				<div>
-					<div className="text-xs opacity-50 mb-2">
-						{"//"} PROTOCOL: {meal.id.slice(0, 8)}
+					<div className="text-label text-muted text-xs mb-2">
+						Recipe ID: {meal.id.slice(0, 8)}
 					</div>
-					<h1 className="text-4xl font-bold uppercase tracking-wider mb-2 text-white glow-green">
+					<h1 className="text-display text-3xl text-carbon mb-2">
 						{meal.name}
 					</h1>
 					{meal.description && (
-						<p className="text-lg opacity-80 max-w-2xl">{meal.description}</p>
+						<p className="text-muted text-lg max-w-2xl">{meal.description}</p>
 					)}
 				</div>
 				<div className="flex flex-col gap-2 text-right">
@@ -145,40 +145,45 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						<div className="flex gap-2 justify-end">
 							<Link
 								to="edit"
-								className="px-3 py-1 border border-[#39FF14] text-sm uppercase hover:bg-[#39FF14]/10"
+								className="text-muted hover:text-hyper-green px-3 py-1 text-sm transition-colors"
 							>
-								[EDIT]
+								Edit
 							</Link>
 							<Form
 								method="post"
 								action={`/api/meals/${meal.id}`}
 								onSubmit={(e) => {
-									if (!confirm("Confirm Protocol Termination?"))
-										e.preventDefault();
+									if (!confirm("Delete this recipe?")) e.preventDefault();
 								}}
 							>
 								<input type="hidden" name="_method" value="DELETE" />
 								<button
 									type="submit"
-									className="px-3 py-1 border border-red-500 text-red-500 text-sm uppercase hover:bg-red-500/10"
+									className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
 								>
-									[TERMINATE]
+									Delete
 								</button>
 							</Form>
 						</div>
 					)}
-					<div className="mt-4 flex gap-4 text-sm">
+					<div className="mt-4 flex gap-6 text-sm">
 						<div className="flex flex-col items-center">
-							<span className="opacity-50 text-[10px]">PREP</span>
-							<span className="font-bold">{meal.prepTime || "--"}m</span>
+							<span className="text-label text-muted text-xs">Prep</span>
+							<span className="text-data font-bold text-carbon">
+								{meal.prepTime || "--"}m
+							</span>
 						</div>
 						<div className="flex flex-col items-center">
-							<span className="opacity-50 text-[10px]">COOK</span>
-							<span className="font-bold">{meal.cookTime || "--"}m</span>
+							<span className="text-label text-muted text-xs">Cook</span>
+							<span className="text-data font-bold text-carbon">
+								{meal.cookTime || "--"}m
+							</span>
 						</div>
 						<div className="flex flex-col items-center">
-							<span className="opacity-50 text-[10px]">YIELD</span>
-							<span className="font-bold">{meal.servings}</span>
+							<span className="text-label text-muted text-xs">Servings</span>
+							<span className="text-data font-bold text-carbon">
+								{meal.servings}
+							</span>
 						</div>
 					</div>
 				</div>
@@ -187,12 +192,12 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 			{/* Main Content Grid */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 				{/* Right Col: Ingredients (Visual hierarchy: Ingredients are crucial data) */}
-				<div className="lg:col-span-1 border border-[#39FF14]/30 bg-[#051105]/50 p-6">
-					<h3 className="text-xl font-bold uppercase mb-6 flex items-center gap-2">
-						<span className="w-2 h-2 bg-[#39FF14]"></span>
-						Manifest
+				<div className="lg:col-span-1 glass-panel rounded-xl p-6">
+					<h3 className="text-label text-muted mb-4 flex items-center gap-2">
+						<span className="w-2 h-2 rounded-full bg-hyper-green"></span>
+						Ingredients
 					</h3>
-					<ul className="space-y-3">
+					<ul className="space-y-1">
 						{meal.ingredients.map((ing) => {
 							const availability = getAvailabilityStatus(ing.ingredientName);
 							const isAvailable = availability?.available ?? true;
@@ -204,18 +209,18 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							return (
 								<li
 									key={ing.ingredientName}
-									className="flex justify-between items-baseline border-b border-[#39FF14]/10 pb-2 last:border-0"
+									className="flex items-center gap-3 py-2 border-b border-platinum last:border-0"
 								>
-									<div className="flex items-center gap-2 flex-1">
+									<div className="flex items-center gap-3 flex-1">
 										{/* Availability Indicator */}
 										{!isLoadingAvailability && (
 											<div
-												className={`w-2 h-2 flex-shrink-0 ${
+												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
 													isAvailable
-														? "bg-[#39FF14]"
+														? "bg-success/10"
 														: hasPartialStock
-															? "bg-yellow-500"
-															: "bg-red-500"
+															? "bg-warning/10"
+															: "bg-danger/10"
 												}`}
 												title={
 													isAvailable
@@ -224,26 +229,36 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 															? "Partial stock available"
 															: "Not available"
 												}
-											/>
+											>
+												<span
+													className={`w-2 h-2 rounded-full ${
+														isAvailable
+															? "bg-success"
+															: hasPartialStock
+																? "bg-warning"
+																: "bg-danger"
+													}`}
+												></span>
+											</div>
 										)}
 										<span
-											className={`uppercase text-sm ${!isAvailable ? "opacity-60" : ""}`}
+											className={`text-sm text-carbon ${!isAvailable ? "opacity-60" : ""}`}
 										>
 											{ing.ingredientName}
 											{ing.isOptional && (
-												<span className="text-[10px] ml-2 opacity-50">
-													(OPT)
+												<span className="text-xs ml-2 text-muted">
+													(optional)
 												</span>
 											)}
 										</span>
 									</div>
 									<div className="flex flex-col items-end">
-										<span className="font-bold">
+										<span className="text-data font-bold text-carbon">
 											{ing.quantity}{" "}
-											<span className="opacity-60 text-xs">{ing.unit}</span>
+											<span className="text-muted text-xs">{ing.unit}</span>
 										</span>
 										{availability && !availability.available && (
-											<span className="text-[9px] text-red-500/80 uppercase">
+											<span className="text-xs text-danger">
 												Need:{" "}
 												{availability.requiredQuantity -
 													availability.availableQuantity}
@@ -263,30 +278,30 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					>
 						<button
 							type="submit"
-							className="w-full py-3 bg-[#39FF14]/10 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black transition-all font-bold uppercase tracking-widest"
+							className="w-full bg-hyper-green text-carbon font-bold px-6 py-3 rounded-xl shadow-glow hover:shadow-glow transition-all"
 						>
-							INITIATE COOK SEQUENCE
+							Cook Now
 						</button>
-						<p className="text-[10px] text-center mt-2 opacity-50 uppercase">
-							{"//"} Will deduct inventory items
+						<p className="text-xs text-center mt-2 text-muted">
+							This will deduct ingredients from inventory
 						</p>
 					</Form>
 				</div>
 
 				{/* Left Col: Directions */}
 				<div className="lg:col-span-2">
-					<h3 className="text-xl font-bold uppercase mb-6 flex items-center gap-2">
-						<span className="w-2 h-2 bg-[#39FF14]"></span>
-						Directives
+					<h3 className="text-label text-muted mb-4 flex items-center gap-2">
+						<span className="w-2 h-2 rounded-full bg-hyper-green"></span>
+						Directions
 					</h3>
-					<div className="prose prose-invert prose-p:font-mono prose-em:text-[#39FF14] max-w-none text-white/90">
+					<div className="prose prose-sm max-w-none text-carbon">
 						{meal.directions ? (
-							<div className="whitespace-pre-wrap leading-relaxed">
+							<div className="whitespace-pre-wrap leading-relaxed bg-platinum/30 rounded-xl p-6">
 								{meal.directions}
 							</div>
 						) : (
-							<p className="opacity-30 italic">
-								{"//"} NO DIRECTIVES SPECIFIED
+							<p className="text-muted italic bg-platinum/30 rounded-xl p-6">
+								No directions provided
 							</p>
 						)}
 					</div>

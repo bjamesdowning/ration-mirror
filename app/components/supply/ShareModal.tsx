@@ -77,13 +77,13 @@ export function ShareModal({
 	};
 
 	return (
-		<div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-			<div className="bg-[#051105] border border-[#39FF14] max-w-lg w-full p-6 relative">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md mx-auto w-full relative">
 				{/* Close Button */}
 				<button
 					type="button"
 					onClick={onClose}
-					className="absolute top-4 right-4 text-[#39FF14]/70 hover:text-[#39FF14] transition-colors"
+					className="absolute top-4 right-4 text-muted hover:text-carbon transition-colors"
 					aria-label="Close"
 				>
 					<svg
@@ -102,10 +102,8 @@ export function ShareModal({
 				</button>
 
 				{/* Header */}
-				<h2 className="text-xl font-bold uppercase tracking-wider mb-2">
-					Share List
-				</h2>
-				<p className="text-sm opacity-70 mb-6">
+				<h2 className="text-xl font-bold text-carbon mb-2">Share List</h2>
+				<p className="text-sm text-muted mb-6">
 					Generate a shareable link for this grocery list. Anyone with the link
 					can view (but not edit) your list.
 				</p>
@@ -119,15 +117,15 @@ export function ShareModal({
 								type="text"
 								value={shareUrl}
 								readOnly
-								className="flex-1 bg-black border border-[#39FF14]/50 p-3 font-mono text-xs text-[#39FF14] focus:outline-none"
+								className="flex-1 bg-platinum rounded-lg px-4 py-3 text-carbon font-mono text-sm focus:outline-none"
 							/>
 							<button
 								type="button"
 								onClick={handleCopy}
-								className={`px-4 font-bold uppercase tracking-wider transition-all ${
+								className={`px-4 py-2 rounded-lg font-semibold transition-all ${
 									copied
-										? "bg-[#39FF14] text-black"
-										: "border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14]/10"
+										? "bg-hyper-green text-carbon shadow-glow-sm"
+										: "bg-platinum text-carbon hover:bg-platinum/80"
 								}`}
 							>
 								{copied ? "Copied!" : "Copy"}
@@ -135,7 +133,7 @@ export function ShareModal({
 						</div>
 
 						{/* Expiry Notice */}
-						<p className="text-xs opacity-50">
+						<p className="text-xs text-muted">
 							⚠ This link expires in 7 days for security.
 						</p>
 
@@ -144,7 +142,7 @@ export function ShareModal({
 							type="button"
 							onClick={handleRevokeLink}
 							disabled={isPending}
-							className="w-full py-2 border border-red-500/50 text-red-500 hover:bg-red-500/10 font-mono uppercase text-sm transition-colors disabled:opacity-50"
+							className="w-full py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
 						>
 							{isPending ? "Processing..." : "Revoke Share Link"}
 						</button>
@@ -152,7 +150,7 @@ export function ShareModal({
 				) : (
 					<div className="text-center py-8">
 						<div className="text-4xl mb-4">🔗</div>
-						<p className="text-sm opacity-70 mb-6">
+						<p className="text-sm text-muted mb-6">
 							No share link generated yet. Create one to share this list with
 							others.
 						</p>
@@ -160,7 +158,7 @@ export function ShareModal({
 							type="button"
 							onClick={handleGenerateLink}
 							disabled={isPending}
-							className="px-8 py-3 bg-[#39FF14] text-black font-bold uppercase tracking-wider hover:bg-[#2bff00] disabled:opacity-50 transition-all"
+							className="px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
 						>
 							{isPending ? "Generating..." : "Generate Share Link"}
 						</button>

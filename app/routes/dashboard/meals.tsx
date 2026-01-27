@@ -35,8 +35,8 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			<DashboardHeader
-				title="GALLEY OPS"
-				subtitle="protocols // loaded"
+				title="Meal Library"
+				subtitle="Your saved recipes"
 				showSearch={false}
 				totalItems={meals.length}
 			/>
@@ -48,10 +48,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						<button
 							type="button"
 							onClick={() => setMatchingEnabled(!matchingEnabled)}
-							className={`px-4 py-2 border font-mono text-xs uppercase tracking-wider transition-all ${
+							className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
 								matchingEnabled
-									? "border-[#39FF14] bg-[#39FF14] text-black font-bold"
-									: "border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10"
+									? "bg-hyper-green text-carbon shadow-glow-sm"
+									: "bg-platinum text-carbon hover:bg-platinum/80"
 							}`}
 						>
 							{matchingEnabled ? "✓ Match Mode Active" : "Enable Match Mode"}
@@ -62,38 +62,38 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					<div className="flex items-center gap-2">
 						<label
 							htmlFor="tag-filter"
-							className="text-xs uppercase opacity-70 font-mono"
+							className="text-xs text-muted font-medium"
 						>
-							Filter by Classification:
+							Filter by tag:
 						</label>
 						<select
 							id="tag-filter"
 							value={currentTag || ""}
 							onChange={handleTagChange}
-							className="bg-black border border-[#39FF14]/50 p-2 text-sm font-mono text-[#39FF14] uppercase focus:outline-none focus:border-[#39FF14] cursor-pointer"
+							className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
 						>
-							<option value="">ALL PROTOCOLS</option>
+							<option value="">All Recipes</option>
 							{availableTags.map((tag) => (
 								<option key={tag} value={tag}>
-									{tag.toUpperCase()}
+									{tag.charAt(0).toUpperCase() + tag.slice(1)}
 								</option>
 							))}
 						</select>
 						{currentTag && (
 							<Link
 								to="/dashboard/meals"
-								className="text-xs opacity-70 hover:opacity-100 underline font-mono"
+								className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
 							>
-								CLEAR
+								Clear
 							</Link>
 						)}
 					</div>
 
 					<Link
 						to="new"
-						className="px-6 py-2 bg-[#39FF14] text-black font-bold uppercase tracking-widest hover:bg-[#2bff00] shadow-[0_0_15px_rgba(57,255,20,0.5)] transition-all"
+						className="px-6 py-2 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:shadow-glow-sm transition-all"
 					>
-						+ NEW PROTOCOL
+						+ New Recipe
 					</Link>
 				</div>
 

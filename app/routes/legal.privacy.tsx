@@ -3,8 +3,8 @@ import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
 	return [
-		{ title: "Privacy Policy | RATION" },
-		{ name: "description", content: "Privacy Policy for the RATION platform." },
+		{ title: "Privacy Policy | Ration" },
+		{ name: "description", content: "Privacy Policy for the Ration platform." },
 	];
 };
 
@@ -12,7 +12,7 @@ export default function PrivacyPolicy() {
 	return (
 		<>
 			<h1>Privacy Policy</h1>
-			<p className="text-sm uppercase tracking-widest mb-8 border border-[#39FF14]/30 p-4 bg-[#39FF14]/5 text-[#39FF14]">
+			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
 				Last Updated: {new Date().toLocaleDateString()}
 			</p>
 
@@ -81,16 +81,16 @@ export default function PrivacyPolicy() {
 			</ul>
 
 			<h2>4. Google User Data</h2>
-			<div className="border-l-4 border-[#39FF14] pl-4 my-4 bg-[#39FF14]/5 p-4">
-				<p className="font-bold">Google OAuth Disclosure</p>
-				<p>
+			<div className="glass-panel rounded-xl p-6 my-6">
+				<p className="font-bold text-carbon">Google OAuth Disclosure</p>
+				<p className="mt-2">
 					Our application uses Google OAuth to allow you to sign in. When you
 					use this feature, we access your Google account profile information,
 					specifically your name, email address, and profile picture.
 				</p>
-				<p>
-					<strong>We do NOT sell this data.</strong> We use this information
-					solely for:
+				<p className="mt-2">
+					<strong className="text-carbon">We do NOT sell this data.</strong> We
+					use this information solely for:
 				</p>
 				<ul className="list-disc pl-5 mt-2">
 					<li>Authenticating your identity.</li>

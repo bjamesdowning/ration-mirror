@@ -63,14 +63,14 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Add item to list..."
-					className="flex-1 bg-black border border-[#39FF14]/50 p-3 font-mono text-[#39FF14] placeholder-[#39FF14]/30 focus:outline-none focus:border-[#39FF14] uppercase"
+					className="flex-1 bg-white rounded-lg px-4 py-3 text-carbon placeholder-muted border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 					disabled={isPending}
 				/>
 				<button
 					type="button"
 					onClick={() => setExpanded(!expanded)}
-					className={`px-3 border border-[#39FF14]/50 text-[#39FF14] hover:bg-[#39FF14]/10 transition-colors ${
-						expanded ? "bg-[#39FF14]/20" : ""
+					className={`px-3 rounded-lg text-carbon hover:bg-platinum/80 transition-colors ${
+						expanded ? "bg-platinum" : "bg-platinum/50"
 					}`}
 					title="More options"
 				>
@@ -91,47 +91,41 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 				<button
 					type="submit"
 					disabled={isPending || !name.trim()}
-					className="px-6 bg-[#39FF14] text-black font-bold uppercase tracking-wider hover:bg-[#2bff00] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+					className="px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
 				>
-					{isPending ? "..." : "+ ADD"}
+					{isPending ? "..." : "+ Add"}
 				</button>
 			</div>
 
 			{/* Expanded options */}
 			{expanded && (
-				<div className="flex gap-4 p-3 border border-[#39FF14]/30 bg-[#051105]/50">
+				<div className="flex gap-4 p-4 bg-platinum/50 rounded-xl">
 					<div className="flex-1">
-						<label className="block text-xs uppercase opacity-70 mb-1">
-							Quantity
-						</label>
+						<label className="block text-label text-muted mb-1">Quantity</label>
 						<input
 							type="number"
 							value={quantity}
 							onChange={(e) => setQuantity(Number(e.target.value))}
 							min={1}
-							className="w-full bg-black border border-[#39FF14]/50 p-2 font-mono text-[#39FF14] focus:outline-none focus:border-[#39FF14]"
+							className="w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 					<div className="flex-1">
-						<label className="block text-xs uppercase opacity-70 mb-1">
-							Unit
-						</label>
+						<label className="block text-label text-muted mb-1">Unit</label>
 						<input
 							type="text"
 							value={unit}
 							onChange={(e) => setUnit(e.target.value)}
 							placeholder="kg, ml, pcs..."
-							className="w-full bg-black border border-[#39FF14]/50 p-2 font-mono text-[#39FF14] placeholder-[#39FF14]/30 focus:outline-none focus:border-[#39FF14]"
+							className="w-full bg-white rounded-lg px-4 py-2 text-carbon placeholder-muted border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 					<div className="flex-1">
-						<label className="block text-xs uppercase opacity-70 mb-1">
-							Category
-						</label>
+						<label className="block text-label text-muted mb-1">Category</label>
 						<select
 							value={category}
 							onChange={(e) => setCategory(e.target.value)}
-							className="w-full bg-black border border-[#39FF14]/50 p-2 font-mono text-[#39FF14] focus:outline-none focus:border-[#39FF14] cursor-pointer"
+							className="w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"
 						>
 							{CATEGORY_OPTIONS.map((opt) => (
 								<option key={opt.value} value={opt.value}>

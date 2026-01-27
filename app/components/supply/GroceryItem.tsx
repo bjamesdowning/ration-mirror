@@ -39,7 +39,7 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 
 	return (
 		<div
-			className={`group flex items-center gap-3 p-3 border border-[#39FF14]/30 bg-[#051105]/90 transition-all ${
+			className={`group flex items-center gap-3 py-3 px-4 border-b border-platinum last:border-0 transition-all ${
 				isPending ? "opacity-60" : ""
 			} ${optimisticPurchased ? "opacity-50" : ""}`}
 		>
@@ -47,10 +47,10 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 			<button
 				type="button"
 				onClick={handleToggle}
-				className={`w-6 h-6 flex items-center justify-center border-2 transition-all ${
+				className={`w-5 h-5 flex items-center justify-center rounded-md border-2 transition-all ${
 					optimisticPurchased
-						? "border-[#39FF14] bg-[#39FF14] text-black"
-						: "border-[#39FF14]/50 hover:border-[#39FF14]"
+						? "border-hyper-green bg-hyper-green text-carbon"
+						: "border-platinum hover:border-hyper-green"
 				}`}
 				aria-label={
 					optimisticPurchased ? "Mark as not purchased" : "Mark as purchased"
@@ -58,7 +58,7 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 			>
 				{optimisticPurchased && (
 					<svg
-						className="w-4 h-4"
+						className="w-3 h-3"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -75,8 +75,8 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 
 			{/* Item Name */}
 			<span
-				className={`flex-1 font-mono uppercase tracking-wide ${
-					optimisticPurchased ? "line-through opacity-70" : ""
+				className={`flex-1 text-carbon ${
+					optimisticPurchased ? "line-through text-muted" : ""
 				}`}
 			>
 				{item.name}
@@ -84,13 +84,13 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 
 			{/* Quantity */}
 			{item.quantity > 1 && (
-				<span className="text-xs opacity-70 font-mono">
+				<span className="text-sm text-muted text-data">
 					{item.quantity} {item.unit}
 				</span>
 			)}
 
 			{/* Category Badge */}
-			<span className="text-[10px] px-1 py-0.5 border border-[#39FF14]/30 opacity-50 uppercase">
+			<span className="text-xs px-2 py-0.5 bg-platinum rounded text-muted">
 				{item.category}
 			</span>
 
@@ -98,7 +98,7 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 			<button
 				type="button"
 				onClick={handleDelete}
-				className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400 transition-opacity p-1"
+				className="opacity-0 group-hover:opacity-100 text-muted hover:text-danger transition-all p-1"
 				aria-label="Remove item"
 			>
 				<svg

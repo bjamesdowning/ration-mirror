@@ -81,15 +81,15 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-8 pb-20">
-			<DashboardHeader title="CONFIGURATION" subtitle="SYSTEM PREFERENCES" />
+			<DashboardHeader title="Configuration" subtitle="System Preferences" />
 
 			<div className="space-y-8">
 				{/* Unit System */}
-				<section className="bg-[#0A1A0A] border border-[#39FF14]/30 p-6 relative">
-					<h2 className="text-xl font-bold mb-4 text-[#39FF14]">
-						MEASUREMENT STANDARD
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-4 text-carbon">
+						Measurement Standard
 					</h2>
-					<Form method="post" className="flex gap-4">
+					<Form method="post" className="flex gap-4 flex-wrap">
 						<input type="hidden" name="intent" value="update-units" />
 
 						<label className="flex items-center gap-2 cursor-pointer">
@@ -98,10 +98,10 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								name="unitSystem"
 								value="metric"
 								defaultChecked={settings.unitSystem !== "imperial"}
-								className="accent-[#39FF14] bg-transparent border-[#39FF14]"
+								className="w-4 h-4 accent-hyper-green"
 								onChange={(e) => e.target.form?.requestSubmit()}
 							/>
-							<span className="text-white">METRIC (g, kg, ml)</span>
+							<span className="text-carbon">Metric (g, kg, ml)</span>
 						</label>
 
 						<label className="flex items-center gap-2 cursor-pointer">
@@ -110,33 +110,30 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								name="unitSystem"
 								value="imperial"
 								defaultChecked={settings.unitSystem === "imperial"}
-								className="accent-[#39FF14] bg-transparent border-[#39FF14]"
+								className="w-4 h-4 accent-hyper-green"
 								onChange={(e) => e.target.form?.requestSubmit()}
 							/>
-							<span className="text-white">IMPERIAL (oz, lb, fl oz)</span>
+							<span className="text-carbon">Imperial (oz, lb, fl oz)</span>
 						</label>
 
 						{isUpdating && (
-							<span className="text-[#39FF14] animate-pulse text-xs ml-4 my-auto">
-								SAVING...
+							<span className="text-hyper-green animate-pulse text-sm ml-4 my-auto">
+								Saving...
 							</span>
 						)}
 					</Form>
 				</section>
 
 				{/* Danger Zone */}
-				<section className="bg-[#1A0505] border border-red-500/50 p-6 relative">
-					<div className="absolute top-0 right-0 bg-red-500/20 px-2 py-1 text-[10px] text-red-500 border-l border-b border-red-500/50">
-						DANGER ZONE
+				<section className="bg-danger/5 border border-danger/20 rounded-xl p-6 relative">
+					<div className="absolute top-4 right-4 bg-danger/20 px-2 py-1 text-xs text-danger rounded-md font-semibold">
+						Danger Zone
 					</div>
 
-					<h2 className="text-xl font-bold mb-2 text-red-500">
-						IDENTITY PURGE
-					</h2>
-					<p className="text-sm text-red-400/80 mb-6 max-w-md">
-						Complete removal of biological signature from database. This action
-						deletes all inventory, ledger history, and user records.
-						IRREVERSIBLE.
+					<h2 className="text-xl font-bold mb-2 text-danger">Delete Account</h2>
+					<p className="text-sm text-muted mb-6 max-w-md">
+						Complete removal of your account and data. This action deletes all
+						inventory, ledger history, and user records. This cannot be undone.
 					</p>
 
 					<Form
@@ -145,7 +142,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
 							if (
 								!confirm(
-									"WARNING: CONFIRM IDENTITY PURGE? THIS CANNOT BE UNDONE.",
+									"Are you sure you want to delete your account? This cannot be undone.",
 								)
 							) {
 								e.preventDefault();
@@ -155,9 +152,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<button
 							type="submit"
 							disabled={isPurging}
-							className="px-4 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors uppercase tracking-widest text-sm disabled:opacity-50"
+							className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
 						>
-							{isPurging ? "PURGING..." : "INITIATE PURGE SEQUENCE"}
+							{isPurging ? "Deleting..." : "Delete Account"}
 						</button>
 					</Form>
 				</section>

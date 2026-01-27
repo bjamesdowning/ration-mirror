@@ -23,8 +23,8 @@ export function Status({ credits = 0 }: StatusProps) {
 
 	if (isPending) {
 		return (
-			<div className="flex items-center gap-4 p-4 border-b border-[#39FF14]/20 bg-[#051105] text-[#39FF14] font-mono tracking-widest justify-end">
-				<div className="animate-pulse">INITIALIZING...</div>
+			<div className="flex items-center gap-4 p-4 border-b border-platinum bg-ceramic text-carbon font-mono tracking-widest justify-end">
+				<div className="animate-pulse text-muted">INITIALIZING...</div>
 			</div>
 		);
 	}
@@ -36,22 +36,22 @@ export function Status({ credits = 0 }: StatusProps) {
 	}
 
 	return (
-		<div className="flex items-center gap-6 p-4 border-b border-[#39FF14]/20 bg-[#051105]/80 backdrop-blur-sm text-[#39FF14] font-mono justify-end">
+		<div className="flex items-center gap-6 p-4 border-b border-platinum bg-ceramic/80 backdrop-blur-sm text-carbon font-mono justify-end">
 			<button
 				type="button"
 				onClick={() => navigate("/dashboard/credits")}
 				className="flex items-center gap-2 hover:opacity-100 transition-opacity cursor-pointer group"
 			>
-				<div className="text-xs uppercase opacity-70 group-hover:opacity-100">
+				<div className="text-xs uppercase text-muted group-hover:text-carbon">
 					CREDITS
 				</div>
-				<div className="text-xl font-bold tabular-nums tracking-widest group-hover:text-[#39FF14]">
+				<div className="text-xl font-bold tabular-nums tracking-widest text-hyper-green">
 					{credits.toString().padStart(4, "0")}
 				</div>
-				<div className="text-xs opacity-50 group-hover:opacity-100">+</div>
+				<div className="text-xs text-muted group-hover:text-carbon">+</div>
 			</button>
 
-			<div className="h-6 w-px bg-[#39FF14]/20" />
+			<div className="h-6 w-px bg-platinum" />
 
 			<div className="flex items-center gap-4">
 				<div className="flex items-center gap-2">
@@ -59,17 +59,17 @@ export function Status({ credits = 0 }: StatusProps) {
 						<img
 							src={session.user.image}
 							alt={session.user.name || "User"}
-							className="w-8 h-8 border border-[#39FF14]/50 object-cover"
+							className="w-8 h-8 rounded-full border border-platinum object-cover"
 						/>
 					)}
-					<span className="text-sm tracking-wide hidden md:block">
+					<span className="text-sm tracking-wide hidden md:block text-carbon">
 						{session.user.name || session.user.email}
 					</span>
 				</div>
 				<button
 					type="button"
 					onClick={handleSignOut}
-					className="text-xs uppercase border border-[#39FF14]/30 px-3 py-1 hover:bg-[#39FF14] hover:text-black transition-all cursor-pointer"
+					className="text-xs uppercase border border-platinum px-3 py-1 rounded-lg text-muted hover:bg-hyper-green hover:text-carbon hover:border-hyper-green transition-all cursor-pointer"
 				>
 					Log Out
 				</button>

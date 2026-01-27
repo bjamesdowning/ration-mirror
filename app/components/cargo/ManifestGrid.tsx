@@ -8,18 +8,20 @@ interface ManifestGridProps {
 export function ManifestGrid({ items }: ManifestGridProps) {
 	if (items.length === 0) {
 		return (
-			<div className="p-8 border border-dashed border-[#39FF14]/30 text-center text-[#39FF14]/50 font-mono uppercase">
-				<p>Cargo Hold Empty</p>
-				<p className="text-sm mt-2">Initiate Ingest Sequence</p>
+			<div className="p-8 bg-platinum/30 rounded-2xl text-center">
+				<p className="text-muted text-lg">Cargo Hold Empty</p>
+				<p className="text-sm text-muted/70 mt-2">Add items to get started</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-			{items.map((item) => (
-				<InventoryCard key={item.id} item={item} />
-			))}
+		<div className="p-4 bg-platinum/30 rounded-2xl">
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+				{items.map((item) => (
+					<InventoryCard key={item.id} item={item} />
+				))}
+			</div>
 		</div>
 	);
 }

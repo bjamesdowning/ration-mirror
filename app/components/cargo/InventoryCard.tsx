@@ -35,22 +35,24 @@ export function InventoryCard({
 
 	return (
 		<>
-			<div className="relative group p-4 border border-[#39FF14] bg-[#051105]/90 font-mono text-[#39FF14] hover:bg-[#0a220a] transition-colors">
+			<div className="relative group glass-panel rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
 				<div className="flex justify-between items-start mb-2">
 					<div className="min-w-0">
 						<h3
-							className="text-lg font-bold uppercase tracking-wider truncate mr-2"
+							className="text-lg font-bold text-carbon truncate mr-2"
 							title={item.name}
 						>
 							{item.name}
 						</h3>
-						<p className="text-[10px] uppercase opacity-60 tracking-widest">
+						<p className="text-label text-muted">
 							{formatInventoryCategory(item.category)}
 						</p>
 					</div>
 					<div className="text-right">
-						<span className="text-xl font-bold">{item.quantity}</span>
-						<span className="text-xs ml-1 opacity-70">{item.unit}</span>
+						<span className="text-xl font-bold text-data text-carbon">
+							{item.quantity}
+						</span>
+						<span className="text-sm ml-1 text-muted">{item.unit}</span>
 					</div>
 				</div>
 
@@ -58,7 +60,7 @@ export function InventoryCard({
 					{tags.map((tag: string) => (
 						<span
 							key={tag}
-							className="text-[10px] px-1 py-0.5 border border-[#39FF14]/50 opacity-80 uppercase"
+							className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green rounded-md"
 						>
 							{tag}
 						</span>
@@ -67,27 +69,29 @@ export function InventoryCard({
 
 				<StatusGauge status={item.status} expiresAt={item.expiresAt} />
 
-				<div className="mt-3 flex justify-between text-[10px] uppercase opacity-60">
+				<div className="mt-3 flex justify-between text-sm text-muted">
 					<span>Status</span>
-					<span>{formatInventoryStatus(item.status)}</span>
+					<span className="text-carbon">
+						{formatInventoryStatus(item.status)}
+					</span>
 				</div>
 
 				<div className="absolute -top-12 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
 					<button
 						type="button"
 						onClick={() => setIsEditing(true)}
-						className="text-[#39FF14] hover:text-[#2bff00] bg-black/90 px-2 py-1 text-xs border border-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.3)] uppercase font-bold tracking-wider"
+						className="bg-hyper-green text-carbon font-bold px-3 py-1.5 text-xs rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 					>
-						[MODIFY]
+						Edit
 					</button>
 					<fetcher.Form method="post">
 						<input type="hidden" name="intent" value="delete" />
 						<input type="hidden" name="itemId" value={item.id} />
 						<button
 							type="submit"
-							className="text-red-500 hover:text-red-400 bg-black/90 px-2 py-1 text-xs border border-red-500 shadow-[0_0_10px_rgba(255,0,0,0.3)] uppercase font-bold tracking-wider"
+							className="bg-danger/10 text-danger hover:bg-danger hover:text-white px-3 py-1.5 text-xs rounded-lg font-bold transition-all"
 						>
-							[JETTISON]
+							Delete
 						</button>
 					</fetcher.Form>
 				</div>

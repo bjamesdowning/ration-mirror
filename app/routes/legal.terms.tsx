@@ -3,10 +3,10 @@ import type { Route } from "./+types/legal.terms";
 
 export const meta: Route.MetaFunction = () => {
 	return [
-		{ title: "Terms of Service | RATION" },
+		{ title: "Terms of Service | Ration" },
 		{
 			name: "description",
-			content: "Terms of Service for the RATION platform.",
+			content: "Terms of Service for the Ration platform.",
 		},
 	];
 };
@@ -15,7 +15,7 @@ export default function TermsOfService() {
 	return (
 		<>
 			<h1>Terms of Service</h1>
-			<p className="text-sm uppercase tracking-widest mb-8 border border-[#39FF14]/30 p-4 bg-[#39FF14]/5 text-[#39FF14]">
+			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
 				Last Updated: {new Date().toLocaleDateString()}
 			</p>
 
@@ -29,13 +29,12 @@ export default function TermsOfService() {
 
 			<h2>2. Description of Service</h2>
 			<p>
-				Ration is an "Orbital Supply Chain" pantry management system designed to
-				track inventory, facilitate logistical planning, and reduce waste. Our
-				services include:
+				Ration is a smart pantry management system designed to track inventory,
+				facilitate meal planning, and reduce waste. Our services include:
 			</p>
 			<ul>
 				<li>Inventory tracking and management</li>
-				<li>AI-assisted recipe generation and logistical planning</li>
+				<li>AI-assisted recipe generation and meal planning</li>
 				<li>Visual scanning and item recognition</li>
 				<li>Credit-based scanning utilizing third-party AI providers</li>
 			</ul>
@@ -43,10 +42,9 @@ export default function TermsOfService() {
 			<h2>3. User Accounts & Security</h2>
 			<p>
 				You are responsible for maintaining the confidentiality of your account
-				capabilities and credentials. You agree to accept responsibility for all
-				activities that occur under your account. You must notify us immediately
-				upon becoming aware of any breach of security or unauthorized use of
-				your account.
+				credentials. You agree to accept responsibility for all activities that
+				occur under your account. You must notify us immediately upon becoming
+				aware of any breach of security or unauthorized use of your account.
 			</p>
 
 			<h2>4. User Conduct</h2>

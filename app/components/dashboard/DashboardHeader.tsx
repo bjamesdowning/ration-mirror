@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Link, useFetcher, useLocation } from "react-router";
+import { useFetcher } from "react-router";
 
 interface DashboardHeaderProps {
 	title: string;
@@ -15,69 +15,14 @@ export function DashboardHeader({
 	totalItems,
 }: DashboardHeaderProps) {
 	const searchFetcher = useFetcher();
-	const location = useLocation();
 
 	return (
-		<header className="mb-8 border-b border-[#39FF14] pb-4 flex flex-col md:flex-row justify-between items-end gap-4">
+		<header className="mb-8 border-b border-platinum pb-4 flex flex-col md:flex-row justify-between items-end gap-4">
 			<div>
-				<h1 className="text-4xl font-black tracking-tighter uppercase glitch-text">
+				<h1 className="text-3xl md:text-4xl font-bold tracking-tight text-carbon">
 					{title}
 				</h1>
-				<p className="opacity-70 text-sm">{subtitle}</p>
-
-				{/* Navigation Tabs (Optional but good for Settings context) */}
-				<nav className="flex gap-4 mt-2 text-xs uppercase tracking-widest">
-					<Link
-						to="/dashboard"
-						className={
-							location.pathname === "/dashboard"
-								? "text-[#39FF14] underline"
-								: "opacity-50 hover:opacity-100"
-						}
-					>
-						Manifest
-					</Link>
-					<Link
-						to="/dashboard/meals"
-						className={
-							location.pathname.startsWith("/dashboard/meals")
-								? "text-[#39FF14] underline"
-								: "opacity-50 hover:opacity-100"
-						}
-					>
-						Galley Ops
-					</Link>
-					<Link
-						to="/dashboard/grocery"
-						className={
-							location.pathname === "/dashboard/grocery"
-								? "text-[#39FF14] underline"
-								: "opacity-50 hover:opacity-100"
-						}
-					>
-						Supply Depot
-					</Link>
-					<Link
-						to="/dashboard/credits"
-						className={
-							location.pathname === "/dashboard/credits"
-								? "text-[#39FF14] underline"
-								: "opacity-50 hover:opacity-100"
-						}
-					>
-						Credits
-					</Link>
-					<Link
-						to="/dashboard/settings"
-						className={
-							location.pathname === "/dashboard/settings"
-								? "text-[#39FF14] underline"
-								: "opacity-50 hover:opacity-100"
-						}
-					>
-						Config
-					</Link>
-				</nav>
+				<p className="text-muted text-sm">{subtitle}</p>
 			</div>
 
 			{showSearch && (
@@ -90,16 +35,16 @@ export function DashboardHeader({
 						<input
 							type="text"
 							name="q"
-							placeholder="SEARCH MANIFEST (SEMANTIC)..."
-							className="w-full bg-black/50 border border-[#39FF14]/30 p-2 pl-4 text-sm focus:border-[#39FF14] outline-none uppercase tracking-widest transition-all"
+							placeholder="Search..."
+							className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
 							onChange={(e) => {
 								if (e.target.value.length > 2) {
 									searchFetcher.submit(e.target.form);
 								}
 							}}
 						/>
-						<div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] opacity-50 pointer-events-none">
-							[VECTORIZE]
+						<div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none uppercase tracking-wide">
+							Semantic
 						</div>
 					</searchFetcher.Form>
 				</div>
@@ -108,8 +53,10 @@ export function DashboardHeader({
 			<div className="text-right whitespace-nowrap">
 				{totalItems !== undefined && (
 					<>
-						<p className="text-xs uppercase opacity-70">Total Mass</p>
-						<p className="text-2xl font-bold">{totalItems} ITEMS</p>
+						<p className="text-xs uppercase text-muted tracking-wide">
+							Total Items
+						</p>
+						<p className="text-2xl font-bold text-carbon">{totalItems}</p>
 					</>
 				)}
 			</div>

@@ -1,25 +1,108 @@
 @import "tailwindcss";
 
 :root {
-  --neon-green: #39FF14;
-  --void-dark: #051105;
+  /* Orbital Luxury Palette */
+  --ceramic: #F8F9FA;
+  --platinum: #E6E6E6;
+  --hyper-green: #00E088;
+  --carbon: #111111;
+  --muted: #6B7280;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
 }
 
 @theme {
-  --color-neon-green: var(--neon-green);
-  --color-void-dark: var(--void-dark);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Orbital Luxury Colors */
+  --color-ceramic: var(--ceramic);       /* Primary background */
+  --color-platinum: var(--platinum);     /* Secondary background */
+  --color-hyper-green: var(--hyper-green); /* Primary accent */
+  --color-carbon: var(--carbon);         /* Primary text */
+  --color-muted: var(--muted);           /* Secondary text */
+  --color-success: var(--success);       /* Success states */
+  --color-warning: var(--warning);       /* Warning states */
+  --color-danger: var(--danger);         /* Error states */
+  
+  /* Typography - Space Mono */
+  --font-sans: 'Space Mono', ui-monospace, monospace;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
 }
 
 @layer base {
   body {
-    background-color: var(--void-dark);
-    color: var(--neon-green);
+    background-color: var(--ceramic);
+    color: var(--carbon);
     font-family: var(--font-mono);
   }
+}
 
-  /* Brutalist Reset */
-  * {
-    border-radius: 0px !important;
-  }
+/* Orbital Luxury Utility Classes */
+
+/* Glowing shadow effect for accent elements */
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(0, 224, 136, 0.3), 0 0 40px rgba(0, 224, 136, 0.1);
+}
+
+.shadow-glow-sm {
+  box-shadow: 0 0 10px rgba(0, 224, 136, 0.2), 0 0 20px rgba(0, 224, 136, 0.05);
+}
+
+/* Glass panel effect for cards */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Control surface for interactive elements */
+.control-surface {
+  background: var(--color-platinum);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+}
+
+.control-surface:hover {
+  background: var(--color-ceramic);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.control-surface:active {
+  transform: scale(0.98);
+}
+
+/* Focus ring for accessibility */
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 224, 136, 0.4);
+}
+
+/* Typography utilities */
+.text-display {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.text-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.text-data {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe area utilities for mobile */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
 }

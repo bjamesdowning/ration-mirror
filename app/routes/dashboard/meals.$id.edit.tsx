@@ -69,22 +69,9 @@ export default function EditMeal({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			<DashboardHeader
-				title="UPDATE PROTOCOL"
-				subtitle={`TARGET: ${meal.name}`}
-			/>
-			<div className="max-w-4xl mx-auto border border-[#39FF14]/30 bg-[#051105]/50 p-8">
-				<MealBuilder
-					defaultValue={meal}
-					method="post"
-					// Action in Builder defaults to current URL which is correct.
-					// method should be POST, which action handles as Update.
-					// Usually Update uses PUT but HTML Forms support POST.
-					// Our loader/action handles POST for update logic here.
-					// Wait, previous API was PUT.
-					// But here we are in a Route Action. Route Action receives POST from <Form>.
-					// So we handle POST in action and call updateMeal.
-				/>
+			<DashboardHeader title="Edit Recipe" subtitle={meal.name} />
+			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
+				<MealBuilder defaultValue={meal} method="post" />
 			</div>
 		</>
 	);

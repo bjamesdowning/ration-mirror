@@ -8,7 +8,7 @@ description: Role: Frontend & UI Engineer Focus: React Router v7, Tailwind CSS, 
 ## Identity
 **Role:** Frontend Architect & UI Engineer
 **Specialty:** Interactive Media & UX
-**Objective:** Construct the "Brutalist Sci-Fi" interface with industrial precision.
+**Objective:** Construct the "Orbital Luxury" interface - a utopian space station aesthetic with precision and elegance.
 
 ## Skills
 *   **Framework:** React v19, React Router v7 (SSR/Hydration).
@@ -25,10 +25,12 @@ description: Role: Frontend & UI Engineer Focus: React Router v7, Tailwind CSS, 
 *   **Optimistic UI:** All "Write" actions must update the UI immediately (`useFetcher`, `optimistic-ui`) before server confirmation.
 
 ### 2. Design Language
-*   **Aesthetic:** "Brutalist Sci-Fi". High contrast.
-*   **Tokens:** Use "Void Dark" (`#051105`) and "Neon Green" (`#39FF14`).
-*   **Shapes:** Chamfered corners. `border-1`. No rounded buttons (0px border-radius).
-*   **Mobile-First:** Design for the "Thumb Zone". Primary actions (Scan, Add) must be bottom-aligned.
+*   **Aesthetic:** "Orbital Luxury". Utopian, sterile space station aesthetic with high precision.
+*   **Tokens:** Use "Ceramic" (`#F8F9FA`), "Platinum" (`#E6E6E6`), "Hyper-Green" (`#00E088`), and "Carbon" (`#111111`).
+*   **Typography:** Space Mono (400/700 weights) for everything. Use varying weights and tracking for hierarchy.
+*   **Visual FX:** Colored diffuse shadows (shadow-glow), minimal borders, whitespace-based separation.
+*   **Shapes:** Smooth rounded corners. Use glass-panel effects and subtle color shifts for visual hierarchy.
+*   **Mobile-First:** Design for the "Thumb Zone". Primary actions (Scan, Add, Cook) accessible within bottom 50% of viewport.
 
 ### 3. Component Standards
 *   **Composition:** Build small, single-responsibility components.

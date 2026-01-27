@@ -6,8 +6,8 @@ trigger: always_on
 
 ## 1. Mission Profile
 **Identity:** Ration is an "Orbital Supply Chain" pantry management system.
-**Aesthetic:** "Brutalist Sci-Fi." High contrast (Neon Green #39FF14 on Void Dark #051105). Heads-Up Display (HUD) interfaces.
-**Core Objective:** Zero-latency inventory tracking, AI-assisted logistical planning (recipes), and automated waste reduction.
+**Aesthetic:** "Orbital Luxury." Utopian space station design with Ceramic White (#F8F9FA), Platinum (#E6E6E6), Hyper-Green (#00E088), and Carbon (#111111). Clean, precision interfaces with Space Mono typography.
+**Core Objective:** Zero-latency inventory tracking, AI-assisted logistical planning (recipes), and automated waste reduction with an elegant, optimistic user experience.
 
 ## 2. Technology Stack (Strict Adherence, but always search and confirm the latest stable versions for each tool. Never use legacy tools)
 * **Framework:** React Router v7.latest (Framework Mode / `routes.ts`).

@@ -1,11 +1,23 @@
 import { Outlet } from "react-router";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { requireAuth } from "~/lib/auth.server";
+import { checkAndGenerateList } from "~/lib/automation.server";
+import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/dashboard";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	await requireAuth(context, request);
-	return {};
+	const { user } = await requireAuth(context, request);
+
+	// Lazy check for automated list generation
+	// We don't await this to avoid blocking navigation?
+	// Actually, for consistency, we probably should await it so the list is there when the page loads.
+	// It's fast (D1 lookup + potential insert).
+	await checkAndGenerateList(context, user.id);
+
+	const settings = (user.settings as UserSettings) || {};
+	const lastGeneratedAt = settings.listGeneration?.lastGeneratedAt || null;
+
+	return { lastGeneratedAt };
 }
 
 export default function DashboardLayout() {

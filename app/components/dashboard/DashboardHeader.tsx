@@ -1,5 +1,19 @@
 // @ts-nocheck
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
+import type { loader } from "../../routes/dashboard";
+
+function formatRelativeTime(dateString: string) {
+	const date = new Date(dateString);
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffMins = Math.round(diffMs / 60000);
+	const diffHours = Math.round(diffMins / 60);
+
+	if (diffMins < 1) return "Just now";
+	if (diffMins < 60) return `${diffMins}m ago`;
+	if (diffHours < 24) return `${diffHours}h ago`;
+	return "Yesterday";
+}
 
 interface DashboardHeaderProps {
 	title: string;
@@ -21,6 +35,10 @@ export function DashboardHeader({
 	onSearchChange,
 }: DashboardHeaderProps) {
 	const searchFetcher = useFetcher();
+	const fetcher = useFetcher();
+	const dashboardData = useRouteLoaderData<typeof loader>("routes/dashboard");
+	const lastGeneratedAt = dashboardData?.lastGeneratedAt;
+	const isGenerating = fetcher.state === "submitting";
 
 	// Use controlled mode if onSearchChange is provided
 	const isControlled = !!onSearchChange;
@@ -79,14 +97,50 @@ export function DashboardHeader({
 				</div>
 			)}
 
-			<div className="text-right whitespace-nowrap">
+			<div className="flex flex-col items-end gap-1">
 				{totalItems !== undefined && (
-					<>
+					<div className="text-right whitespace-nowrap">
 						<p className="text-xs uppercase text-muted tracking-wide">
 							Total Items
 						</p>
 						<p className="text-2xl font-bold text-carbon">{totalItems}</p>
-					</>
+					</div>
+				)}
+
+				{/* Automation Status & Refresh */}
+				{lastGeneratedAt && (
+					<div className="flex items-center gap-2 mt-2">
+						<span className="text-[10px] uppercase tracking-wide text-muted">
+							Auto-List: {formatRelativeTime(lastGeneratedAt)}
+						</span>
+						<fetcher.Form method="post" action="/api/automation/trigger">
+							<button
+								type="submit"
+								disabled={isGenerating}
+								title="Generate List Now"
+								className="p-1 hover:bg-platinum rounded-md text-hyper-green transition-colors disabled:opacity-50"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									className={isGenerating ? "animate-spin" : ""}
+								>
+									<title>Refresh List</title>
+									<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+									<path d="M3 3v5h5" />
+									<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+									<path d="M16 16h5v5" />
+								</svg>
+							</button>
+						</fetcher.Form>
+					</div>
 				)}
 			</div>
 		</header>

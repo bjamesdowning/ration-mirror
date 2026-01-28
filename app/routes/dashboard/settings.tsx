@@ -5,12 +5,9 @@ import { Form, redirect, useNavigation } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
+// Removed local interface in favor of shared type
+import type { UserSettings } from "../../lib/types";
 import type { Route } from "./+types/settings";
-
-interface Settings {
-	unitSystem?: "metric" | "imperial";
-	expirationAlertDays?: number;
-}
 
 export async function loader(args: Route.LoaderArgs) {
 	const { user: authUser } = await requireAuth(args.context, args.request);
@@ -26,7 +23,7 @@ export async function loader(args: Route.LoaderArgs) {
 	if (!user) throw redirect("/sign-in");
 
 	// Drizzle automatically parses JSON mode fields
-	const settings = (user.settings as Settings) || {};
+	const settings = (user.settings as UserSettings) || {};
 
 	return {
 		settings,
@@ -52,8 +49,8 @@ export async function action(args: Route.ActionArgs) {
 
 		if (user) {
 			// Drizzle automatically parses/stringifies JSON mode fields
-			const currentSettings = (user.settings as Settings) || {};
-			const newSettings: Settings = {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
 				...currentSettings,
 				unitSystem: unitSystem as "metric" | "imperial",
 			};
@@ -76,8 +73,8 @@ export async function action(args: Route.ActionArgs) {
 		});
 
 		if (user) {
-			const currentSettings = (user.settings as Settings) || {};
-			const newSettings: Settings = {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
 				...currentSettings,
 				expirationAlertDays: clampedDays,
 			};
@@ -88,6 +85,39 @@ export async function action(args: Route.ActionArgs) {
 				.where(eq(schema.user.id, userId));
 		}
 
+		return { success: true };
+	}
+
+	if (intent === "update-list-generation") {
+		const frequency = formData.get("frequency") as
+			| "off"
+			| "daily"
+			| "weekly"
+			| "custom";
+		const intervalDays = Number(formData.get("intervalDays")) || 7;
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				listGeneration: {
+					...currentSettings.listGeneration,
+					frequency,
+					intervalDays: frequency === "custom" ? intervalDays : undefined,
+					// Preserve the lastGeneratedAt if it exists
+					lastGeneratedAt: currentSettings.listGeneration?.lastGeneratedAt,
+				},
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
 		return { success: true };
 	}
 
@@ -106,6 +136,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const isPurging =
 		navigation.state === "submitting" &&
 		navigation.formAction === "/api/user/purge";
+	const isUpdatingAutomation =
+		navigation.state === "submitting" &&
+		navigation.formData?.get("intent") === "update-list-generation";
 
 	return (
 		<div className="space-y-8 pb-20">
@@ -184,6 +217,54 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							{settings.expirationAlertDays || 7} days
 						</span>
 						{isUpdatingExpiration && (
+							<span className="text-hyper-green animate-pulse text-sm">
+								Saving...
+							</span>
+						)}
+					</Form>
+				</section>
+
+				{/* Automated Restock */}
+				<section className="glass-panel rounded-xl p-6">
+					<div className="flex justify-between items-start mb-4">
+						<div>
+							<h2 className="text-xl font-bold text-carbon">
+								Automated Restock
+							</h2>
+							<p className="text-sm text-muted">
+								Auto-generate lists based on your supply levels
+							</p>
+						</div>
+					</div>
+
+					<Form method="post" className="space-y-4">
+						<input type="hidden" name="intent" value="update-list-generation" />
+
+						<div className="flex gap-2 p-1 bg-platinum/50 rounded-lg w-fit">
+							{(["off", "daily", "weekly"] as const).map((freq) => (
+								<label
+									key={freq}
+									className={`px-4 py-2 rounded-md text-sm font-medium cursor-pointer transition-all ${
+										settings.listGeneration?.frequency === freq ||
+										(!settings.listGeneration?.frequency && freq === "off")
+											? "bg-white text-carbon shadow-sm"
+											: "text-muted hover:text-carbon"
+									}`}
+								>
+									<input
+										type="radio"
+										name="frequency"
+										value={freq}
+										defaultChecked={settings.listGeneration?.frequency === freq}
+										className="hidden"
+										onChange={(e) => e.target.form?.requestSubmit()}
+									/>
+									{freq.charAt(0).toUpperCase() + freq.slice(1)}
+								</label>
+							))}
+						</div>
+
+						{isUpdatingAutomation && (
 							<span className="text-hyper-green animate-pulse text-sm">
 								Saving...
 							</span>

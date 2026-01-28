@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Link, useFetcher } from "react-router";
+import { Form, Link } from "react-router";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
 
@@ -21,7 +21,6 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		IngredientAvailability[]
 	>([]);
 	const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
-	const deleteFetcher = useFetcher();
 
 	// Fetch ingredient availability for this meal
 	useEffect(() => {
@@ -150,20 +149,21 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							>
 								Edit
 							</Link>
-							<button
-								type="button"
-								onClick={() => {
-									if (confirm("Delete this recipe?")) {
-										deleteFetcher.submit(null, {
-											method: "DELETE",
-											action: `/api/meals/${meal.id}`,
-										});
+							<Form
+								method="delete"
+								onSubmit={(e) => {
+									if (!confirm("Delete this recipe?")) {
+										e.preventDefault();
 									}
 								}}
-								className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
 							>
-								Delete
-							</button>
+								<button
+									type="submit"
+									className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
+								>
+									Delete
+								</button>
+							</Form>
 						</div>
 					)}
 					<div className="mt-4 flex gap-6 text-sm">

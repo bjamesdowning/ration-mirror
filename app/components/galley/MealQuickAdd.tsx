@@ -170,13 +170,13 @@ export function MealQuickAdd({
 						</div>
 
 						{/* Ingredients */}
-						<div>
+						<div className="relative z-30">
 							<h4 className="text-label text-muted text-sm mb-2">Components</h4>
 							<IngredientPicker availableIngredients={availableIngredients} />
 						</div>
 
 						{/* Directions */}
-						<div>
+						<div className="relative z-0">
 							<DirectionsEditor />
 						</div>
 

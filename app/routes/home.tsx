@@ -2,6 +2,7 @@
 import type { Route } from "./+types/home";
 import "../../load-context"; // Ensure augmentation is loaded
 import { Link } from "react-router";
+import { AuthWidget } from "~/components/auth";
 
 export function meta(_: Route.MetaArgs) {
 	return [
@@ -68,20 +69,9 @@ export default function Home() {
 							<span>Secure</span>
 						</div>
 
-						{/* CTA Buttons */}
-						<div className="flex flex-col md:flex-row gap-4 w-full max-w-md mt-8">
-							<Link
-								to="/sign-in"
-								className="flex-1 bg-hyper-green text-carbon font-bold text-center py-4 px-8 rounded-xl shadow-glow hover:shadow-glow-sm transition-all hover:scale-105"
-							>
-								Sign In
-							</Link>
-							<Link
-								to="/sign-up"
-								className="flex-1 glass-panel text-carbon font-bold text-center py-4 px-8 rounded-xl hover:bg-platinum transition-all"
-							>
-								Get Started
-							</Link>
+						{/* Embedded Auth Widget */}
+						<div className="w-full flex justify-center mt-8">
+							<AuthWidget defaultMode="signUp" />
 						</div>
 					</div>
 

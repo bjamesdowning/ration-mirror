@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
 
@@ -124,6 +124,10 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		);
 		return match;
 	};
+
+	const fetcher = useFetcher<{ result: { cooked: boolean } }>();
+	const isCooking = fetcher.state !== "idle";
+	const isCooked = fetcher.data?.result?.cooked === true;
 
 	return (
 		<div className="max-w-4xl mx-auto space-y-8">
@@ -271,21 +275,46 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					</ul>
 
 					{/* Cook Action */}
-					<Form
+					<fetcher.Form
 						method="post"
 						action={`/api/meals/${meal.id}/cook`}
 						className="mt-8"
+						onSubmit={(e: React.FormEvent) => {
+							if (
+								!confirm(
+									"Cook this meal? It will deduct ingredients from your pantry.",
+								)
+							) {
+								e.preventDefault();
+							}
+						}}
 					>
 						<button
 							type="submit"
-							className="w-full bg-hyper-green text-carbon font-bold px-6 py-3 rounded-xl shadow-glow hover:shadow-glow transition-all"
+							disabled={isCooking}
+							className={`w-full font-bold px-6 py-3 rounded-xl shadow-glow hover:shadow-glow transition-all ${
+								isCooked
+									? "bg-success text-carbon"
+									: "bg-hyper-green text-carbon"
+							} ${isCooking ? "opacity-75 cursor-wait" : ""}`}
 						>
-							Cook Now
+							{isCooking
+								? "Cooking..."
+								: isCooked
+									? "Meal Cooked!"
+									: "Cook Now"}
 						</button>
-						<p className="text-xs text-center mt-2 text-muted">
-							This will deduct ingredients from inventory
-						</p>
-					</Form>
+						{isCooked && (
+							<p className="text-xs text-center mt-2 text-success font-medium">
+								Inventory updated successfully
+							</p>
+						)}
+						{!isCooked && (
+							<p className="text-xs text-center mt-2 text-muted">
+								This will deduct ingredients from inventory
+							</p>
+						)}
+					</fetcher.Form>
 				</div>
 
 				{/* Left Col: Directions */}

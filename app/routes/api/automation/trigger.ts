@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import { createGroceryListFromAllMeals } from "~/lib/grocery.server";
-import type { Route } from "./+types/trigger-automation";
+import type { Route } from "./+types/trigger";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);

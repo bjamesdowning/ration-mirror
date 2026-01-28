@@ -46,8 +46,6 @@ export async function checkAndGenerateList(
 		// First time run
 		shouldGenerate = true;
 	} else {
-		const diffTime = Math.abs(now.getTime() - lastGenerated.getTime());
-
 		// Logic: If it's been MORE than the interval since last generation
 		// For "daily", we check if the date has changed or 24h passed?
 		// Simple approach: Check if "today" is different from "last generated day" for daily

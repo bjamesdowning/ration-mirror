@@ -121,6 +121,7 @@ export function DashboardHeader({
 								className="p-1 hover:bg-platinum rounded-md text-hyper-green transition-colors disabled:opacity-50"
 							>
 								<svg
+									aria-hidden="true"
 									xmlns="http://www.w3.org/2000/svg"
 									width="14"
 									height="14"

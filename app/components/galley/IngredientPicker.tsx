@@ -63,6 +63,7 @@ export function IngredientPicker({
 				ingredientName: "",
 				quantity: 0,
 				unit: "unit",
+				inventoryId: null,
 				isOptional: false,
 				orderIndex: ingredients.length,
 			},
@@ -122,7 +123,7 @@ export function IngredientPicker({
 	};
 
 	return (
-		<div className="glass-panel rounded-xl p-4 space-y-4 relative">
+		<div className="glass-panel rounded-xl p-4 space-y-4 relative overflow-visible">
 			<div className="flex justify-between items-center">
 				<h3 className="text-label text-muted text-sm">Components</h3>
 				<div className="flex gap-2">
@@ -174,24 +175,32 @@ export function IngredientPicker({
 							autoComplete="off"
 						/>
 						{/* Dropdown */}
-						{activeIndex === idx && filteredOptions.length > 0 && (
+						{activeIndex === idx && (
 							<div
 								id="ingredient-dropdown"
-								className="absolute z-50 left-0 right-0 mt-1 bg-white border border-platinum rounded-lg shadow-lg max-h-48 overflow-y-auto"
+								className="absolute z-[100] left-0 right-0 mt-1 bg-white border border-platinum rounded-lg shadow-lg max-h-48 overflow-y-auto"
 							>
-								{filteredOptions.map((option) => (
-									<button
-										key={option.id}
-										type="button"
-										onClick={() => selectOption(idx, option)}
-										className="w-full text-left px-3 py-2 text-sm text-carbon hover:bg-platinum transition-colors flex justify-between items-center"
-									>
-										<span>{option.name}</span>
-										<span className="text-xs text-muted font-mono bg-platinum/50 px-1.5 py-0.5 rounded">
-											{option.unit}
-										</span>
-									</button>
-								))}
+								{filteredOptions.length > 0 ? (
+									filteredOptions.map((option) => (
+										<button
+											key={option.id}
+											type="button"
+											onClick={() => selectOption(idx, option)}
+											className="w-full text-left px-3 py-2 text-sm text-carbon hover:bg-platinum transition-colors flex justify-between items-center"
+										>
+											<span>{option.name}</span>
+											<span className="text-xs text-muted font-mono bg-platinum/50 px-1.5 py-0.5 rounded">
+												{option.unit}
+											</span>
+										</button>
+									))
+								) : (
+									<div className="px-3 py-2 text-xs text-muted italic">
+										No matching pantry items.
+										<br />
+										Type to add custom.
+									</div>
+								)}
 							</div>
 						)}
 					</div>

@@ -14,7 +14,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// It's fast (D1 lookup + potential insert).
 	await checkAndGenerateList(context, user.id);
 
-	const settings = (user.settings as UserSettings) || {};
+	// biome-ignore lint/suspicious/noExplicitAny: better-auth user type misses custom schema fields
+	const settings = ((user as any).settings as UserSettings) || {};
 	const lastGeneratedAt = settings.listGeneration?.lastGeneratedAt || null;
 
 	return { lastGeneratedAt };

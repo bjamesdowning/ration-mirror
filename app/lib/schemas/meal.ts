@@ -10,7 +10,11 @@ export const MealIngredientSchema = z.object({
 		.string()
 		.min(1, "Unit is required")
 		.transform((v) => v.toLowerCase()),
-	inventoryId: z.string().optional().nullable(),
+	inventoryId: z
+		.string()
+		.optional()
+		.nullable()
+		.transform((v) => (v === "" ? null : v)),
 	isOptional: z.coerce.boolean().default(false),
 	orderIndex: z.coerce.number().default(0),
 });

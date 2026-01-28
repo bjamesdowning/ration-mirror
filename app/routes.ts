@@ -63,6 +63,7 @@ export default [
 	route("api/checkout", "routes/api/checkout.tsx"),
 	route("api/webhook", "routes/api/webhook.tsx"),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
+	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
 	// Legal

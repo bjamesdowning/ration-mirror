@@ -1,5 +1,5 @@
 import { Form } from "react-router";
-import type { InventoryItemInput } from "~/lib/inventory.server";
+
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
 import { IngredientPicker } from "./IngredientPicker";

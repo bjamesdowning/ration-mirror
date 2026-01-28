@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { MealIngredientInput } from "~/lib/schemas/meal"; // Implied type from schema
+import type { MealIngredientInput } from "~/lib/schemas/meal";
 
 type IngredientWithId = MealIngredientInput & { localId: string };
 
@@ -25,6 +25,36 @@ export function IngredientPicker({
 		defaultValue.map((ing) => ({ ...ing, localId: crypto.randomUUID() })),
 	);
 
+	// Track which input has the active dropdown
+	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+	// Filtered options based on current input
+	const [filteredOptions, setFilteredOptions] = useState<InventoryItem[]>([]);
+
+	const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (activeIndex !== null) {
+				const dropdown = document.getElementById("ingredient-dropdown");
+				const input = inputRefs.current[activeIndex];
+				if (
+					dropdown &&
+					!dropdown.contains(event.target as Node) &&
+					input &&
+					!input.contains(event.target as Node)
+				) {
+					setActiveIndex(null);
+				}
+			}
+		};
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+		};
+	}, [activeIndex]);
+
 	const addIngredient = () => {
 		setIngredients([
 			...ingredients,
@@ -33,21 +63,6 @@ export function IngredientPicker({
 				ingredientName: "",
 				quantity: 0,
 				unit: "unit",
-				isOptional: false,
-				orderIndex: ingredients.length,
-			},
-		]);
-	};
-
-	const addFromInventory = (item: InventoryItem) => {
-		setIngredients([
-			...ingredients,
-			{
-				localId: crypto.randomUUID(),
-				ingredientName: item.name,
-				quantity: 1, // Default to 1
-				unit: item.unit,
-				inventoryId: item.id,
 				isOptional: false,
 				orderIndex: ingredients.length,
 			},
@@ -68,14 +83,49 @@ export function IngredientPicker({
 		const newIngredients = [...ingredients];
 		newIngredients[index] = { ...newIngredients[index], [field]: value };
 		setIngredients(newIngredients);
+
+		// If updating name, filter options
+		if (field === "ingredientName" && typeof value === "string") {
+			filterOptions(value);
+			setActiveIndex(index);
+		}
+	};
+
+	const filterOptions = (query: string) => {
+		if (!query) {
+			setFilteredOptions(availableIngredients.slice(0, 10));
+			return;
+		}
+		const lowerQuery = query.toLowerCase();
+		const filtered = availableIngredients
+			.filter((item) => item.name.toLowerCase().includes(lowerQuery))
+			.slice(0, 10);
+		setFilteredOptions(filtered);
+	};
+
+	const handleInputFocus = (index: number) => {
+		setActiveIndex(index);
+		const currentName = ingredients[index].ingredientName;
+		filterOptions(currentName);
+	};
+
+	const selectOption = (index: number, item: InventoryItem) => {
+		const newIngredients = [...ingredients];
+		newIngredients[index] = {
+			...newIngredients[index],
+			ingredientName: item.name,
+			unit: item.unit,
+			inventoryId: item.id,
+		};
+		setIngredients(newIngredients);
+		setActiveIndex(null);
 	};
 
 	return (
-		<div className="glass-panel rounded-xl p-4 space-y-4">
+		<div className="glass-panel rounded-xl p-4 space-y-4 relative">
 			<div className="flex justify-between items-center">
 				<h3 className="text-label text-muted text-sm">Components</h3>
 				<div className="flex gap-2">
-					{/* Quick Add Section */}
 					<button
 						type="button"
 						onClick={addIngredient}
@@ -86,27 +136,10 @@ export function IngredientPicker({
 				</div>
 			</div>
 
-			{/* Quick Add Chips */}
-			{availableIngredients.length > 0 && (
-				<div className="flex flex-wrap gap-2 mb-4">
-					{availableIngredients.slice(0, 10).map((item) => (
-						<button
-							key={item.id}
-							type="button"
-							onClick={() => addFromInventory(item)}
-							className="px-2 py-1 bg-platinum border border-platinum-dark text-carbon text-xs rounded-full hover:bg-hyper-green hover:text-carbon hover:border-hyper-green transition-all shadow-sm"
-							title={`Add ${item.name} (${item.unit})`}
-						>
-							+ {item.name}
-						</button>
-					))}
-				</div>
-			)}
-
 			{ingredients.map((ing, idx) => (
 				<div
 					key={ing.localId}
-					className="grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3"
+					className="grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3 relative" // Added relative for dropdown positioning context if needed, though we use fixed/absolute
 				>
 					{/* Hidden inputs for form submission */}
 					<input
@@ -114,22 +147,53 @@ export function IngredientPicker({
 						name={`ingredients[${idx}].orderIndex`}
 						value={idx}
 					/>
+					<input
+						type="hidden"
+						name={`ingredients[${idx}].inventoryId`}
+						value={ing.inventoryId || ""}
+					/>
 
 					<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
 						{idx + 1}
 					</div>
 
-					<div className="col-span-5">
+					<div className="col-span-5 relative">
 						<input
+							ref={(el) => {
+								inputRefs.current[idx] = el;
+							}}
 							type="text"
 							name={`ingredients[${idx}].ingredientName`}
 							value={ing.ingredientName}
 							onChange={(e) =>
 								updateIngredient(idx, "ingredientName", e.target.value)
 							}
+							onFocus={() => handleInputFocus(idx)}
 							placeholder="Component name"
 							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							autoComplete="off"
 						/>
+						{/* Dropdown */}
+						{activeIndex === idx && filteredOptions.length > 0 && (
+							<div
+								id="ingredient-dropdown"
+								className="absolute z-50 left-0 right-0 mt-1 bg-white border border-platinum rounded-lg shadow-lg max-h-48 overflow-y-auto"
+							>
+								{filteredOptions.map((option) => (
+									<button
+										key={option.id}
+										type="button"
+										onClick={() => selectOption(idx, option)}
+										className="w-full text-left px-3 py-2 text-sm text-carbon hover:bg-platinum transition-colors flex justify-between items-center"
+									>
+										<span>{option.name}</span>
+										<span className="text-xs text-muted font-mono bg-platinum/50 px-1.5 py-0.5 rounded">
+											{option.unit}
+										</span>
+									</button>
+								))}
+							</div>
+						)}
 					</div>
 
 					<div className="col-span-2">

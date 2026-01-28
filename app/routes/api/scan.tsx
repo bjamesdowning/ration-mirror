@@ -86,32 +86,37 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		try {
 			// 5. Run AI Inference
-			// Model: @cf/meta/llama-3.2-11b-vision-instruct
+			// Model: LLaVA 1.5 7B (EU-compatible alternative to Llama 3.2 Vision)
 			const response = await context.cloudflare.env.AI.run(
-				"@cf/meta/llama-3.2-11b-vision-instruct",
+				"@cf/llava-hf/llava-1.5-7b-hf",
 				{
 					image: imageDataUrl,
 					prompt:
-						"System: You are an orbital supply chain logistics officer. Analyze the provided image and identify all food items. \n" +
-						"Requirement: Return ONLY a valid JSON object. No preamble. No markdown code blocks. No postscript.\n" +
-						'Schema: { "items": [{ "name": "string", "quantity": number, "tags": ["Dry" | "Frozen" | "Fridge" | "Produce" | "Can" | "Bottle"] }] }\n' +
-						"Guidelines:\n" +
-						"- Name: Short, descriptive, uppercase (e.g., 'SYNTH-MEAT PASTE', 'OXYGENATED WATER').\n" +
-						"- Quantity: Numeric estimate of units seen.\n" +
-						"- Tags: Map to the most relevant categories.\n" +
-						'- If no food items are found, return { "items": [] }.',
+						"You are analyzing a grocery receipt or food items. Extract all food items with their quantities.\n\n" +
+						"Return ONLY valid JSON in this exact format: {\"items\":[{\"name\":\"item name\",\"quantity\":1,\"unit\":\"unit\",\"expiresAt\":\"YYYY-MM-DD\"}]}\n\n" +
+						"Rules:\n" +
+						"1. name: Item name in lowercase (e.g., 'milk', 'bread')\n" +
+						"2. quantity: Numeric value (default 1 if unclear)\n" +
+						"3. unit: Use 'unit' for countable items, 'kg' for weight shown in kg, 'l' for liquid in liters\n" +
+						"4. expiresAt: ONLY include if expiration date is clearly visible (format: YYYY-MM-DD)\n" +
+						"5. Ignore non-food items\n\n" +
+						"Example: {\"items\":[{\"name\":\"milk\",\"quantity\":2,\"unit\":\"l\"},{\"name\":\"bread\",\"quantity\":1,\"unit\":\"unit\"}]}",
+					max_tokens: 2048,
 				},
 			);
 
 			console.log("[SCAN DEBUG] AI response received, parsing...");
 
 			// 6. Parse AI Response
-			// Llama vision returns { response: string }
+			// LLaVA returns { description: string }
 			let rawText = "";
-			if ("response" in response) {
+			if ("description" in response) {
+				rawText = response.description as string;
+			} else if ("response" in response) {
+				// Fallback for other response formats
 				rawText = response.response as string;
 			} else {
-				// Fallback or explicit handling if type differs
+				// Ultimate fallback
 				rawText = JSON.stringify(response);
 			}
 			console.log(`[SCAN DEBUG] Raw AI response: ${rawText.substring(0, 500)}`);

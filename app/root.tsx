@@ -16,6 +16,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { Status } from "./components/hud/Status";
 import { createAuth } from "./lib/auth.server";
+import { getUserWithCredits } from "./lib/user.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -36,12 +37,13 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 
 	let credits = 0;
 	if (session?.user) {
-		// In Better Auth schema we added credits to user table, so it should be available in session.user
-		// but by default getSession returns basic user fields.
-		// Since we extended the schema, Better Auth might return it if typed correctly.
-		// However, for safety/guarantee, we might want to cast or it just works.
-		// For now let's assume it's in user object or 0.
-		credits = (session.user as { credits?: number }).credits || 0;
+		// Better Auth's getSession() only returns core user fields (id, name, email, image).
+		// We need to query the database directly to get our custom 'credits' field.
+		const userData = await getUserWithCredits(
+			context.cloudflare.env.DB,
+			session.user.id,
+		);
+		credits = userData?.credits ?? 0;
 	}
 
 	return {

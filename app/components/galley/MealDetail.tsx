@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
 
@@ -21,6 +21,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		IngredientAvailability[]
 	>([]);
 	const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+	const deleteFetcher = useFetcher();
 
 	// Fetch ingredient availability for this meal
 	useEffect(() => {
@@ -149,21 +150,20 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							>
 								Edit
 							</Link>
-							<Form
-								method="post"
-								action={`/api/meals/${meal.id}`}
-								onSubmit={(e) => {
-									if (!confirm("Delete this recipe?")) e.preventDefault();
+							<button
+								type="button"
+								onClick={() => {
+									if (confirm("Delete this recipe?")) {
+										deleteFetcher.submit(null, {
+											method: "DELETE",
+											action: `/api/meals/${meal.id}`,
+										});
+									}
 								}}
+								className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
 							>
-								<input type="hidden" name="_method" value="DELETE" />
-								<button
-									type="submit"
-									className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
-								>
-									Delete
-								</button>
-							</Form>
+								Delete
+							</button>
 						</div>
 					)}
 					<div className="mt-4 flex gap-6 text-sm">
@@ -215,13 +215,12 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 										{/* Availability Indicator */}
 										{!isLoadingAvailability && (
 											<div
-												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-													isAvailable
-														? "bg-success/10"
-														: hasPartialStock
-															? "bg-warning/10"
-															: "bg-danger/10"
-												}`}
+												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isAvailable
+													? "bg-success/10"
+													: hasPartialStock
+														? "bg-warning/10"
+														: "bg-danger/10"
+													}`}
 												title={
 													isAvailable
 														? "Available in inventory"
@@ -231,13 +230,12 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 												}
 											>
 												<span
-													className={`w-2 h-2 rounded-full ${
-														isAvailable
-															? "bg-success"
-															: hasPartialStock
-																? "bg-warning"
-																: "bg-danger"
-													}`}
+													className={`w-2 h-2 rounded-full ${isAvailable
+														? "bg-success"
+														: hasPartialStock
+															? "bg-warning"
+															: "bg-danger"
+														}`}
 												></span>
 											</div>
 										)}

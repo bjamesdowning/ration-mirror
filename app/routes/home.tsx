@@ -1,8 +1,21 @@
 // @ts-nocheck
 import type { Route } from "./+types/home";
 import "../../load-context"; // Ensure augmentation is loaded
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
+import { createAuth } from "~/lib/auth.server";
+
+export async function loader({ request, context }: Route.LoaderArgs) {
+	const auth = createAuth(context.cloudflare.env);
+	const session = await auth.api.getSession({ headers: request.headers });
+
+	// If user is logged in, redirect to dashboard
+	if (session?.user) {
+		throw redirect("/dashboard");
+	}
+
+	return null;
+}
 
 export function meta(_: Route.MetaArgs) {
 	return [

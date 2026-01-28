@@ -21,6 +21,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	return { meals, availableTags, currentTag: tag };
 }
 
+export async function action({ request, context }: Route.ActionArgs) {
+	const { user } = await requireAuth(context, request);
+	const formData = await request.formData();
+	const intent = formData.get("intent");
+
+	if (intent === "delete") {
+		const mealId = formData.get("mealId") as string;
+		if (!mealId) return { success: false, error: "Missing Meal ID" };
+
+		const { deleteMeal } = await import("~/lib/meals.server");
+		await deleteMeal(context.cloudflare.env.DB, user.id, mealId);
+		return { success: true };
+	}
+
+	return { success: false, error: "Unknown Intent" };
+}
+
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const { meals, availableTags, currentTag } = loaderData;
 	const [, setSearchParams] = useSearchParams();
@@ -76,11 +93,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => setMatchingEnabled(!matchingEnabled)}
-								className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-									matchingEnabled
+								className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${matchingEnabled
 										? "bg-hyper-green text-carbon shadow-glow-sm"
 										: "bg-platinum text-carbon hover:bg-platinum/80"
-								}`}
+									}`}
 							>
 								{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
 							</button>

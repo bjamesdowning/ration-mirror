@@ -18,7 +18,7 @@ cache:
     - node_modules/
 
 # Install Dependencies
-install_dependencies:
+.install_dependencies:
   stage: install
   script:
     # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
@@ -33,19 +33,19 @@ install_dependencies:
     expire_in: 1 hour
 
 # Verification Jobs (DAG: ALL run in parallel after install)
-lint:
+.lint:
   stage: verify
   needs: ["install_dependencies"]
   script:
     - bun run lint
 
-typecheck:
+.typecheck:
   stage: verify
   needs: ["install_dependencies"]
   script:
     - bun run typecheck
 
-test_unit:
+.test_unit:
   stage: verify
   needs: ["install_dependencies"]
   script:

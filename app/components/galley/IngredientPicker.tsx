@@ -140,7 +140,9 @@ export function IngredientPicker({
 			{ingredients.map((ing, idx) => (
 				<div
 					key={ing.localId}
-					className="grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3 relative" // Added relative for dropdown positioning context if needed, though we use fixed/absolute
+					className={`grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3 relative ${
+						activeIndex === idx ? "z-20" : "z-0"
+					}`}
 				>
 					{/* Hidden inputs for form submission */}
 					<input

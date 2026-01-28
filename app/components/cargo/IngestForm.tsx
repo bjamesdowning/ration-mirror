@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-
-import {
-	CameraInput,
-	type DetectedItem,
-} from "~/components/scanner/CameraInput";
+import { CameraInput } from "~/components/scanner/CameraInput";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 export function IngestForm() {
@@ -13,11 +9,6 @@ export function IngestForm() {
 	const isSubmitting = fetcher.state !== "idle";
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	// State to populate form programmatically
-	// We can use refs to access inputs directly without re-renders for every keystroke generally,
-	// but for population we need to set values. DefaultValue only works on mount.
-	// Controlled inputs would be cleaner, but let's stick to uncontrolled with Ref manipulation for "industrial" speed if possible,
-	// OR just use state. Let's use Refs for direct manipulation which is often simpler for "fill form" actions without re-rendering everything.
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
 	const unitInputRef = useRef<HTMLSelectElement>(null);
@@ -34,23 +25,6 @@ export function IngestForm() {
 			formRef.current?.reset();
 		}
 	}, [fetcher.state, fetcher.data]);
-
-	const handleScanComplete = (items: DetectedItem[]) => {
-		if (items.length > 0) {
-			const item = items[0];
-			if (nameInputRef.current)
-				nameInputRef.current.value = item.name.toUpperCase();
-			if (qtyInputRef.current)
-				qtyInputRef.current.value = item.quantity.toString();
-
-			// Heuristic for unit or default to "unit"
-			if (unitInputRef.current) unitInputRef.current.value = "unit"; // Start with default
-			if (categoryInputRef.current) categoryInputRef.current.value = "other";
-
-			// Auto-check tags if they match?
-			// For MVP, simplistic name/qty fill is great "wow" factor.
-		}
-	};
 
 	return (
 		<div className="glass-panel rounded-xl p-6">

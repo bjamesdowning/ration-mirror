@@ -141,11 +141,10 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		return items;
 	}, [initialInventory, searchQuery, categoryFilter]);
 
-	// Handle scan completion - populate form fields
-	const handleScanComplete = (_items) => {
-		// Open quick add form when scan completes
-		setShowQuickAdd(true);
-		// Items are handled by the IngestForm internally
+	// Handle scan completion - close quick add if open
+	const handleScanComplete = () => {
+		// Close quick add form since scan now has its own modal
+		setShowQuickAdd(false);
 	};
 
 	return (

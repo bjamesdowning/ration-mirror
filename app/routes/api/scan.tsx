@@ -58,11 +58,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
 	}
 
-	// 4. Prepare Image for AI
+	// 4. Prepare Image for AI - Convert to base64 data URL
 	const arrayBuffer = await imageFile.arrayBuffer();
 	const uint8Array = new Uint8Array(arrayBuffer);
-	// Workers AI expects an array of numbers for the image input
-	const imageArray = Array.from(uint8Array);
+
+	// Convert to base64
+	let binary = "";
+	for (let i = 0; i < uint8Array.length; i++) {
+		binary += String.fromCharCode(uint8Array[i]);
+	}
+	const base64 = btoa(binary);
+
+	// Construct data URL with proper MIME type
+	const mimeType = imageFile.type || "image/jpeg";
+	const imageDataUrl = `data:${mimeType};base64,${base64}`;
 
 	try {
 		// 5. Run AI Inference
@@ -70,7 +79,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const response = await context.cloudflare.env.AI.run(
 			"@cf/meta/llama-3.2-11b-vision-instruct",
 			{
-				image: imageArray,
+				image: imageDataUrl,
 				prompt:
 					"System: You are an orbital supply chain logistics officer. Analyze the provided image and identify all food items. \n" +
 					"Requirement: Return ONLY a valid JSON object. No preamble. No markdown code blocks. No postscript.\n" +

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	groceryItem,
@@ -36,23 +36,31 @@ export interface GenerationSummary {
 export async function getGroceryLists(db: D1Database, userId: string) {
 	const d1 = drizzle(db);
 
-	const [lists, allItems] = await d1.batch([
-		d1
-			.select()
-			.from(groceryList)
-			.where(eq(groceryList.userId, userId))
-			.orderBy(desc(groceryList.updatedAt)),
-		d1
-			.select()
-			.from(groceryItem)
-			.innerJoin(groceryList, eq(groceryItem.listId, groceryList.id))
-			.where(eq(groceryList.userId, userId)),
-	]);
+	// First get all lists for this user
+	const lists = await d1
+		.select()
+		.from(groceryList)
+		.where(eq(groceryList.userId, userId))
+		.orderBy(desc(groceryList.updatedAt));
+
+	if (lists.length === 0) {
+		return [];
+	}
+
+	// Then get all items for those lists
+	const listIds = lists.map((l) => l.id);
+	const allItems = await d1
+		.select()
+		.from(groceryItem)
+		.where(
+			listIds.length === 1
+				? eq(groceryItem.listId, listIds[0])
+				: inArray(groceryItem.listId, listIds),
+		);
 
 	// Group items by list ID
 	const itemsByListId = new Map<string, (typeof groceryItem.$inferSelect)[]>();
-	for (const row of allItems) {
-		const item = row.grocery_item;
+	for (const item of allItems) {
 		if (!itemsByListId.has(item.listId)) {
 			itemsByListId.set(item.listId, []);
 		}

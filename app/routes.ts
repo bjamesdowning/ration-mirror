@@ -11,6 +11,9 @@ export default [
 		route("settings", "routes/dashboard/settings.tsx"),
 		route("credits", "routes/dashboard/credits.tsx"),
 
+		// Pantry/Inventory
+		route("pantry", "routes/dashboard/pantry.tsx"),
+
 		// Meals
 		route("meals", "routes/dashboard/meals.tsx"),
 		route("meals/new", "routes/dashboard/meals.new.tsx"),

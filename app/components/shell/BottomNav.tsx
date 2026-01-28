@@ -11,24 +11,8 @@ const navItems = [
 export function BottomNav() {
 	return (
 		<nav className="md:hidden fixed bottom-0 left-0 right-0 bg-ceramic/95 backdrop-blur-lg border-t border-platinum safe-area-pb z-50">
-			<div className="flex items-center justify-around h-16 px-1">
-				{/* First two items: Dashboard, Pantry */}
-				{navItems.slice(0, 2).map((item) => (
-					<NavItem key={item.to} {...item} />
-				))}
-
-				{/* Center FAB - Visual Scan (links to Pantry) */}
-				<div className="relative -mt-6">
-					<NavLink
-						to="/dashboard/pantry"
-						className="w-14 h-14 rounded-full bg-hyper-green text-carbon flex items-center justify-center shadow-glow active:scale-95 transition-transform"
-					>
-						<ScanIcon />
-					</NavLink>
-				</div>
-
-				{/* Last three items: Meals, Grocery, Settings */}
-				{navItems.slice(2).map((item) => (
+			<div className="flex items-center justify-around h-16 px-2">
+				{navItems.map((item) => (
 					<NavItem key={item.to} {...item} />
 				))}
 			</div>

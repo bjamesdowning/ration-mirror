@@ -42,17 +42,6 @@ export function RailSidebar() {
 					</NavLink>
 				))}
 			</nav>
-
-			{/* Visual Scan FAB for desktop - links to Pantry */}
-			<div className="p-4">
-				<NavLink
-					to="/dashboard/pantry"
-					className="w-14 h-14 rounded-full bg-hyper-green text-carbon flex items-center justify-center shadow-glow hover:scale-105 transition-transform"
-					title="Visual Scan"
-				>
-					<ScanIcon />
-				</NavLink>
-			</div>
 		</aside>
 	);
 }

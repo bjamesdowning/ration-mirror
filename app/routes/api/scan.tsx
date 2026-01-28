@@ -59,19 +59,26 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	// 4. Prepare Image for AI - Convert to base64 data URL
+	console.log(`[SCAN DEBUG] Processing image: ${imageFile.name}, size: ${imageFile.size}, type: ${imageFile.type}`);
+	
 	const arrayBuffer = await imageFile.arrayBuffer();
+	console.log(`[SCAN DEBUG] ArrayBuffer size: ${arrayBuffer.byteLength}`);
+	
 	const uint8Array = new Uint8Array(arrayBuffer);
-
-	// Convert to base64
-	let binary = "";
-	for (let i = 0; i < uint8Array.length; i++) {
-		binary += String.fromCharCode(uint8Array[i]);
-	}
-	const base64 = btoa(binary);
-
-	// Construct data URL with proper MIME type
-	const mimeType = imageFile.type || "image/jpeg";
-	const imageDataUrl = `data:${mimeType};base64,${base64}`;
+	
+	try {
+		// Convert to base64 using safer method
+		const base64 = btoa(
+			Array.from(uint8Array)
+				.map((byte) => String.fromCharCode(byte))
+				.join(""),
+		);
+		console.log(`[SCAN DEBUG] Base64 encoded, length: ${base64.length}`);
+		
+		// Construct data URL with proper MIME type
+		const mimeType = imageFile.type || "image/jpeg";
+		const imageDataUrl = `data:${mimeType};base64,${base64}`;
+		console.log(`[SCAN DEBUG] Data URL created, total length: ${imageDataUrl.length}`);
 
 	try {
 		// 5. Run AI Inference
@@ -92,6 +99,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			},
 		);
 
+		console.log("[SCAN DEBUG] AI response received, parsing...");
+		
 		// 6. Parse AI Response
 		// Llama vision returns { response: string }
 		let rawText = "";
@@ -101,6 +110,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			// Fallback or explicit handling if type differs
 			rawText = JSON.stringify(response);
 		}
+		console.log(`[SCAN DEBUG] Raw AI response: ${rawText.substring(0, 500)}`);
 
 		// Attempt to extract JSON if the AI included conversational text
 		let cleanedText = rawText;

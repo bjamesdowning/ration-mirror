@@ -196,9 +196,21 @@ export function IngredientPicker({
 									))
 								) : (
 									<div className="px-3 py-2 text-xs text-muted italic">
-										No matching pantry items.
-										<br />
-										Type to add custom.
+										{availableIngredients.length === 0 ? (
+											<>
+												Your pantry is empty.
+												<br />
+												<span className="opacity-75">
+													Add items in Supply first.
+												</span>
+											</>
+										) : (
+											<>
+												No matching pantry items.
+												<br />
+												Type to add custom.
+											</>
+										)}
 									</div>
 								)}
 							</div>

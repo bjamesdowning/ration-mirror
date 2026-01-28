@@ -3,16 +3,29 @@ import { useFetcher } from "react-router";
 import { DirectionsEditor } from "./DirectionsEditor";
 import { IngredientPicker } from "./IngredientPicker";
 
+// Helper type for inventory item (matching IngredientPicker expectations)
+type InventoryItem = {
+	id: string;
+	name: string;
+	unit: string;
+	quantity: number;
+};
+
 interface MealQuickAddProps {
 	/** Callback when form is successfully submitted */
 	onSuccess?: () => void;
+	/** Available pantry items for ingredient picker */
+	availableIngredients?: InventoryItem[];
 }
 
 /**
  * Inline quick-add form for creating meals.
  * Supports both simple (name only) and complex (ingredients/directions) flows.
  */
-export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
+export function MealQuickAdd({
+	onSuccess,
+	availableIngredients = [],
+}: MealQuickAddProps) {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const nameInputRef = useRef<HTMLInputElement>(null);
@@ -159,7 +172,7 @@ export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 						{/* Ingredients */}
 						<div>
 							<h4 className="text-label text-muted text-sm mb-2">Components</h4>
-							<IngredientPicker />
+							<IngredientPicker availableIngredients={availableIngredients} />
 						</div>
 
 						{/* Directions */}

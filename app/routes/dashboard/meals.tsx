@@ -6,6 +6,7 @@ import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import { requireAuth } from "~/lib/auth.server";
+import { getInventory } from "~/lib/inventory.server";
 import { getMeals, getUserMealTags } from "~/lib/meals.server";
 import type { Route } from "./+types/meals";
 
@@ -14,11 +15,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 
-	const [meals, availableTags] = await Promise.all([
+	const [meals, availableTags, inventory] = await Promise.all([
 		getMeals(context.cloudflare.env.DB, user.id, tag),
 		getUserMealTags(context.cloudflare.env.DB, user.id),
+		getInventory(context.cloudflare.env.DB, user.id),
 	]);
-	return { meals, availableTags, currentTag: tag };
+	return { meals, availableTags, currentTag: tag, inventory };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -39,7 +41,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const { meals, availableTags, currentTag } = loaderData;
+	const { meals, availableTags, currentTag, inventory } = loaderData;
 	const [, setSearchParams] = useSearchParams();
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -85,7 +87,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					showQuickAdd={showQuickAdd}
 					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
 					quickAddForm={
-						<MealQuickAdd onSuccess={() => setShowQuickAdd(false)} />
+						<MealQuickAdd
+							onSuccess={() => setShowQuickAdd(false)}
+							availableIngredients={inventory}
+						/>
 					}
 					filterControls={
 						<>

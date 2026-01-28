@@ -1,5 +1,4 @@
 import { Outlet } from "react-router";
-import { Status } from "~/components/hud/Status";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { requireAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/dashboard";
@@ -16,10 +15,7 @@ export default function DashboardLayout() {
 			<RailSidebar />
 
 			{/* Main Content Area */}
-			<main className="flex-1 pb-20 md:pb-0">
-				{/* Status bar - light theme */}
-				<Status />
-
+			<main className="flex-1 pb-20 md:pb-0 pt-0">
 				{/* Content */}
 				<div className="px-4 md:px-8 py-6">
 					<Outlet />

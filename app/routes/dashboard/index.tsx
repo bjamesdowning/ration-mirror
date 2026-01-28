@@ -1,168 +1,136 @@
-// @ts-nocheck
-import { useMemo, useState } from "react";
-import { useFetcher } from "react-router";
-import { IngestForm } from "~/components/cargo/IngestForm";
-import { ManifestGrid } from "~/components/cargo/ManifestGrid";
+import { drizzle } from "drizzle-orm/d1";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { ExpiringItemsCard } from "~/components/dashboard/ExpiringItemsCard";
+import { GroceryPreviewCard } from "~/components/dashboard/GroceryPreviewCard";
+import { MealSuggestionsCard } from "~/components/dashboard/MealSuggestionsCard";
+import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
-import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
-import {
-	addItem,
-	getInventory,
-	InventoryItemSchema,
-	jettisonItem,
-	updateItem,
-} from "~/lib/inventory.server";
-import type { Route } from "./+types/dashboard";
+import { getLatestGroceryList } from "~/lib/grocery.server";
+import { getExpiringItems, getInventoryStats } from "~/lib/inventory.server";
+import { matchMeals } from "~/lib/matching.server";
+import type { Route } from "./+types/index";
+
+interface UserSettings {
+	unitSystem?: "metric" | "imperial";
+	expirationAlertDays?: number;
+}
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { user } = await requireAuth(context, request);
-	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
-	return { inventory };
-}
+	const db = context.cloudflare.env.DB;
 
-// --- ACTION ---
-export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
-	const userId = user.id;
+	// Get user settings for expiration alert days
+	const drizzleDb = drizzle(db, { schema });
+	const userData = await drizzleDb.query.user.findFirst({
+		where: (u, { eq }) => eq(u.id, user.id),
+	});
+	const settings = (userData?.settings as UserSettings) || {};
+	const expirationAlertDays = settings.expirationAlertDays || 7;
 
-	const formData = await request.formData();
-	const intent = formData.get("intent");
+	// Fetch all dashboard data in parallel
+	const [expiringItems, inventoryStats, latestGroceryList, mealMatches] =
+		await Promise.all([
+			getExpiringItems(db, user.id, expirationAlertDays, 10),
+			getInventoryStats(db, user.id),
+			getLatestGroceryList(db, user.id),
+			matchMeals(db, user.id, { mode: "delta", minMatch: 50, limit: 6 }),
+		]);
 
-	if (intent === "create") {
-		// Parse tags: formData.getAll("tags") returns array of strings
-		const rawTags = formData.getAll("tags");
-
-		// Construct object for validation
-		const rawData = {
-			name: formData.get("name"),
-			quantity: formData.get("quantity"),
-			unit: formData.get("unit"),
-			category: formData.get("category") ?? undefined,
-			tags: rawTags,
-		};
-
-		const result = InventoryItemSchema.safeParse(rawData);
-
-		if (!result.success) {
-			return { success: false, errors: result.error.flatten() };
-		}
-
-		await addItem(context.cloudflare.env, userId, result.data);
-		return { success: true };
-	}
-
-	if (intent === "delete") {
-		const itemId = formData.get("itemId") as string;
-		if (!itemId) return { success: false, error: "Missing Item ID" };
-
-		await jettisonItem(context.cloudflare.env.DB, userId, itemId);
-		return { success: true };
-	}
-
-	if (intent === "update") {
-		const itemId = formData.get("itemId") as string;
-		if (!itemId) return { success: false, error: "Missing Item ID" };
-
-		// Parse tags: handle comma-separated string from edit form
-		const tagsValue = formData.get("tags") as string;
-		const rawTags = tagsValue
-			? tagsValue
-					.split(",")
-					.map((t) => t.trim())
-					.filter((t) => t.length > 0)
-			: [];
-		const expiresAtValue = formData.get("expiresAt");
-
-		// Construct object for validation
-		const rawData = {
-			name: formData.get("name"),
-			quantity: formData.get("quantity"),
-			unit: formData.get("unit"),
-			category: formData.get("category") ?? undefined,
-			tags: rawTags,
-			expiresAt: expiresAtValue || undefined,
-		};
-
-		const result = InventoryItemSchema.safeParse(rawData);
-
-		if (!result.success) {
-			return { success: false, errors: result.error.flatten() };
-		}
-
-		const updated = await updateItem(
-			context.cloudflare.env,
-			userId,
-			itemId,
-			result.data,
-		);
-		if (!updated) {
-			return { success: false, error: "Item not found or unauthorized" };
-		}
-		return { success: true };
-	}
-
-	return { success: false, error: "Unknown Intent" };
+	return {
+		expiringItems,
+		inventoryStats,
+		latestGroceryList,
+		mealMatches,
+		expirationAlertDays,
+	};
 }
 
 // --- COMPONENT ---
-export default function DashboardIndex({ loaderData }: Route.ComponentProps) {
-	const { inventory: initialInventory } = loaderData;
-	const [categoryFilter, setCategoryFilter] = useState("all");
-
-	// Search Logic
-	const searchFetcher = useFetcher();
-	const searchResults = searchFetcher.data?.results;
-
-	const displayedInventory = searchResults || initialInventory;
-	const filteredInventory = useMemo(() => {
-		if (categoryFilter === "all") return displayedInventory;
-		return displayedInventory.filter(
-			(item) => item.category === categoryFilter,
-		);
-	}, [categoryFilter, displayedInventory]);
+export default function DashboardHub({ loaderData }: Route.ComponentProps) {
+	const {
+		expiringItems,
+		inventoryStats,
+		latestGroceryList,
+		mealMatches,
+		expirationAlertDays,
+	} = loaderData;
 
 	return (
 		<>
 			<DashboardHeader
-				title="Cargo Hold"
-				subtitle="manifest_v3.0 // connected"
-				showSearch={true}
-				totalItems={filteredInventory.length}
+				title="Dashboard"
+				subtitle="Mission Control // Overview"
+				showSearch={false}
+				totalItems={inventoryStats.totalItems}
 			/>
 
-			<div className="grid lg:grid-cols-[350px_1fr] gap-8">
-				{/* Left Col: Ingest & Stats */}
-				<aside className="space-y-8">
-					<IngestForm />
+			<div className="space-y-8">
+				{/* Quick Stats Bar */}
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+					<StatCard
+						label="Pantry Items"
+						value={inventoryStats.totalItems}
+						icon="📦"
+					/>
+					<StatCard
+						label="Expiring Soon"
+						value={inventoryStats.expiringCount}
+						icon="⏰"
+						highlight={inventoryStats.expiringCount > 0}
+					/>
+					<StatCard
+						label="Recipes Ready"
+						value={mealMatches.filter((m) => m.canMake).length}
+						icon="✅"
+					/>
+					<StatCard
+						label="Grocery Items"
+						value={latestGroceryList?.items.length || 0}
+						icon="🛒"
+					/>
+				</div>
 
-					<div className="glass-panel rounded-xl p-4">
-						<h3 className="text-label text-carbon mb-3">Cargo Filters</h3>
-						<label htmlFor="category-filter" className="text-label text-muted">
-							Category
-						</label>
-						<select
-							id="category-filter"
-							value={categoryFilter}
-							onChange={(event) => setCategoryFilter(event.target.value)}
-							className="mt-2 w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"
-						>
-							<option value="all">All Categories</option>
-							{INVENTORY_CATEGORIES.map((category) => (
-								<option key={category} value={category}>
-									{formatInventoryCategory(category)}
-								</option>
-							))}
-						</select>
-					</div>
-				</aside>
+				{/* Main Content: Meal Suggestions */}
+				<MealSuggestionsCard meals={mealMatches} />
 
-				{/* Right Col: Manifest Grid */}
-				<main>
-					<ManifestGrid items={filteredInventory} />
-				</main>
+				{/* Secondary Row: Expiring + Grocery */}
+				<div className="grid md:grid-cols-2 gap-6">
+					<ExpiringItemsCard
+						items={expiringItems}
+						alertDays={expirationAlertDays}
+					/>
+					<GroceryPreviewCard list={latestGroceryList} />
+				</div>
 			</div>
 		</>
+	);
+}
+
+// --- STAT CARD COMPONENT ---
+interface StatCardProps {
+	label: string;
+	value: number;
+	icon: string;
+	highlight?: boolean;
+}
+
+function StatCard({ label, value, icon, highlight }: StatCardProps) {
+	return (
+		<div
+			className={`glass-panel rounded-xl p-4 flex items-center gap-3 ${
+				highlight ? "border-2 border-warning" : ""
+			}`}
+		>
+			<span className="text-2xl">{icon}</span>
+			<div>
+				<p className="text-xs text-muted uppercase tracking-wider">{label}</p>
+				<p
+					className={`text-2xl font-bold ${highlight ? "text-warning" : "text-carbon"}`}
+				>
+					{value}
+				</p>
+			</div>
+		</div>
 	);
 }

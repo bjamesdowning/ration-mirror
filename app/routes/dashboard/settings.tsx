@@ -9,6 +9,7 @@ import type { Route } from "./+types/settings";
 
 interface Settings {
 	unitSystem?: "metric" | "imperial";
+	expirationAlertDays?: number;
 }
 
 export async function loader(args: Route.LoaderArgs) {
@@ -66,15 +67,42 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-expiration-alert") {
+		const days = Number(formData.get("expirationAlertDays")) || 7;
+		const clampedDays = Math.min(Math.max(days, 1), 30); // Clamp between 1-30
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as Settings) || {};
+			const newSettings: Settings = {
+				...currentSettings,
+				expirationAlertDays: clampedDays,
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+
+		return { success: true };
+	}
+
 	return null;
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings } = loaderData;
 	const navigation = useNavigation();
-	const isUpdating =
+	const isUpdatingUnits =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-units";
+	const isUpdatingExpiration =
+		navigation.state === "submitting" &&
+		navigation.formData?.get("intent") === "update-expiration-alert";
 	const isPurging =
 		navigation.state === "submitting" &&
 		navigation.formAction === "/api/user/purge";
@@ -116,8 +144,47 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							<span className="text-carbon">Imperial (oz, lb, fl oz)</span>
 						</label>
 
-						{isUpdating && (
+						{isUpdatingUnits && (
 							<span className="text-hyper-green animate-pulse text-sm ml-4 my-auto">
+								Saving...
+							</span>
+						)}
+					</Form>
+				</section>
+
+				{/* Expiration Alert */}
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">
+						Expiration Alerts
+					</h2>
+					<p className="text-sm text-muted mb-4">
+						Get alerts for items expiring within this many days
+					</p>
+					<Form method="post" className="flex items-center gap-4">
+						<input
+							type="hidden"
+							name="intent"
+							value="update-expiration-alert"
+						/>
+						<input
+							type="range"
+							name="expirationAlertDays"
+							min="1"
+							max="30"
+							defaultValue={settings.expirationAlertDays || 7}
+							onChange={(e) => {
+								const display = e.target.nextElementSibling;
+								if (display) display.textContent = `${e.target.value} days`;
+							}}
+							onMouseUp={(e) => e.currentTarget.form?.requestSubmit()}
+							onTouchEnd={(e) => e.currentTarget.form?.requestSubmit()}
+							className="flex-1 h-2 bg-platinum rounded-lg appearance-none cursor-pointer accent-hyper-green"
+						/>
+						<span className="text-carbon font-bold min-w-[60px] text-right">
+							{settings.expirationAlertDays || 7} days
+						</span>
+						{isUpdatingExpiration && (
+							<span className="text-hyper-green animate-pulse text-sm">
 								Saving...
 							</span>
 						)}

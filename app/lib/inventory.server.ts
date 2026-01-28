@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { inventory } from "../db/schema";
@@ -188,4 +188,74 @@ export async function jettisonItem(
 	return await d1
 		.delete(inventory)
 		.where(and(eq(inventory.id, itemId), eq(inventory.userId, userId)));
+}
+
+/**
+ * Fetch inventory items that are expiring within the specified number of days.
+ * Returns items ordered by expiration date (soonest first).
+ *
+ * @param db - D1 Database instance
+ * @param userId - User ID to filter inventory
+ * @param daysUntilExpiry - Number of days to look ahead (default: 7)
+ * @param limit - Maximum number of items to return (default: 10)
+ */
+export async function getExpiringItems(
+	db: D1Database,
+	userId: string,
+	daysUntilExpiry = 7,
+	limit = 10,
+) {
+	const d1 = drizzle(db);
+
+	const now = new Date();
+	const futureDate = new Date(
+		now.getTime() + daysUntilExpiry * 24 * 60 * 60 * 1000,
+	);
+
+	return await d1
+		.select()
+		.from(inventory)
+		.where(
+			and(
+				eq(inventory.userId, userId),
+				isNotNull(inventory.expiresAt),
+				lte(inventory.expiresAt, futureDate),
+				gte(inventory.expiresAt, now), // Only items not yet expired
+			),
+		)
+		.orderBy(asc(inventory.expiresAt))
+		.limit(limit);
+}
+
+/**
+ * Get a count summary of inventory for the dashboard.
+ *
+ * @param db - D1 Database instance
+ * @param userId - User ID to filter inventory
+ */
+export async function getInventoryStats(db: D1Database, userId: string) {
+	const d1 = drizzle(db);
+
+	const items = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.userId, userId));
+
+	const now = new Date();
+	const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+	const expiringCount = items.filter(
+		(item) =>
+			item.expiresAt && item.expiresAt >= now && item.expiresAt <= sevenDaysOut,
+	).length;
+
+	const expiredCount = items.filter(
+		(item) => item.expiresAt && item.expiresAt < now,
+	).length;
+
+	return {
+		totalItems: items.length,
+		expiringCount,
+		expiredCount,
+	};
 }

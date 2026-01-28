@@ -1,7 +1,8 @@
 import { NavLink } from "react-router";
 
 const navItems = [
-	{ to: "/dashboard", icon: "home", label: "Home" },
+	{ to: "/dashboard", icon: "home", label: "Dashboard" },
+	{ to: "/dashboard/pantry", icon: "package", label: "Pantry" },
 	{ to: "/dashboard/meals", icon: "chef-hat", label: "Meals" },
 	{ to: "/dashboard/grocery", icon: "shopping-cart", label: "Grocery" },
 	{ to: "/dashboard/settings", icon: "settings", label: "Settings" },
@@ -42,10 +43,10 @@ export function RailSidebar() {
 				))}
 			</nav>
 
-			{/* Visual Scan FAB for desktop */}
+			{/* Visual Scan FAB for desktop - links to Pantry */}
 			<div className="p-4">
 				<NavLink
-					to="/dashboard"
+					to="/dashboard/pantry"
 					className="w-14 h-14 rounded-full bg-hyper-green text-carbon flex items-center justify-center shadow-glow hover:scale-105 transition-transform"
 					title="Visual Scan"
 				>
@@ -71,6 +72,21 @@ function NavIcon({ name }: { name: string }) {
 					strokeLinejoin="round"
 					strokeWidth={2}
 					d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+				/>
+			</svg>
+		),
+		package: (
+			<svg
+				className="w-5 h-5"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth={2}
+					d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 				/>
 			</svg>
 		),

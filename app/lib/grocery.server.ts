@@ -58,6 +58,15 @@ export async function getGroceryLists(db: D1Database, userId: string) {
 }
 
 /**
+ * Retrieves the most recently updated grocery list for a user.
+ * Returns null if the user has no grocery lists.
+ */
+export async function getLatestGroceryList(db: D1Database, userId: string) {
+	const lists = await getGroceryLists(db, userId);
+	return lists.length > 0 ? lists[0] : null;
+}
+
+/**
  * Retrieves a single grocery list by ID with all its items.
  */
 export async function getGroceryList(

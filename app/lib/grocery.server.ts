@@ -4,6 +4,7 @@ import {
 	groceryItem,
 	groceryList,
 	inventory,
+	meal,
 	mealIngredient,
 } from "../db/schema";
 
@@ -20,6 +21,13 @@ export interface GroceryItemInput {
 
 export interface GroceryListInput {
 	name?: string;
+}
+
+export interface GenerationSummary {
+	addedItems: number;
+	skippedItems: number;
+	mealsProcessed: number;
+	totalIngredients: number;
 }
 
 /**
@@ -489,4 +497,249 @@ export async function addItemsFromMeal(
 		.where(eq(groceryList.id, listId));
 
 	return { addedItems, skippedItems };
+}
+
+/**
+ * Creates a grocery list from ALL user meals with missing ingredients.
+ * Aggregates ingredients across meals and deduplicates by name.
+ * Only adds items that are missing or insufficient in inventory.
+ */
+export async function createGroceryListFromAllMeals(
+	db: D1Database,
+	userId: string,
+	listName?: string,
+): Promise<{
+	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
+	summary: GenerationSummary;
+}> {
+	const d1 = drizzle(db);
+
+	// Get all user meals
+	const meals = await d1
+		.select({ id: meal.id })
+		.from(meal)
+		.where(eq(meal.userId, userId));
+
+	if (meals.length === 0) {
+		// Create empty list if no meals exist
+		const listId = crypto.randomUUID();
+		await d1.insert(groceryList).values({
+			id: listId,
+			userId,
+			name: listName || "Shopping from Meals",
+		});
+
+		const list = await getGroceryList(db, userId, listId);
+		return {
+			list: list!,
+			summary: {
+				addedItems: 0,
+				skippedItems: 0,
+				mealsProcessed: 0,
+				totalIngredients: 0,
+			},
+		};
+	}
+
+	// Get all ingredients from all meals
+	const allIngredients = await d1
+		.select()
+		.from(mealIngredient)
+		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+		.where(eq(meal.userId, userId));
+
+	if (allIngredients.length === 0) {
+		// Create empty list if no ingredients
+		const listId = crypto.randomUUID();
+		await d1.insert(groceryList).values({
+			id: listId,
+			userId,
+			name: listName || "Shopping from Meals",
+		});
+
+		const list = await getGroceryList(db, userId, listId);
+		return {
+			list: list!,
+			summary: {
+				addedItems: 0,
+				skippedItems: 0,
+				mealsProcessed: meals.length,
+				totalIngredients: 0,
+			},
+		};
+	}
+
+	// Get user's current inventory
+	const userInventory = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.userId, userId));
+
+	// Create inventory lookup map (normalized names)
+	const inventoryMap = new Map(
+		userInventory.map((item) => [
+			item.name.toLowerCase().trim(),
+			{ quantity: item.quantity, unit: item.unit },
+		]),
+	);
+
+	// Aggregate ingredients by name (combine quantities for duplicates)
+	const ingredientAggregation = new Map<
+		string,
+		{
+			name: string;
+			quantity: number;
+			unit: string;
+			sourceMealIds: string[];
+		}
+	>();
+
+	for (const row of allIngredients) {
+		const ingredient = row.meal_ingredient;
+		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
+
+		if (ingredientAggregation.has(normalizedName)) {
+			const existing = ingredientAggregation.get(normalizedName)!;
+			// Only aggregate if units match
+			if (existing.unit === ingredient.unit) {
+				existing.quantity += ingredient.quantity;
+				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
+					existing.sourceMealIds.push(ingredient.mealId);
+				}
+			} else {
+				// Different units - create separate entry with unit suffix
+				const keyWithUnit = `${normalizedName}__${ingredient.unit}`;
+				ingredientAggregation.set(keyWithUnit, {
+					name: ingredient.ingredientName,
+					quantity: ingredient.quantity,
+					unit: ingredient.unit,
+					sourceMealIds: [ingredient.mealId],
+				});
+			}
+		} else {
+			ingredientAggregation.set(normalizedName, {
+				name: ingredient.ingredientName,
+				quantity: ingredient.quantity,
+				unit: ingredient.unit,
+				sourceMealIds: [ingredient.mealId],
+			});
+		}
+	}
+
+	// Create the grocery list
+	const listId = crypto.randomUUID();
+	await d1.insert(groceryList).values({
+		id: listId,
+		userId,
+		name: listName || "Shopping from Meals",
+	});
+
+	let addedCount = 0;
+	let skippedCount = 0;
+
+	// Check each aggregated ingredient against inventory
+	for (const [, aggregated] of ingredientAggregation) {
+		const normalizedName = aggregated.name.toLowerCase().trim();
+		const inventoryItem = inventoryMap.get(normalizedName);
+
+		// Skip if user has sufficient quantity
+		if (
+			inventoryItem &&
+			inventoryItem.unit === aggregated.unit &&
+			inventoryItem.quantity >= aggregated.quantity
+		) {
+			skippedCount++;
+			continue;
+		}
+
+		// Calculate needed quantity
+		const neededQuantity =
+			inventoryItem && inventoryItem.unit === aggregated.unit
+				? Math.max(0, aggregated.quantity - inventoryItem.quantity)
+				: aggregated.quantity;
+
+		if (neededQuantity <= 0) {
+			skippedCount++;
+			continue;
+		}
+
+		// Auto-categorize ingredient based on keywords
+		const category = categorizeIngredient(aggregated.name);
+
+		// Add to grocery list
+		await d1.insert(groceryItem).values({
+			id: crypto.randomUUID(),
+			listId,
+			name: aggregated.name,
+			quantity: neededQuantity,
+			unit: aggregated.unit,
+			category,
+			sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
+		});
+
+		addedCount++;
+	}
+
+	const list = await getGroceryList(db, userId, listId);
+
+	return {
+		list: list!,
+		summary: {
+			addedItems: addedCount,
+			skippedItems: skippedCount,
+			mealsProcessed: meals.length,
+			totalIngredients: ingredientAggregation.size,
+		},
+	};
+}
+
+/**
+ * Auto-categorizes an ingredient based on keywords.
+ */
+function categorizeIngredient(name: string): string {
+	const lower = name.toLowerCase();
+
+	// Produce
+	if (
+		/apple|banana|orange|tomato|lettuce|carrot|onion|garlic|potato|pepper|fruit|vegetable/.test(
+			lower,
+		)
+	) {
+		return "produce";
+	}
+
+	// Perishable (dairy, meat, eggs)
+	if (
+		/milk|cheese|yogurt|butter|cream|egg|chicken|beef|pork|fish|salmon|turkey|bacon|sausage/.test(
+			lower,
+		)
+	) {
+		return "perishable";
+	}
+
+	// Frozen
+	if (/frozen|ice cream/.test(lower)) {
+		return "cryo_frozen";
+	}
+
+	// Dry goods
+	if (
+		/rice|pasta|flour|sugar|salt|spice|grain|cereal|oat|quinoa|bread|cookie/.test(
+			lower,
+		)
+	) {
+		return "dry_goods";
+	}
+
+	// Canned
+	if (/canned|can of|jarred/.test(lower)) {
+		return "canned";
+	}
+
+	// Liquid
+	if (/water|juice|soda|wine|beer|broth|stock|oil|vinegar|sauce/.test(lower)) {
+		return "liquid";
+	}
+
+	return "other";
 }

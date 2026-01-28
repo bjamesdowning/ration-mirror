@@ -215,12 +215,13 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 										{/* Availability Indicator */}
 										{!isLoadingAvailability && (
 											<div
-												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isAvailable
-													? "bg-success/10"
-													: hasPartialStock
-														? "bg-warning/10"
-														: "bg-danger/10"
-													}`}
+												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+													isAvailable
+														? "bg-success/10"
+														: hasPartialStock
+															? "bg-warning/10"
+															: "bg-danger/10"
+												}`}
 												title={
 													isAvailable
 														? "Available in inventory"
@@ -230,12 +231,13 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 												}
 											>
 												<span
-													className={`w-2 h-2 rounded-full ${isAvailable
-														? "bg-success"
-														: hasPartialStock
-															? "bg-warning"
-															: "bg-danger"
-														}`}
+													className={`w-2 h-2 rounded-full ${
+														isAvailable
+															? "bg-success"
+															: hasPartialStock
+																? "bg-warning"
+																: "bg-danger"
+													}`}
 												></span>
 											</div>
 										)}

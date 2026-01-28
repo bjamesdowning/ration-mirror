@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
+import { DirectionsEditor } from "./DirectionsEditor";
+import { IngredientPicker } from "./IngredientPicker";
 
 interface MealQuickAddProps {
 	/** Callback when form is successfully submitted */
@@ -8,13 +10,14 @@ interface MealQuickAddProps {
 
 /**
  * Inline quick-add form for creating meals.
- * Minimal form with name field - redirects to full edit page after creation.
+ * Supports both simple (name only) and complex (ingredients/directions) flows.
  */
 export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const isSubmitting = fetcher.state !== "idle";
+	const [isExpanded, setIsExpanded] = useState(false);
 
 	// Focus input on mount
 	useEffect(() => {
@@ -25,6 +28,9 @@ export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 	useEffect(() => {
 		if (fetcher.state === "idle" && fetcher.data && !fetcher.data?.error) {
 			formRef.current?.reset();
+			// Reset expansion state if desired, or keep it?
+			// Resetting is cleaner for next add.
+			setIsExpanded(false);
 			onSuccess?.();
 		}
 	}, [fetcher.state, fetcher.data, onSuccess]);
@@ -36,9 +42,9 @@ export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 			action="/dashboard/meals/new"
 			className="space-y-4"
 		>
-			<div className="flex flex-col md:flex-row gap-4">
-				{/* Name Input */}
-				<div className="flex-1">
+			<div className="flex flex-col gap-4">
+				{/* Name Input - Always Visible */}
+				<div>
 					<label
 						htmlFor="quick-meal-name"
 						className="block text-label text-muted mb-2 text-sm"
@@ -56,64 +62,137 @@ export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 					/>
 				</div>
 
-				{/* Description Input */}
-				<div className="flex-1">
-					<label
-						htmlFor="quick-meal-description"
-						className="block text-label text-muted mb-2 text-sm"
+				{/* Expand Toggle */}
+				<div>
+					<button
+						type="button"
+						onClick={() => setIsExpanded(!isExpanded)}
+						className="flex items-center text-xs text-muted hover:text-carbon font-medium transition-colors"
 					>
-						Description (optional)
-					</label>
-					<input
-						type="text"
-						id="quick-meal-description"
-						name="description"
-						placeholder="Brief description..."
-						className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-					/>
+						{isExpanded ? (
+							<>
+								<span className="mr-1">−</span> Less Details
+							</>
+						) : (
+							<>
+								<span className="mr-1">+</span> Add Details (Ingredients,
+								Directions, etc.)
+							</>
+						)}
+					</button>
 				</div>
 
-				{/* Servings */}
-				<div className="w-24">
-					<label
-						htmlFor="quick-meal-servings"
-						className="block text-label text-muted mb-2 text-sm"
-					>
-						Servings
-					</label>
-					<input
-						type="number"
-						id="quick-meal-servings"
-						name="servings"
-						defaultValue={2}
-						min={1}
-						className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-					/>
-				</div>
-			</div>
+				{/* Expanded Section */}
+				{isExpanded && (
+					<div className="space-y-6 pt-2 animate-fade-in">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							{/* Description */}
+							<div>
+								<label
+									htmlFor="quick-meal-description"
+									className="block text-label text-muted mb-2 text-sm"
+								>
+									Description
+								</label>
+								<input
+									type="text"
+									id="quick-meal-description"
+									name="description"
+									placeholder="Brief description..."
+									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								/>
+							</div>
 
-			{/* Tags */}
-			<div>
-				<label
-					htmlFor="quick-meal-tags"
-					className="block text-label text-muted mb-2 text-sm"
-				>
-					Tags (comma separated)
-				</label>
-				<input
-					type="text"
-					id="quick-meal-tags"
-					name="tags"
-					placeholder="e.g. breakfast, quick, vegetarian"
-					className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-				/>
+							{/* Servings */}
+							<div>
+								<label
+									htmlFor="quick-meal-servings"
+									className="block text-label text-muted mb-2 text-sm"
+								>
+									Servings
+								</label>
+								<input
+									type="number"
+									id="quick-meal-servings"
+									name="servings"
+									defaultValue={2}
+									min={1}
+									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								/>
+							</div>
+						</div>
+
+						<div className="grid grid-cols-2 gap-4">
+							{/* Prep Time */}
+							<div>
+								<label
+									htmlFor="prepTime"
+									className="block text-label text-muted mb-2 text-sm"
+								>
+									Prep Time (min)
+								</label>
+								<input
+									type="number"
+									name="prepTime"
+									id="prepTime"
+									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								/>
+							</div>
+
+							{/* Cook Time */}
+							<div>
+								<label
+									htmlFor="cookTime"
+									className="block text-label text-muted mb-2 text-sm"
+								>
+									Cook Time (min)
+								</label>
+								<input
+									type="number"
+									name="cookTime"
+									id="cookTime"
+									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								/>
+							</div>
+						</div>
+
+						{/* Ingredients */}
+						<div>
+							<h4 className="text-label text-muted text-sm mb-2">Components</h4>
+							<IngredientPicker />
+						</div>
+
+						{/* Directions */}
+						<div>
+							<DirectionsEditor />
+						</div>
+
+						{/* Tags */}
+						<div>
+							<label
+								htmlFor="quick-meal-tags"
+								className="block text-label text-muted mb-2 text-sm"
+							>
+								Tags (comma separated)
+							</label>
+							<input
+								type="text"
+								id="quick-meal-tags"
+								name="tags"
+								placeholder="e.g. breakfast, quick, vegetarian"
+								className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							/>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{/* Helper Text */}
-			<p className="text-xs text-muted">
-				Quick create a meal - you can add ingredients and directions after
-				creation.
-			</p>
+			{!isExpanded && (
+				<p className="text-xs text-muted">
+					Quick create a meal - or expand to add full recipe details.
+				</p>
+			)}
 
 			{/* Error Display */}
 			{fetcher.data?.error && (
@@ -129,7 +208,11 @@ export function MealQuickAdd({ onSuccess }: MealQuickAddProps) {
 					disabled={isSubmitting}
 					className="bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 				>
-					{isSubmitting ? "Creating..." : "Create Meal"}
+					{isSubmitting
+						? "Creating..."
+						: isExpanded
+							? "Create Full Recipe"
+							: "Create Meal"}
 				</button>
 			</div>
 		</fetcher.Form>

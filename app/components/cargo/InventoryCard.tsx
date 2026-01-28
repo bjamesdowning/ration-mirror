@@ -76,20 +76,27 @@ export function InventoryCard({
 					</span>
 				</div>
 
-				<div className="absolute -top-12 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+				<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-10">
 					<button
 						type="button"
 						onClick={() => setIsEditing(true)}
-						className="bg-hyper-green text-carbon font-bold px-3 py-1.5 text-xs rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+						className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"
+					>
+						View
+					</button>
+					<button
+						type="button"
+						onClick={() => setIsEditing(true)}
+						className="bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow transition-all shadow-lg text-sm"
 					>
 						Edit
 					</button>
-					<fetcher.Form method="post">
+					<fetcher.Form method="post" onSubmit={(e) => e.stopPropagation()}>
 						<input type="hidden" name="intent" value="delete" />
 						<input type="hidden" name="itemId" value={item.id} />
 						<button
 							type="submit"
-							className="bg-danger/10 text-danger hover:bg-danger hover:text-white px-3 py-1.5 text-xs rounded-lg font-bold transition-all"
+							className="bg-danger text-white font-bold px-4 py-2 rounded-lg hover:bg-danger/90 transition-all shadow-lg text-sm"
 						>
 							Delete
 						</button>

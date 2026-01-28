@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import {
@@ -11,6 +11,7 @@ export function IngestForm() {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const isSubmitting = fetcher.state !== "idle";
+	const [isExpanded, setIsExpanded] = useState(false);
 
 	// State to populate form programmatically
 	// We can use refs to access inputs directly without re-renders for every keystroke generally,
@@ -121,49 +122,95 @@ export function IngestForm() {
 					</div>
 				</div>
 
-				{/* Category */}
-				<div className="flex flex-col">
-					<label htmlFor="item-category" className="text-label text-muted mb-2">
-						Category
-					</label>
-					<select
-						id="item-category"
-						ref={categoryInputRef}
-						name="category"
-						defaultValue="other"
-						className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
+				{/* Advanced Details Toggle */}
+				<div className="pt-2">
+					<button
+						type="button"
+						onClick={() => setIsExpanded(!isExpanded)}
+						className="flex items-center text-xs text-muted hover:text-carbon font-medium transition-colors"
 					>
-						{INVENTORY_CATEGORIES.map((category) => (
-							<option key={category} value={category}>
-								{formatInventoryCategory(category)}
-							</option>
-						))}
-					</select>
+						{isExpanded ? (
+							<>
+								<span className="mr-1">−</span> Less Details
+							</>
+						) : (
+							<>
+								<span className="mr-1">+</span> Add Details (Category, Tags,
+								Expiry)
+							</>
+						)}
+					</button>
 				</div>
 
-				{/* Tags */}
-				<div className="flex flex-col">
-					<label htmlFor="tag-dry" className="text-label text-muted mb-2">
-						Tags
-					</label>
-					<div className="flex flex-wrap gap-4 text-sm">
-						{["Dry", "Frozen", "Fridge", "Hazard"].map((tag) => (
-							<label
-								key={tag}
-								className="flex items-center cursor-pointer text-carbon hover:text-hyper-green transition-colors"
-							>
+				{/* Collapsible Advanced Section */}
+				{isExpanded && (
+					<div className="space-y-4 pt-2 animate-fade-in">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							{/* Category */}
+							<div className="flex flex-col">
+								<label
+									htmlFor="item-category"
+									className="text-label text-muted mb-2"
+								>
+									Category
+								</label>
+								<select
+									id="item-category"
+									ref={categoryInputRef}
+									name="category"
+									defaultValue="other"
+									className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
+								>
+									{INVENTORY_CATEGORIES.map((category) => (
+										<option key={category} value={category}>
+											{formatInventoryCategory(category)}
+										</option>
+									))}
+								</select>
+							</div>
+
+							{/* Expiration Date */}
+							<div className="flex flex-col">
+								<label
+									htmlFor="item-expires"
+									className="text-label text-muted mb-2"
+								>
+									Expiration Date
+								</label>
 								<input
-									type="checkbox"
-									id={tag === "Dry" ? "tag-dry" : undefined}
-									name="tags"
-									value={tag}
-									className="mr-2 w-4 h-4 accent-hyper-green rounded"
+									id="item-expires"
+									type="date"
+									name="expiresAt"
+									className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 								/>
-								{tag}
+							</div>
+						</div>
+
+						{/* Tags */}
+						<div className="flex flex-col">
+							<label htmlFor="tag-dry" className="text-label text-muted mb-2">
+								Tags
 							</label>
-						))}
+							<div className="flex flex-wrap gap-4 text-sm">
+								{["Dry", "Frozen", "Fridge", "Hazard"].map((tag) => (
+									<label
+										key={tag}
+										className="flex items-center cursor-pointer text-carbon hover:text-hyper-green transition-colors"
+									>
+										<input
+											type="checkbox"
+											id={tag === "Dry" ? "tag-dry" : undefined}
+											name="tags"
+											value={tag}
+											className="mr-2 w-4 h-4 accent-hyper-green rounded"
+										/>
+										{tag}
+									</label>
+								))}
+							</div>
+						</div>
 					</div>
-				</div>
+				)}
 
 				{/* Submit */}
 				<button

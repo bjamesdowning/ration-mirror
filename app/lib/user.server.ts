@@ -10,21 +10,21 @@ import * as schema from "../db/schema";
  * This function fetches the full user record including our custom extensions.
  */
 export async function getUserWithCredits(
-    db: D1Database,
-    userId: string,
+	db: D1Database,
+	userId: string,
 ): Promise<{ credits: number } | null> {
-    const d1 = drizzle(db, { schema });
+	const d1 = drizzle(db, { schema });
 
-    const user = await d1.query.user.findFirst({
-        where: eq(schema.user.id, userId),
-        columns: {
-            credits: true,
-        },
-    });
+	const user = await d1.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: {
+			credits: true,
+		},
+	});
 
-    if (!user) return null;
+	if (!user) return null;
 
-    return {
-        credits: user.credits ?? 0,
-    };
+	return {
+		credits: user.credits ?? 0,
+	};
 }

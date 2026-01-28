@@ -35,6 +35,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (intent === "create") {
 		// Parse tags: formData.getAll("tags") returns array of strings
 		const rawTags = formData.getAll("tags");
+		const expiresAtValue = formData.get("expiresAt");
 
 		// Construct object for validation
 		const rawData = {
@@ -43,6 +44,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			unit: formData.get("unit"),
 			category: formData.get("category") ?? undefined,
 			tags: rawTags,
+			expiresAt: expiresAtValue
+				? new Date(expiresAtValue as string)
+				: undefined,
 		};
 
 		const result = InventoryItemSchema.safeParse(rawData);
@@ -113,18 +117,29 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	const { inventory: initialInventory } = loaderData;
 	const [categoryFilter, setCategoryFilter] = useState("all");
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
+	const [searchQuery, setSearchQuery] = useState("");
 
-	// Search Logic - semantic search uses API
-	const searchFetcher = useFetcher();
-	const searchResults = searchFetcher.data?.results;
-
-	const displayedInventory = searchResults || initialInventory;
+	// Local Search Logic
 	const filteredInventory = useMemo(() => {
-		if (categoryFilter === "all") return displayedInventory;
-		return displayedInventory.filter(
-			(item) => item.category === categoryFilter,
-		);
-	}, [categoryFilter, displayedInventory]);
+		let items = initialInventory;
+
+		// Filter by search query
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase();
+			items = items.filter(
+				(item) =>
+					item.name.toLowerCase().includes(query) ||
+					item.tags?.some((tag) => tag.toLowerCase().includes(query)),
+			);
+		}
+
+		// Filter by category
+		if (categoryFilter !== "all") {
+			items = items.filter((item) => item.category === categoryFilter);
+		}
+
+		return items;
+	}, [initialInventory, searchQuery, categoryFilter]);
 
 	// Handle scan completion - populate form fields
 	const handleScanComplete = (items) => {
@@ -141,6 +156,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				showSearch={true}
 				totalItems={filteredInventory.length}
 				searchPlaceholder="Search ingredients..."
+				onSearchChange={setSearchQuery}
 			/>
 
 			<div className="space-y-6">

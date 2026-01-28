@@ -28,7 +28,12 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 		if (request.method === "PUT") {
 			const json = await request.json();
 			const input = MealSchema.parse(json);
-			const meal = await updateMeal(context.cloudflare.env.DB, user.id, id, input);
+			const meal = await updateMeal(
+				context.cloudflare.env.DB,
+				user.id,
+				id,
+				input,
+			);
 			return { meal };
 		}
 

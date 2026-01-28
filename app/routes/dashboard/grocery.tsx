@@ -129,10 +129,11 @@ export default function GroceryDashboard() {
 								key={list.id}
 								type="button"
 								onClick={() => setActiveListId(list.id)}
-								className={`group relative px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeListId === list.id
-									? "bg-hyper-green text-carbon shadow-glow-sm"
-									: "bg-platinum text-carbon hover:bg-platinum/80"
-									}`}
+								className={`group relative px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+									activeListId === list.id
+										? "bg-hyper-green text-carbon shadow-glow-sm"
+										: "bg-platinum text-carbon hover:bg-platinum/80"
+								}`}
 							>
 								{list.name}
 								{activeListId !== list.id && (
@@ -232,8 +233,8 @@ export default function GroceryDashboard() {
 							{fetcher.data.summary.skippedItems > 0 && (
 								<p className="text-xs text-muted mt-1">
 									{fetcher.data.summary.skippedItems} item
-									{fetcher.data.summary.skippedItems !== 1 ? "s" : ""} already in
-									inventory
+									{fetcher.data.summary.skippedItems !== 1 ? "s" : ""} already
+									in inventory
 								</p>
 							)}
 						</div>
@@ -273,6 +274,6 @@ export default function GroceryDashboard() {
 					</button>
 				</div>
 			)}
-	</>
+		</>
 	);
 }

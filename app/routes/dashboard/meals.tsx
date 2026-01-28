@@ -115,14 +115,6 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							)}
 						</>
 					}
-					secondaryAction={
-						<Link
-							to="new"
-							className="px-6 py-2.5 bg-platinum text-carbon font-medium rounded-lg hover:bg-platinum/80 transition-colors"
-						>
-							+ Full Recipe
-						</Link>
-					}
 				/>
 
 				{/* Empty State */}

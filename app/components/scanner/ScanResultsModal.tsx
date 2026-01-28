@@ -254,7 +254,10 @@ function ScanResultItemRow({
 						/>
 					</div>
 					<div>
-						<label htmlFor="edit-quantity" className="text-xs text-muted block mb-1">
+						<label
+							htmlFor="edit-quantity"
+							className="text-xs text-muted block mb-1"
+						>
 							Quantity
 						</label>
 						<input
@@ -273,7 +276,10 @@ function ScanResultItemRow({
 						/>
 					</div>
 					<div>
-						<label htmlFor="edit-unit" className="text-xs text-muted block mb-1">
+						<label
+							htmlFor="edit-unit"
+							className="text-xs text-muted block mb-1"
+						>
 							Unit
 						</label>
 						<select
@@ -330,7 +336,10 @@ function ScanResultItemRow({
 						</select>
 					</div>
 					<div>
-						<label htmlFor="edit-expiry" className="text-xs text-muted block mb-1">
+						<label
+							htmlFor="edit-expiry"
+							className="text-xs text-muted block mb-1"
+						>
 							Expiry Date
 						</label>
 						<input

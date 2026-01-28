@@ -4,6 +4,8 @@ import { useFetcher } from "react-router";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
+import { CameraInput } from "~/components/scanner/CameraInput";
 import { requireAuth } from "~/lib/auth.server";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import {
@@ -110,8 +112,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	const { inventory: initialInventory } = loaderData;
 	const [categoryFilter, setCategoryFilter] = useState("all");
+	const [showQuickAdd, setShowQuickAdd] = useState(false);
 
-	// Search Logic
+	// Search Logic - semantic search uses API
 	const searchFetcher = useFetcher();
 	const searchResults = searchFetcher.data?.results;
 
@@ -123,6 +126,13 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		);
 	}, [categoryFilter, displayedInventory]);
 
+	// Handle scan completion - populate form fields
+	const handleScanComplete = (items) => {
+		// Open quick add form when scan completes
+		setShowQuickAdd(true);
+		// Items are handled by the IngestForm internally
+	};
+
 	return (
 		<>
 			<DashboardHeader
@@ -130,38 +140,79 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				subtitle="Inventory Management // Your Ingredients"
 				showSearch={true}
 				totalItems={filteredInventory.length}
+				searchPlaceholder="Search ingredients..."
 			/>
 
-			<div className="grid lg:grid-cols-[350px_1fr] gap-8">
-				{/* Left Col: Ingest & Stats */}
-				<aside className="space-y-8">
-					<IngestForm />
+			<div className="space-y-6">
+				{/* Unified Toolbar */}
+				<PanelToolbar
+					primaryAction={<CameraInput onScanComplete={handleScanComplete} />}
+					quickAddPlaceholder="Add Item"
+					showQuickAdd={showQuickAdd}
+					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+					quickAddForm={<IngestForm />}
+					filterControls={
+						<>
+							<label
+								htmlFor="category-filter"
+								className="text-xs text-muted font-medium"
+							>
+								Category:
+							</label>
+							<select
+								id="category-filter"
+								value={categoryFilter}
+								onChange={(event) => setCategoryFilter(event.target.value)}
+								className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
+							>
+								<option value="all">All Categories</option>
+								{INVENTORY_CATEGORIES.map((category) => (
+									<option key={category} value={category}>
+										{formatInventoryCategory(category)}
+									</option>
+								))}
+							</select>
+							{categoryFilter !== "all" && (
+								<button
+									type="button"
+									onClick={() => setCategoryFilter("all")}
+									className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
+								>
+									Clear
+								</button>
+							)}
+						</>
+					}
+				/>
 
-					<div className="glass-panel rounded-xl p-4">
-						<h3 className="text-label text-carbon mb-3">Pantry Filters</h3>
-						<label htmlFor="category-filter" className="text-label text-muted">
-							Category
-						</label>
-						<select
-							id="category-filter"
-							value={categoryFilter}
-							onChange={(event) => setCategoryFilter(event.target.value)}
-							className="mt-2 w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"
-						>
-							<option value="all">All Categories</option>
-							{INVENTORY_CATEGORIES.map((category) => (
-								<option key={category} value={category}>
-									{formatInventoryCategory(category)}
-								</option>
-							))}
-						</select>
+				{/* Empty State */}
+				{filteredInventory.length === 0 && (
+					<div className="text-center py-16 glass-panel rounded-2xl">
+						<div className="text-6xl mb-6">🥫</div>
+						<h3 className="text-display text-xl text-carbon mb-2">
+							Your Pantry is Empty
+						</h3>
+						<p className="text-sm text-muted mb-6 max-w-md mx-auto">
+							Scan a receipt or add items manually to start tracking your
+							ingredients.
+						</p>
+						<div className="flex flex-wrap justify-center gap-4">
+							<CameraInput onScanComplete={handleScanComplete} />
+							<button
+								type="button"
+								onClick={() => setShowQuickAdd(true)}
+								className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+							>
+								Add First Item
+							</button>
+						</div>
 					</div>
-				</aside>
+				)}
 
-				{/* Right Col: Manifest Grid */}
-				<main>
+				{/* Inventory Grid */}
+				{filteredInventory.length > 0 && (
 					<ManifestGrid items={filteredInventory} />
-				</main>
+				)}
 			</div>
 		</>
 	);

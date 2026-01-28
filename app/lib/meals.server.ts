@@ -5,13 +5,15 @@ import type { MealInput } from "./schemas/meal";
 
 /**
  * Retrieves all meals for a user, optionally filtered by tag.
- * Uses a JOIN for efficient tag filtering.
+ * Returns meals with their associated tags for client-side filtering.
  */
 export async function getMeals(db: D1Database, userId: string, tag?: string) {
 	const d1 = drizzle(db);
 
+	// Base query to get meals
+	let mealsQuery;
 	if (tag) {
-		return await d1
+		mealsQuery = d1
 			.select({
 				id: meal.id,
 				userId: meal.userId,
@@ -30,13 +32,43 @@ export async function getMeals(db: D1Database, userId: string, tag?: string) {
 			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
 			.where(and(eq(meal.userId, userId), eq(mealTag.tag, tag)))
 			.orderBy(desc(meal.createdAt));
+	} else {
+		mealsQuery = d1
+			.select()
+			.from(meal)
+			.where(eq(meal.userId, userId))
+			.orderBy(desc(meal.createdAt));
 	}
 
-	return await d1
-		.select()
-		.from(meal)
-		.where(eq(meal.userId, userId))
-		.orderBy(desc(meal.createdAt));
+	const meals = await mealsQuery;
+
+	if (meals.length === 0) {
+		return [];
+	}
+
+	// Fetch all tags for the user's meals in one query
+	const mealIds = meals.map((m) => m.id);
+	const allTags = await d1
+		.select({
+			mealId: mealTag.mealId,
+			tag: mealTag.tag,
+		})
+		.from(mealTag)
+		.where(inArray(mealTag.mealId, mealIds));
+
+	// Group tags by meal ID
+	const tagsByMealId = new Map<string, string[]>();
+	for (const t of allTags) {
+		const existing = tagsByMealId.get(t.mealId) || [];
+		existing.push(t.tag);
+		tagsByMealId.set(t.mealId, existing);
+	}
+
+	// Return meals with tags attached
+	return meals.map((m) => ({
+		...m,
+		tags: tagsByMealId.get(m.id) || [],
+	}));
 }
 
 /**

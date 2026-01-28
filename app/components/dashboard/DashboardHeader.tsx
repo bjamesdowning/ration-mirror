@@ -6,6 +6,10 @@ interface DashboardHeaderProps {
 	subtitle: string;
 	showSearch?: boolean;
 	totalItems?: number;
+	/** Placeholder text for search input */
+	searchPlaceholder?: string;
+	/** Callback for controlled search (local filtering) - if provided, uses local state instead of API */
+	onSearchChange?: (query: string) => void;
 }
 
 export function DashboardHeader({
@@ -13,8 +17,21 @@ export function DashboardHeader({
 	subtitle,
 	showSearch = false,
 	totalItems,
+	searchPlaceholder = "Search...",
+	onSearchChange,
 }: DashboardHeaderProps) {
 	const searchFetcher = useFetcher();
+
+	// Use controlled mode if onSearchChange is provided
+	const isControlled = !!onSearchChange;
+
+	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		if (isControlled) {
+			onSearchChange(e.target.value);
+		} else if (e.target.value.length > 2) {
+			searchFetcher.submit(e.target.form);
+		}
+	};
 
 	return (
 		<header className="mb-8 border-b border-platinum pb-4 flex flex-col md:flex-row justify-between items-end gap-4">
@@ -27,26 +44,38 @@ export function DashboardHeader({
 
 			{showSearch && (
 				<div className="w-full md:w-auto flex-1 md:max-w-md mx-4">
-					<searchFetcher.Form
-						method="get"
-						action="/api/search"
-						className="relative group"
-					>
-						<input
-							type="text"
-							name="q"
-							placeholder="Search..."
-							className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
-							onChange={(e) => {
-								if (e.target.value.length > 2) {
-									searchFetcher.submit(e.target.form);
-								}
-							}}
-						/>
-						<div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none uppercase tracking-wide">
-							Semantic
+					{isControlled ? (
+						// Controlled local search (no API call)
+						<div className="relative group">
+							<input
+								type="text"
+								placeholder={searchPlaceholder}
+								className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
+								onChange={handleSearchChange}
+							/>
+							<div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none uppercase tracking-wide">
+								Local
+							</div>
 						</div>
-					</searchFetcher.Form>
+					) : (
+						// Semantic API search (existing behavior)
+						<searchFetcher.Form
+							method="get"
+							action="/api/search"
+							className="relative group"
+						>
+							<input
+								type="text"
+								name="q"
+								placeholder={searchPlaceholder}
+								className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
+								onChange={handleSearchChange}
+							/>
+							<div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none uppercase tracking-wide">
+								Semantic
+							</div>
+						</searchFetcher.Form>
+					)}
 				</div>
 			)}
 

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { inventory } from "~/db/schema";
+import { AlertIcon, SuccessIcon } from "../icons/DashboardIcons";
 
 interface ExpiringItemsCardProps {
 	items: (typeof inventory.$inferSelect)[];
@@ -36,14 +37,14 @@ export function ExpiringItemsCard({
 		<div className="glass-panel rounded-xl p-6 h-full">
 			{/* Header */}
 			<div className="flex items-start justify-between mb-4">
-				<div>
-					<h3 className="text-label text-carbon font-bold flex items-center gap-2">
-						<span className="text-warning">⚠️</span>
-						Expiring Soon
-					</h3>
-					<p className="text-xs text-muted mt-1">
-						Items expiring within {alertDays} days
-					</p>
+				<div className="flex items-center gap-2">
+					<AlertIcon />
+					<div>
+						<h3 className="text-label text-carbon font-bold">Expiring Soon</h3>
+						<p className="text-xs text-muted mt-1">
+							Items expiring within {alertDays} days
+						</p>
+					</div>
 				</div>
 				{hasItems && (
 					<span className="bg-warning/10 text-warning text-xs font-bold px-2 py-1 rounded-md">
@@ -72,9 +73,9 @@ export function ExpiringItemsCard({
 					))}
 				</ul>
 			) : (
-				<div className="text-center py-6">
-					<div className="text-3xl mb-2">✅</div>
-					<p className="text-sm text-muted">No items expiring soon</p>
+				<div className="text-center py-6 flex flex-col items-center">
+					<SuccessIcon />
+					<p className="text-sm text-muted mt-3">No items expiring soon</p>
 				</div>
 			)}
 

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { groceryItem, groceryList } from "~/db/schema";
+import { CheckIcon, GroceryIcon, ListIcon } from "../icons/DashboardIcons";
 
 type GroceryListWithItems = typeof groceryList.$inferSelect & {
 	items: (typeof groceryItem.$inferSelect)[];
@@ -15,19 +16,19 @@ export function GroceryPreviewCard({ list }: GroceryPreviewCardProps) {
 			<div className="glass-panel rounded-xl p-6 h-full">
 				{/* Header */}
 				<div className="flex items-start justify-between mb-4">
-					<div>
-						<h3 className="text-label text-carbon font-bold flex items-center gap-2">
-							<span>🛒</span>
-							Grocery List
-						</h3>
-						<p className="text-xs text-muted mt-1">Your shopping list</p>
+					<div className="flex items-center gap-2">
+						<GroceryIcon />
+						<div>
+							<h3 className="text-label text-carbon font-bold">Grocery List</h3>
+							<p className="text-xs text-muted mt-1">Your shopping list</p>
+						</div>
 					</div>
 				</div>
 
 				{/* Empty State */}
-				<div className="text-center py-6">
-					<div className="text-3xl mb-2">📝</div>
-					<p className="text-sm text-muted mb-4">No grocery list yet</p>
+				<div className="text-center py-6 flex flex-col items-center">
+					<ListIcon />
+					<p className="text-sm text-muted mb-4 mt-3">No grocery list yet</p>
 					<Link
 						to="/dashboard/grocery"
 						className="inline-block text-xs bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow-sm transition-all"
@@ -47,12 +48,12 @@ export function GroceryPreviewCard({ list }: GroceryPreviewCardProps) {
 		<div className="glass-panel rounded-xl p-6 h-full">
 			{/* Header */}
 			<div className="flex items-start justify-between mb-4">
-				<div>
-					<h3 className="text-label text-carbon font-bold flex items-center gap-2">
-						<span>🛒</span>
-						Grocery List
-					</h3>
-					<p className="text-xs text-muted mt-1">{list.name}</p>
+				<div className="flex items-center gap-2">
+					<GroceryIcon />
+					<div>
+						<h3 className="text-label text-carbon font-bold">Grocery List</h3>
+						<p className="text-xs text-muted mt-1">{list.name}</p>
+					</div>
 				</div>
 				<span className="text-xs text-muted">
 					{purchasedCount}/{totalCount}
@@ -86,7 +87,7 @@ export function GroceryPreviewCard({ list }: GroceryPreviewCardProps) {
 										: "border-carbon/30"
 								}`}
 							>
-								{item.isPurchased && "✓"}
+								{item.isPurchased && <CheckIcon className="w-3 h-3" />}
 							</span>
 							<span className="truncate">
 								{item.name}

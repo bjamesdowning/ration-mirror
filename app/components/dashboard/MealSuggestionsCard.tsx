@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { MealMatchResult } from "~/lib/matching.server";
+import { CheckIcon, MealIcon, RecipeIcon } from "../icons/DashboardIcons";
 
 interface MealSuggestionsCardProps {
 	meals: MealMatchResult[];
@@ -26,14 +27,16 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 		<div className="glass-panel rounded-xl p-6">
 			{/* Header */}
 			<div className="flex items-start justify-between mb-6">
-				<div>
-					<h3 className="text-label text-carbon font-bold flex items-center gap-2">
-						<span>🍳</span>
-						Meals You Can Make
-					</h3>
-					<p className="text-xs text-muted mt-1">
-						Based on your current pantry
-					</p>
+				<div className="flex items-center gap-2">
+					<MealIcon />
+					<div>
+						<h3 className="text-label text-carbon font-bold">
+							Meals You Can Make
+						</h3>
+						<p className="text-xs text-muted mt-1">
+							Based on your current pantry
+						</p>
+					</div>
 				</div>
 				{hasItems && (
 					<Link
@@ -62,7 +65,9 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 									{result.matchPercentage}% match
 								</span>
 								{result.canMake && (
-									<span className="text-xs text-success">✓ Ready</span>
+									<span className="flex items-center gap-1 text-xs text-success">
+										<CheckIcon className="w-3 h-3" /> Ready
+									</span>
 								)}
 							</div>
 
@@ -90,9 +95,9 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 					))}
 				</div>
 			) : (
-				<div className="text-center py-8">
-					<div className="text-4xl mb-3">📖</div>
-					<h4 className="text-carbon font-medium mb-2">No Recipes Yet</h4>
+				<div className="text-center py-8 flex flex-col items-center">
+					<RecipeIcon />
+					<h4 className="text-carbon font-medium mb-2 mt-4">No Recipes Yet</h4>
 					<p className="text-sm text-muted mb-4">
 						Add some recipes to get personalized suggestions
 					</p>

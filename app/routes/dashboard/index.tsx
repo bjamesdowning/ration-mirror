@@ -3,6 +3,12 @@ import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { ExpiringItemsCard } from "~/components/dashboard/ExpiringItemsCard";
 import { GroceryPreviewCard } from "~/components/dashboard/GroceryPreviewCard";
 import { MealSuggestionsCard } from "~/components/dashboard/MealSuggestionsCard";
+import {
+	ClockIcon,
+	GroceryIcon,
+	PantryIcon,
+	SuccessIcon,
+} from "~/components/icons/DashboardIcons";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { getLatestGroceryList } from "~/lib/grocery.server";
@@ -71,23 +77,23 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 					<StatCard
 						label="Pantry Items"
 						value={inventoryStats.totalItems}
-						icon="📦"
+						icon={<PantryIcon />}
 					/>
 					<StatCard
 						label="Expiring Soon"
 						value={inventoryStats.expiringCount}
-						icon="⏰"
+						icon={<ClockIcon />}
 						highlight={inventoryStats.expiringCount > 0}
 					/>
 					<StatCard
 						label="Recipes Ready"
 						value={mealMatches.filter((m) => m.canMake).length}
-						icon="✅"
+						icon={<SuccessIcon />}
 					/>
 					<StatCard
 						label="Grocery Items"
 						value={latestGroceryList?.items.length || 0}
-						icon="🛒"
+						icon={<GroceryIcon />}
 					/>
 				</div>
 
@@ -111,7 +117,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 interface StatCardProps {
 	label: string;
 	value: number;
-	icon: string;
+	icon: React.ReactNode;
 	highlight?: boolean;
 }
 
@@ -122,7 +128,7 @@ function StatCard({ label, value, icon, highlight }: StatCardProps) {
 				highlight ? "border-2 border-warning" : ""
 			}`}
 		>
-			<span className="text-2xl">{icon}</span>
+			{icon}
 			<div>
 				<p className="text-xs text-muted uppercase tracking-wider">{label}</p>
 				<p

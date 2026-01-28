@@ -21,6 +21,7 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 				className="flex items-center gap-2 px-3 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors"
 			>
 				<svg
+					aria-hidden="true"
 					className="w-4 h-4 text-muted"
 					fill="none"
 					stroke="currentColor"
@@ -35,6 +36,7 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 				</svg>
 				Export
 				<svg
+					aria-hidden="true"
 					className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
 					fill="none"
 					stroke="currentColor"
@@ -52,9 +54,11 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 			{isOpen && (
 				<>
 					{/* Backdrop */}
-					<div
-						className="fixed inset-0 z-10"
+					<button
+						type="button"
+						className="fixed inset-0 z-10 w-full h-full cursor-default focus:outline-none"
 						onClick={() => setIsOpen(false)}
+						aria-label="Close menu"
 					/>
 
 					{/* Dropdown */}

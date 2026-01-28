@@ -82,6 +82,7 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 						className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors"
 					>
 						<svg
+							aria-hidden="true"
 							className="w-4 h-4"
 							fill="none"
 							stroke="currentColor"

@@ -58,6 +58,7 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 			>
 				{optimisticPurchased && (
 					<svg
+						aria-hidden="true"
 						className="w-3 h-3"
 						fill="none"
 						stroke="currentColor"
@@ -102,6 +103,7 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 				aria-label="Remove item"
 			>
 				<svg
+					aria-hidden="true"
 					className="w-4 h-4"
 					fill="none"
 					stroke="currentColor"

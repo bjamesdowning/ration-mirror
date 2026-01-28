@@ -4,9 +4,16 @@ import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
+import { getInventory } from "~/lib/inventory.server";
 import { createMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.new";
+
+export async function loader({ request, context }: Route.LoaderArgs) {
+	const { user } = await requireAuth(context, request);
+	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
+	return { inventory };
+}
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
@@ -30,12 +37,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 }
 
-export default function NewMeal() {
+export default function NewMeal({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			<DashboardHeader title="New Recipe" subtitle="Create a new meal" />
 			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
-				<MealBuilder />
+				<MealBuilder availableIngredients={loaderData?.inventory} />
 			</div>
 		</>
 	);

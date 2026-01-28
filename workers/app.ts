@@ -1,6 +1,7 @@
 import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
 
+// biome-ignore lint/suspicious/noExplicitAny: Build types are handled by framework
 const handleRequest = createRequestHandler({ build: build as any });
 
 export default {

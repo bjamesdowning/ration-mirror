@@ -64,9 +64,7 @@ export function MealCard({ meal }: MealCardProps) {
 				>
 					Edit
 				</Link>
-				<fetcher.Form
-					method="post"
-				>
+				<fetcher.Form method="post">
 					<input type="hidden" name="intent" value="delete" />
 					<input type="hidden" name="mealId" value={meal.id} />
 					<button

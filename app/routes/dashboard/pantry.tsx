@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useMemo, useState } from "react";
-import { useFetcher } from "react-router";
+// import { useFetcher } from "react-router"; // Unused import removed
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
@@ -142,7 +142,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	}, [initialInventory, searchQuery, categoryFilter]);
 
 	// Handle scan completion - populate form fields
-	const handleScanComplete = (items) => {
+	const handleScanComplete = (_items) => {
 		// Open quick add form when scan completes
 		setShowQuickAdd(true);
 		// Items are handled by the IngestForm internally

@@ -4,6 +4,7 @@ import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
+import { getInventory } from "~/lib/inventory.server";
 import { getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.$id.edit";
@@ -15,6 +16,8 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
 	const meal = await getMeal(context.cloudflare.env.DB, user.id, id);
 	if (!meal) throw redirect("/dashboard/meals");
+
+	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
 
 	// Sanitize for frontend types (null -> undefined)
 	const sanitizedMeal = {
@@ -36,7 +39,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		})),
 	};
 
-	return { meal: sanitizedMeal };
+	return { meal: sanitizedMeal, inventory };
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -71,7 +74,11 @@ export default function EditMeal({ loaderData }: Route.ComponentProps) {
 		<>
 			<DashboardHeader title="Edit Recipe" subtitle={meal.name} />
 			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
-				<MealBuilder defaultValue={meal} method="post" />
+				<MealBuilder
+					defaultValue={meal}
+					availableIngredients={loaderData.inventory}
+					method="post"
+				/>
 			</div>
 		</>
 	);

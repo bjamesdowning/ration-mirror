@@ -1,15 +1,26 @@
 import { Form } from "react-router";
+import type { InventoryItemInput } from "~/lib/inventory.server";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
 import { IngredientPicker } from "./IngredientPicker";
 
+// Helper type for inventory item from DB
+type InventoryItem = {
+	id: string;
+	name: string;
+	unit: string;
+	quantity: number;
+};
+
 interface MealBuilderProps {
+	availableIngredients?: InventoryItem[];
 	defaultValue?: Partial<MealInput>;
 	actionUrl?: string;
 	method?: "post" | "put";
 }
 
 export function MealBuilder({
+	availableIngredients = [],
 	defaultValue = {},
 	method = "post",
 }: MealBuilderProps) {
@@ -146,7 +157,10 @@ export function MealBuilder({
 			{/* Ingredients */}
 			<div className="border-b border-platinum pb-6 mb-6">
 				<h3 className="text-label text-muted mb-4">Ingredients</h3>
-				<IngredientPicker defaultValue={defaultValue.ingredients} />
+				<IngredientPicker
+					defaultValue={defaultValue.ingredients}
+					availableIngredients={availableIngredients}
+				/>
 			</div>
 
 			{/* Directions */}

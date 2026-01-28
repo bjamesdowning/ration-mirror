@@ -4,21 +4,26 @@ import type { MealIngredientInput } from "~/lib/schemas/meal"; // Implied type f
 
 type IngredientWithId = MealIngredientInput & { localId: string };
 
+// Basic inventory item type matching what we passed down
+type InventoryItem = {
+	id: string;
+	name: string;
+	unit: string;
+	quantity: number;
+};
+
 interface IngredientPickerProps {
 	defaultValue?: MealIngredientInput[];
+	availableIngredients?: InventoryItem[];
 }
 
-export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
+export function IngredientPicker({
+	defaultValue = [],
+	availableIngredients = [],
+}: IngredientPickerProps) {
 	const [ingredients, setIngredients] = useState<IngredientWithId[]>(
 		defaultValue.map((ing) => ({ ...ing, localId: crypto.randomUUID() })),
 	);
-	// In a real implementation, we'd use a fetcher to search inventory
-	// but for now let's assume we can fetch all or search via API
-	// simpler version: Just text inputs for Phase 1 MVP if search is complex
-	// But requirements say "inventory search integration".
-	// We can use a fetcher to get inventory list for autocomplete.
-
-	// const inventoryFetcher = useFetcher<{ inventory: InventoryItem[] }>();
 
 	const addIngredient = () => {
 		setIngredients([
@@ -28,6 +33,21 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 				ingredientName: "",
 				quantity: 0,
 				unit: "unit",
+				isOptional: false,
+				orderIndex: ingredients.length,
+			},
+		]);
+	};
+
+	const addFromInventory = (item: InventoryItem) => {
+		setIngredients([
+			...ingredients,
+			{
+				localId: crypto.randomUUID(),
+				ingredientName: item.name,
+				quantity: 1, // Default to 1
+				unit: item.unit,
+				inventoryId: item.id,
 				isOptional: false,
 				orderIndex: ingredients.length,
 			},
@@ -54,14 +74,34 @@ export function IngredientPicker({ defaultValue = [] }: IngredientPickerProps) {
 		<div className="glass-panel rounded-xl p-4 space-y-4">
 			<div className="flex justify-between items-center">
 				<h3 className="text-label text-muted text-sm">Components</h3>
-				<button
-					type="button"
-					onClick={addIngredient}
-					className="px-3 py-1.5 bg-hyper-green/10 text-hyper-green rounded-lg text-xs font-medium hover:bg-hyper-green/20 transition-colors"
-				>
-					+ Add Component
-				</button>
+				<div className="flex gap-2">
+					{/* Quick Add Section */}
+					<button
+						type="button"
+						onClick={addIngredient}
+						className="px-3 py-1.5 bg-hyper-green/10 text-hyper-green rounded-lg text-xs font-medium hover:bg-hyper-green/20 transition-colors"
+					>
+						+ Custom
+					</button>
+				</div>
 			</div>
+
+			{/* Quick Add Chips */}
+			{availableIngredients.length > 0 && (
+				<div className="flex flex-wrap gap-2 mb-4">
+					{availableIngredients.slice(0, 10).map((item) => (
+						<button
+							key={item.id}
+							type="button"
+							onClick={() => addFromInventory(item)}
+							className="px-2 py-1 bg-platinum border border-platinum-dark text-carbon text-xs rounded-full hover:bg-hyper-green hover:text-carbon hover:border-hyper-green transition-all shadow-sm"
+							title={`Add ${item.name} (${item.unit})`}
+						>
+							+ {item.name}
+						</button>
+					))}
+				</div>
+			)}
 
 			{ingredients.map((ing, idx) => (
 				<div

@@ -87,6 +87,7 @@ export function ShareModal({
 					aria-label="Close"
 				>
 					<svg
+						aria-hidden="true"
 						className="w-6 h-6"
 						fill="none"
 						stroke="currentColor"

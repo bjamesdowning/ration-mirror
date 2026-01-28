@@ -75,6 +75,7 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 					title="More options"
 				>
 					<svg
+						aria-hidden="true"
 						className={`w-5 h-5 transition-transform ${expanded ? "rotate-180" : ""}`}
 						fill="none"
 						stroke="currentColor"
@@ -101,8 +102,14 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 			{expanded && (
 				<div className="flex gap-4 p-4 bg-platinum/50 rounded-xl">
 					<div className="flex-1">
-						<label className="block text-label text-muted mb-1">Quantity</label>
+						<label
+							htmlFor="quantity"
+							className="block text-label text-muted mb-1"
+						>
+							Quantity
+						</label>
 						<input
+							id="quantity"
 							type="number"
 							value={quantity}
 							onChange={(e) => setQuantity(Number(e.target.value))}
@@ -111,8 +118,11 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 						/>
 					</div>
 					<div className="flex-1">
-						<label className="block text-label text-muted mb-1">Unit</label>
+						<label htmlFor="unit" className="block text-label text-muted mb-1">
+							Unit
+						</label>
 						<input
+							id="unit"
 							type="text"
 							value={unit}
 							onChange={(e) => setUnit(e.target.value)}
@@ -121,8 +131,14 @@ export function AddItemForm({ listId, onAdd }: AddItemFormProps) {
 						/>
 					</div>
 					<div className="flex-1">
-						<label className="block text-label text-muted mb-1">Category</label>
+						<label
+							htmlFor="category"
+							className="block text-label text-muted mb-1"
+						>
+							Category
+						</label>
 						<select
+							id="category"
 							value={category}
 							onChange={(e) => setCategory(e.target.value)}
 							className="w-full bg-white rounded-lg px-4 py-2 text-carbon border-0 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"

@@ -162,6 +162,7 @@ export default function GroceryDashboard() {
 								onChange={(e) => setNewListName(e.target.value)}
 								placeholder="List name..."
 								className="bg-ceramic border border-carbon/20 px-3 py-2 rounded-lg text-sm text-carbon placeholder-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+								// biome-ignore lint/a11y/noAutofocus: input focus is required for UX
 								autoFocus
 							/>
 							<button
@@ -198,6 +199,7 @@ export default function GroceryDashboard() {
 						title="Auto-create list from all your meals"
 					>
 						<svg
+							aria-hidden="true"
 							className="w-4 h-4"
 							fill="none"
 							stroke="currentColor"

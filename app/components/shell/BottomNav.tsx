@@ -50,6 +50,7 @@ function NavIcon({ name }: { name: string }) {
 	const icons: Record<string, React.ReactNode> = {
 		home: (
 			<svg
+				aria-hidden="true"
 				className="w-5 h-5"
 				fill="none"
 				stroke="currentColor"
@@ -65,6 +66,7 @@ function NavIcon({ name }: { name: string }) {
 		),
 		package: (
 			<svg
+				aria-hidden="true"
 				className="w-5 h-5"
 				fill="none"
 				stroke="currentColor"
@@ -80,6 +82,7 @@ function NavIcon({ name }: { name: string }) {
 		),
 		"chef-hat": (
 			<svg
+				aria-hidden="true"
 				className="w-5 h-5"
 				fill="none"
 				stroke="currentColor"
@@ -95,6 +98,7 @@ function NavIcon({ name }: { name: string }) {
 		),
 		"shopping-cart": (
 			<svg
+				aria-hidden="true"
 				className="w-5 h-5"
 				fill="none"
 				stroke="currentColor"
@@ -110,6 +114,7 @@ function NavIcon({ name }: { name: string }) {
 		),
 		settings: (
 			<svg
+				aria-hidden="true"
 				className="w-5 h-5"
 				fill="none"
 				stroke="currentColor"
@@ -131,22 +136,4 @@ function NavIcon({ name }: { name: string }) {
 		),
 	};
 	return icons[name] || null;
-}
-
-function ScanIcon() {
-	return (
-		<svg
-			className="w-6 h-6"
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M3 9V6a3 3 0 013-3h3M21 9V6a3 3 0 00-3-3h-3M3 15v3a3 3 0 003 3h3M21 15v3a3 3 0 01-3 3h-3M12 8v8m-4-4h8"
-			/>
-		</svg>
-	);
 }

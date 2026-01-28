@@ -8,11 +8,14 @@ import { INVENTORY_CATEGORIES } from "./inventory";
 // --- Validation Schemas ---
 
 export const InventoryItemSchema = z.object({
-	name: z.string().min(1, "Name is required"),
+	name: z
+		.string()
+		.min(1, "Name is required")
+		.transform((v) => v.toLowerCase()),
 	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
 	unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
 	category: z.enum(INVENTORY_CATEGORIES).default("other"),
-	tags: z.array(z.string()).default([]),
+	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
 	expiresAt: z.coerce.date().optional(), // Optional date string coercion
 });
 

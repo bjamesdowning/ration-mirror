@@ -93,10 +93,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => setMatchingEnabled(!matchingEnabled)}
-								className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${matchingEnabled
+								className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+									matchingEnabled
 										? "bg-hyper-green text-carbon shadow-glow-sm"
 										: "bg-platinum text-carbon hover:bg-platinum/80"
-									}`}
+								}`}
 							>
 								{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
 							</button>

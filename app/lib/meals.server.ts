@@ -11,36 +11,31 @@ export async function getMeals(db: D1Database, userId: string, tag?: string) {
 	const d1 = drizzle(db);
 
 	// Base query to get meals
-	let mealsQuery;
-	if (tag) {
-		mealsQuery = d1
-			.select({
-				id: meal.id,
-				userId: meal.userId,
-				name: meal.name,
-				description: meal.description,
-				directions: meal.directions,
-				equipment: meal.equipment,
-				servings: meal.servings,
-				prepTime: meal.prepTime,
-				cookTime: meal.cookTime,
-				customFields: meal.customFields,
-				createdAt: meal.createdAt,
-				updatedAt: meal.updatedAt,
-			})
-			.from(meal)
-			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-			.where(and(eq(meal.userId, userId), eq(mealTag.tag, tag)))
-			.orderBy(desc(meal.createdAt));
-	} else {
-		mealsQuery = d1
-			.select()
-			.from(meal)
-			.where(eq(meal.userId, userId))
-			.orderBy(desc(meal.createdAt));
-	}
-
-	const meals = await mealsQuery;
+	const meals = tag
+		? await d1
+				.select({
+					id: meal.id,
+					userId: meal.userId,
+					name: meal.name,
+					description: meal.description,
+					directions: meal.directions,
+					equipment: meal.equipment,
+					servings: meal.servings,
+					prepTime: meal.prepTime,
+					cookTime: meal.cookTime,
+					customFields: meal.customFields,
+					createdAt: meal.createdAt,
+					updatedAt: meal.updatedAt,
+				})
+				.from(meal)
+				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+				.where(and(eq(meal.userId, userId), eq(mealTag.tag, tag)))
+				.orderBy(desc(meal.createdAt))
+		: await d1
+				.select()
+				.from(meal)
+				.where(eq(meal.userId, userId))
+				.orderBy(desc(meal.createdAt));
 
 	if (meals.length === 0) {
 		return [];
@@ -112,6 +107,7 @@ export async function createMeal(
 	const d1 = drizzle(db);
 	const mealId = crypto.randomUUID();
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1.insert(meal).values({
 			id: mealId,
@@ -154,6 +150,7 @@ export async function createMeal(
 		);
 	}
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
 	return await getMeal(db, userId, mealId);
@@ -178,6 +175,7 @@ export async function updateMeal(
 
 	if (!existing) throw new Error("Meal not found or unauthorized");
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1
 			.update(meal)
@@ -224,6 +222,7 @@ export async function updateMeal(
 		);
 	}
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
 	return await getMeal(db, userId, mealId);
@@ -317,6 +316,7 @@ export async function cookMeal(db: D1Database, userId: string, mealId: string) {
 				);
 		});
 
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(updates as [any, ...any[]]);
 		return { cooked: true, ingredientsDeducted: updates.length };
 	}

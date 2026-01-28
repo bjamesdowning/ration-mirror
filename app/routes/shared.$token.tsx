@@ -129,6 +129,7 @@ export default function SharedListPage() {
 										>
 											{item.isPurchased && (
 												<svg
+													aria-hidden="true"
 													className="w-3 h-3"
 													fill="none"
 													viewBox="0 0 24 24"

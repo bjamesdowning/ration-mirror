@@ -13,7 +13,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
 	const { id } = params;
 	if (!id) throw new Response("Not Found", { status: 404 });
 
-	const meal = await getMeal(context.env.DB, user.id, id);
+	const meal = await getMeal(context.cloudflare.env.DB, user.id, id);
 	if (!meal) throw new Response("Not Found", { status: 404 });
 
 	return { meal };
@@ -28,12 +28,12 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 		if (request.method === "PUT") {
 			const json = await request.json();
 			const input = MealSchema.parse(json);
-			const meal = await updateMeal(context.env.DB, user.id, id, input);
+			const meal = await updateMeal(context.cloudflare.env.DB, user.id, id, input);
 			return { meal };
 		}
 
 		if (request.method === "DELETE") {
-			await deleteMeal(context.env.DB, user.id, id);
+			await deleteMeal(context.cloudflare.env.DB, user.id, id);
 			return { success: true };
 		}
 	} catch (e) {

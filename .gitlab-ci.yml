@@ -45,9 +45,8 @@ cache:
   script:
     - bun run typecheck
 
-.test_unit:
+test_unit:
   stage: verify
-  needs: ["install_dependencies"]
   script:
     - bun run test:unit
 

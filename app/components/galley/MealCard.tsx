@@ -1,4 +1,4 @@
-import { Link, useFetcher, useNavigate } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import type { meal } from "~/db/schema";
 
@@ -22,7 +22,7 @@ export function MealCard({ meal }: MealCardProps) {
 	};
 
 	return (
-		<div className="block relative glass-panel rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group p-4">
+		<div className="block relative glass-panel rounded-xl shadow-sm hover:shadow-md transition-shadow group p-4">
 			{/* Mobile Action Menu */}
 			<div className="md:hidden absolute top-2 right-2 z-20">
 				<ActionMenu
@@ -79,18 +79,20 @@ export function MealCard({ meal }: MealCardProps) {
 
 			{/* Desktop Hover Overlay */}
 			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">
-				<Link
-					to={`/dashboard/meals/${meal.id}`}
+				<button
+					type="button"
+					onClick={() => navigate(`/dashboard/meals/${meal.id}`)}
 					className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"
 				>
 					View
-				</Link>
-				<Link
-					to={`/dashboard/meals/${meal.id}/edit`}
+				</button>
+				<button
+					type="button"
+					onClick={() => navigate(`/dashboard/meals/${meal.id}/edit`)}
 					className="bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow transition-all shadow-lg text-sm"
 				>
 					Edit
-				</Link>
+				</button>
 				<fetcher.Form method="post">
 					<input type="hidden" name="intent" value="delete" />
 					<input type="hidden" name="mealId" value={meal.id} />

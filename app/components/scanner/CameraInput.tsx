@@ -40,8 +40,30 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 			alert(`Scan failed: ${fetcher.data.error}`);
 			if (inputRef.current) inputRef.current.value = "";
 		} else {
-			// Success - show results modal
-			setScanResult(fetcher.data as ScanResult);
+			// Success - transform raw items to include required properties
+			// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
+			const rawItems = (fetcher.data as any).items || [];
+			const transformedResult: ScanResult = {
+				items: rawItems.map((item: any) => ({
+					id: crypto.randomUUID(), // Generate unique ID for selection tracking
+					name: item.name || "Unknown Item",
+					quantity: item.quantity ?? 1,
+					unit: item.unit || "unit",
+					category: item.category,
+					tags: item.tags || [],
+					expiresAt: item.expiresAt,
+					selected: true, // Default to selected
+					confidence: item.confidence,
+					rawText: item.rawText,
+				})),
+				metadata: {
+					source: "image",
+					filename: undefined,
+					processedAt: new Date().toISOString(),
+					confidence: undefined,
+				},
+			};
+			setScanResult(transformedResult);
 		}
 	}
 

@@ -8,6 +8,7 @@ import type { Session, User } from "better-auth";
 export interface UserSettings {
 	unitSystem?: "metric" | "imperial";
 	expirationAlertDays?: number;
+	defaultGroupId?: string;
 	listGeneration?: {
 		lastGeneratedAt?: string;
 		enabled?: boolean;

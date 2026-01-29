@@ -45,12 +45,21 @@ export async function loader(args: Route.LoaderArgs) {
 		const isOwner = currentMember?.role === "owner";
 		const currentOrg = members[0]?.organization;
 
+		// Fetch all organizations the user is a member of (for default group selector)
+		const userOrganizations = await db.query.member.findMany({
+			where: (member, { eq }) => eq(member.userId, userId),
+			with: {
+				organization: true,
+			},
+		});
+
 		return {
 			settings,
 			members,
 			isOwner,
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
+			userOrganizations: userOrganizations.map((m) => m.organization),
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);
@@ -150,11 +159,34 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-default-group") {
+		const defaultGroupId = formData.get("defaultGroupId") as string;
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				defaultGroupId: defaultGroupId || undefined,
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+		return { success: true };
+	}
+
 	return null;
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-	const { settings, members, isOwner, organizationId } = loaderData;
+	const { settings, members, isOwner, organizationId, userOrganizations } =
+		loaderData;
 	const navigation = useNavigation();
 	const isUpdatingUnits =
 		navigation.state === "submitting" &&
@@ -171,6 +203,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const isUpdatingAutomation =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-list-generation";
+	const isUpdatingDefaultGroup =
+		navigation.state === "submitting" &&
+		navigation.formData?.get("intent") === "update-default-group";
 
 	return (
 		<div className="space-y-8 pb-20">
@@ -179,6 +214,35 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			<div className="space-y-8">
 				{/* Group Management */}
 				<GroupManagement members={members} />
+
+				{/* Default Group */}
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">Default Group</h2>
+					<p className="text-sm text-muted mb-4">
+						Select which group to activate when you sign in
+					</p>
+					<Form method="post" className="flex items-center gap-4">
+						<input type="hidden" name="intent" value="update-default-group" />
+						<select
+							name="defaultGroupId"
+							defaultValue={settings.defaultGroupId || ""}
+							onChange={(e) => e.target.form?.requestSubmit()}
+							className="flex-1 px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+						>
+							<option value="">Auto-select (Personal Group)</option>
+							{userOrganizations?.map((org) => (
+								<option key={org.id} value={org.id}>
+									{org.name}
+								</option>
+							))}
+						</select>
+						{isUpdatingDefaultGroup && (
+							<span className="text-hyper-green animate-pulse text-sm">
+								Saving...
+							</span>
+						)}
+					</Form>
+				</section>
 
 				{/* Unit System */}
 				<section className="glass-panel rounded-xl p-6">

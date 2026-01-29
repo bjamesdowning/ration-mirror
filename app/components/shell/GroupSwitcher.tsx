@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import type { OrganizationWithCredits } from "~/lib/types";
@@ -6,6 +7,8 @@ export function GroupSwitcher() {
 	const session = authClient.useSession();
 	const organizations = authClient.useListOrganizations();
 	const navigate = useNavigate();
+	const [isOpen, setIsOpen] = useState(false);
+	const dropdownRef = useRef<HTMLDivElement>(null);
 
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const activeOrg = organizations.data?.find((org) => org.id === activeOrgId) as
@@ -20,18 +23,41 @@ export function GroupSwitcher() {
 		activeOrg?.name || (session.isPending ? "Loading..." : "Select Group");
 	const credits = activeOrg?.credits ?? 0;
 
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				dropdownRef.current &&
+				!dropdownRef.current.contains(event.target as Node)
+			) {
+				setIsOpen(false);
+			}
+		};
+
+		if (isOpen) {
+			document.addEventListener("mousedown", handleClickOutside);
+			return () => {
+				document.removeEventListener("mousedown", handleClickOutside);
+			};
+		}
+	}, [isOpen]);
+
 	const handleSwitch = async (orgId: string) => {
 		await authClient.organization.setActive({
 			organizationId: orgId,
 		});
+		setIsOpen(false);
 		// Reload to ensure all server loaders re-run with new context
 		window.location.reload();
 	};
 
 	return (
-		<div className="relative group z-50">
+		<div ref={dropdownRef} className="relative z-50">
 			<button
 				type="button"
+				onClick={() => setIsOpen(!isOpen)}
+				aria-expanded={isOpen}
+				aria-haspopup="true"
 				className="flex items-center gap-3 px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10"
 			>
 				<div className="flex flex-col items-start text-left">
@@ -46,7 +72,9 @@ export function GroupSwitcher() {
 				</div>
 				<svg
 					aria-hidden="true"
-					className="w-4 h-4 text-muted group-hover:text-carbon transition-colors"
+					className={`w-4 h-4 text-muted transition-all ${
+						isOpen ? "text-carbon rotate-180" : ""
+					}`}
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -61,7 +89,13 @@ export function GroupSwitcher() {
 			</button>
 
 			{/* Dropdown Menu */}
-			<div className="absolute left-0 top-full mt-2 w-64 bg-ceramic border border-platinum rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-left z-50">
+			<div
+				className={`absolute left-0 top-full mt-2 w-64 bg-ceramic border border-platinum rounded-xl shadow-xl transition-all transform origin-top-left z-50 ${
+					isOpen
+						? "opacity-100 visible"
+						: "opacity-0 invisible pointer-events-none"
+				}`}
+			>
 				<div className="p-2 space-y-1">
 					<div className="px-3 py-2 text-xs font-semibold text-muted uppercase tracking-wider">
 						Switch Group
@@ -102,7 +136,10 @@ export function GroupSwitcher() {
 
 					<button
 						type="button"
-						onClick={() => navigate("/dashboard/groups/new")}
+						onClick={() => {
+							setIsOpen(false);
+							navigate("/dashboard/groups/new");
+						}}
 						// Future: navigate("/groups/create")
 						className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-platinum hover:text-carbon transition-colors"
 					>

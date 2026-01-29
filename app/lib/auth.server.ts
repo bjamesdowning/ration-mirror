@@ -140,7 +140,49 @@ export async function ensureActiveOrganization(
 	try {
 		const db = drizzle(env.DB, { schema });
 
-		// Find user's personal group
+		// Check if user has a default group preference
+		const user = await db.query.user.findFirst({
+			where: eq(schema.user.id, session.user.id),
+		});
+
+		const userSettings = (user?.settings as { defaultGroupId?: string }) || {};
+		const defaultGroupId = userSettings.defaultGroupId;
+
+		// If user has a default group preference, verify they're still a member
+		if (defaultGroupId) {
+			const membership = await db.query.member.findFirst({
+				where: (member, { and, eq }) =>
+					and(
+						eq(member.organizationId, defaultGroupId),
+						eq(member.userId, session.user.id),
+					),
+			});
+
+			if (membership) {
+				// User is still a member, use their default group
+				await db
+					.update(schema.session)
+					.set({ activeOrganizationId: defaultGroupId })
+					.where(eq(schema.session.id, session.session.id));
+
+				console.log(
+					`[Auth] Auto-activated default group ${defaultGroupId} for session ${session.session.id}`,
+				);
+
+				return {
+					...session,
+					session: {
+						...session.session,
+						activeOrganizationId: defaultGroupId,
+					},
+				};
+			}
+			console.log(
+				`[Auth] User's default group ${defaultGroupId} is no longer accessible, falling back to personal group`,
+			);
+		}
+
+		// Fallback: Find user's personal group
 		const personalGroup = await db.query.organization.findFirst({
 			where: like(schema.organization.slug, `personal-${session.user.id}`),
 		});

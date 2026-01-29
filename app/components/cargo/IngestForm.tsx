@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { CameraInput } from "~/components/scanner/CameraInput";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 export function IngestForm() {
@@ -30,7 +29,6 @@ export function IngestForm() {
 		<div className="glass-panel rounded-xl p-6">
 			<div className="flex justify-between items-center mb-6 border-b border-platinum pb-4">
 				<h2 className="text-xl font-bold text-carbon">Add New Item</h2>
-				<CameraInput onScanComplete={handleScanComplete} />
 			</div>
 
 			<fetcher.Form method="post" ref={formRef} className="space-y-4">

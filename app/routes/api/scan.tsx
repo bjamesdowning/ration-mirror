@@ -69,19 +69,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const uint8Array = new Uint8Array(arrayBuffer);
 
 	try {
-		// Convert to base64 using safer method
-		const base64 = btoa(
-			Array.from(uint8Array)
-				.map((byte) => String.fromCharCode(byte))
-				.join(""),
-		);
-		console.log(`[SCAN DEBUG] Base64 encoded, length: ${base64.length}`);
-
-		// Construct data URL with proper MIME type
-		const mimeType = imageFile.type || "image/jpeg";
-		const imageDataUrl = `data:${mimeType};base64,${base64}`;
+		// Convert Uint8Array to number[] for Workers AI
+		// Per Cloudflare docs: LLaVA expects image as number[] (0-255 values)
+		const imageArray = [...uint8Array];
 		console.log(
-			`[SCAN DEBUG] Data URL created, total length: ${imageDataUrl.length}`,
+			`[SCAN DEBUG] Image array created, length: ${imageArray.length}`,
 		);
 
 		try {
@@ -90,17 +82,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const response = await context.cloudflare.env.AI.run(
 				"@cf/llava-hf/llava-1.5-7b-hf",
 				{
-					image: imageDataUrl,
+					image: imageArray,
 					prompt:
 						"You are analyzing a grocery receipt or food items. Extract all food items with their quantities.\n\n" +
-						"Return ONLY valid JSON in this exact format: {\"items\":[{\"name\":\"item name\",\"quantity\":1,\"unit\":\"unit\",\"expiresAt\":\"YYYY-MM-DD\"}]}\n\n" +
+						'Return ONLY valid JSON in this exact format: {"items":[{"name":"item name","quantity":1,"unit":"unit","expiresAt":"YYYY-MM-DD"}]}\n\n' +
 						"Rules:\n" +
 						"1. name: Item name in lowercase (e.g., 'milk', 'bread')\n" +
 						"2. quantity: Numeric value (default 1 if unclear)\n" +
 						"3. unit: Use 'unit' for countable items, 'kg' for weight shown in kg, 'l' for liquid in liters\n" +
 						"4. expiresAt: ONLY include if expiration date is clearly visible (format: YYYY-MM-DD)\n" +
 						"5. Ignore non-food items\n\n" +
-						"Example: {\"items\":[{\"name\":\"milk\",\"quantity\":2,\"unit\":\"l\"},{\"name\":\"bread\",\"quantity\":1,\"unit\":\"unit\"}]}",
+						'Example: {"items":[{"name":"milk","quantity":2,"unit":"l"},{"name":"bread","quantity":1,"unit":"unit"}]}',
 					max_tokens: 2048,
 				},
 			);
@@ -109,15 +101,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 			// 6. Parse AI Response
 			// LLaVA returns { description: string }
+			// biome-ignore lint/suspicious/noExplicitAny: AI response type varies by model
+			const aiResponse = response as any;
 			let rawText = "";
-			if ("description" in response) {
-				rawText = response.description as string;
-			} else if ("response" in response) {
+			if ("description" in aiResponse) {
+				rawText = aiResponse.description as string;
+			} else if ("response" in aiResponse) {
 				// Fallback for other response formats
-				rawText = response.response as string;
+				rawText = aiResponse.response as string;
 			} else {
 				// Ultimate fallback
-				rawText = JSON.stringify(response);
+				rawText = JSON.stringify(aiResponse);
 			}
 			console.log(`[SCAN DEBUG] Raw AI response: ${rawText.substring(0, 500)}`);
 

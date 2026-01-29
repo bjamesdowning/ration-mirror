@@ -38,6 +38,7 @@ export default [
 
 	// API - Inventory
 	route("api/inventory/:id", "routes/api/inventory.$id.ts"),
+	route("api/inventory/batch", "routes/api/inventory.batch.tsx"),
 
 	// API - Grocery Lists
 	route("api/grocery-lists", "routes/api/grocery-lists.ts"),

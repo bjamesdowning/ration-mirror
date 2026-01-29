@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useRouteLoaderData } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import type { OrganizationWithCredits } from "~/lib/types";
 
@@ -9,6 +9,11 @@ export function GroupSwitcher() {
 	const navigate = useNavigate();
 	const [isOpen, setIsOpen] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
+
+	// Get credits from dashboard loader
+	const dashboardData = useRouteLoaderData("routes/dashboard") as {
+		balance: number;
+	} | null;
 
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const activeOrg = organizations.data?.find((org) => org.id === activeOrgId) as
@@ -21,7 +26,7 @@ export function GroupSwitcher() {
 	// We'll stick to "Select Group" but maybe add a loading indicator or check pending state.
 	const displayName =
 		activeOrg?.name || (session.isPending ? "Loading..." : "Select Group");
-	const credits = activeOrg?.credits ?? 0;
+	const credits = dashboardData?.balance ?? activeOrg?.credits ?? 0;
 
 	// Close dropdown when clicking outside
 	useEffect(() => {

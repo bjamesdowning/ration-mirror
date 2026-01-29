@@ -3,6 +3,7 @@ import { BottomNav, RailSidebar } from "~/components/shell";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkAndGenerateList } from "~/lib/automation.server";
+import { checkBalance } from "~/lib/ledger.server";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/dashboard";
 
@@ -22,7 +23,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const settings = ((user as any).settings as UserSettings) || {};
 	const lastGeneratedAt = settings.listGeneration?.lastGeneratedAt || null;
 
-	return { lastGeneratedAt };
+	// Fetch fresh balance for the active group
+	const balance = await checkBalance(context.cloudflare.env, groupId);
+
+	return { lastGeneratedAt, balance };
 }
 
 export default function DashboardLayout() {

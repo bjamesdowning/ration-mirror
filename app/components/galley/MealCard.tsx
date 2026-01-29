@@ -1,4 +1,5 @@
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useNavigate } from "react-router";
+import { ActionMenu } from "~/components/hud/ActionMenu";
 import type { meal } from "~/db/schema";
 
 interface MealCardProps {
@@ -10,13 +11,39 @@ interface MealCardProps {
 
 export function MealCard({ meal }: MealCardProps) {
 	const fetcher = useFetcher();
+	const navigate = useNavigate();
 	const isDeleting =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete";
 
 	if (isDeleting) return null;
 
+	const handleDelete = () => {
+		fetcher.submit({ intent: "delete", mealId: meal.id }, { method: "post" });
+	};
+
 	return (
 		<div className="block relative glass-panel rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group p-4">
+			{/* Mobile Action Menu */}
+			<div className="md:hidden absolute top-2 right-2 z-20">
+				<ActionMenu
+					actions={[
+						{
+							label: "View",
+							onClick: () => navigate(`/dashboard/meals/${meal.id}`),
+						},
+						{
+							label: "Edit",
+							onClick: () => navigate(`/dashboard/meals/${meal.id}/edit`),
+						},
+						{
+							label: "Delete",
+							onClick: handleDelete,
+							destructive: true,
+						},
+					]}
+				/>
+			</div>
+
 			<div className="flex justify-between items-start mb-2">
 				<h3
 					className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
@@ -50,8 +77,8 @@ export function MealCard({ meal }: MealCardProps) {
 				</div>
 			</div>
 
-			{/* Action Overlay */}
-			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-10">
+			{/* Desktop Hover Overlay */}
+			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-10 hidden md:flex">
 				<Link
 					to={`/dashboard/meals/${meal.id}`}
 					className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"

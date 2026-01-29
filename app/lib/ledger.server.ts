@@ -25,40 +25,36 @@ export async function deductCredits(
 ) {
 	const db = drizzle(env.DB, { schema });
 
-	await db.transaction(async (tx) => {
-		// 1. Get current balance with a fresh read
-		// Note: D1 doesn't support 'FOR UPDATE' locks in the same way as Postgres,
-		// but transactions inside a single worker invocation are generally safe.
-		// However, for strict consistency, we should verify inside the transaction.
+	// 1. Pre-check balance (simple read, no transaction needed)
+	const user = await db.query.user.findFirst({
+		where: (user, { eq }) => eq(user.id, userId),
+		columns: {
+			credits: true,
+		},
+	});
 
-		const user = await tx.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-			columns: {
-				credits: true,
-			},
-		});
+	if (!user) {
+		throw new Error("User not found");
+	}
 
-		if (!user) {
-			throw new Error("User not found");
-		}
+	if (user.credits < cost) {
+		throw new Error("Insufficient credits"); // 402 Payment Required scenario
+	}
 
-		if ((user?.credits ?? 0) < cost) {
-			throw new Error("Insufficient credits"); // 402 Payment Required scenario
-		}
-
-		// 2. Deduct credits
-		await tx
+	// 2. Execute both writes atomically via D1 batch API
+	// D1 doesn't support traditional transactions via BEGIN/COMMIT,
+	// but batch() provides atomic execution of multiple statements
+	await db.batch([
+		db
 			.update(schema.user)
 			.set({ credits: sql`${schema.user.credits} - ${cost}` })
-			.where(eq(schema.user.id, userId));
-
-		// 3. Record in ledger
-		await tx.insert(schema.ledger).values({
+			.where(eq(schema.user.id, userId)),
+		db.insert(schema.ledger).values({
 			userId,
 			amount: -cost, // Negative for deduction
 			reason,
-		});
-	});
+		}),
+	]);
 }
 
 export async function addCredits(
@@ -70,42 +66,41 @@ export async function addCredits(
 ) {
 	const db = drizzle(env.DB, { schema });
 
-	await db.transaction(async (tx) => {
-		// 1. Check for idempotency: has this sessionId already been processed?
-		if (metadata?.sessionId) {
-			const existing = await tx.query.ledger.findFirst({
-				where: (ledger, { and, eq }) =>
-					and(
-						eq(ledger.userId, userId),
-						eq(ledger.reason, `${reason}:${metadata.sessionId}`),
-					),
-			});
+	// 1. Check for idempotency: has this sessionId already been processed?
+	if (metadata?.sessionId) {
+		const existing = await db.query.ledger.findFirst({
+			where: (ledger, { and, eq }) =>
+				and(
+					eq(ledger.userId, userId),
+					eq(ledger.reason, `${reason}:${metadata.sessionId}`),
+				),
+		});
 
-			if (existing) {
-				console.warn(
-					`Duplicate credit add attempt for session ${metadata.sessionId}`,
-				);
-				return; // Already processed, skip
-			}
+		if (existing) {
+			console.warn(
+				`Duplicate credit add attempt for session ${metadata.sessionId}`,
+			);
+			return; // Already processed, skip
 		}
+	}
 
-		// 2. Increment credits
-		await tx
+	// 2. Prepare ledger reason (include sessionId for idempotency)
+	const ledgerReason = metadata?.sessionId
+		? `${reason}:${metadata.sessionId}`
+		: reason;
+
+	// 3. Execute both writes atomically via D1 batch API
+	await db.batch([
+		db
 			.update(schema.user)
 			.set({ credits: sql`${schema.user.credits} + ${amount}` })
-			.where(eq(schema.user.id, userId));
-
-		// 3. Record in ledger (include sessionId for idempotency)
-		const ledgerReason = metadata?.sessionId
-			? `${reason}:${metadata.sessionId}`
-			: reason;
-
-		await tx.insert(schema.ledger).values({
+			.where(eq(schema.user.id, userId)),
+		db.insert(schema.ledger).values({
 			userId,
 			amount, // Positive for addition
 			reason: ledgerReason,
-		});
-	});
+		}),
+	]);
 }
 
 export async function processCheckoutSession(env: Env, sessionId: string) {

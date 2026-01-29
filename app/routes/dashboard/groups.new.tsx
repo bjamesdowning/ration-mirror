@@ -1,4 +1,4 @@
-import { useFetcher } from "react-router";
+import { Form, useActionData, useNavigation } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { requireAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/groups.new";
@@ -9,8 +9,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function CreateGroupPage() {
-	const fetcher = useFetcher<{ error?: string }>();
-	const isSubmitting = fetcher.state === "submitting";
+	const actionData = useActionData<{ error?: string }>();
+	const navigation = useNavigation();
+	const isSubmitting = navigation.state === "submitting";
 
 	return (
 		<div className="max-w-2xl mx-auto">
@@ -21,14 +22,10 @@ export default function CreateGroupPage() {
 			/>
 
 			<div className="glass-panel rounded-xl p-8">
-				<fetcher.Form
-					method="post"
-					action="/api/groups/create"
-					className="space-y-6"
-				>
-					{fetcher.data?.error && (
+				<Form method="post" action="/api/groups/create" className="space-y-6">
+					{actionData?.error && (
 						<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
-							{fetcher.data.error}
+							{actionData.error}
 						</div>
 					)}
 
@@ -89,7 +86,7 @@ export default function CreateGroupPage() {
 							{isSubmitting ? "Creating..." : "Create Group"}
 						</button>
 					</div>
-				</fetcher.Form>
+				</Form>
 			</div>
 		</div>
 	);

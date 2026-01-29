@@ -8,12 +8,12 @@ import { loadStripe } from "@stripe/stripe-js";
 import { useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { checkBalance, processCheckoutSession } from "~/lib/ledger.server";
 import type { Route } from "./+types/credits";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const sessionId = url.searchParams.get("session_id");
 
@@ -32,7 +32,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	// Fetch fresh balance (after potential fulfillment)
-	const balance = await checkBalance(context.cloudflare.env, user.id);
+	const balance = await checkBalance(context.cloudflare.env, groupId);
 
 	return {
 		balance,

@@ -4,6 +4,8 @@ export default [
 	index("routes/home.tsx"),
 	route("sign-in", "routes/sign-in.tsx"),
 	route("sign-up", "routes/sign-up.tsx"),
+	route("invitations/accept", "routes/invitations.accept.tsx"),
+	route("select-group", "routes/select-group.tsx"),
 
 	// Dashboard
 	route("dashboard", "routes/dashboard.tsx", [
@@ -19,6 +21,9 @@ export default [
 		route("meals/new", "routes/dashboard/meals.new.tsx"),
 		route("meals/:id", "routes/dashboard/meals.$id.tsx"),
 		route("meals/:id/edit", "routes/dashboard/meals.$id.edit.tsx"),
+
+		// Groups
+		route("groups/new", "routes/dashboard/groups.new.tsx"),
 
 		// Grocery Lists
 		route("grocery", "routes/dashboard/grocery.tsx"),
@@ -65,6 +70,10 @@ export default [
 	route("api/webhook", "routes/api/webhook.tsx"),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
+	route(
+		"api/groups/invitations/create",
+		"routes/api/groups.invitations.create.ts",
+	),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
 	// Legal

@@ -31,16 +31,16 @@ export interface GenerationSummary {
 }
 
 /**
- * Retrieves all grocery lists for a user with their items.
+ * Retrieves all grocery lists for an organization with their items.
  */
-export async function getGroceryLists(db: D1Database, userId: string) {
+export async function getGroceryLists(db: D1Database, organizationId: string) {
 	const d1 = drizzle(db);
 
-	// First get all lists for this user
+	// First get all lists for this organization
 	const lists = await d1
 		.select()
 		.from(groceryList)
-		.where(eq(groceryList.userId, userId))
+		.where(eq(groceryList.organizationId, organizationId))
 		.orderBy(desc(groceryList.updatedAt));
 
 	if (lists.length === 0) {
@@ -74,11 +74,14 @@ export async function getGroceryLists(db: D1Database, userId: string) {
 }
 
 /**
- * Retrieves the most recently updated grocery list for a user.
- * Returns null if the user has no grocery lists.
+ * Retrieves the most recently updated grocery list for an organization.
+ * Returns null if the organization has no grocery lists.
  */
-export async function getLatestGroceryList(db: D1Database, userId: string) {
-	const lists = await getGroceryLists(db, userId);
+export async function getLatestGroceryList(
+	db: D1Database,
+	organizationId: string,
+) {
+	const lists = await getGroceryLists(db, organizationId);
 	return lists.length > 0 ? lists[0] : null;
 }
 
@@ -87,7 +90,7 @@ export async function getLatestGroceryList(db: D1Database, userId: string) {
  */
 export async function getGroceryList(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 ) {
 	const d1 = drizzle(db);
@@ -96,7 +99,12 @@ export async function getGroceryList(
 		d1
 			.select()
 			.from(groceryList)
-			.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId))),
+			.where(
+				and(
+					eq(groceryList.id, listId),
+					eq(groceryList.organizationId, organizationId),
+				),
+			),
 		d1.select().from(groceryItem).where(eq(groceryItem.listId, listId)),
 	]);
 
@@ -110,7 +118,7 @@ export async function getGroceryList(
 }
 
 /**
- * Retrieves a grocery list by share token (public access - no userId verification).
+ * Retrieves a grocery list by share token (public access - no organizationId verification).
  */
 export async function getGroceryListByShareToken(
 	db: D1Database,
@@ -149,11 +157,11 @@ export async function getGroceryListByShareToken(
 }
 
 /**
- * Creates a new grocery list for a user.
+ * Creates a new grocery list for an organization.
  */
 export async function createGroceryList(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	data?: GroceryListInput,
 ) {
 	const d1 = drizzle(db);
@@ -161,11 +169,11 @@ export async function createGroceryList(
 
 	await d1.insert(groceryList).values({
 		id: listId,
-		userId,
+		organizationId,
 		name: data?.name || "Shopping List",
 	});
 
-	return await getGroceryList(db, userId, listId);
+	return await getGroceryList(db, organizationId, listId);
 }
 
 /**
@@ -173,7 +181,7 @@ export async function createGroceryList(
  */
 export async function updateGroceryList(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 	data: GroceryListInput,
 ) {
@@ -183,7 +191,12 @@ export async function updateGroceryList(
 	const [existing] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!existing) throw new Error("Grocery list not found or unauthorized");
 
@@ -195,7 +208,7 @@ export async function updateGroceryList(
 		})
 		.where(eq(groceryList.id, listId));
 
-	return await getGroceryList(db, userId, listId);
+	return await getGroceryList(db, organizationId, listId);
 }
 
 /**
@@ -203,14 +216,19 @@ export async function updateGroceryList(
  */
 export async function deleteGroceryList(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 ) {
 	const d1 = drizzle(db);
 
 	return await d1
 		.delete(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 }
 
 /**
@@ -218,7 +236,7 @@ export async function deleteGroceryList(
  */
 export async function addGroceryItem(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 	data: GroceryItemInput,
 ) {
@@ -228,7 +246,12 @@ export async function addGroceryItem(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -263,7 +286,7 @@ export async function addGroceryItem(
  */
 export async function updateGroceryItem(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 	itemId: string,
 	data: Partial<GroceryItemInput & { isPurchased?: boolean }>,
@@ -274,7 +297,12 @@ export async function updateGroceryItem(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -316,7 +344,7 @@ export async function updateGroceryItem(
  */
 export async function deleteGroceryItem(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 	itemId: string,
 ) {
@@ -326,7 +354,12 @@ export async function deleteGroceryItem(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -349,7 +382,7 @@ export async function deleteGroceryItem(
  */
 export async function generateShareToken(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 ) {
 	const d1 = drizzle(db);
@@ -358,7 +391,12 @@ export async function generateShareToken(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -388,7 +426,7 @@ export async function generateShareToken(
  */
 export async function revokeShareToken(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 ) {
 	const d1 = drizzle(db);
@@ -397,7 +435,12 @@ export async function revokeShareToken(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -415,11 +458,11 @@ export async function revokeShareToken(
 
 /**
  * Adds missing ingredients from a meal to a grocery list.
- * This performs inventory matching to only add items the user doesn't have.
+ * This performs inventory matching to only add items the organization doesn't have.
  */
 export async function addItemsFromMeal(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listId: string,
 	mealId: string,
 ) {
@@ -429,7 +472,12 @@ export async function addItemsFromMeal(
 	const [list] = await d1
 		.select()
 		.from(groceryList)
-		.where(and(eq(groceryList.id, listId), eq(groceryList.userId, userId)));
+		.where(
+			and(
+				eq(groceryList.id, listId),
+				eq(groceryList.organizationId, organizationId),
+			),
+		);
 
 	if (!list) throw new Error("Grocery list not found or unauthorized");
 
@@ -443,15 +491,15 @@ export async function addItemsFromMeal(
 		return { addedItems: [], skippedItems: [] };
 	}
 
-	// Get user's current inventory
-	const userInventory = await d1
+	// Get organization's current inventory
+	const orgInventory = await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.userId, userId));
+		.where(eq(inventory.organizationId, organizationId));
 
 	// Create a map for quick lookup (normalized names)
 	const inventoryMap = new Map(
-		userInventory.map((item) => [
+		orgInventory.map((item) => [
 			item.name.toLowerCase().trim(),
 			{ quantity: item.quantity, unit: item.unit },
 		]),
@@ -466,7 +514,7 @@ export async function addItemsFromMeal(
 		const inventoryItem = inventoryMap.get(normalizedName);
 
 		if (inventoryItem && inventoryItem.quantity >= ingredient.quantity) {
-			// User has enough of this item
+			// Organization has enough of this item
 			skippedItems.push({
 				name: ingredient.ingredientName,
 				reason: "Sufficient quantity in inventory",
@@ -508,13 +556,13 @@ export async function addItemsFromMeal(
 }
 
 /**
- * Creates a grocery list from ALL user meals with missing ingredients.
+ * Creates a grocery list from ALL organization meals with missing ingredients.
  * Aggregates ingredients across meals and deduplicates by name.
  * Only adds items that are missing or insufficient in inventory.
  */
 export async function createGroceryListFromAllMeals(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	listName?: string,
 ): Promise<{
 	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
@@ -522,22 +570,22 @@ export async function createGroceryListFromAllMeals(
 }> {
 	const d1 = drizzle(db);
 
-	// Get all user meals
+	// Get all organization meals
 	const meals = await d1
 		.select({ id: meal.id })
 		.from(meal)
-		.where(eq(meal.userId, userId));
+		.where(eq(meal.organizationId, organizationId));
 
 	if (meals.length === 0) {
 		// Create empty list if no meals exist
 		const listId = crypto.randomUUID();
 		await d1.insert(groceryList).values({
 			id: listId,
-			userId,
+			organizationId,
 			name: listName || "Shopping from Meals",
 		});
 
-		const list = await getGroceryList(db, userId, listId);
+		const list = await getGroceryList(db, organizationId, listId);
 		return {
 			list: list!,
 			summary: {
@@ -554,18 +602,18 @@ export async function createGroceryListFromAllMeals(
 		.select()
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
-		.where(eq(meal.userId, userId));
+		.where(eq(meal.organizationId, organizationId));
 
 	if (allIngredients.length === 0) {
 		// Create empty list if no ingredients
 		const listId = crypto.randomUUID();
 		await d1.insert(groceryList).values({
 			id: listId,
-			userId,
+			organizationId,
 			name: listName || "Shopping from Meals",
 		});
 
-		const list = await getGroceryList(db, userId, listId);
+		const list = await getGroceryList(db, organizationId, listId);
 		return {
 			list: list!,
 			summary: {
@@ -577,15 +625,15 @@ export async function createGroceryListFromAllMeals(
 		};
 	}
 
-	// Get user's current inventory
-	const userInventory = await d1
+	// Get organization's current inventory
+	const orgInventory = await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.userId, userId));
+		.where(eq(inventory.organizationId, organizationId));
 
 	// Create inventory lookup map (normalized names)
 	const inventoryMap = new Map(
-		userInventory.map((item) => [
+		orgInventory.map((item) => [
 			item.name.toLowerCase().trim(),
 			{ quantity: item.quantity, unit: item.unit },
 		]),
@@ -638,7 +686,7 @@ export async function createGroceryListFromAllMeals(
 	const listId = crypto.randomUUID();
 	await d1.insert(groceryList).values({
 		id: listId,
-		userId,
+		organizationId,
 		name: listName || "Shopping from Meals",
 	});
 
@@ -650,7 +698,7 @@ export async function createGroceryListFromAllMeals(
 		const normalizedName = aggregated.name.toLowerCase().trim();
 		const inventoryItem = inventoryMap.get(normalizedName);
 
-		// Skip if user has sufficient quantity
+		// Skip if organization has sufficient quantity
 		if (
 			inventoryItem &&
 			inventoryItem.unit === aggregated.unit &&
@@ -688,7 +736,7 @@ export async function createGroceryListFromAllMeals(
 		addedCount++;
 	}
 
-	const list = await getGroceryList(db, userId, listId);
+	const list = await getGroceryList(db, organizationId, listId);
 
 	return {
 		list: list!,

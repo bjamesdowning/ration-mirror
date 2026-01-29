@@ -4,7 +4,7 @@ import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { GroceryList } from "~/components/supply/GroceryList";
 import type { groceryItem, groceryList } from "~/db/schema";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	createGroceryList,
 	createGroceryListFromAllMeals,
@@ -17,19 +17,19 @@ type GroceryListWithItems = typeof groceryList.$inferSelect & {
 };
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
-	const lists = await getGroceryLists(context.cloudflare.env.DB, user.id);
+	const { groupId } = await requireActiveGroup(context, request);
+	const lists = await getGroceryLists(context.cloudflare.env.DB, groupId);
 	return { lists };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const formData = await request.formData();
 	const intent = formData.get("intent");
 
 	if (intent === "create") {
 		const name = formData.get("name")?.toString() || "Shopping List";
-		const list = await createGroceryList(context.cloudflare.env.DB, user.id, {
+		const list = await createGroceryList(context.cloudflare.env.DB, groupId, {
 			name,
 		});
 		return { list };
@@ -38,7 +38,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 	if (intent === "delete") {
 		const listId = formData.get("listId")?.toString();
 		if (listId) {
-			await deleteGroceryList(context.cloudflare.env.DB, user.id, listId);
+			await deleteGroceryList(context.cloudflare.env.DB, groupId, listId);
 			return { deleted: true };
 		}
 	}
@@ -46,7 +46,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 	if (intent === "create-from-meals") {
 		const result = await createGroceryListFromAllMeals(
 			context.cloudflare.env.DB,
-			user.id,
+			groupId,
 			"Shopping from Meals",
 		);
 		return { list: result.list, summary: result.summary };

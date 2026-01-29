@@ -4,52 +4,55 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { getStripe } from "./stripe.server";
 
-export async function checkBalance(env: Env, userId: string): Promise<number> {
+export async function checkBalance(
+	env: Env,
+	organizationId: string,
+): Promise<number> {
 	const db = drizzle(env.DB, { schema });
 
-	const user = await db.query.user.findFirst({
-		where: (user, { eq }) => eq(user.id, userId),
+	const org = await db.query.organization.findFirst({
+		where: (org, { eq }) => eq(org.id, organizationId),
 		columns: {
 			credits: true,
 		},
 	});
 
-	return user?.credits ?? 0;
+	return org?.credits ?? 0;
 }
 
 export async function deductCredits(
 	env: Env,
-	userId: string,
+	organizationId: string,
+	userId: string, // Keep userId for audit trail
 	cost: number,
 	reason: string,
 ) {
 	const db = drizzle(env.DB, { schema });
 
 	// 1. Pre-check balance (simple read, no transaction needed)
-	const user = await db.query.user.findFirst({
-		where: (user, { eq }) => eq(user.id, userId),
+	const org = await db.query.organization.findFirst({
+		where: (org, { eq }) => eq(org.id, organizationId),
 		columns: {
 			credits: true,
 		},
 	});
 
-	if (!user) {
-		throw new Error("User not found");
+	if (!org) {
+		throw new Error("Organization not found");
 	}
 
-	if (user.credits < cost) {
+	if (org.credits < cost) {
 		throw new Error("Insufficient credits"); // 402 Payment Required scenario
 	}
 
 	// 2. Execute both writes atomically via D1 batch API
-	// D1 doesn't support traditional transactions via BEGIN/COMMIT,
-	// but batch() provides atomic execution of multiple statements
 	await db.batch([
 		db
-			.update(schema.user)
-			.set({ credits: sql`${schema.user.credits} - ${cost}` })
-			.where(eq(schema.user.id, userId)),
+			.update(schema.organization)
+			.set({ credits: sql`${schema.organization.credits} - ${cost}` })
+			.where(eq(schema.organization.id, organizationId)),
 		db.insert(schema.ledger).values({
+			organizationId,
 			userId,
 			amount: -cost, // Negative for deduction
 			reason,
@@ -59,7 +62,8 @@ export async function deductCredits(
 
 export async function addCredits(
 	env: Env,
-	userId: string,
+	organizationId: string,
+	userId: string | null, // Optional user ID for audit
 	amount: number,
 	reason: string,
 	metadata?: { sessionId?: string },
@@ -71,7 +75,7 @@ export async function addCredits(
 		const existing = await db.query.ledger.findFirst({
 			where: (ledger, { and, eq }) =>
 				and(
-					eq(ledger.userId, userId),
+					eq(ledger.organizationId, organizationId),
 					eq(ledger.reason, `${reason}:${metadata.sessionId}`),
 				),
 		});
@@ -92,10 +96,11 @@ export async function addCredits(
 	// 3. Execute both writes atomically via D1 batch API
 	await db.batch([
 		db
-			.update(schema.user)
-			.set({ credits: sql`${schema.user.credits} + ${amount}` })
-			.where(eq(schema.user.id, userId)),
+			.update(schema.organization)
+			.set({ credits: sql`${schema.organization.credits} + ${amount}` })
+			.where(eq(schema.organization.id, organizationId)),
 		db.insert(schema.ledger).values({
+			organizationId,
 			userId,
 			amount, // Positive for addition
 			reason: ledgerReason,
@@ -114,23 +119,32 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 	}
 
 	// 2. Extract metadata
-	const userId = session.metadata?.userId;
+	const userId = session.metadata?.userId; // Who made the purchase
+	const organizationId = session.metadata?.organizationId; // Who gets the credits
 	const creditsStr = session.metadata?.credits;
 
-	if (!userId || !creditsStr) {
+	if (!organizationId || !creditsStr) {
 		throw new Error(`Session ${sessionId} missing metadata`);
 	}
 
 	const credits = Number.parseInt(creditsStr, 10);
 
 	// 3. Fulfill credits (Idempotent)
-	await addCredits(env, userId, credits, "Stripe Purchase", {
-		sessionId: session.id,
-	});
+	await addCredits(
+		env,
+		organizationId,
+		userId || null,
+		credits,
+		"Stripe Purchase",
+		{
+			sessionId: session.id,
+		},
+	);
 
 	return {
 		success: true,
 		userId,
+		organizationId,
 		credits,
 	};
 }

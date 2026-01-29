@@ -5,26 +5,26 @@ import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { getInventory } from "~/lib/inventory.server";
-import { getMeals, getUserMealTags } from "~/lib/meals.server";
+import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
 import type { Route } from "./+types/meals";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 
 	const [meals, availableTags, inventory] = await Promise.all([
-		getMeals(context.cloudflare.env.DB, user.id, tag),
-		getUserMealTags(context.cloudflare.env.DB, user.id),
-		getInventory(context.cloudflare.env.DB, user.id),
+		getMeals(context.cloudflare.env.DB, groupId, tag),
+		getOrganizationMealTags(context.cloudflare.env.DB, groupId),
+		getInventory(context.cloudflare.env.DB, groupId),
 	]);
 	return { meals, availableTags, currentTag: tag, inventory };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const formData = await request.formData();
 	const intent = formData.get("intent");
 
@@ -33,7 +33,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (!mealId) return { success: false, error: "Missing Meal ID" };
 
 		const { deleteMeal } = await import("~/lib/meals.server");
-		await deleteMeal(context.cloudflare.env.DB, user.id, mealId);
+		await deleteMeal(context.cloudflare.env.DB, groupId, mealId);
 		return { success: true };
 	}
 

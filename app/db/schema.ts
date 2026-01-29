@@ -17,7 +17,7 @@ export const user = sqliteTable("user", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 	// Extended fields
 	settings: text("settings", { mode: "json" }).default("{}"), // Allergens, units, etc.
-	credits: integer("credits").default(0),
+	// NOTE: credits moved to organization table (line 80)
 });
 
 export const session = sqliteTable("session", {
@@ -31,6 +31,10 @@ export const session = sqliteTable("session", {
 	userId: text("user_id")
 		.notNull()
 		.references(() => user.id),
+	// Active organization for group switching
+	activeOrganizationId: text("active_organization_id").references(
+		() => organization.id,
+	),
 });
 
 export const account = sqliteTable("account", {
@@ -64,15 +68,72 @@ export const verification = sqliteTable("verification", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }),
 });
 
+// Better Auth Organization Plugin Tables
+
+export const organization = sqliteTable("organization", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	slug: text("slug").unique(),
+	logo: text("logo"),
+	metadata: text("metadata", { mode: "json" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	// Extended field for credit pooling
+	credits: integer("credits").default(0).notNull(),
+});
+
+export const member = sqliteTable(
+	"member",
+	{
+		id: text("id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		role: text("role").notNull(), // 'owner' | 'admin' | 'member'
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	},
+	(table) => [
+		index("member_org_idx").on(table.organizationId),
+		index("member_user_idx").on(table.userId),
+		unique("member_org_user_unique").on(table.organizationId, table.userId),
+	],
+);
+
+export const invitation = sqliteTable(
+	"invitation",
+	{
+		id: text("id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		token: text("token").notNull().unique(), // Shareable link token
+		role: text("role").notNull(), // 'admin' | 'member'
+		status: text("status").notNull().default("pending"), // 'pending' | 'accepted' | 'canceled'
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		inviterId: text("inviter_id")
+			.notNull()
+			.references(() => user.id),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("invitation_org_idx").on(table.organizationId),
+		index("invitation_token_idx").on(table.token),
+	],
+);
+
 export const inventory = sqliteTable(
 	"inventory",
 	{
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
+		organizationId: text("organization_id")
 			.notNull()
-			.references(() => user.id),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		quantity: integer("quantity").notNull(), // Normalised value
 		unit: text("unit").notNull(), // kg, g, l, ml, piece
@@ -88,8 +149,8 @@ export const inventory = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("inventory_user_idx").on(table.userId),
-		index("inventory_category_idx").on(table.userId, table.category),
+		index("inventory_org_idx").on(table.organizationId),
+		index("inventory_category_idx").on(table.organizationId, table.category),
 	],
 );
 
@@ -99,16 +160,20 @@ export const ledger = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
+		organizationId: text("organization_id")
 			.notNull()
-			.references(() => user.id),
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id").references(() => user.id), // Track which user triggered the transaction
 		amount: integer("amount").notNull(), // Positive or negative
 		reason: text("reason").notNull(), // "scan", "top-up", "correction"
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),
 	},
-	(table) => [index("ledger_user_idx").on(table.userId)],
+	(table) => [
+		index("ledger_org_idx").on(table.organizationId),
+		index("ledger_user_idx").on(table.userId),
+	],
 );
 
 export const meal = sqliteTable(
@@ -117,9 +182,9 @@ export const meal = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
+		organizationId: text("organization_id")
 			.notNull()
-			.references(() => user.id),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		description: text("description"),
 		directions: text("directions"),
@@ -136,8 +201,8 @@ export const meal = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("meal_user_idx").on(table.userId),
-		index("meal_user_id_idx").on(table.userId, table.id),
+		index("meal_org_idx").on(table.organizationId),
+		index("meal_org_id_idx").on(table.organizationId, table.id),
 	],
 );
 
@@ -189,9 +254,9 @@ export const groceryList = sqliteTable(
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
-		userId: text("user_id")
+		organizationId: text("organization_id")
 			.notNull()
-			.references(() => user.id),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull().default("Shopping List"),
 		shareToken: text("share_token").unique(),
 		shareExpiresAt: integer("share_expires_at", { mode: "timestamp" }),
@@ -203,7 +268,7 @@ export const groceryList = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("grocery_list_user_idx").on(table.userId),
+		index("grocery_list_org_idx").on(table.organizationId),
 		index("grocery_list_share_idx").on(table.shareToken),
 	],
 );

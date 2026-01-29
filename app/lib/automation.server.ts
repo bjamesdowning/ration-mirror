@@ -12,6 +12,7 @@ import type { UserSettings } from "./types";
 export async function checkAndGenerateList(
 	context: { cloudflare: { env: Env } },
 	userId: string,
+	organizationId: string,
 ) {
 	const db = drizzle(context.cloudflare.env.DB, { schema });
 
@@ -94,10 +95,12 @@ export async function checkAndGenerateList(
 	}
 
 	// Generate the list
-	console.log(`[Automation] Generating list '${listName}' for user ${userId}`);
+	console.log(
+		`[Automation] Generating list '${listName}' for organization ${organizationId} (User: ${userId})`,
+	);
 	const result = await createGroceryListFromAllMeals(
 		context.cloudflare.env.DB,
-		userId,
+		organizationId,
 		listName,
 	);
 

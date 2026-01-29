@@ -6,7 +6,7 @@ import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { CameraInput } from "~/components/scanner/CameraInput";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import {
 	addItem,
@@ -19,15 +19,14 @@ import type { Route } from "./+types/pantry";
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
-	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
+	const { groupId } = await requireActiveGroup(context, request);
+	const inventory = await getInventory(context.cloudflare.env.DB, groupId);
 	return { inventory };
 }
 
 // --- ACTION ---
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
-	const userId = user.id;
+	const { groupId } = await requireActiveGroup(context, request);
 
 	const formData = await request.formData();
 	const intent = formData.get("intent");
@@ -55,7 +54,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return { success: false, errors: result.error.flatten() };
 		}
 
-		await addItem(context.cloudflare.env, userId, result.data);
+		await addItem(context.cloudflare.env, groupId, result.data);
 		return { success: true };
 	}
 
@@ -63,7 +62,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const itemId = formData.get("itemId") as string;
 		if (!itemId) return { success: false, error: "Missing Item ID" };
 
-		await jettisonItem(context.cloudflare.env.DB, userId, itemId);
+		await jettisonItem(context.cloudflare.env.DB, groupId, itemId);
 		return { success: true };
 	}
 
@@ -99,7 +98,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const updated = await updateItem(
 			context.cloudflare.env,
-			userId,
+			groupId,
 			itemId,
 			result.data,
 		);

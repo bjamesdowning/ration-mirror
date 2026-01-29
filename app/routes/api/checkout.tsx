@@ -1,12 +1,15 @@
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { data } from "~/lib/response";
 import { CREDIT_PACKS, getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	// 1. Authentication
-	const { user } = await requireAuth(context, request);
+	// 1. Authentication & Group Context
+	const {
+		session: { user },
+		groupId,
+	} = await requireActiveGroup(context, request);
 	const userId = user.id;
 
 	// 2. Rate Limiting (Distributed via KV)
@@ -66,7 +69,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				},
 			],
 			metadata: {
-				userId, // Critical: bind user to this session for webhook
+				userId, // Who triggered it
+				organizationId: groupId, // Who gets the credits
 				credits: selectedPack.credits.toString(),
 			},
 			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}`,

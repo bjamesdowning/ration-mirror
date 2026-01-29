@@ -241,26 +241,26 @@ function deltaMatch(
  */
 export async function matchMeals(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
 	const d1 = drizzle(db);
 	const { mode, minMatch = 50, limit = 20, tag } = query;
 
 	console.log("[matchMeals] Starting with params:", {
-		userId,
+		organizationId,
 		mode,
 		minMatch,
 		limit,
 		tag,
 	});
 
-	// 1. Fetch user's meals (with optional tag filter)
+	// 1. Fetch organization's meals (with optional tag filter)
 	const mealQuery = tag
 		? d1
 				.select({
 					id: meal.id,
-					userId: meal.userId,
+					organizationId: meal.organizationId,
 					name: meal.name,
 					description: meal.description,
 					directions: meal.directions,
@@ -274,8 +274,10 @@ export async function matchMeals(
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-				.where(and(eq(meal.userId, userId), eq(mealTag.tag, tag)))
-		: d1.select().from(meal).where(eq(meal.userId, userId));
+				.where(
+					and(eq(meal.organizationId, organizationId), eq(mealTag.tag, tag)),
+				)
+		: d1.select().from(meal).where(eq(meal.organizationId, organizationId));
 
 	const meals = await mealQuery;
 	console.log("[matchMeals] Found meals:", meals.length);
@@ -323,14 +325,14 @@ export async function matchMeals(
 		tagsByMeal.set(tag.mealId, existing);
 	}
 
-	// 3. Fetch user's current inventory
-	const userInventory = await d1
+	// 3. Fetch organization's current inventory
+	const orgInventory = await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.userId, userId));
+		.where(eq(inventory.organizationId, organizationId));
 
 	// 4. Build inventory index for efficient lookups
-	const inventoryIndex = buildInventoryIndex(userInventory);
+	const inventoryIndex = buildInventoryIndex(orgInventory);
 
 	// 5. Combine meal data with ingredients and tags
 	const enrichedMeals = meals.map((m) => ({
@@ -355,9 +357,9 @@ export async function matchMeals(
  * Generates a cache key for meal matching results
  */
 export function getMatchCacheKey(
-	userId: string,
+	organizationId: string,
 	query: MealMatchQuery,
 ): string {
 	const { mode, minMatch = 50, limit = 20, tag } = query;
-	return `match:${userId}:${mode}:${minMatch}:${limit}:${tag || "all"}`;
+	return `match:${organizationId}:${mode}:${minMatch}:${limit}:${tag || "all"}`;
 }

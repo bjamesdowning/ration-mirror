@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-
-import { Form, redirect, useNavigation } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { useEffect, useState } from "react";
+import { Form, redirect, useFetcher, useNavigation } from "react-router";
+import { requireActiveGroup } from "~/lib/auth.server";
+import { authClient } from "~/lib/auth-client";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
 // Removed local interface in favor of shared type
@@ -10,7 +11,10 @@ import type { UserSettings } from "../../lib/types";
 import type { Route } from "./+types/settings";
 
 export async function loader(args: Route.LoaderArgs) {
-	const { user: authUser } = await requireAuth(args.context, args.request);
+	const {
+		session: { user: authUser },
+		groupId,
+	} = await requireActiveGroup(args.context, args.request);
 	const userId = authUser.id;
 
 	const env = args.context.cloudflare.env;
@@ -25,13 +29,24 @@ export async function loader(args: Route.LoaderArgs) {
 	// Drizzle automatically parses JSON mode fields
 	const settings = (user.settings as UserSettings) || {};
 
+	// Fetch members
+	const members = await db.query.member.findMany({
+		where: (member, { eq }) => eq(member.organizationId, groupId),
+		with: {
+			user: true, // Fetch user details for each member
+		},
+	});
+
 	return {
 		settings,
+		members,
 	};
 }
 
 export async function action(args: Route.ActionArgs) {
-	const { user: authUser } = await requireAuth(args.context, args.request);
+	const {
+		session: { user: authUser },
+	} = await requireActiveGroup(args.context, args.request);
 	const userId = authUser.id;
 
 	const formData = await args.request.formData();
@@ -48,7 +63,6 @@ export async function action(args: Route.ActionArgs) {
 		});
 
 		if (user) {
-			// Drizzle automatically parses/stringifies JSON mode fields
 			const currentSettings = (user.settings as UserSettings) || {};
 			const newSettings: UserSettings = {
 				...currentSettings,
@@ -108,7 +122,6 @@ export async function action(args: Route.ActionArgs) {
 					...currentSettings.listGeneration,
 					frequency,
 					intervalDays: frequency === "custom" ? intervalDays : undefined,
-					// Preserve the lastGeneratedAt if it exists
 					lastGeneratedAt: currentSettings.listGeneration?.lastGeneratedAt,
 				},
 			};
@@ -125,7 +138,7 @@ export async function action(args: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-	const { settings } = loaderData;
+	const { settings, members } = loaderData;
 	const navigation = useNavigation();
 	const isUpdatingUnits =
 		navigation.state === "submitting" &&
@@ -145,6 +158,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			<DashboardHeader title="Configuration" subtitle="System Preferences" />
 
 			<div className="space-y-8">
+				{/* Group Management */}
+				<GroupManagement members={members} />
+
 				{/* Unit System */}
 				<section className="glass-panel rounded-xl p-6">
 					<h2 className="text-xl font-bold mb-4 text-carbon">
@@ -308,5 +324,101 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				</section>
 			</div>
 		</div>
+	);
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: members type is complex from query
+function GroupManagement({ members }: { members: any[] }) {
+	const session = authClient.useSession();
+	const activeOrgId = session.data?.session.activeOrganizationId;
+	const [inviteLink, setInviteLink] = useState<string | null>(null);
+	const fetcher = useFetcher<{ success: boolean; invitationId: string }>();
+
+	const handleInvite = () => {
+		fetcher.submit(
+			{},
+			{ method: "post", action: "/api/groups/invitations/create" },
+		);
+	};
+
+	useEffect(() => {
+		if (fetcher.data?.success && fetcher.data?.invitationId) {
+			setInviteLink(
+				`${window.location.origin}/invitations/accept?id=${fetcher.data.invitationId}`,
+			);
+		}
+	}, [fetcher.data]);
+
+	if (!activeOrgId) return null;
+
+	return (
+		<section className="glass-panel rounded-xl p-6">
+			<div className="flex justify-between items-start mb-6">
+				<div>
+					<h2 className="text-xl font-bold text-carbon">Group Members</h2>
+					<p className="text-sm text-muted">
+						Manage who has access to this pantry
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={handleInvite}
+					disabled={fetcher.state !== "idle"}
+					className="px-4 py-2 bg-platinum text-carbon font-medium rounded-lg hover:bg-platinum/80 transition-colors text-sm disabled:opacity-50"
+				>
+					{fetcher.state === "submitting" ? "Creating..." : "Invite Member"}
+				</button>
+			</div>
+
+			{inviteLink && (
+				<div className="mb-6 p-4 bg-hyper-green/10 border border-hyper-green/20 rounded-lg">
+					<p className="text-xs text-muted font-bold uppercase mb-2">
+						Share this link
+					</p>
+					<div className="flex gap-2">
+						<input
+							type="text"
+							readOnly
+							value={inviteLink}
+							className="flex-1 bg-white/50 border border-carbon/10 rounded px-3 py-1 text-sm font-mono text-carbon"
+							onClick={(e) => e.currentTarget.select()}
+						/>
+						<button
+							type="button"
+							onClick={() => {
+								navigator.clipboard.writeText(inviteLink);
+								alert("Copied to clipboard!");
+							}}
+							className="px-3 py-1 bg-white text-carbon text-xs font-semibold rounded border border-carbon/10 hover:bg-gray-50"
+						>
+							Copy
+						</button>
+					</div>
+				</div>
+			)}
+
+			<div className="space-y-3">
+				{members?.map((member) => (
+					<div
+						key={member.id}
+						className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg"
+					>
+						<div className="flex items-center gap-3">
+							<div className="w-8 h-8 rounded-full bg-hyper-green/20 flex items-center justify-center text-hyper-green font-bold text-xs">
+								{member.user.name?.charAt(0).toUpperCase()}
+							</div>
+							<div>
+								<div className="text-sm font-medium text-carbon">
+									{member.user.name}
+								</div>
+								<div className="text-xs text-muted capitalize">
+									{member.role}
+								</div>
+							</div>
+						</div>
+					</div>
+				))}
+			</div>
+		</section>
 	);
 }

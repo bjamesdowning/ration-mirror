@@ -10,7 +10,7 @@ import {
 	SuccessIcon,
 } from "~/components/icons/DashboardIcons";
 import * as schema from "~/db/schema";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { getLatestGroceryList } from "~/lib/grocery.server";
 import { getExpiringItems, getInventoryStats } from "~/lib/inventory.server";
 import { matchMeals } from "~/lib/matching.server";
@@ -23,7 +23,10 @@ interface UserSettings {
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
+	const {
+		session: { user },
+		groupId,
+	} = await requireActiveGroup(context, request);
 	const db = context.cloudflare.env.DB;
 
 	// Get user settings for expiration alert days
@@ -37,10 +40,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// Fetch all dashboard data in parallel
 	const [expiringItems, inventoryStats, latestGroceryList, mealMatches] =
 		await Promise.all([
-			getExpiringItems(db, user.id, expirationAlertDays, 10),
-			getInventoryStats(db, user.id),
-			getLatestGroceryList(db, user.id),
-			matchMeals(db, user.id, { mode: "delta", minMatch: 50, limit: 6 }),
+			getExpiringItems(db, groupId, expirationAlertDays, 10),
+			getInventoryStats(db, groupId),
+			getLatestGroceryList(db, groupId),
+			matchMeals(db, groupId, { mode: "delta", minMatch: 50, limit: 6 }),
 		]);
 
 	return {

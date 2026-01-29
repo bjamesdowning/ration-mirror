@@ -1,7 +1,7 @@
 import type { InventoryItemInput } from "./inventory.server";
 
 export interface VectorizeMetadata {
-	userId: string;
+	organizationId: string;
 	itemId: string;
 	name: string;
 	tags: string[];
@@ -44,7 +44,7 @@ export async function generateEmbedding(
  */
 export async function updateItemEmbedding(
 	env: Env,
-	userId: string,
+	organizationId: string,
 	itemId: string,
 	item: InventoryItemInput,
 ) {
@@ -58,7 +58,7 @@ export async function updateItemEmbedding(
 				id: itemId,
 				values: embedding,
 				metadata: {
-					userId,
+					organizationId,
 					itemId,
 					name: item.name,
 					tags: JSON.stringify(item.tags), // Metadata only supports strings/numbers/booleans
@@ -78,11 +78,11 @@ export async function updateItemEmbedding(
 
 /**
  * Search for similar items in the vector database.
- * Filters by userId to ensure multi-tenant isolation.
+ * Filters by organizationId to ensure multi-tenant isolation.
  */
 export async function querySimilarItems(
 	env: Env,
-	userId: string,
+	organizationId: string,
 	query: string,
 	topK = 5,
 ) {
@@ -91,7 +91,7 @@ export async function querySimilarItems(
 	const results = await env.VECTOR_INDEX.query(embedding, {
 		topK,
 		filter: {
-			userId: userId,
+			organizationId: organizationId,
 		},
 	});
 

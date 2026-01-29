@@ -54,33 +54,33 @@ function normalizeTags(tags: unknown) {
 // --- Database Operations ---
 
 /**
- * Fetch all inventory items for a specific user.
+ * Fetch all inventory items for a specific organization.
  * Ordered by creation date descending (newest first).
  */
-export async function getInventory(db: D1Database, userId: string) {
+export async function getInventory(db: D1Database, organizationId: string) {
 	const d1 = drizzle(db);
 
 	return await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.userId, userId))
+		.where(eq(inventory.organizationId, organizationId))
 		.orderBy(desc(inventory.createdAt));
 }
 
 /**
- * Add a new item to the user's inventory.
+ * Add a new item to the organization's inventory.
  */
 import { updateItemEmbedding } from "./vector.server";
 
 // ... (keep existing imports)
 
 /**
- * Add a new item to the user's inventory.
+ * Add a new item to the organization's inventory.
  * Triggers an asynchronous vector embedding update.
  */
 export async function addItem(
 	env: Env,
-	userId: string,
+	organizationId: string,
 	data: InventoryItemInput,
 ) {
 	const d1 = drizzle(env.DB);
@@ -88,7 +88,7 @@ export async function addItem(
 	const [newItem] = await d1
 		.insert(inventory)
 		.values({
-			userId,
+			organizationId,
 			name: data.name,
 			quantity: data.quantity,
 			unit: data.unit,
@@ -103,11 +103,8 @@ export async function addItem(
 	// Fire-and-forget vector update (or await if strict consistency needed)
 	// We await it here to ensure it's done before returning, but catch errors to not fail the user action
 	if (newItem) {
-		// We need to cast the result to match what updateItemEmbedding expects if types don't align perfectly
-		// But our Drizzle types should align with InventoryItemInput roughly.
-		// Actually updateItemEmbedding takes InventoryItemInput, which lacks 'id'.
-		// We pass the Input data which we have.
-		await updateItemEmbedding(env, userId, newItem.id, data);
+		// Embeddings are now scoped to organizationId
+		await updateItemEmbedding(env, organizationId, newItem.id, data);
 	}
 
 	return [newItem];
@@ -115,12 +112,12 @@ export async function addItem(
 
 /**
  * Update an existing inventory item.
- * Security: Ensures the item belongs to the user requesting update.
+ * Security: Ensures the item belongs to the organization.
  * Also updates the vector embedding for semantic search.
  */
 export async function updateItem(
 	env: Env,
-	userId: string,
+	organizationId: string,
 	itemId: string,
 	data: InventoryItemUpdateInput,
 ) {
@@ -129,7 +126,12 @@ export async function updateItem(
 	const [existing] = await d1
 		.select()
 		.from(inventory)
-		.where(and(eq(inventory.id, itemId), eq(inventory.userId, userId)))
+		.where(
+			and(
+				eq(inventory.id, itemId),
+				eq(inventory.organizationId, organizationId),
+			),
+		)
 		.limit(1);
 
 	if (!existing) {
@@ -166,12 +168,17 @@ export async function updateItem(
 			expiresAt: nextData.expiresAt,
 			updatedAt: new Date(),
 		})
-		.where(and(eq(inventory.id, itemId), eq(inventory.userId, userId)))
+		.where(
+			and(
+				eq(inventory.id, itemId),
+				eq(inventory.organizationId, organizationId),
+			),
+		)
 		.returning();
 
 	// Update vector embedding if item was found and updated
 	if (updatedItem) {
-		await updateItemEmbedding(env, userId, itemId, nextData);
+		await updateItemEmbedding(env, organizationId, itemId, nextData);
 	}
 
 	return updatedItem;
@@ -179,18 +186,23 @@ export async function updateItem(
 
 /**
  * Delete (Jettison) an item from the inventory.
- * Security: Ensures the item belongs to the user requesting deletion.
+ * Security: Ensures the item belongs to the organization.
  */
 export async function jettisonItem(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	itemId: string,
 ) {
 	const d1 = drizzle(db);
 
 	return await d1
 		.delete(inventory)
-		.where(and(eq(inventory.id, itemId), eq(inventory.userId, userId)));
+		.where(
+			and(
+				eq(inventory.id, itemId),
+				eq(inventory.organizationId, organizationId),
+			),
+		);
 }
 
 /**
@@ -198,13 +210,13 @@ export async function jettisonItem(
  * Returns items ordered by expiration date (soonest first).
  *
  * @param db - D1 Database instance
- * @param userId - User ID to filter inventory
+ * @param organizationId - Organization ID to filter inventory
  * @param daysUntilExpiry - Number of days to look ahead (default: 7)
  * @param limit - Maximum number of items to return (default: 10)
  */
 export async function getExpiringItems(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	daysUntilExpiry = 7,
 	limit = 10,
 ) {
@@ -220,7 +232,7 @@ export async function getExpiringItems(
 		.from(inventory)
 		.where(
 			and(
-				eq(inventory.userId, userId),
+				eq(inventory.organizationId, organizationId),
 				isNotNull(inventory.expiresAt),
 				lte(inventory.expiresAt, futureDate),
 				gte(inventory.expiresAt, now), // Only items not yet expired
@@ -234,15 +246,18 @@ export async function getExpiringItems(
  * Get a count summary of inventory for the dashboard.
  *
  * @param db - D1 Database instance
- * @param userId - User ID to filter inventory
+ * @param organizationId - Organization ID to filter inventory
  */
-export async function getInventoryStats(db: D1Database, userId: string) {
+export async function getInventoryStats(
+	db: D1Database,
+	organizationId: string,
+) {
 	const d1 = drizzle(db);
 
 	const items = await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.userId, userId));
+		.where(eq(inventory.organizationId, organizationId));
 
 	const now = new Date();
 	const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);

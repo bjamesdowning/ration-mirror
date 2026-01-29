@@ -4,10 +4,14 @@ import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
 import type { MealInput } from "./schemas/meal";
 
 /**
- * Retrieves all meals for a user, optionally filtered by tag.
+ * Retrieves all meals for an organization, optionally filtered by tag.
  * Returns meals with their associated tags for client-side filtering.
  */
-export async function getMeals(db: D1Database, userId: string, tag?: string) {
+export async function getMeals(
+	db: D1Database,
+	organizationId: string,
+	tag?: string,
+) {
 	const d1 = drizzle(db);
 
 	// Base query to get meals
@@ -15,7 +19,7 @@ export async function getMeals(db: D1Database, userId: string, tag?: string) {
 		? await d1
 				.select({
 					id: meal.id,
-					userId: meal.userId,
+					organizationId: meal.organizationId,
 					name: meal.name,
 					description: meal.description,
 					directions: meal.directions,
@@ -29,19 +33,21 @@ export async function getMeals(db: D1Database, userId: string, tag?: string) {
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-				.where(and(eq(meal.userId, userId), eq(mealTag.tag, tag)))
+				.where(
+					and(eq(meal.organizationId, organizationId), eq(mealTag.tag, tag)),
+				)
 				.orderBy(desc(meal.createdAt))
 		: await d1
 				.select()
 				.from(meal)
-				.where(eq(meal.userId, userId))
+				.where(eq(meal.organizationId, organizationId))
 				.orderBy(desc(meal.createdAt));
 
 	if (meals.length === 0) {
 		return [];
 	}
 
-	// Fetch all tags for the user's meals in one query
+	// Fetch all tags for the organization's meals in one query
 	const mealIds = meals.map((m) => m.id);
 	const allTags = await d1
 		.select({
@@ -70,14 +76,18 @@ export async function getMeals(db: D1Database, userId: string, tag?: string) {
  * Retrieves a single meal by ID, including its ingredients and tags.
  * Uses a batch query to avoid N+1 issues and reduce round-trips.
  */
-export async function getMeal(db: D1Database, userId: string, mealId: string) {
+export async function getMeal(
+	db: D1Database,
+	organizationId: string,
+	mealId: string,
+) {
 	const d1 = drizzle(db);
 
 	const [mealResults, ingredients, tags] = await d1.batch([
 		d1
 			.select()
 			.from(meal)
-			.where(and(eq(meal.id, mealId), eq(meal.userId, userId))),
+			.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId))),
 		d1
 			.select()
 			.from(mealIngredient)
@@ -101,7 +111,7 @@ export async function getMeal(db: D1Database, userId: string, mealId: string) {
  */
 export async function createMeal(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	data: MealInput,
 ) {
 	const d1 = drizzle(db);
@@ -111,7 +121,7 @@ export async function createMeal(
 	const batch: any[] = [
 		d1.insert(meal).values({
 			id: mealId,
-			userId,
+			organizationId,
 			name: data.name,
 			description: data.description,
 			directions: data.directions,
@@ -153,7 +163,7 @@ export async function createMeal(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
-	return await getMeal(db, userId, mealId);
+	return await getMeal(db, organizationId, mealId);
 }
 
 /**
@@ -161,7 +171,7 @@ export async function createMeal(
  */
 export async function updateMeal(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	mealId: string,
 	data: MealInput,
 ) {
@@ -171,7 +181,7 @@ export async function updateMeal(
 	const [existing] = await d1
 		.select()
 		.from(meal)
-		.where(and(eq(meal.id, mealId), eq(meal.userId, userId)));
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
 
 	if (!existing) throw new Error("Meal not found or unauthorized");
 
@@ -225,43 +235,47 @@ export async function updateMeal(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
-	return await getMeal(db, userId, mealId);
+	return await getMeal(db, organizationId, mealId);
 }
 
 /**
- * Deletes a meal. Verification ensures user can only delete their own meals.
+ * Deletes a meal. Verification ensures organization can only delete their own meals.
  */
 export async function deleteMeal(
 	db: D1Database,
-	userId: string,
+	organizationId: string,
 	mealId: string,
 ) {
 	const d1 = drizzle(db);
 	return await d1
 		.delete(meal)
-		.where(and(eq(meal.id, mealId), eq(meal.userId, userId)));
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
 }
 
 /**
  * Executes a meal cooking procedure.
  *
  * Safety Features:
- * 1. Ownership Verification: Ensures the meal belongs to the user.
+ * 1. Ownership Verification: Ensures the meal belongs to the organization.
  * 2. Inventory Check: Verifies all linked inventory items have sufficient quantity.
  * 3. Race Condition Prevention: Uses a batch operation for deduction.
  * 4. Input Validation: Prevents SQL injection via type-safe Drizzle paramaters.
  */
-export async function cookMeal(db: D1Database, userId: string, mealId: string) {
+export async function cookMeal(
+	db: D1Database,
+	organizationId: string,
+	mealId: string,
+) {
 	const d1 = drizzle(db);
 
 	// 1. Verify meal ownership and existence
 	const [mealRecord] = await d1
 		.select()
 		.from(meal)
-		.where(and(eq(meal.id, mealId), eq(meal.userId, userId)));
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
 
 	if (!mealRecord) {
-		throw new Error("Meal not found or unauthorized for this user.");
+		throw new Error("Meal not found or unauthorized for this organization.");
 	}
 
 	// 2. Get ingredients
@@ -284,7 +298,10 @@ export async function cookMeal(db: D1Database, userId: string, mealId: string) {
 			.select()
 			.from(inventory)
 			.where(
-				and(eq(inventory.userId, userId), inArray(inventory.id, inventoryIds)),
+				and(
+					eq(inventory.organizationId, organizationId),
+					inArray(inventory.id, inventoryIds),
+				),
 			);
 
 		const inventoryMap = new Map(
@@ -311,7 +328,7 @@ export async function cookMeal(db: D1Database, userId: string, mealId: string) {
 				.where(
 					and(
 						eq(inventory.id, ing.inventoryId as string),
-						eq(inventory.userId, userId),
+						eq(inventory.organizationId, organizationId),
 					),
 				);
 		});
@@ -325,17 +342,20 @@ export async function cookMeal(db: D1Database, userId: string, mealId: string) {
 }
 
 /**
- * Retrieves all unique tags for a user's meals.
+ * Retrieves all unique tags for an organization's meals.
  * Useful for populating tag filter dropdowns.
  */
-export async function getUserMealTags(db: D1Database, userId: string) {
+export async function getOrganizationMealTags(
+	db: D1Database,
+	organizationId: string,
+) {
 	const d1 = drizzle(db);
 
 	const tags = await d1
 		.selectDistinct({ tag: mealTag.tag })
 		.from(mealTag)
 		.innerJoin(meal, eq(mealTag.mealId, meal.id))
-		.where(eq(meal.userId, userId))
+		.where(eq(meal.organizationId, organizationId))
 		.orderBy(mealTag.tag);
 
 	return tags.map((t) => t.tag);

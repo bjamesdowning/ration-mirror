@@ -1,4 +1,4 @@
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { data } from "~/lib/response";
@@ -8,10 +8,15 @@ import type { Route } from "./+types/scan";
 const SCAN_COST = 5;
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	// 1. Auth & Group Context
+	const {
+		session: { user },
+		groupId,
+	} = await requireActiveGroup(context, request);
 	const userId = user.id;
 
-	// 1. Rate Limiting (Distributed via KV)
+	// 2. Rate Limiting (Distributed via KV)
+	// We rate limit by USER, not group, to prevent one user from draining group credits too fast
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"scan",
@@ -36,8 +41,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 2. Economy Check
-	const balance = await checkBalance(context.cloudflare.env, userId);
+	// 3. Economy Check
+	const balance = await checkBalance(context.cloudflare.env, groupId);
 	if (balance < SCAN_COST) {
 		throw data(
 			{ error: "Insufficient credits", required: SCAN_COST, current: balance },
@@ -45,7 +50,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 3. Parse Input
+	// 4. Parse Input
 	const formData = await request.formData();
 	const imageFile = formData.get("image");
 
@@ -58,27 +63,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
 	}
 
-	// 4. Prepare Image for AI - Convert to base64 data URL
+	// 5. Prepare Image for AI
 	console.log(
 		`[SCAN DEBUG] Processing image: ${imageFile.name}, size: ${imageFile.size}, type: ${imageFile.type}`,
 	);
 
-	const arrayBuffer = await imageFile.arrayBuffer();
-	console.log(`[SCAN DEBUG] ArrayBuffer size: ${arrayBuffer.byteLength}`);
-
-	const uint8Array = new Uint8Array(arrayBuffer);
-
 	try {
-		// Convert Uint8Array to number[] for Workers AI
-		// Per Cloudflare docs: LLaVA expects image as number[] (0-255 values)
+		const arrayBuffer = await imageFile.arrayBuffer();
+		const uint8Array = new Uint8Array(arrayBuffer);
 		const imageArray = [...uint8Array];
-		console.log(
-			`[SCAN DEBUG] Image array created, length: ${imageArray.length}`,
-		);
 
+		// 6. Run AI Inference
 		try {
-			// 5. Run AI Inference
-			// Model: LLaVA 1.5 7B (EU-compatible alternative to Llama 3.2 Vision)
 			const response = await context.cloudflare.env.AI.run(
 				"@cf/llava-hf/llava-1.5-7b-hf",
 				{
@@ -97,25 +93,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 				},
 			);
 
-			console.log("[SCAN DEBUG] AI response received, parsing...");
-
-			// 6. Parse AI Response
-			// LLaVA returns { description: string }
+			// 7. Parse AI Response
 			// biome-ignore lint/suspicious/noExplicitAny: AI response type varies by model
 			const aiResponse = response as any;
 			let rawText = "";
 			if ("description" in aiResponse) {
 				rawText = aiResponse.description as string;
 			} else if ("response" in aiResponse) {
-				// Fallback for other response formats
 				rawText = aiResponse.response as string;
 			} else {
-				// Ultimate fallback
 				rawText = JSON.stringify(aiResponse);
 			}
-			console.log(`[SCAN DEBUG] Raw AI response: ${rawText.substring(0, 500)}`);
 
-			// Attempt to extract JSON if the AI included conversational text
+			// Attempt to extract JSON
 			let cleanedText = rawText;
 			const jsonStart = rawText.indexOf("{");
 			const jsonEnd = rawText.lastIndexOf("}");
@@ -136,10 +126,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				throw new Error("AI response missing 'items' array");
 			}
 
-			// 7. Deduct Credits (only on successful scan)
+			// 8. Deduct Credits (only on successful scan)
 			await deductCredits(
 				context.cloudflare.env,
-				userId,
+				groupId, // Organization ID
+				userId, // User ID (Audit)
 				SCAN_COST,
 				"Standard visual scan",
 			);
@@ -150,7 +141,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"[SCAN DEBUG] Inner error during AI processing:",
 				innerError,
 			);
-			console.error("[SCAN DEBUG] Error stack:", (innerError as Error).stack);
 			throw data(
 				{
 					error: "Scan processing failed",
@@ -167,7 +157,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			"[SCAN DEBUG] Outer error during image preparation:",
 			outerError,
 		);
-		console.error("[SCAN DEBUG] Error stack:", (outerError as Error).stack);
 		throw data(
 			{
 				error: "Image processing failed",

@@ -10,9 +10,7 @@
 	"observability": {
 		"enabled": true
 	},
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
+	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
 		"BETTER_AUTH_URL": "https://ration.mayutic.com"
 	},
@@ -71,7 +69,7 @@
 	 *   - STRIPE_SECRET_KEY: Stripe server-side API key
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
-	 *   - BETTER_AUTH_SECRET: Better Auth encryption key   
+	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
 	 *   - ADMIN_EMAILS: Comma-separated admin emails
 	 */
 	/*

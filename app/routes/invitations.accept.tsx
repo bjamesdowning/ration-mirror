@@ -119,7 +119,7 @@ export default function InvitationAcceptPage({
 				</p>
 
 				<Form method="post">
-					<input type="hidden" name="invitationId" value={invitationId!} />
+					<input type="hidden" name="invitationId" value={invitationId || ""} />
 					<button
 						type="submit"
 						disabled={isJoining}

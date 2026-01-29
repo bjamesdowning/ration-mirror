@@ -4,43 +4,49 @@ import { useEffect, useState } from "react";
 import { Form, redirect, useFetcher, useNavigation } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { data } from "~/lib/response";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
-// Removed local interface in favor of shared type
 import type { UserSettings } from "../../lib/types";
 import type { Route } from "./+types/settings";
 
 export async function loader(args: Route.LoaderArgs) {
-	const {
-		session: { user: authUser },
-		groupId,
-	} = await requireActiveGroup(args.context, args.request);
-	const userId = authUser.id;
+	try {
+		const {
+			session: { user: authUser },
+			groupId,
+		} = await requireActiveGroup(args.context, args.request);
+		const userId = authUser.id;
 
-	const env = args.context.cloudflare.env;
-	const db = drizzle(env.DB, { schema });
+		const env = args.context.cloudflare.env;
+		const db = drizzle(env.DB, { schema });
 
-	const user = await db.query.user.findFirst({
-		where: (user, { eq }) => eq(user.id, userId),
-	});
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
 
-	if (!user) throw redirect("/sign-in");
+		if (!user) throw redirect("/sign-in");
 
-	// Drizzle automatically parses JSON mode fields
-	const settings = (user.settings as UserSettings) || {};
+		// Drizzle automatically parses JSON mode fields
+		const settings = (user.settings as UserSettings) || {};
 
-	// Fetch members
-	const members = await db.query.member.findMany({
-		where: (member, { eq }) => eq(member.organizationId, groupId),
-		with: {
-			user: true, // Fetch user details for each member
-		},
-	});
+		// Fetch members
+		const members = await db.query.member.findMany({
+			where: (member, { eq }) => eq(member.organizationId, groupId),
+			with: {
+				user: true, // Fetch user details for each member
+			},
+		});
 
-	return {
-		settings,
-		members,
-	};
+		return {
+			settings,
+			members,
+		};
+	} catch (error) {
+		console.error("[Settings] Loader failed:", error);
+		if (error instanceof Response) throw error;
+		throw data({ error: "Failed to load settings" }, { status: 500 });
+	}
 }
 
 export async function action(args: Route.ActionArgs) {

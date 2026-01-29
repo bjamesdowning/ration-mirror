@@ -6,14 +6,14 @@ import type { Session, User } from "better-auth";
 
 // User settings stored in user.settings JSON field
 export interface UserSettings {
-  unitSystem?: "metric" | "imperial";
-  expirationAlertDays?: number;
-  listGeneration?: {
-    lastGeneratedAt?: string;
-    enabled?: boolean;
-    frequency?: "off" | "daily" | "weekly" | "biweekly" | "custom";
-    intervalDays?: number;
-  };
+	unitSystem?: "metric" | "imperial";
+	expirationAlertDays?: number;
+	listGeneration?: {
+		lastGeneratedAt?: string;
+		enabled?: boolean;
+		frequency?: "off" | "daily" | "weekly" | "biweekly" | "custom";
+		intervalDays?: number;
+	};
 }
 
 // Extended organization type with credits and metadata

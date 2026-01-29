@@ -8,7 +8,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function SelectGroupPage() {
-	const { data: session } = authClient.useSession();
 	const { data: organizations, isPending } = authClient.useListOrganizations();
 
 	// Auto-select if only one organization
@@ -63,6 +62,7 @@ export default function SelectGroupPage() {
 							>
 								<span className="font-bold text-carbon">{org.name}</span>
 								<svg
+									aria-hidden="true"
 									className="w-5 h-5 text-muted group-hover:text-hyper-green"
 									fill="none"
 									stroke="currentColor"

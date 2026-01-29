@@ -41,6 +41,7 @@ export function GroupSwitcher() {
 					)}
 				</div>
 				<svg
+					aria-hidden="true"
 					className="w-4 h-4 text-muted group-hover:text-carbon transition-colors"
 					fill="none"
 					stroke="currentColor"
@@ -76,6 +77,7 @@ export function GroupSwitcher() {
 							<span className="truncate">{org.name}</span>
 							{org.id === activeOrgId && (
 								<svg
+									aria-hidden="true"
 									className="w-4 h-4 text-hyper-green"
 									fill="none"
 									stroke="currentColor"
@@ -101,6 +103,7 @@ export function GroupSwitcher() {
 						className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-platinum hover:text-carbon transition-colors"
 					>
 						<svg
+							aria-hidden="true"
 							className="w-4 h-4"
 							fill="none"
 							stroke="currentColor"

@@ -17,7 +17,6 @@ export const user = sqliteTable("user", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 	// Extended fields
 	settings: text("settings", { mode: "json" }).default("{}"), // Allergens, units, etc.
-	// NOTE: credits moved to organization table (line 80)
 });
 
 export const session = sqliteTable("session", {

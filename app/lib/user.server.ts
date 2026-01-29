@@ -4,7 +4,7 @@ import * as schema from "../db/schema";
 
 /**
  * Retrieves a user's organization credit balance from the database.
- * 
+ *
  * NOTE: Credits are now stored at the organization level, not on individual users.
  * This function returns the credit balance for the specified organization.
  *

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { addGroceryItem } from "~/lib/grocery.server";
 import { GroceryItemSchema } from "~/lib/schemas/grocery";
@@ -8,7 +8,9 @@ import { GroceryItemSchema } from "~/lib/schemas/grocery";
  * POST /api/grocery-lists/:id/items - Add item to grocery list
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const {
+		groupId,
+	} = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
@@ -24,7 +26,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		const input = GroceryItemSchema.parse(json);
 		const item = await addGroceryItem(
 			context.cloudflare.env.DB,
-			user.id,
+			groupId,
 			listId,
 			input,
 		);

@@ -1,4 +1,4 @@
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { addItem } from "~/lib/inventory.server";
 import { data } from "~/lib/response";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
@@ -8,8 +8,7 @@ import type { Route } from "./+types/inventory.batch";
  * Batch add multiple items to inventory from scan results
  */
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
-	const userId = user.id;
+	const { groupId } = await requireActiveGroup(context, request);
 
 	try {
 		const body = await request.json();
@@ -30,7 +29,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		for (const item of items) {
 			try {
-				const [newItem] = await addItem(context.cloudflare.env, userId, item);
+				const [newItem] = await addItem(context.cloudflare.env, groupId, item);
 				addedItems.push(newItem);
 			} catch (error) {
 				console.error(`Failed to add item ${item.name}:`, error);

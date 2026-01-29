@@ -317,8 +317,14 @@ function ScanResultItemRow({
 
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 					<div>
-						<label className="text-xs text-muted block mb-1">Category</label>
+						<label
+							className="text-xs text-muted block mb-1"
+							htmlFor="edit-category"
+						>
+							Category
+						</label>
 						<select
+							id="edit-category"
 							value={editedItem.category || "other"}
 							onChange={(e) =>
 								setEditedItem({

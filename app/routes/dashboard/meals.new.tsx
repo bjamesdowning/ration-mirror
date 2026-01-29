@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
@@ -10,13 +10,13 @@ import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.new";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
-	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
+	const { groupId } = await requireActiveGroup(context, request);
+	const inventory = await getInventory(context.cloudflare.env.DB, groupId);
 	return { inventory };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const contentType = request.headers.get("Content-Type");
 	let inputData: unknown;
 
@@ -29,7 +29,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const input = MealSchema.parse(inputData);
-		const meal = await createMeal(context.cloudflare.env.DB, user.id, input);
+		const meal = await createMeal(context.cloudflare.env.DB, groupId, input);
 		if (!meal) throw new Error("Failed to create meal");
 		return redirect(`/dashboard/meals/${meal.id}`);
 	} catch (e) {

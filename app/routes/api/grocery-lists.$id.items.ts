@@ -8,9 +8,7 @@ import { GroceryItemSchema } from "~/lib/schemas/grocery";
  * POST /api/grocery-lists/:id/items - Add item to grocery list
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const {
-		groupId,
-	} = await requireActiveGroup(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {

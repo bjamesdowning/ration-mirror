@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	index,
 	integer,
@@ -19,6 +19,11 @@ export const user = sqliteTable("user", {
 	settings: text("settings", { mode: "json" }).default("{}"), // Allergens, units, etc.
 });
 
+export const userRelations = relations(user, ({ many }) => ({
+	members: many(member),
+	sessions: many(session),
+}));
+
 export const session = sqliteTable("session", {
 	id: text("id").primaryKey(),
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
@@ -35,6 +40,13 @@ export const session = sqliteTable("session", {
 		() => organization.id,
 	),
 });
+
+export const sessionRelations = relations(session, ({ one }) => ({
+	user: one(user, {
+		fields: [session.userId],
+		references: [user.id],
+	}),
+}));
 
 export const account = sqliteTable("account", {
 	id: text("id").primaryKey(),
@@ -80,6 +92,13 @@ export const organization = sqliteTable("organization", {
 	credits: integer("credits").default(0).notNull(),
 });
 
+export const organizationRelations = relations(organization, ({ many }) => ({
+	members: many(member),
+	inventory: many(inventory),
+	meals: many(meal),
+	groceryLists: many(groceryList),
+}));
+
 export const member = sqliteTable(
 	"member",
 	{
@@ -99,6 +118,17 @@ export const member = sqliteTable(
 		unique("member_org_user_unique").on(table.organizationId, table.userId),
 	],
 );
+
+export const memberRelations = relations(member, ({ one }) => ({
+	organization: one(organization, {
+		fields: [member.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [member.userId],
+		references: [user.id],
+	}),
+}));
 
 export const invitation = sqliteTable(
 	"invitation",
@@ -153,6 +183,13 @@ export const inventory = sqliteTable(
 	],
 );
 
+export const inventoryRelations = relations(inventory, ({ one }) => ({
+	organization: one(organization, {
+		fields: [inventory.organizationId],
+		references: [organization.id],
+	}),
+}));
+
 export const ledger = sqliteTable(
 	"ledger",
 	{
@@ -205,6 +242,15 @@ export const meal = sqliteTable(
 	],
 );
 
+export const mealRelations = relations(meal, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [meal.organizationId],
+		references: [organization.id],
+	}),
+	ingredients: many(mealIngredient),
+	tags: many(mealTag),
+}));
+
 export const mealIngredient = sqliteTable(
 	"meal_ingredient",
 	{
@@ -229,6 +275,17 @@ export const mealIngredient = sqliteTable(
 	],
 );
 
+export const mealIngredientRelations = relations(mealIngredient, ({ one }) => ({
+	meal: one(meal, {
+		fields: [mealIngredient.mealId],
+		references: [meal.id],
+	}),
+	inventory: one(inventory, {
+		fields: [mealIngredient.inventoryId],
+		references: [inventory.id],
+	}),
+}));
+
 export const mealTag = sqliteTable(
 	"meal_tag",
 	{
@@ -246,6 +303,13 @@ export const mealTag = sqliteTable(
 		unique("meal_tag_unique").on(table.mealId, table.tag),
 	],
 );
+
+export const mealTagRelations = relations(mealTag, ({ one }) => ({
+	meal: one(meal, {
+		fields: [mealTag.mealId],
+		references: [meal.id],
+	}),
+}));
 
 export const groceryList = sqliteTable(
 	"grocery_list",
@@ -272,6 +336,14 @@ export const groceryList = sqliteTable(
 	],
 );
 
+export const groceryListRelations = relations(groceryList, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [groceryList.organizationId],
+		references: [organization.id],
+	}),
+	items: many(groceryItem),
+}));
+
 export const groceryItem = sqliteTable(
 	"grocery_item",
 	{
@@ -297,3 +369,10 @@ export const groceryItem = sqliteTable(
 	},
 	(table) => [index("grocery_item_list_idx").on(table.listId)],
 );
+
+export const groceryItemRelations = relations(groceryItem, ({ one }) => ({
+	list: one(groceryList, {
+		fields: [groceryItem.listId],
+		references: [groceryList.id],
+	}),
+}));

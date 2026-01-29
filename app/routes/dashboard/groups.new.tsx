@@ -21,7 +21,11 @@ export default function CreateGroupPage() {
 			/>
 
 			<div className="glass-panel rounded-xl p-8">
-				<fetcher.Form method="post" action="/api/groups/create" className="space-y-6">
+				<fetcher.Form
+					method="post"
+					action="/api/groups/create"
+					className="space-y-6"
+				>
 					{fetcher.data?.error && (
 						<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
 							{fetcher.data.error}

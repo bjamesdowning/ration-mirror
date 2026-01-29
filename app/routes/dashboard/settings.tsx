@@ -35,23 +35,22 @@ export async function loader(args: Route.LoaderArgs) {
 		const members = await db.query.member.findMany({
 			where: (member, { eq }) => eq(member.organizationId, groupId),
 			with: {
-				user: true, // Fetch user details for each member
+				user: true,
+				organization: true, // Fetch organization name
 			},
 		});
 
 		// Check if current user is owner
 		const currentMember = members.find((m) => m.userId === userId);
 		const isOwner = currentMember?.role === "owner";
+		const currentOrg = members[0]?.organization;
 
 		return {
 			settings,
 			members,
 			isOwner,
-			// Pass current org ID to the UI for deletion confirmation
 			organizationId: groupId,
-			organizationName: user.sessions.find(
-				(s) => s.activeOrganizationId === groupId,
-			)?.activeOrganizationId, // We don't have org name in user query easily, but we can get it from member query if we expand
+			organizationName: currentOrg?.name || "Unknown Group",
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);

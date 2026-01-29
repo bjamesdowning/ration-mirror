@@ -78,7 +78,7 @@ export function MealCard({ meal }: MealCardProps) {
 			</div>
 
 			{/* Desktop Hover Overlay */}
-			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-10 hidden md:flex">
+			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">
 				<Link
 					to={`/dashboard/meals/${meal.id}`}
 					className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"

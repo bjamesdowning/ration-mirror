@@ -6,7 +6,6 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
-	useLoaderData,
 } from "react-router";
 
 import "@fontsource/space-mono/400.css";
@@ -14,9 +13,7 @@ import "@fontsource/space-mono/700.css";
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { Status } from "./components/hud/Status";
 import { createAuth } from "./lib/auth.server";
-import { getUserWithCredits } from "./lib/user.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -35,26 +32,12 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const auth = createAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 
-	let credits = 0;
-	if (session?.user) {
-		// Better Auth's getSession() only returns core user fields (id, name, email, image).
-		// We need to query the database directly to get our custom 'credits' field.
-		const userData = await getUserWithCredits(
-			context.cloudflare.env.DB,
-			session.user.id,
-		);
-		credits = userData?.credits ?? 0;
-	}
-
 	return {
 		user: session?.user,
-		credits,
 	};
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
-	const loaderData = useLoaderData<typeof loader>();
-
 	return (
 		<html lang="en">
 			<head>
@@ -64,7 +47,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				<Links />
 			</head>
 			<body className="bg-ceramic text-carbon">
-				<Status credits={loaderData?.credits} />
 				{children}
 				<ScrollRestoration />
 				<Scripts />

@@ -1,7 +1,13 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useState } from "react";
-import { Form, redirect, useFetcher, useNavigation } from "react-router";
+import {
+	Form,
+	redirect,
+	useFetcher,
+	useNavigate,
+	useNavigation,
+} from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { data } from "~/lib/response";
@@ -53,6 +59,10 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
+		// Fetch credits for the current group
+		const { checkBalance } = await import("../../lib/ledger.server");
+		const credits = await checkBalance(env, groupId);
+
 		return {
 			settings,
 			members,
@@ -60,6 +70,7 @@ export async function loader(args: Route.LoaderArgs) {
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
 			userOrganizations: userOrganizations.map((m) => m.organization),
+			credits,
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);
@@ -212,6 +223,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			<DashboardHeader title="Configuration" subtitle="System Preferences" />
 
 			<div className="space-y-8">
+				{/* User Profile & Credits */}
+				<ReferenceIdSection credits={loaderData.credits} />
+
 				{/* Group Management */}
 				<GroupManagement members={members} />
 
@@ -446,6 +460,77 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				</section>
 			</div>
 		</div>
+	);
+}
+
+function ReferenceIdSection({ credits }: { credits: number }) {
+	const { data: session } = authClient.useSession();
+	const navigate = useNavigate();
+
+	const handleSignOut = async () => {
+		await authClient.signOut({
+			fetchOptions: {
+				onSuccess: () => {
+					navigate("/sign-in");
+				},
+			},
+		});
+	};
+
+	if (!session) return null;
+
+	return (
+		<section className="glass-panel rounded-xl p-6">
+			<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+				{/* User Info */}
+				<div className="flex items-center gap-4">
+					{session.user.image ? (
+						<img
+							src={session.user.image}
+							alt={session.user.name || "User"}
+							className="w-16 h-16 rounded-full border-2 border-platinum object-cover shadow-sm"
+						/>
+					) : (
+						<div className="w-16 h-16 rounded-full bg-platinum/50 flex items-center justify-center text-2xl font-bold text-muted border-2 border-platinum border-dashed">
+							{session.user.name?.charAt(0).toUpperCase() || "?"}
+						</div>
+					)}
+					<div>
+						<h2 className="text-xl font-bold text-carbon">
+							{session.user.name || "Unknown User"}
+						</h2>
+						<p className="text-sm font-mono text-muted tracking-wide">
+							{session.user.email}
+						</p>
+						<p className="text-xs text-muted/80 mt-1 uppercase tracking-widest">
+							ID: {session.user.id.slice(0, 8)}...
+						</p>
+					</div>
+				</div>
+
+				{/* Actions & Credits */}
+				<div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+					<div className="text-right">
+						<div className="text-xs uppercase text-muted mb-1">
+							Available Credits
+						</div>
+						<div className="text-2xl font-bold tabular-nums tracking-widest text-hyper-green">
+							{credits.toString().padStart(4, "0")} CR
+						</div>
+					</div>
+
+					<div className="h-10 w-px bg-platinum/50 hidden md:block" />
+
+					<button
+						type="button"
+						onClick={handleSignOut}
+						className="px-4 py-2 border border-platinum/50 rounded-lg text-sm text-muted hover:text-carbon hover:bg-platinum/50 transition-all font-medium whitespace-nowrap"
+					>
+						Log Out
+					</button>
+				</div>
+			</div>
+		</section>
 	);
 }
 

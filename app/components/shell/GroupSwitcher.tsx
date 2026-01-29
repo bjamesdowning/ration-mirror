@@ -13,7 +13,11 @@ export function GroupSwitcher() {
 		| undefined;
 
 	// Fallback to name or "Select Group"
-	const displayName = activeOrg?.name || "Select Group";
+	// If activeOrg is undefined but activeOrgId is set, it might be loading or the user is in a group not yet in the list.
+	// But we can try to trust the session metadata if available? Better auth session doesn't usually carry org name.
+	// We'll stick to "Select Group" but maybe add a loading indicator or check pending state.
+	const displayName =
+		activeOrg?.name || (session.isPending ? "Loading..." : "Select Group");
 	const credits = activeOrg?.credits ?? 0;
 
 	const handleSwitch = async (orgId: string) => {
@@ -57,7 +61,7 @@ export function GroupSwitcher() {
 			</button>
 
 			{/* Dropdown Menu */}
-			<div className="absolute left-0 top-full mt-2 w-64 bg-ceramic border border-platinum rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-left">
+			<div className="absolute left-0 top-full mt-2 w-64 bg-ceramic border border-platinum rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-left z-50">
 				<div className="p-2 space-y-1">
 					<div className="px-3 py-2 text-xs font-semibold text-muted uppercase tracking-wider">
 						Switch Group

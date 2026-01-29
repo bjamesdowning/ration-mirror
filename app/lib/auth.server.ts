@@ -53,6 +53,9 @@ export function createAuth(env: Cloudflare.Env) {
 				session: schema.session,
 				account: schema.account,
 				verification: schema.verification,
+				organization: schema.organization,
+				member: schema.member,
+				invitation: schema.invitation,
 			},
 		}),
 		plugins: [

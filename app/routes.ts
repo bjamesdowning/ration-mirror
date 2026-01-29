@@ -71,6 +71,7 @@ export default [
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/groups/create", "routes/api/groups.create.ts"),
+	route("api/groups/delete", "routes/api/groups.delete.ts"),
 	route(
 		"api/groups/invitations/create",
 		"routes/api/groups.invitations.create.ts",

@@ -23,6 +23,7 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const user = await db.query.user.findFirst({
 			where: (user, { eq }) => eq(user.id, userId),
+			with: { sessions: true },
 		});
 
 		if (!user) throw redirect("/sign-in");
@@ -38,9 +39,19 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
+		// Check if current user is owner
+		const currentMember = members.find((m) => m.userId === userId);
+		const isOwner = currentMember?.role === "owner";
+
 		return {
 			settings,
 			members,
+			isOwner,
+			// Pass current org ID to the UI for deletion confirmation
+			organizationId: groupId,
+			organizationName: user.sessions.find(
+				(s) => s.activeOrganizationId === groupId,
+			)?.activeOrganizationId, // We don't have org name in user query easily, but we can get it from member query if we expand
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);
@@ -144,7 +155,7 @@ export async function action(args: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-	const { settings, members } = loaderData;
+	const { settings, members, isOwner, organizationId } = loaderData;
 	const navigation = useNavigation();
 	const isUpdatingUnits =
 		navigation.state === "submitting" &&
@@ -155,6 +166,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const isPurging =
 		navigation.state === "submitting" &&
 		navigation.formAction === "/api/user/purge";
+	const isDeletingGroup =
+		navigation.state === "submitting" &&
+		navigation.formAction === "/api/groups/delete";
 	const isUpdatingAutomation =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-list-generation";
@@ -327,6 +341,45 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							{isPurging ? "Deleting..." : "Delete Account"}
 						</button>
 					</Form>
+
+					{isOwner && (
+						<div className="mt-8 pt-8 border-t border-danger/20">
+							<h2 className="text-xl font-bold mb-2 text-danger">
+								Delete Group
+							</h2>
+							<p className="text-sm text-muted mb-6 max-w-md">
+								Permanently delete this group and all its data (inventory,
+								meals, lists). This cannot be undone.
+							</p>
+
+							<Form
+								action="/api/groups/delete"
+								method="post"
+								onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+									if (
+										!confirm(
+											"Are you sure you want to delete this group? All shared data will be lost forever.",
+										)
+									) {
+										e.preventDefault();
+									}
+								}}
+							>
+								<input
+									type="hidden"
+									name="organizationId"
+									value={organizationId}
+								/>
+								<button
+									type="submit"
+									disabled={isDeletingGroup}
+									className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
+								>
+									{isDeletingGroup ? "Deleting..." : "Delete Group"}
+								</button>
+							</Form>
+						</div>
+					)}
 				</section>
 			</div>
 		</div>

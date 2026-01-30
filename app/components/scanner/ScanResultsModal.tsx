@@ -1,5 +1,5 @@
 import { Calendar, Check, Edit2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
@@ -80,10 +80,12 @@ export function ScanResultsModal({
 	};
 
 	// Handle success
-	if (fetcher.state === "idle" && fetcher.data?.success) {
-		onSuccess();
-		onClose();
-	}
+	useEffect(() => {
+		if (fetcher.state === "idle" && fetcher.data?.success) {
+			onSuccess();
+			onClose();
+		}
+	}, [fetcher.state, fetcher.data, onSuccess, onClose]);
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">

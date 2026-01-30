@@ -1,5 +1,5 @@
 import { Camera, RefreshCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import type { ScanResult } from "~/lib/schemas/scan";
 import { ScanResultsModal } from "./ScanResultsModal";
@@ -113,48 +113,59 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 		});
 	};
 
-	// Monitor fetcher state to detect completion
-	if (isAnalyzing && fetcher.state === "idle" && fetcher.data) {
-		setIsAnalyzing(false);
+	const lastState = useRef(fetcher.state);
 
-		// Check for errors
-		if ("error" in fetcher.data) {
-			alert(`Scan failed: ${fetcher.data.error}`);
-			if (inputRef.current) inputRef.current.value = "";
-		} else {
-			// Success - transform raw items to include required properties
-			// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
-			const rawItems = (fetcher.data as any).items || [];
-			const transformedResult: ScanResult = {
-				items: rawItems.map((item: any) => ({
-					id: crypto.randomUUID(), // Generate unique ID for selection tracking
-					name: item.name || "Unknown Item",
-					quantity: item.quantity ?? 1,
-					unit: item.unit || "unit",
-					category: item.category,
-					tags: item.tags || [],
-					expiresAt: item.expiresAt,
-					selected: true, // Default to selected
-					confidence: item.confidence,
-					rawText: item.rawText,
-				})),
-				metadata: {
-					source: "image",
-					filename: undefined,
-					processedAt: new Date().toISOString(),
-					confidence: undefined,
-				},
-			};
-			setScanResult(transformedResult);
+	useEffect(() => {
+		// Detect when fetcher finishes a submission
+		if (
+			isAnalyzing &&
+			lastState.current !== "idle" &&
+			fetcher.state === "idle"
+		) {
+			setIsAnalyzing(false);
+
+			if (fetcher.data) {
+				console.log("[SCAN] Fetcher success data:", fetcher.data);
+				if ("error" in fetcher.data) {
+					alert(`Scan failed: ${fetcher.data.error}`);
+					if (inputRef.current) inputRef.current.value = "";
+				} else {
+					// Success - transform raw items to include required properties
+					// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
+					const rawItems = (fetcher.data as any).items || [];
+					console.log(`[SCAN] Found ${rawItems.length} items`);
+					const transformedResult: ScanResult = {
+						items: rawItems.map((item: any) => ({
+							id: crypto.randomUUID(),
+							name: item.name || "Unknown Item",
+							quantity: item.quantity ?? 1,
+							unit: item.unit || "unit",
+							category: item.category,
+							tags: item.tags || [],
+							expiresAt: item.expiresAt,
+							selected: true,
+							confidence: item.confidence,
+							rawText: item.rawText,
+						})),
+						metadata: {
+							source: "image",
+							processedAt: new Date().toISOString(),
+						},
+					};
+					setScanResult(transformedResult);
+				}
+			} else {
+				// No data returned but idle (likely an unexpected error)
+				console.error(
+					"[SCAN] Fetcher completed with NO data. State:",
+					fetcher.state,
+				);
+				alert("Scan failed. Please try again.");
+				if (inputRef.current) inputRef.current.value = "";
+			}
 		}
-	}
-
-	// Error handling state transition
-	if (isAnalyzing && fetcher.state === "idle" && !fetcher.data) {
-		setIsAnalyzing(false);
-		alert("Scan failed. Please try again.");
-		if (inputRef.current) inputRef.current.value = "";
-	}
+		lastState.current = fetcher.state;
+	}, [fetcher.state, fetcher.data, isAnalyzing]);
 
 	const handleModalClose = () => {
 		setScanResult(null);

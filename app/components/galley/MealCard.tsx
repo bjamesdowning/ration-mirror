@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import type { meal } from "~/db/schema";
 
@@ -11,7 +11,6 @@ interface MealCardProps {
 
 export function MealCard({ meal }: MealCardProps) {
 	const fetcher = useFetcher();
-	const navigate = useNavigate();
 	const isDeleting =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete";
 
@@ -29,11 +28,11 @@ export function MealCard({ meal }: MealCardProps) {
 					actions={[
 						{
 							label: "View",
-							onClick: () => navigate(`/dashboard/meals/${meal.id}`),
+							to: `/dashboard/meals/${meal.id}`,
 						},
 						{
 							label: "Edit",
-							onClick: () => navigate(`/dashboard/meals/${meal.id}/edit`),
+							to: `/dashboard/meals/${meal.id}/edit`,
 						},
 						{
 							label: "Delete",
@@ -79,20 +78,18 @@ export function MealCard({ meal }: MealCardProps) {
 
 			{/* Desktop Hover Overlay */}
 			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">
-				<button
-					type="button"
-					onClick={() => navigate(`/dashboard/meals/${meal.id}`)}
+				<Link
+					to={`/dashboard/meals/${meal.id}`}
 					className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"
 				>
 					View
-				</button>
-				<button
-					type="button"
-					onClick={() => navigate(`/dashboard/meals/${meal.id}/edit`)}
+				</Link>
+				<Link
+					to={`/dashboard/meals/${meal.id}/edit`}
 					className="bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow transition-all shadow-lg text-sm"
 				>
 					Edit
-				</button>
+				</Link>
 				<fetcher.Form method="post" onSubmit={(e) => e.stopPropagation()}>
 					<input type="hidden" name="intent" value="delete" />
 					<input type="hidden" name="mealId" value={meal.id} />

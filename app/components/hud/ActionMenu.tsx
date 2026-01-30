@@ -1,10 +1,13 @@
 import { MoreVertical } from "lucide-react";
 import { useState } from "react";
 
+import { Link } from "react-router";
+
 interface ActionMenuItem {
 	label: string;
 	icon?: React.ReactNode;
-	onClick: () => void;
+	onClick?: () => void;
+	to?: string;
 	destructive?: boolean;
 }
 
@@ -16,7 +19,9 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 	const [isOpen, setIsOpen] = useState(false);
 
 	const handleAction = (action: ActionMenuItem) => {
-		action.onClick();
+		if (action.onClick) {
+			action.onClick();
+		}
 		setIsOpen(false);
 	};
 
@@ -51,33 +56,58 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 
 					{/* Dropdown */}
 					<div className="absolute right-0 top-full mt-1 z-40 glass-panel rounded-xl shadow-lg p-2 min-w-[160px]">
-						{actions.map((action, index) => (
-							<button
-								key={`${action.label}-${index}`}
-								type="button"
-								onClick={(e) => {
-									e.preventDefault();
-									e.stopPropagation();
-									handleAction(action);
-								}}
-								className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
-									action.destructive
-										? "text-danger hover:bg-danger/10"
-										: "text-carbon hover:bg-platinum"
-								}`}
-							>
-								{action.icon && (
-									<span
-										className={
-											action.destructive ? "text-danger" : "text-muted"
-										}
+						{actions.map((action, index) => {
+							const Content = () => (
+								<>
+									{action.icon && (
+										<span
+											className={
+												action.destructive ? "text-danger" : "text-muted"
+											}
+										>
+											{action.icon}
+										</span>
+									)}
+									<div className="text-sm font-medium">{action.label}</div>
+								</>
+							);
+
+							if (action.to) {
+								return (
+									<Link
+										key={`${action.label}-${index}`}
+										to={action.to}
+										onClick={() => setIsOpen(false)}
+										className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
+											action.destructive
+												? "text-danger hover:bg-danger/10"
+												: "text-carbon hover:bg-platinum"
+										}`}
 									>
-										{action.icon}
-									</span>
-								)}
-								<div className="text-sm font-medium">{action.label}</div>
-							</button>
-						))}
+										<Content />
+									</Link>
+								);
+							}
+
+							return (
+								<button
+									key={`${action.label}-${index}`}
+									type="button"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										handleAction(action);
+									}}
+									className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
+										action.destructive
+											? "text-danger hover:bg-danger/10"
+											: "text-carbon hover:bg-platinum"
+									}`}
+								>
+									<Content />
+								</button>
+							);
+						})}
 					</div>
 				</>
 			)}

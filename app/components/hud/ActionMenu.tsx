@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { Link } from "react-router";
 
-interface ActionMenuItem {
+export interface ActionMenuItem {
 	label: string;
 	icon?: React.ReactNode;
 	onClick?: () => void;

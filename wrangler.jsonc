@@ -35,12 +35,6 @@
 			"migrations_dir": "drizzle"
 		}
 	],
-	"vectorize": [
-		{
-			"binding": "VECTOR_INDEX",
-			"index_name": "ration-index"
-		}
-	],
 	"r2_buckets": [
 		{
 			"binding": "STORAGE",

@@ -1,29 +1,31 @@
-import { inArray } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { inventory } from "~/db/schema";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { data } from "~/lib/response";
-import { querySimilarItems } from "~/lib/vector.server";
 import type { Route } from "./+types/search";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
-	const userId = user.id;
+	// 1. Auth & Group Context
+	// Ideally search should be group-scoped.
+	const {
+		session: { user },
+		groupId,
+	} = await requireActiveGroup(context, request);
 
 	const url = new URL(request.url);
 	const q = url.searchParams.get("q");
 
 	if (!q || q.length < 2) {
-		// Return empty if query is too short
 		return { results: [] };
 	}
 
-	// 1. Rate Limiting (Distributed via KV)
+	// 2. Rate Limiting
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"search",
-		userId,
+		user.id,
 	);
 
 	if (!rateLimitResult.allowed) {
@@ -44,33 +46,25 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 	}
 
-	// 2. Vector Search
-	const matches = await querySimilarItems(context.cloudflare.env, userId, q, 5);
-
-	if (matches.length === 0) {
-		return { results: [] };
-	}
-
-	// 3. Hydrate from D1
-	// Extract IDs. Vectorize match IDs correspond to Inventory Item IDs
-	const ids = matches.map((m) => m.id);
-
+	// 3. Database Search
 	const db = drizzle(context.cloudflare.env.DB);
+	const searchPattern = `%${q.toLowerCase()}%`;
+
 	const items = await db
 		.select()
 		.from(inventory)
-		.where(inArray(inventory.id, ids));
+		.where(
+			and(
+				eq(inventory.organizationId, groupId),
+				or(
+					like(inventory.name, searchPattern),
+					// Note: JSON array tags are harder to search with simple LIKE,
+					// so we prioritize name search for now.
+				),
+			),
+		)
+		.orderBy(desc(inventory.createdAt))
+		.limit(20);
 
-	// 4. Merge/Order
-	// D1 select implementation doesn't guarantee order matches the input array order usually.
-	// We re-sort based on match score order for better relevance.
-	const scoreMap = new Map(matches.map((m) => [m.id, m.score]));
-
-	const sortedItems = items.sort((a, b) => {
-		const scoreA = scoreMap.get(a.id) ?? 0;
-		const scoreB = scoreMap.get(b.id) ?? 0;
-		return scoreB - scoreA; // Descending score
-	});
-
-	return { results: sortedItems };
+	return { results: items };
 }

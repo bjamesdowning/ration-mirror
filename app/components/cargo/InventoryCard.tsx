@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useFetcher } from "react-router";
 import { InventoryEditModal } from "~/components/cargo/InventoryEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
-import { ActionMenu } from "~/components/hud/ActionMenu";
+import { StandardCard } from "~/components/common/StandardCard";
 import type { inventory } from "~/db/schema";
 import {
 	formatInventoryCategory,
@@ -40,28 +40,23 @@ export function InventoryCard({
 
 	return (
 		<>
-			<div className="relative group glass-panel rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
-				{/* Mobile Action Menu */}
-				<div className="md:hidden absolute top-2 right-2 z-20">
-					<ActionMenu
-						actions={[
-							{
-								label: "View",
-								onClick: () => setIsEditing(true),
-							},
-							{
-								label: "Edit",
-								onClick: () => setIsEditing(true),
-							},
-							{
-								label: "Delete",
-								onClick: handleDelete,
-								destructive: true,
-							},
-						]}
-					/>
-				</div>
-
+			<StandardCard
+				actions={[
+					{
+						label: "View",
+						onClick: () => setIsEditing(true),
+					},
+					{
+						label: "Edit",
+						onClick: () => setIsEditing(true),
+					},
+					{
+						label: "Delete",
+						onClick: handleDelete,
+						destructive: true,
+					},
+				]}
+			>
 				<div className="flex justify-between items-start mb-2">
 					<div className="min-w-0">
 						<h3
@@ -101,35 +96,7 @@ export function InventoryCard({
 						{formatInventoryStatus(item.status)}
 					</span>
 				</div>
-
-				{/* Desktop Hover Overlay */}
-				<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">
-					<button
-						type="button"
-						onClick={() => setIsEditing(true)}
-						className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"
-					>
-						View
-					</button>
-					<button
-						type="button"
-						onClick={() => setIsEditing(true)}
-						className="bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow transition-all shadow-lg text-sm"
-					>
-						Edit
-					</button>
-					<fetcher.Form method="post" onSubmit={(e) => e.stopPropagation()}>
-						<input type="hidden" name="intent" value="delete" />
-						<input type="hidden" name="itemId" value={item.id} />
-						<button
-							type="submit"
-							className="bg-danger text-white font-bold px-4 py-2 rounded-lg hover:bg-danger/90 transition-all shadow-lg text-sm"
-						>
-							Delete
-						</button>
-					</fetcher.Form>
-				</div>
-			</div>
+			</StandardCard>
 
 			{isEditing && (
 				<InventoryEditModal

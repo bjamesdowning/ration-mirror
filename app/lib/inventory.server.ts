@@ -70,7 +70,6 @@ export async function getInventory(db: D1Database, organizationId: string) {
 /**
  * Add a new item to the organization's inventory.
  */
-import { updateItemEmbedding } from "./vector.server";
 
 // ... (keep existing imports)
 
@@ -102,10 +101,6 @@ export async function addItem(
 
 	// Fire-and-forget vector update (or await if strict consistency needed)
 	// We await it here to ensure it's done before returning, but catch errors to not fail the user action
-	if (newItem) {
-		// Embeddings are now scoped to organizationId
-		await updateItemEmbedding(env, organizationId, newItem.id, data);
-	}
 
 	return [newItem];
 }
@@ -177,9 +172,6 @@ export async function updateItem(
 		.returning();
 
 	// Update vector embedding if item was found and updated
-	if (updatedItem) {
-		await updateItemEmbedding(env, organizationId, itemId, nextData);
-	}
 
 	return updatedItem;
 }

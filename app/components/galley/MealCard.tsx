@@ -81,20 +81,14 @@ export function MealCard({ meal }: MealCardProps) {
 			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">
 				<button
 					type="button"
-					onClick={(e) => {
-						e.stopPropagation();
-						navigate(`/dashboard/meals/${meal.id}`);
-					}}
+					onClick={() => navigate(`/dashboard/meals/${meal.id}`)}
 					className="bg-platinum text-carbon font-bold px-4 py-2 rounded-lg hover:bg-white transition-all shadow-lg text-sm"
 				>
 					View
 				</button>
 				<button
 					type="button"
-					onClick={(e) => {
-						e.stopPropagation();
-						navigate(`/dashboard/meals/${meal.id}/edit`);
-					}}
+					onClick={() => navigate(`/dashboard/meals/${meal.id}/edit`)}
 					className="bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow transition-all shadow-lg text-sm"
 				>
 					Edit

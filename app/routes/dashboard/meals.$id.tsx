@@ -1,16 +1,16 @@
 import { redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealDetail } from "~/components/galley/MealDetail";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { deleteMeal, getMeal } from "~/lib/meals.server";
 import type { Route } from "./+types/meals.$id";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/dashboard/meals");
 
-	const meal = await getMeal(context.cloudflare.env.DB, user.id, id);
+	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw redirect("/dashboard/meals");
 
 	// MealDetail expects 'MealInput & { id }'. getMeal returns database record + arrays.
@@ -40,12 +40,12 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/dashboard/meals");
 
 	if (request.method === "DELETE") {
-		await deleteMeal(context.cloudflare.env.DB, user.id, id);
+		await deleteMeal(context.cloudflare.env.DB, groupId, id);
 		return redirect("/dashboard/meals");
 	}
 

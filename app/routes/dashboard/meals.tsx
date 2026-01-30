@@ -37,6 +37,31 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update") {
+		const mealId = formData.get("mealId") as string;
+		if (!mealId) return { success: false, error: "Missing Meal ID" };
+
+		const { updateMeal } = await import("~/lib/meals.server");
+		const { MealSchema } = await import("~/lib/schemas/meal");
+		const { parseFormData } = await import("~/lib/form-utils");
+
+		try {
+			// Need to convert FormData to JSON object for Zod validation
+			// We can use the logic from meals.$id.edit.tsx
+			const inputData = parseFormData(formData);
+
+			// Remove intent and mealId from inputData before validation if they are not in schema
+			// Schema might be strict.
+
+			const input = MealSchema.parse(inputData);
+			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input);
+			return { success: true };
+		} catch (error) {
+			console.error("Update failed", error);
+			return { success: false, error: "Validation failed" };
+		}
+	}
+
 	return { success: false, error: "Unknown Intent" };
 }
 
@@ -176,7 +201,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 				{/* Meal Grid */}
 				{filteredMeals.length > 0 && (
-					<MealGrid meals={filteredMeals} enableMatching={matchingEnabled} />
+					<MealGrid
+						meals={filteredMeals}
+						enableMatching={matchingEnabled}
+						inventory={inventory}
+					/>
 				)}
 			</div>
 		</>

@@ -51,6 +51,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:search",
 	},
+	generate_meal: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 10,
+		keyPrefix: "rate:generate_meal",
+	},
 };
 
 /**

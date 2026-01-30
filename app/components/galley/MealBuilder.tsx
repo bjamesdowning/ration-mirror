@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, type useFetcher } from "react-router";
 
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
@@ -17,15 +17,23 @@ interface MealBuilderProps {
 	defaultValue?: Partial<MealInput>;
 	actionUrl?: string;
 	method?: "post" | "put";
+	fetcher?: ReturnType<typeof useFetcher<unknown>>;
+	children?: React.ReactNode;
 }
 
 export function MealBuilder({
 	availableIngredients = [],
 	defaultValue = {},
 	method = "post",
+	fetcher,
+	children,
 }: MealBuilderProps) {
+	const FormComponent = fetcher ? fetcher.Form : Form;
+
 	return (
-		<Form method={method} className="space-y-8">
+		<FormComponent method={method} className="space-y-8">
+			{children}
+
 			{/* Basic Info */}
 			<div className="glass-panel rounded-xl p-6">
 				<h3 className="text-label text-muted mb-4 border-b border-platinum pb-4">
@@ -178,6 +186,6 @@ export function MealBuilder({
 					{method === "post" ? "Create Recipe" : "Update Recipe"}
 				</button>
 			</div>
-		</Form>
+		</FormComponent>
 	);
 }

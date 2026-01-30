@@ -8,6 +8,7 @@ export interface ActionMenuItem {
 	icon?: React.ReactNode;
 	onClick?: () => void;
 	to?: string;
+	reloadDocument?: boolean;
 	destructive?: boolean;
 }
 
@@ -77,6 +78,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 									<Link
 										key={`${action.label}-${index}`}
 										to={action.to}
+										reloadDocument={action.reloadDocument}
 										onClick={() => setIsOpen(false)}
 										className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
 											action.destructive

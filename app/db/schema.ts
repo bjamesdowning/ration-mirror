@@ -224,11 +224,15 @@ export const meal = sqliteTable(
 		name: text("name").notNull(),
 		description: text("description"),
 		directions: text("directions"),
-		equipment: text("equipment", { mode: "json" }).default("[]"),
+		equipment: text("equipment", { mode: "json" })
+			.$type<string[]>()
+			.default([]),
 		servings: integer("servings").default(1),
 		prepTime: integer("prep_time"),
 		cookTime: integer("cook_time"),
-		customFields: text("custom_fields", { mode: "json" }).default("{}"),
+		customFields: text("custom_fields", { mode: "json" })
+			.$type<Record<string, any>>()
+			.default({}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

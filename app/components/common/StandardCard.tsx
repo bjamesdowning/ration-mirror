@@ -28,14 +28,13 @@ export function StandardCard({ children, actions }: StandardCardProps) {
 							<Link
 								key={`${action.label}-${index}`}
 								to={action.to}
+								reloadDocument={action.reloadDocument}
 								className={`font-bold px-4 py-2 rounded-lg transition-all shadow-lg text-sm ${
 									action.destructive
 										? "bg-danger text-white hover:bg-danger/90"
-										: "bg-platinum text-carbon hover:bg-white"
-								} ${
-									!action.destructive && action.label === "Edit"
-										? "bg-hyper-green text-carbon hover:shadow-glow"
-										: ""
+										: action.label === "Edit"
+											? "bg-hyper-green text-carbon hover:shadow-glow"
+											: "bg-platinum text-carbon hover:bg-white"
 								}`}
 							>
 								{action.label}

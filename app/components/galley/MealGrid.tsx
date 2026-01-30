@@ -7,12 +7,31 @@ import { MealMatchBadge } from "./MealMatchBadge";
 interface MealGridProps {
 	meals: (typeof meal.$inferSelect & {
 		tags?: string[];
-		ingredients?: { quantity: number; unit: string }[];
+		ingredients?: {
+			inventoryId?: string | null;
+			ingredientName: string;
+			quantity: number;
+			unit: string;
+			isOptional?: boolean | null;
+			orderIndex?: number | null;
+		}[];
+		equipment?: string[] | null;
+		customFields?: string | Record<string, any> | null;
 	})[];
 	enableMatching?: boolean;
+	inventory?: {
+		id: string;
+		name: string;
+		unit: string;
+		quantity: number;
+	}[];
 }
 
-export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
+export function MealGrid({
+	meals,
+	enableMatching = false,
+	inventory = [],
+}: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
 	const [minMatch, setMinMatch] = useState(50);
 	const [matchResults, setMatchResults] = useState<MealMatchResult[] | null>(
@@ -154,7 +173,10 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 							{matchResults.map((result) => (
 								<div key={result.meal.id} className="relative">
-									<MealCard meal={result.meal} />
+									<MealCard
+										meal={result.meal}
+										availableIngredients={inventory}
+									/>
 									<div className="absolute top-2 right-2">
 										<MealMatchBadge
 											percentage={result.matchPercentage}
@@ -188,7 +210,7 @@ export function MealGrid({ meals, enableMatching = false }: MealGridProps) {
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 			{meals.map((meal) => (
-				<MealCard key={meal.id} meal={meal} />
+				<MealCard key={meal.id} meal={meal} availableIngredients={inventory} />
 			))}
 		</div>
 	);

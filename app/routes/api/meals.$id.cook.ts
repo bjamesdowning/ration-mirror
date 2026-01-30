@@ -1,10 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { cookMeal } from "~/lib/meals.server";
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 
 	if (!id) throw new Response("Not Found", { status: 404 });
@@ -14,7 +14,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 	}
 
 	try {
-		const result = await cookMeal(context.cloudflare.env.DB, user.id, id);
+		const result = await cookMeal(context.cloudflare.env.DB, groupId, id);
 		return { result };
 	} catch (e) {
 		return handleApiError(e);

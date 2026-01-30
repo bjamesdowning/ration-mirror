@@ -180,9 +180,10 @@ Generate 3 creative meal options I can cook right now.`;
 			// If wrapped in 'response', unwraps it
 			let actualData = parsed;
 			if (parsed.response) {
-				actualData = typeof parsed.response === "string"
-					? JSON.parse(parsed.response)
-					: parsed.response;
+				actualData =
+					typeof parsed.response === "string"
+						? JSON.parse(parsed.response)
+						: parsed.response;
 			}
 
 			console.log("DEBUG: Parsed Data:", JSON.stringify(actualData, null, 2));

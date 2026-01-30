@@ -87,7 +87,6 @@ Rules:
 - quantity: number (default 1)
 - unit: "unit", "kg", "g", "l", "ml", "can", "pack"
 - expiry: YYYY-MM-DD or "null" if not visible
-- Ignore non-food items.
 - NO extra text, NO markdown, NO JSON.
 
 Example:
@@ -120,23 +119,27 @@ canned beans|2|can|null`;
 
 			console.log("[SCAN DEBUG] AI Raw Response:", rawText);
 
-			// Parse Pipe-Separated Values
-			const lines = rawText.split("\n");
+			// Robust parsing using Regex to find patterns anywhere in the text
+			// This handles:
+			// 1. Multiple items on one line
+			// 2. Inconsistent newlines
+			// 3. Extra text around the items
+			// Pattern: name | quantity | unit | expiry
+			const itemRegex = /([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
+
 			const parsedItems = [];
+			let match;
 
-			for (const line of lines) {
-				const trimmed = line.trim();
-				if (!trimmed || !trimmed.includes("|")) continue;
+			// biome-ignore lint/suspicious/noAssignInExpressions: standard regex loop
+			while ((match = itemRegex.exec(rawText)) !== null) {
+				const name = match[1].trim();
+				const quantity = Number(match[2]);
+				const unit = match[3].trim();
+				const expiryRaw = match[4].trim();
 
-				const parts = trimmed.split("|").map((p) => p.trim());
-				if (parts.length < 3) continue;
+				// Validation
+				if (!name || Number.isNaN(quantity) || !unit) continue;
 
-				const name = parts[0];
-				let quantity = Number(parts[1]);
-				if (Number.isNaN(quantity)) quantity = 1;
-
-				const unit = parts[2];
-				const expiryRaw = parts[3] || "null";
 				const expiresAt =
 					expiryRaw !== "null" && expiryRaw.match(/^\d{4}-\d{2}-\d{2}$/)
 						? expiryRaw
@@ -147,7 +150,6 @@ canned beans|2|can|null`;
 					quantity,
 					unit,
 					expiresAt,
-					// Default category (user can edit)
 					category: "other",
 				});
 			}
@@ -155,6 +157,7 @@ canned beans|2|can|null`;
 			if (parsedItems.length === 0) {
 				console.warn("[SCAN DEBUG] No valid items parsed from text:", rawText);
 				// Fallback: if absolutely nothing parsed, try to treat lines as just names
+				const lines = rawText.split("\n");
 				for (const line of lines) {
 					if (line.trim().length > 3 && !line.includes("|")) {
 						parsedItems.push({

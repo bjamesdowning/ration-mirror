@@ -178,7 +178,12 @@ Generate 3 creative meal options I can cook right now.`;
 			// Some models return strings even in JSON mode, so we parse just in case
 			const parsed = typeof aiData === "string" ? JSON.parse(aiData) : aiData;
 			// If wrapped in 'response', unwraps it
-			const actualData = parsed.response ? JSON.parse(parsed.response) : parsed;
+			let actualData = parsed;
+			if (parsed.response) {
+				actualData = typeof parsed.response === "string"
+					? JSON.parse(parsed.response)
+					: parsed.response;
+			}
 
 			console.log("DEBUG: Parsed Data:", JSON.stringify(actualData, null, 2));
 

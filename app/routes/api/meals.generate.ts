@@ -164,6 +164,7 @@ Generate 3 creative meal options I can cook right now.`;
 						},
 					},
 				},
+				max_tokens: 2048,
 			},
 		);
 

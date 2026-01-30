@@ -113,6 +113,7 @@ Rules:
 							],
 						},
 					],
+					max_tokens: 32768, // High limit (32k) to allow for very long receipts, well within 128k context
 				},
 			);
 

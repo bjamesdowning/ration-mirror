@@ -16,7 +16,7 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 	const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
 	// Resize parameters
-	const MAX_DIMENSION = 1536; // Max width or height
+	const MAX_DIMENSION = 1024; // Max width or height - reduced to prevent AI timeouts
 	const COMPRESSION_QUALITY = 0.8;
 
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

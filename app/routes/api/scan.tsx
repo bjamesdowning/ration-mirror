@@ -79,82 +79,95 @@ export async function action({ request, context }: Route.ActionArgs) {
 		try {
 			const prompt = `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.
-Return ONLY a valid JSON object with a single key "items" containing a list of objects.
-Do not include any markdown formatting, backticks, or explanation. Only the raw JSON.
-
-Structure:
-{
-  "items": [
-    {
-      "name": "item name (lowercase)",
-      "quantity": number,
-      "unit": "unit" | "kg" | "g" | "l" | "ml" | "can" | "pack",
-      "expiresAt": "YYYY-MM-DD" (strictly only if visible on package)
-    }
-  ]
-}
+Return valid items as a simple list, one item per line.
+Format each line EXACTLY as: name|quantity|unit|expiry
 
 Rules:
+- name: lowercase item name
+- quantity: number (default 1)
+- unit: "unit", "kg", "g", "l", "ml", "can", "pack"
+- expiry: YYYY-MM-DD or "null" if not visible
 - Ignore non-food items.
-- If quantity is unclear, default to 1.
-- Use "unit" for countable items like apples or bottles if weight isn't clear.
-`;
+- NO extra text, NO markdown, NO JSON.
+
+Example:
+apple|6|unit|null
+milk|1|l|2024-12-31
+canned beans|2|can|null`;
 
 			const response = await context.cloudflare.env.AI.run(
 				"@cf/llava-hf/llava-1.5-7b-hf",
 				{
 					prompt: prompt,
-					image: imageArray, // LLaVA expects array of integers
+					image: imageArray,
 				},
 			);
 
 			// 7. Parse AI Response
 			// biome-ignore lint/suspicious/noExplicitAny: AI response type varies by model
 			const aiResponse = response as any;
-
-			// Mistral returns the response in .response or .description depending on the binding version/gateway
 			let rawText = "";
+
 			if (typeof aiResponse === "string") {
 				rawText = aiResponse;
-			} else if (aiResponse.response) {
-				rawText = aiResponse.response;
 			} else if (aiResponse.description) {
 				rawText = aiResponse.description;
+			} else if (aiResponse.response) {
+				rawText = aiResponse.response;
 			} else {
 				rawText = JSON.stringify(aiResponse);
 			}
 
 			console.log("[SCAN DEBUG] AI Raw Response:", rawText);
 
-			// Robust JSON extraction
-			// Find the first '{' and the last '}' to strip out any potential "Here is the JSON:" preamble
-			let cleanedText = rawText;
-			const jsonStart = rawText.indexOf("{");
-			const jsonEnd = rawText.lastIndexOf("}");
+			// Parse Pipe-Separated Values
+			const lines = rawText.split("\n");
+			const parsedItems = [];
 
-			if (jsonStart !== -1 && jsonEnd !== -1) {
-				cleanedText = rawText.substring(jsonStart, jsonEnd + 1);
-			} else {
-				throw new Error("No JSON object found in AI response");
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (!trimmed || !trimmed.includes("|")) continue;
+
+				const parts = trimmed.split("|").map((p) => p.trim());
+				if (parts.length < 3) continue;
+
+				const name = parts[0];
+				let quantity = Number(parts[1]);
+				if (Number.isNaN(quantity)) quantity = 1;
+
+				const unit = parts[2];
+				const expiryRaw = parts[3] || "null";
+				const expiresAt =
+					expiryRaw !== "null" && expiryRaw.match(/^\d{4}-\d{2}-\d{2}$/)
+						? expiryRaw
+						: undefined;
+
+				parsedItems.push({
+					name,
+					quantity,
+					unit,
+					expiresAt,
+					// Default category (user can edit)
+					category: "other",
+				});
 			}
 
-			// biome-ignore lint/suspicious/noExplicitAny: JSON parse result
-			let detectedItems: any;
-			try {
-				detectedItems = JSON.parse(cleanedText);
-			} catch (_e) {
-				console.error("Failed to parse AI JSON. Cleaned Text:", cleanedText);
-				throw new Error("AI response was not valid JSON");
-			}
-
-			if (!detectedItems.items || !Array.isArray(detectedItems.items)) {
-				// Sometimes models wrap it differently, try to salvage
-				if (Array.isArray(detectedItems)) {
-					detectedItems = { items: detectedItems };
-				} else {
-					throw new Error("AI response missing 'items' array");
+			if (parsedItems.length === 0) {
+				console.warn("[SCAN DEBUG] No valid items parsed from text:", rawText);
+				// Fallback: if absolutely nothing parsed, try to treat lines as just names
+				for (const line of lines) {
+					if (line.trim().length > 3 && !line.includes("|")) {
+						parsedItems.push({
+							name: line.trim(),
+							quantity: 1,
+							unit: "unit",
+							category: "other",
+						});
+					}
 				}
 			}
+
+			const detectedItems = { items: parsedItems };
 
 			// 8. Deduct Credits (only on successful scan)
 			await deductCredits(

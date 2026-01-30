@@ -70,47 +70,80 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const arrayBuffer = await imageFile.arrayBuffer();
-		const uint8Array = new Uint8Array(arrayBuffer);
-		const imageArray = [...uint8Array];
 
 		// 6. Run AI Inference
+		// 6. Run AI Inference
+		// We use Mistral Small 3.1 24B as it is EU-compliant and has excellent vision capabilities
 		try {
+			const prompt = `You are an expert pantry inventory assistant.
+Analyze this image and extract all food items visible.
+Return ONLY a valid JSON object with a single key "items" containing a list of objects.
+Do not include any markdown formatting, backticks, or explanation. Only the raw JSON.
+
+Structure:
+{
+  "items": [
+    {
+      "name": "item name (lowercase)",
+      "quantity": number,
+      "unit": "unit" | "kg" | "g" | "l" | "ml" | "can" | "pack",
+      "expiresAt": "YYYY-MM-DD" (strictly only if visible on package)
+    }
+  ]
+}
+
+Rules:
+- Ignore non-food items.
+- If quantity is unclear, default to 1.
+- Use "unit" for countable items like apples or bottles if weight isn't clear.
+`;
+
 			const response = await context.cloudflare.env.AI.run(
-				"@cf/llava-hf/llava-1.5-7b-hf",
+				"@cf/mistralai/mistral-small-3.1-24b-instruct",
 				{
-					image: imageArray,
-					prompt:
-						"You are analyzing a grocery receipt or food items. Extract all food items with their quantities.\n\n" +
-						'Return ONLY valid JSON in this exact format: {"items":[{"name":"item name","quantity":1,"unit":"unit","expiresAt":"YYYY-MM-DD"}]}\n\n' +
-						"Rules:\n" +
-						"1. name: Item name in lowercase (e.g., 'milk', 'bread')\n" +
-						"2. quantity: Numeric value (default 1 if unclear)\n" +
-						"3. unit: Use 'unit' for countable items, 'kg' for weight shown in kg, 'l' for liquid in liters\n" +
-						"4. expiresAt: ONLY include if expiration date is clearly visible (format: YYYY-MM-DD)\n" +
-						"5. Ignore non-food items\n\n" +
-						'Example: {"items":[{"name":"milk","quantity":2,"unit":"l"},{"name":"bread","quantity":1,"unit":"unit"}]}',
-					max_tokens: 2048,
+					messages: [
+						{
+							role: "user",
+							content: [
+								{ type: "text", text: prompt },
+								{
+									type: "image",
+									image: new Uint8Array(arrayBuffer), // Mistral expects Uint8Array or base64
+								},
+							],
+						},
+					],
 				},
 			);
 
 			// 7. Parse AI Response
 			// biome-ignore lint/suspicious/noExplicitAny: AI response type varies by model
 			const aiResponse = response as any;
+
+			// Mistral returns the response in .response or .description depending on the binding version/gateway
 			let rawText = "";
-			if ("description" in aiResponse) {
-				rawText = aiResponse.description as string;
-			} else if ("response" in aiResponse) {
-				rawText = aiResponse.response as string;
+			if (typeof aiResponse === "string") {
+				rawText = aiResponse;
+			} else if (aiResponse.response) {
+				rawText = aiResponse.response;
+			} else if (aiResponse.description) {
+				rawText = aiResponse.description;
 			} else {
 				rawText = JSON.stringify(aiResponse);
 			}
 
-			// Attempt to extract JSON
+			console.log("[SCAN DEBUG] AI Raw Response:", rawText);
+
+			// Robust JSON extraction
+			// Find the first '{' and the last '}' to strip out any potential "Here is the JSON:" preamble
 			let cleanedText = rawText;
 			const jsonStart = rawText.indexOf("{");
 			const jsonEnd = rawText.lastIndexOf("}");
+
 			if (jsonStart !== -1 && jsonEnd !== -1) {
 				cleanedText = rawText.substring(jsonStart, jsonEnd + 1);
+			} else {
+				throw new Error("No JSON object found in AI response");
 			}
 
 			// biome-ignore lint/suspicious/noExplicitAny: JSON parse result
@@ -118,12 +151,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 			try {
 				detectedItems = JSON.parse(cleanedText);
 			} catch (_e) {
-				console.error("Failed to parse AI JSON. Raw response:", rawText);
+				console.error("Failed to parse AI JSON. Cleaned Text:", cleanedText);
 				throw new Error("AI response was not valid JSON");
 			}
 
 			if (!detectedItems.items || !Array.isArray(detectedItems.items)) {
-				throw new Error("AI response missing 'items' array");
+				// Sometimes models wrap it differently, try to salvage
+				if (Array.isArray(detectedItems)) {
+					detectedItems = { items: detectedItems };
+				} else {
+					throw new Error("AI response missing 'items' array");
+				}
 			}
 
 			// 8. Deduct Credits (only on successful scan)
@@ -141,6 +179,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"[SCAN DEBUG] Inner error during AI processing:",
 				innerError,
 			);
+
+			const errorMessage =
+				innerError instanceof Error ? innerError.message : String(innerError);
+
+			// Check for Cloudflare/Worker specific timeout errors
+			// Error 3046 is "Request timeout" from the Workers AI binding
+			if (
+				errorMessage.includes("3046") ||
+				errorMessage.toLowerCase().includes("timeout")
+			) {
+				throw data(
+					{
+						error:
+							"The receipt is too long to process in one go. Please try scanning it in two halves.",
+					},
+					{ status: 422 }, // Unprocessable Entity
+				);
+			}
+
 			throw data(
 				{
 					error: "Scan processing failed",

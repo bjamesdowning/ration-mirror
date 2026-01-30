@@ -77,6 +77,7 @@ export function MealEditModal({
 					defaultValue={defaultValues}
 					method="post"
 					fetcher={fetcher}
+					submitLabel="Save Changes"
 				>
 					<input type="hidden" name="intent" value="update" />
 					<input type="hidden" name="mealId" value={meal.id} />

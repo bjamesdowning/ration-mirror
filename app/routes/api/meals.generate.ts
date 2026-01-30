@@ -110,7 +110,60 @@ Generate 3 creative meal options I can cook right now.`;
 					{ role: "system", content: systemPrompt },
 					{ role: "user", content: userPrompt },
 				],
-				response_format: { type: "json_object" },
+				response_format: {
+					type: "json_schema",
+					json_schema: {
+						name: "recipe_options",
+						schema: {
+							type: "object",
+							properties: {
+								recipes: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											name: { type: "string" },
+											description: { type: "string" },
+											prepTime: { type: "number" },
+											cookTime: { type: "number" },
+											ingredients: {
+												type: "array",
+												items: {
+													type: "object",
+													properties: {
+														name: { type: "string" },
+														quantity: { type: "number" },
+														unit: { type: "string" },
+														inventoryName: { type: "string" },
+													},
+													required: [
+														"name",
+														"quantity",
+														"unit",
+														"inventoryName",
+													],
+												},
+											},
+											directions: {
+												type: "array",
+												items: { type: "string" },
+											},
+										},
+										required: [
+											"name",
+											"description",
+											"prepTime",
+											"cookTime",
+											"ingredients",
+											"directions",
+										],
+									},
+								},
+							},
+							required: ["recipes"],
+						},
+					},
+				},
 			},
 		);
 

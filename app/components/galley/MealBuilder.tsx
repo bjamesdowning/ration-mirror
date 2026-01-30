@@ -19,6 +19,7 @@ interface MealBuilderProps {
 	method?: "post" | "put";
 	fetcher?: ReturnType<typeof useFetcher<unknown>>;
 	children?: React.ReactNode;
+	submitLabel?: string;
 }
 
 export function MealBuilder({
@@ -27,6 +28,7 @@ export function MealBuilder({
 	method = "post",
 	fetcher,
 	children,
+	submitLabel,
 }: MealBuilderProps) {
 	const FormComponent = fetcher ? fetcher.Form : Form;
 
@@ -183,7 +185,8 @@ export function MealBuilder({
 					type="submit"
 					className="bg-hyper-green text-carbon font-bold px-8 py-3 rounded-xl shadow-glow-sm hover:shadow-glow w-full md:w-auto transition-all"
 				>
-					{method === "post" ? "Create Recipe" : "Update Recipe"}
+					{submitLabel ||
+						(method === "post" ? "Create Recipe" : "Update Recipe")}
 				</button>
 			</div>
 		</FormComponent>

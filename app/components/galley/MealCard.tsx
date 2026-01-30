@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
@@ -32,16 +32,23 @@ interface MealCardProps {
 export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
 	const fetcher = useFetcher();
 	const [isEditing, setIsEditing] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
 
 	const isDeleting =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete";
 	const isUpdating =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "update";
 
-	// Close modal on successful update
-	if (isEditing && fetcher.state === "idle" && fetcher.data?.success) {
-		setIsEditing(false);
-	}
+	// Handle successful update
+	useEffect(() => {
+		if (fetcher.state !== "idle") {
+			setIsSaving(true);
+		}
+		if (isSaving && fetcher.state === "idle" && fetcher.data?.success) {
+			setIsEditing(false);
+			setIsSaving(false);
+		}
+	}, [fetcher.state, fetcher.data, isSaving]);
 
 	if (isDeleting) return null;
 

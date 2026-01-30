@@ -1,5 +1,5 @@
 import { AlertCircle, Check, ChefHat, Sparkles, Timer } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 
 interface GeneratedRecipe {
@@ -28,7 +28,7 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 		error?: string;
 	}>();
 	const saveFetcher = useFetcher();
-	const navigate = useNavigate();
+	const _navigate = useNavigate();
 
 	const isGenerating =
 		generateFetcher.state === "submitting" ||
@@ -36,7 +36,7 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 	const recipes = generateFetcher.data?.recipes;
 	const error = generateFetcher.data?.error;
 
-	const handleGenerate = () => {
+	const _handleGenerate = () => {
 		if (onGenerate) {
 			onGenerate();
 		} else {
@@ -192,7 +192,7 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 							{/* Results Grid */}
 							{recipes && (
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-									{recipes.map((recipe, idx) => (
+									{recipes.map((recipe, _idx) => (
 										<div
 											key={recipe.name}
 											className="flex flex-col bg-white border border-carbon/5 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
@@ -229,7 +229,7 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 													<h5 className="text-xs font-bold text-carbon uppercase tracking-wider mb-2">
 														Key Ingredients
 													</h5>
-													{recipe.ingredients.slice(0, 4).map((ing, i) => (
+													{recipe.ingredients.slice(0, 4).map((ing, _i) => (
 														<div
 															key={ing.ingredientName}
 															className="flex justify-between text-xs text-muted"

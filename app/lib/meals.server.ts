@@ -47,15 +47,22 @@ export async function getMeals(
 		return [];
 	}
 
-	// Fetch all tags for the organization's meals in one query
+	// Fetch all tags and ingredients for the organization's meals in one query each
 	const mealIds = meals.map((m) => m.id);
-	const allTags = await d1
-		.select({
-			mealId: mealTag.mealId,
-			tag: mealTag.tag,
-		})
-		.from(mealTag)
-		.where(inArray(mealTag.mealId, mealIds));
+	const [allTags, allIngredients] = await Promise.all([
+		d1
+			.select({
+				mealId: mealTag.mealId,
+				tag: mealTag.tag,
+			})
+			.from(mealTag)
+			.where(inArray(mealTag.mealId, mealIds)),
+		d1
+			.select()
+			.from(mealIngredient)
+			.where(inArray(mealIngredient.mealId, mealIds))
+			.orderBy(mealIngredient.orderIndex),
+	]);
 
 	// Group tags by meal ID
 	const tagsByMealId = new Map<string, string[]>();
@@ -65,10 +72,22 @@ export async function getMeals(
 		tagsByMealId.set(t.mealId, existing);
 	}
 
-	// Return meals with tags attached
+	// Group ingredients by meal ID
+	const ingredientsByMealId = new Map<
+		string,
+		(typeof mealIngredient.$inferSelect)[]
+	>();
+	for (const ing of allIngredients) {
+		const existing = ingredientsByMealId.get(ing.mealId) || [];
+		existing.push(ing);
+		ingredientsByMealId.set(ing.mealId, existing);
+	}
+
+	// Return meals with tags and ingredients attached
 	return meals.map((m) => ({
 		...m,
 		tags: tagsByMealId.get(m.id) || [],
+		ingredients: ingredientsByMealId.get(m.id) || [],
 	}));
 }
 

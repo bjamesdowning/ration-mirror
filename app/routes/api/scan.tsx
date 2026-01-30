@@ -70,6 +70,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const arrayBuffer = await imageFile.arrayBuffer();
+		const uint8Array = new Uint8Array(arrayBuffer);
+		const imageArray = [...uint8Array];
 
 		// 6. Run AI Inference
 		// 6. Run AI Inference
@@ -99,21 +101,10 @@ Rules:
 `;
 
 			const response = await context.cloudflare.env.AI.run(
-				"@cf/mistralai/mistral-small-3.1-24b-instruct",
+				"@cf/llava-hf/llava-1.5-7b-hf",
 				{
-					messages: [
-						{
-							role: "user",
-							content: [
-								{ type: "text", text: prompt },
-								{
-									type: "image",
-									image: new Uint8Array(arrayBuffer), // Mistral expects Uint8Array or base64
-								},
-							],
-						},
-					],
-					max_tokens: 32768, // High limit (32k) to allow for very long receipts, well within 128k context
+					prompt: prompt,
+					image: imageArray, // LLaVA expects array of integers
 				},
 			);
 

@@ -169,6 +169,8 @@ Generate 3 creative meal options I can cook right now.`;
 
 		// biome-ignore lint/suspicious/noExplicitAny: Worker AI response type
 		const aiData = response as any;
+		console.log("DEBUG: Raw AI Response:", JSON.stringify(aiData, null, 2));
+
 		let recipes: AIResponse["recipes"] = [];
 
 		try {
@@ -176,6 +178,8 @@ Generate 3 creative meal options I can cook right now.`;
 			const parsed = typeof aiData === "string" ? JSON.parse(aiData) : aiData;
 			// If wrapped in 'response', unwraps it
 			const actualData = parsed.response ? JSON.parse(parsed.response) : parsed;
+
+			console.log("DEBUG: Parsed Data:", JSON.stringify(actualData, null, 2));
 
 			if (actualData && Array.isArray(actualData.recipes)) {
 				recipes = actualData.recipes;
@@ -185,13 +189,13 @@ Generate 3 creative meal options I can cook right now.`;
 			}
 		} catch (e) {
 			console.error("Failed to parse AI response", e);
+			console.error("Raw data causing failure:", aiData);
 			throw data(
 				{ error: "AI generation failed due to formatting error." },
 				{ status: 500 },
 			);
 		}
 
-		// 7. Hallucination Guard / Verification & Remapping
 		const verifiedRecipes = recipes
 			.map((recipe) => {
 				const missingIngredients: string[] = [];
@@ -251,7 +255,11 @@ Generate 3 creative meal options I can cook right now.`;
 		return { success: true, recipes: verifiedRecipes };
 	} catch (error) {
 		console.error("Analysis failed:", error);
-		if (error instanceof Response) throw error;
+		if (error instanceof Response) {
+			console.error("Caught Response Error Status:", error.status);
+			// We won't try to read body to avoid consumption issues, just rethrow
+			throw error;
+		}
 		throw data({ error: "Internal generation error" }, { status: 500 });
 	}
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import type { meal } from "~/db/schema";
@@ -31,6 +31,7 @@ interface MealCardProps {
 
 export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
 	const fetcher = useFetcher();
+	const navigate = useNavigate();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 
@@ -62,7 +63,7 @@ export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
 				actions={[
 					{
 						label: "View",
-						onClick: () => setIsEditing(true),
+						onClick: () => navigate(`/dashboard/meals/${meal.id}`),
 					},
 					{
 						label: "Edit",

@@ -72,6 +72,13 @@ export function MealEditModal({
 					</button>
 				</div>
 
+				{(fetcher.data as { error?: string })?.error && (
+					<div className="bg-danger/10 text-danger px-4 py-3 rounded-xl mb-6 text-sm flex items-center gap-2">
+						<span className="text-lg">⚠️</span>
+						{(fetcher.data as { error?: string }).error}
+					</div>
+				)}
+
 				<MealBuilder
 					availableIngredients={availableIngredients}
 					defaultValue={defaultValues}

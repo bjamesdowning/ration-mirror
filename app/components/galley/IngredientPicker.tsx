@@ -61,7 +61,7 @@ export function IngredientPicker({
 			{
 				localId: crypto.randomUUID(),
 				ingredientName: "",
-				quantity: 0,
+				quantity: 1,
 				unit: "unit",
 				inventoryId: null,
 				isOptional: false,

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { deleteGroceryItem, updateGroceryItem } from "~/lib/grocery.server";
 import { GroceryItemUpdateSchema } from "~/lib/schemas/grocery";
@@ -9,7 +9,10 @@ import { GroceryItemUpdateSchema } from "~/lib/schemas/grocery";
  * DELETE /api/grocery-lists/:id/items/:itemId - Remove grocery item
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const {
+		session: { user },
+		groupId,
+	} = await requireActiveGroup(context, request);
 	const listId = params.id;
 	const itemId = params.itemId;
 
@@ -23,7 +26,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 			const input = GroceryItemUpdateSchema.parse(json);
 			const item = await updateGroceryItem(
 				context.cloudflare.env.DB,
-				user.id,
+				groupId,
 				listId,
 				itemId,
 				input,
@@ -34,7 +37,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		if (request.method === "DELETE") {
 			await deleteGroceryItem(
 				context.cloudflare.env.DB,
-				user.id,
+				groupId,
 				listId,
 				itemId,
 			);

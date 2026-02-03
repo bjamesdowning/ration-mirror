@@ -7,6 +7,7 @@ import {
 	meal,
 	mealIngredient,
 } from "../db/schema";
+import { dockGroceryItems } from "./inventory.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -639,8 +640,9 @@ export async function createGroceryListFromAllMeals(
 		});
 
 		const list = await getGroceryList(db, organizationId, listId);
+		if (!list) throw new Error("List creation failed");
 		return {
-			list: list!,
+			list,
 			summary: {
 				addedItems: 0,
 				skippedItems: 0,
@@ -674,8 +676,9 @@ export async function createGroceryListFromAllMeals(
 		});
 
 		const list = await getGroceryList(db, organizationId, listId);
+		if (!list) throw new Error("List creation failed");
 		return {
-			list: list!,
+			list,
 			summary: {
 				addedItems: 0,
 				skippedItems: 0,
@@ -800,65 +803,102 @@ export async function createGroceryListFromAllMeals(
 	}
 
 	const list = await getGroceryList(db, organizationId, listId);
+	if (!list) throw new Error("List retrieval failed");
 
 	return {
-		list: list!, // List was just created/retrieved, safe to assert or handled above
+		list,
 		summary: {
 			addedItems: addedCount,
 			skippedItems: skippedCount,
 			mealsProcessed: meals.length,
-			totalIngredients: ingredientAggregation.size,
+			totalIngredients: allIngredients.length,
 		},
 	};
 }
 
 /**
- * Auto-categorizes an ingredient based on keywords.
+ * Simple keyword-based categorization
  */
 function categorizeIngredient(name: string): string {
 	const lower = name.toLowerCase();
-
-	// Produce
 	if (
-		/apple|banana|orange|tomato|lettuce|carrot|onion|garlic|potato|pepper|fruit|vegetable/.test(
-			lower,
-		)
-	) {
+		lower.includes("chicken") ||
+		lower.includes("beef") ||
+		lower.includes("pork") ||
+		lower.includes("fish") ||
+		lower.includes("meat")
+	)
+		return "protein";
+	if (
+		lower.includes("milk") ||
+		lower.includes("cheese") ||
+		lower.includes("yogurt") ||
+		lower.includes("cream") ||
+		lower.includes("butter")
+	)
+		return "dairy";
+	if (
+		lower.includes("apple") ||
+		lower.includes("banana") ||
+		lower.includes("carrot") ||
+		lower.includes("lettuce") ||
+		lower.includes("onion") ||
+		lower.includes("potato") ||
+		lower.includes("tomato") ||
+		lower.includes("vegetable") ||
+		lower.includes("fruit")
+	)
 		return "produce";
-	}
-
-	// Perishable (dairy, meat, eggs)
 	if (
-		/milk|cheese|yogurt|butter|cream|egg|chicken|beef|pork|fish|salmon|turkey|bacon|sausage/.test(
-			lower,
-		)
-	) {
-		return "perishable";
-	}
-
-	// Frozen
-	if (/frozen|ice cream/.test(lower)) {
-		return "cryo_frozen";
-	}
-
-	// Dry goods
-	if (
-		/rice|pasta|flour|sugar|salt|spice|grain|cereal|oat|quinoa|bread|cookie/.test(
-			lower,
-		)
-	) {
-		return "dry_goods";
-	}
-
-	// Canned
-	if (/canned|can of|jarred/.test(lower)) {
+		lower.includes("bread") ||
+		lower.includes("pasta") ||
+		lower.includes("rice") ||
+		lower.includes("flour") ||
+		lower.includes("oat")
+	)
+		return "grains";
+	if (lower.includes("can") || lower.includes("jar") || lower.includes("sauce"))
 		return "canned";
-	}
-
-	// Liquid
-	if (/water|juice|soda|wine|beer|broth|stock|oil|vinegar|sauce/.test(lower)) {
-		return "liquid";
-	}
-
+	if (lower.includes("frozen") || lower.includes("ice")) return "frozen";
 	return "other";
+}
+
+/**
+ * Docks all purchased items from the list into inventory and removes them from the list.
+ */
+export async function completeGroceryList(
+	db: D1Database,
+	organizationId: string,
+	listId: string,
+) {
+	const d1 = drizzle(db);
+
+	// 1. Get purchased items
+	const purchasedItems = await d1
+		.select()
+		.from(groceryItem)
+		.where(
+			and(eq(groceryItem.listId, listId), eq(groceryItem.isPurchased, true)),
+		);
+
+	if (purchasedItems.length === 0) {
+		return {
+			docked: 0,
+			created: 0,
+			message: "No purchased items to dock",
+		};
+	}
+
+	// 2. Dock them
+	const results = await dockGroceryItems(db, organizationId, purchasedItems);
+
+	// 3. Remove them from the list (cleanup)
+	for (const item of purchasedItems) {
+		await d1.delete(groceryItem).where(eq(groceryItem.id, item.id));
+	}
+
+	return {
+		docked: results.updated + results.created,
+		summary: results,
+	};
 }

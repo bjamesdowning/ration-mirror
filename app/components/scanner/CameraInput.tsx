@@ -135,6 +135,7 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 					const rawItems = (fetcher.data as any).items || [];
 					console.log(`[SCAN] Found ${rawItems.length} items`);
 					const transformedResult: ScanResult = {
+						// biome-ignore lint/suspicious/noExplicitAny: legacy
 						items: rawItems.map((item: any) => ({
 							id: crypto.randomUUID(),
 							name: item.name || "Unknown Item",

@@ -3,7 +3,7 @@ import { requireAuth } from "~/lib/auth.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { getMatchCacheKey, matchMeals } from "~/lib/matching.server";
 
-const CACHE_TTL = 300; // 5 minutes in seconds
+const CACHE_TTL = 0; // Disabled for immediate updates
 
 /**
  * GET /api/meals/match
@@ -61,18 +61,23 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			tag,
 		});
 
-		// Check KV cache first
+		// Check KV cache first (if enabled)
 		const cacheKey = getMatchCacheKey(user.id, query);
-		console.log("[Match API] Cache key:", cacheKey);
 
-		const cached = await context.cloudflare.env.RATION_KV.get(cacheKey, "json");
+		if (CACHE_TTL > 0) {
+			console.log("[Match API] Cache key:", cacheKey);
+			const cached = await context.cloudflare.env.RATION_KV.get(
+				cacheKey,
+				"json",
+			);
 
-		if (cached) {
-			console.log("[Match API] Cache hit");
-			return Response.json({
-				results: cached,
-				cached: true,
-			});
+			if (cached) {
+				console.log("[Match API] Cache hit");
+				return Response.json({
+					results: cached,
+					cached: true,
+				});
+			}
 		}
 
 		console.log("[Match API] Cache miss, performing matching...");
@@ -82,14 +87,17 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 		console.log("[Match API] Match complete, results count:", results.length);
 
-		// Store in KV cache with 5-minute TTL
-		await context.cloudflare.env.RATION_KV.put(
-			cacheKey,
-			JSON.stringify(results),
-			{
-				expirationTtl: CACHE_TTL,
-			},
-		);
+		// Store in KV cache (if enabled)
+		if (CACHE_TTL > 0) {
+			await context.cloudflare.env.RATION_KV.put(
+				cacheKey,
+				JSON.stringify(results),
+				{
+					expirationTtl: CACHE_TTL,
+				},
+			);
+			console.log("[Match API] Results cached");
+		}
 
 		console.log("[Match API] Results cached");
 

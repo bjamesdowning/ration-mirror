@@ -159,38 +159,6 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
-	if (intent === "update-list-generation") {
-		const frequency = formData.get("frequency") as
-			| "off"
-			| "daily"
-			| "weekly"
-			| "custom";
-		const intervalDays = Number(formData.get("intervalDays")) || 7;
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				listGeneration: {
-					...currentSettings.listGeneration,
-					frequency,
-					intervalDays: frequency === "custom" ? intervalDays : undefined,
-					lastGeneratedAt: currentSettings.listGeneration?.lastGeneratedAt,
-				},
-			};
-
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
-		return { success: true };
-	}
-
 	if (intent === "update-default-group") {
 		const defaultGroupId = formData.get("defaultGroupId") as string;
 
@@ -232,9 +200,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const isDeletingGroup =
 		navigation.state === "submitting" &&
 		navigation.formAction === "/api/groups/delete";
-	const isUpdatingAutomation =
-		navigation.state === "submitting" &&
-		navigation.formData?.get("intent") === "update-list-generation";
+
 	const isUpdatingDefaultGroup =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-default-group";
@@ -390,54 +356,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							{settings.expirationAlertDays || 7} days
 						</span>
 						{isUpdatingExpiration && (
-							<span className="text-hyper-green animate-pulse text-sm">
-								Saving...
-							</span>
-						)}
-					</Form>
-				</section>
-
-				{/* Automated Restock */}
-				<section className="glass-panel rounded-xl p-6">
-					<div className="flex justify-between items-start mb-4">
-						<div>
-							<h2 className="text-xl font-bold text-carbon">
-								Automated Restock
-							</h2>
-							<p className="text-sm text-muted">
-								Auto-generate lists based on your supply levels
-							</p>
-						</div>
-					</div>
-
-					<Form method="post" className="space-y-4">
-						<input type="hidden" name="intent" value="update-list-generation" />
-
-						<div className="flex gap-2 p-1 bg-platinum/50 rounded-lg w-fit">
-							{(["off", "daily", "weekly"] as const).map((freq) => (
-								<label
-									key={freq}
-									className={`px-4 py-2 rounded-md text-sm font-medium cursor-pointer transition-all ${
-										settings.listGeneration?.frequency === freq ||
-										(!settings.listGeneration?.frequency && freq === "off")
-											? "bg-white text-carbon shadow-sm"
-											: "text-muted hover:text-carbon"
-									}`}
-								>
-									<input
-										type="radio"
-										name="frequency"
-										value={freq}
-										defaultChecked={settings.listGeneration?.frequency === freq}
-										className="hidden"
-										onChange={(e) => e.target.form?.requestSubmit()}
-									/>
-									{freq.charAt(0).toUpperCase() + freq.slice(1)}
-								</label>
-							))}
-						</div>
-
-						{isUpdatingAutomation && (
 							<span className="text-hyper-green animate-pulse text-sm">
 								Saving...
 							</span>

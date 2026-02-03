@@ -1,10 +1,5 @@
-import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
 import type { groceryItem, groceryList } from "~/db/schema";
-import { AddItemForm } from "./AddItemForm";
-import { ExportMenu } from "./ExportMenu";
 import { GroceryItem } from "./GroceryItem";
-import { ShareModal } from "./ShareModal";
 
 type GroceryListWithItems = typeof groceryList.$inferSelect & {
 	items: (typeof groceryItem.$inferSelect)[];
@@ -16,36 +11,6 @@ interface GroceryListProps {
 }
 
 export function GroceryList({ list, onRefresh }: GroceryListProps) {
-	const [showShareModal, setShowShareModal] = useState(false);
-	const dockingFetcher = useFetcher<{ docked: number; message?: string }>();
-	const [showDockSuccess, setShowDockSuccess] = useState(false);
-
-	// Show success message when docking completes
-	useEffect(() => {
-		if (dockingFetcher.data?.docked) {
-			setShowDockSuccess(true);
-			const timer = setTimeout(() => setShowDockSuccess(false), 4000);
-			return () => clearTimeout(timer);
-		}
-	}, [dockingFetcher.data]);
-
-	const isDocking = dockingFetcher.state !== "idle";
-	const purchased = list.items.filter((i) => i.isPurchased).length;
-	const total = list.items.length;
-
-	// Handler for Docking
-	const handleDock = () => {
-		if (
-			!confirm(`Ready to transfer ${purchased} purchased items to your pantry?`)
-		)
-			return;
-		dockingFetcher.submit(null, {
-			method: "POST",
-			action: `/api/grocery-lists/${list.id}/complete`,
-		});
-		if (onRefresh) onRefresh();
-	};
-
 	// Group items by category
 	const groupedItems = list.items.reduce<
 		Record<string, (typeof groceryItem.$inferSelect)[]>
@@ -81,74 +46,8 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 		(a, b) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b),
 	);
 
-	const progress = total > 0 ? Math.round((purchased / total) * 100) : 0;
-
 	return (
 		<div className="space-y-6">
-			{/* Header Actions */}
-			<div className="flex flex-wrap items-center justify-between gap-4">
-				{/* Progress Bar */}
-				<div className="flex items-center gap-4">
-					<div className="text-label text-muted">Progress:</div>
-					<div className="w-32 h-2 bg-platinum rounded-full overflow-hidden">
-						<div
-							className="h-full bg-hyper-green transition-all duration-300"
-							style={{ width: `${progress}%` }}
-						/>
-					</div>
-					<div className="text-sm text-data text-carbon">
-						{purchased}/{total}
-					</div>
-				</div>
-
-				{/* Actions */}
-				<div className="flex items-center gap-2">
-					{/* Docking Button */}
-					{purchased > 0 && (
-						<button
-							type="button"
-							onClick={handleDock}
-							disabled={isDocking}
-							className="flex items-center gap-2 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg hover:shadow-glow-sm transition-all disabled:opacity-50 animate-fade-in"
-						>
-							{isDocking ? (
-								<span className="animate-pulse">Docking...</span>
-							) : (
-								<>
-									<span>Dock Cargo</span>
-								</>
-							)}
-						</button>
-					)}
-
-					<button
-						type="button"
-						onClick={() => setShowShareModal(true)}
-						className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors"
-					>
-						<svg
-							aria-hidden="true"
-							className="w-4 h-4"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-							/>
-						</svg>
-						Share
-					</button>
-					<ExportMenu listId={list.id} />
-				</div>
-			</div>
-
-			{/* Add Item Form */}
-			<AddItemForm listId={list.id} onAdd={onRefresh} />
-
 			{/* Items List */}
 			{list.items.length === 0 ? (
 				<div className="bg-platinum/50 rounded-xl p-8 text-center">
@@ -187,27 +86,6 @@ export function GroceryList({ list, onRefresh }: GroceryListProps) {
 							</section>
 						);
 					})}
-				</div>
-			)}
-
-			{/* Share Modal */}
-			{showShareModal && (
-				<ShareModal
-					listId={list.id}
-					existingShareToken={list.shareToken}
-					onClose={() => setShowShareModal(false)}
-				/>
-			)}
-			{/* Success Toast */}
-			{showDockSuccess && (
-				<div className="fixed bottom-8 right-8 z-50 glass-panel bg-carbon/90 border border-hyper-green text-hyper-green px-6 py-4 rounded-xl shadow-2xl animate-slide-up flex items-center gap-3">
-					<span className="text-2xl">🚀</span>
-					<div>
-						<h4 className="font-bold text-white">Cargo Docked!</h4>
-						<p className="text-sm text-gray-300">
-							{dockingFetcher.data?.docked} items transferred to pantry.
-						</p>
-					</div>
 				</div>
 			)}
 		</div>

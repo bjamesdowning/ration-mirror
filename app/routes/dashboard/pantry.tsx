@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { CameraInput } from "~/components/scanner/CameraInput";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -201,26 +202,23 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 
 				{/* Empty State */}
 				{filteredInventory.length === 0 && (
-					<div className="text-center py-16 glass-panel rounded-2xl">
-						<div className="text-6xl mb-6">🥫</div>
-						<h3 className="text-display text-xl text-carbon mb-2">
-							Your Pantry is Empty
-						</h3>
-						<p className="text-sm text-muted mb-6 max-w-md mx-auto">
-							Scan a receipt or add items manually to start tracking your
-							ingredients.
-						</p>
-						<div className="flex flex-wrap justify-center gap-4">
-							<CameraInput onScanComplete={handleScanComplete} />
-							<button
-								type="button"
-								onClick={() => setShowQuickAdd(true)}
-								className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
-							>
-								Add First Item
-							</button>
-						</div>
-					</div>
+					<EmptyPanel
+						icon="🥫"
+						title="Your Pantry is Empty"
+						description="Scan a receipt or add items manually to start tracking your ingredients."
+						action={
+							<>
+								<CameraInput onScanComplete={handleScanComplete} />
+								<button
+									type="button"
+									onClick={() => setShowQuickAdd(true)}
+									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+								>
+									Add First Item
+								</button>
+							</>
+						}
+					/>
 				)}
 
 				{/* Inventory Grid */}

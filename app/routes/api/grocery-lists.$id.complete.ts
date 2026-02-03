@@ -13,6 +13,7 @@ import { dockGroceryItems } from "~/lib/inventory.server";
 export async function action({ request, context, params }: ActionFunctionArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
+	console.log(`[DOCK] Request for list: ${listId}, Group: ${groupId}`);
 
 	if (!listId) {
 		throw new Response("List ID required", { status: 400 });
@@ -32,6 +33,8 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 			.where(
 				and(eq(groceryItem.listId, listId), eq(groceryItem.isPurchased, true)),
 			);
+
+		console.log(`[DOCK] Found ${purchasedItems.length} purchased items`);
 
 		if (purchasedItems.length === 0) {
 			return {
@@ -63,6 +66,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 			summary: results,
 		};
 	} catch (e) {
+		console.error("[DOCK] Error:", e);
 		return handleApiError(e);
 	}
 }

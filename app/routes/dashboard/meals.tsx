@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
@@ -166,37 +167,33 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 				{/* Empty State */}
 				{filteredMeals.length === 0 && !searchQuery && (
-					<div className="text-center py-16 glass-panel rounded-2xl">
-						<div className="text-6xl mb-6">🍽️</div>
-						<h3 className="text-display text-xl text-carbon mb-2">
-							No Recipes Yet
-						</h3>
-						<p className="text-sm text-muted mb-6 max-w-md mx-auto">
-							Create your first meal or let AI generate suggestions based on
-							your pantry inventory.
-						</p>
-						<div className="flex flex-wrap justify-center gap-4">
-							<GenerateMealButton />
-							<button
-								type="button"
-								onClick={() => setShowQuickAdd(true)}
-								className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
-							>
-								Create Recipe
-							</button>
-						</div>
-					</div>
+					<EmptyPanel
+						icon="🍽️"
+						title="No Recipes Yet"
+						description="Create your first meal or let AI generate suggestions based on your pantry inventory."
+						action={
+							<>
+								<GenerateMealButton />
+								<button
+									type="button"
+									onClick={() => setShowQuickAdd(true)}
+									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+								>
+									Create Recipe
+								</button>
+							</>
+						}
+					/>
 				)}
 
 				{/* No Search Results */}
 				{filteredMeals.length === 0 && searchQuery && (
-					<div className="text-center py-12 glass-panel rounded-2xl">
-						<div className="text-4xl mb-4">🔍</div>
-						<h3 className="text-lg text-carbon mb-2">No Results</h3>
-						<p className="text-sm text-muted">
-							No meals found matching "{searchQuery}"
-						</p>
-					</div>
+					<EmptyPanel
+						icon="🔍"
+						title="No Results"
+						description={`No meals found matching "${searchQuery}"`}
+						className="py-12"
+					/>
 				)}
 
 				{/* Meal Grid */}

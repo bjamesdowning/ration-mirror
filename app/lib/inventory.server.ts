@@ -2,7 +2,7 @@
 import { and, asc, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { inventory } from "../db/schema";
+import { type groceryItem, inventory, ledger } from "../db/schema";
 import { INVENTORY_CATEGORIES } from "./inventory";
 
 // --- Validation Schemas ---
@@ -268,4 +268,102 @@ export async function getInventoryStats(
 		expiringCount,
 		expiredCount,
 	};
+}
+
+/**
+ * Docks purchased grocery items into the inventory.
+ * - Matches existing items by name and unit (case-insensitive).
+ * - Increments quantity for matches.
+ * - Creates new items for non-matches.
+ * - Logs to ledger.
+ */
+export async function dockGroceryItems(
+	db: D1Database,
+	organizationId: string,
+	items: (typeof groceryItem.$inferSelect)[],
+) {
+	const d1 = drizzle(db);
+	const results = {
+		updated: 0,
+		created: 0,
+	};
+
+	// 1. Get current inventory for matching
+	const currentInventory = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+
+	// Create map for case-insensitive matching: "name|unit" -> InventoryItem
+	const inventoryMap = new Map<string, typeof inventory.$inferSelect>();
+	for (const item of currentInventory) {
+		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
+		inventoryMap.set(key, item);
+	}
+
+	// 2. Process each item (sequential for now to keep logic simple, could be batched)
+	for (const item of items) {
+		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
+		const existing = inventoryMap.get(key);
+
+		if (existing) {
+			// Update existing
+			await d1
+				.update(inventory)
+				.set({
+					quantity: existing.quantity + item.quantity,
+					updatedAt: new Date(),
+				})
+				.where(eq(inventory.id, existing.id));
+
+			// Update local map in case duplicates in list
+			existing.quantity += item.quantity;
+			results.updated++;
+		} else {
+			// Create new
+			const newItemId = crypto.randomUUID();
+			const now = new Date();
+
+			// Default expiry logic roughly inferred from category could go here
+			// For now, no default expiry
+
+			await d1.insert(inventory).values({
+				id: newItemId,
+				organizationId,
+				name: item.name,
+				quantity: item.quantity,
+				unit: item.unit,
+				category: item.category,
+				status: "stable",
+				tags: [], // No tags from grocery list currently
+				createdAt: now,
+				updatedAt: now,
+			});
+
+			// Add to map for subsequent items in same batch
+			inventoryMap.set(key, {
+				id: newItemId,
+				organizationId,
+				name: item.name,
+				quantity: item.quantity,
+				unit: item.unit,
+				category: item.category,
+				status: "stable",
+				tags: "[]",
+				expiresAt: null,
+				createdAt: now,
+				updatedAt: now,
+			});
+			results.created++;
+		}
+
+		// Log to ledger
+		await d1.insert(ledger).values({
+			organizationId,
+			amount: 0, // No monetary tracking yet
+			reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
+		});
+	}
+
+	return results;
 }

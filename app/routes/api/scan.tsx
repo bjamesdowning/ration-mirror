@@ -125,10 +125,11 @@ canned beans|2|can|null`;
 			// 2. Inconsistent newlines
 			// 3. Extra text around the items
 			// Pattern: name | quantity | unit | expiry
-			const itemRegex = /([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
+			const itemRegex =
+				/([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
 
 			const parsedItems = [];
-			let match;
+			let match: RegExpExecArray | null;
 
 			// biome-ignore lint/suspicious/noAssignInExpressions: standard regex loop
 			while ((match = itemRegex.exec(rawText)) !== null) {

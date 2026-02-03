@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useMemo, useState } from "react";
 // import { useFetcher } from "react-router"; // Unused import removed
 import { IngestForm } from "~/components/cargo/IngestForm";
@@ -121,7 +120,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 
 	// Local Search Logic
 	const filteredInventory = useMemo(() => {
-		let items = initialInventory;
+		let items: typeof initialInventory = initialInventory;
 
 		// Filter by search query
 		if (searchQuery.trim()) {
@@ -129,7 +128,9 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			items = items.filter(
 				(item) =>
 					item.name.toLowerCase().includes(query) ||
-					item.tags?.some((tag) => tag.toLowerCase().includes(query)),
+					(item.tags as string[] | undefined)?.some((tag: string) =>
+						tag.toLowerCase().includes(query),
+					),
 			);
 		}
 

@@ -35,7 +35,7 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 
 			const formData = new FormData();
 			// Send as jpeg with original name (but forced .jpg extension)
-			const filename = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+			const filename = `${file.name.replace(/\.[^/.]+$/, "")}.jpg`;
 			formData.append("image", resizedBlob, filename);
 
 			fetcher.submit(formData, {

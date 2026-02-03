@@ -6,7 +6,6 @@ const handleRequest = createRequestHandler({ build: build as any });
 
 export default {
 	fetch(request, env, ctx) {
-		console.log("[Worker] Env Keys:", Object.keys(env));
 		const context = {
 			request,
 			env,

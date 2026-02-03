@@ -1,9 +1,9 @@
-// @ts-nocheck
 import type { Route } from "./+types/home";
 import "../../load-context"; // Ensure augmentation is loaded
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { createAuth } from "~/lib/auth.server";
+import { APP_VERSION } from "~/lib/version";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const auth = createAuth(context.cloudflare.env);
@@ -42,8 +42,8 @@ export default function Home() {
 			{/* Under Construction Banner */}
 			<div className="relative z-50 bg-hyper-green/10 border-b border-hyper-green/20 p-2 text-center">
 				<p className="text-xs uppercase tracking-wider font-bold text-carbon">
-					<span className="text-hyper-green">⚡</span> Early Access {" // "}
-					v0.9.4-ALPHA {" // "} Some features in development
+					<span className="text-hyper-green">⚡</span> Early Access {" // "}v
+					{APP_VERSION} {" // "} Some features in development
 				</p>
 			</div>
 
@@ -218,7 +218,7 @@ export default function Home() {
 			<footer className="relative z-20 border-t border-carbon/10 bg-ceramic/90 backdrop-blur p-4 mt-12">
 				<div className="flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto text-xs text-muted gap-4">
 					<div className="flex gap-6">
-						<span>Build v0.9.4-ALPHA</span>
+						<span>Build v{APP_VERSION}</span>
 						<Link
 							to="/legal/privacy"
 							className="hover:text-hyper-green transition-colors"

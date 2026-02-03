@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
@@ -10,14 +10,14 @@ import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.$id.edit";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/dashboard/meals");
 
-	const meal = await getMeal(context.cloudflare.env.DB, user.id, id);
+	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw redirect("/dashboard/meals");
 
-	const inventory = await getInventory(context.cloudflare.env.DB, user.id);
+	const inventory = await getInventory(context.cloudflare.env.DB, groupId);
 
 	// Sanitize for frontend types (null -> undefined)
 	const sanitizedMeal = {
@@ -43,7 +43,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/dashboard/meals");
 
@@ -59,7 +59,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		}
 
 		const input = MealSchema.parse(inputData);
-		await updateMeal(context.cloudflare.env.DB, user.id, id, input);
+		await updateMeal(context.cloudflare.env.DB, groupId, id, input);
 
 		return redirect(`/dashboard/meals/${id}`);
 	} catch (e) {

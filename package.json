@@ -1,5 +1,6 @@
 {
 	"name": "ration",
+	"version": "0.9.4-ALPHA",
 	"private": true,
 	"type": "module",
 	"scripts": {

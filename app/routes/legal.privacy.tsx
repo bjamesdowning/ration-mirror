@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
@@ -13,7 +12,7 @@ export default function PrivacyPolicy() {
 		<>
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: {new Date().toLocaleDateString()}
+				Last Updated: February 3, 2026
 			</p>
 
 			<h2>1. Introduction</h2>

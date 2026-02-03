@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Link, Outlet } from "react-router";
 
 export default function LegalLayout() {

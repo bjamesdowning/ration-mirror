@@ -1,6 +1,6 @@
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { data } from "~/lib/response";
 import { CREDIT_PACKS, getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
 

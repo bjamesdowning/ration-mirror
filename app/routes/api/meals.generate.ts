@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { data } from "react-router";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { data } from "~/lib/response";
 import type { Route } from "./+types/meals.generate";
 
 const GENERATE_COST = 5;

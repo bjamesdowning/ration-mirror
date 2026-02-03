@@ -1,6 +1,6 @@
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { addItem } from "~/lib/inventory.server";
-import { data } from "~/lib/response";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/inventory.batch";
 

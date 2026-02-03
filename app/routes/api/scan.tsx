@@ -1,7 +1,7 @@
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { data } from "~/lib/response";
 import type { Route } from "./+types/scan";
 
 // Cost for a visual scan

@@ -83,63 +83,6 @@ export async function getSupplyList(db: D1Database, organizationId: string) {
 }
 
 /**
- * @deprecated Use getSupplyList instead
- * Retrieves all grocery lists for an organization with their items.
- */
-export async function getGroceryLists(db: D1Database, organizationId: string) {
-	const d1 = drizzle(db);
-
-	// First get all lists for this organization
-	const lists = await d1
-		.select()
-		.from(groceryList)
-		.where(eq(groceryList.organizationId, organizationId))
-		.orderBy(desc(groceryList.updatedAt));
-
-	if (lists.length === 0) {
-		return [];
-	}
-
-	// Then get all items for those lists
-	const listIds = lists.map((l) => l.id);
-	const allItems = await d1
-		.select()
-		.from(groceryItem)
-		.where(
-			listIds.length === 1
-				? eq(groceryItem.listId, listIds[0])
-				: inArray(groceryItem.listId, listIds),
-		);
-
-	// Group items by list ID
-	const itemsByListId = new Map<string, (typeof groceryItem.$inferSelect)[]>();
-	for (const item of allItems) {
-		if (!itemsByListId.has(item.listId)) {
-			itemsByListId.set(item.listId, []);
-		}
-		itemsByListId.get(item.listId)?.push(item);
-	}
-
-	return lists.map((list) => ({
-		...list,
-		items: itemsByListId.get(list.id) || [],
-	}));
-}
-
-/**
- * @deprecated Use getSupplyList instead
- * Retrieves the most recently updated grocery list for an organization.
- * Returns null if the organization has no grocery lists.
- */
-export async function getLatestGroceryList(
-	db: D1Database,
-	organizationId: string,
-) {
-	const lists = await getGroceryLists(db, organizationId);
-	return lists.length > 0 ? lists[0] : null;
-}
-
-/**
  * Retrieves a single grocery list by ID with all its items.
  */
 export async function getGroceryList(

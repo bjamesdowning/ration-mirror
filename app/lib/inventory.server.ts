@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { and, asc, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
@@ -69,12 +68,6 @@ export async function getInventory(db: D1Database, organizationId: string) {
 
 /**
  * Add a new item to the organization's inventory.
- */
-
-// ... (keep existing imports)
-
-/**
- * Add a new item to the organization's inventory.
  * Triggers an asynchronous vector embedding update.
  */
 export async function addItem(
@@ -137,10 +130,13 @@ export async function updateItem(
 		data.tags !== undefined ? data.tags : normalizeTags(existing.tags);
 	const nextExpiresAt =
 		data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt;
-	const nextCategory = data.category ?? existing.category ?? "other";
+	const nextCategory =
+		data.category ??
+		(existing.category as InventoryItemInput["category"]) ??
+		"other";
 	const nextName = data.name ?? existing.name;
 	const nextQuantity = data.quantity ?? existing.quantity;
-	const nextUnit = data.unit ?? existing.unit;
+	const nextUnit = data.unit ?? (existing.unit as InventoryItemInput["unit"]);
 	const nextStatus = calculateInventoryStatus(nextExpiresAt);
 	const nextData: InventoryItemInput = {
 		name: nextName,

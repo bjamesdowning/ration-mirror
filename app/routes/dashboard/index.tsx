@@ -11,7 +11,7 @@ import {
 } from "~/components/icons/DashboardIcons";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getLatestGroceryList } from "~/lib/grocery.server";
+import { getSupplyList } from "~/lib/grocery.server";
 import { getExpiringItems, getInventoryStats } from "~/lib/inventory.server";
 import { matchMeals } from "~/lib/matching.server";
 import type { Route } from "./+types/index";
@@ -42,7 +42,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		await Promise.all([
 			getExpiringItems(db, groupId, expirationAlertDays, 10),
 			getInventoryStats(db, groupId),
-			getLatestGroceryList(db, groupId),
+			getSupplyList(db, groupId),
 			matchMeals(db, groupId, { mode: "delta", minMatch: 50, limit: 6 }),
 		]);
 

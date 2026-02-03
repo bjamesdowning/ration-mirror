@@ -1,10 +1,9 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { ActionFunctionArgs } from "react-router";
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
-import { data } from "~/lib/response";
 
 export async function action({ request, context }: ActionFunctionArgs) {
 	const { user, session } = await requireAuth(context, request);

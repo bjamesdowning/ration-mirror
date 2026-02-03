@@ -1,4 +1,3 @@
-// @ts-nocheck
 import Stripe from "stripe";
 
 /**
@@ -10,7 +9,7 @@ export function getStripe(env: Env): Stripe {
 	}
 
 	return new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: "2024-12-18.acacia",
+		apiVersion: "2025-12-15.clover",
 		typescript: true,
 		httpClient: Stripe.createFetchHttpClient(),
 	});

@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { data } from "~/lib/response";
 import type { Route } from "./+types/groups.invitations.create";
 
 const MAX_ACTIVE_INVITATIONS_PER_GROUP = 10;

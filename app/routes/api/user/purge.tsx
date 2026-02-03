@@ -1,9 +1,8 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
-import { data } from "~/lib/response";
 import type { Route } from "./+types/purge";
 
 export async function action({ request, context }: Route.ActionArgs) {

@@ -1,9 +1,9 @@
 import { and, desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { data } from "react-router";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { data } from "~/lib/response";
 import type { Route } from "./+types/search";
 
 export async function loader({ request, context }: Route.LoaderArgs) {

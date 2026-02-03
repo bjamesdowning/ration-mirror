@@ -56,6 +56,26 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:generate_meal",
 	},
+	group_create: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 5, // Very restrictive to prevent spam
+		keyPrefix: "rate:group_create",
+	},
+	group_invite: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 10,
+		keyPrefix: "rate:group_invite",
+	},
+	inventory_batch: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20,
+		keyPrefix: "rate:inventory_batch",
+	},
+	automation: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 10,
+		keyPrefix: "rate:automation",
+	},
 };
 
 /**

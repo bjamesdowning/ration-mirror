@@ -1,10 +1,33 @@
-import { redirect } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { data, redirect } from "react-router";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { createGroceryListFromAllMeals } from "~/lib/grocery.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/trigger";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId, session } = await requireActiveGroup(context, request);
+
+	// Rate limiting to prevent automation spam
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"automation",
+		session.user.id,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many automation requests. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
 
 	const dateFormatter = new Intl.DateTimeFormat("en-US", {
 		weekday: "short",
@@ -18,7 +41,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	await createGroceryListFromAllMeals(
 		context.cloudflare.env.DB,
-		user.id,
+		groupId,
 		listName,
 	);
 

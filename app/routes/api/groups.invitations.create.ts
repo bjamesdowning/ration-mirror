@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.invitations.create";
 
 const MAX_ACTIVE_INVITATIONS_PER_GROUP = 10;
@@ -11,6 +12,28 @@ const INVITATION_EXPIRY_DAYS = 7;
 export async function action({ request, context }: Route.ActionArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);
 	const userId = session.user.id;
+
+	// Rate limiting to prevent invitation spam
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"group_invite",
+		userId,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many invitation requests. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
 
 	const env = context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });

@@ -12,9 +12,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const env = context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
-	console.log(
-		`[Purge] Request to delete user account: ${userId} (${user.email})`,
-	);
+	console.log(`[Purge] Request to delete user account: ${userId}`);
 
 	try {
 		// D1 does not support traditional SQL transactions (BEGIN/COMMIT) via Drizzle's db.transaction.

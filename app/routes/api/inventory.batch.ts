@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { addItem } from "~/lib/inventory.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/inventory.batch";
 
@@ -8,7 +9,29 @@ import type { Route } from "./+types/inventory.batch";
  * Batch add multiple items to inventory from scan results
  */
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { groupId, session } = await requireActiveGroup(context, request);
+
+	// Rate limiting to prevent DB overload
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"inventory_batch",
+		session.user.id,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many batch requests. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
 
 	try {
 		const body = await request.json();

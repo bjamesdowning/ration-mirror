@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { getSupplyList } from "~/lib/grocery.server";
 
@@ -7,9 +7,9 @@ import { getSupplyList } from "~/lib/grocery.server";
  * GET /api/grocery-lists - Get the singleton Supply list
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 
-	const list = await getSupplyList(context.cloudflare.env.DB, user.id);
+	const list = await getSupplyList(context.cloudflare.env.DB, groupId);
 	return { list };
 }
 
@@ -17,7 +17,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
  * POST /api/grocery-lists - Ensure the Supply list exists (Idempotent)
  */
 export async function action({ request, context }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 
 	if (request.method !== "POST") {
 		throw new Response("Method not allowed", { status: 405 });
@@ -25,7 +25,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 	try {
 		// We ignore the input name, as "Supply" is enforced
-		const list = await getSupplyList(context.cloudflare.env.DB, user.id);
+		const list = await getSupplyList(context.cloudflare.env.DB, groupId);
 		return { list };
 	} catch (e) {
 		return handleApiError(e);

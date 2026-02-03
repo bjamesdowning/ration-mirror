@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	exportGroceryListAsMarkdown,
 	exportGroceryListAsText,
@@ -12,14 +12,14 @@ import { getGroceryList } from "~/lib/grocery.server";
  *   - format: 'text' | 'markdown' (default: 'text')
  */
 export async function loader({ request, context, params }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
 		throw new Response("List ID required", { status: 400 });
 	}
 
-	const list = await getGroceryList(context.cloudflare.env.DB, user.id, listId);
+	const list = await getGroceryList(context.cloudflare.env.DB, groupId, listId);
 
 	if (!list) {
 		throw new Response("Grocery list not found", { status: 404 });

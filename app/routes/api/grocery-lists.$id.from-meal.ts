@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { addItemsFromMeal } from "~/lib/grocery.server";
 import { AddFromMealSchema } from "~/lib/schemas/grocery";
@@ -8,7 +8,7 @@ import { AddFromMealSchema } from "~/lib/schemas/grocery";
  * POST /api/grocery-lists/:id/from-meal - Add missing meal ingredients to grocery list
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
@@ -24,7 +24,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		const { mealId } = AddFromMealSchema.parse(json);
 		const result = await addItemsFromMeal(
 			context.cloudflare.env.DB,
-			user.id,
+			groupId,
 			listId,
 			mealId,
 		);

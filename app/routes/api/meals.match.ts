@@ -1,9 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
-import { getMatchCacheKey, matchMeals } from "~/lib/matching.server";
-
-const CACHE_TTL = 0; // Disabled for immediate updates
+import { matchMeals } from "~/lib/matching.server";
 
 /**
  * GET /api/meals/match
@@ -17,7 +15,7 @@ const CACHE_TTL = 0; // Disabled for immediate updates
  * - tag: string, optional meal tag filter
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 
 	// Parse query parameters
@@ -54,73 +52,31 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	try {
 		console.log("[Match API] Starting match request:", {
-			userId: user.id,
+			groupId,
 			mode,
 			minMatch,
 			limit,
 			tag,
 		});
 
-		// Check KV cache first (if enabled)
-		const cacheKey = getMatchCacheKey(user.id, query);
-
-		if (CACHE_TTL > 0) {
-			console.log("[Match API] Cache key:", cacheKey);
-			const cached = await context.cloudflare.env.RATION_KV.get(
-				cacheKey,
-				"json",
-			);
-
-			if (cached) {
-				console.log("[Match API] Cache hit");
-				return Response.json({
-					results: cached,
-					cached: true,
-				});
-			}
-		}
-
-		console.log("[Match API] Cache miss, performing matching...");
-
 		// Perform matching
-		const results = await matchMeals(context.cloudflare.env.DB, user.id, query);
+		const results = await matchMeals(context.cloudflare.env.DB, groupId, query);
 
 		console.log("[Match API] Match complete, results count:", results.length);
 
-		// Store in KV cache (if enabled)
-		if (CACHE_TTL > 0) {
-			await context.cloudflare.env.RATION_KV.put(
-				cacheKey,
-				JSON.stringify(results),
-				{
-					expirationTtl: CACHE_TTL,
-				},
-			);
-			console.log("[Match API] Results cached");
-		}
-
-		console.log("[Match API] Results cached");
-
 		return Response.json({
 			results,
-			cached: false,
 		});
 	} catch (error) {
-		console.error("[Match API] Error:", error);
 		console.error(
-			"[Match API] Error stack:",
-			error instanceof Error ? error.stack : "No stack",
+			"[Match API] Error:",
+			error instanceof Error ? error.message : "Unknown error",
 		);
-		console.error("[Match API] Error details:", {
-			message: error instanceof Error ? error.message : String(error),
-			name: error instanceof Error ? error.name : "Unknown",
-		});
 
 		return Response.json(
 			{
 				error: "Failed to match meals",
 				details: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
 			},
 			{ status: 500 },
 		);

@@ -4,23 +4,23 @@ import {
 	type LoaderFunctionArgs,
 } from "react-router";
 import { z } from "zod";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { deleteMeal, getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw new Response("Not Found", { status: 404 });
 
-	const meal = await getMeal(context.cloudflare.env.DB, user.id, id);
+	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw new Response("Not Found", { status: 404 });
 
 	return { meal };
 }
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw new Response("Not Found", { status: 404 });
 
@@ -30,7 +30,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 			const input = MealSchema.parse(json);
 			const meal = await updateMeal(
 				context.cloudflare.env.DB,
-				user.id,
+				groupId,
 				id,
 				input,
 			);
@@ -38,7 +38,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 		}
 
 		if (request.method === "DELETE") {
-			await deleteMeal(context.cloudflare.env.DB, user.id, id);
+			await deleteMeal(context.cloudflare.env.DB, groupId, id);
 			return { success: true };
 		}
 	} catch (e) {

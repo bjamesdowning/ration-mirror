@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import {
 	deleteGroceryList,
@@ -12,14 +12,14 @@ import { GroceryListSchema } from "~/lib/schemas/grocery";
  * GET /api/grocery-lists/:id - Get a single grocery list with items
  */
 export async function loader({ request, context, params }: LoaderFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
 		throw new Response("List ID required", { status: 400 });
 	}
 
-	const list = await getGroceryList(context.cloudflare.env.DB, user.id, listId);
+	const list = await getGroceryList(context.cloudflare.env.DB, groupId, listId);
 
 	if (!list) {
 		throw new Response("Grocery list not found", { status: 404 });
@@ -33,7 +33,7 @@ export async function loader({ request, context, params }: LoaderFunctionArgs) {
  * DELETE /api/grocery-lists/:id - Delete grocery list
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
@@ -46,7 +46,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 			const input = GroceryListSchema.parse(json);
 			const list = await updateGroceryList(
 				context.cloudflare.env.DB,
-				user.id,
+				groupId,
 				listId,
 				input,
 			);
@@ -54,7 +54,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		}
 
 		if (request.method === "DELETE") {
-			await deleteGroceryList(context.cloudflare.env.DB, user.id, listId);
+			await deleteGroceryList(context.cloudflare.env.DB, groupId, listId);
 			return { deleted: true };
 		}
 

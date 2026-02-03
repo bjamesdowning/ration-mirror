@@ -54,7 +54,6 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		// 3. Remove them from the list (cleanup)
 		// We delete them one by one or by ID list to ensure we only delete what we processed
 		if (purchasedItems.length > 0) {
-			const _itemIds = purchasedItems.map((i) => i.id);
 			// Verify batch delete syntax for SQLite/Drizzle, simple loop is safest for D1 limits
 			for (const item of purchasedItems) {
 				await d1.delete(groceryItem).where(eq(groceryItem.id, item.id));

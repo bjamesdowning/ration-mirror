@@ -1,13 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data as json } from "react-router";
 import { z } from "zod";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { InventoryItemSchema, updateItem } from "~/lib/inventory.server";
 
 const PartialInventorySchema = InventoryItemSchema.partial();
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw new Response("Not Found", { status: 404 });
 
@@ -21,7 +21,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
 		const updated = await updateItem(
 			context.cloudflare.env,
-			user.id,
+			groupId,
 			id,
 			input,
 		);

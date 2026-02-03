@@ -4,9 +4,32 @@ import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 
 export async function action({ request, context }: ActionFunctionArgs) {
 	const { user, session } = await requireAuth(context, request);
+
+	// Rate limiting to prevent group spam
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"group_create",
+		user.id,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many group creation requests. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
 
 	const formData = await request.formData();
 	const name = formData.get("name")?.toString();

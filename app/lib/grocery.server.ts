@@ -10,6 +10,7 @@ import {
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+const SUPPLY_LIST_NAME = "Supply";
 
 export interface GroceryItemInput {
 	name: string;
@@ -31,6 +32,57 @@ export interface GenerationSummary {
 }
 
 /**
+ * Ensures a single "Supply" list exists for the organization.
+ * If multiple lists exist, it keeps the most recently updated one, renames it to "Supply",
+ * and deletes the others (per user directive to destroy data if easier).
+ * If no list exists, creates a new one named "Supply".
+ */
+export async function ensureSupplyList(db: D1Database, organizationId: string) {
+	const d1 = drizzle(db);
+
+	// Get all lists, ordered by update time (most recent first)
+	const lists = await d1
+		.select()
+		.from(groceryList)
+		.where(eq(groceryList.organizationId, organizationId))
+		.orderBy(desc(groceryList.updatedAt));
+
+	if (lists.length === 0) {
+		// No lists, create one
+		return createGroceryList(db, organizationId, { name: SUPPLY_LIST_NAME });
+	}
+
+	const [primaryList, ...listsToDelete] = lists;
+
+	// Update primary list name if needed
+	if (primaryList.name !== SUPPLY_LIST_NAME) {
+		await d1
+			.update(groceryList)
+			.set({ name: SUPPLY_LIST_NAME, updatedAt: new Date() })
+			.where(eq(groceryList.id, primaryList.id));
+		primaryList.name = SUPPLY_LIST_NAME;
+	}
+
+	// Delete extra lists if any
+	if (listsToDelete.length > 0) {
+		const idsToDelete = listsToDelete.map((l) => l.id);
+		await d1.delete(groceryList).where(inArray(groceryList.id, idsToDelete));
+	}
+
+	// Return the full list with items
+	return getGroceryList(db, organizationId, primaryList.id);
+}
+
+/**
+ * Retrieves the "Supply" list for an organization.
+ * This is the main entry point for the UI.
+ */
+export async function getSupplyList(db: D1Database, organizationId: string) {
+	return ensureSupplyList(db, organizationId);
+}
+
+/**
+ * @deprecated Use getSupplyList instead
  * Retrieves all grocery lists for an organization with their items.
  */
 export async function getGroceryLists(db: D1Database, organizationId: string) {
@@ -74,6 +126,7 @@ export async function getGroceryLists(db: D1Database, organizationId: string) {
 }
 
 /**
+ * @deprecated Use getSupplyList instead
  * Retrieves the most recently updated grocery list for an organization.
  * Returns null if the organization has no grocery lists.
  */
@@ -599,7 +652,14 @@ export async function createGroceryListFromAllMeals(
 
 	// Get all ingredients from all meals
 	const allIngredients = await d1
-		.select()
+		.select({
+			meal_ingredient: {
+				ingredientName: mealIngredient.ingredientName,
+				quantity: mealIngredient.quantity,
+				unit: mealIngredient.unit,
+				mealId: mealIngredient.mealId,
+			},
+		})
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
 		.where(eq(meal.organizationId, organizationId));
@@ -655,7 +715,9 @@ export async function createGroceryListFromAllMeals(
 		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
 
 		if (ingredientAggregation.has(normalizedName)) {
-			const existing = ingredientAggregation.get(normalizedName)!;
+			const existing = ingredientAggregation.get(normalizedName);
+			if (!existing) continue;
+
 			// Only aggregate if units match
 			if (existing.unit === ingredient.unit) {
 				existing.quantity += ingredient.quantity;
@@ -682,13 +744,14 @@ export async function createGroceryListFromAllMeals(
 		}
 	}
 
-	// Create the grocery list
-	const listId = crypto.randomUUID();
-	await d1.insert(groceryList).values({
-		id: listId,
-		organizationId,
-		name: listName || "Shopping from Meals",
-	});
+	// Use the Supply list instead of creating a new one
+	const supplyList = await ensureSupplyList(db, organizationId);
+
+	if (!supplyList) {
+		throw new Error("Failed to ensure supply list");
+	}
+
+	const listId = supplyList.id;
 
 	let addedCount = 0;
 	let skippedCount = 0;
@@ -739,7 +802,7 @@ export async function createGroceryListFromAllMeals(
 	const list = await getGroceryList(db, organizationId, listId);
 
 	return {
-		list: list!,
+		list: list!, // List was just created/retrieved, safe to assert or handled above
 		summary: {
 			addedItems: addedCount,
 			skippedItems: skippedCount,

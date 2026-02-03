@@ -9,10 +9,7 @@ import { GroceryItemUpdateSchema } from "~/lib/schemas/grocery";
  * DELETE /api/grocery-lists/:id/items/:itemId - Remove grocery item
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const {
-		session: { user },
-		groupId,
-	} = await requireActiveGroup(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 	const itemId = params.itemId;
 

@@ -17,7 +17,7 @@ cache:
   paths:
     - node_modules/
 
-# Install Dependencies
+# Install Dependencies test
 .install_dependencies:
   stage: install
   script:

@@ -61,7 +61,9 @@ export const GroceryItemUpdateSchema = z.object({
 			"other",
 		])
 		.optional(),
-	isPurchased: z.boolean().optional(),
+	isPurchased: z
+		.union([z.boolean(), z.string().transform((val) => val === "true")])
+		.optional(),
 });
 
 export const AddFromMealSchema = z.object({

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { requireAuth } from "~/lib/auth.server";
+import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { generateShareToken, revokeShareToken } from "~/lib/grocery.server";
 
@@ -8,7 +8,7 @@ import { generateShareToken, revokeShareToken } from "~/lib/grocery.server";
  * DELETE /api/grocery-lists/:id/share - Revoke share token
  */
 export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { user } = await requireAuth(context, request);
+	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
@@ -19,7 +19,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		if (request.method === "POST") {
 			const { shareToken, shareExpiresAt } = await generateShareToken(
 				context.cloudflare.env.DB,
-				user.id,
+				groupId,
 				listId,
 			);
 
@@ -31,7 +31,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 		}
 
 		if (request.method === "DELETE") {
-			await revokeShareToken(context.cloudflare.env.DB, user.id, listId);
+			await revokeShareToken(context.cloudflare.env.DB, groupId, listId);
 			return { revoked: true };
 		}
 

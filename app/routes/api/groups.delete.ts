@@ -35,50 +35,54 @@ export async function action({ request, context }: ActionFunctionArgs) {
 	);
 
 	try {
-		// D1 does not support BEGIN/COMMIT via the driver in standard Drizzle transactions.
-		// We execute the commands sequentially. Since this is a final deletion,
-		// partial failure is rare and better than a transaction fail.
+		// Execute all deletions atomically via D1 batch API
+		// This ensures all-or-nothing semantics and reduces latency
+		console.log(
+			`[DeleteGroup] Executing atomic deletion of org ${organizationId}...`,
+		);
 
-		console.log("[DeleteGroup] 1. Clearing active org for all sessions...");
-		await db
-			.update(schema.session)
-			.set({ activeOrganizationId: null })
-			.where(eq(schema.session.activeOrganizationId, organizationId));
+		await db.batch([
+			// 1. Clear active org for all sessions
+			db
+				.update(schema.session)
+				.set({ activeOrganizationId: null })
+				.where(eq(schema.session.activeOrganizationId, organizationId)),
 
-		console.log("[DeleteGroup] 2. Deleting inventory...");
-		await db
-			.delete(schema.inventory)
-			.where(eq(schema.inventory.organizationId, organizationId));
+			// 2. Delete inventory
+			db
+				.delete(schema.inventory)
+				.where(eq(schema.inventory.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 3. Deleting grocery lists...");
-		await db
-			.delete(schema.groceryList)
-			.where(eq(schema.groceryList.organizationId, organizationId));
+			// 3. Delete grocery lists (cascade deletes grocery items)
+			db
+				.delete(schema.groceryList)
+				.where(eq(schema.groceryList.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 4. Deleting meals...");
-		await db
-			.delete(schema.meal)
-			.where(eq(schema.meal.organizationId, organizationId));
+			// 4. Delete meals (cascade deletes meal ingredients and tags)
+			db
+				.delete(schema.meal)
+				.where(eq(schema.meal.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 5. Deleting memberships...");
-		await db
-			.delete(schema.member)
-			.where(eq(schema.member.organizationId, organizationId));
+			// 5. Delete memberships
+			db
+				.delete(schema.member)
+				.where(eq(schema.member.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 6. Deleting ledger entries...");
-		await db
-			.delete(schema.ledger)
-			.where(eq(schema.ledger.organizationId, organizationId));
+			// 6. Delete ledger entries
+			db
+				.delete(schema.ledger)
+				.where(eq(schema.ledger.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 7. Deleting invitations...");
-		await db
-			.delete(schema.invitation)
-			.where(eq(schema.invitation.organizationId, organizationId));
+			// 7. Delete invitations
+			db
+				.delete(schema.invitation)
+				.where(eq(schema.invitation.organizationId, organizationId)),
 
-		console.log("[DeleteGroup] 8. Deleting organization record...");
-		await db
-			.delete(schema.organization)
-			.where(eq(schema.organization.id, organizationId));
+			// 8. Delete organization record
+			db
+				.delete(schema.organization)
+				.where(eq(schema.organization.id, organizationId)),
+		]);
 
 		console.log(`[DeleteGroup] Successfully deleted org ${organizationId}`);
 	} catch (error) {

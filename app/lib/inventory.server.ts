@@ -297,44 +297,47 @@ export async function dockGroceryItems(
 		inventoryMap.set(key, item);
 	}
 
-	// 2. Process each item (sequential for now to keep logic simple, could be batched)
+	// 2. Collect all operations for batching
+	const batchOps = [];
+	const now = new Date();
+
 	for (const item of items) {
 		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
 		const existing = inventoryMap.get(key);
 
 		if (existing) {
-			// Update existing
-			await d1
-				.update(inventory)
-				.set({
-					quantity: existing.quantity + item.quantity,
-					updatedAt: new Date(),
-				})
-				.where(eq(inventory.id, existing.id));
+			// Queue update for existing item
+			batchOps.push(
+				d1
+					.update(inventory)
+					.set({
+						quantity: existing.quantity + item.quantity,
+						updatedAt: now,
+					})
+					.where(eq(inventory.id, existing.id)),
+			);
 
 			// Update local map in case duplicates in list
 			existing.quantity += item.quantity;
 			results.updated++;
 		} else {
-			// Create new
+			// Queue insert for new item
 			const newItemId = crypto.randomUUID();
-			const now = new Date();
 
-			// Default expiry logic roughly inferred from category could go here
-			// For now, no default expiry
-
-			await d1.insert(inventory).values({
-				id: newItemId,
-				organizationId,
-				name: item.name,
-				quantity: item.quantity,
-				unit: item.unit,
-				category: item.category,
-				status: "stable",
-				tags: [], // No tags from grocery list currently
-				createdAt: now,
-				updatedAt: now,
-			});
+			batchOps.push(
+				d1.insert(inventory).values({
+					id: newItemId,
+					organizationId,
+					name: item.name,
+					quantity: item.quantity,
+					unit: item.unit,
+					category: item.category,
+					status: "stable",
+					tags: [], // No tags from grocery list currently
+					createdAt: now,
+					updatedAt: now,
+				}),
+			);
 
 			// Add to map for subsequent items in same batch
 			inventoryMap.set(key, {
@@ -353,12 +356,20 @@ export async function dockGroceryItems(
 			results.created++;
 		}
 
-		// Log to ledger
-		await d1.insert(ledger).values({
-			organizationId,
-			amount: 0, // No monetary tracking yet
-			reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
-		});
+		// Queue ledger entry
+		batchOps.push(
+			d1.insert(ledger).values({
+				organizationId,
+				amount: 0, // No monetary tracking yet
+				reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
+			}),
+		);
+	}
+
+	// 3. Execute all operations atomically in a single batch
+	if (batchOps.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(batchOps as [any, ...any[]]);
 	}
 
 	return results;

@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { addItem } from "~/lib/inventory.server";
+
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/inventory.batch";
@@ -46,28 +46,45 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const { items } = result.data;
 
-		// Add each item to inventory
-		const addedItems = [];
-		const errors = [];
+		// Collect all insert operations for batching
+		const batchOps = [];
+		const now = new Date();
 
 		for (const item of items) {
-			try {
-				const [newItem] = await addItem(context.cloudflare.env, groupId, item);
-				addedItems.push(newItem);
-			} catch (error) {
-				console.error(`Failed to add item ${item.name}:`, error);
-				errors.push({
-					name: item.name,
-					error: error instanceof Error ? error.message : "Unknown error",
-				});
-			}
+			batchOps.push(
+				context.cloudflare.env.DB.prepare(
+					`INSERT INTO inventory (id, organization_id, name, quantity, unit, category, status, tags, created_at, updated_at)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				).bind(
+					crypto.randomUUID(),
+					groupId,
+					item.name,
+					item.quantity,
+					item.unit,
+					item.category,
+					"stable",
+					JSON.stringify(item.tags || []),
+					Math.floor(now.getTime() / 1000),
+					Math.floor(now.getTime() / 1000),
+				),
+			);
 		}
+
+		// Execute all inserts in a single batch
+		const results = await context.cloudflare.env.DB.batch(batchOps);
+
+		// Count successful inserts
+		const addedCount = results.filter((r) => r.success).length;
+		const errors = results
+			.map((r, idx) =>
+				!r.success ? { name: items[idx].name, error: r.error } : null,
+			)
+			.filter(Boolean);
 
 		return {
 			success: true,
-			added: addedItems.length,
+			added: addedCount,
 			total: items.length,
-			items: addedItems,
 			errors: errors.length > 0 ? errors : undefined,
 		};
 	} catch (error) {

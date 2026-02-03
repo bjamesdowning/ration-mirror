@@ -9,25 +9,35 @@ export interface UserSettings {
 	unitSystem?: "metric" | "imperial";
 	expirationAlertDays?: number;
 	defaultGroupId?: string;
+	allergens?: string[];
 	listGeneration?: {
 		lastGeneratedAt?: string;
 		enabled?: boolean;
 		frequency?: "off" | "daily" | "weekly" | "biweekly" | "custom";
 		intervalDays?: number;
 	};
+	[key: string]: unknown; // Index signature for database compatibility
 }
 
 // Extended organization type with credits and metadata
+export interface OrganizationMetadata {
+	isPersonal?: boolean;
+	[key: string]: unknown;
+}
+
 export interface OrganizationWithCredits {
 	id: string;
 	name: string;
 	slug: string | null;
 	logo: string | null;
 	credits: number;
-	metadata: {
-		isPersonal?: boolean;
-	} | null;
+	metadata: OrganizationMetadata | null;
 	createdAt: Date;
+}
+
+// Meal custom fields JSON structure
+export interface MealCustomFields {
+	[key: string]: unknown;
 }
 
 // Extended session with active organization

@@ -6,6 +6,11 @@ import {
 	text,
 	unique,
 } from "drizzle-orm/sqlite-core";
+import type {
+	MealCustomFields,
+	OrganizationMetadata,
+	UserSettings,
+} from "../lib/types";
 
 export const user = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -14,9 +19,13 @@ export const user = sqliteTable("user", {
 	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
 	image: text("image"),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+		.notNull()
+		.default(sql`(unixepoch())`),
 	// Extended fields
-	settings: text("settings", { mode: "json" }).default("{}"), // Allergens, units, etc.
+	settings: text("settings", { mode: "json" })
+		.$type<UserSettings>()
+		.default(sql`'{}'`), // Allergens, units, etc.
 });
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -29,7 +38,9 @@ export const session = sqliteTable("session", {
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 	token: text("token").notNull().unique(),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+		.notNull()
+		.default(sql`(unixepoch())`),
 	ipAddress: text("ip_address"),
 	userAgent: text("user_agent"),
 	userId: text("user_id")
@@ -70,14 +81,18 @@ export const account = sqliteTable("account", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
-export const verification = sqliteTable("verification", {
-	id: text("id").primaryKey(),
-	identifier: text("identifier").notNull(),
-	value: text("value").notNull(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" }),
-});
+export const verification = sqliteTable(
+	"verification",
+	{
+		id: text("id").primaryKey(),
+		identifier: text("identifier").notNull(),
+		value: text("value").notNull(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" }),
+		updatedAt: integer("updated_at", { mode: "timestamp" }),
+	},
+	(table) => [index("verification_identifier_idx").on(table.identifier)],
+);
 
 // Better Auth Organization Plugin Tables
 
@@ -86,7 +101,7 @@ export const organization = sqliteTable("organization", {
 	name: text("name").notNull(),
 	slug: text("slug").unique(),
 	logo: text("logo"),
-	metadata: text("metadata", { mode: "json" }),
+	metadata: text("metadata", { mode: "json" }).$type<OrganizationMetadata>(),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	// Extended field for credit pooling
 	credits: integer("credits").default(0).notNull(),
@@ -231,7 +246,7 @@ export const meal = sqliteTable(
 		prepTime: integer("prep_time"),
 		cookTime: integer("cook_time"),
 		customFields: text("custom_fields", { mode: "json" })
-			.$type<Record<string, any>>()
+			.$type<MealCustomFields>()
 			.default({}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
@@ -241,7 +256,7 @@ export const meal = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("meal_org_idx").on(table.organizationId),
+		// Compound index covers both single-column and multi-column queries
 		index("meal_org_id_idx").on(table.organizationId, table.id),
 	],
 );

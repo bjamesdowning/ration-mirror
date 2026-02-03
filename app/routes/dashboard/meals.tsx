@@ -97,8 +97,8 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			<DashboardHeader
-				title="Meal Library"
-				subtitle="Your saved recipes // Kitchen Intel"
+				title="Galley"
+				subtitle="Recipe Database // Intel"
 				showSearch={true}
 				totalItems={filteredMeals.length}
 				searchPlaceholder="Search meals..."

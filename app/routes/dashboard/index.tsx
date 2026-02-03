@@ -68,7 +68,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			<DashboardHeader
-				title="Dashboard"
+				title="Hub"
 				subtitle="Mission Control // Overview"
 				showSearch={false}
 				totalItems={inventoryStats.totalItems}

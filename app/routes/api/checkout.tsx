@@ -40,6 +40,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 	// 3. Parse Input
 	const formData = await request.formData();
 	const packKey = formData.get("pack") as keyof typeof CREDIT_PACKS;
+	const returnUrlPath =
+		(formData.get("returnUrl") as string) || "/dashboard/settings";
+
+	// Validate returnUrl to prevent open redirects (simple allowlist or path check)
+	// We only allow dashboard paths
+	if (!returnUrlPath.startsWith("/dashboard")) {
+		throw data({ error: "Invalid return URL" }, { status: 400 });
+	}
 
 	if (!packKey || !CREDIT_PACKS[packKey]) {
 		throw data({ error: "Invalid credit pack" }, { status: 400 });
@@ -73,7 +81,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				organizationId: groupId, // Who gets the credits
 				credits: selectedPack.credits.toString(),
 			},
-			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}/dashboard/credits?session_id={CHECKOUT_SESSION_ID}`,
+			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
 		});
 
 		// 5. Return client secret for frontend

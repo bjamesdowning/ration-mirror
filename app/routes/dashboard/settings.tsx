@@ -11,6 +11,7 @@ import {
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { data } from "~/lib/response";
+import { CreditShop } from "../../components/dashboard/CreditShop";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import * as schema from "../../db/schema";
 import type { UserSettings } from "../../lib/types";
@@ -60,7 +61,25 @@ export async function loader(args: Route.LoaderArgs) {
 		});
 
 		// Fetch credits for the current group
-		const { checkBalance } = await import("../../lib/ledger.server");
+		const { checkBalance, processCheckoutSession } = await import(
+			"../../lib/ledger.server"
+		);
+
+		// Handle Stripe Return
+		const url = new URL(args.request.url);
+		const sessionId = url.searchParams.get("session_id");
+		let transactionStatus: "success" | "pending" | "failed" | null = null;
+
+		if (sessionId) {
+			try {
+				await processCheckoutSession(env, sessionId);
+				transactionStatus = "success";
+			} catch (error) {
+				console.error("Manual fulfillment failed:", error);
+				transactionStatus = "failed";
+			}
+		}
+
 		const credits = await checkBalance(env, groupId);
 
 		return {
@@ -71,6 +90,8 @@ export async function loader(args: Route.LoaderArgs) {
 			organizationName: currentOrg?.name || "Unknown Group",
 			userOrganizations: userOrganizations.map((m) => m.organization),
 			credits,
+			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
+			transactionStatus,
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);
@@ -220,11 +241,50 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-8 pb-20">
-			<DashboardHeader title="Configuration" subtitle="System Preferences" />
+			<DashboardHeader title="System" subtitle="Preferences & Configuration" />
 
 			<div className="space-y-8">
 				{/* User Profile & Credits */}
 				<ReferenceIdSection credits={loaderData.credits} />
+
+				{/* Purchase Credits */}
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-4 text-carbon">
+						Acquire Credits
+					</h2>
+
+					{/* Transaction Status Messages */}
+					{loaderData.transactionStatus === "success" && (
+						<div className="mb-6 p-4 bg-success/10 border border-success/20 rounded-lg flex items-center gap-4">
+							<div className="text-2xl text-success">✓</div>
+							<div>
+								<div className="font-bold text-carbon">
+									Transaction Complete
+								</div>
+								<div className="text-sm text-muted">
+									Credits have been added to your account.
+								</div>
+							</div>
+						</div>
+					)}
+
+					{loaderData.transactionStatus === "failed" && (
+						<div className="mb-6 p-4 bg-danger/10 border border-danger/20 rounded-lg flex items-center gap-4">
+							<div className="text-2xl text-danger">!</div>
+							<div>
+								<div className="font-bold text-danger">Verification Failed</div>
+								<div className="text-sm text-muted">
+									Could not verify transaction. Please contact support.
+								</div>
+							</div>
+						</div>
+					)}
+
+					<CreditShop
+						stripePublishableKey={loaderData.stripePublishableKey}
+						returnUrl="/dashboard/settings"
+					/>
+				</section>
 
 				{/* Group Management */}
 				<GroupManagement members={members} />

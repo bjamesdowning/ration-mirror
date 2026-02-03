@@ -117,8 +117,8 @@ export default function GroceryDashboard() {
 	return (
 		<>
 			<DashboardHeader
-				title="Grocery Lists"
-				subtitle="Plan and track your shopping"
+				title="Supply"
+				subtitle="Procurement & Logistics"
 				showSearch={false}
 				totalItems={lists.length}
 			/>

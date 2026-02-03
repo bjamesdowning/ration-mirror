@@ -150,8 +150,8 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			<DashboardHeader
-				title="Pantry"
-				subtitle="Inventory Management // Your Ingredients"
+				title="Cargo"
+				subtitle="Inventory Management // Stock"
 				showSearch={true}
 				totalItems={filteredInventory.length}
 				searchPlaceholder="Search ingredients..."

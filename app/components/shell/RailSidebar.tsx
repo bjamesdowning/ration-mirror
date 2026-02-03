@@ -1,11 +1,11 @@
 import { NavLink } from "react-router";
 
 const navItems = [
-	{ to: "/dashboard", icon: "home", label: "Dashboard" },
-	{ to: "/dashboard/pantry", icon: "package", label: "Pantry" },
-	{ to: "/dashboard/meals", icon: "chef-hat", label: "Meals" },
-	{ to: "/dashboard/grocery", icon: "shopping-cart", label: "Grocery" },
-	{ to: "/dashboard/settings", icon: "settings", label: "Settings" },
+	{ to: "/dashboard", icon: "home", label: "Hub" },
+	{ to: "/dashboard/pantry", icon: "package", label: "Cargo" },
+	{ to: "/dashboard/meals", icon: "chef-hat", label: "Galley" },
+	{ to: "/dashboard/grocery", icon: "shopping-cart", label: "Supply" },
+	{ to: "/dashboard/settings", icon: "settings", label: "System" },
 ];
 
 export function RailSidebar() {

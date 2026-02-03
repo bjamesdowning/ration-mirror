@@ -756,8 +756,25 @@ export async function createGroceryListFromAllMeals(
 
 	const listId = supplyList.id;
 
+	// Create map of existing items for deduplication
+	const existingItemsMap = new Map<string, typeof groceryItem.$inferSelect>();
+
+	if (supplyList.items) {
+		for (const item of supplyList.items) {
+			const key = `${item.name.toLowerCase().trim()}__${item.unit}`;
+			existingItemsMap.set(key, item);
+		}
+	}
+
 	let addedCount = 0;
 	let skippedCount = 0;
+
+	// Collect batch operations
+	const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
+	const itemsToUpdate: Array<{
+		id: string;
+		quantity: number;
+	}> = [];
 
 	// Check each aggregated ingredient against inventory
 	for (const [, aggregated] of ingredientAggregation) {
@@ -785,21 +802,60 @@ export async function createGroceryListFromAllMeals(
 			continue;
 		}
 
-		// Auto-categorize ingredient based on keywords
-		const category = categorizeIngredient(aggregated.name);
+		// Check if item already exists in the list
+		const existingKey = `${normalizedName}__${aggregated.unit}`;
+		const existingItem = existingItemsMap.get(existingKey);
 
-		// Add to grocery list
-		await d1.insert(groceryItem).values({
-			id: crypto.randomUUID(),
-			listId,
-			name: aggregated.name,
-			quantity: neededQuantity,
-			unit: aggregated.unit,
-			category,
-			sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
-		});
+		if (existingItem) {
+			// Queue update if quantity changed
+			if (existingItem.quantity !== neededQuantity) {
+				itemsToUpdate.push({
+					id: existingItem.id,
+					quantity: neededQuantity,
+				});
+			}
+		} else {
+			// Auto-categorize ingredient based on keywords
+			const category = categorizeIngredient(aggregated.name);
 
-		addedCount++;
+			// Queue insert
+			itemsToInsert.push({
+				id: crypto.randomUUID(),
+				listId,
+				name: aggregated.name,
+				quantity: neededQuantity,
+				unit: aggregated.unit,
+				category,
+				sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
+			});
+
+			addedCount++;
+		}
+	}
+
+	// Execute batched operations
+	const batchOperations = [];
+
+	// Batch inserts
+	if (itemsToInsert.length > 0) {
+		batchOperations.push(d1.insert(groceryItem).values(itemsToInsert));
+	}
+
+	// Batch updates (Drizzle doesn't support bulk updates directly, so we batch them)
+	if (itemsToUpdate.length > 0) {
+		for (const update of itemsToUpdate) {
+			batchOperations.push(
+				d1
+					.update(groceryItem)
+					.set({ quantity: update.quantity })
+					.where(eq(groceryItem.id, update.id)),
+			);
+		}
+	}
+
+	// Execute all operations in a single batch
+	if (batchOperations.length > 0) {
+		await d1.batch(batchOperations as [any, ...any[]]);
 	}
 
 	const list = await getGroceryList(db, organizationId, listId);

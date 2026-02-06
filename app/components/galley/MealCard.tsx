@@ -95,74 +95,80 @@ export function MealCard({
 
 	return (
 		<>
-			<StandardCard
-				actions={[
-					{
-						label: "View",
-						to: `/dashboard/meals/${meal.id}`,
-					},
-					{
-						label: "Edit",
-						onClick: () => setIsEditing(true),
-					},
-					{
-						label: "Delete",
-						onClick: handleDelete,
-						destructive: true,
-					},
-				]}
-			>
-				<div className="flex justify-between items-start mb-2">
-					<div className="flex items-start gap-2 min-w-0">
-						<button
-							type="button"
-							onClick={handleToggleActive}
-							disabled={isToggling}
-							aria-pressed={localActive}
-							className={`flex items-center justify-center w-7 h-7 border text-xs font-bold transition-all shadow-sm ${
-								localActive
-									? "bg-hyper-green text-carbon border-hyper-green"
-									: "bg-platinum/70 text-muted border-carbon/20"
-							}`}
-							title={
-								localActive ? "Selected for Supply list" : "Add to Supply list"
-							}
-						>
-							{localActive ? "✓" : "+"}
-						</button>
-						<h3
-							className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
-							title={meal.name}
-						>
-							{meal.name}
-						</h3>
-					</div>
-					<div className="text-right">
-						<span className="text-label text-muted block text-xs">PREP</span>
-						<span className="text-data text-sm font-bold text-carbon">
-							{meal.prepTime ? `${meal.prepTime}m` : "--"}
-						</span>
-					</div>
-				</div>
+			<div className="relative">
+				{/* Toggle button floats ABOVE StandardCard's hover overlay (z-30) */}
+				<button
+					type="button"
+					onClick={handleToggleActive}
+					disabled={isToggling}
+					aria-pressed={localActive}
+					className={`absolute top-4 left-4 z-40 flex items-center justify-center w-7 h-7 border text-xs font-bold transition-all shadow-sm ${
+						localActive
+							? "bg-hyper-green text-carbon border-hyper-green"
+							: "bg-platinum/70 text-muted border-carbon/20 hover:bg-platinum"
+					}`}
+					title={
+						localActive ? "Selected for Supply list" : "Add to Supply list"
+					}
+				>
+					{localActive ? "✓" : "+"}
+				</button>
 
-				<div className="flex flex-wrap gap-2 mb-4">
-					{(meal.tags || []).map((tag) => (
-						<span
-							key={tag}
-							className="bg-hyper-green/10 text-hyper-green text-xs px-2 py-1 rounded-md"
-						>
-							{tag}
-						</span>
-					))}
-				</div>
-
-				<div className="flex justify-between items-end mt-4">
-					<div className="text-sm text-muted">
-						<div>Servings: {meal.servings}</div>
-						<div>Ingredients: {meal.ingredients?.length || 0}</div>
+				<StandardCard
+					actions={[
+						{
+							label: "View",
+							to: `/dashboard/meals/${meal.id}`,
+						},
+						{
+							label: "Edit",
+							onClick: () => setIsEditing(true),
+						},
+						{
+							label: "Delete",
+							onClick: handleDelete,
+							destructive: true,
+						},
+					]}
+				>
+					<div className="flex justify-between items-start mb-2">
+						<div className="flex items-start gap-2 min-w-0">
+							{/* Spacer to account for floating toggle button */}
+							<div className="w-7 h-7 flex-shrink-0" />
+							<h3
+								className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
+								title={meal.name}
+							>
+								{meal.name}
+							</h3>
+						</div>
+						<div className="text-right">
+							<span className="text-label text-muted block text-xs">PREP</span>
+							<span className="text-data text-sm font-bold text-carbon">
+								{meal.prepTime ? `${meal.prepTime}m` : "--"}
+							</span>
+						</div>
 					</div>
-				</div>
-			</StandardCard>
+
+					<div className="flex flex-wrap gap-2 mb-4">
+						{(meal.tags || []).map((tag) => (
+							<span
+								key={tag}
+								className="bg-hyper-green/10 text-hyper-green text-xs px-2 py-1 rounded-md"
+							>
+								{tag}
+							</span>
+						))}
+					</div>
+
+					<div className="flex justify-between items-end mt-4">
+						<div className="text-sm text-muted">
+							<div>Servings: {meal.servings}</div>
+							<div>Ingredients: {meal.ingredients?.length || 0}</div>
+						</div>
+					</div>
+				</StandardCard>
+			</div>
 
 			{isEditing && (
 				<MealEditModal

@@ -112,6 +112,29 @@ export async function action(args: Route.ActionArgs) {
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 
+	if (intent === "update-theme") {
+		const theme = formData.get("theme") as "light" | "dark";
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				theme,
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+
+		return { success: true };
+	}
+
 	if (intent === "update-units") {
 		const unitSystem = formData.get("unitSystem"); // "metric" | "imperial"
 
@@ -188,6 +211,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings, members, isOwner, organizationId, userOrganizations } =
 		loaderData;
 	const navigation = useNavigation();
+	const isUpdatingTheme =
+		navigation.state === "submitting" &&
+		navigation.formData?.get("intent") === "update-theme";
 	const isUpdatingUnits =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-units";
@@ -278,6 +304,47 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						</select>
 						{isUpdatingDefaultGroup && (
 							<span className="text-hyper-green animate-pulse text-sm">
+								Saving...
+							</span>
+						)}
+					</Form>
+				</section>
+
+				{/* Appearance */}
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">Appearance</h2>
+					<p className="text-sm text-muted mb-4">
+						Choose your preferred color scheme
+					</p>
+					<Form method="post" className="flex gap-4 flex-wrap">
+						<input type="hidden" name="intent" value="update-theme" />
+
+						<label className="flex items-center gap-2 cursor-pointer">
+							<input
+								type="radio"
+								name="theme"
+								value="light"
+								defaultChecked={settings.theme !== "dark"}
+								className="w-4 h-4 accent-hyper-green"
+								onChange={(e) => e.target.form?.requestSubmit()}
+							/>
+							<span className="text-carbon">Light</span>
+						</label>
+
+						<label className="flex items-center gap-2 cursor-pointer">
+							<input
+								type="radio"
+								name="theme"
+								value="dark"
+								defaultChecked={settings.theme === "dark"}
+								className="w-4 h-4 accent-hyper-green"
+								onChange={(e) => e.target.form?.requestSubmit()}
+							/>
+							<span className="text-carbon">Dark</span>
+						</label>
+
+						{isUpdatingTheme && (
+							<span className="text-hyper-green animate-pulse text-sm ml-4 my-auto">
 								Saving...
 							</span>
 						)}

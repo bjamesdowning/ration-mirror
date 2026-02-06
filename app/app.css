@@ -1,28 +1,52 @@
 @import "tailwindcss";
 
 :root {
-  /* Orbital Luxury Palette */
-  --ceramic: #F8F9FA;
-  --platinum: #E6E6E6;
+  /* Light Mode (Default) */
+  --bg-primary: #F8F9FA;
+  /* ceramic */
+  --bg-secondary: #E6E6E6;
+  /* platinum */
+  --bg-surface: rgba(255, 255, 255, 0.9);
+  --text-primary: #111111;
+  /* carbon */
+  --text-muted: #6B7280;
+  --border-color: rgba(0, 0, 0, 0.08);
+
+  /* Semantic colors (unchanged across themes) */
   --hyper-green: #00E088;
-  --carbon: #111111;
-  --muted: #6B7280;
   --success: #10B981;
   --warning: #F59E0B;
   --danger: #EF4444;
 }
 
+.dark {
+  --bg-primary: #0D0D0D;
+  --bg-secondary: #1A1A1A;
+  --bg-surface: rgba(26, 26, 26, 0.95);
+  --text-primary: #F8F9FA;
+  --text-muted: #9CA3AF;
+  --border-color: rgba(255, 255, 255, 0.08);
+}
+
 @theme {
-  /* Orbital Luxury Colors */
-  --color-ceramic: var(--ceramic);       /* Primary background */
-  --color-platinum: var(--platinum);     /* Secondary background */
-  --color-hyper-green: var(--hyper-green); /* Primary accent */
-  --color-carbon: var(--carbon);         /* Primary text */
-  --color-muted: var(--muted);           /* Secondary text */
-  --color-success: var(--success);       /* Success states */
-  --color-warning: var(--warning);       /* Warning states */
-  --color-danger: var(--danger);         /* Error states */
-  
+  /* Orbital Luxury Colors - Theme-aware */
+  --color-ceramic: var(--bg-primary);
+  /* Primary background */
+  --color-platinum: var(--bg-secondary);
+  /* Secondary background */
+  --color-hyper-green: var(--hyper-green);
+  /* Primary accent */
+  --color-carbon: var(--text-primary);
+  /* Primary text */
+  --color-muted: var(--text-muted);
+  /* Secondary text */
+  --color-success: var(--success);
+  /* Success states */
+  --color-warning: var(--warning);
+  /* Warning states */
+  --color-danger: var(--danger);
+  /* Error states */
+
   /* Typography - Space Mono */
   --font-sans: 'Space Mono', ui-monospace, monospace;
   --font-mono: 'Space Mono', ui-monospace, monospace;
@@ -49,21 +73,21 @@
 
 /* Glass panel effect for cards */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
 }
 
 /* Control surface for interactive elements */
 .control-surface {
-  background: var(--color-platinum);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   transition: all 0.15s ease;
 }
 
 .control-surface:hover {
-  background: var(--color-ceramic);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--bg-primary);
+  box-shadow: 0 2px 8px var(--border-color);
 }
 
 .control-surface:active {

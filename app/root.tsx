@@ -34,12 +34,23 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 
 	return {
 		user: session?.user,
+		theme:
+			(session?.user?.settings as { theme?: "light" | "dark" })?.theme ||
+			"light",
 	};
 };
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({
+	children,
+	loaderData,
+}: {
+	children: React.ReactNode;
+	loaderData?: Route.ComponentProps["loaderData"];
+}) {
+	const theme = loaderData?.theme || "light";
+
 	return (
-		<html lang="en">
+		<html lang="en" className={theme === "dark" ? "dark" : ""}>
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />

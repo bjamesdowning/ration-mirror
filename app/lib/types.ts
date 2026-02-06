@@ -9,6 +9,7 @@ export interface UserSettings {
 	unitSystem?: "metric" | "imperial";
 	expirationAlertDays?: number;
 	defaultGroupId?: string;
+	theme?: "light" | "dark";
 	allergens?: string[];
 	listGeneration?: {
 		lastGeneratedAt?: string;

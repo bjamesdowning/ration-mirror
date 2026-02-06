@@ -24,7 +24,7 @@ export function AuthWidget({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 
-	const handleAuth = async () => {
+	const handleSocialAuth = async () => {
 		setLoading(true);
 		setError("");
 		try {
@@ -38,6 +38,39 @@ export function AuthWidget({
 					? "Registration failed. Please try again."
 					: "Authentication failed. Please try again.",
 			);
+			setLoading(false);
+		}
+	};
+
+	const handleDevLogin = async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await authClient.signIn.email({
+				email: "dev@ration.app",
+				password: "ration-dev",
+				callbackURL: "/dashboard",
+			});
+
+			if (result.error) {
+				// User doesn't exist, create them
+				const signUpResult = await authClient.signUp.email({
+					email: "dev@ration.app",
+					password: "ration-dev",
+					name: "Dev User",
+					callbackURL: "/dashboard",
+				});
+
+				if (signUpResult.error) {
+					throw new Error(signUpResult.error.message || "Dev signup failed");
+				}
+			}
+
+			// Redirect to dashboard
+			window.location.href = "/dashboard";
+		} catch (err) {
+			setError("Dev login failed. Please check the console.");
+			console.error("[Dev Login Error]:", err);
 			setLoading(false);
 		}
 	};
@@ -118,8 +151,33 @@ export function AuthWidget({
 						mode={mode}
 						loading={loading}
 						error={error}
-						onAuthClick={handleAuth}
+						onAuthClick={handleSocialAuth}
 					/>
+
+					{/* Dev Login Button (only in dev mode) */}
+					{import.meta.env.DEV && (
+						<div className="mt-4">
+							<div className="relative">
+								<div className="absolute inset-0 flex items-center">
+									<div className="w-full border-t border-muted/20" />
+								</div>
+								<div className="relative flex justify-center text-xs uppercase">
+									<span className="bg-ceramic px-2 text-muted">Dev Mode</span>
+								</div>
+							</div>
+							<button
+								type="button"
+								onClick={handleDevLogin}
+								disabled={loading}
+								className="mt-4 w-full py-3 px-4 rounded-xl font-mono text-sm bg-carbon text-ceramic hover:bg-carbon/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-hyper-green/30"
+							>
+								{loading ? "..." : "⚡ Dev Login"}
+							</button>
+							<p className="mt-2 text-xs text-muted text-center font-mono">
+								dev@ration.app
+							</p>
+						</div>
+					)}
 
 					{mode === "signUp" && (
 						<p className="mt-6 text-xs text-muted text-center">

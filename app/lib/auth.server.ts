@@ -45,6 +45,15 @@ const member = ac.newRole({
 
 export function createAuth(env: Cloudflare.Env) {
 	const db = drizzle(env.DB, { schema });
+
+	// Dev Mode Detection: Enable credential provider if Google OAuth is not configured
+	const authEnv = env as Cloudflare.Env & {
+		GOOGLE_CLIENT_ID?: string;
+		GOOGLE_CLIENT_SECRET?: string;
+	};
+	const isDevMode =
+		!authEnv.GOOGLE_CLIENT_ID || authEnv.GOOGLE_CLIENT_ID.trim() === "";
+
 	return betterAuth({
 		database: drizzleAdapter(db, {
 			provider: "sqlite",
@@ -69,14 +78,23 @@ export function createAuth(env: Cloudflare.Env) {
 				allowUserToCreateOrganization: true,
 			}),
 		],
-		socialProviders: {
-			google: {
-				clientId: (env as Cloudflare.Env & { GOOGLE_CLIENT_ID: string })
-					.GOOGLE_CLIENT_ID,
-				clientSecret: (env as Cloudflare.Env & { GOOGLE_CLIENT_SECRET: string })
-					.GOOGLE_CLIENT_SECRET,
+		socialProviders: isDevMode
+			? {}
+			: {
+					google: {
+						clientId: (env as Cloudflare.Env & { GOOGLE_CLIENT_ID: string })
+							.GOOGLE_CLIENT_ID,
+						clientSecret: (
+							env as Cloudflare.Env & { GOOGLE_CLIENT_SECRET: string }
+						).GOOGLE_CLIENT_SECRET,
+					},
+				},
+		...(isDevMode && {
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: false,
 			},
-		},
+		}),
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
 		databaseHooks: {

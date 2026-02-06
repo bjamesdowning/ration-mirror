@@ -55,7 +55,7 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 						<Link
 							key={result.meal.id}
 							to={`/dashboard/meals/${result.meal.id}`}
-							className="group block bg-white rounded-lg p-4 hover:shadow-md transition-all border border-carbon/5 hover:border-hyper-green/30"
+							className="group block bg-ceramic rounded-lg p-4 hover:shadow-md transition-all border border-carbon/5 hover:border-hyper-green/30"
 						>
 							{/* Match Badge */}
 							<div className="flex justify-between items-start mb-2">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { meal } from "~/db/schema";
 import type { MealMatchResult } from "~/lib/matching.server";
+import type { MealCustomFields } from "~/lib/types";
 import { MealCard } from "./MealCard";
 import { MealMatchBadge } from "./MealMatchBadge";
 
@@ -16,7 +17,7 @@ interface MealGridProps {
 			orderIndex?: number | null;
 		}[];
 		equipment?: string[] | null;
-		customFields?: string | Record<string, any> | null;
+		customFields?: string | MealCustomFields | null;
 	})[];
 	enableMatching?: boolean;
 	inventory?: {
@@ -25,12 +26,16 @@ interface MealGridProps {
 		unit: string;
 		quantity: number;
 	}[];
+	activeMealIds?: Set<string>;
+	onToggleMealActive?: (mealId: string, nextActive: boolean) => void;
 }
 
 export function MealGrid({
 	meals,
 	enableMatching = false,
 	inventory = [],
+	activeMealIds,
+	onToggleMealActive,
 }: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
 	const [minMatch, setMinMatch] = useState(50);
@@ -176,6 +181,8 @@ export function MealGrid({
 									<MealCard
 										meal={result.meal}
 										availableIngredients={inventory}
+										isActive={activeMealIds?.has(result.meal.id)}
+										onToggleActive={onToggleMealActive}
 									/>
 									<div className="absolute top-2 right-2">
 										<MealMatchBadge
@@ -210,7 +217,13 @@ export function MealGrid({
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 			{meals.map((meal) => (
-				<MealCard key={meal.id} meal={meal} availableIngredients={inventory} />
+				<MealCard
+					key={meal.id}
+					meal={meal}
+					availableIngredients={inventory}
+					isActive={activeMealIds?.has(meal.id)}
+					onToggleActive={onToggleMealActive}
+				/>
 			))}
 		</div>
 	);

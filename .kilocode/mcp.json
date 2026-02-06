@@ -9,8 +9,8 @@
 			"args": ["mcp-remote", "https://docs.mcp.cloudflare.com/sse"]
 		},
 		"mermaid": {
-          "command": "npx",
-          "args": ["-y", "mcp-remote", "https://mcp.mermaid.ai/mcp"]
-        }
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://mcp.mermaid.ai/mcp"]
+		}
 	}
 }

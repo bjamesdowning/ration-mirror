@@ -23,7 +23,7 @@ interface MealEditModalProps {
 			orderIndex?: number | null;
 		}[];
 		equipment?: string[] | null;
-		customFields?: Record<string, any> | null;
+		customFields?: Record<string, unknown> | null;
 	};
 	availableIngredients: InventoryItem[];
 	onClose: () => void;
@@ -37,6 +37,17 @@ export function MealEditModal({
 	onClose,
 	fetcher,
 }: MealEditModalProps) {
+	const normalizeCustomFields = (
+		customFields: Record<string, unknown> | null | undefined,
+	): Record<string, string> => {
+		if (!customFields) return {};
+		return Object.fromEntries(
+			Object.entries(customFields).filter(
+				(entry): entry is [string, string] => typeof entry[1] === "string",
+			),
+		);
+	};
+
 	// Transform DB meal to MealInput for the form
 	const defaultValues: Partial<MealInput> = {
 		name: meal.name,
@@ -46,7 +57,9 @@ export function MealEditModal({
 		cookTime: meal.cookTime || undefined,
 		tags: meal.tags || [],
 		equipment: meal.equipment || [],
-		customFields: meal.customFields || {},
+		customFields: normalizeCustomFields(
+			meal.customFields as Record<string, unknown> | null,
+		),
 		directions: meal.directions || undefined,
 		ingredients: (meal.ingredients || []).map((ing) => ({
 			inventoryId: ing.inventoryId,

@@ -8,6 +8,7 @@ import {
 	mealIngredient,
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
+import { getSelectedMealIds } from "./meal-selection.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -777,7 +778,7 @@ export async function createGroceryListFromAllMeals(
 	}
 
 	// Execute batched operations
-	const batchOperations = [];
+	const batchOperations: Array<Parameters<typeof d1.batch>[0][number]> = [];
 
 	// Batch inserts
 	if (itemsToInsert.length > 0) {
@@ -798,7 +799,263 @@ export async function createGroceryListFromAllMeals(
 
 	// Execute all operations in a single batch
 	if (batchOperations.length > 0) {
-		await d1.batch(batchOperations as [any, ...any[]]);
+		await d1.batch(
+			batchOperations as [
+				Parameters<typeof d1.batch>[0][number],
+				...Parameters<typeof d1.batch>[0][number][],
+			],
+		);
+	}
+
+	const list = await getGroceryList(db, organizationId, listId);
+	if (!list) throw new Error("List retrieval failed");
+
+	return {
+		list,
+		summary: {
+			addedItems: addedCount,
+			skippedItems: skippedCount,
+			mealsProcessed: meals.length,
+			totalIngredients: allIngredients.length,
+		},
+	};
+}
+
+/**
+ * Creates/updates the Supply list from ONLY selected meals.
+ * If no meals are selected, returns the Supply list unchanged.
+ */
+export async function createGroceryListFromSelectedMeals(
+	db: D1Database,
+	organizationId: string,
+	_listName?: string,
+): Promise<{
+	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
+	summary: GenerationSummary;
+}> {
+	const d1 = drizzle(db);
+
+	const selectedMealIds = await getSelectedMealIds(db, organizationId);
+
+	if (selectedMealIds.length === 0) {
+		const supplyList = await ensureSupplyList(db, organizationId);
+		if (!supplyList) {
+			throw new Error("Failed to ensure supply list");
+		}
+		return {
+			list: supplyList,
+			summary: {
+				addedItems: 0,
+				skippedItems: 0,
+				mealsProcessed: 0,
+				totalIngredients: 0,
+			},
+		};
+	}
+
+	const meals = await d1
+		.select({ id: meal.id })
+		.from(meal)
+		.where(inArray(meal.id, selectedMealIds));
+
+	if (meals.length === 0) {
+		const supplyList = await ensureSupplyList(db, organizationId);
+		if (!supplyList) {
+			throw new Error("Failed to ensure supply list");
+		}
+		return {
+			list: supplyList,
+			summary: {
+				addedItems: 0,
+				skippedItems: 0,
+				mealsProcessed: 0,
+				totalIngredients: 0,
+			},
+		};
+	}
+
+	const allIngredients = await d1
+		.select({
+			meal_ingredient: {
+				ingredientName: mealIngredient.ingredientName,
+				quantity: mealIngredient.quantity,
+				unit: mealIngredient.unit,
+				mealId: mealIngredient.mealId,
+			},
+		})
+		.from(mealIngredient)
+		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+		.where(inArray(mealIngredient.mealId, selectedMealIds));
+
+	if (allIngredients.length === 0) {
+		const supplyList = await ensureSupplyList(db, organizationId);
+		if (!supplyList) {
+			throw new Error("Failed to ensure supply list");
+		}
+		return {
+			list: supplyList,
+			summary: {
+				addedItems: 0,
+				skippedItems: 0,
+				mealsProcessed: meals.length,
+				totalIngredients: 0,
+			},
+		};
+	}
+
+	const orgInventory = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+
+	const inventoryMap = new Map(
+		orgInventory.map((item) => [
+			item.name.toLowerCase().trim(),
+			{ quantity: item.quantity, unit: item.unit },
+		]),
+	);
+
+	const ingredientAggregation = new Map<
+		string,
+		{
+			name: string;
+			quantity: number;
+			unit: string;
+			sourceMealIds: string[];
+		}
+	>();
+
+	for (const row of allIngredients) {
+		const ingredient = row.meal_ingredient;
+		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
+
+		if (ingredientAggregation.has(normalizedName)) {
+			const existing = ingredientAggregation.get(normalizedName);
+			if (!existing) continue;
+
+			if (existing.unit === ingredient.unit) {
+				existing.quantity += ingredient.quantity;
+				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
+					existing.sourceMealIds.push(ingredient.mealId);
+				}
+			} else {
+				const keyWithUnit = `${normalizedName}__${ingredient.unit}`;
+				ingredientAggregation.set(keyWithUnit, {
+					name: ingredient.ingredientName,
+					quantity: ingredient.quantity,
+					unit: ingredient.unit,
+					sourceMealIds: [ingredient.mealId],
+				});
+			}
+		} else {
+			ingredientAggregation.set(normalizedName, {
+				name: ingredient.ingredientName,
+				quantity: ingredient.quantity,
+				unit: ingredient.unit,
+				sourceMealIds: [ingredient.mealId],
+			});
+		}
+	}
+
+	const supplyList = await ensureSupplyList(db, organizationId);
+
+	if (!supplyList) {
+		throw new Error("Failed to ensure supply list");
+	}
+
+	const listId = supplyList.id;
+
+	const existingItemsMap = new Map<string, typeof groceryItem.$inferSelect>();
+
+	if (supplyList.items) {
+		for (const item of supplyList.items) {
+			const key = `${item.name.toLowerCase().trim()}__${item.unit}`;
+			existingItemsMap.set(key, item);
+		}
+	}
+
+	let addedCount = 0;
+	let skippedCount = 0;
+
+	const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
+	const itemsToUpdate: Array<{
+		id: string;
+		quantity: number;
+	}> = [];
+
+	for (const [, aggregated] of ingredientAggregation) {
+		const normalizedName = aggregated.name.toLowerCase().trim();
+		const inventoryItem = inventoryMap.get(normalizedName);
+
+		if (
+			inventoryItem &&
+			inventoryItem.unit === aggregated.unit &&
+			inventoryItem.quantity >= aggregated.quantity
+		) {
+			skippedCount++;
+			continue;
+		}
+
+		const neededQuantity =
+			inventoryItem && inventoryItem.unit === aggregated.unit
+				? Math.max(0, aggregated.quantity - inventoryItem.quantity)
+				: aggregated.quantity;
+
+		if (neededQuantity <= 0) {
+			skippedCount++;
+			continue;
+		}
+
+		const existingKey = `${normalizedName}__${aggregated.unit}`;
+		const existingItem = existingItemsMap.get(existingKey);
+
+		if (existingItem) {
+			if (existingItem.quantity !== neededQuantity) {
+				itemsToUpdate.push({
+					id: existingItem.id,
+					quantity: neededQuantity,
+				});
+			}
+		} else {
+			const category = categorizeIngredient(aggregated.name);
+			itemsToInsert.push({
+				id: crypto.randomUUID(),
+				listId,
+				name: aggregated.name,
+				quantity: neededQuantity,
+				unit: aggregated.unit,
+				category,
+				sourceMealId: aggregated.sourceMealIds[0],
+			});
+
+			addedCount++;
+		}
+	}
+
+	const batchOperations: Array<Parameters<typeof d1.batch>[0][number]> = [];
+
+	if (itemsToInsert.length > 0) {
+		batchOperations.push(d1.insert(groceryItem).values(itemsToInsert));
+	}
+
+	if (itemsToUpdate.length > 0) {
+		for (const update of itemsToUpdate) {
+			batchOperations.push(
+				d1
+					.update(groceryItem)
+					.set({ quantity: update.quantity })
+					.where(eq(groceryItem.id, update.id)),
+			);
+		}
+	}
+
+	if (batchOperations.length > 0) {
+		await d1.batch(
+			batchOperations as [
+				Parameters<typeof d1.batch>[0][number],
+				...Parameters<typeof d1.batch>[0][number][],
+			],
+		);
 	}
 
 	const list = await getGroceryList(db, organizationId, listId);

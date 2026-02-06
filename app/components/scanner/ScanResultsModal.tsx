@@ -4,6 +4,8 @@ import { useFetcher } from "react-router";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 
+type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number];
+
 interface ScanResultsModalProps {
 	result: ScanResult;
 	onClose: () => void;
@@ -331,7 +333,7 @@ function ScanResultItemRow({
 							onChange={(e) =>
 								setEditedItem({
 									...editedItem,
-									category: e.target.value as any,
+									category: e.target.value as InventoryCategory,
 								})
 							}
 							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"

@@ -111,6 +111,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	members: many(member),
 	inventory: many(inventory),
 	meals: many(meal),
+	activeMealSelections: many(activeMealSelection),
 	groceryLists: many(groceryList),
 }));
 
@@ -268,6 +269,10 @@ export const mealRelations = relations(meal, ({ one, many }) => ({
 	}),
 	ingredients: many(mealIngredient),
 	tags: many(mealTag),
+	activeSelection: one(activeMealSelection, {
+		fields: [meal.id],
+		references: [activeMealSelection.mealId],
+	}),
 }));
 
 export const mealIngredient = sqliteTable(
@@ -329,6 +334,44 @@ export const mealTagRelations = relations(mealTag, ({ one }) => ({
 		references: [meal.id],
 	}),
 }));
+
+export const activeMealSelection = sqliteTable(
+	"active_meal_selection",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		mealId: text("meal_id")
+			.notNull()
+			.references(() => meal.id, { onDelete: "cascade" }),
+		servingsOverride: integer("servings_override"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("ams_org_idx").on(table.organizationId),
+		index("ams_meal_idx").on(table.mealId),
+		unique("ams_org_meal_unique").on(table.organizationId, table.mealId),
+	],
+);
+
+export const activeMealSelectionRelations = relations(
+	activeMealSelection,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [activeMealSelection.organizationId],
+			references: [organization.id],
+		}),
+		meal: one(meal, {
+			fields: [activeMealSelection.mealId],
+			references: [meal.id],
+		}),
+	}),
+);
 
 export const groceryList = sqliteTable(
 	"grocery_list",

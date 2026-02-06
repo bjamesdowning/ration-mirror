@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useFetcher, useSearchParams } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
@@ -8,6 +8,7 @@ import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getInventory } from "~/lib/inventory.server";
+import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
 import type { Route } from "./+types/meals";
 
@@ -16,12 +17,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 
-	const [meals, availableTags, inventory] = await Promise.all([
-		getMeals(context.cloudflare.env.DB, groupId, tag),
-		getOrganizationMealTags(context.cloudflare.env.DB, groupId),
-		getInventory(context.cloudflare.env.DB, groupId),
-	]);
-	return { meals, availableTags, currentTag: tag, inventory };
+	const [meals, availableTags, inventory, activeSelections] = await Promise.all(
+		[
+			getMeals(context.cloudflare.env.DB, groupId, tag),
+			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
+			getInventory(context.cloudflare.env.DB, groupId),
+			getActiveMealSelections(context.cloudflare.env.DB, groupId),
+		],
+	);
+	const activeMealIds = activeSelections.map((selection) => selection.mealId);
+	return { meals, availableTags, currentTag: tag, inventory, activeMealIds };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -67,11 +72,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const { meals, availableTags, currentTag, inventory } = loaderData;
+	const { meals, availableTags, currentTag, inventory, activeMealIds } =
+		loaderData;
 	const [, setSearchParams] = useSearchParams();
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedMealIds, setSelectedMealIds] = useState(
+		() => new Set(activeMealIds),
+	);
+	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 
 	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const selectedTag = e.target.value;
@@ -94,6 +104,28 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 		);
 	}, [meals, searchQuery]);
 
+	const selectedCount = selectedMealIds.size;
+
+	const handleToggleActive = (mealId: string, nextActive: boolean) => {
+		setSelectedMealIds((prev) => {
+			const next = new Set(prev);
+			if (nextActive) {
+				next.add(mealId);
+			} else {
+				next.delete(mealId);
+			}
+			return next;
+		});
+	};
+
+	const handleClearSelections = () => {
+		setSelectedMealIds(new Set());
+		clearFetcher.submit(null, {
+			method: "post",
+			action: "/api/meals/clear-selections",
+		});
+	};
+
 	return (
 		<>
 			<DashboardHeader
@@ -106,6 +138,24 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			/>
 
 			<div className="space-y-6">
+				<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">
+					<div className="text-sm text-muted">
+						<span className="text-carbon font-bold">{selectedCount}</span> meals
+						selected for Supply list
+					</div>
+					<button
+						type="button"
+						onClick={handleClearSelections}
+						disabled={selectedCount === 0}
+						className={`text-xs font-bold px-3 py-2 border transition-all ${
+							selectedCount > 0
+								? "border-hyper-green text-hyper-green hover:bg-hyper-green/10"
+								: "border-carbon/20 text-muted cursor-not-allowed"
+						}`}
+					>
+						Clear All
+					</button>
+				</div>
 				{/* Unified Toolbar */}
 				<PanelToolbar
 					primaryAction={<GenerateMealButton />}
@@ -202,6 +252,8 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						meals={filteredMeals}
 						enableMatching={matchingEnabled}
 						inventory={inventory}
+						activeMealIds={selectedMealIds}
+						onToggleMealActive={handleToggleActive}
 					/>
 				)}
 			</div>

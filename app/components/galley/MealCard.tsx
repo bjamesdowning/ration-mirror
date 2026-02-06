@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import type { meal } from "~/db/schema";
+import type { MealCustomFields } from "~/lib/types";
 
 // Helper type for inventory item from DB
 type InventoryItem = {
@@ -24,20 +25,34 @@ interface MealCardProps {
 			orderIndex?: number | null;
 		}[];
 		equipment?: string[] | null;
-		customFields?: string | Record<string, any> | null;
+		customFields?: string | MealCustomFields | null;
 	};
 	availableIngredients?: InventoryItem[];
+	isActive?: boolean;
+	onToggleActive?: (mealId: string, nextActive: boolean) => void;
 }
 
-export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
+export function MealCard({
+	meal,
+	availableIngredients = [],
+	isActive = false,
+	onToggleActive,
+}: MealCardProps) {
 	const fetcher = useFetcher();
+	const toggleFetcher = useFetcher<{
+		success: boolean;
+		mealId: string;
+		isActive: boolean;
+	}>();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
+	const [localActive, setLocalActive] = useState(isActive);
 
 	const isDeleting =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete";
 	const isUpdating =
 		fetcher.state !== "idle" && fetcher.formData?.get("intent") === "update";
+	const isToggling = toggleFetcher.state !== "idle";
 
 	// Handle successful update
 	useEffect(() => {
@@ -50,10 +65,32 @@ export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
 		}
 	}, [fetcher.state, fetcher.data, isSaving]);
 
+	useEffect(() => {
+		setLocalActive(isActive);
+	}, [isActive]);
+
+	useEffect(() => {
+		if (!toggleFetcher.data?.mealId) return;
+		if (toggleFetcher.data.mealId !== meal.id) return;
+		const next = toggleFetcher.data.isActive;
+		setLocalActive(next);
+		onToggleActive?.(meal.id, next);
+	}, [toggleFetcher.data, meal.id, onToggleActive]);
+
 	if (isDeleting) return null;
 
 	const handleDelete = () => {
 		fetcher.submit({ intent: "delete", mealId: meal.id }, { method: "post" });
+	};
+
+	const handleToggleActive = () => {
+		const nextActive = !localActive;
+		setLocalActive(nextActive);
+		onToggleActive?.(meal.id, nextActive);
+		toggleFetcher.submit(null, {
+			method: "post",
+			action: `/api/meals/${meal.id}/toggle-active`,
+		});
 	};
 
 	return (
@@ -76,12 +113,30 @@ export function MealCard({ meal, availableIngredients = [] }: MealCardProps) {
 				]}
 			>
 				<div className="flex justify-between items-start mb-2">
-					<h3
-						className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
-						title={meal.name}
-					>
-						{meal.name}
-					</h3>
+					<div className="flex items-start gap-2 min-w-0">
+						<button
+							type="button"
+							onClick={handleToggleActive}
+							disabled={isToggling}
+							aria-pressed={localActive}
+							className={`flex items-center justify-center w-7 h-7 border text-xs font-bold transition-all shadow-sm ${
+								localActive
+									? "bg-hyper-green text-carbon border-hyper-green"
+									: "bg-platinum/70 text-muted border-carbon/20"
+							}`}
+							title={
+								localActive ? "Selected for Supply list" : "Add to Supply list"
+							}
+						>
+							{localActive ? "✓" : "+"}
+						</button>
+						<h3
+							className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
+							title={meal.name}
+						>
+							{meal.name}
+						</h3>
+					</div>
 					<div className="text-right">
 						<span className="text-label text-muted block text-xs">PREP</span>
 						<span className="text-data text-sm font-bold text-carbon">

@@ -9,8 +9,9 @@ import type { groceryItem, groceryList } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	completeGroceryList,
-	createGroceryListFromAllMeals,
+	createGroceryListFromSelectedMeals,
 } from "~/lib/grocery.server";
+import { getActiveMealSelections } from "~/lib/meal-selection.server";
 
 type GroceryListWithItems = typeof groceryList.$inferSelect & {
 	items: (typeof groceryItem.$inferSelect)[];
@@ -21,12 +22,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	// Auto-sync: Always ensure we have a list and it's up to date with missing meal ingredients
 	// This fulfills: "when the supply page is opened, it should automatically update"
-	const { list } = await createGroceryListFromAllMeals(
+	const { list } = await createGroceryListFromSelectedMeals(
+		context.cloudflare.env.DB,
+		groupId,
+	);
+	const activeSelections = await getActiveMealSelections(
 		context.cloudflare.env.DB,
 		groupId,
 	);
 
-	return { list };
+	return { list, activeSelectionCount: activeSelections.length };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -36,7 +41,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 	// Manual Update / Refresh
 	if (intent === "update-list") {
-		const result = await createGroceryListFromAllMeals(
+		const result = await createGroceryListFromSelectedMeals(
 			context.cloudflare.env.DB,
 			groupId,
 		);
@@ -60,7 +65,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function GroceryDashboard() {
-	const { list } = useLoaderData<{ list: GroceryListWithItems }>();
+	const { list, activeSelectionCount } = useLoaderData<{
+		list: GroceryListWithItems;
+		activeSelectionCount: number;
+	}>();
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
 	const revalidator = useRevalidator();
@@ -112,6 +120,14 @@ export default function GroceryDashboard() {
 			/>
 
 			<div className="space-y-6">
+				{activeSelectionCount === 0 && (
+					<div className="glass-panel rounded-xl p-4 border border-hyper-green/30">
+						<p className="text-sm text-muted">
+							No meals selected yet. Visit the Galley and toggle meals to
+							auto-populate this list.
+						</p>
+					</div>
+				)}
 				<PanelToolbar
 					primaryAction={
 						<div className="flex gap-2">

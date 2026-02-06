@@ -13,11 +13,7 @@ export function RailSidebar() {
 		<aside className="hidden md:flex flex-col w-20 h-screen bg-ceramic border-r border-platinum sticky top-0">
 			{/* Logo */}
 			<div className="p-4 flex justify-center">
-				<img
-					src="/static/ration-logo-final-no-background-small.png"
-					alt="Ration"
-					className="w-10 h-10"
-				/>
+				<img src="/static/ration-logo.svg" alt="Ration" className="w-10 h-10" />
 			</div>
 
 			{/* Navigation */}

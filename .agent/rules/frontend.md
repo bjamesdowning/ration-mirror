@@ -30,6 +30,7 @@ description: Role: Frontend & UI Engineer Focus: React Router v7, Tailwind CSS, 
 *   **Typography:** Space Mono (400/700 weights) for everything. Use varying weights and tracking for hierarchy.
 *   **Visual FX:** Colored diffuse shadows (shadow-glow), minimal borders, whitespace-based separation.
 *   **Shapes:** Smooth rounded corners. Use glass-panel effects and subtle color shifts for visual hierarchy.
+*   **Logo:** Use the vector asset at `/static/ration-logo.svg` for all branding.
 *   **Mobile-First:** Design for the "Thumb Zone". Primary actions (Scan, Add, Cook) accessible within bottom 50% of viewport.
 
 ### 3. Component Standards

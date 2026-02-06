@@ -29,7 +29,7 @@ export default function SelectGroupPage() {
 			<div className="max-w-md w-full glass-panel rounded-xl p-8">
 				<div className="flex justify-center mb-6">
 					<img
-						src="/static/ration-logo-final-no-background-small.png"
+						src="/static/ration-logo.svg"
 						alt="Ration"
 						className="w-12 h-12"
 					/>

@@ -56,7 +56,7 @@ export default function Home() {
 						<div className="relative group">
 							<div className="absolute -inset-4 bg-hyper-green/5 rounded-full blur-xl group-hover:bg-hyper-green/10 transition-all duration-500" />
 							<img
-								src="/static/ration-logo-final-no-background.png"
+								src="/static/ration-logo.svg"
 								alt="Ration"
 								className="w-64 md:w-96 relative z-10 drop-shadow-lg"
 							/>

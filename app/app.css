@@ -54,8 +54,8 @@
 
 @layer base {
   body {
-    background-color: var(--ceramic);
-    color: var(--carbon);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-family: var(--font-mono);
   }
 }

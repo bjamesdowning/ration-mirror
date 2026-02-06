@@ -6,6 +6,7 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
+	useRouteLoaderData,
 } from "react-router";
 
 import "@fontsource/space-mono/400.css";
@@ -40,13 +41,8 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	};
 };
 
-export function Layout({
-	children,
-	loaderData,
-}: {
-	children: React.ReactNode;
-	loaderData?: Route.ComponentProps["loaderData"];
-}) {
+export function Layout({ children }: { children: React.ReactNode }) {
+	const loaderData = useRouteLoaderData<typeof loader>("root");
 	const theme = loaderData?.theme || "light";
 
 	return (

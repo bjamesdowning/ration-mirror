@@ -74,8 +74,8 @@ export function MealCard({
 		if (toggleFetcher.data.mealId !== meal.id) return;
 		const next = toggleFetcher.data.isActive;
 		setLocalActive(next);
-		onToggleActive?.(meal.id, next);
-	}, [toggleFetcher.data, meal.id, onToggleActive]);
+		// Note: Parent is already notified optimistically in handleToggleActive
+	}, [toggleFetcher.data, meal.id]);
 
 	if (isDeleting) return null;
 

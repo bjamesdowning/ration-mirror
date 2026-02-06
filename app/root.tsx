@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { useEffect } from "react";
 import {
 	isRouteErrorResponse,
@@ -9,6 +7,7 @@ import {
 	Scripts,
 	ScrollRestoration,
 	useLoaderData,
+	useRouteLoaderData,
 } from "react-router";
 
 import "@fontsource/space-mono/400.css";
@@ -33,20 +32,32 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export const loader = async ({ request, context }: Route.LoaderArgs) => {
+	// Fast path: read theme from cookie (no DB hit)
+	const cookieHeader = request.headers.get("Cookie") || "";
+	const cookieTheme = cookieHeader.match(/theme=(light|dark)/)?.[1] as
+		| "light"
+		| "dark"
+		| undefined;
+
 	const auth = createAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 
+	// Session theme as fallback (now available via additionalFields)
+	const sessionTheme = (session?.user?.settings as { theme?: "light" | "dark" })
+		?.theme;
+
 	return {
 		user: session?.user,
-		theme:
-			(session?.user?.settings as { theme?: "light" | "dark" })?.theme ||
-			"light",
+		theme: cookieTheme ?? sessionTheme ?? "light",
 	};
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
+	const data = useRouteLoaderData<typeof loader>("root");
+	const themeClass = data?.theme === "dark" ? "dark" : "";
+
 	return (
-		<html lang="en">
+		<html lang="en" className={themeClass}>
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />

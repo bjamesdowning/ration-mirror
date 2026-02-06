@@ -67,6 +67,16 @@ export function createAuth(env: Cloudflare.Env) {
 				invitation: schema.invitation,
 			},
 		}),
+		user: {
+			additionalFields: {
+				settings: {
+					type: "string", // JSON stored as text in D1
+					required: false,
+					returned: true, // Include in getSession() response
+					input: false, // Don't allow setting via auth API
+				},
+			},
+		},
 		plugins: [
 			organization({
 				ac,
@@ -145,19 +155,44 @@ export type Auth = ReturnType<typeof createAuth>;
 
 /**
  * Helper function to auto-activate personal organization if no active org is set.
+ * Also syncs theme cookie if missing (e.g., new browser login).
  * Should be called in loaders/actions after getting session.
  */
 export async function ensureActiveOrganization(
 	env: Cloudflare.Env,
 	session: NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>,
-): Promise<NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>> {
+	request?: Request,
+): Promise<{
+	session: NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>;
+	headers?: Headers;
+}> {
+	const db = drizzle(env.DB, { schema });
+	let syncHeaders: Headers | undefined;
+
+	// Sync theme cookie if missing (new browser login)
+	if (request) {
+		const cookieHeader = request.headers.get("Cookie") || "";
+		const hasThemeCookie = /theme=(light|dark)/.test(cookieHeader);
+
+		if (!hasThemeCookie) {
+			const user = await db.query.user.findFirst({
+				where: eq(schema.user.id, session.user.id),
+			});
+			const theme =
+				(user?.settings as { theme?: "light" | "dark" })?.theme || "light";
+			syncHeaders = new Headers();
+			syncHeaders.set(
+				"Set-Cookie",
+				`theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`,
+			);
+		}
+	}
+
 	if (session.session.activeOrganizationId) {
-		return session; // Already has active org
+		return { session, headers: syncHeaders }; // Already has active org
 	}
 
 	try {
-		const db = drizzle(env.DB, { schema });
-
 		// Check if user has a default group preference
 		const user = await db.query.user.findFirst({
 			where: eq(schema.user.id, session.user.id),
@@ -188,11 +223,14 @@ export async function ensureActiveOrganization(
 				);
 
 				return {
-					...session,
 					session: {
-						...session.session,
-						activeOrganizationId: defaultGroupId,
+						...session,
+						session: {
+							...session.session,
+							activeOrganizationId: defaultGroupId,
+						},
 					},
+					headers: syncHeaders,
 				};
 			}
 			console.log(
@@ -218,32 +256,39 @@ export async function ensureActiveOrganization(
 
 			// Return updated session
 			return {
-				...session,
 				session: {
-					...session.session,
-					activeOrganizationId: personalGroup.id,
+					...session,
+					session: {
+						...session.session,
+						activeOrganizationId: personalGroup.id,
+					},
 				},
+				headers: syncHeaders,
 			};
 		}
 	} catch (error) {
 		console.error("[Auth] Failed to auto-activate organization:", error);
 	}
 
-	return session;
+	return { session, headers: syncHeaders };
 }
 
 export async function requireAuth(context: AppLoadContext, request: Request) {
 	const auth = createAuth(context.cloudflare.env);
-	let session = await auth.api.getSession({ headers: request.headers });
+	const session = await auth.api.getSession({ headers: request.headers });
 
 	if (!session) {
 		throw redirect("/");
 	}
 
-	// Auto-activate personal organization if needed
-	session = await ensureActiveOrganization(context.cloudflare.env, session);
+	// Auto-activate personal organization if needed and sync theme cookie
+	const { session: updatedSession } = await ensureActiveOrganization(
+		context.cloudflare.env,
+		session,
+		request,
+	);
 
-	return session;
+	return updatedSession;
 }
 
 export async function requireAdmin(context: AppLoadContext, request: Request) {

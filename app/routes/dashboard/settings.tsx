@@ -132,7 +132,14 @@ export async function action(args: Route.ActionArgs) {
 				.where(eq(schema.user.id, userId));
 		}
 
-		return { success: true };
+		return data(
+			{ success: true },
+			{
+				headers: {
+					"Set-Cookie": `theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`,
+				},
+			},
+		);
 	}
 
 	if (intent === "update-units") {

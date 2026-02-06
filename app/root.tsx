@@ -1,4 +1,6 @@
 // @ts-nocheck
+
+import { useEffect } from "react";
 import {
 	isRouteErrorResponse,
 	Links,
@@ -6,7 +8,7 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
-	useRouteLoaderData,
+	useLoaderData,
 } from "react-router";
 
 import "@fontsource/space-mono/400.css";
@@ -42,11 +44,8 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
-	const loaderData = useRouteLoaderData<typeof loader>("root");
-	const theme = loaderData?.theme || "light";
-
 	return (
-		<html lang="en" className={theme === "dark" ? "dark" : ""}>
+		<html lang="en">
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -63,6 +62,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+	const { theme } = useLoaderData<typeof loader>();
+
+	// Apply theme class to document element after hydration
+	useEffect(() => {
+		if (theme === "dark") {
+			document.documentElement.classList.add("dark");
+		} else {
+			document.documentElement.classList.remove("dark");
+		}
+	}, [theme]);
+
 	return <Outlet />;
 }
 

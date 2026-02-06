@@ -33,7 +33,7 @@ export async function loader(args: Route.LoaderArgs) {
 			with: { sessions: true },
 		});
 
-		if (!user) throw redirect("/sign-in");
+		if (!user) throw redirect("/");
 
 		// Drizzle automatically parses JSON mode fields
 		const settings = (user.settings as UserSettings) || {};
@@ -326,7 +326,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								value="light"
 								defaultChecked={settings.theme !== "dark"}
 								className="w-4 h-4 accent-hyper-green"
-								onChange={(e) => e.target.form?.requestSubmit()}
+								onChange={(e) => {
+									// Immediately apply theme for instant feedback
+									document.documentElement.classList.remove("dark");
+									e.target.form?.requestSubmit();
+								}}
 							/>
 							<span className="text-carbon">Light</span>
 						</label>
@@ -338,7 +342,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								value="dark"
 								defaultChecked={settings.theme === "dark"}
 								className="w-4 h-4 accent-hyper-green"
-								onChange={(e) => e.target.form?.requestSubmit()}
+								onChange={(e) => {
+									// Immediately apply theme for instant feedback
+									document.documentElement.classList.add("dark");
+									e.target.form?.requestSubmit();
+								}}
 							/>
 							<span className="text-carbon">Dark</span>
 						</label>
@@ -516,7 +524,7 @@ function ReferenceIdSection({ credits }: { credits: number }) {
 		await authClient.signOut({
 			fetchOptions: {
 				onSuccess: () => {
-					navigate("/sign-in");
+					navigate("/");
 				},
 			},
 		});

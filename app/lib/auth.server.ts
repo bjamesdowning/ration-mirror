@@ -219,7 +219,7 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	let session = await auth.api.getSession({ headers: request.headers });
 
 	if (!session) {
-		throw redirect("/sign-in");
+		throw redirect("/");
 	}
 
 	// Auto-activate personal organization if needed

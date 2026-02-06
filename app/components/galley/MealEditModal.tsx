@@ -51,6 +51,7 @@ export function MealEditModal({
 	// Transform DB meal to MealInput for the form
 	const defaultValues: Partial<MealInput> = {
 		name: meal.name,
+		domain: (meal.domain ?? "food") as MealInput["domain"],
 		description: meal.description || undefined,
 		servings: meal.servings || 1,
 		prepTime: meal.prepTime || undefined,

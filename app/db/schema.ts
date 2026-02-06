@@ -184,6 +184,7 @@ export const inventory = sqliteTable(
 		unit: text("unit").notNull(), // kg, g, l, ml, piece
 		tags: text("tags", { mode: "json" }).notNull().default("[]"), // Array of strings
 		category: text("category").notNull().default("other"),
+		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
 		expiresAt: integer("expires_at", { mode: "timestamp" }),
 		createdAt: integer("created_at", { mode: "timestamp" })
@@ -196,6 +197,7 @@ export const inventory = sqliteTable(
 	(table) => [
 		index("inventory_org_idx").on(table.organizationId),
 		index("inventory_category_idx").on(table.organizationId, table.category),
+		index("inventory_domain_idx").on(table.organizationId, table.domain),
 	],
 );
 
@@ -238,6 +240,7 @@ export const meal = sqliteTable(
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
+		domain: text("domain").notNull().default("food"),
 		description: text("description"),
 		directions: text("directions"),
 		equipment: text("equipment", { mode: "json" })
@@ -259,6 +262,7 @@ export const meal = sqliteTable(
 	(table) => [
 		// Compound index covers both single-column and multi-column queries
 		index("meal_org_id_idx").on(table.organizationId, table.id),
+		index("meal_domain_idx").on(table.organizationId, table.domain),
 	],
 );
 
@@ -419,6 +423,7 @@ export const groceryItem = sqliteTable(
 		quantity: integer("quantity").notNull().default(1),
 		unit: text("unit").notNull().default("unit"),
 		category: text("category").notNull().default("other"),
+		domain: text("domain").notNull().default("food"),
 		isPurchased: integer("is_purchased", { mode: "boolean" })
 			.notNull()
 			.default(false),
@@ -429,7 +434,10 @@ export const groceryItem = sqliteTable(
 			.notNull()
 			.default(sql`(unixepoch())`),
 	},
-	(table) => [index("grocery_item_list_idx").on(table.listId)],
+	(table) => [
+		index("grocery_item_list_idx").on(table.listId),
+		index("grocery_item_domain_idx").on(table.listId, table.domain),
+	],
 );
 
 export const groceryItemRelations = relations(groceryItem, ({ one }) => ({

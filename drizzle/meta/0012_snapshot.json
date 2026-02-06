@@ -1,8 +1,8 @@
 {
 	"version": "6",
 	"dialect": "sqlite",
-	"id": "6b482f98-f97e-478a-8e7f-53b610f22256",
-	"prevId": "ad731ab1-fd3a-4d9d-bc62-a75dc9395d02",
+	"id": "b3b35e2a-4d16-45d4-9a3a-8b33a396faf6",
+	"prevId": "6b482f98-f97e-478a-8e7f-53b610f22256",
 	"tables": {
 		"account": {
 			"name": "account",
@@ -244,6 +244,14 @@
 					"autoincrement": false,
 					"default": "'other'"
 				},
+				"domain": {
+					"name": "domain",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'food'"
+				},
 				"is_purchased": {
 					"name": "is_purchased",
 					"type": "integer",
@@ -272,6 +280,11 @@
 				"grocery_item_list_idx": {
 					"name": "grocery_item_list_idx",
 					"columns": ["list_id"],
+					"isUnique": false
+				},
+				"grocery_item_domain_idx": {
+					"name": "grocery_item_domain_idx",
+					"columns": ["list_id", "domain"],
 					"isUnique": false
 				}
 			},
@@ -441,6 +454,14 @@
 					"autoincrement": false,
 					"default": "'other'"
 				},
+				"domain": {
+					"name": "domain",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'food'"
+				},
 				"status": {
 					"name": "status",
 					"type": "text",
@@ -482,6 +503,11 @@
 				"inventory_category_idx": {
 					"name": "inventory_category_idx",
 					"columns": ["organization_id", "category"],
+					"isUnique": false
+				},
+				"inventory_domain_idx": {
+					"name": "inventory_domain_idx",
+					"columns": ["organization_id", "domain"],
 					"isUnique": false
 				}
 			},
@@ -710,6 +736,14 @@
 					"notNull": true,
 					"autoincrement": false
 				},
+				"domain": {
+					"name": "domain",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'food'"
+				},
 				"description": {
 					"name": "description",
 					"type": "text",
@@ -783,6 +817,11 @@
 				"meal_org_id_idx": {
 					"name": "meal_org_id_idx",
 					"columns": ["organization_id", "id"],
+					"isUnique": false
+				},
+				"meal_domain_idx": {
+					"name": "meal_domain_idx",
+					"columns": ["organization_id", "domain"],
 					"isUnique": false
 				}
 			},

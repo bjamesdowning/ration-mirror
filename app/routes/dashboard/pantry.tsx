@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 // import { useFetcher } from "react-router"; // Unused import removed
+import { CsvImportButton } from "~/components/cargo/CsvImportButton";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
@@ -7,6 +9,7 @@ import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { CameraInput } from "~/components/scanner/CameraInput";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import {
 	addItem,
@@ -17,11 +20,19 @@ import {
 } from "~/lib/inventory.server";
 import type { Route } from "./+types/pantry";
 
+type ItemDomain = (typeof ITEM_DOMAINS)[number];
+
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
-	const inventory = await getInventory(context.cloudflare.env.DB, groupId);
-	return { inventory };
+	const url = new URL(request.url);
+	const domain = url.searchParams.get("domain") || undefined;
+	const inventory = await getInventory(
+		context.cloudflare.env.DB,
+		groupId,
+		domain as ItemDomain | undefined,
+	);
+	return { inventory, currentDomain: domain };
 }
 
 // --- ACTION ---
@@ -42,6 +53,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
 			category: formData.get("category") ?? undefined,
+			domain: formData.get("domain") ?? undefined,
 			tags: rawTags,
 			expiresAt: expiresAtValue
 				? new Date(expiresAtValue as string)
@@ -86,6 +98,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
 			category: formData.get("category") ?? undefined,
+			domain: formData.get("domain") ?? undefined,
 			tags: rawTags,
 			expiresAt: expiresAtValue || undefined,
 		};
@@ -113,10 +126,27 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 // --- COMPONENT ---
 export default function PantryPage({ loaderData }: Route.ComponentProps) {
-	const { inventory: initialInventory } = loaderData;
+	const { inventory: initialInventory, currentDomain } = loaderData;
 	const [categoryFilter, setCategoryFilter] = useState("all");
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [searchParams, setSearchParams] = useSearchParams();
+
+	const activeDomainParam =
+		searchParams.get("domain") || currentDomain || "all";
+	const activeDomain = ITEM_DOMAINS.includes(activeDomainParam as ItemDomain)
+		? (activeDomainParam as ItemDomain)
+		: "all";
+
+	const handleDomainChange = (nextDomain: ItemDomain | "all") => {
+		const nextParams = new URLSearchParams(searchParams);
+		if (nextDomain === "all") {
+			nextParams.delete("domain");
+		} else {
+			nextParams.set("domain", nextDomain);
+		}
+		setSearchParams(nextParams);
+	};
 
 	// Local Search Logic
 	const filteredInventory = useMemo(() => {
@@ -139,12 +169,20 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			items = items.filter((item) => item.category === categoryFilter);
 		}
 
+		if (activeDomain !== "all") {
+			items = items.filter((item) => item.domain === activeDomain);
+		}
+
 		return items;
-	}, [initialInventory, searchQuery, categoryFilter]);
+	}, [initialInventory, searchQuery, categoryFilter, activeDomain]);
 
 	// Handle scan completion - close quick add if open
 	const handleScanComplete = () => {
 		// Close quick add form since scan now has its own modal
+		setShowQuickAdd(false);
+	};
+
+	const handleImportComplete = () => {
 		setShowQuickAdd(false);
 	};
 
@@ -162,42 +200,88 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			<div className="space-y-6">
 				{/* Unified Toolbar */}
 				<PanelToolbar
-					primaryAction={<CameraInput onScanComplete={handleScanComplete} />}
+					primaryAction={
+						<div className="flex gap-2">
+							<CameraInput onScanComplete={handleScanComplete} />
+							<CsvImportButton
+								onImportComplete={handleImportComplete}
+								defaultDomain={
+									activeDomain === "all" ? undefined : activeDomain
+								}
+							/>
+						</div>
+					}
 					quickAddPlaceholder="Add Item"
 					showQuickAdd={showQuickAdd}
 					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-					quickAddForm={<IngestForm />}
+					quickAddForm={
+						<IngestForm
+							defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+						/>
+					}
 					filterControls={
-						<>
-							<label
-								htmlFor="category-filter"
-								className="text-xs text-muted font-medium"
-							>
-								Category:
-							</label>
-							<select
-								id="category-filter"
-								value={categoryFilter}
-								onChange={(event) => setCategoryFilter(event.target.value)}
-								className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
-							>
-								<option value="all">All Categories</option>
-								{INVENTORY_CATEGORIES.map((category) => (
-									<option key={category} value={category}>
-										{formatInventoryCategory(category)}
-									</option>
-								))}
-							</select>
-							{categoryFilter !== "all" && (
-								<button
-									type="button"
-									onClick={() => setCategoryFilter("all")}
-									className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
+						<div className="flex flex-wrap items-center gap-3">
+							<div className="flex items-center gap-2">
+								<span className="text-xs text-muted font-medium">Domain:</span>
+								<div className="flex flex-wrap gap-2">
+									<button
+										type="button"
+										onClick={() => handleDomainChange("all")}
+										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+											activeDomain === "all"
+												? "bg-hyper-green text-carbon"
+												: "bg-platinum text-carbon hover:bg-platinum/80"
+										}`}
+									>
+										All
+									</button>
+									{ITEM_DOMAINS.map((domain) => (
+										<button
+											key={domain}
+											type="button"
+											onClick={() => handleDomainChange(domain)}
+											className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+												activeDomain === domain
+													? "bg-hyper-green text-carbon"
+													: "bg-platinum text-carbon hover:bg-platinum/80"
+											}`}
+										>
+											{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+										</button>
+									))}
+								</div>
+							</div>
+							<div className="flex items-center gap-2">
+								<label
+									htmlFor="category-filter"
+									className="text-xs text-muted font-medium"
 								>
-									Clear
-								</button>
-							)}
-						</>
+									Category:
+								</label>
+								<select
+									id="category-filter"
+									value={categoryFilter}
+									onChange={(event) => setCategoryFilter(event.target.value)}
+									className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
+								>
+									<option value="all">All Categories</option>
+									{INVENTORY_CATEGORIES.map((category) => (
+										<option key={category} value={category}>
+											{formatInventoryCategory(category)}
+										</option>
+									))}
+								</select>
+								{categoryFilter !== "all" && (
+									<button
+										type="button"
+										onClick={() => setCategoryFilter("all")}
+										className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
+									>
+										Clear
+									</button>
+								)}
+							</div>
+						</div>
 					}
 				/>
 

@@ -7,6 +7,7 @@ import { AddItemForm } from "~/components/supply/AddItemForm";
 import { GroceryList } from "~/components/supply/GroceryList";
 import type { groceryItem, groceryList } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import {
 	completeGroceryList,
 	createGroceryListFromSelectedMeals,
@@ -16,6 +17,8 @@ import { getActiveMealSelections } from "~/lib/meal-selection.server";
 type GroceryListWithItems = typeof groceryList.$inferSelect & {
 	items: (typeof groceryItem.$inferSelect)[];
 };
+
+type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
@@ -74,6 +77,7 @@ export default function GroceryDashboard() {
 	const revalidator = useRevalidator();
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [showSummary, setShowSummary] = useState(false);
+	const [domainFilter, setDomainFilter] = useState<ItemDomain | "all">("all");
 
 	const isDocking = dockFetcher.state !== "idle";
 
@@ -179,15 +183,46 @@ export default function GroceryDashboard() {
 					quickAddForm={
 						<AddItemForm
 							listId={list.id}
+							defaultDomain={domainFilter === "all" ? "food" : domainFilter}
 							onAdd={() => revalidator.revalidate()}
 						/>
 					}
 				/>
 
+				<div className="flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						onClick={() => setDomainFilter("all")}
+						className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
+							domainFilter === "all"
+								? "border-hyper-green bg-hyper-green/15 text-hyper-green"
+								: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
+						}`}
+					>
+						All
+					</button>
+					{ITEM_DOMAINS.map((domain) => (
+						<button
+							key={domain}
+							type="button"
+							onClick={() => setDomainFilter(domain)}
+							className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
+								domainFilter === domain
+									? "border-hyper-green bg-hyper-green/15 text-hyper-green"
+									: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
+							}`}
+						>
+							<span>{DOMAIN_ICONS[domain]}</span>
+							<span>{DOMAIN_LABELS[domain]}</span>
+						</button>
+					))}
+				</div>
+
 				{/* Supply List Content */}
 				<GroceryList
 					key={list.id}
 					list={list}
+					filterDomain={domainFilter}
 					onRefresh={() => revalidator.revalidate()}
 				/>
 			</div>

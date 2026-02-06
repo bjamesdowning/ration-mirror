@@ -142,6 +142,7 @@ export function CameraInput({ onScanComplete }: CameraInputProps) {
 							quantity: item.quantity ?? 1,
 							unit: item.unit || "unit",
 							category: item.category,
+							domain: item.domain ?? "food",
 							tags: item.tags || [],
 							expiresAt: item.expiresAt,
 							selected: true,

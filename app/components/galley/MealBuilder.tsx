@@ -1,5 +1,5 @@
 import { Form, type useFetcher } from "react-router";
-
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
 import { IngredientPicker } from "./IngredientPicker";
@@ -58,6 +58,25 @@ export function MealBuilder({
 							/>
 						</div>
 						<div className="flex flex-col gap-2">
+							<label htmlFor="domain" className="text-label text-muted text-sm">
+								Domain
+							</label>
+							<select
+								name="domain"
+								id="domain"
+								defaultValue={defaultValue.domain ?? "food"}
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							>
+								{ITEM_DOMAINS.map((domain) => (
+									<option key={domain} value={domain}>
+										{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+									</option>
+								))}
+							</select>
+						</div>
+					</div>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="flex flex-col gap-2">
 							<label
 								htmlFor="servings"
 								className="text-label text-muted text-sm"
@@ -73,23 +92,22 @@ export function MealBuilder({
 								className="bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>
 						</div>
-					</div>
-
-					<div className="flex flex-col gap-2">
-						<label
-							htmlFor="description"
-							className="text-label text-muted text-sm"
-						>
-							Description
-						</label>
-						<input
-							type="text"
-							name="description"
-							id="description"
-							defaultValue={defaultValue.description}
-							className="bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-							placeholder="Optional description"
-						/>
+						<div className="flex flex-col gap-2">
+							<label
+								htmlFor="description"
+								className="text-label text-muted text-sm"
+							>
+								Description
+							</label>
+							<input
+								type="text"
+								name="description"
+								id="description"
+								defaultValue={defaultValue.description}
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								placeholder="Optional description"
+							/>
+						</div>
 					</div>
 
 					<div className="flex flex-col gap-2">

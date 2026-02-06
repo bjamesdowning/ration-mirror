@@ -262,6 +262,7 @@ export async function matchMeals(
 					id: meal.id,
 					organizationId: meal.organizationId,
 					name: meal.name,
+					domain: meal.domain,
 					description: meal.description,
 					directions: meal.directions,
 					equipment: meal.equipment,

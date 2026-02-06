@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { useFetcher } from "react-router";
 import type { inventory } from "~/db/schema";
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 interface InventoryEditModalProps {
@@ -114,6 +115,27 @@ export function InventoryEditModal({
 							{INVENTORY_CATEGORIES.map((category) => (
 								<option key={category} value={category}>
 									{formatInventoryCategory(category)}
+								</option>
+							))}
+						</select>
+					</div>
+
+					<div className="flex flex-col gap-2">
+						<label
+							htmlFor={`domain-${item.id}`}
+							className="text-label text-muted"
+						>
+							Domain
+						</label>
+						<select
+							name="domain"
+							id={`domain-${item.id}`}
+							defaultValue={item.domain ?? "food"}
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
+						>
+							{ITEM_DOMAINS.map((domain) => (
+								<option key={domain} value={domain}>
+									{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
 								</option>
 							))}
 						</select>

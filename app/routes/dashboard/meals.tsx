@@ -7,26 +7,37 @@ import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { getInventory } from "~/lib/inventory.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
 import type { Route } from "./+types/meals";
 
+type ItemDomain = (typeof ITEM_DOMAINS)[number];
+
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
+	const domain = url.searchParams.get("domain") || undefined;
 
 	const [meals, availableTags, inventory, activeSelections] = await Promise.all(
 		[
-			getMeals(context.cloudflare.env.DB, groupId, tag),
+			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain),
 			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
 			getInventory(context.cloudflare.env.DB, groupId),
 			getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		],
 	);
 	const activeMealIds = activeSelections.map((selection) => selection.mealId);
-	return { meals, availableTags, currentTag: tag, inventory, activeMealIds };
+	return {
+		meals,
+		availableTags,
+		currentTag: tag,
+		currentDomain: domain,
+		inventory,
+		activeMealIds,
+	};
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -72,9 +83,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const { meals, availableTags, currentTag, inventory, activeMealIds } =
-		loaderData;
-	const [, setSearchParams] = useSearchParams();
+	const {
+		meals,
+		availableTags,
+		currentTag,
+		currentDomain,
+		inventory,
+		activeMealIds,
+	} = loaderData;
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -85,24 +102,46 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const selectedTag = e.target.value;
+		const nextParams = new URLSearchParams(searchParams);
 		if (selectedTag) {
-			setSearchParams({ tag: selectedTag });
+			nextParams.set("tag", selectedTag);
 		} else {
-			setSearchParams({});
+			nextParams.delete("tag");
 		}
+		setSearchParams(nextParams);
+	};
+
+	const activeDomainParam =
+		currentDomain || searchParams.get("domain") || "all";
+	const activeDomain = ITEM_DOMAINS.includes(activeDomainParam as ItemDomain)
+		? (activeDomainParam as ItemDomain)
+		: "all";
+
+	const handleDomainChange = (nextDomain: ItemDomain | "all") => {
+		const nextParams = new URLSearchParams(searchParams);
+		if (nextDomain === "all") {
+			nextParams.delete("domain");
+		} else {
+			nextParams.set("domain", nextDomain);
+		}
+		setSearchParams(nextParams);
 	};
 
 	// Local search filtering (client-side for speed, no credits)
 	const filteredMeals = useMemo(() => {
-		if (!searchQuery.trim()) return meals;
+		let filtered = meals;
+		if (activeDomain !== "all") {
+			filtered = filtered.filter((meal) => meal.domain === activeDomain);
+		}
+		if (!searchQuery.trim()) return filtered;
 		const query = searchQuery.toLowerCase();
-		return meals.filter(
+		return filtered.filter(
 			(meal) =>
 				meal.name.toLowerCase().includes(query) ||
 				meal.description?.toLowerCase().includes(query) ||
 				meal.tags?.some((tag) => tag.toLowerCase().includes(query)),
 		);
-	}, [meals, searchQuery]);
+	}, [meals, searchQuery, activeDomain]);
 
 	const selectedCount = selectedMealIds.size;
 
@@ -169,7 +208,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						/>
 					}
 					filterControls={
-						<>
+						<div className="flex flex-wrap items-center gap-3">
 							{/* Match Mode Toggle */}
 							<button
 								type="button"
@@ -182,6 +221,37 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							>
 								{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
 							</button>
+
+							<div className="flex items-center gap-2">
+								<span className="text-xs text-muted font-medium">Domain:</span>
+								<div className="flex flex-wrap gap-2">
+									<button
+										type="button"
+										onClick={() => handleDomainChange("all")}
+										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+											activeDomain === "all"
+												? "bg-hyper-green text-carbon"
+												: "bg-platinum text-carbon hover:bg-platinum/80"
+										}`}
+									>
+										All
+									</button>
+									{ITEM_DOMAINS.map((domain) => (
+										<button
+											key={domain}
+											type="button"
+											onClick={() => handleDomainChange(domain)}
+											className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+												activeDomain === domain
+													? "bg-hyper-green text-carbon"
+													: "bg-platinum text-carbon hover:bg-platinum/80"
+											}`}
+										>
+											{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+										</button>
+									))}
+								</div>
+							</div>
 
 							{/* Tag Filter */}
 							<label
@@ -211,7 +281,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									Clear
 								</Link>
 							)}
-						</>
+						</div>
 					}
 				/>
 

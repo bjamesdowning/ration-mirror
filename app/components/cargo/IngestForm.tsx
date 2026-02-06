@@ -1,17 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
+import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
-export function IngestForm() {
+type ItemDomain = (typeof ITEM_DOMAINS)[number];
+
+interface IngestFormProps {
+	defaultDomain?: ItemDomain;
+}
+
+export function IngestForm({ defaultDomain }: IngestFormProps) {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const isSubmitting = fetcher.state !== "idle";
 	const [isExpanded, setIsExpanded] = useState(false);
+	const [domain, setDomain] = useState<ItemDomain>(defaultDomain ?? "food");
 
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
 	const unitInputRef = useRef<HTMLSelectElement>(null);
 	const categoryInputRef = useRef<HTMLSelectElement>(null);
+
+	useEffect(() => {
+		if (defaultDomain) {
+			setDomain(defaultDomain);
+		}
+	}, [defaultDomain]);
 
 	// Reset form on success
 	useEffect(() => {
@@ -94,6 +108,8 @@ export function IngestForm() {
 					</div>
 				</div>
 
+				<input type="hidden" name="domain" value={domain} />
+
 				{/* Advanced Details Toggle */}
 				<div className="pt-2">
 					<button
@@ -108,7 +124,7 @@ export function IngestForm() {
 						) : (
 							<>
 								<span className="mr-1">+</span> Add Details (Category, Tags,
-								Expiry)
+								Domain, Expiry)
 							</>
 						)}
 					</button>
@@ -117,7 +133,7 @@ export function IngestForm() {
 				{/* Collapsible Advanced Section */}
 				{isExpanded && (
 					<div className="space-y-4 pt-2 animate-fade-in">
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							{/* Category */}
 							<div className="flex flex-col">
 								<label
@@ -136,6 +152,31 @@ export function IngestForm() {
 									{INVENTORY_CATEGORIES.map((category) => (
 										<option key={category} value={category}>
 											{formatInventoryCategory(category)}
+										</option>
+									))}
+								</select>
+							</div>
+
+							{/* Domain */}
+							<div className="flex flex-col">
+								<label
+									htmlFor="item-domain"
+									className="text-label text-muted mb-2"
+								>
+									Domain
+								</label>
+								<select
+									id="item-domain"
+									name="domain"
+									value={domain}
+									onChange={(event) =>
+										setDomain(event.target.value as ItemDomain)
+									}
+									className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
+								>
+									{ITEM_DOMAINS.map((itemDomain) => (
+										<option key={itemDomain} value={itemDomain}>
+											{DOMAIN_ICONS[itemDomain]} {DOMAIN_LABELS[itemDomain]}
 										</option>
 									))}
 								</select>

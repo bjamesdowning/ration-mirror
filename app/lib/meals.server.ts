@@ -11,8 +11,16 @@ export async function getMeals(
 	db: D1Database,
 	organizationId: string,
 	tag?: string,
+	domain?: (typeof meal.$inferSelect)["domain"],
 ) {
 	const d1 = drizzle(db);
+	const conditions = [eq(meal.organizationId, organizationId)];
+	if (tag) {
+		conditions.push(eq(mealTag.tag, tag));
+	}
+	if (domain) {
+		conditions.push(eq(meal.domain, domain));
+	}
 
 	// Base query to get meals
 	const meals = tag
@@ -21,6 +29,7 @@ export async function getMeals(
 					id: meal.id,
 					organizationId: meal.organizationId,
 					name: meal.name,
+					domain: meal.domain,
 					description: meal.description,
 					directions: meal.directions,
 					equipment: meal.equipment,
@@ -33,14 +42,12 @@ export async function getMeals(
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-				.where(
-					and(eq(meal.organizationId, organizationId), eq(mealTag.tag, tag)),
-				)
+				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt))
 		: await d1
 				.select()
 				.from(meal)
-				.where(eq(meal.organizationId, organizationId))
+				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt));
 
 	if (meals.length === 0) {
@@ -142,6 +149,7 @@ export async function createMeal(
 			id: mealId,
 			organizationId,
 			name: data.name,
+			domain: data.domain,
 			description: data.description,
 			directions: data.directions,
 			equipment: data.equipment,
@@ -210,6 +218,7 @@ export async function updateMeal(
 			.update(meal)
 			.set({
 				name: data.name,
+				domain: data.domain,
 				description: data.description,
 				directions: data.directions,
 				equipment: data.equipment,

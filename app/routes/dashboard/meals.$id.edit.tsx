@@ -2,6 +2,7 @@ import { redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
@@ -22,6 +23,9 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	// Sanitize for frontend types (null -> undefined)
 	const sanitizedMeal = {
 		...meal,
+		domain: ITEM_DOMAINS.includes(meal.domain as ItemDomain)
+			? (meal.domain as ItemDomain)
+			: "food",
 		servings: meal.servings ?? 1,
 		prepTime: meal.prepTime ?? undefined,
 		cookTime: meal.cookTime ?? undefined,

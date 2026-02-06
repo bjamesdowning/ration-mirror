@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_DOMAINS } from "../domain";
 
 export const GroceryListSchema = z.object({
 	name: z
@@ -33,6 +34,7 @@ export const GroceryItemSchema = z.object({
 			"other",
 		])
 		.default("other"),
+	domain: z.enum(ITEM_DOMAINS).default("food"),
 	sourceMealId: z.string().uuid().optional(),
 });
 
@@ -61,6 +63,7 @@ export const GroceryItemUpdateSchema = z.object({
 			"other",
 		])
 		.optional(),
+	domain: z.enum(ITEM_DOMAINS).optional(),
 	isPurchased: z
 		.union([z.boolean(), z.string().transform((val) => val === "true")])
 		.optional(),

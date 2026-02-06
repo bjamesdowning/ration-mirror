@@ -19,6 +19,7 @@ export interface GroceryItemInput {
 	quantity?: number;
 	unit?: string;
 	category?: string;
+	domain?: string;
 	sourceMealId?: string;
 }
 
@@ -263,6 +264,7 @@ export async function addGroceryItem(
 			quantity: data.quantity || 1,
 			unit: data.unit || "unit",
 			category: data.category || "other",
+			domain: data.domain || "food",
 			sourceMealId: data.sourceMealId,
 		}),
 		d1
@@ -320,6 +322,7 @@ export async function updateGroceryItem(
 				quantity: data.quantity ?? existing.quantity,
 				unit: data.unit ?? existing.unit,
 				category: data.category ?? existing.category,
+				domain: data.domain ?? existing.domain,
 				isPurchased: data.isPurchased ?? existing.isPurchased,
 			})
 			.where(eq(groceryItem.id, itemId)),
@@ -484,6 +487,11 @@ export async function addItemsFromMeal(
 		.select()
 		.from(mealIngredient)
 		.where(eq(mealIngredient.mealId, mealId));
+	const [mealRecord] = await d1
+		.select({ domain: meal.domain })
+		.from(meal)
+		.where(eq(meal.id, mealId));
+	const mealDomain = mealRecord?.domain ?? "food";
 
 	if (ingredients.length === 0) {
 		return { addedItems: [], skippedItems: [] };
@@ -533,6 +541,7 @@ export async function addItemsFromMeal(
 			name: ingredient.ingredientName,
 			quantity: neededQuantity,
 			unit: ingredient.unit,
+			domain: mealDomain,
 			sourceMealId: mealId,
 		});
 
@@ -605,6 +614,7 @@ export async function createGroceryListFromAllMeals(
 				unit: mealIngredient.unit,
 				mealId: mealIngredient.mealId,
 			},
+			meal_domain: meal.domain,
 		})
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
@@ -653,6 +663,7 @@ export async function createGroceryListFromAllMeals(
 			name: string;
 			quantity: number;
 			unit: string;
+			domain: string;
 			sourceMealIds: string[];
 		}
 	>();
@@ -660,24 +671,26 @@ export async function createGroceryListFromAllMeals(
 	for (const row of allIngredients) {
 		const ingredient = row.meal_ingredient;
 		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
+		const domain = row.meal_domain ?? "food";
 
 		if (ingredientAggregation.has(normalizedName)) {
 			const existing = ingredientAggregation.get(normalizedName);
 			if (!existing) continue;
 
 			// Only aggregate if units match
-			if (existing.unit === ingredient.unit) {
+			if (existing.unit === ingredient.unit && existing.domain === domain) {
 				existing.quantity += ingredient.quantity;
 				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
 					existing.sourceMealIds.push(ingredient.mealId);
 				}
 			} else {
 				// Different units - create separate entry with unit suffix
-				const keyWithUnit = `${normalizedName}__${ingredient.unit}`;
+				const keyWithUnit = `${normalizedName}__${ingredient.unit}__${domain}`;
 				ingredientAggregation.set(keyWithUnit, {
 					name: ingredient.ingredientName,
 					quantity: ingredient.quantity,
 					unit: ingredient.unit,
+					domain,
 					sourceMealIds: [ingredient.mealId],
 				});
 			}
@@ -686,6 +699,7 @@ export async function createGroceryListFromAllMeals(
 				name: ingredient.ingredientName,
 				quantity: ingredient.quantity,
 				unit: ingredient.unit,
+				domain,
 				sourceMealIds: [ingredient.mealId],
 			});
 		}
@@ -705,7 +719,9 @@ export async function createGroceryListFromAllMeals(
 
 	if (supplyList.items) {
 		for (const item of supplyList.items) {
-			const key = `${item.name.toLowerCase().trim()}__${item.unit}`;
+			const key = `${item.name.toLowerCase().trim()}__${item.unit}__${
+				item.domain ?? "food"
+			}`;
 			existingItemsMap.set(key, item);
 		}
 	}
@@ -747,7 +763,7 @@ export async function createGroceryListFromAllMeals(
 		}
 
 		// Check if item already exists in the list
-		const existingKey = `${normalizedName}__${aggregated.unit}`;
+		const existingKey = `${normalizedName}__${aggregated.unit}__${aggregated.domain}`;
 		const existingItem = existingItemsMap.get(existingKey);
 
 		if (existingItem) {
@@ -770,6 +786,7 @@ export async function createGroceryListFromAllMeals(
 				quantity: neededQuantity,
 				unit: aggregated.unit,
 				category,
+				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
 			});
 
@@ -882,6 +899,7 @@ export async function createGroceryListFromSelectedMeals(
 				unit: mealIngredient.unit,
 				mealId: mealIngredient.mealId,
 			},
+			meal_domain: meal.domain,
 		})
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
@@ -921,6 +939,7 @@ export async function createGroceryListFromSelectedMeals(
 			name: string;
 			quantity: number;
 			unit: string;
+			domain: string;
 			sourceMealIds: string[];
 		}
 	>();
@@ -928,22 +947,24 @@ export async function createGroceryListFromSelectedMeals(
 	for (const row of allIngredients) {
 		const ingredient = row.meal_ingredient;
 		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
+		const domain = row.meal_domain ?? "food";
 
 		if (ingredientAggregation.has(normalizedName)) {
 			const existing = ingredientAggregation.get(normalizedName);
 			if (!existing) continue;
 
-			if (existing.unit === ingredient.unit) {
+			if (existing.unit === ingredient.unit && existing.domain === domain) {
 				existing.quantity += ingredient.quantity;
 				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
 					existing.sourceMealIds.push(ingredient.mealId);
 				}
 			} else {
-				const keyWithUnit = `${normalizedName}__${ingredient.unit}`;
+				const keyWithUnit = `${normalizedName}__${ingredient.unit}__${domain}`;
 				ingredientAggregation.set(keyWithUnit, {
 					name: ingredient.ingredientName,
 					quantity: ingredient.quantity,
 					unit: ingredient.unit,
+					domain,
 					sourceMealIds: [ingredient.mealId],
 				});
 			}
@@ -952,6 +973,7 @@ export async function createGroceryListFromSelectedMeals(
 				name: ingredient.ingredientName,
 				quantity: ingredient.quantity,
 				unit: ingredient.unit,
+				domain,
 				sourceMealIds: [ingredient.mealId],
 			});
 		}
@@ -969,7 +991,9 @@ export async function createGroceryListFromSelectedMeals(
 
 	if (supplyList.items) {
 		for (const item of supplyList.items) {
-			const key = `${item.name.toLowerCase().trim()}__${item.unit}`;
+			const key = `${item.name.toLowerCase().trim()}__${item.unit}__${
+				item.domain ?? "food"
+			}`;
 			existingItemsMap.set(key, item);
 		}
 	}
@@ -1006,7 +1030,9 @@ export async function createGroceryListFromSelectedMeals(
 			continue;
 		}
 
-		const existingKey = `${normalizedName}__${aggregated.unit}`;
+		const existingKey = `${normalizedName}__${aggregated.unit}__${
+			aggregated.domain
+		}`;
 		const existingItem = existingItemsMap.get(existingKey);
 
 		if (existingItem) {
@@ -1025,6 +1051,7 @@ export async function createGroceryListFromSelectedMeals(
 				quantity: neededQuantity,
 				unit: aggregated.unit,
 				category,
+				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0],
 			});
 

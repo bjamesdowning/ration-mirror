@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { type groceryItem, inventory, ledger } from "../db/schema";
+import { ITEM_DOMAINS } from "./domain";
 import { INVENTORY_CATEGORIES } from "./inventory";
 
 // --- Validation Schemas ---
@@ -14,6 +15,7 @@ export const InventoryItemSchema = z.object({
 	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
 	unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
 	category: z.enum(INVENTORY_CATEGORIES).default("other"),
+	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
 	expiresAt: z.coerce.date().optional(), // Optional date string coercion
 });
@@ -56,13 +58,22 @@ function normalizeTags(tags: unknown) {
  * Fetch all inventory items for a specific organization.
  * Ordered by creation date descending (newest first).
  */
-export async function getInventory(db: D1Database, organizationId: string) {
+export async function getInventory(
+	db: D1Database,
+	organizationId: string,
+	domain?: (typeof ITEM_DOMAINS)[number],
+) {
 	const d1 = drizzle(db);
+	const conditions = [eq(inventory.organizationId, organizationId)];
+
+	if (domain) {
+		conditions.push(eq(inventory.domain, domain));
+	}
 
 	return await d1
 		.select()
 		.from(inventory)
-		.where(eq(inventory.organizationId, organizationId))
+		.where(and(...conditions))
 		.orderBy(desc(inventory.createdAt));
 }
 
@@ -85,6 +96,7 @@ export async function addItem(
 			quantity: data.quantity,
 			unit: data.unit,
 			category: data.category,
+			domain: data.domain,
 			status: calculateInventoryStatus(data.expiresAt),
 			tags: data.tags,
 			expiresAt: data.expiresAt,
@@ -143,6 +155,7 @@ export async function updateItem(
 		quantity: nextQuantity,
 		unit: nextUnit,
 		category: nextCategory,
+		domain: data.domain ?? (existing.domain as InventoryItemInput["domain"]),
 		tags: nextTags,
 		expiresAt: nextExpiresAt ?? undefined,
 	};
@@ -154,6 +167,7 @@ export async function updateItem(
 			quantity: nextData.quantity,
 			unit: nextData.unit,
 			category: nextData.category,
+			domain: nextData.domain,
 			status: nextStatus,
 			tags: nextData.tags,
 			expiresAt: nextData.expiresAt,
@@ -332,6 +346,7 @@ export async function dockGroceryItems(
 					quantity: item.quantity,
 					unit: item.unit,
 					category: item.category,
+					domain: item.domain,
 					status: "stable",
 					tags: [], // No tags from grocery list currently
 					createdAt: now,
@@ -347,6 +362,7 @@ export async function dockGroceryItems(
 				quantity: item.quantity,
 				unit: item.unit,
 				category: item.category,
+				domain: item.domain,
 				status: "stable",
 				tags: "[]",
 				expiresAt: null,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_DOMAINS } from "../domain";
 
 export const MealIngredientSchema = z.object({
 	ingredientName: z
@@ -27,6 +28,7 @@ export const MealSchema = z.object({
 		.string()
 		.min(1, "Meal name is required")
 		.transform((v) => v.toLowerCase()),
+	domain: z.enum(ITEM_DOMAINS).default("food"),
 	description: z.string().optional(),
 	directions: z.string().optional(),
 	equipment: z.array(z.string()).default([]),

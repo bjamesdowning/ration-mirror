@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useFetcher } from "react-router";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 
 interface AddItemFormProps {
 	listId: string;
@@ -177,7 +177,7 @@ export function AddItemForm({
 						>
 							{ITEM_DOMAINS.map((itemDomain) => (
 								<option key={itemDomain} value={itemDomain}>
-									{DOMAIN_ICONS[itemDomain]} {DOMAIN_LABELS[itemDomain]}
+									{DOMAIN_LABELS[itemDomain]}
 								</option>
 							))}
 						</select>

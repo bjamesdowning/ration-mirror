@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
@@ -78,6 +78,21 @@ export default function GroceryDashboard() {
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [showSummary, setShowSummary] = useState(false);
 	const [domainFilter, setDomainFilter] = useState<ItemDomain | "all">("all");
+	const [searchQuery, setSearchQuery] = useState("");
+
+	// Local Search Logic (matches Cargo/Galley pattern)
+	const filteredItems = useMemo(() => {
+		if (!list?.items) return [];
+		let items = list.items;
+
+		// Filter by search query
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase();
+			items = items.filter((item) => item.name.toLowerCase().includes(query));
+		}
+
+		return items;
+	}, [list?.items, searchQuery]);
 
 	const isDocking = dockFetcher.state !== "idle";
 
@@ -120,7 +135,9 @@ export default function GroceryDashboard() {
 				title="Supply"
 				subtitle="Procurement & Logistics"
 				showSearch={true}
-				totalItems={list?.items?.length || 0}
+				totalItems={filteredItems.length}
+				searchPlaceholder="Search items..."
+				onSearchChange={setSearchQuery}
 			/>
 
 			<div className="space-y-6">
@@ -201,21 +218,24 @@ export default function GroceryDashboard() {
 					>
 						All
 					</button>
-					{ITEM_DOMAINS.map((domain) => (
-						<button
-							key={domain}
-							type="button"
-							onClick={() => setDomainFilter(domain)}
-							className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
-								domainFilter === domain
-									? "border-hyper-green bg-hyper-green/15 text-hyper-green"
-									: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
-							}`}
-						>
-							<span>{DOMAIN_ICONS[domain]}</span>
-							<span>{DOMAIN_LABELS[domain]}</span>
-						</button>
-					))}
+					{ITEM_DOMAINS.map((domain) => {
+						const Icon = DOMAIN_ICONS[domain];
+						return (
+							<button
+								key={domain}
+								type="button"
+								onClick={() => setDomainFilter(domain)}
+								className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
+									domainFilter === domain
+										? "border-hyper-green bg-hyper-green/15 text-hyper-green"
+										: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
+								}`}
+							>
+								<Icon className="w-3 h-3" />
+								<span>{DOMAIN_LABELS[domain]}</span>
+							</button>
+						);
+					})}
 				</div>
 
 				{/* Supply List Content */}
@@ -223,6 +243,7 @@ export default function GroceryDashboard() {
 					key={list.id}
 					list={list}
 					filterDomain={domainFilter}
+					filterSearch={searchQuery}
 					onRefresh={() => revalidator.revalidate()}
 				/>
 			</div>

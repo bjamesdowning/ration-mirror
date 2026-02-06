@@ -1,3 +1,4 @@
+import { ShoppingCart } from "lucide-react";
 import type { groceryItem, groceryList } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { GroceryItem } from "./GroceryItem";
@@ -10,6 +11,7 @@ interface GroceryListProps {
 	list: GroceryListWithItems;
 	onRefresh?: () => void;
 	filterDomain?: (typeof ITEM_DOMAINS)[number] | "all";
+	filterSearch?: string;
 }
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -18,11 +20,23 @@ export function GroceryList({
 	list,
 	onRefresh,
 	filterDomain = "all",
+	filterSearch = "",
 }: GroceryListProps) {
-	const domainFilteredItems =
+	// Apply domain filter
+	let filteredItems =
 		filterDomain === "all"
 			? list.items
 			: list.items.filter((item) => item.domain === filterDomain);
+
+	// Apply search filter
+	if (filterSearch.trim()) {
+		const query = filterSearch.toLowerCase();
+		filteredItems = filteredItems.filter((item) =>
+			item.name.toLowerCase().includes(query),
+		);
+	}
+
+	const domainFilteredItems = filteredItems;
 
 	const categoryNames: Record<string, string> = {
 		dry_goods: "Dry Goods",
@@ -65,7 +79,7 @@ export function GroceryList({
 			{/* Items List */}
 			{domainFilteredItems.length === 0 ? (
 				<div className="bg-platinum/50 rounded-xl p-8 text-center">
-					<div className="text-4xl mb-4">🛒</div>
+					<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted" />
 					<p className="text-lg text-muted">No items in this list yet</p>
 					<p className="text-sm text-muted mt-2">
 						Add items using the form above
@@ -93,7 +107,10 @@ export function GroceryList({
 						return (
 							<section key={domain} className="space-y-4">
 								<div className="flex items-center gap-3">
-									<span className="text-xl">{DOMAIN_ICONS[domain]}</span>
+									{(() => {
+										const Icon = DOMAIN_ICONS[domain];
+										return <Icon className="w-5 h-5 text-hyper-green" />;
+									})()}
 									<h3 className="text-lg font-semibold text-carbon">
 										{DOMAIN_LABELS[domain]}
 									</h3>

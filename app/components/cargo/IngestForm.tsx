@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -176,7 +176,7 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 								>
 									{ITEM_DOMAINS.map((itemDomain) => (
 										<option key={itemDomain} value={itemDomain}>
-											{DOMAIN_ICONS[itemDomain]} {DOMAIN_LABELS[itemDomain]}
+											{DOMAIN_LABELS[itemDomain]}
 										</option>
 									))}
 								</select>

@@ -1,5 +1,5 @@
 import { Form, type useFetcher } from "react-router";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
 import { IngredientPicker } from "./IngredientPicker";
@@ -69,7 +69,7 @@ export function MealBuilder({
 							>
 								{ITEM_DOMAINS.map((domain) => (
 									<option key={domain} value={domain}>
-										{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+										{DOMAIN_LABELS[domain]}
 									</option>
 								))}
 							</select>

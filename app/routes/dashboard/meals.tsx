@@ -236,20 +236,24 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									>
 										All
 									</button>
-									{ITEM_DOMAINS.map((domain) => (
-										<button
-											key={domain}
-											type="button"
-											onClick={() => handleDomainChange(domain)}
-											className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-												activeDomain === domain
-													? "bg-hyper-green text-carbon"
-													: "bg-platinum text-carbon hover:bg-platinum/80"
-											}`}
-										>
-											{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
-										</button>
-									))}
+									{ITEM_DOMAINS.map((domain) => {
+										const Icon = DOMAIN_ICONS[domain];
+										return (
+											<button
+												key={domain}
+												type="button"
+												onClick={() => handleDomainChange(domain)}
+												className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+													activeDomain === domain
+														? "bg-hyper-green text-carbon"
+														: "bg-platinum text-carbon hover:bg-platinum/80"
+												}`}
+											>
+												<Icon className="w-3 h-3" />
+												<span>{DOMAIN_LABELS[domain]}</span>
+											</button>
+										);
+									})}
 								</div>
 							</div>
 

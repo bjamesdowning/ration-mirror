@@ -1,7 +1,7 @@
 // @ts-nocheck
 import type { useFetcher } from "react-router";
 import type { inventory } from "~/db/schema";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 interface InventoryEditModalProps {
@@ -135,7 +135,7 @@ export function InventoryEditModal({
 						>
 							{ITEM_DOMAINS.map((domain) => (
 								<option key={domain} value={domain}>
-									{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+									{DOMAIN_LABELS[domain]}
 								</option>
 							))}
 						</select>

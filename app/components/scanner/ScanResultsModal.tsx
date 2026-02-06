@@ -1,7 +1,7 @@
 import { Calendar, Check, Edit2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 
@@ -368,7 +368,7 @@ function ScanResultItemRow({
 						>
 							{ITEM_DOMAINS.map((domain) => (
 								<option key={domain} value={domain}>
-									{DOMAIN_ICONS[domain]} {DOMAIN_LABELS[domain]}
+									{DOMAIN_LABELS[domain]}
 								</option>
 							))}
 						</select>
@@ -432,12 +432,7 @@ function ScanResultItemRow({
 								{item.category && (
 									<> • {formatInventoryCategory(item.category)}</>
 								)}
-								{item.domain && (
-									<>
-										{" "}
-										• {DOMAIN_ICONS[item.domain]} {DOMAIN_LABELS[item.domain]}
-									</>
-								)}
+								{item.domain && <> • {DOMAIN_LABELS[item.domain]}</>}
 								{item.expiresAt && (
 									<>
 										{" "}

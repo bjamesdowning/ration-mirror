@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-// import { useFetcher } from "react-router"; // Unused import removed
 import { CsvImportButton } from "~/components/cargo/CsvImportButton";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
-import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
-import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
+import { PackageIcon } from "~/components/icons/PageIcons";
 import { CameraInput } from "~/components/scanner/CameraInput";
+import { FilterChip } from "~/components/shell/FilterSheet";
+import {
+	type FloatingAction,
+	FloatingActionBar,
+} from "~/components/shell/FloatingActionBar";
+import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
@@ -178,7 +182,6 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 
 	// Handle scan completion - close quick add if open
 	const handleScanComplete = () => {
-		// Close quick add form since scan now has its own modal
 		setShowQuickAdd(false);
 	};
 
@@ -186,117 +189,150 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		setShowQuickAdd(false);
 	};
 
+	// Check if any filters are active
+	const hasActiveFilters = activeDomain !== "all" || categoryFilter !== "all";
+
+	// FAB actions for mobile
+	const fabActions: FloatingAction[] = [
+		{
+			id: "add",
+			icon: <PlusIcon />,
+			label: "Add Item",
+			onClick: () => setShowQuickAdd(true),
+		},
+		{
+			id: "scan",
+			icon: <CameraIcon />,
+			label: "Scan",
+			primary: true,
+			onClick: () => {
+				// Trigger the hidden CameraInput
+				document.getElementById("fab-camera-trigger")?.click();
+			},
+		},
+		{
+			id: "import",
+			icon: <ImportIcon />,
+			label: "Import",
+			onClick: () => {
+				document.getElementById("fab-import-trigger")?.click();
+			},
+		},
+	];
+
+	// Filter content for mobile sheet
+	const filterContent = (
+		<div className="space-y-6">
+			{/* Domain filters */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Domain</h4>
+				<div className="flex flex-wrap gap-2">
+					<FilterChip
+						label="All"
+						isActive={activeDomain === "all"}
+						onClick={() => handleDomainChange("all")}
+					/>
+					{ITEM_DOMAINS.map((domain) => {
+						const Icon = DOMAIN_ICONS[domain];
+						return (
+							<FilterChip
+								key={domain}
+								label={DOMAIN_LABELS[domain]}
+								icon={<Icon className="w-4 h-4" />}
+								isActive={activeDomain === domain}
+								onClick={() => handleDomainChange(domain)}
+							/>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* Category filter */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Category</h4>
+				<select
+					id="category-filter-mobile"
+					value={categoryFilter}
+					onChange={(e) => setCategoryFilter(e.target.value)}
+					className="w-full bg-platinum dark:bg-white/10 border border-carbon/10 dark:border-white/10 px-4 py-3 rounded-xl text-sm text-carbon dark:text-white focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+				>
+					<option value="all">All Categories</option>
+					{INVENTORY_CATEGORIES.map((category) => (
+						<option key={category} value={category}>
+							{formatInventoryCategory(category)}
+						</option>
+					))}
+				</select>
+			</div>
+
+			{/* Clear filters */}
+			{hasActiveFilters && (
+				<button
+					type="button"
+					onClick={() => {
+						handleDomainChange("all");
+						setCategoryFilter("all");
+					}}
+					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
+				>
+					Clear All Filters
+				</button>
+			)}
+		</div>
+	);
+
 	return (
 		<>
-			<DashboardHeader
+			{/* Mobile Header */}
+			<MobilePageHeader
+				icon={<PackageIcon className="w-6 h-6 text-hyper-green" />}
 				title="Cargo"
-				subtitle="Inventory Management // Stock"
+				itemCount={filteredInventory.length}
 				showSearch={true}
-				totalItems={filteredInventory.length}
 				searchPlaceholder="Search ingredients..."
 				onSearchChange={setSearchQuery}
+				filterContent={filterContent}
+				hasActiveFilters={hasActiveFilters}
 			/>
 
-			<div className="space-y-6">
-				{/* Unified Toolbar */}
-				<PanelToolbar
-					primaryAction={
-						<div className="flex gap-2">
-							<CameraInput onScanComplete={handleScanComplete} />
-							<CsvImportButton
-								onImportComplete={handleImportComplete}
-								defaultDomain={
-									activeDomain === "all" ? undefined : activeDomain
-								}
-							/>
-						</div>
-					}
-					quickAddPlaceholder="Add Item"
-					showQuickAdd={showQuickAdd}
-					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-					quickAddForm={
+			<div className="space-y-4">
+				{/* Desktop Toolbar - hidden on mobile */}
+				<div className="hidden md:flex flex-wrap items-center gap-3">
+					<button
+						type="button"
+						onClick={() => setShowQuickAdd(!showQuickAdd)}
+						className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+							showQuickAdd
+								? "bg-hyper-green text-carbon shadow-glow-sm"
+								: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
+						}`}
+					>
+						{showQuickAdd ? "✕ Cancel" : "+ Add Item"}
+					</button>
+					<CameraInput onScanComplete={handleScanComplete} />
+					<CsvImportButton
+						onImportComplete={handleImportComplete}
+						defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+					/>
+				</div>
+
+				{/* Quick Add Form (collapsible) */}
+				{showQuickAdd && (
+					<div className="glass-panel rounded-xl p-6 animate-fade-in">
 						<IngestForm
 							defaultDomain={activeDomain === "all" ? undefined : activeDomain}
 						/>
-					}
-					filterControls={
-						<div className="flex flex-wrap items-center gap-3">
-							<div className="flex items-center gap-2">
-								<span className="text-xs text-muted font-medium">Domain:</span>
-								<div className="flex flex-wrap gap-2">
-									<button
-										type="button"
-										onClick={() => handleDomainChange("all")}
-										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-											activeDomain === "all"
-												? "bg-hyper-green text-carbon"
-												: "bg-platinum text-carbon hover:bg-platinum/80"
-										}`}
-									>
-										All
-									</button>
-									{ITEM_DOMAINS.map((domain) => {
-										const Icon = DOMAIN_ICONS[domain];
-										return (
-											<button
-												key={domain}
-												type="button"
-												onClick={() => handleDomainChange(domain)}
-												className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-													activeDomain === domain
-														? "bg-hyper-green text-carbon"
-														: "bg-platinum text-carbon hover:bg-platinum/80"
-												}`}
-											>
-												<Icon className="w-3 h-3" />
-												<span>{DOMAIN_LABELS[domain]}</span>
-											</button>
-										);
-									})}
-								</div>
-							</div>
-							<div className="flex items-center gap-2">
-								<label
-									htmlFor="category-filter"
-									className="text-xs text-muted font-medium"
-								>
-									Category:
-								</label>
-								<select
-									id="category-filter"
-									value={categoryFilter}
-									onChange={(event) => setCategoryFilter(event.target.value)}
-									className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
-								>
-									<option value="all">All Categories</option>
-									{INVENTORY_CATEGORIES.map((category) => (
-										<option key={category} value={category}>
-											{formatInventoryCategory(category)}
-										</option>
-									))}
-								</select>
-								{categoryFilter !== "all" && (
-									<button
-										type="button"
-										onClick={() => setCategoryFilter("all")}
-										className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
-									>
-										Clear
-									</button>
-								)}
-							</div>
-						</div>
-					}
-				/>
+					</div>
+				)}
 
 				{/* Empty State */}
 				{filteredInventory.length === 0 && (
 					<EmptyPanel
-						icon="🥫"
-						title="Your Pantry is Empty"
-						description="Scan a receipt or add items manually to start tracking your ingredients."
+						icon={<PackageIcon className="w-12 h-12 text-muted" />}
+						title="Cargo Hold Empty"
+						description="Scan a receipt or add items to start tracking your ingredients."
 						action={
-							<>
+							<div className="flex flex-wrap justify-center gap-3">
 								<CameraInput onScanComplete={handleScanComplete} />
 								<button
 									type="button"
@@ -305,7 +341,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 								>
 									Add First Item
 								</button>
-							</>
+							</div>
 						}
 					/>
 				)}
@@ -315,6 +351,83 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					<ManifestGrid items={filteredInventory} />
 				)}
 			</div>
+
+			{/* Hidden triggers for FAB */}
+			<div className="hidden">
+				<span id="fab-camera-trigger">
+					<CameraInput onScanComplete={handleScanComplete} />
+				</span>
+				<span id="fab-import-trigger">
+					<CsvImportButton
+						onImportComplete={handleImportComplete}
+						defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+					/>
+				</span>
+			</div>
+
+			{/* Floating Action Bar (mobile only) */}
+			<FloatingActionBar actions={fabActions} />
 		</>
+	);
+}
+
+// --- Icon Components ---
+function PlusIcon() {
+	return (
+		<svg
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M12 4v16m8-8H4"
+			/>
+		</svg>
+	);
+}
+
+function CameraIcon() {
+	return (
+		<svg
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+			/>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+			/>
+		</svg>
+	);
+}
+
+function ImportIcon() {
+	return (
+		<svg
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+			/>
+		</svg>
 	);
 }

@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
-import { Link, useFetcher, useSearchParams } from "react-router";
-import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { useFetcher, useSearchParams } from "react-router";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
-import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
+import { ChefHatIcon, SearchIcon } from "~/components/icons/PageIcons";
+import { FilterChip } from "~/components/shell/FilterSheet";
+import {
+	type FloatingAction,
+	FloatingActionBar,
+} from "~/components/shell/FloatingActionBar";
+import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { getInventory } from "~/lib/inventory.server";
@@ -165,138 +170,190 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 		});
 	};
 
+	// Check if any filters are active
+	const hasActiveFilters =
+		activeDomain !== "all" || !!currentTag || matchingEnabled;
+
+	// FAB actions for mobile
+	const fabActions: FloatingAction[] = [
+		{
+			id: "add",
+			icon: <PlusIcon />,
+			label: "Add Meal",
+			onClick: () => setShowQuickAdd(true),
+		},
+		{
+			id: "generate",
+			icon: <SparkleIcon />,
+			label: "Generate",
+			primary: true,
+			onClick: () => {
+				// Trigger the hidden GenerateMealButton
+				document.getElementById("fab-generate-trigger")?.click();
+			},
+		},
+	];
+
+	// Filter content for mobile sheet
+	const filterContent = (
+		<div className="space-y-6">
+			{/* Match Mode toggle */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Match Mode</h4>
+				<button
+					type="button"
+					onClick={() => setMatchingEnabled(!matchingEnabled)}
+					className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all ${
+						matchingEnabled
+							? "bg-hyper-green text-carbon"
+							: "bg-platinum dark:bg-white/10 text-carbon dark:text-white"
+					}`}
+				>
+					<span>Match with pantry ingredients</span>
+					<span>{matchingEnabled ? "✓ On" : "Off"}</span>
+				</button>
+			</div>
+
+			{/* Domain filters */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Domain</h4>
+				<div className="flex flex-wrap gap-2">
+					<FilterChip
+						label="All"
+						isActive={activeDomain === "all"}
+						onClick={() => handleDomainChange("all")}
+					/>
+					{ITEM_DOMAINS.map((domain) => {
+						const Icon = DOMAIN_ICONS[domain];
+						return (
+							<FilterChip
+								key={domain}
+								label={DOMAIN_LABELS[domain]}
+								icon={<Icon className="w-4 h-4" />}
+								isActive={activeDomain === domain}
+								onClick={() => handleDomainChange(domain)}
+							/>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* Tag filter */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Recipe Tag</h4>
+				<select
+					id="tag-filter-mobile"
+					value={currentTag || ""}
+					onChange={handleTagChange}
+					className="w-full bg-platinum dark:bg-white/10 border border-carbon/10 dark:border-white/10 px-4 py-3 rounded-xl text-sm text-carbon dark:text-white focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+				>
+					<option value="">All Recipes</option>
+					{availableTags.map((tag) => (
+						<option key={tag} value={tag}>
+							{tag.charAt(0).toUpperCase() + tag.slice(1)}
+						</option>
+					))}
+				</select>
+			</div>
+
+			{/* Clear filters */}
+			{hasActiveFilters && (
+				<button
+					type="button"
+					onClick={() => {
+						handleDomainChange("all");
+						setMatchingEnabled(false);
+						const nextParams = new URLSearchParams(searchParams);
+						nextParams.delete("tag");
+						setSearchParams(nextParams);
+					}}
+					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
+				>
+					Clear All Filters
+				</button>
+			)}
+		</div>
+	);
+
 	return (
 		<>
-			<DashboardHeader
+			{/* Mobile Header */}
+			<MobilePageHeader
+				icon={<ChefHatIcon className="w-6 h-6 text-hyper-green" />}
 				title="Galley"
-				subtitle="Recipe Database // Intel"
+				itemCount={filteredMeals.length}
 				showSearch={true}
-				totalItems={filteredMeals.length}
 				searchPlaceholder="Search meals..."
 				onSearchChange={setSearchQuery}
+				filterContent={filterContent}
+				hasActiveFilters={hasActiveFilters}
 			/>
 
-			<div className="space-y-6">
-				<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">
-					<div className="text-sm text-muted">
-						<span className="text-carbon font-bold">{selectedCount}</span> meals
-						selected for Supply list
+			<div className="space-y-4">
+				{/* Selection status bar */}
+				{selectedCount > 0 && (
+					<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">
+						<div className="text-sm text-muted">
+							<span className="text-carbon dark:text-white font-bold">
+								{selectedCount}
+							</span>{" "}
+							meals selected for Supply list
+						</div>
+						<button
+							type="button"
+							onClick={handleClearSelections}
+							className="text-xs font-bold px-3 py-2 border border-hyper-green text-hyper-green hover:bg-hyper-green/10 transition-all rounded-lg"
+						>
+							Clear All
+						</button>
 					</div>
+				)}
+
+				{/* Desktop Toolbar - hidden on mobile */}
+				<div className="hidden md:flex flex-wrap items-center gap-3">
 					<button
 						type="button"
-						onClick={handleClearSelections}
-						disabled={selectedCount === 0}
-						className={`text-xs font-bold px-3 py-2 border transition-all ${
-							selectedCount > 0
-								? "border-hyper-green text-hyper-green hover:bg-hyper-green/10"
-								: "border-carbon/20 text-muted cursor-not-allowed"
+						onClick={() => setShowQuickAdd(!showQuickAdd)}
+						className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+							showQuickAdd
+								? "bg-hyper-green text-carbon shadow-glow-sm"
+								: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
 						}`}
 					>
-						Clear All
+						{showQuickAdd ? "✕ Cancel" : "+ Quick Add Meal"}
+					</button>
+					<GenerateMealButton />
+					<button
+						type="button"
+						onClick={() => setMatchingEnabled(!matchingEnabled)}
+						className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+							matchingEnabled
+								? "bg-hyper-green text-carbon shadow-glow-sm"
+								: "bg-platinum text-carbon hover:bg-platinum/80"
+						}`}
+					>
+						{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
 					</button>
 				</div>
-				{/* Unified Toolbar */}
-				<PanelToolbar
-					primaryAction={<GenerateMealButton />}
-					quickAddPlaceholder="Quick Add Meal"
-					showQuickAdd={showQuickAdd}
-					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-					quickAddForm={
+
+				{/* Quick Add Form (collapsible) */}
+				{showQuickAdd && (
+					<div className="glass-panel rounded-xl p-6 animate-fade-in">
 						<MealQuickAdd
 							onSuccess={() => setShowQuickAdd(false)}
 							availableIngredients={inventory}
 						/>
-					}
-					filterControls={
-						<div className="flex flex-wrap items-center gap-3">
-							{/* Match Mode Toggle */}
-							<button
-								type="button"
-								onClick={() => setMatchingEnabled(!matchingEnabled)}
-								className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-									matchingEnabled
-										? "bg-hyper-green text-carbon shadow-glow-sm"
-										: "bg-platinum text-carbon hover:bg-platinum/80"
-								}`}
-							>
-								{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
-							</button>
-
-							<div className="flex items-center gap-2">
-								<span className="text-xs text-muted font-medium">Domain:</span>
-								<div className="flex flex-wrap gap-2">
-									<button
-										type="button"
-										onClick={() => handleDomainChange("all")}
-										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-											activeDomain === "all"
-												? "bg-hyper-green text-carbon"
-												: "bg-platinum text-carbon hover:bg-platinum/80"
-										}`}
-									>
-										All
-									</button>
-									{ITEM_DOMAINS.map((domain) => {
-										const Icon = DOMAIN_ICONS[domain];
-										return (
-											<button
-												key={domain}
-												type="button"
-												onClick={() => handleDomainChange(domain)}
-												className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-													activeDomain === domain
-														? "bg-hyper-green text-carbon"
-														: "bg-platinum text-carbon hover:bg-platinum/80"
-												}`}
-											>
-												<Icon className="w-3 h-3" />
-												<span>{DOMAIN_LABELS[domain]}</span>
-											</button>
-										);
-									})}
-								</div>
-							</div>
-
-							{/* Tag Filter */}
-							<label
-								htmlFor="tag-filter"
-								className="text-xs text-muted font-medium"
-							>
-								Filter:
-							</label>
-							<select
-								id="tag-filter"
-								value={currentTag || ""}
-								onChange={handleTagChange}
-								className="bg-platinum border border-carbon/10 px-3 py-2 rounded-lg text-sm text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 cursor-pointer"
-							>
-								<option value="">All Recipes</option>
-								{availableTags.map((tag) => (
-									<option key={tag} value={tag}>
-										{tag.charAt(0).toUpperCase() + tag.slice(1)}
-									</option>
-								))}
-							</select>
-							{currentTag && (
-								<Link
-									to="/dashboard/meals"
-									className="text-xs text-hyper-green hover:text-hyper-green/80 transition-colors"
-								>
-									Clear
-								</Link>
-							)}
-						</div>
-					}
-				/>
+					</div>
+				)}
 
 				{/* Empty State */}
 				{filteredMeals.length === 0 && !searchQuery && (
 					<EmptyPanel
-						icon="🍽️"
+						icon={<ChefHatIcon className="w-12 h-12 text-muted" />}
 						title="No Recipes Yet"
-						description="Create your first meal or let AI generate suggestions based on your pantry inventory."
+						description="Create your first meal or let AI generate suggestions based on your pantry."
 						action={
-							<>
+							<div className="flex flex-wrap justify-center gap-3">
 								<GenerateMealButton />
 								<button
 									type="button"
@@ -305,7 +362,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								>
 									Create Recipe
 								</button>
-							</>
+							</div>
 						}
 					/>
 				)}
@@ -313,7 +370,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				{/* No Search Results */}
 				{filteredMeals.length === 0 && searchQuery && (
 					<EmptyPanel
-						icon="🔍"
+						icon={<SearchIcon className="w-12 h-12 text-muted" />}
 						title="No Results"
 						description={`No meals found matching "${searchQuery}"`}
 						className="py-12"
@@ -331,6 +388,53 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					/>
 				)}
 			</div>
+
+			{/* Hidden trigger for FAB */}
+			<div className="hidden">
+				<span id="fab-generate-trigger">
+					<GenerateMealButton />
+				</span>
+			</div>
+
+			{/* Floating Action Bar (mobile only) */}
+			<FloatingActionBar actions={fabActions} />
 		</>
+	);
+}
+
+// --- Icon Components ---
+function PlusIcon() {
+	return (
+		<svg
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M12 4v16m8-8H4"
+			/>
+		</svg>
+	);
+}
+
+function SparkleIcon() {
+	return (
+		<svg
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+			/>
+		</svg>
 	);
 }

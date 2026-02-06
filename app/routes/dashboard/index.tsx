@@ -1,5 +1,4 @@
 import { drizzle } from "drizzle-orm/d1";
-import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { ExpiringItemsCard } from "~/components/dashboard/ExpiringItemsCard";
 import { GroceryPreviewCard } from "~/components/dashboard/GroceryPreviewCard";
 import { MealSuggestionsCard } from "~/components/dashboard/MealSuggestionsCard";
@@ -9,6 +8,8 @@ import {
 	PantryIcon,
 	SuccessIcon,
 } from "~/components/icons/DashboardIcons";
+import { HomeIcon } from "~/components/icons/PageIcons";
+import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getSupplyList } from "~/lib/grocery.server";
@@ -67,11 +68,11 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			<DashboardHeader
+			{/* Mobile Header */}
+			<MobilePageHeader
+				icon={<HomeIcon className="w-6 h-6 text-hyper-green" />}
 				title="Hub"
-				subtitle="Mission Control // Overview"
-				showSearch={false}
-				totalItems={inventoryStats.totalItems}
+				itemCount={inventoryStats.totalItems}
 			/>
 
 			<div className="space-y-8">
@@ -135,7 +136,7 @@ function StatCard({ label, value, icon, highlight }: StatCardProps) {
 			<div>
 				<p className="text-xs text-muted uppercase tracking-wider">{label}</p>
 				<p
-					className={`text-2xl font-bold ${highlight ? "text-warning" : "text-carbon"}`}
+					className={`text-2xl font-bold ${highlight ? "text-warning" : "text-carbon dark:text-white"}`}
 				>
 					{value}
 				</p>

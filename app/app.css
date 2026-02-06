@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Enable dark mode via .dark class selector (not media query) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Define base theme tokens (static colors that don't change) */
+@theme {
+  /* Semantic accent colors (same in both themes) */
+  --color-hyper-green: #00E088;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+
+  /* Typography - Space Mono */
+  --font-sans: 'Space Mono', ui-monospace, monospace;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+}
+
+/* 
+ * Define theme-aware colors using CSS variables that update with .dark class.
+ * These are used by utility classes and custom styles.
+ */
 :root {
   /* Light Mode (Default) */
   --bg-primary: #F8F9FA;
@@ -11,16 +31,11 @@
   /* carbon */
   --text-muted: #6B7280;
   --border-color: rgba(0, 0, 0, 0.08);
-
-  /* Semantic colors (unchanged across themes) */
-  --hyper-green: #00E088;
-  --success: #10B981;
-  --warning: #F59E0B;
-  --danger: #EF4444;
 }
 
 .dark {
   --bg-primary: #0D0D0D;
+  /* soft black */
   --bg-secondary: #1A1A1A;
   --bg-surface: rgba(26, 26, 26, 0.95);
   --text-primary: #F8F9FA;
@@ -28,28 +43,15 @@
   --border-color: rgba(255, 255, 255, 0.08);
 }
 
-@theme {
-  /* Orbital Luxury Colors - Theme-aware */
+/* 
+ * Map CSS variables to Tailwind color utilities via @theme inline.
+ * Using 'inline' prevents Tailwind from embedding static values.
+ */
+@theme inline {
   --color-ceramic: var(--bg-primary);
-  /* Primary background */
   --color-platinum: var(--bg-secondary);
-  /* Secondary background */
-  --color-hyper-green: var(--hyper-green);
-  /* Primary accent */
   --color-carbon: var(--text-primary);
-  /* Primary text */
   --color-muted: var(--text-muted);
-  /* Secondary text */
-  --color-success: var(--success);
-  /* Success states */
-  --color-warning: var(--warning);
-  /* Warning states */
-  --color-danger: var(--danger);
-  /* Error states */
-
-  /* Typography - Space Mono */
-  --font-sans: 'Space Mono', ui-monospace, monospace;
-  --font-mono: 'Space Mono', ui-monospace, monospace;
 }
 
 @layer base {

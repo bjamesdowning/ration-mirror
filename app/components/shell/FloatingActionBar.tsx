@@ -11,6 +11,8 @@ export interface FloatingAction {
 	onClick?: () => void;
 	/** If true, this is the primary/emphasized action */
 	primary?: boolean;
+	/** Visual style variant */
+	variant?: "default" | "primary" | "danger";
 	/** If true, button is disabled */
 	disabled?: boolean;
 }
@@ -49,9 +51,11 @@ export function FloatingActionBar({
 						className={`
 							flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all min-w-[44px] min-h-[44px] justify-center
 							${
-								action.primary
+								action.primary || action.variant === "primary"
 									? "bg-hyper-green text-carbon shadow-glow-sm hover:shadow-glow"
-									: "text-white/90 hover:bg-white/10 hover:text-white"
+									: action.variant === "danger"
+										? "bg-red-500/90 text-white shadow-glow-sm hover:bg-red-500 hover:shadow-glow"
+										: "text-white/90 hover:bg-white/10 hover:text-white"
 							}
 							${action.disabled ? "opacity-50 cursor-not-allowed" : ""}
 						`}
@@ -60,9 +64,9 @@ export function FloatingActionBar({
 						<span className="w-6 h-6 flex items-center justify-center shrink-0">
 							{action.icon}
 						</span>
-						{action.primary && (
+						{action.primary || action.variant === "primary" ? (
 							<span className="hidden xs:inline">{action.label}</span>
-						)}
+						) : null}
 					</button>
 				))}
 			</div>

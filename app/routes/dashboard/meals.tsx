@@ -7,7 +7,11 @@ import {
 } from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
-import { ChefHatIcon, SearchIcon } from "~/components/icons/PageIcons";
+import {
+	ChefHatIcon,
+	CloseIcon,
+	SearchIcon,
+} from "~/components/icons/PageIcons";
 import { FilterChip } from "~/components/shell/FilterSheet";
 import {
 	type FloatingAction,
@@ -181,10 +185,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
 		{
-			id: "add",
-			icon: <PlusIcon />,
-			label: "Add Meal",
-			onClick: () => setShowQuickAdd(true),
+			id: showQuickAdd ? "cancel" : "add",
+			icon: showQuickAdd ? <CloseIcon /> : <PlusIcon />,
+			label: showQuickAdd ? "Cancel" : "Add Meal",
+			variant: showQuickAdd ? "danger" : "default",
+			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
 		{
 			id: "generate",

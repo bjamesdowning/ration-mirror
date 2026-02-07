@@ -7,7 +7,7 @@ import {
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
-import { PackageIcon } from "~/components/icons/PageIcons";
+import { CloseIcon, PackageIcon } from "~/components/icons/PageIcons";
 import {
 	CameraInput,
 	type CameraInputHandle,
@@ -230,10 +230,11 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
 		{
-			id: "add",
-			icon: <PlusIcon />,
-			label: "Add Item",
-			onClick: () => setShowQuickAdd(true),
+			id: showQuickAdd ? "cancel" : "add",
+			icon: showQuickAdd ? <CloseIcon /> : <PlusIcon />,
+			label: showQuickAdd ? "Cancel" : "Add Item",
+			variant: showQuickAdd ? "danger" : "default",
+			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
 		{
 			id: "scan",

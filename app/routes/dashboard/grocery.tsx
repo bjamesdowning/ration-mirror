@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
-import { ShoppingBagIcon } from "~/components/icons/PageIcons";
+import { CloseIcon, ShoppingBagIcon } from "~/components/icons/PageIcons";
 import { FilterChip } from "~/components/shell/FilterSheet";
 import {
 	type FloatingAction,
@@ -88,10 +88,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function GroceryDashboard() {
-	const { list, activeSelectionCount, availableTags } = useLoaderData<{
+	const { list, activeSelectionCount } = useLoaderData<{
 		list: GroceryListWithItems;
 		activeSelectionCount: number;
-		availableTags: string[];
 	}>();
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
@@ -198,8 +197,10 @@ export default function GroceryDashboard() {
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
 		{
-			id: "add",
-			icon: (
+			id: showQuickAdd ? "cancel" : "add",
+			icon: showQuickAdd ? (
+				<CloseIcon className="w-6 h-6" />
+			) : (
 				<svg
 					className="w-6 h-6"
 					fill="none"
@@ -217,8 +218,9 @@ export default function GroceryDashboard() {
 					/>
 				</svg>
 			),
-			label: "Add Item",
-			onClick: () => setShowQuickAdd(true),
+			label: showQuickAdd ? "Cancel" : "Add Item",
+			variant: showQuickAdd ? "danger" : "default",
+			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
 		{
 			id: "dock",
@@ -291,11 +293,10 @@ export default function GroceryDashboard() {
 									type="button"
 									onClick={handleDockCargo}
 									disabled={isDocking || purchasedCount === 0}
-									className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${
-										purchasedCount > 0
+									className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${purchasedCount > 0
 											? "bg-hyper-green text-carbon hover:shadow-glow-sm"
 											: "bg-platinum text-muted cursor-not-allowed"
-									}`}
+										}`}
 								>
 									{isDocking ? (
 										<span className="animate-pulse">Transferring...</span>
@@ -345,11 +346,10 @@ export default function GroceryDashboard() {
 					<button
 						type="button"
 						onClick={() => setDomainFilter("all")}
-						className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
-							domainFilter === "all"
+						className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${domainFilter === "all"
 								? "border-hyper-green bg-hyper-green/15 text-hyper-green"
 								: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
-						}`}
+							}`}
 					>
 						All
 					</button>
@@ -360,11 +360,10 @@ export default function GroceryDashboard() {
 								key={domain}
 								type="button"
 								onClick={() => setDomainFilter(domain)}
-								className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
-									domainFilter === domain
+								className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${domainFilter === domain
 										? "border-hyper-green bg-hyper-green/15 text-hyper-green"
 										: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
-								}`}
+									}`}
 							>
 								<Icon className="w-3 h-3" />
 								<span>{DOMAIN_LABELS[domain]}</span>

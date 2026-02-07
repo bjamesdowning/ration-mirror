@@ -151,7 +151,7 @@ export default function GroceryDashboard() {
 			</div>
 
 			{/* Actions */}
-			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6">
+			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6 md:hidden">
 				<button
 					type="button"
 					onClick={() => {

@@ -1,11 +1,17 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { CsvImportButton } from "~/components/cargo/CsvImportButton";
+import {
+	CsvImportButton,
+	type CsvImportButtonHandle,
+} from "~/components/cargo/CsvImportButton";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PackageIcon } from "~/components/icons/PageIcons";
-import { CameraInput } from "~/components/scanner/CameraInput";
+import {
+	CameraInput,
+	type CameraInputHandle,
+} from "~/components/scanner/CameraInput";
 import { FilterChip } from "~/components/shell/FilterSheet";
 import {
 	type FloatingAction,
@@ -149,6 +155,8 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchParams, setSearchParams] = useSearchParams();
+	const cameraRef = useRef<CameraInputHandle>(null);
+	const importRef = useRef<CsvImportButtonHandle>(null);
 
 	const activeDomainParam =
 		searchParams.get("domain") || currentDomain || "all";
@@ -234,7 +242,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			primary: true,
 			onClick: () => {
 				// Trigger the hidden CameraInput
-				document.getElementById("fab-camera-trigger")?.click();
+				cameraRef.current?.openCamera();
 			},
 		},
 		{
@@ -242,7 +250,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			icon: <ImportIcon />,
 			label: "Import",
 			onClick: () => {
-				document.getElementById("fab-import-trigger")?.click();
+				importRef.current?.openImport();
 			},
 		},
 	];
@@ -338,8 +346,9 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					>
 						{showQuickAdd ? "✕ Cancel" : "+ Add Item"}
 					</button>
-					<CameraInput onScanComplete={handleScanComplete} />
+					<CameraInput ref={cameraRef} onScanComplete={handleScanComplete} />
 					<CsvImportButton
+						ref={importRef}
 						onImportComplete={handleImportComplete}
 						defaultDomain={activeDomain === "all" ? undefined : activeDomain}
 					/>
@@ -362,7 +371,10 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 						description="Scan a receipt or add items to start tracking your ingredients."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<CameraInput onScanComplete={handleScanComplete} />
+								<CameraInput
+									ref={cameraRef}
+									onScanComplete={handleScanComplete}
+								/>
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}
@@ -379,19 +391,6 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				{filteredInventory.length > 0 && (
 					<ManifestGrid items={filteredInventory} />
 				)}
-			</div>
-
-			{/* Hidden triggers for FAB */}
-			<div className="hidden">
-				<span id="fab-camera-trigger">
-					<CameraInput onScanComplete={handleScanComplete} />
-				</span>
-				<span id="fab-import-trigger">
-					<CsvImportButton
-						onImportComplete={handleImportComplete}
-						defaultDomain={activeDomain === "all" ? undefined : activeDomain}
-					/>
-				</span>
 			</div>
 
 			{/* Floating Action Bar (mobile only) */}

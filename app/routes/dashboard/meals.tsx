@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
-import { GenerateMealButton } from "~/components/galley/GenerateMealButton";
+import {
+	GenerateMealButton,
+	type GenerateMealButtonHandle,
+} from "~/components/galley/GenerateMealButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import { ChefHatIcon, SearchIcon } from "~/components/icons/PageIcons";
@@ -104,6 +107,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 		() => new Set(activeMealIds),
 	);
 	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
+	const generateRef = useRef<GenerateMealButtonHandle>(null);
 
 	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const selectedTag = e.target.value;
@@ -189,7 +193,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			primary: true,
 			onClick: () => {
 				// Trigger the hidden GenerateMealButton
-				document.getElementById("fab-generate-trigger")?.click();
+				generateRef.current?.open();
 			},
 		},
 	];
@@ -322,7 +326,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					>
 						{showQuickAdd ? "✕ Cancel" : "+ Quick Add Meal"}
 					</button>
-					<GenerateMealButton />
+					<GenerateMealButton ref={generateRef} />
 					<button
 						type="button"
 						onClick={() => setMatchingEnabled(!matchingEnabled)}
@@ -354,7 +358,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						description="Create your first meal or let AI generate suggestions based on your pantry."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<GenerateMealButton />
+								<GenerateMealButton ref={generateRef} />
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}
@@ -387,13 +391,6 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						onToggleMealActive={handleToggleActive}
 					/>
 				)}
-			</div>
-
-			{/* Hidden trigger for FAB */}
-			<div className="hidden">
-				<span id="fab-generate-trigger">
-					<GenerateMealButton />
-				</span>
 			</div>
 
 			{/* Floating Action Bar (mobile only) */}

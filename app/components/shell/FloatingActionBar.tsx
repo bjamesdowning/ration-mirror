@@ -47,7 +47,7 @@ export function FloatingActionBar({
 						onClick={action.onClick}
 						disabled={action.disabled}
 						className={`
-							flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all
+							flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all min-w-[44px] min-h-[44px] justify-center
 							${
 								action.primary
 									? "bg-hyper-green text-carbon shadow-glow-sm hover:shadow-glow"
@@ -57,7 +57,7 @@ export function FloatingActionBar({
 						`}
 						title={action.label}
 					>
-						<span className="w-5 h-5 flex items-center justify-center">
+						<span className="w-6 h-6 flex items-center justify-center shrink-0">
 							{action.icon}
 						</span>
 						{action.primary && (

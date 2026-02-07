@@ -1,5 +1,5 @@
 import { AlertCircle, Check, ChefHat, Sparkles, Timer } from "lucide-react";
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 
 interface GeneratedRecipe {
@@ -17,11 +17,18 @@ interface GeneratedRecipe {
 	missingIngredients?: string[];
 }
 
+export interface GenerateMealButtonHandle {
+	open: () => void;
+}
+
 interface GenerateMealButtonProps {
 	onGenerate?: () => void;
 }
 
-export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
+export const GenerateMealButton = forwardRef<
+	GenerateMealButtonHandle,
+	GenerateMealButtonProps
+>(({ onGenerate }, ref) => {
 	const [showModal, setShowModal] = useState(false);
 	const generateFetcher = useFetcher<{
 		recipes: GeneratedRecipe[];
@@ -29,6 +36,13 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 	}>();
 	const saveFetcher = useFetcher();
 	const _navigate = useNavigate();
+
+	// Expose open method via ref
+	useImperativeHandle(ref, () => ({
+		open: () => {
+			setShowModal(true);
+		},
+	}));
 
 	const isGenerating =
 		generateFetcher.state === "submitting" ||
@@ -66,9 +80,6 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 			encType: "application/json",
 		});
 	};
-
-	// Close modal on successful save and redirect happens automatically by the action redirect
-	// But we might want to close if we stay? The action redirects, so we unmount.
 
 	return (
 		<>
@@ -275,4 +286,6 @@ export function GenerateMealButton({ onGenerate }: GenerateMealButtonProps) {
 			)}
 		</>
 	);
-}
+});
+
+GenerateMealButton.displayName = "GenerateMealButton";

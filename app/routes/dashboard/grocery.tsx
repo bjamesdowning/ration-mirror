@@ -3,6 +3,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
+import { ShoppingBagIcon } from "~/components/icons/PageIcons";
+import {
+	type FloatingAction,
+	FloatingActionBar,
+} from "~/components/shell/FloatingActionBar";
+import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { GroceryList } from "~/components/supply/GroceryList";
 import type { groceryItem, groceryList } from "~/db/schema";
@@ -129,16 +135,81 @@ export default function GroceryDashboard() {
 		setTimeout(() => setShowDockSuccess(false), 4000);
 	}
 
+	// FAB actions for mobile
+	const fabActions: FloatingAction[] = [
+		{
+			id: "add",
+			icon: (
+				<svg
+					className="w-6 h-6"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					role="img"
+					aria-labelledby="add-item-icon"
+				>
+					<title id="add-item-icon">Add Item</title>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M12 4v16m8-8H4"
+					/>
+				</svg>
+			),
+			label: "Add Item",
+			onClick: () => setShowQuickAdd(true),
+		},
+		{
+			id: "dock",
+			icon: (
+				<svg
+					className="w-6 h-6"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					role="img"
+					aria-labelledby="dock-cargo-icon"
+				>
+					<title id="dock-cargo-icon">Add to Cargo</title>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M5 13l4 4L19 7"
+					/>
+				</svg>
+			),
+			label: "Add to Cargo",
+			primary: true,
+			onClick: handleDockCargo,
+			disabled: isDocking || purchasedCount === 0,
+		},
+	];
+
 	return (
 		<>
-			<DashboardHeader
+			{/* Mobile Header */}
+			<MobilePageHeader
+				icon={<ShoppingBagIcon className="w-6 h-6 text-hyper-green" />}
 				title="Supply"
-				subtitle="Procurement & Logistics"
+				itemCount={filteredItems.length}
 				showSearch={true}
-				totalItems={filteredItems.length}
 				searchPlaceholder="Search items..."
 				onSearchChange={setSearchQuery}
 			/>
+
+			{/* Desktop Header (hidden on mobile via CSS if needed, but MobilePageHeader handles mobile view) */}
+			<div className="hidden md:block">
+				<DashboardHeader
+					title="Supply"
+					subtitle="Procurement & Logistics"
+					showSearch={true}
+					totalItems={filteredItems.length}
+					searchPlaceholder="Search items..."
+					onSearchChange={setSearchQuery}
+				/>
+			</div>
 
 			<div className="space-y-6">
 				{activeSelectionCount === 0 && (
@@ -285,6 +356,9 @@ export default function GroceryDashboard() {
 					</div>
 				</div>
 			)}
+
+			{/* Floating Action Bar */}
+			<FloatingActionBar actions={fabActions} />
 		</>
 	);
 }

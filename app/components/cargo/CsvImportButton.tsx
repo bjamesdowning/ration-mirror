@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import {
+	forwardRef,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useRevalidator } from "react-router";
 import { parseInventoryCsv } from "~/lib/csv-parser";
 import type { ItemDomain } from "~/lib/domain";
@@ -17,6 +23,10 @@ const SCAN_UNITS = [
 	"pack",
 ] as const;
 
+export interface CsvImportButtonHandle {
+	openImport: () => void;
+}
+
 interface CsvImportButtonProps {
 	onImportComplete?: () => void;
 	defaultDomain?: ItemDomain;
@@ -24,15 +34,22 @@ interface CsvImportButtonProps {
 
 const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB
 
-export function CsvImportButton({
-	onImportComplete,
-	defaultDomain,
-}: CsvImportButtonProps) {
+export const CsvImportButton = forwardRef<
+	CsvImportButtonHandle,
+	CsvImportButtonProps
+>(({ onImportComplete, defaultDomain }, ref) => {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const revalidator = useRevalidator();
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [warnings, setWarnings] = useState<string[]>([]);
 	const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+
+	// Expose openImport method via ref
+	useImperativeHandle(ref, () => ({
+		openImport: () => {
+			inputRef.current?.click();
+		},
+	}));
 
 	const acceptTypes = useMemo(
 		() => ".csv,.tsv,text/csv,text/tab-separated-values",
@@ -145,4 +162,6 @@ export function CsvImportButton({
 			)}
 		</>
 	);
-}
+});
+
+CsvImportButton.displayName = "CsvImportButton";

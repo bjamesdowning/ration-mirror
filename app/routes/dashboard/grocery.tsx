@@ -11,7 +11,9 @@ import {
 } from "~/components/shell/FloatingActionBar";
 import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import { AddItemForm } from "~/components/supply/AddItemForm";
+import { ExportMenu } from "~/components/supply/ExportMenu";
 import { GroceryList } from "~/components/supply/GroceryList";
+import { ShareModal } from "~/components/supply/ShareModal";
 import type { groceryItem, groceryList } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
@@ -99,6 +101,8 @@ export default function GroceryDashboard() {
 	const [showSummary, setShowSummary] = useState(false);
 	const [domainFilter, setDomainFilter] = useState<ItemDomain | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
+	const [isFilterSheetOpen, _setIsFilterSheetOpen] = useState(false);
+	const [showShareModal, setShowShareModal] = useState(false);
 
 	// Local Search Logic (matches Cargo/Galley pattern)
 	const filteredItems = useMemo(() => {
@@ -318,6 +322,32 @@ export default function GroceryDashboard() {
 								</button>
 							</div>
 						}
+						secondaryAction={
+							<div className="flex gap-2">
+								<ExportMenu listId={list.id} />
+								<button
+									type="button"
+									onClick={() => setShowShareModal(true)}
+									className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors font-medium"
+								>
+									<svg
+										className="w-4 h-4"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										aria-hidden="true"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+										/>
+									</svg>
+									Share
+								</button>
+							</div>
+						}
 						quickAddPlaceholder="Add Item"
 						showQuickAdd={showQuickAdd}
 						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
@@ -330,6 +360,20 @@ export default function GroceryDashboard() {
 						}
 					/>
 				</div>
+
+				{/* Mobile Quick Add Form */}
+				{showQuickAdd && (
+					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
+						<AddItemForm
+							listId={list.id}
+							defaultDomain={domainFilter === "all" ? "food" : domainFilter}
+							onAdd={() => {
+								revalidator.revalidate();
+								setShowQuickAdd(false);
+							}}
+						/>
+					</div>
+				)}
 
 				{/* Supply List Content */}
 				<GroceryList
@@ -380,7 +424,16 @@ export default function GroceryDashboard() {
 			)}
 
 			{/* Floating Action Bar */}
-			<FloatingActionBar actions={fabActions} />
+			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
+
+			{/* Share Modal */}
+			{showShareModal && (
+				<ShareModal
+					listId={list.id}
+					existingShareToken={list.shareToken}
+					onClose={() => setShowShareModal(false)}
+				/>
+			)}
 		</>
 	);
 }

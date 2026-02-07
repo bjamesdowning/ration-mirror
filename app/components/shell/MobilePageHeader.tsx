@@ -18,6 +18,8 @@ interface MobilePageHeaderProps {
 	filterContent?: React.ReactNode;
 	/** Whether there are active filters */
 	hasActiveFilters?: boolean;
+	/** Callback when filter sheet is opened/closed */
+	onFilterOpenChange?: (isOpen: boolean) => void;
 }
 
 /**
@@ -36,8 +38,14 @@ export function MobilePageHeader({
 	onSearchChange,
 	filterContent,
 	hasActiveFilters = false,
+	onFilterOpenChange,
 }: MobilePageHeaderProps) {
 	const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+	const _handleFilterOpenChange = (open: boolean) => {
+		setIsFilterOpen(open);
+		onFilterOpenChange?.(open);
+	};
 	const [searchQuery, setSearchQuery] = useState("");
 
 	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

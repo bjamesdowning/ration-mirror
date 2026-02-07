@@ -64,7 +64,7 @@ export function FilterSheet({
 			{/* Sheet */}
 			<div
 				ref={sheetRef}
-				className="fixed bottom-0 left-0 right-0 z-50 bg-ceramic dark:bg-carbon rounded-t-3xl shadow-2xl animate-slide-up max-h-[80vh] overflow-hidden"
+				className="fixed bottom-0 left-0 right-0 z-[70] bg-ceramic dark:bg-[#1A1A1A] rounded-t-3xl shadow-2xl animate-slide-up max-h-[85vh] overflow-hidden"
 				style={{
 					animation: "slideUp 0.3s ease-out forwards",
 				}}
@@ -84,7 +84,7 @@ export function FilterSheet({
 				)}
 
 				{/* Content */}
-				<div className="px-6 py-4 overflow-y-auto max-h-[calc(80vh-80px)]">
+				<div className="px-6 py-4 overflow-y-auto max-h-[calc(85vh-120px)]">
 					{children}
 				</div>
 

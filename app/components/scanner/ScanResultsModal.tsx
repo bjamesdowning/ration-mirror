@@ -90,8 +90,8 @@ export function ScanResultsModal({
 	}, [fetcher.state, fetcher.data, onSuccess, onClose]);
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">
-			<div className="bg-void-dark border-2 border-hyper-green rounded-xl shadow-glow max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">
+			<div className="bg-[#0D0D0D] dark:bg-[#1A1A1A] border-2 border-hyper-green rounded-xl shadow-glow w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col">
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-hyper-green/30">
 					<div>
@@ -254,7 +254,7 @@ function ScanResultItemRow({
 							onChange={(e) =>
 								setEditedItem({ ...editedItem, name: e.target.value })
 							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-white dark:text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 					<div>
@@ -276,7 +276,7 @@ function ScanResultItemRow({
 							}
 							min="0"
 							step="any"
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-white dark:text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 					<div>

@@ -22,6 +22,8 @@ interface FloatingActionBarProps {
 	actions: FloatingAction[];
 	/** Optional className for container */
 	className?: string;
+	/** Hide the FAB (e.g., when a sheet is open) */
+	hidden?: boolean;
 }
 
 /**
@@ -34,8 +36,9 @@ interface FloatingActionBarProps {
 export function FloatingActionBar({
 	actions,
 	className = "",
+	hidden = false,
 }: FloatingActionBarProps) {
-	if (actions.length === 0) return null;
+	if (actions.length === 0 || hidden) return null;
 
 	return (
 		<div

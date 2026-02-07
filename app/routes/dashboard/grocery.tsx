@@ -4,6 +4,7 @@ import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { ShoppingBagIcon } from "~/components/icons/PageIcons";
+import { FilterChip } from "~/components/shell/FilterSheet";
 import {
 	type FloatingAction,
 	FloatingActionBar,
@@ -40,7 +41,20 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		groupId,
 	);
 
-	return { list, activeSelectionCount: activeSelections.length };
+	// Fetch available tags for filtering
+	const { getOrganizationInventoryTags } = await import(
+		"~/lib/inventory.server"
+	);
+	const availableTags = await getOrganizationInventoryTags(
+		context.cloudflare.env.DB,
+		groupId,
+	);
+
+	return {
+		list,
+		activeSelectionCount: activeSelections.length,
+		availableTags,
+	};
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -74,9 +88,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function GroceryDashboard() {
-	const { list, activeSelectionCount } = useLoaderData<{
+	const { list, activeSelectionCount, availableTags } = useLoaderData<{
 		list: GroceryListWithItems;
 		activeSelectionCount: number;
+		availableTags: string[];
 	}>();
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
@@ -91,6 +106,11 @@ export default function GroceryDashboard() {
 		if (!list?.items) return [];
 		let items = list.items;
 
+		// Filter by Domain
+		if (domainFilter !== "all") {
+			items = items.filter((item) => item.domain === domainFilter);
+		}
+
 		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
@@ -98,7 +118,47 @@ export default function GroceryDashboard() {
 		}
 
 		return items;
-	}, [list?.items, searchQuery]);
+	}, [list?.items, searchQuery, domainFilter]);
+
+	// Filter content for mobile sheet
+	const filterContent = (
+		<div className="space-y-6">
+			{/* Domain filters */}
+			<div>
+				<h4 className="text-sm font-medium text-muted mb-3">Domain</h4>
+				<div className="flex flex-wrap gap-2">
+					<FilterChip
+						label="All"
+						isActive={domainFilter === "all"}
+						onClick={() => setDomainFilter("all")}
+					/>
+					{ITEM_DOMAINS.map((domain) => {
+						const Icon = DOMAIN_ICONS[domain];
+						return (
+							<FilterChip
+								key={domain}
+								label={DOMAIN_LABELS[domain]}
+								icon={<Icon className="w-4 h-4" />}
+								isActive={domainFilter === domain}
+								onClick={() => setDomainFilter(domain)}
+							/>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* Clear filters */}
+			{domainFilter !== "all" && (
+				<button
+					type="button"
+					onClick={() => setDomainFilter("all")}
+					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
+				>
+					Clear All Filters
+				</button>
+			)}
+		</div>
+	);
 
 	const isDocking = dockFetcher.state !== "idle";
 
@@ -197,6 +257,8 @@ export default function GroceryDashboard() {
 				showSearch={true}
 				searchPlaceholder="Search items..."
 				onSearchChange={setSearchQuery}
+				filterContent={filterContent}
+				hasActiveFilters={domainFilter !== "all"}
 			/>
 
 			{/* Desktop Header (hidden on mobile via CSS if needed, but MobilePageHeader handles mobile view) */}
@@ -220,64 +282,66 @@ export default function GroceryDashboard() {
 						</p>
 					</div>
 				)}
-				<PanelToolbar
-					primaryAction={
-						<div className="flex gap-2">
-							{/* Add to Cargo (Dock) Button */}
-							<button
-								type="button"
-								onClick={handleDockCargo}
-								disabled={isDocking || purchasedCount === 0}
-								className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${
-									purchasedCount > 0
-										? "bg-hyper-green text-carbon hover:shadow-glow-sm"
-										: "bg-platinum text-muted cursor-not-allowed"
-								}`}
-							>
-								{isDocking ? (
-									<span className="animate-pulse">Transferring...</span>
-								) : (
-									<>
-										<svg
-											className="w-4 h-4"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-											role="img"
-											aria-labelledby="addCargoIcon"
-										>
-											<title id="addCargoIcon">Add to Cargo</title>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M5 13l4 4L19 7"
-											/>
-										</svg>
-										Add to Cargo
-										{purchasedCount > 0 && (
-											<span className="ml-1 opacity-75">
-												({purchasedCount})
-											</span>
-										)}
-									</>
-								)}
-							</button>
-						</div>
-					}
-					quickAddPlaceholder="Add Item"
-					showQuickAdd={showQuickAdd}
-					onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-					quickAddForm={
-						<AddItemForm
-							listId={list.id}
-							defaultDomain={domainFilter === "all" ? "food" : domainFilter}
-							onAdd={() => revalidator.revalidate()}
-						/>
-					}
-				/>
+				<div className="hidden md:block">
+					<PanelToolbar
+						primaryAction={
+							<div className="flex gap-2">
+								{/* Add to Cargo (Dock) Button */}
+								<button
+									type="button"
+									onClick={handleDockCargo}
+									disabled={isDocking || purchasedCount === 0}
+									className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${
+										purchasedCount > 0
+											? "bg-hyper-green text-carbon hover:shadow-glow-sm"
+											: "bg-platinum text-muted cursor-not-allowed"
+									}`}
+								>
+									{isDocking ? (
+										<span className="animate-pulse">Transferring...</span>
+									) : (
+										<>
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+												role="img"
+												aria-labelledby="addCargoIcon"
+											>
+												<title id="addCargoIcon">Add to Cargo</title>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M5 13l4 4L19 7"
+												/>
+											</svg>
+											Add to Cargo
+											{purchasedCount > 0 && (
+												<span className="ml-1 opacity-75">
+													({purchasedCount})
+												</span>
+											)}
+										</>
+									)}
+								</button>
+							</div>
+						}
+						quickAddPlaceholder="Add Item"
+						showQuickAdd={showQuickAdd}
+						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+						quickAddForm={
+							<AddItemForm
+								listId={list.id}
+								defaultDomain={domainFilter === "all" ? "food" : domainFilter}
+								onAdd={() => revalidator.revalidate()}
+							/>
+						}
+					/>
+				</div>
 
-				<div className="flex flex-wrap items-center gap-2">
+				<div className="hidden md:flex flex-wrap items-center gap-2">
 					<button
 						type="button"
 						onClick={() => setDomainFilter("all")}

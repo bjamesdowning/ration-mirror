@@ -324,7 +324,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
 						}`}
 					>
-						{showQuickAdd ? "✕ Cancel" : "+ Quick Add Meal"}
+						{showQuickAdd ? "✕ Cancel" : "+ Add Meal"}
 					</button>
 					<GenerateMealButton ref={generateRef} />
 					<button

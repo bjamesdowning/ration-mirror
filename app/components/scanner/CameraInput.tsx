@@ -16,10 +16,11 @@ export interface CameraInputHandle {
 
 interface CameraInputProps {
 	onScanComplete?: () => void;
+	className?: string;
 }
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
-	({ onScanComplete }, ref) => {
+	({ onScanComplete, className }, ref) => {
 		const fetcher = useFetcher<ScanResult>();
 		const revalidator = useRevalidator();
 		const inputRef = useRef<HTMLInputElement>(null);
@@ -202,7 +203,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 
 		return (
 			<>
-				<div className="relative inline-block">
+				<div className={`relative inline-block ${className || ""}`}>
 					<input
 						ref={inputRef}
 						type="file"

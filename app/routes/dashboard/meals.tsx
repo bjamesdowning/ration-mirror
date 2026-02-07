@@ -331,7 +331,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					>
 						{showQuickAdd ? "✕ Cancel" : "+ Add Meal"}
 					</button>
-					<GenerateMealButton ref={generateRef} />
+
 					<button
 						type="button"
 						onClick={() => setMatchingEnabled(!matchingEnabled)}
@@ -398,6 +398,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				)}
 			</div>
 
+			<GenerateMealButton ref={generateRef} className="hidden md:flex" />
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} />
 		</>

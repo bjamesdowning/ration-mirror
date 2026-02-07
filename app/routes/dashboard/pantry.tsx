@@ -347,7 +347,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					>
 						{showQuickAdd ? "✕ Cancel" : "+ Add Item"}
 					</button>
-					<CameraInput ref={cameraRef} onScanComplete={handleScanComplete} />
+
 					<CsvImportButton
 						ref={importRef}
 						onImportComplete={handleImportComplete}
@@ -394,6 +394,11 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				)}
 			</div>
 
+			<CameraInput
+				ref={cameraRef}
+				onScanComplete={handleScanComplete}
+				className="hidden md:inline-block"
+			/>
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} />
 		</>

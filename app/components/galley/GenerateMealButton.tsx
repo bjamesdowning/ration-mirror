@@ -23,12 +23,13 @@ export interface GenerateMealButtonHandle {
 
 interface GenerateMealButtonProps {
 	onGenerate?: () => void;
+	className?: string;
 }
 
 export const GenerateMealButton = forwardRef<
 	GenerateMealButtonHandle,
 	GenerateMealButtonProps
->(({ onGenerate }, ref) => {
+>(({ onGenerate, className }, ref) => {
 	const [showModal, setShowModal] = useState(false);
 	const generateFetcher = useFetcher<{
 		recipes: GeneratedRecipe[];
@@ -86,12 +87,13 @@ export const GenerateMealButton = forwardRef<
 			<button
 				type="button"
 				onClick={() => setShowModal(true)}
-				className="
+				className={`
 					flex items-center gap-2 px-4 py-3 
 					bg-hyper-green text-carbon font-semibold rounded-lg
 					shadow-glow-sm hover:shadow-glow transition-all
 					active:scale-95
-				"
+					${className || ""}
+				`}
 			>
 				<Sparkles className="w-4 h-4" />
 				Generate Meal

@@ -77,7 +77,7 @@ export function ShareModal({
 	};
 
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
 			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md mx-auto w-full relative">
 				{/* Close Button */}
 				<button

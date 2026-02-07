@@ -348,6 +348,12 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 						{showQuickAdd ? "✕ Cancel" : "+ Add Item"}
 					</button>
 
+					<CameraInput
+						ref={cameraRef}
+						onScanComplete={handleScanComplete}
+						className="hidden md:inline-block"
+					/>
+
 					<CsvImportButton
 						ref={importRef}
 						onImportComplete={handleImportComplete}
@@ -393,18 +399,6 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					<ManifestGrid items={filteredInventory} />
 				)}
 			</div>
-
-			<CameraInput
-				ref={cameraRef}
-				onScanComplete={handleScanComplete}
-				className="hidden md:inline-block"
-			/>
-			<CsvImportButton
-				ref={importRef}
-				onImportComplete={handleImportComplete}
-				defaultDomain={activeDomain === "all" ? undefined : activeDomain}
-				className="hidden md:inline-block"
-			/>
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} />
 		</>

@@ -332,17 +332,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						{showQuickAdd ? "✕ Cancel" : "+ Add Meal"}
 					</button>
 
-					<button
-						type="button"
-						onClick={() => setMatchingEnabled(!matchingEnabled)}
-						className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-							matchingEnabled
-								? "bg-hyper-green text-carbon shadow-glow-sm"
-								: "bg-platinum text-carbon hover:bg-platinum/80"
-						}`}
-					>
-						{matchingEnabled ? "✓ Match Mode" : "Match Mode"}
-					</button>
+					<GenerateMealButton ref={generateRef} />
 				</div>
 
 				{/* Quick Add Form (collapsible) */}
@@ -398,7 +388,6 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				)}
 			</div>
 
-			<GenerateMealButton ref={generateRef} className="hidden md:flex" />
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} />
 		</>

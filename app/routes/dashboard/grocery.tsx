@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
-import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import { CloseIcon, ShoppingBagIcon } from "~/components/icons/PageIcons";
 import { FilterChip } from "~/components/shell/FilterSheet";
@@ -263,18 +263,6 @@ export default function GroceryDashboard() {
 				hasActiveFilters={domainFilter !== "all"}
 			/>
 
-			{/* Desktop Header (hidden on mobile via CSS if needed, but MobilePageHeader handles mobile view) */}
-			<div className="hidden md:block">
-				<DashboardHeader
-					title="Supply"
-					subtitle="Procurement & Logistics"
-					showSearch={true}
-					totalItems={filteredItems.length}
-					searchPlaceholder="Search items..."
-					onSearchChange={setSearchQuery}
-				/>
-			</div>
-
 			<div className="space-y-6">
 				{activeSelectionCount === 0 && (
 					<div className="glass-panel rounded-xl p-4 border border-hyper-green/30">
@@ -293,10 +281,11 @@ export default function GroceryDashboard() {
 									type="button"
 									onClick={handleDockCargo}
 									disabled={isDocking || purchasedCount === 0}
-									className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${purchasedCount > 0
+									className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${
+										purchasedCount > 0
 											? "bg-hyper-green text-carbon hover:shadow-glow-sm"
 											: "bg-platinum text-muted cursor-not-allowed"
-										}`}
+									}`}
 								>
 									{isDocking ? (
 										<span className="animate-pulse">Transferring...</span>
@@ -340,36 +329,6 @@ export default function GroceryDashboard() {
 							/>
 						}
 					/>
-				</div>
-
-				<div className="hidden md:flex flex-wrap items-center gap-2">
-					<button
-						type="button"
-						onClick={() => setDomainFilter("all")}
-						className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${domainFilter === "all"
-								? "border-hyper-green bg-hyper-green/15 text-hyper-green"
-								: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
-							}`}
-					>
-						All
-					</button>
-					{ITEM_DOMAINS.map((domain) => {
-						const Icon = DOMAIN_ICONS[domain];
-						return (
-							<button
-								key={domain}
-								type="button"
-								onClick={() => setDomainFilter(domain)}
-								className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${domainFilter === domain
-										? "border-hyper-green bg-hyper-green/15 text-hyper-green"
-										: "border-platinum/20 text-muted hover:border-hyper-green/60 hover:text-hyper-green"
-									}`}
-							>
-								<Icon className="w-3 h-3" />
-								<span>{DOMAIN_LABELS[domain]}</span>
-							</button>
-						);
-					})}
 				</div>
 
 				{/* Supply List Content */}

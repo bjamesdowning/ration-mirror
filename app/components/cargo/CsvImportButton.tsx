@@ -30,6 +30,7 @@ export interface CsvImportButtonHandle {
 interface CsvImportButtonProps {
 	onImportComplete?: () => void;
 	defaultDomain?: ItemDomain;
+	className?: string;
 }
 
 const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB
@@ -37,7 +38,7 @@ const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB
 export const CsvImportButton = forwardRef<
 	CsvImportButtonHandle,
 	CsvImportButtonProps
->(({ onImportComplete, defaultDomain }, ref) => {
+>(({ onImportComplete, defaultDomain, className }, ref) => {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const revalidator = useRevalidator();
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -125,7 +126,7 @@ export const CsvImportButton = forwardRef<
 
 	return (
 		<>
-			<div className="relative inline-block">
+			<div className={`relative inline-block ${className || ""}`}>
 				<input
 					ref={inputRef}
 					type="file"

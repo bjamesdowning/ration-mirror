@@ -399,6 +399,12 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				onScanComplete={handleScanComplete}
 				className="hidden md:inline-block"
 			/>
+			<CsvImportButton
+				ref={importRef}
+				onImportComplete={handleImportComplete}
+				defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+				className="hidden md:inline-block"
+			/>
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} />
 		</>

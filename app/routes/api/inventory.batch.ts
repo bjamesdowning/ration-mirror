@@ -53,15 +53,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 		for (const item of items) {
 			batchOps.push(
 				context.cloudflare.env.DB.prepare(
-					`INSERT INTO inventory (id, organization_id, name, quantity, unit, category, domain, status, tags, created_at, updated_at)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					`INSERT INTO inventory (id, organization_id, name, quantity, unit, domain, status, tags, created_at, updated_at)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				).bind(
 					crypto.randomUUID(),
 					groupId,
 					item.name,
 					item.quantity,
 					item.unit,
-					item.category,
 					item.domain,
 					"stable",
 					JSON.stringify(item.tags || []),

@@ -1,5 +1,4 @@
 import { ITEM_DOMAINS } from "./domain";
-import { INVENTORY_CATEGORIES } from "./inventory";
 
 export interface CsvParseResult {
 	items: ParsedCsvItem[];
@@ -11,7 +10,6 @@ export interface ParsedCsvItem {
 	name: string;
 	quantity: number;
 	unit: string;
-	category?: string;
 	domain?: string;
 	tags?: string[];
 	expiresAt?: string;
@@ -44,9 +42,6 @@ const COLUMN_ALIASES: Record<string, string> = {
 	unit: "unit",
 	uom: "unit",
 	measure: "unit",
-	// category aliases
-	category: "category",
-	type: "category",
 	// domain aliases
 	domain: "domain",
 	// tags aliases
@@ -232,13 +227,6 @@ export function parseInventoryCsv(csvText: string): CsvParseResult {
 			? unit
 			: "unit";
 
-		const category = (values.category || "other").toLowerCase().trim();
-		const normalizedCategory = (
-			INVENTORY_CATEGORIES as readonly string[]
-		).includes(category)
-			? category
-			: "other";
-
 		const domain = (values.domain || "food").toLowerCase().trim();
 		const normalizedDomain = (ITEM_DOMAINS as readonly string[]).includes(
 			domain,
@@ -256,7 +244,6 @@ export function parseInventoryCsv(csvText: string): CsvParseResult {
 			name,
 			quantity,
 			unit: normalizedUnit,
-			category: normalizedCategory,
 			domain: normalizedDomain,
 			tags,
 			expiresAt,

@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { DOMAIN_LABELS } from "~/lib/domain";
 import { getGroceryListByShareToken } from "~/lib/grocery.server";
 
 interface SharedItem {
@@ -7,7 +8,7 @@ interface SharedItem {
 	name: string;
 	quantity: number;
 	unit: string;
-	category: string;
+	domain: string;
 	isPurchased: boolean;
 }
 
@@ -48,26 +49,16 @@ export async function loader({ context, params }: LoaderFunctionArgs) {
 export default function SharedListPage() {
 	const { list } = useLoaderData<{ list: SharedList }>();
 
-	// Group items by category
+	// Group items by domain
 	const groupedItems = list.items.reduce<Record<string, SharedItem[]>>(
 		(acc, item) => {
-			const category = item.category || "other";
-			if (!acc[category]) acc[category] = [];
-			acc[category].push(item);
+			const domain = item.domain || "food";
+			if (!acc[domain]) acc[domain] = [];
+			acc[domain].push(item);
 			return acc;
 		},
 		{},
 	);
-
-	const categoryNames: Record<string, string> = {
-		dry_goods: "Dry Goods",
-		cryo_frozen: "Frozen",
-		perishable: "Refrigerated",
-		produce: "Produce",
-		canned: "Canned Goods",
-		liquid: "Beverages & Liquids",
-		other: "Other",
-	};
 
 	const purchased = list.items.filter((i) => i.isPurchased).length;
 	const total = list.items.length;
@@ -105,10 +96,10 @@ export default function SharedListPage() {
 						<p className="text-muted">No items in this list</p>
 					</div>
 				) : (
-					Object.entries(groupedItems).map(([category, items]) => (
-						<section key={category} className="glass-panel rounded-xl p-4">
+					Object.entries(groupedItems).map(([domain, items]) => (
+						<section key={domain} className="glass-panel rounded-xl p-4">
 							<h2 className="text-label text-muted mb-3 pb-2 border-b border-carbon/10">
-								{categoryNames[category] || category}
+								{DOMAIN_LABELS[domain as keyof typeof DOMAIN_LABELS] || domain}
 							</h2>
 							<ul className="space-y-2">
 								{items.map((item) => (

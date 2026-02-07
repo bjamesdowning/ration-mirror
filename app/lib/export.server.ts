@@ -1,4 +1,5 @@
 import type { groceryItem, groceryList } from "../db/schema";
+import { DOMAIN_LABELS } from "./domain";
 
 type GroceryListWithItems = typeof groceryList.$inferSelect & {
 	items: (typeof groceryItem.$inferSelect)[];
@@ -21,12 +22,12 @@ export function exportGroceryListAsText(list: GroceryListWithItems): string {
 		return lines.join("\n");
 	}
 
-	// Group items by category
-	const itemsByCategory = groupItemsByCategory(list.items);
+	// Group items by domain
+	const itemsByDomain = groupItemsByDomain(list.items);
 
-	// Format each category
-	for (const [category, items] of Object.entries(itemsByCategory)) {
-		lines.push(`## ${formatCategoryName(category)}`);
+	// Format each domain
+	for (const [domain, items] of Object.entries(itemsByDomain)) {
+		lines.push(`## ${formatDomainName(domain)}`);
 
 		for (const item of items) {
 			const checkbox = item.isPurchased ? "☑" : "☐";
@@ -64,12 +65,12 @@ export function exportGroceryListAsMarkdown(
 		return lines.join("\n");
 	}
 
-	// Group items by category
-	const itemsByCategory = groupItemsByCategory(list.items);
+	// Group items by domain
+	const itemsByDomain = groupItemsByDomain(list.items);
 
-	// Format each category
-	for (const [category, items] of Object.entries(itemsByCategory)) {
-		lines.push(`## ${formatCategoryName(category)}`);
+	// Format each domain
+	for (const [domain, items] of Object.entries(itemsByDomain)) {
+		lines.push(`## ${formatDomainName(domain)}`);
 		lines.push("");
 
 		for (const item of items) {
@@ -87,42 +88,35 @@ export function exportGroceryListAsMarkdown(
 }
 
 /**
- * Groups grocery items by category.
+ * Groups grocery items by domain.
  */
-function groupItemsByCategory(
+function groupItemsByDomain(
 	items: (typeof groceryItem.$inferSelect)[],
 ): Record<string, (typeof groceryItem.$inferSelect)[]> {
 	const groups: Record<string, (typeof groceryItem.$inferSelect)[]> = {};
 
 	for (const item of items) {
-		const category = item.category || "other";
-		if (!groups[category]) {
-			groups[category] = [];
+		const domain = item.domain || "food";
+		if (!groups[domain]) {
+			groups[domain] = [];
 		}
-		groups[category].push(item);
+		groups[domain].push(item);
 	}
 
-	// Sort items within each category alphabetically
-	for (const category of Object.keys(groups)) {
-		groups[category].sort((a, b) => a.name.localeCompare(b.name));
+	// Sort items within each domain alphabetically
+	for (const domain of Object.keys(groups)) {
+		groups[domain].sort((a, b) => a.name.localeCompare(b.name));
 	}
 
 	return groups;
 }
 
 /**
- * Formats a category slug into a human-readable name.
+ * Formats a domain slug into a human-readable name.
  */
-function formatCategoryName(category: string): string {
-	const categoryNames: Record<string, string> = {
-		dry_goods: "Dry Goods",
-		cryo_frozen: "Frozen",
-		perishable: "Refrigerated",
-		produce: "Produce",
-		canned: "Canned Goods",
-		liquid: "Beverages & Liquids",
-		other: "Other",
-	};
-
-	return categoryNames[category] || category.replace(/_/g, " ").toUpperCase();
+function formatDomainName(domain: string): string {
+	return (
+		DOMAIN_LABELS[domain as keyof typeof DOMAIN_LABELS] ||
+		domain.replace(/_/g, " ").toUpperCase()
+	);
 }

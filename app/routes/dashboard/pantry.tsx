@@ -14,10 +14,10 @@ import {
 import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import {
 	addItem,
 	getInventory,
+	getOrganizationInventoryTags,
 	InventoryItemSchema,
 	jettisonItem,
 	updateItem,
@@ -31,12 +31,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const domain = url.searchParams.get("domain") || undefined;
-	const inventory = await getInventory(
-		context.cloudflare.env.DB,
-		groupId,
-		domain as ItemDomain | undefined,
-	);
-	return { inventory, currentDomain: domain };
+	const tag = url.searchParams.get("tag") || undefined;
+
+	const [inventory, availableTags] = await Promise.all([
+		getInventory(
+			context.cloudflare.env.DB,
+			groupId,
+			domain as ItemDomain | undefined,
+		),
+		getOrganizationInventoryTags(context.cloudflare.env.DB, groupId),
+	]);
+
+	return { inventory, currentDomain: domain, currentTag: tag, availableTags };
 }
 
 // --- ACTION ---
@@ -47,8 +53,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const intent = formData.get("intent");
 
 	if (intent === "create") {
-		// Parse tags: formData.getAll("tags") returns array of strings
-		const rawTags = formData.getAll("tags");
+		// Parse tags: handle comma-separated string
+		const tagsValue = formData.get("tags") as string;
+		const rawTags = tagsValue
+			? tagsValue
+					.split(",")
+					.map((t) => t.trim())
+					.filter((t) => t.length > 0)
+			: [];
 		const expiresAtValue = formData.get("expiresAt");
 
 		// Construct object for validation
@@ -56,7 +68,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
-			category: formData.get("category") ?? undefined,
 			domain: formData.get("domain") ?? undefined,
 			tags: rawTags,
 			expiresAt: expiresAtValue
@@ -101,7 +112,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			name: formData.get("name"),
 			quantity: formData.get("quantity"),
 			unit: formData.get("unit"),
-			category: formData.get("category") ?? undefined,
 			domain: formData.get("domain") ?? undefined,
 			tags: rawTags,
 			expiresAt: expiresAtValue || undefined,
@@ -130,8 +140,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 // --- COMPONENT ---
 export default function PantryPage({ loaderData }: Route.ComponentProps) {
-	const { inventory: initialInventory, currentDomain } = loaderData;
-	const [categoryFilter, setCategoryFilter] = useState("all");
+	const {
+		inventory: initialInventory,
+		currentDomain,
+		currentTag,
+		availableTags,
+	} = loaderData;
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -152,6 +166,17 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		setSearchParams(nextParams);
 	};
 
+	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+		const selectedTag = e.target.value;
+		const nextParams = new URLSearchParams(searchParams);
+		if (selectedTag) {
+			nextParams.set("tag", selectedTag);
+		} else {
+			nextParams.delete("tag");
+		}
+		setSearchParams(nextParams);
+	};
+
 	// Local Search Logic
 	const filteredInventory = useMemo(() => {
 		let items: typeof initialInventory = initialInventory;
@@ -168,9 +193,11 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			);
 		}
 
-		// Filter by category
-		if (categoryFilter !== "all") {
-			items = items.filter((item) => item.category === categoryFilter);
+		// Filter by tag
+		if (currentTag) {
+			items = items.filter((item) =>
+				(item.tags as string[] | undefined)?.includes(currentTag),
+			);
 		}
 
 		if (activeDomain !== "all") {
@@ -178,7 +205,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		}
 
 		return items;
-	}, [initialInventory, searchQuery, categoryFilter, activeDomain]);
+	}, [initialInventory, searchQuery, currentTag, activeDomain]);
 
 	// Handle scan completion - close quick add if open
 	const handleScanComplete = () => {
@@ -190,7 +217,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	};
 
 	// Check if any filters are active
-	const hasActiveFilters = activeDomain !== "all" || categoryFilter !== "all";
+	const hasActiveFilters = activeDomain !== "all" || !!currentTag;
 
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
@@ -247,19 +274,19 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				</div>
 			</div>
 
-			{/* Category filter */}
+			{/* Tag filter */}
 			<div>
-				<h4 className="text-sm font-medium text-muted mb-3">Category</h4>
+				<h4 className="text-sm font-medium text-muted mb-3">Tag</h4>
 				<select
-					id="category-filter-mobile"
-					value={categoryFilter}
-					onChange={(e) => setCategoryFilter(e.target.value)}
+					id="tag-filter-mobile"
+					value={currentTag || ""}
+					onChange={handleTagChange}
 					className="w-full bg-platinum dark:bg-white/10 border border-carbon/10 dark:border-white/10 px-4 py-3 rounded-xl text-sm text-carbon dark:text-white focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
 				>
-					<option value="all">All Categories</option>
-					{INVENTORY_CATEGORIES.map((category) => (
-						<option key={category} value={category}>
-							{formatInventoryCategory(category)}
+					<option value="">All Items</option>
+					{availableTags.map((tag) => (
+						<option key={tag} value={tag}>
+							{tag.charAt(0).toUpperCase() + tag.slice(1)}
 						</option>
 					))}
 				</select>
@@ -271,7 +298,9 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					type="button"
 					onClick={() => {
 						handleDomainChange("all");
-						setCategoryFilter("all");
+						const nextParams = new URLSearchParams(searchParams);
+						nextParams.delete("tag");
+						setSearchParams(nextParams);
 					}}
 					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
 				>

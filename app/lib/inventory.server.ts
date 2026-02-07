@@ -3,7 +3,6 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { type groceryItem, inventory, ledger } from "../db/schema";
 import { ITEM_DOMAINS } from "./domain";
-import { INVENTORY_CATEGORIES } from "./inventory";
 
 // --- Validation Schemas ---
 
@@ -14,7 +13,6 @@ export const InventoryItemSchema = z.object({
 		.transform((v) => v.toLowerCase()),
 	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
 	unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
-	category: z.enum(INVENTORY_CATEGORIES).default("other"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
 	expiresAt: z.coerce.date().optional(), // Optional date string coercion
@@ -78,6 +76,33 @@ export async function getInventory(
 }
 
 /**
+ * Retrieves all unique tags for an organization's inventory.
+ * Useful for populating tag filter dropdowns.
+ */
+export async function getOrganizationInventoryTags(
+	db: D1Database,
+	organizationId: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+
+	const items = await d1
+		.select({ tags: inventory.tags })
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+
+	// Extract all tags from all items and deduplicate
+	const allTags = new Set<string>();
+	for (const item of items) {
+		const tags = normalizeTags(item.tags);
+		for (const tag of tags) {
+			allTags.add(tag);
+		}
+	}
+
+	return Array.from(allTags).sort();
+}
+
+/**
  * Add a new item to the organization's inventory.
  * Triggers an asynchronous vector embedding update.
  */
@@ -95,7 +120,6 @@ export async function addItem(
 			name: data.name,
 			quantity: data.quantity,
 			unit: data.unit,
-			category: data.category,
 			domain: data.domain,
 			status: calculateInventoryStatus(data.expiresAt),
 			tags: data.tags,
@@ -142,10 +166,6 @@ export async function updateItem(
 		data.tags !== undefined ? data.tags : normalizeTags(existing.tags);
 	const nextExpiresAt =
 		data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt;
-	const nextCategory =
-		data.category ??
-		(existing.category as InventoryItemInput["category"]) ??
-		"other";
 	const nextName = data.name ?? existing.name;
 	const nextQuantity = data.quantity ?? existing.quantity;
 	const nextUnit = data.unit ?? (existing.unit as InventoryItemInput["unit"]);
@@ -154,7 +174,6 @@ export async function updateItem(
 		name: nextName,
 		quantity: nextQuantity,
 		unit: nextUnit,
-		category: nextCategory,
 		domain: data.domain ?? (existing.domain as InventoryItemInput["domain"]),
 		tags: nextTags,
 		expiresAt: nextExpiresAt ?? undefined,
@@ -166,7 +185,6 @@ export async function updateItem(
 			name: nextData.name,
 			quantity: nextData.quantity,
 			unit: nextData.unit,
-			category: nextData.category,
 			domain: nextData.domain,
 			status: nextStatus,
 			tags: nextData.tags,

@@ -16,15 +16,6 @@ const SCAN_UNITS = [
 	"can",
 	"pack",
 ] as const;
-const SCAN_CATEGORIES = [
-	"dry_goods",
-	"cryo_frozen",
-	"perishable",
-	"produce",
-	"canned",
-	"liquid",
-	"other",
-] as const;
 
 interface CsvImportButtonProps {
 	onImportComplete?: () => void;
@@ -74,11 +65,6 @@ export function CsvImportButton({
 				unit: SCAN_UNITS.includes(item.unit as (typeof SCAN_UNITS)[number])
 					? (item.unit as (typeof SCAN_UNITS)[number])
 					: "unit",
-				category: SCAN_CATEGORIES.includes(
-					item.category as (typeof SCAN_CATEGORIES)[number],
-				)
-					? (item.category as (typeof SCAN_CATEGORIES)[number])
-					: "other",
 				domain: (item.domain ?? defaultDomain ?? "food") as ItemDomain,
 				tags: item.tags ?? [],
 				expiresAt: item.expiresAt,

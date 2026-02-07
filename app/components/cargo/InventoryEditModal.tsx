@@ -2,7 +2,6 @@
 import type { useFetcher } from "react-router";
 import type { inventory } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 interface InventoryEditModalProps {
 	item: typeof inventory.$inferSelect;
@@ -97,27 +96,6 @@ export function InventoryEditModal({
 								<option value="pack">pack</option>
 							</select>
 						</div>
-					</div>
-
-					<div className="flex flex-col gap-2">
-						<label
-							htmlFor={`category-${item.id}`}
-							className="text-label text-muted"
-						>
-							Category
-						</label>
-						<select
-							name="category"
-							id={`category-${item.id}`}
-							defaultValue={item.category ?? "other"}
-							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
-						>
-							{INVENTORY_CATEGORIES.map((category) => (
-								<option key={category} value={category}>
-									{formatInventoryCategory(category)}
-								</option>
-							))}
-						</select>
 					</div>
 
 					<div className="flex flex-col gap-2">

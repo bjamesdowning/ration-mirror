@@ -80,19 +80,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const prompt = `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.
 Return valid items as a simple list, one item per line.
-Format each line EXACTLY as: name|quantity|unit|expiry
+Format each line EXACTLY as: name|quantity|unit|tags|expiry
 
 Rules:
 - name: lowercase item name
 - quantity: number (default 1)
 - unit: "unit", "kg", "g", "l", "ml", "can", "pack"
+- tags: comma-separated tags (e.g. "produce, fruit") or "null"
 - expiry: YYYY-MM-DD or "null" if not visible
 - NO extra text, NO markdown, NO JSON.
 
 Example:
-apple|6|unit|null
-milk|1|l|2024-12-31
-canned beans|2|can|null`;
+apple|6|unit|produce,fruit|null
+milk|1|l|dairy,fridge|2024-12-31
+canned beans|2|can|pantry,canned|null`;
 
 			const response = await context.cloudflare.env.AI.run(
 				"@cf/llava-hf/llava-1.5-7b-hf",
@@ -124,9 +125,9 @@ canned beans|2|can|null`;
 			// 1. Multiple items on one line
 			// 2. Inconsistent newlines
 			// 3. Extra text around the items
-			// Pattern: name | quantity | unit | expiry
+			// Pattern: name | quantity | unit | tags | expiry
 			const itemRegex =
-				/([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
+				/([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
 
 			const parsedItems = [];
 			let match: RegExpExecArray | null;
@@ -136,10 +137,14 @@ canned beans|2|can|null`;
 				const name = match[1].trim();
 				const quantity = Number(match[2]);
 				const unit = match[3].trim();
-				const expiryRaw = match[4].trim();
+				const tagsRaw = match[4].trim();
+				const expiryRaw = match[5].trim();
 
 				// Validation
 				if (!name || Number.isNaN(quantity) || !unit) continue;
+
+				const tags =
+					tagsRaw !== "null" ? tagsRaw.split(",").map((t) => t.trim()) : [];
 
 				const expiresAt =
 					expiryRaw !== "null" && expiryRaw.match(/^\d{4}-\d{2}-\d{2}$/)
@@ -151,7 +156,8 @@ canned beans|2|can|null`;
 					quantity,
 					unit,
 					expiresAt,
-					category: "other",
+					tags,
+					domain: "food", // Default domain
 				});
 			}
 
@@ -165,7 +171,8 @@ canned beans|2|can|null`;
 							name: line.trim(),
 							quantity: 1,
 							unit: "unit",
-							category: "other",
+							tags: [],
+							domain: "food",
 						});
 					}
 				}

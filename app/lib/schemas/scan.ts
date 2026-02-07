@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
-import { INVENTORY_CATEGORIES } from "../inventory";
 
 /**
  * Schema for individual scanned items
@@ -10,7 +9,6 @@ export const ScanResultItemSchema = z.object({
 	name: z.string().min(1, "Item name is required"),
 	quantity: z.number().min(0, "Quantity must be positive"),
 	unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
-	category: z.enum(INVENTORY_CATEGORIES).optional(),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string()).default([]),
 	expiresAt: z.string().optional(), // ISO date string
@@ -45,7 +43,7 @@ export const BatchAddInventorySchema = z.object({
 			name: z.string().min(1),
 			quantity: z.number().min(0),
 			unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
-			category: z.enum(INVENTORY_CATEGORIES).default("other"),
+
 			domain: z.enum(ITEM_DOMAINS).default("food"),
 			tags: z.array(z.string()).default([]),
 			expiresAt: z.coerce.date().optional(),

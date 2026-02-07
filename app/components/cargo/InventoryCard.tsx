@@ -4,10 +4,7 @@ import { InventoryEditModal } from "~/components/cargo/InventoryEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
 import type { inventory } from "~/db/schema";
-import {
-	formatInventoryCategory,
-	formatInventoryStatus,
-} from "~/lib/inventory";
+import { formatInventoryStatus } from "~/lib/inventory";
 
 export function InventoryCard({
 	item,
@@ -65,9 +62,7 @@ export function InventoryCard({
 						>
 							{item.name}
 						</h3>
-						<p className="text-label text-muted">
-							{formatInventoryCategory(item.category)}
-						</p>
+						<p className="text-label text-muted">{/* Category removed */}</p>
 					</div>
 					<div className="text-right">
 						<span className="text-xl font-bold text-data text-carbon">

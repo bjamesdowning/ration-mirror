@@ -1,13 +1,3 @@
-export const INVENTORY_CATEGORIES = [
-	"dry_goods",
-	"cryo_frozen",
-	"perishable",
-	"produce",
-	"canned",
-	"liquid",
-	"other",
-] as const;
-
 export const INVENTORY_STATUSES = [
 	"stable",
 	"decay_imminent",
@@ -20,14 +10,16 @@ export const INVENTORY_STATUS_LABELS: Record<string, string> = {
 	biohazard: "BIOHAZARD",
 };
 
-export function formatInventoryCategory(category?: string | null) {
-	if (!category) return "OTHER";
-	return category.replace(/_/g, " ").toUpperCase();
-}
-
 export function formatInventoryStatus(status?: string | null) {
 	if (!status) return INVENTORY_STATUS_LABELS.stable;
 	return (
 		INVENTORY_STATUS_LABELS[status] ?? status.replace(/_/g, " ").toUpperCase()
 	);
+}
+
+/**
+ * Format a tag for display (capitalize first letter)
+ */
+export function formatTag(tag: string): string {
+	return tag.charAt(0).toUpperCase() + tag.slice(1);
 }

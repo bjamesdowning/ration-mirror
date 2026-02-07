@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -19,7 +18,6 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
 	const unitInputRef = useRef<HTMLSelectElement>(null);
-	const categoryInputRef = useRef<HTMLSelectElement>(null);
 
 	useEffect(() => {
 		if (defaultDomain) {
@@ -123,8 +121,8 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 							</>
 						) : (
 							<>
-								<span className="mr-1">+</span> Add Details (Category, Tags,
-								Domain, Expiry)
+								<span className="mr-1">+</span> Add Details (Tags, Domain,
+								Expiry)
 							</>
 						)}
 					</button>
@@ -133,30 +131,7 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 				{/* Collapsible Advanced Section */}
 				{isExpanded && (
 					<div className="space-y-4 pt-2 animate-fade-in">
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-							{/* Category */}
-							<div className="flex flex-col">
-								<label
-									htmlFor="item-category"
-									className="text-label text-muted mb-2"
-								>
-									Category
-								</label>
-								<select
-									id="item-category"
-									ref={categoryInputRef}
-									name="category"
-									defaultValue="other"
-									className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none appearance-none"
-								>
-									{INVENTORY_CATEGORIES.map((category) => (
-										<option key={category} value={category}>
-											{formatInventoryCategory(category)}
-										</option>
-									))}
-								</select>
-							</div>
-
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							{/* Domain */}
 							<div className="flex flex-col">
 								<label
@@ -201,26 +176,16 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 
 						{/* Tags */}
 						<div className="flex flex-col">
-							<label htmlFor="tag-dry" className="text-label text-muted mb-2">
-								Tags
+							<label htmlFor="item-tags" className="text-label text-muted mb-2">
+								Tags (Comma Separated)
 							</label>
-							<div className="flex flex-wrap gap-4 text-sm">
-								{["Dry", "Frozen", "Fridge", "Hazard"].map((tag) => (
-									<label
-										key={tag}
-										className="flex items-center cursor-pointer text-carbon hover:text-hyper-green transition-colors"
-									>
-										<input
-											type="checkbox"
-											id={tag === "Dry" ? "tag-dry" : undefined}
-											name="tags"
-											value={tag}
-											className="mr-2 w-4 h-4 accent-hyper-green rounded"
-										/>
-										{tag}
-									</label>
-								))}
-							</div>
+							<input
+								id="item-tags"
+								type="text"
+								name="tags"
+								placeholder="e.g. Dry, Italian, Snack"
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none placeholder-muted/50"
+							/>
 						</div>
 					</div>
 				)}

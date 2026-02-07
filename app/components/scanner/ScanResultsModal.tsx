@@ -2,10 +2,8 @@ import { Calendar, Check, Edit2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { formatInventoryCategory, INVENTORY_CATEGORIES } from "~/lib/inventory";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 
-type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number];
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 interface ScanResultsModalProps {
@@ -70,7 +68,6 @@ export function ScanResultsModal({
 			name: item.name,
 			quantity: item.quantity,
 			unit: item.unit,
-			category: item.category || "other",
 			domain: item.domain,
 			tags: item.tags,
 			expiresAt: item.expiresAt,
@@ -322,32 +319,7 @@ function ScanResultItemRow({
 					</div>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-					<div>
-						<label
-							className="text-xs text-muted block mb-1"
-							htmlFor="edit-category"
-						>
-							Category
-						</label>
-						<select
-							id="edit-category"
-							value={editedItem.category || "other"}
-							onChange={(e) =>
-								setEditedItem({
-									...editedItem,
-									category: e.target.value as InventoryCategory,
-								})
-							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						>
-							{INVENTORY_CATEGORIES.map((cat) => (
-								<option key={cat} value={cat}>
-									{formatInventoryCategory(cat)}
-								</option>
-							))}
-						</select>
-					</div>
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 					<div>
 						<label
 							className="text-xs text-muted block mb-1"
@@ -429,9 +401,6 @@ function ScanResultItemRow({
 							</h3>
 							<p className="text-sm text-muted">
 								{item.quantity} {item.unit}
-								{item.category && (
-									<> • {formatInventoryCategory(item.category)}</>
-								)}
 								{item.domain && <> • {DOMAIN_LABELS[item.domain]}</>}
 								{item.expiresAt && (
 									<>

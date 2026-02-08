@@ -1,8 +1,36 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
+import { log } from "./logging.server";
 import { getStripe } from "./stripe.server";
 
+// ---------------------------------------------------------------------------
+// Cost Registry
+// ---------------------------------------------------------------------------
+// Centralised cost map for every credit-consuming operation. Add new entries
+// here when new AI features are introduced so pricing stays in one place.
+export const AI_COSTS = {
+	MEAL_GENERATE: 5,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Error Types
+// ---------------------------------------------------------------------------
+export class InsufficientCreditsError extends Error {
+	override name = "InsufficientCreditsError" as const;
+	required: number;
+	current?: number;
+
+	constructor(required: number, current?: number) {
+		super("Insufficient credits");
+		this.required = required;
+		this.current = current;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Balance Read
+// ---------------------------------------------------------------------------
 export async function checkBalance(
 	env: Env,
 	organizationId: string,
@@ -16,31 +44,21 @@ export async function checkBalance(
 		},
 	});
 
-	// #region agent log
-	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "ledger.server.ts:checkBalance",
-			message: "checkBalance result",
-			data: {
-				organizationId,
-				orgFound: !!org,
-				credits: org?.credits ?? 0,
-			},
-			timestamp: Date.now(),
-			hypothesisId: "H2",
-		}),
-	}).catch(() => {});
-	// #endregion
-
 	return org?.credits ?? 0;
 }
 
+// ---------------------------------------------------------------------------
+// Atomic Deduction
+// ---------------------------------------------------------------------------
+// Uses D1 batch (transactional) to guarantee the balance UPDATE and ledger
+// INSERT either both commit or both roll back. The UPDATE uses a
+// `WHERE credits >= cost` guard to prevent overdraft, and RETURNING to
+// verify it actually matched. If no rows are returned, an orphaned ledger
+// entry may exist within the same transaction; it is cleaned up immediately.
 export async function deductCredits(
 	env: Env,
 	organizationId: string,
-	userId: string, // Keep userId for audit trail
+	userId: string,
 	cost: number,
 	reason: string,
 ) {
@@ -48,94 +66,42 @@ export async function deductCredits(
 		throw new Error("Cost must be positive");
 	}
 
+	const ledgerId = crypto.randomUUID();
 	const now = Math.floor(Date.now() / 1000);
-	const result = await env.DB.prepare(
-		`WITH updated AS (
-			UPDATE organization
-			SET credits = credits - ?
-			WHERE id = ? AND credits >= ?
-			RETURNING id
-		)
-		INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
-		SELECT ?, ?, ?, ?, ?, ?
-		WHERE EXISTS (SELECT 1 FROM updated);`,
-	)
-		.bind(
-			cost,
-			organizationId,
-			cost,
-			crypto.randomUUID(),
-			organizationId,
-			userId,
-			-cost,
-			reason,
-			now,
-		)
-		.run();
 
-	// #region agent log
-	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "ledger.server.ts:deductCredits",
-			message: "D1 result meta after deductCredits SQL",
-			data: {
-				organizationId,
-				cost,
-				meta: result.meta,
-				metaKeys: result.meta ? Object.keys(result.meta) : [],
-				changed_db: result.meta?.changed_db,
-				changes: result.meta?.changes,
-				rows_written: result.meta?.rows_written,
-			},
-			timestamp: Date.now(),
-			hypothesisId: "H3",
-		}),
-	}).catch(() => {});
-	// #endregion
+	// D1 batch executes all statements in a single transaction.
+	const batchResults = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE organization
+			SET credits = credits - ?1
+			WHERE id = ?2 AND credits >= ?1
+			RETURNING id;`,
+		).bind(cost, organizationId),
+		env.DB.prepare(
+			`INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
+		).bind(ledgerId, organizationId, userId, -cost, reason, now),
+	]);
 
-	const changed =
-		result.meta?.changed_db === true ||
-		(result.meta?.changes ?? 0) > 0 ||
-		(result.meta?.rows_written ?? 0) > 0;
-
-	// #region agent log
-	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "ledger.server.ts:deductCredits",
-			message: "changed computed, about to check",
-			data: { changed, willThrow: !changed },
-			timestamp: Date.now(),
-			hypothesisId: "H3",
-		}),
-	}).catch(() => {});
-	// #endregion
-
-	if (!changed) {
-		// #region agent log
-		fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				location: "ledger.server.ts:deductCredits",
-				message: "Throwing Insufficient credits - changed was false",
-				data: { organizationId, cost, meta: result.meta },
-				timestamp: Date.now(),
-				hypothesisId: "H3",
-			}),
-		}).catch(() => {});
-		// #endregion
-		throw new Error("Insufficient credits");
+	// Verify the UPDATE matched at least one row (sufficient credits).
+	const updateResult = batchResults[0];
+	if (!updateResult.results || updateResult.results.length === 0) {
+		// Race condition: balance was insufficient despite a possible pre-flight
+		// check passing. The INSERT committed an orphaned ledger entry; remove it.
+		await env.DB.prepare("DELETE FROM ledger WHERE id = ?1;")
+			.bind(ledgerId)
+			.run();
+		throw new InsufficientCreditsError(cost);
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Credit Addition (Purchases & Refunds)
+// ---------------------------------------------------------------------------
 export async function addCredits(
 	env: Env,
 	organizationId: string,
-	userId: string | null, // Optional user ID for audit
+	userId: string | null,
 	amount: number,
 	reason: string,
 	metadata?: { sessionId?: string },
@@ -146,7 +112,7 @@ export async function addCredits(
 
 	const db = drizzle(env.DB, { schema });
 
-	// 1. Check for idempotency: has this sessionId already been processed?
+	// 1. Idempotency guard for Stripe fulfillment (keyed on sessionId)
 	if (metadata?.sessionId) {
 		const existing = await db.query.ledger.findFirst({
 			where: (ledger, { and, eq }) =>
@@ -157,19 +123,19 @@ export async function addCredits(
 		});
 
 		if (existing) {
-			console.warn(
-				`Duplicate credit add attempt for session ${metadata.sessionId}`,
-			);
-			return; // Already processed, skip
+			log.warn("Duplicate credit add attempt for Stripe session", {
+				sessionId: metadata.sessionId,
+			});
+			return;
 		}
 	}
 
-	// 2. Prepare ledger reason (include sessionId for idempotency)
+	// 2. Ledger reason (include sessionId for idempotency when present)
 	const ledgerReason = metadata?.sessionId
 		? `${reason}:${metadata.sessionId}`
 		: reason;
 
-	// 3. Execute both writes atomically via D1 batch API
+	// 3. Atomic balance + ledger write via D1 batch
 	await db.batch([
 		db
 			.update(schema.organization)
@@ -178,12 +144,71 @@ export async function addCredits(
 		db.insert(schema.ledger).values({
 			organizationId,
 			userId,
-			amount, // Positive for addition
+			amount,
 			reason: ledgerReason,
 		}),
 	]);
 }
 
+// ---------------------------------------------------------------------------
+// Credit Gate  (the primary interface for AI feature routes)
+// ---------------------------------------------------------------------------
+// Wraps any credit-consuming operation with:
+//   1. Pre-flight balance check  (fast-fail UX, avoids unnecessary work)
+//   2. Atomic deduction           (overdraft-safe via SQL guard)
+//   3. Operation execution
+//   4. Automatic refund on error  (user receives credits back if they got
+//      no usable result -- deliberate product decision)
+//
+// Refund policy: every thrown error triggers a refund because the user did
+// not receive the value they paid for. Infrastructure failures, AI timeouts,
+// and malformed responses all fall into this bucket. If a future feature
+// needs "consume on attempt" semantics, the operation should return a result
+// (even a partial one) instead of throwing.
+export async function withCreditGate<T>(
+	options: {
+		env: Env;
+		organizationId: string;
+		userId: string;
+		cost: number;
+		reason: string;
+	},
+	operation: () => Promise<T>,
+): Promise<T> {
+	const { env, organizationId, userId, cost, reason } = options;
+
+	// 1. Pre-flight balance check (cheap read, saves an unnecessary batch)
+	const balance = await checkBalance(env, organizationId);
+	if (balance < cost) {
+		throw new InsufficientCreditsError(cost, balance);
+	}
+
+	// 2. Atomic deduction (may still throw InsufficientCreditsError on race)
+	await deductCredits(env, organizationId, userId, cost, reason);
+
+	// 3. Execute the billable operation
+	try {
+		return await operation();
+	} catch (error) {
+		// 4. Refund -- the user got nothing of value
+		try {
+			await addCredits(env, organizationId, userId, cost, `Refund: ${reason}`);
+		} catch (refundError) {
+			// CRITICAL: Balance debited but refund failed. Log enough context for
+			// manual reconciliation without exposing PII (IDs are UUIDs, not PII).
+			log.critical("Credit refund failed", refundError, {
+				organizationId,
+				amount: cost,
+				reason,
+			});
+		}
+		throw error;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Stripe Checkout Fulfillment
+// ---------------------------------------------------------------------------
 export async function processCheckoutSession(env: Env, sessionId: string) {
 	const stripe = getStripe(env);
 

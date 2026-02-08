@@ -4,12 +4,15 @@ import { data } from "react-router";
 import { z } from "zod";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { addCredits, checkBalance, deductCredits } from "~/lib/ledger.server";
+import {
+	AI_COSTS,
+	InsufficientCreditsError,
+	withCreditGate,
+} from "~/lib/ledger.server";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.generate";
 
-const GENERATE_COST = 5;
 const GENERATE_MODEL = "gemini-3-flash-preview";
 
 const AIRecipeSchema = z.object({
@@ -74,40 +77,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 3. Economy Check
-	const balance = await checkBalance(context.cloudflare.env, groupId);
-
-	// #region agent log
-	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "meals.generate.ts:checkBalance",
-			message: "Balance after checkBalance",
-			data: {
-				groupId,
-				balance,
-				required: GENERATE_COST,
-				willPass: balance >= GENERATE_COST,
-			},
-			timestamp: Date.now(),
-			hypothesisId: "H1",
-		}),
-	}).catch(() => {});
-	// #endregion
-
-	if (balance < GENERATE_COST) {
-		throw data(
-			{
-				error: "Insufficient credits",
-				required: GENERATE_COST,
-				current: balance,
-			},
-			{ status: 402 },
-		);
-	}
-
-	// 4. Fetch Inventory
+	// 3. Fetch Inventory
 	const d1 = drizzle(context.cloudflare.env.DB);
 	const pantryItems = await d1
 		.select({
@@ -125,7 +95,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 5. Construct Prompt
+	// 4. Construct Prompt
 	const sanitizeName = (name: string) =>
 		name
 			.split("")
@@ -161,203 +131,169 @@ ${pantryJson}
 
 Generate 3 creative meal options I can cook right now.`;
 
-	let creditsDeducted = false;
-
 	try {
-		// 6. Deduct Credits before AI call
-		try {
-			await deductCredits(
-				context.cloudflare.env,
-				groupId,
-				user.id,
-				GENERATE_COST,
-				"Meal Generation",
-			);
-			creditsDeducted = true;
-		} catch (deductError) {
-			// #region agent log
-			fetch(
-				"http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c",
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						location: "meals.generate.ts:deductCredits catch",
-						message: "deductCredits threw",
-						data: {
-							groupId,
-							errorMsg:
-								deductError instanceof Error
-									? deductError.message
-									: String(deductError),
-							errorName:
-								deductError instanceof Error ? deductError.name : undefined,
-						},
-						timestamp: Date.now(),
-						hypothesisId: "H5",
-					}),
-				},
-			).catch(() => {});
-			// #endregion
-			throw data(
-				{ error: "Insufficient credits", required: GENERATE_COST },
-				{ status: 402 },
-			);
-		}
-
-		// 7. AI Inference
-		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
-			context.cloudflare.env;
-		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-			throw data(
-				{
-					error: "Meal generation configuration missing",
-				},
-				{ status: 500 },
-			);
-		}
-
-		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
-
-		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${GENERATE_MODEL}:generateContent`,
+		return await withCreditGate(
 			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
-				},
-				body: JSON.stringify({
-					contents: [
-						{
-							parts: [{ text: systemPrompt }, { text: userPrompt }],
-						},
-					],
-				}),
+				env: context.cloudflare.env,
+				organizationId: groupId,
+				userId: user.id,
+				cost: AI_COSTS.MEAL_GENERATE,
+				reason: "Meal Generation",
 			},
-		);
-		if (!response.ok) {
-			await response.text();
-			const status =
-				response.status === 408 ||
-				response.status === 504 ||
-				response.status === 524
-					? 422
-					: 500;
-			throw data(
-				{
-					error:
-						status === 422
-							? "Meal generation took too long. Try again."
-							: "Meal generation failed",
-				},
-				{ status },
-			);
-		}
-
-		const payload = (await response.json()) as unknown;
-		const modelText = extractModelText(payload);
-		if (!modelText) {
-			throw data({ error: "Meal generation failed" }, { status: 500 });
-		}
-
-		let recipes: AIResponse["recipes"] = [];
-
-		try {
-			const cleanedText = modelText
-				.replace(/^```(?:json)?\s*\n?/i, "")
-				.replace(/\n?```\s*$/i, "")
-				.trim();
-			const parsed = JSON.parse(cleanedText);
-			const parsedResult = AIResponseSchema.safeParse(parsed);
-			if (!parsedResult.success) {
-				throw new Error("Invalid structure");
-			}
-			recipes = parsedResult.data.recipes;
-		} catch (e) {
-			console.error("Failed to parse AI response", e);
-			throw data(
-				{ error: "AI generation failed due to formatting error." },
-				{ status: 500 },
-			);
-		}
-
-		const verifiedRecipes = recipes
-			.map((recipe) => {
-				const missingIngredients: string[] = [];
-
-				const ingredients = recipe.ingredients ?? [];
-
-				// Check each ingredient
-				for (const ing of ingredients) {
-					const ingName = ing.name ?? "";
-					const ingInventoryName = ing.inventoryName ?? ingName;
-
-					if (!ingName) continue; // skip malformed entries
-
-					const isBasic = ["salt", "pepper", "water", "oil"].some((b) =>
-						ingName.toLowerCase().includes(b),
+			async () => {
+				// 5. AI Inference
+				const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
+					context.cloudflare.env;
+				if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
+					throw data(
+						{
+							error: "Meal generation configuration missing",
+						},
+						{ status: 500 },
 					);
-					if (isBasic) continue;
-
-					const exists = pantryItems.some(
-						(p) =>
-							normalizeForMatch(p.name) ===
-								normalizeForMatch(ingInventoryName) ||
-							tokenMatchScore(p.name, ingName) >= 0.8,
-					);
-
-					if (!exists) {
-						missingIngredients.push(ingName);
-					}
 				}
 
-				// Map to App Schema (ingredientName)
-				const mappedIngredients = ingredients.map((ing) => ({
-					ingredientName: ing.name ?? "unknown",
-					quantity: ing.quantity ?? 1,
-					unit: ing.unit ?? "unit",
-					inventoryName: ing.inventoryName ?? ing.name ?? "unknown",
-				}));
+				const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 
-				return {
-					...recipe,
-					ingredients: mappedIngredients,
-					missingIngredients,
-				};
-			})
-			.filter((r) => r.missingIngredients.length <= 2); // Allow max 2 missing
-
-		if (verifiedRecipes.length === 0) {
-			throw data(
-				{
-					error: "Could not generate any valid recipes with current inventory.",
-				},
-				{ status: 422 },
-			);
-		}
-
-		return { success: true, recipes: verifiedRecipes };
-	} catch (error) {
-		if (creditsDeducted) {
-			try {
-				await addCredits(
-					context.cloudflare.env,
-					groupId,
-					user.id,
-					GENERATE_COST,
-					"Refund: Meal Generation",
+				const response = await fetch(
+					`${gatewayUrl}/v1beta/models/${GENERATE_MODEL}:generateContent`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
+						},
+						body: JSON.stringify({
+							contents: [
+								{
+									parts: [{ text: systemPrompt }, { text: userPrompt }],
+								},
+							],
+						}),
+					},
 				);
-			} catch (refundError) {
-				console.error("Meal generation refund failed:", refundError);
-			}
+				if (!response.ok) {
+					await response.text();
+					const status =
+						response.status === 408 ||
+						response.status === 504 ||
+						response.status === 524
+							? 422
+							: 500;
+					throw data(
+						{
+							error:
+								status === 422
+									? "Meal generation took too long. Try again."
+									: "Meal generation failed",
+						},
+						{ status },
+					);
+				}
+
+				const payload = (await response.json()) as unknown;
+				const modelText = extractModelText(payload);
+				if (!modelText) {
+					throw data({ error: "Meal generation failed" }, { status: 500 });
+				}
+
+				let recipes: AIResponse["recipes"] = [];
+
+				try {
+					const cleanedText = modelText
+						.replace(/^```(?:json)?\s*\n?/i, "")
+						.replace(/\n?```\s*$/i, "")
+						.trim();
+					const parsed = JSON.parse(cleanedText);
+					const parsedResult = AIResponseSchema.safeParse(parsed);
+					if (!parsedResult.success) {
+						throw new Error("Invalid structure");
+					}
+					recipes = parsedResult.data.recipes;
+				} catch (e) {
+					console.error("Failed to parse AI response", e);
+					throw data(
+						{ error: "AI generation failed due to formatting error." },
+						{ status: 500 },
+					);
+				}
+
+				const verifiedRecipes = recipes
+					.map((recipe) => {
+						const missingIngredients: string[] = [];
+
+						const ingredients = recipe.ingredients ?? [];
+
+						// Check each ingredient
+						for (const ing of ingredients) {
+							const ingName = ing.name ?? "";
+							const ingInventoryName = ing.inventoryName ?? ingName;
+
+							if (!ingName) continue; // skip malformed entries
+
+							const isBasic = ["salt", "pepper", "water", "oil"].some((b) =>
+								ingName.toLowerCase().includes(b),
+							);
+							if (isBasic) continue;
+
+							const exists = pantryItems.some(
+								(p) =>
+									normalizeForMatch(p.name) ===
+										normalizeForMatch(ingInventoryName) ||
+									tokenMatchScore(p.name, ingName) >= 0.8,
+							);
+
+							if (!exists) {
+								missingIngredients.push(ingName);
+							}
+						}
+
+						// Map to App Schema (ingredientName)
+						const mappedIngredients = ingredients.map((ing) => ({
+							ingredientName: ing.name ?? "unknown",
+							quantity: ing.quantity ?? 1,
+							unit: ing.unit ?? "unit",
+							inventoryName: ing.inventoryName ?? ing.name ?? "unknown",
+						}));
+
+						return {
+							...recipe,
+							ingredients: mappedIngredients,
+							missingIngredients,
+						};
+					})
+					.filter((r) => r.missingIngredients.length <= 2); // Allow max 2 missing
+
+				if (verifiedRecipes.length === 0) {
+					throw data(
+						{
+							error:
+								"Could not generate any valid recipes with current inventory.",
+						},
+						{ status: 422 },
+					);
+				}
+
+				return { success: true, recipes: verifiedRecipes };
+			},
+		);
+	} catch (error) {
+		if (error instanceof InsufficientCreditsError) {
+			const payload = {
+				error: "Insufficient credits",
+				required: error.required,
+				...(typeof error.current === "number"
+					? { current: error.current }
+					: {}),
+			};
+			throw data(payload, { status: 402 });
 		}
 
 		if (error instanceof Response) {
 			throw error;
 		}
 
-		console.error("Analysis failed:", error);
+		console.error("Meal generation failed:", error);
 		if (
 			error &&
 			typeof error === "object" &&

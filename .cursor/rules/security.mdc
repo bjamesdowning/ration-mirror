@@ -1,0 +1,36 @@
+---
+description: Security directives for authentication, authorization, data privacy, and attack mitigation. Always apply this rule.
+alwaysApply: true
+---
+
+# Security Directives
+
+## Zero Trust Architecture
+
+- **Authentication:** Verify Session JWTs on every Edge request via Middleware
+- **Authorization:** Enforce Row Level Security (RLS). Every database query must rely on `user_id` from the verified session, never client input
+- See `app/lib/auth.server.ts` for `requireAuth()` and `requireActiveGroup()` patterns
+
+## Attack Vector Mitigation
+
+- **Rate Limiting:** Implement aggressive throttling on expensive endpoints (`/api/scan`, `/api/generate`) to prevent billing attacks
+  - See `app/lib/rate-limiter.server.ts` for implementation
+- **Injection:** Rely on Drizzle ORM's parameterization to prevent SQL Injection
+- **Validation:** Sanitize all user inputs via Zod schemas at the API boundary
+  - See `app/lib/schemas/` for validation patterns
+
+## Data Privacy (GDPR)
+
+- **Right to Delete:** When a user requests deletion, purge:
+  - D1 Records (User + Data)
+  - Vectorize Indexes (Embeddings)
+  - R2 Objects (Images)
+- **Logs:** PII must never be logged to the console or telemetry
+
+## Secrets Management
+
+- **Audit:** Constantly scan implementation plans for accidental secret exposure
+- **Alert:** Stop the line if an API key appears in code
+- **Storage:** Use `wrangler secret put` for sensitive values (Stripe Keys, Better Auth Secret)
+- **Access:** Access environment variables via `context.cloudflare.env` (in Loaders/Actions) or `env` (in generic Workers)
+- Never log secrets

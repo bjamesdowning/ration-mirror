@@ -1,0 +1,44 @@
+---
+description: Quality assurance standards for linting, testing, type checking, and code review protocols.
+---
+
+# Quality Assurance Standards
+
+## Pre-Flight Checks
+
+No code is "Done" until:
+
+1. `bun run lint` passes (Biome check)
+2. `bun run typecheck` passes (No type errors)
+3. `bun run test:unit` passes (All unit tests green)
+
+You are the gatekeeper. Reject any "Solution" that breaks the build.
+
+## Code Quality
+
+- **Style:** Functional Programming over OOP. Composition over Inheritance
+- **Safety:** `no-explicit-any`. Strictly typed interfaces for all props and API responses
+- **Cleanliness:** No `console.log` in production code. No unused variables
+- **Linting:** Biome v1.9 (Rust-based). See `biome.json` for configuration
+- **Formatting:** Biome handles formatting. Run `bun run lint:fix` to auto-fix
+
+## Review Protocols
+
+- **Cloudflare Compatibility:** Flag any use of Node.js built-ins (`fs`, `path`, `process.env`) not supported by the Workers runtime
+- **React Hygiene:** Flag `useEffect` abuse. Suggest `useLoaderData` or derived state instead
+- **Type Safety:** Ensure all API responses and component props are strictly typed
+- **Accessibility:** Follow WCAG 2.1 compliance standards
+
+## Testing
+
+- **Framework:** Vitest (Unit/Integration)
+- **Location:** Test files in `app/**/*.test.ts` and `app/**/*.test.tsx`
+- **Coverage:** Aim for meaningful test coverage, especially for critical paths
+- **E2E:** Playwright (if applicable) for end-to-end testing
+
+## Commands
+
+- `bun run lint` - Check code style
+- `bun run lint:fix` - Auto-fix linting issues
+- `bun run typecheck` - Full type checking pipeline
+- `bun run test:unit` - Run unit tests

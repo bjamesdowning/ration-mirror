@@ -1,0 +1,77 @@
+---
+description: Core Ration project identity, technology stack, constraints, and coding standards. Always apply this rule.
+alwaysApply: true
+---
+
+# Ration: Master Protocol & Directives
+
+## Mission Profile
+
+**Identity:** Ration is an "Orbital Supply Chain" pantry management system.
+
+**Aesthetic:** "Orbital Luxury." Utopian space station design with Ceramic White (#F8F9FA), Platinum (#E6E6E6), Hyper-Green (#00E088), and Carbon (#111111). Clean, precision interfaces with Space Mono typography.
+
+**Core Objective:** Zero-latency inventory tracking, AI-assisted logistical planning (recipes), and automated waste reduction with an elegant, optimistic user experience.
+
+## Technology Stack
+
+Always search and confirm the latest stable versions for each tool. Never use legacy tools.
+
+- **Framework:** React Router v7.latest (Framework Mode / `routes.ts`)
+- **Runtime:** Cloudflare Workers (V8 Isolates). **NO Node.js APIs (fs, net)**
+- **Database:** Cloudflare D1 (SQLite) + Drizzle ORM
+- **Object Store:** Cloudflare R2 (S3 Compatible)
+- **Domain/DNS:** Cloudflare Domains
+- **Vector Search:** Cloudflare Vectorize (Semantic Search)
+- **Auth:** Better Auth - Edge compatible
+- **Styling:** Tailwind CSS v4.1
+- **Language:** TypeScript (Strict Mode)
+- **Package Manager:** bun
+- **Linting:** biome
+- **Payment Processing:** Stripe SDK
+
+See `package.json` for current versions.
+
+## Functional Requirements
+
+- **Core:** User bio-safety (allergens), unit calibration (metric/imperial), and inventory CRUD (Dry/Frozen taxonomy)
+- **Ingest:** Bulk receipt parsing (OCR/LLM) and manual entry
+- **Intel:** Hybrid Search (D1 Boolean + Vectorize Semantic) and Visual Scanning (Llama 3 Vision)
+- **Economy:** Credit-based ledger system. Scans cost credits; credits are purchasable via Stripe
+- **Admin:** "God Mode" dashboard for MRR and telemetry
+
+## Non-Functional Directives
+
+- **Latency:** < 100ms interaction time. Edge-native logic
+- **Reliability:** Offline-first PWA. Read capabilities must function without network
+- **Cost:** Zero idle cost. No provisioned instances
+- **Security:** Strict Rate Limiting on AI endpoints to prevent billing drain
+
+## Coding Standards
+
+- **Architecture:** Feature-based folder structure (see `app/components/`, `app/routes/`)
+- **Typing:** Strict Zod validation at the API boundary (see `app/lib/schemas/`)
+- **Linting:** Biome v1.9 (Rust-based). See `biome.json`
+- **Error Handling:** Graceful degradation. If AI fails, fallback to manual keyword search
+
+## File Organization
+
+```
+app/
+├── components/     # Feature-based UI components (cargo, galley, shell, etc.)
+├── db/            # Drizzle schema (schema.ts)
+├── lib/           # Server utilities (*.server.ts) and Zod schemas
+└── routes/        # React Router routes (routes.ts config)
+```
+
+## Commands Reference
+
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun run deploy` - Build + deploy to Cloudflare
+- `bun run lint` / `bun run lint:fix` - Biome linting
+- `bun run typecheck` - Full type checking pipeline
+- `bun run test:unit` - Run Vitest
+- `bun run db:generate` - Generate Drizzle migrations
+- `bun run db:migrate:dev` - Apply migrations locally
+- `bun run db:migrate:prod` - Apply migrations remotely

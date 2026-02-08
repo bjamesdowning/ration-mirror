@@ -1,0 +1,47 @@
+---
+description: Database patterns for Drizzle ORM, D1 migrations, schema design, and query optimization.
+globs: ["app/db/**", "drizzle/**", "drizzle.config.ts"]
+---
+
+# Database Standards
+
+## Schema Management
+
+- **Authority:** All structural changes must originate in `app/db/schema.ts`
+- **Migrations:** Use Drizzle Kit to generate and apply migrations. Never modify the production database manually
+  - `bun run db:generate` - Generate migration files
+  - `bun run db:migrate:dev` - Apply locally
+  - `bun run db:migrate:prod` - Apply remotely
+- See `drizzle.config.ts` for Drizzle configuration
+
+## Data Integrity
+
+- **Relationships:** Enforce Foreign Keys in D1
+- **Indexing:** Create compound indexes on frequently queried columns (e.g., `user_id`, `created_at`)
+- **Transactions:** Use D1 batch transactions (`db.batch()`) for atomic multi-step operations
+  - Example: "Deduct Credit" + "Save Scan Result" should be batched
+  - See `app/lib/meals.server.ts` for batch query examples
+
+## Vectorization Strategy
+
+- **Indexing:** When an item is added to `Inventory`, ensure the `Vectorize` index is updated
+- **Synchronization:** Keep D1 metadata and Vectorize IDs in strict sync
+- **Hybrid Search:** Combine D1 keyword matches (`LIKE %q%`) with Vectorize semantic similarity (`cosine` distance)
+
+## Query Optimization
+
+- **Reads:** Prefer simple `SELECT` queries over complex nested joins where possible
+- **Writes:** Batch insert operations for bulk user actions
+- **N+1 Prevention:** Use `d1.batch()` to fetch related data in parallel
+  - Example: `app/lib/meals.server.ts` shows batch fetching of tags and ingredients
+
+## Schema Example
+
+```typescript
+// app/db/schema.ts
+export const table = pgTable("table", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+```

@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
 import {
 	CsvImportButton,
 	type CsvImportButtonHandle,
@@ -7,19 +6,29 @@ import {
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
-import { CloseIcon, PackageIcon } from "~/components/icons/PageIcons";
+import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
+import {
+	CameraIcon,
+	CloseIcon,
+	ImportIcon,
+	PackageIcon,
+	PlusIcon,
+	SearchIcon,
+} from "~/components/icons/PageIcons";
 import {
 	CameraInput,
 	type CameraInputHandle,
 } from "~/components/scanner/CameraInput";
-import { FilterChip } from "~/components/shell/FilterSheet";
+import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
+import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { ITEM_DOMAINS } from "~/lib/domain";
 import {
 	addItem,
 	getInventory,
@@ -146,44 +155,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 // --- COMPONENT ---
 export default function PantryPage({ loaderData }: Route.ComponentProps) {
-	const {
-		inventory: initialInventory,
-		currentDomain,
-		currentTag,
-		availableTags,
-	} = loaderData;
+	const { inventory: initialInventory, availableTags } = loaderData;
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [searchParams, setSearchParams] = useSearchParams();
+	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const importRef = useRef<CsvImportButtonHandle>(null);
-
-	const activeDomainParam =
-		searchParams.get("domain") || currentDomain || "all";
-	const activeDomain = ITEM_DOMAINS.includes(activeDomainParam as ItemDomain)
-		? (activeDomainParam as ItemDomain)
-		: "all";
-
-	const handleDomainChange = (nextDomain: ItemDomain | "all") => {
-		const nextParams = new URLSearchParams(searchParams);
-		if (nextDomain === "all") {
-			nextParams.delete("domain");
-		} else {
-			nextParams.set("domain", nextDomain);
-		}
-		setSearchParams(nextParams);
-	};
-
-	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-		const selectedTag = e.target.value;
-		const nextParams = new URLSearchParams(searchParams);
-		if (selectedTag) {
-			nextParams.set("tag", selectedTag);
-		} else {
-			nextParams.delete("tag");
-		}
-		setSearchParams(nextParams);
-	};
+	const {
+		activeDomain,
+		currentTag,
+		handleDomainChange,
+		handleTagChange,
+		clearAllFilters,
+		hasActiveFilters,
+	} = usePageFilters();
 
 	// Local Search Logic
 	const filteredInventory = useMemo(() => {
@@ -224,9 +209,6 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 		setShowQuickAdd(false);
 	};
 
-	// Check if any filters are active
-	const hasActiveFilters = activeDomain !== "all" || !!currentTag;
-
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
 		{
@@ -259,57 +241,25 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	// Filter content for mobile sheet
 	const filterContent = (
 		<div className="space-y-6">
-			{/* Domain filters */}
-			<div>
-				<h4 className="text-sm font-medium text-muted mb-3">Domain</h4>
-				<div className="flex flex-wrap gap-2">
-					<FilterChip
-						label="All"
-						isActive={activeDomain === "all"}
-						onClick={() => handleDomainChange("all")}
-					/>
-					{ITEM_DOMAINS.map((domain) => {
-						const Icon = DOMAIN_ICONS[domain];
-						return (
-							<FilterChip
-								key={domain}
-								label={DOMAIN_LABELS[domain]}
-								icon={<Icon className="w-4 h-4" />}
-								isActive={activeDomain === domain}
-								onClick={() => handleDomainChange(domain)}
-							/>
-						);
-					})}
-				</div>
-			</div>
+			<DomainFilterChips
+				activeDomain={activeDomain}
+				onDomainChange={handleDomainChange}
+			/>
 
-			{/* Tag filter */}
-			<div>
-				<h4 className="text-sm font-medium text-muted mb-3">Tag</h4>
-				<select
-					id="tag-filter-mobile"
-					value={currentTag || ""}
-					onChange={handleTagChange}
-					className="w-full bg-platinum dark:bg-white/10 border border-carbon/10 dark:border-white/10 px-4 py-3 rounded-xl text-sm text-carbon dark:text-white focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
-				>
-					<option value="">All Items</option>
-					{availableTags.map((tag) => (
-						<option key={tag} value={tag}>
-							{tag.charAt(0).toUpperCase() + tag.slice(1)}
-						</option>
-					))}
-				</select>
-			</div>
+			<TagFilterDropdown
+				label="Tag"
+				emptyLabel="All Items"
+				currentTag={currentTag}
+				availableTags={availableTags}
+				onTagChange={handleTagChange}
+			/>
 
 			{/* Clear filters */}
 			{hasActiveFilters && (
 				<button
 					type="button"
 					onClick={() => {
-						handleDomainChange("all");
-						const nextParams = new URLSearchParams(searchParams);
-						nextParams.delete("tag");
-						setSearchParams(nextParams);
+						clearAllFilters();
 					}}
 					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
 				>
@@ -331,40 +281,43 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				onSearchChange={setSearchQuery}
 				filterContent={filterContent}
 				hasActiveFilters={hasActiveFilters}
+				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
 
-			<div className="space-y-4">
-				{/* Desktop Toolbar - visible in DOM for Refs, items hidden on mobile */}
-				<div className="flex flex-wrap items-center gap-3">
-					<button
-						type="button"
-						onClick={() => setShowQuickAdd(!showQuickAdd)}
-						className={`hidden md:flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-							showQuickAdd
-								? "bg-hyper-green text-carbon shadow-glow-sm"
-								: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
-						}`}
-					>
-						{showQuickAdd ? "✕ Cancel" : "+ Add Item"}
-					</button>
-
-					<CameraInput
-						ref={cameraRef}
-						onScanComplete={handleScanComplete}
-						className="hidden md:inline-block"
-					/>
-
-					<CsvImportButton
-						ref={importRef}
-						onImportComplete={handleImportComplete}
-						defaultDomain={activeDomain === "all" ? undefined : activeDomain}
-						className="hidden md:inline-block"
+			<div className="space-y-6">
+				<div className="hidden md:block">
+					<PanelToolbar
+						primaryAction={
+							<CameraInput
+								ref={cameraRef}
+								onScanComplete={handleScanComplete}
+							/>
+						}
+						secondaryAction={
+							<CsvImportButton
+								ref={importRef}
+								onImportComplete={handleImportComplete}
+								defaultDomain={
+									activeDomain === "all" ? undefined : activeDomain
+								}
+							/>
+						}
+						quickAddPlaceholder="Add Item"
+						showQuickAdd={showQuickAdd}
+						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+						quickAddForm={
+							<IngestForm
+								defaultDomain={
+									activeDomain === "all" ? undefined : activeDomain
+								}
+							/>
+						}
 					/>
 				</div>
 
-				{/* Quick Add Form (collapsible) */}
+				{/* Mobile Quick Add Form */}
 				{showQuickAdd && (
-					<div className="glass-panel rounded-xl p-6 animate-fade-in">
+					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						<IngestForm
 							defaultDomain={activeDomain === "all" ? undefined : activeDomain}
 						/>
@@ -372,7 +325,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				)}
 
 				{/* Empty State */}
-				{filteredInventory.length === 0 && (
+				{filteredInventory.length === 0 && !searchQuery && (
 					<EmptyPanel
 						icon={<PackageIcon className="w-12 h-12 text-muted" />}
 						title="Cargo Hold Empty"
@@ -395,74 +348,23 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					/>
 				)}
 
+				{/* No Search Results */}
+				{filteredInventory.length === 0 && searchQuery && (
+					<EmptyPanel
+						icon={<SearchIcon className="w-12 h-12 text-muted" />}
+						title="No Results"
+						description={`No items found matching "${searchQuery}"`}
+						className="py-12"
+					/>
+				)}
+
 				{/* Inventory Grid */}
 				{filteredInventory.length > 0 && (
 					<ManifestGrid items={filteredInventory} />
 				)}
 			</div>
 			{/* Floating Action Bar (mobile only) */}
-			<FloatingActionBar actions={fabActions} />
+			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
 		</>
-	);
-}
-
-// --- Icon Components ---
-function PlusIcon() {
-	return (
-		<svg
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M12 4v16m8-8H4"
-			/>
-		</svg>
-	);
-}
-
-function CameraIcon() {
-	return (
-		<svg
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-			/>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-			/>
-		</svg>
-	);
-}
-
-function ImportIcon() {
-	return (
-		<svg
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-			/>
-		</svg>
 	);
 }

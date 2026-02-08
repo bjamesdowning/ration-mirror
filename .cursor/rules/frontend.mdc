@@ -1,0 +1,51 @@
+---
+description: Frontend patterns for React Router v7, Tailwind CSS, component architecture, and UX standards.
+globs: ["app/components/**", "app/routes/**/*.tsx", "app/root.tsx", "app/app.css"]
+---
+
+# Frontend Standards
+
+## Architectural Patterns
+
+- **Routing:** Use `routes.ts` config. Prefer Nested Routes to share layouts (e.g., Dashboard Layout)
+  - See `app/routes.ts` for route configuration
+- **Data Fetching:** NEVER use `useEffect` for data. Use React Router `loader` (Read) and `action` (Write)
+  - Example: `app/routes/dashboard/index.tsx` shows loader pattern
+- **Optimistic UI:** All "Write" actions must update the UI immediately (`useFetcher`, `optimistic-ui`) before server confirmation
+  - Example: `app/components/galley/MealCard.tsx` shows optimistic toggle pattern
+
+## Design Language
+
+- **Aesthetic:** "Orbital Luxury". Utopian, sterile space station aesthetic with high precision
+- **Color Tokens:** 
+  - Ceramic: `#F8F9FA`
+  - Platinum: `#E6E6E6`
+  - Hyper-Green: `#00E088`
+  - Carbon: `#111111`
+- **Typography:** Space Mono (400/700 weights) for everything. Use varying weights and tracking for hierarchy
+- **Visual FX:** Colored diffuse shadows (shadow-glow), minimal borders, whitespace-based separation
+- **Shapes:** Smooth rounded corners. Use glass-panel effects and subtle color shifts for visual hierarchy
+- **Logo:** Use the vector asset at `/static/ration-logo.svg` for all branding
+- **Mobile-First:** Design for the "Thumb Zone". Primary actions (Scan, Add, Cook) accessible within bottom 50% of viewport
+
+See `app/app.css` for theme configuration.
+
+## Component Standards
+
+- **Composition:** Build small, single-responsibility components
+- **Organization:** Feature-based structure (`app/components/cargo/`, `app/components/galley/`, etc.)
+- **State:** Prefer URL state (search params) over global state (Redux/Context) where possible
+- **Props:** Use TypeScript interfaces for all props. See `app/components/common/StandardCard.tsx` for example
+
+## Component Example
+
+```typescript
+interface ComponentProps {
+  // Strictly typed props
+}
+
+export function Component({ ... }: ComponentProps) {
+  // Use useFetcher for mutations, not useEffect
+  // Prefer loader data over client-side fetching
+}
+```

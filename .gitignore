@@ -17,3 +17,7 @@ worker-configuration.d.ts
 
 !.dev.vars.example
 !.env.example
+
+# Legacy agent configs (preserved locally but ignored in git)
+.agent/
+.kilocode/

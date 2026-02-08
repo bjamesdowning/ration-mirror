@@ -1,0 +1,41 @@
+---
+description: CI/CD pipeline patterns, deployment workflows, quality gates, and release management.
+---
+
+# DevOps Standards
+
+## Pipeline Architecture
+
+- **Stages:** Construct robust pipelines with standard stages: `Install` -> `Verify` (Lint/Test) -> `Preview` -> `Deploy`
+- **Caching:** Aggressively cache `node_modules` based on `bun.lock` hash to speed up builds
+- **Tool Chain:** Use project-local binaries (`bun x wrangler`) to ensure version consistency. Avoid global installs in CI
+
+## Quality Gates
+
+- **Blocker:** No code reaches usage (Preview or Prod) without passing QA protocols (Linting, Types, Unit Tests)
+- **Preview:** Every Merge Request should generate a unique, ephemeral Preview URL for stakeholder verification
+- **Automation:** Run `bun run lint`, `bun run typecheck`, and `bun run test:unit` in CI
+
+## Deployment Safety
+
+- **Migrations:** Database migrations (`bun run db:migrate:prod`) must run **successfully** before the new code is promoted
+- **Secrets:** Inject sensitive config via Masked/Protected CI Variables. Never log these
+- **Order:** Always run migrations before deploying new code that depends on schema changes
+
+## Deployment Workflow
+
+1. **Generate Migrations:** `bun run db:generate` (checks if schema needs updating)
+2. **Apply Migrations:** `bun run db:migrate:prod` (applies to remote D1 database)
+3. **Build:** `bun run build` (generates production build)
+4. **Deploy:** `bun run deploy` (builds + deploys to Cloudflare)
+
+## CI/CD Configuration
+
+- **Platform:** GitLab CI (`.gitlab-ci.yml`) - currently disabled, but patterns should be maintained
+- **Scripts:** Use `package.json` scripts for consistency between local and CI environments
+- **Versioning:** Ensure `wrangler.jsonc` compatibility_date is up-to-date
+
+## Blue/Green Deployment
+
+- **Pattern:** Consider Blue/Green deployment patterns for zero-downtime deployments
+- **Rollback:** Have a rollback plan ready (revert migrations + code if needed)

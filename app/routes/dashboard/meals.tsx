@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
+import { useFetcher } from "react-router";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
+import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import {
 	GenerateMealButton,
 	type GenerateMealButtonHandle,
@@ -10,16 +11,20 @@ import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import {
 	ChefHatIcon,
 	CloseIcon,
+	PlusIcon,
 	SearchIcon,
+	SparkleIcon,
 } from "~/components/icons/PageIcons";
-import { FilterChip } from "~/components/shell/FilterSheet";
+import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
+import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { ITEM_DOMAINS } from "~/lib/domain";
 import { getInventory } from "~/lib/inventory.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
@@ -95,50 +100,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const {
-		meals,
-		availableTags,
-		currentTag,
-		currentDomain,
-		inventory,
-		activeMealIds,
-	} = loaderData;
-	const [searchParams, setSearchParams] = useSearchParams();
+	const { meals, availableTags, inventory, activeMealIds } = loaderData;
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [selectedMealIds, setSelectedMealIds] = useState(
 		() => new Set(activeMealIds),
 	);
 	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 	const generateRef = useRef<GenerateMealButtonHandle>(null);
-
-	const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-		const selectedTag = e.target.value;
-		const nextParams = new URLSearchParams(searchParams);
-		if (selectedTag) {
-			nextParams.set("tag", selectedTag);
-		} else {
-			nextParams.delete("tag");
-		}
-		setSearchParams(nextParams);
-	};
-
-	const activeDomainParam =
-		currentDomain || searchParams.get("domain") || "all";
-	const activeDomain = ITEM_DOMAINS.includes(activeDomainParam as ItemDomain)
-		? (activeDomainParam as ItemDomain)
-		: "all";
-
-	const handleDomainChange = (nextDomain: ItemDomain | "all") => {
-		const nextParams = new URLSearchParams(searchParams);
-		if (nextDomain === "all") {
-			nextParams.delete("domain");
-		} else {
-			nextParams.set("domain", nextDomain);
-		}
-		setSearchParams(nextParams);
-	};
+	const {
+		activeDomain,
+		currentTag,
+		handleDomainChange,
+		handleTagChange,
+		clearAllFilters,
+		hasActiveFilters,
+	} = usePageFilters({ extraActiveCheck: () => matchingEnabled });
 
 	// Local search filtering (client-side for speed, no credits)
 	const filteredMeals = useMemo(() => {
@@ -177,10 +156,6 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			action: "/api/meals/clear-selections",
 		});
 	};
-
-	// Check if any filters are active
-	const hasActiveFilters =
-		activeDomain !== "all" || !!currentTag || matchingEnabled;
 
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
@@ -223,58 +198,26 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				</button>
 			</div>
 
-			{/* Domain filters */}
-			<div>
-				<h4 className="text-sm font-medium text-muted mb-3">Domain</h4>
-				<div className="flex flex-wrap gap-2">
-					<FilterChip
-						label="All"
-						isActive={activeDomain === "all"}
-						onClick={() => handleDomainChange("all")}
-					/>
-					{ITEM_DOMAINS.map((domain) => {
-						const Icon = DOMAIN_ICONS[domain];
-						return (
-							<FilterChip
-								key={domain}
-								label={DOMAIN_LABELS[domain]}
-								icon={<Icon className="w-4 h-4" />}
-								isActive={activeDomain === domain}
-								onClick={() => handleDomainChange(domain)}
-							/>
-						);
-					})}
-				</div>
-			</div>
+			<DomainFilterChips
+				activeDomain={activeDomain}
+				onDomainChange={handleDomainChange}
+			/>
 
-			{/* Tag filter */}
-			<div>
-				<h4 className="text-sm font-medium text-muted mb-3">Recipe Tag</h4>
-				<select
-					id="tag-filter-mobile"
-					value={currentTag || ""}
-					onChange={handleTagChange}
-					className="w-full bg-platinum dark:bg-white/10 border border-carbon/10 dark:border-white/10 px-4 py-3 rounded-xl text-sm text-carbon dark:text-white focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
-				>
-					<option value="">All Recipes</option>
-					{availableTags.map((tag) => (
-						<option key={tag} value={tag}>
-							{tag.charAt(0).toUpperCase() + tag.slice(1)}
-						</option>
-					))}
-				</select>
-			</div>
+			<TagFilterDropdown
+				label="Recipe Tag"
+				emptyLabel="All Recipes"
+				currentTag={currentTag}
+				availableTags={availableTags}
+				onTagChange={handleTagChange}
+			/>
 
 			{/* Clear filters */}
 			{hasActiveFilters && (
 				<button
 					type="button"
 					onClick={() => {
-						handleDomainChange("all");
+						clearAllFilters();
 						setMatchingEnabled(false);
-						const nextParams = new URLSearchParams(searchParams);
-						nextParams.delete("tag");
-						setSearchParams(nextParams);
 					}}
 					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
 				>
@@ -296,9 +239,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				onSearchChange={setSearchQuery}
 				filterContent={filterContent}
 				hasActiveFilters={hasActiveFilters}
+				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
 
-			<div className="space-y-4">
+			<div className="space-y-6">
 				{/* Selection status bar */}
 				{selectedCount > 0 && (
 					<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">
@@ -318,26 +262,29 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					</div>
 				)}
 
-				{/* Desktop Toolbar - visible in DOM for Refs, items hidden on mobile */}
-				<div className="flex flex-wrap items-center gap-3">
-					<button
-						type="button"
-						onClick={() => setShowQuickAdd(!showQuickAdd)}
-						className={`hidden md:flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-							showQuickAdd
-								? "bg-hyper-green text-carbon shadow-glow-sm"
-								: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
-						}`}
-					>
-						{showQuickAdd ? "✕ Cancel" : "+ Add Meal"}
-					</button>
-
-					<GenerateMealButton ref={generateRef} className="hidden md:flex" />
+				<div className="hidden md:block">
+					<PanelToolbar
+						primaryAction={
+							<GenerateMealButton
+								ref={generateRef}
+								className="hidden md:flex"
+							/>
+						}
+						quickAddPlaceholder="Add Meal"
+						showQuickAdd={showQuickAdd}
+						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+						quickAddForm={
+							<MealQuickAdd
+								onSuccess={() => setShowQuickAdd(false)}
+								availableIngredients={inventory}
+							/>
+						}
+					/>
 				</div>
 
-				{/* Quick Add Form (collapsible) */}
+				{/* Mobile Quick Add Form */}
 				{showQuickAdd && (
-					<div className="glass-panel rounded-xl p-6 animate-fade-in">
+					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						<MealQuickAdd
 							onSuccess={() => setShowQuickAdd(false)}
 							availableIngredients={inventory}
@@ -389,44 +336,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			</div>
 
 			{/* Floating Action Bar (mobile only) */}
-			<FloatingActionBar actions={fabActions} />
+			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
 		</>
-	);
-}
-
-// --- Icon Components ---
-function PlusIcon() {
-	return (
-		<svg
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M12 4v16m8-8H4"
-			/>
-		</svg>
-	);
-}
-
-function SparkleIcon() {
-	return (
-		<svg
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth={2}
-				d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-			/>
-		</svg>
 	);
 }

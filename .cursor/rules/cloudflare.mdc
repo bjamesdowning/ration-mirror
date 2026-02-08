@@ -1,0 +1,37 @@
+---
+description: Cloudflare infrastructure patterns for Workers configuration, bindings, secrets, and deployment.
+globs: ["wrangler.jsonc", "workers/**", "load-context.ts"]
+---
+
+# Cloudflare Infrastructure Standards
+
+## Infrastructure as Code
+
+- **Ownership:** `wrangler.jsonc` is the single source of truth for infrastructure configuration
+- **Schema:** Maintain strict schema validation for the configuration
+- **Environments:** Clearly distinguish between `dev`, `preview`, and `production` environments
+
+## Bindings & Resources
+
+- **Mapping:** Ensure D1, R2, Vectorize, and AI bindings are correctly mapped in `wrangler.jsonc`
+- **Synchronization:** Verify that binding names match the TypeScript interfaces in the application code
+- **Access:** Bindings are available via `context.cloudflare.env` in loaders/actions
+  - Example: `context.cloudflare.env.DB` for D1 database
+
+## Secrets Management
+
+- **Protocol:** NEVER commit secrets to version control
+- **Action:** Use `wrangler secret put` for sensitive values (Stripe Keys, Better Auth Secret)
+- **Access:** Secrets are accessed via `context.cloudflare.env` like other bindings
+
+## Assets & Build
+
+- **Static Assets:** Configure `assets` binding for serving the React Router build output
+- **Compatibility:** Ensure `compatibility_date` is locked and up-to-date in `wrangler.jsonc`
+- **Build:** Use `bun run build` to generate `build/server/index.js` for deployment
+- **Deploy:** Use `bun run deploy` which runs build + `wrangler deploy`
+
+## Type Generation
+
+- **Types:** Run `bun run cf-typegen` (or `wrangler types`) to generate TypeScript types for bindings
+- **Output:** Types are generated to `worker-configuration.d.ts` (gitignored)

@@ -1,0 +1,58 @@
+---
+description: Backend patterns for Cloudflare Workers edge runtime, React Router loaders/actions, API design, and data validation.
+globs: ["app/routes/api/**", "app/lib/**/*.server.ts", "workers/**"]
+---
+
+# Backend Standards
+
+## Edge Environment Constraints
+
+- **Runtime:** Cloudflare Workers (V8 Isolate), NOT Node.js
+- **Prohibited:** `fs`, `net`, `child_process` - these APIs don't exist in Workers
+- **Performance:** Minimize cold starts. Avoid heavy dependencies
+
+## API & Data Flow
+
+- **Primary Logic:** Implement backend logic within React Router `loader` (read) and `action` (write) functions
+  - Example: `app/routes/api/meals.ts` shows loader/action pattern
+- **Standalone APIs:** Use `app/routes/api/` for resource logic decoupled from UI (e.g., Webhooks, Cron Jobs)
+- **Validation:** Trust no one. Validate ALL inputs via Zod schemas at the API boundary before any processing
+  - See `app/lib/schemas/` for schema definitions
+  - Example: `app/lib/error-handler.ts` shows Zod error handling
+
+## API Route Pattern
+
+```typescript
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const { groupId } = await requireActiveGroup(context, request);
+  // Fetch data
+  return { data };
+}
+
+export async function action({ request, context }: ActionFunctionArgs) {
+  const { groupId } = await requireActiveGroup(context, request);
+  if (request.method !== "POST") {
+    throw new Response("Method not allowed", { status: 405 });
+  }
+  try {
+    const json = await request.json();
+    const input = Schema.parse(json); // Zod validation
+    // Process
+    return { success: true };
+  } catch (e) {
+    return handleApiError(e);
+  }
+}
+```
+
+## Economic Safety
+
+- **Rule:** Every call to an AI or "Computed" endpoint must check the User's "Credit Ledger" in D1 first
+- **Enforcement:** If `balance < cost`, immediately reject the request with `402 Payment Required`
+- See `app/lib/ledger.server.ts` for credit ledger implementation
+
+## Bindings & Secrets
+
+- **Access:** Access environment variables via `context.cloudflare.env` (in Loaders/Actions) or `env` (in generic Workers)
+- **Security:** Never log secrets
+- See `wrangler.jsonc` for binding configuration

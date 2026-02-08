@@ -32,38 +32,19 @@ const ScanAIResponseSchema = z.object({
 	items: z.array(ScanAIItemSchema).default([]),
 });
 
-const SCAN_RESPONSE_SCHEMA = {
-	type: "object",
-	properties: {
-		items: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					name: { type: "string" },
-					quantity: { type: "number" },
-					unit: { type: "string", enum: [...SCAN_UNITS] },
-					tags: { type: "array", items: { type: "string" } },
-					expiresAt: { type: ["string", "null"] },
-				},
-				required: ["name"],
-			},
-		},
-	},
-	required: ["items"],
-} as const;
-
 const SCAN_PROMPT = `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.
-Return JSON that matches the provided schema.
+You MUST respond with ONLY a valid JSON object matching this exact schema — no markdown, no explanation, no extra text:
+
+{"items":[{"name":"string","quantity":number,"unit":"string","tags":["string"],"expiresAt":"string or null"}]}
 
 Rules:
 - Use lowercase item names
 - quantity defaults to 1 if unknown
 - unit must be one of: ${SCAN_UNITS.join(", ")}
-- tags are comma-free strings (array)
+- tags are descriptive strings in an array (e.g. ["produce","fruit"])
 - expiresAt must be YYYY-MM-DD or null
-- No extra keys, no markdown, no commentary.`;
+- Respond with ONLY the JSON object, nothing else.`;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -180,7 +161,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 
 			const response = await fetch(
-				`${gatewayUrl}/v1/models/${SCAN_MODEL}:generateContent`,
+				`${gatewayUrl}/v1beta/models/${SCAN_MODEL}:generateContent`,
 				{
 					method: "POST",
 					headers: {
@@ -201,10 +182,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 								],
 							},
 						],
-						generationConfig: {
-							responseMimeType: "application/json",
-							responseSchema: SCAN_RESPONSE_SCHEMA,
-						},
 					}),
 				},
 			);
@@ -238,7 +215,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 				);
 			}
 
-			const parsedJson = JSON.parse(modelText);
+			// Strip markdown code fences if model wraps JSON in ```json ... ```
+			const cleanedText = modelText
+				.replace(/^```(?:json)?\s*\n?/i, "")
+				.replace(/\n?```\s*$/i, "")
+				.trim();
+			const parsedJson = JSON.parse(cleanedText);
 			const parsedResult = ScanAIResponseSchema.safeParse(parsedJson);
 			if (!parsedResult.success) {
 				throw data(
@@ -293,7 +275,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 			return { success: true, ...detectedItems };
 		} catch (innerError) {
-			if (innerError instanceof Response) {
+			// data() returns DataWithResponseInit, not Response — re-throw it for React Router
+			if (
+				innerError instanceof Response ||
+				(innerError &&
+					typeof innerError === "object" &&
+					"type" in innerError &&
+					(innerError as { type: string }).type === "DataWithResponseInit")
+			) {
 				throw innerError;
 			}
 			console.error(
@@ -331,6 +320,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 	} catch (outerError) {
+		// Re-throw DataWithResponseInit so React Router handles it correctly
+		if (
+			outerError instanceof Response ||
+			(outerError &&
+				typeof outerError === "object" &&
+				"type" in outerError &&
+				(outerError as { type: string }).type === "DataWithResponseInit")
+		) {
+			throw outerError;
+		}
 		console.error(
 			"[SCAN DEBUG] Outer error during image preparation:",
 			outerError,

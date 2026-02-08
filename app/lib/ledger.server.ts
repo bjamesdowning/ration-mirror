@@ -16,6 +16,24 @@ export async function checkBalance(
 		},
 	});
 
+	// #region agent log
+	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "ledger.server.ts:checkBalance",
+			message: "checkBalance result",
+			data: {
+				organizationId,
+				orgFound: !!org,
+				credits: org?.credits ?? 0,
+			},
+			timestamp: Date.now(),
+			hypothesisId: "H2",
+		}),
+	}).catch(() => {});
+	// #endregion
+
 	return org?.credits ?? 0;
 }
 
@@ -55,11 +73,61 @@ export async function deductCredits(
 		)
 		.run();
 
+	// #region agent log
+	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "ledger.server.ts:deductCredits",
+			message: "D1 result meta after deductCredits SQL",
+			data: {
+				organizationId,
+				cost,
+				meta: result.meta,
+				metaKeys: result.meta ? Object.keys(result.meta) : [],
+				changed_db: result.meta?.changed_db,
+				changes: result.meta?.changes,
+				rows_written: result.meta?.rows_written,
+			},
+			timestamp: Date.now(),
+			hypothesisId: "H3",
+		}),
+	}).catch(() => {});
+	// #endregion
+
 	const changed =
 		result.meta?.changed_db === true ||
 		(result.meta?.changes ?? 0) > 0 ||
 		(result.meta?.rows_written ?? 0) > 0;
+
+	// #region agent log
+	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "ledger.server.ts:deductCredits",
+			message: "changed computed, about to check",
+			data: { changed, willThrow: !changed },
+			timestamp: Date.now(),
+			hypothesisId: "H3",
+		}),
+	}).catch(() => {});
+	// #endregion
+
 	if (!changed) {
+		// #region agent log
+		fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				location: "ledger.server.ts:deductCredits",
+				message: "Throwing Insufficient credits - changed was false",
+				data: { organizationId, cost, meta: result.meta },
+				timestamp: Date.now(),
+				hypothesisId: "H3",
+			}),
+		}).catch(() => {});
+		// #endregion
 		throw new Error("Insufficient credits");
 	}
 }

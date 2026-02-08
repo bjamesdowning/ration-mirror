@@ -75,6 +75,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	// 3. Economy Check
 	const balance = await checkBalance(context.cloudflare.env, groupId);
+
+	// #region agent log
+	fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "meals.generate.ts:checkBalance",
+			message: "Balance after checkBalance",
+			data: { groupId, balance, required: GENERATE_COST, willPass: balance >= GENERATE_COST },
+			timestamp: Date.now(),
+			hypothesisId: "H1",
+		}),
+	}).catch(() => {});
+	// #endregion
+
 	if (balance < GENERATE_COST) {
 		throw data(
 			{
@@ -153,7 +168,24 @@ Generate 3 creative meal options I can cook right now.`;
 				"Meal Generation",
 			);
 			creditsDeducted = true;
-		} catch (_error) {
+		} catch (deductError) {
+			// #region agent log
+			fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					location: "meals.generate.ts:deductCredits catch",
+					message: "deductCredits threw",
+					data: {
+						groupId,
+						errorMsg: deductError instanceof Error ? deductError.message : String(deductError),
+						errorName: deductError instanceof Error ? deductError.name : undefined,
+					},
+					timestamp: Date.now(),
+					hypothesisId: "H5",
+				}),
+			}).catch(() => {});
+			// #endregion
 			throw data(
 				{ error: "Insufficient credits", required: GENERATE_COST },
 				{ status: 402 },

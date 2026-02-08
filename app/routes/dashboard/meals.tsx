@@ -229,6 +229,9 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
+			{/* Hidden instance for ref + modal (always in DOM, even on mobile) */}
+			<GenerateMealButton ref={generateRef} className="hidden" />
+
 			{/* Mobile Header */}
 			<MobilePageHeader
 				icon={<ChefHatIcon className="w-6 h-6 text-hyper-green" />}
@@ -265,10 +268,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				<div className="hidden md:block">
 					<PanelToolbar
 						primaryAction={
-							<GenerateMealButton
-								ref={generateRef}
-								className="hidden md:flex"
-							/>
+							<button
+								type="button"
+								onClick={() => generateRef.current?.open()}
+								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+							>
+								<SparkleIcon className="w-4 h-4" />
+								Generate Meal
+							</button>
 						}
 						quickAddPlaceholder="Add Meal"
 						showQuickAdd={showQuickAdd}
@@ -300,7 +307,13 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						description="Create your first meal or let AI generate suggestions based on your pantry."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<GenerateMealButton ref={generateRef} />
+								<button
+									type="button"
+									onClick={() => generateRef.current?.open()}
+									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									Generate Meal
+								</button>
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}

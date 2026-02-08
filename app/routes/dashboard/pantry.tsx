@@ -271,6 +271,19 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
+			{/* Hidden instances for refs + modals (always in DOM, even on mobile) */}
+			<CameraInput
+				ref={cameraRef}
+				onScanComplete={handleScanComplete}
+				className="hidden"
+			/>
+			<CsvImportButton
+				ref={importRef}
+				onImportComplete={handleImportComplete}
+				defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+				className="hidden"
+			/>
+
 			{/* Mobile Header */}
 			<MobilePageHeader
 				icon={<PackageIcon className="w-6 h-6 text-hyper-green" />}
@@ -288,19 +301,24 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				<div className="hidden md:block">
 					<PanelToolbar
 						primaryAction={
-							<CameraInput
-								ref={cameraRef}
-								onScanComplete={handleScanComplete}
-							/>
+							<button
+								type="button"
+								onClick={() => cameraRef.current?.openCamera()}
+								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+							>
+								<CameraIcon className="w-4 h-4" />
+								Scan Item
+							</button>
 						}
 						secondaryAction={
-							<CsvImportButton
-								ref={importRef}
-								onImportComplete={handleImportComplete}
-								defaultDomain={
-									activeDomain === "all" ? undefined : activeDomain
-								}
-							/>
+							<button
+								type="button"
+								onClick={() => importRef.current?.openImport()}
+								className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+							>
+								<ImportIcon className="w-4 h-4" />
+								Import CSV
+							</button>
 						}
 						quickAddPlaceholder="Add Item"
 						showQuickAdd={showQuickAdd}
@@ -332,10 +350,13 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 						description="Scan a receipt or add items to start tracking your ingredients."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<CameraInput
-									ref={cameraRef}
-									onScanComplete={handleScanComplete}
-								/>
+								<button
+									type="button"
+									onClick={() => cameraRef.current?.openCamera()}
+									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									Scan Receipt
+								</button>
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}

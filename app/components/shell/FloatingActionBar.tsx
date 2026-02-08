@@ -44,7 +44,7 @@ export function FloatingActionBar({
 		<div
 			className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 md:hidden ${className}`}
 		>
-			<div className="flex items-center gap-2 bg-carbon/95 backdrop-blur-md rounded-2xl px-3 py-2 shadow-2xl border border-white/10">
+			<div className="flex items-center gap-2 bg-ceramic/95 dark:bg-carbon/95 backdrop-blur-md rounded-2xl px-3 py-2 shadow-2xl border border-carbon/10 dark:border-white/10">
 				{actions.map((action) => (
 					<button
 						key={action.id}
@@ -58,7 +58,7 @@ export function FloatingActionBar({
 									? "bg-hyper-green text-carbon shadow-glow-sm hover:shadow-glow"
 									: action.variant === "danger"
 										? "bg-red-500/90 text-white shadow-glow-sm hover:bg-red-500 hover:shadow-glow"
-										: "text-white/90 hover:bg-white/10 hover:text-white"
+										: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80 hover:bg-platinum/80 dark:hover:bg-white/20"
 							}
 							${action.disabled ? "opacity-50 cursor-not-allowed" : ""}
 						`}

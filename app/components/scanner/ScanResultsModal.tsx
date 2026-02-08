@@ -2,7 +2,7 @@ import { Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
+import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];

@@ -44,7 +44,7 @@ export function FloatingActionBar({
 		<div
 			className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 md:hidden ${className}`}
 		>
-			<div className="flex items-center gap-2 bg-ceramic/95 dark:bg-carbon/95 backdrop-blur-md rounded-2xl px-3 py-2 shadow-2xl border border-carbon/10 dark:border-white/10">
+			<div className="flex items-center gap-2 bg-ceramic/95 dark:bg-black/95 backdrop-blur-md rounded-2xl px-3 py-2 shadow-2xl border border-carbon/10 dark:border-white/10">
 				{actions.map((action) => (
 					<button
 						key={action.id}

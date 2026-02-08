@@ -7,9 +7,9 @@ description: AI systems patterns for LLM integration, vector embeddings, semanti
 ## Visual Processing
 
 - **Input:** Process raw image buffers from the Scanner component
-- **Model:** Use `llama-3.2-11b-vision-instruct` (or latest stable) for receipt OCR and item identification
-- **Output:** Return structured JSON (strictly typed to `InventoryItem` schema). Use "JSON Mode" where available
-- **Integration:** Cloudflare Workers AI provides edge-native LLM inference
+- **Model:** Use `gemini-3-flash-preview` (fallback `gemini-2.5-flash`) for pantry image recognition
+- **Output:** Return structured JSON (strictly typed to `InventoryItem` schema). Use response schema + JSON mode
+- **Integration:** Cloudflare AI Gateway proxies to Google AI Studio with Authenticated Gateway enabled
 
 ## Semantic Memory (RAG)
 
@@ -34,7 +34,7 @@ description: AI systems patterns for LLM integration, vector embeddings, semanti
 
 ## Models & Tools
 
-- **Vision:** Llama 3.2 (Vision/Text) for image processing
+- **Vision:** Gemini 3 Flash (Agentic Vision) via AI Gateway + Google AI Studio
 - **Audio:** Whisper (if needed) for audio transcription
 - **Embeddings:** Cloudflare Vectorize, OpenAI text-embedding-3 (or BGE)
 - **Techniques:** RAG (Retrieval Augmented Generation), Prompt Engineering, Chain-of-Thought

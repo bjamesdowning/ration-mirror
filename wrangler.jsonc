@@ -12,7 +12,9 @@
 	},
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
-		"BETTER_AUTH_URL": "https://ration.mayutic.com"
+		"BETTER_AUTH_URL": "https://ration.mayutic.com",
+		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+		"AI_GATEWAY_ID": "ration-gateway"
 	},
 	/**
 	 * Smart Placement

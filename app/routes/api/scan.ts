@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -6,6 +7,94 @@ import type { Route } from "./+types/scan";
 
 // Cost for a visual scan
 const SCAN_COST = 5;
+const SCAN_MODEL = "gemini-3-flash-preview";
+const SCAN_UNITS = [
+	"kg",
+	"g",
+	"lb",
+	"oz",
+	"l",
+	"ml",
+	"unit",
+	"can",
+	"pack",
+] as const;
+
+const ScanAIItemSchema = z.object({
+	name: z.string().min(1),
+	quantity: z.number().optional(),
+	unit: z.enum(SCAN_UNITS).optional(),
+	tags: z.array(z.string()).optional(),
+	expiresAt: z.union([z.string(), z.null()]).optional(),
+});
+
+const ScanAIResponseSchema = z.object({
+	items: z.array(ScanAIItemSchema).default([]),
+});
+
+const SCAN_RESPONSE_SCHEMA = {
+	type: "object",
+	properties: {
+		items: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					name: { type: "string" },
+					quantity: { type: "number" },
+					unit: { type: "string", enum: [...SCAN_UNITS] },
+					tags: { type: "array", items: { type: "string" } },
+					expiresAt: { type: ["string", "null"] },
+				},
+				required: ["name"],
+			},
+		},
+	},
+	required: ["items"],
+} as const;
+
+const SCAN_PROMPT = `You are an expert pantry inventory assistant.
+Analyze this image and extract all food items visible.
+Return JSON that matches the provided schema.
+
+Rules:
+- Use lowercase item names
+- quantity defaults to 1 if unknown
+- unit must be one of: ${SCAN_UNITS.join(", ")}
+- tags are comma-free strings (array)
+- expiresAt must be YYYY-MM-DD or null
+- No extra keys, no markdown, no commentary.`;
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+	const bytes = new Uint8Array(buffer);
+	const chunkSize = 0x8000;
+	let binary = "";
+
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+	}
+
+	return btoa(binary);
+}
+
+function extractModelText(payload: unknown) {
+	if (!payload || typeof payload !== "object") return null;
+	const candidates = (payload as { candidates?: Array<unknown> }).candidates;
+	if (!Array.isArray(candidates) || candidates.length === 0) return null;
+	const first = candidates[0] as {
+		content?: { parts?: Array<{ text?: string }> };
+	};
+	const parts = first?.content?.parts;
+	if (!Array.isArray(parts)) return null;
+	for (const part of parts) {
+		if (typeof part.text === "string") {
+			return part.text;
+		}
+	}
+	return null;
+}
 
 export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
@@ -70,113 +159,126 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const arrayBuffer = await imageFile.arrayBuffer();
-		const uint8Array = new Uint8Array(arrayBuffer);
-		const imageArray = [...uint8Array];
+		const base64Image = arrayBufferToBase64(arrayBuffer);
 
-		// 6. Run AI Inference
-		// 6. Run AI Inference
-		// We use Mistral Small 3.1 24B as it is EU-compliant and has excellent vision capabilities
+		// 6. Run AI Inference (AI Gateway -> Google AI Studio)
 		try {
-			const prompt = `You are an expert pantry inventory assistant.
-Analyze this image and extract all food items visible.
-Return valid items as a simple list, one item per line.
-Format each line EXACTLY as: name|quantity|unit|tags|expiry
+			const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
+				context.cloudflare.env;
 
-Rules:
-- name: lowercase item name
-- quantity: number (default 1)
-- unit: "unit", "kg", "g", "l", "ml", "can", "pack"
-- tags: comma-separated tags (e.g. "produce, fruit") or "null"
-- expiry: YYYY-MM-DD or "null" if not visible
-- NO extra text, NO markdown, NO JSON.
+			if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
+				throw data(
+					{
+						error: "Scan configuration missing",
+						details:
+							"AI Gateway account/id or required secrets are not configured.",
+					},
+					{ status: 500 },
+				);
+			}
 
-Example:
-apple|6|unit|produce,fruit|null
-milk|1|l|dairy,fridge|2024-12-31
-canned beans|2|can|pantry,canned|null`;
+			const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 
-			const response = await context.cloudflare.env.AI.run(
-				"@cf/llava-hf/llava-1.5-7b-hf",
+			const response = await fetch(
+				`${gatewayUrl}/v1/models/${SCAN_MODEL}:generateContent`,
 				{
-					prompt: prompt,
-					image: imageArray,
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
+					},
+					body: JSON.stringify({
+						contents: [
+							{
+								parts: [
+									{
+										inlineData: {
+											mimeType: "image/jpeg",
+											data: base64Image,
+										},
+									},
+									{ text: SCAN_PROMPT },
+								],
+							},
+						],
+						generationConfig: {
+							responseMimeType: "application/json",
+							responseSchema: SCAN_RESPONSE_SCHEMA,
+						},
+					}),
 				},
 			);
 
-			// 7. Parse AI Response
-			// biome-ignore lint/suspicious/noExplicitAny: AI response type varies by model
-			const aiResponse = response as any;
-			let rawText = "";
-
-			if (typeof aiResponse === "string") {
-				rawText = aiResponse;
-			} else if (aiResponse.description) {
-				rawText = aiResponse.description;
-			} else if (aiResponse.response) {
-				rawText = aiResponse.response;
-			} else {
-				rawText = JSON.stringify(aiResponse);
+			if (!response.ok) {
+				const errorText = await response.text();
+				const status =
+					response.status === 408 ||
+					response.status === 504 ||
+					response.status === 524
+						? 422
+						: 500;
+				throw data(
+					{
+						error:
+							status === 422
+								? "The image took too long to process. Try a closer shot."
+								: "Scan processing failed",
+						details: errorText,
+					},
+					{ status },
+				);
 			}
 
-			console.log("[SCAN DEBUG] AI Raw Response:", rawText);
-
-			// Robust parsing using Regex to find patterns anywhere in the text
-			// This handles:
-			// 1. Multiple items on one line
-			// 2. Inconsistent newlines
-			// 3. Extra text around the items
-			// Pattern: name | quantity | unit | tags | expiry
-			const itemRegex =
-				/([^|\r\n]+?)\s*\|\s*(\d+(?:\.\d+)?)\s*\|\s*([^|\r\n]+?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(null|\d{4}-\d{2}-\d{2})/g;
-
-			const parsedItems = [];
-			let match: RegExpExecArray | null;
-
-			// biome-ignore lint/suspicious/noAssignInExpressions: standard regex loop
-			while ((match = itemRegex.exec(rawText)) !== null) {
-				const name = match[1].trim();
-				const quantity = Number(match[2]);
-				const unit = match[3].trim();
-				const tagsRaw = match[4].trim();
-				const expiryRaw = match[5].trim();
-
-				// Validation
-				if (!name || Number.isNaN(quantity) || !unit) continue;
-
-				const tags =
-					tagsRaw !== "null" ? tagsRaw.split(",").map((t) => t.trim()) : [];
-
-				const expiresAt =
-					expiryRaw !== "null" && expiryRaw.match(/^\d{4}-\d{2}-\d{2}$/)
-						? expiryRaw
-						: undefined;
-
-				parsedItems.push({
-					name,
-					quantity,
-					unit,
-					expiresAt,
-					tags,
-					domain: "food", // Default domain
-				});
+			const payload = (await response.json()) as unknown;
+			const modelText = extractModelText(payload);
+			if (!modelText) {
+				throw data(
+					{ error: "Scan processing failed", details: "Empty AI response" },
+					{ status: 500 },
+				);
 			}
 
-			if (parsedItems.length === 0) {
-				console.warn("[SCAN DEBUG] No valid items parsed from text:", rawText);
-				// Fallback: if absolutely nothing parsed, try to treat lines as just names
-				const lines = rawText.split("\n");
-				for (const line of lines) {
-					if (line.trim().length > 3 && !line.includes("|")) {
-						parsedItems.push({
-							name: line.trim(),
-							quantity: 1,
-							unit: "unit",
-							tags: [],
-							domain: "food",
-						});
-					}
-				}
+			const parsedJson = JSON.parse(modelText);
+			const parsedResult = ScanAIResponseSchema.safeParse(parsedJson);
+			if (!parsedResult.success) {
+				throw data(
+					{
+						error: "Scan processing failed",
+						details: parsedResult.error.flatten(),
+					},
+					{ status: 500 },
+				);
 			}
+
+			const parsedItems = parsedResult.data.items
+				.map((item) => {
+					const name = item.name.trim().toLowerCase();
+					if (!name) return null;
+
+					const quantity =
+						typeof item.quantity === "number" && item.quantity > 0
+							? item.quantity
+							: 1;
+
+					const unit = item.unit ?? "unit";
+					const tags = (item.tags ?? [])
+						.map((tag) => tag.trim())
+						.filter(Boolean);
+					const expiresAt =
+						item.expiresAt && DATE_PATTERN.test(item.expiresAt)
+							? item.expiresAt
+							: undefined;
+
+					return {
+						name,
+						quantity,
+						unit,
+						expiresAt,
+						tags,
+						domain: "food",
+					};
+				})
+				.filter((item): item is NonNullable<typeof item> => item !== null);
 
 			const detectedItems = { items: parsedItems };
 
@@ -191,6 +293,9 @@ canned beans|2|can|pantry,canned|null`;
 
 			return { success: true, ...detectedItems };
 		} catch (innerError) {
+			if (innerError instanceof Response) {
+				throw innerError;
+			}
 			console.error(
 				"[SCAN DEBUG] Inner error during AI processing:",
 				innerError,

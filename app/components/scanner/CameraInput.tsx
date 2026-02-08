@@ -203,7 +203,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 
 		return (
 			<>
-				<div className={`relative inline-block ${className || ""}`}>
+				<div className={`relative ${className || "inline-block"}`}>
 					<input
 						ref={inputRef}
 						type="file"

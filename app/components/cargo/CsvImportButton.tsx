@@ -126,7 +126,7 @@ export const CsvImportButton = forwardRef<
 
 	return (
 		<>
-			<div className={`relative inline-block ${className || ""}`}>
+			<div className={`relative ${className || "inline-block"}`}>
 				<input
 					ref={inputRef}
 					type="file"

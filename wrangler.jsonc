@@ -43,9 +43,6 @@
 			"bucket_name": "ration-storage"
 		}
 	],
-	"ai": {
-		"binding": "AI"
-	},
 	"kv_namespaces": [
 		{
 			"binding": "RATION_KV",

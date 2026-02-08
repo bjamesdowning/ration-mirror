@@ -8,6 +8,7 @@ import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.generate";
 
 const GENERATE_COST = 5;
+const GENERATE_MODEL = "gemini-3-flash-preview";
 
 // Response schema for structured output
 type AIResponse = {
@@ -25,6 +26,23 @@ type AIResponse = {
 		cookTime: number;
 	}>;
 };
+
+function extractModelText(payload: unknown) {
+	if (!payload || typeof payload !== "object") return null;
+	const candidates = (payload as { candidates?: Array<unknown> }).candidates;
+	if (!Array.isArray(candidates) || candidates.length === 0) return null;
+	const first = candidates[0] as {
+		content?: { parts?: Array<{ text?: string }> };
+	};
+	const parts = first?.content?.parts;
+	if (!Array.isArray(parts)) return null;
+	for (const part of parts) {
+		if (typeof part.text === "string") {
+			return part.text;
+		}
+	}
+	return null;
+}
 
 export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
@@ -93,6 +111,7 @@ Rules:
 2. DO NOT hallucinate ingredients. If it's not in the list (or the 4 basics), do not use it.
 3. "inventoryName" must match the exact string from the provided list for mapping.
 4. Keep descriptions concise and appetizing.
+5. Respond with ONLY the JSON object, no markdown, no extra text.
 `;
 
 	const userPrompt = `Here is my current orbital pantry:
@@ -102,101 +121,83 @@ Generate 3 creative meal options I can cook right now.`;
 
 	try {
 		// 6. AI Inference
-		const response = await context.cloudflare.env.AI.run(
-			// @ts-expect-error Llama 3.1 is supported but types might be lagging
-			"@cf/meta/llama-3.1-8b-instruct",
-			{
-				messages: [
-					{ role: "system", content: systemPrompt },
-					{ role: "user", content: userPrompt },
-				],
-				response_format: {
-					type: "json_schema",
-					json_schema: {
-						name: "recipe_options",
-						schema: {
-							type: "object",
-							properties: {
-								recipes: {
-									type: "array",
-									items: {
-										type: "object",
-										properties: {
-											name: { type: "string" },
-											description: { type: "string" },
-											prepTime: { type: "number" },
-											cookTime: { type: "number" },
-											ingredients: {
-												type: "array",
-												items: {
-													type: "object",
-													properties: {
-														name: { type: "string" },
-														quantity: { type: "number" },
-														unit: { type: "string" },
-														inventoryName: { type: "string" },
-													},
-													required: [
-														"name",
-														"quantity",
-														"unit",
-														"inventoryName",
-													],
-												},
-											},
-											directions: {
-												type: "array",
-												items: { type: "string" },
-											},
-										},
-										required: [
-											"name",
-											"description",
-											"prepTime",
-											"cookTime",
-											"ingredients",
-											"directions",
-										],
-									},
-								},
-							},
-							required: ["recipes"],
-						},
-					},
+		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
+			context.cloudflare.env;
+		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
+			throw data(
+				{
+					error: "Meal generation configuration missing",
+					details:
+						"AI Gateway account/id or required secrets are not configured.",
 				},
-				max_tokens: 2048,
+				{ status: 500 },
+			);
+		}
+
+		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
+
+		const response = await fetch(
+			`${gatewayUrl}/v1beta/models/${GENERATE_MODEL}:generateContent`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
+				},
+				body: JSON.stringify({
+					contents: [
+						{
+							parts: [{ text: systemPrompt }, { text: userPrompt }],
+						},
+					],
+				}),
 			},
 		);
+		if (!response.ok) {
+			const errorText = await response.text();
+			const status =
+				response.status === 408 ||
+				response.status === 504 ||
+				response.status === 524
+					? 422
+					: 500;
+			throw data(
+				{
+					error:
+						status === 422
+							? "Meal generation took too long. Try again."
+							: "Meal generation failed",
+					details: errorText,
+				},
+				{ status },
+			);
+		}
 
-		// biome-ignore lint/suspicious/noExplicitAny: Worker AI response type
-		const aiData = response as any;
-		console.log("DEBUG: Raw AI Response:", JSON.stringify(aiData, null, 2));
+		const payload = (await response.json()) as unknown;
+		const modelText = extractModelText(payload);
+		if (!modelText) {
+			throw data(
+				{ error: "Meal generation failed", details: "Empty AI response" },
+				{ status: 500 },
+			);
+		}
 
 		let recipes: AIResponse["recipes"] = [];
 
 		try {
-			// Some models return strings even in JSON mode, so we parse just in case
-			const parsed = typeof aiData === "string" ? JSON.parse(aiData) : aiData;
-			// If wrapped in 'response', unwraps it
-			let actualData = parsed;
-			if (parsed.response) {
-				actualData =
-					typeof parsed.response === "string"
-						? JSON.parse(parsed.response)
-						: parsed.response;
-			}
-
-			console.log("DEBUG: Parsed Data:", JSON.stringify(actualData, null, 2));
-
-			if (actualData && Array.isArray(actualData.recipes)) {
-				recipes = actualData.recipes;
+			const cleanedText = modelText
+				.replace(/^```(?:json)?\s*\n?/i, "")
+				.replace(/\n?```\s*$/i, "")
+				.trim();
+			const parsed = JSON.parse(cleanedText) as AIResponse;
+			if (parsed && Array.isArray(parsed.recipes)) {
+				recipes = parsed.recipes;
 			} else {
-				console.error("AI Response structure invalid:", actualData);
 				throw new Error("Invalid structure");
 			}
 		} catch (e) {
 			console.error("Failed to parse AI response", e);
-			console.error("Raw data causing failure:", aiData);
+			console.error("Raw data causing failure:", modelText);
 			throw data(
 				{ error: "AI generation failed due to formatting error." },
 				{ status: 500 },
@@ -207,30 +208,37 @@ Generate 3 creative meal options I can cook right now.`;
 			.map((recipe) => {
 				const missingIngredients: string[] = [];
 
+				const ingredients = recipe.ingredients ?? [];
+
 				// Check each ingredient
-				for (const ing of recipe.ingredients) {
+				for (const ing of ingredients) {
+					const ingName = ing.name ?? "";
+					const ingInventoryName = ing.inventoryName ?? ingName;
+
+					if (!ingName) continue; // skip malformed entries
+
 					const isBasic = ["salt", "pepper", "water", "oil"].some((b) =>
-						ing.name.toLowerCase().includes(b),
+						ingName.toLowerCase().includes(b),
 					);
 					if (isBasic) continue;
 
 					const exists = pantryItems.some(
 						(p) =>
-							p.name.toLowerCase() === ing.inventoryName.toLowerCase() ||
-							p.name.toLowerCase().includes(ing.name.toLowerCase()), // Fuzzy match fallback
+							p.name.toLowerCase() === ingInventoryName.toLowerCase() ||
+							p.name.toLowerCase().includes(ingName.toLowerCase()), // Fuzzy match fallback
 					);
 
 					if (!exists) {
-						missingIngredients.push(ing.name);
+						missingIngredients.push(ingName);
 					}
 				}
 
 				// Map to App Schema (ingredientName)
-				const mappedIngredients = recipe.ingredients.map((ing) => ({
-					ingredientName: ing.name,
-					quantity: ing.quantity,
-					unit: ing.unit,
-					inventoryName: ing.inventoryName,
+				const mappedIngredients = ingredients.map((ing) => ({
+					ingredientName: ing.name ?? "unknown",
+					quantity: ing.quantity ?? 1,
+					unit: ing.unit ?? "unit",
+					inventoryName: ing.inventoryName ?? ing.name ?? "unknown",
 				}));
 
 				return {
@@ -262,9 +270,13 @@ Generate 3 creative meal options I can cook right now.`;
 		return { success: true, recipes: verifiedRecipes };
 	} catch (error) {
 		console.error("Analysis failed:", error);
-		if (error instanceof Response) {
-			console.error("Caught Response Error Status:", error.status);
-			// We won't try to read body to avoid consumption issues, just rethrow
+		if (
+			error instanceof Response ||
+			(error &&
+				typeof error === "object" &&
+				"type" in error &&
+				(error as { type: string }).type === "DataWithResponseInit")
+		) {
 			throw error;
 		}
 		throw data({ error: "Internal generation error" }, { status: 500 });

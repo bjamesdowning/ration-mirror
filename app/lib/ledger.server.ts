@@ -55,7 +55,11 @@ export async function deductCredits(
 		)
 		.run();
 
-	if ((result.meta?.changes ?? 0) === 0) {
+	const changed =
+		result.meta?.changed_db === true ||
+		(result.meta?.changes ?? 0) > 0 ||
+		(result.meta?.rows_written ?? 0) > 0;
+	if (!changed) {
 		throw new Error("Insufficient credits");
 	}
 }

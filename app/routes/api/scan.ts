@@ -1,13 +1,10 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { addCredits, checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { ScanResultSchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/scan";
 
-// Cost for a visual scan
-const SCAN_COST = 5;
 const SCAN_MODEL = "gemini-3-flash-preview";
 const SCAN_UNITS = [
 	"kg",
@@ -82,12 +79,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
 	const {
 		session: { user },
-		groupId,
 	} = await requireActiveGroup(context, request);
 	const userId = user.id;
 
 	// 2. Rate Limiting (Distributed via KV)
-	// We rate limit by USER, not group, to prevent one user from draining group credits too fast
+	// We rate limit by USER, not group, to prevent abuse and control AI costs
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"scan",
@@ -112,16 +108,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 3. Economy Check
-	const balance = await checkBalance(context.cloudflare.env, groupId);
-	if (balance < SCAN_COST) {
-		throw data(
-			{ error: "Insufficient credits", required: SCAN_COST, current: balance },
-			{ status: 402 },
-		);
-	}
-
-	// 4. Parse Input
+	// 3. Parse Input
 	const formData = await request.formData();
 	const imageFile = formData.get("image");
 
@@ -134,31 +121,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
 	}
 
-	// 5. Prepare Image for AI
-	let creditsDeducted = false;
+	// 4. Prepare Image for AI
 
 	try {
 		const arrayBuffer = await imageFile.arrayBuffer();
 		const base64Image = arrayBufferToBase64(arrayBuffer);
 
-		// 6. Deduct Credits before AI call
-		try {
-			await deductCredits(
-				context.cloudflare.env,
-				groupId, // Organization ID
-				userId, // User ID (Audit)
-				SCAN_COST,
-				"Standard visual scan",
-			);
-			creditsDeducted = true;
-		} catch (_error) {
-			throw data(
-				{ error: "Insufficient credits", required: SCAN_COST },
-				{ status: 402 },
-			);
-		}
-
-		// 7. Run AI Inference (AI Gateway -> Google AI Studio)
+		// 5. Run AI Inference (AI Gateway -> Google AI Studio)
 		try {
 			const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
 				context.cloudflare.env;
@@ -296,16 +265,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 			return { success: true, ...validatedScan.data };
 		} catch (innerError) {
-			if (creditsDeducted) {
-				await addCredits(
-					context.cloudflare.env,
-					groupId,
-					userId,
-					SCAN_COST,
-					"Refund: Standard visual scan",
-				);
-			}
-
 			// data() returns DataWithResponseInit, not Response — re-throw it for React Router
 			if (
 				innerError instanceof Response ||

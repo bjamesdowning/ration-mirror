@@ -100,7 +100,7 @@ export function CreditShop({
 						</div>
 						<div className="text-label text-muted">Credits</div>
 						<div className="mt-4 text-data text-muted">
-							≈ 10 scan operations
+							≈ 10 meal generations
 						</div>
 					</div>
 				</button>
@@ -126,7 +126,7 @@ export function CreditShop({
 						</div>
 						<div className="text-label text-muted">Credits</div>
 						<div className="mt-4 text-data text-muted">
-							≈ 100 scan operations
+							≈ 100 meal generations
 						</div>
 					</div>
 				</button>

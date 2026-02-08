@@ -35,7 +35,7 @@ export default function TermsOfService() {
 				<li>Inventory tracking and management</li>
 				<li>AI-assisted recipe generation and meal planning</li>
 				<li>Visual scanning and item recognition</li>
-				<li>Credit-based scanning utilizing third-party AI providers</li>
+				<li>Free visual scanning utilizing third-party AI providers</li>
 			</ul>
 
 			<h2>3. User Accounts & Security</h2>

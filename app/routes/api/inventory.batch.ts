@@ -45,12 +45,50 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const { items } = result.data;
+		const mergeItems = items.filter((item) => item.mergeTargetId);
+		const newItems = items.filter((item) => !item.mergeTargetId);
 
 		// Collect all insert operations for batching
 		const batchOps = [];
 		const now = new Date();
 
-		for (const item of items) {
+		if (mergeItems.length > 0) {
+			const mergeIds = mergeItems
+				.map((item) => item.mergeTargetId)
+				.filter((id): id is string => Boolean(id));
+			const placeholders = mergeIds.map(() => "?").join(", ");
+			const existingResults = await context.cloudflare.env.DB.prepare(
+				`SELECT id FROM inventory WHERE organization_id = ? AND id IN (${placeholders})`,
+			)
+				.bind(groupId, ...mergeIds)
+				.all();
+			const allowedIds = new Set(
+				(existingResults.results ?? []).map((row) => row.id as string),
+			);
+
+			for (const item of mergeItems) {
+				if (!item.mergeTargetId || !allowedIds.has(item.mergeTargetId)) {
+					throw data({ error: "Invalid merge target" }, { status: 400 });
+				}
+			}
+
+			for (const item of mergeItems) {
+				batchOps.push(
+					context.cloudflare.env.DB.prepare(
+						`UPDATE inventory
+						 SET quantity = quantity + ?, updated_at = ?
+						 WHERE id = ? AND organization_id = ?`,
+					).bind(
+						item.quantity,
+						Math.floor(now.getTime() / 1000),
+						item.mergeTargetId,
+						groupId,
+					),
+				);
+			}
+		}
+
+		for (const item of newItems) {
 			batchOps.push(
 				context.cloudflare.env.DB.prepare(
 					`INSERT INTO inventory (id, organization_id, name, quantity, unit, domain, status, tags, created_at, updated_at)

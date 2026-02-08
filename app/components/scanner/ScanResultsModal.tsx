@@ -1,19 +1,54 @@
 import { Calendar, Check, Edit2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
+interface ExistingInventoryItem {
+	id: string;
+	name: string;
+	quantity: number;
+	unit: string;
+}
+
+interface MergeMatch {
+	target: ExistingInventoryItem;
+	convertedQuantity: number;
+	displayDelta: string;
+}
+
+function getUnitMultiplier(from: string, to: string): number | null {
+	if (from === to) return 1;
+	const key = `${from}->${to}`;
+	const conversions: Record<string, number> = {
+		"kg->g": 1000,
+		"g->kg": 1 / 1000,
+		"l->ml": 1000,
+		"ml->l": 1 / 1000,
+		"lb->oz": 16,
+		"oz->lb": 1 / 16,
+	};
+	return conversions[key] ?? null;
+}
+
+function formatQuantity(value: number): string {
+	const rounded = Number.isInteger(value) ? value : Number(value.toFixed(2));
+	return `${rounded}`;
+}
+
 interface ScanResultsModalProps {
 	result: ScanResult;
+	existingInventory?: ExistingInventoryItem[];
 	onClose: () => void;
 	onSuccess: () => void;
 }
 
 export function ScanResultsModal({
 	result,
+	existingInventory = [],
 	onClose,
 	onSuccess,
 }: ScanResultsModalProps) {
@@ -62,16 +97,60 @@ export function ScanResultsModal({
 		setBulkExpiryDate("");
 	};
 
+	const findMergeMatch = useCallback(
+		(item: ScanResultItem): MergeMatch | null => {
+			if (!existingInventory.length) return null;
+			const normalizedItem = normalizeForMatch(item.name);
+			let bestMatch: MergeMatch | null = null;
+			let bestScore = 0;
+
+			for (const candidate of existingInventory) {
+				const multiplier = getUnitMultiplier(item.unit, candidate.unit);
+				if (multiplier === null) continue;
+				const normalizedCandidate = normalizeForMatch(candidate.name);
+
+				const exact = normalizedItem === normalizedCandidate;
+				const score = exact ? 1 : tokenMatchScore(item.name, candidate.name);
+
+				if (score >= 0.8 && score > bestScore) {
+					bestScore = score;
+					const convertedQuantity = item.quantity * multiplier;
+					bestMatch = {
+						target: candidate,
+						convertedQuantity,
+						displayDelta: `+${formatQuantity(convertedQuantity)} ${candidate.unit}`,
+					};
+				}
+			}
+
+			return bestMatch;
+		},
+		[existingInventory],
+	);
+
+	const mergeMatches = useMemo(() => {
+		const map = new Map<string, MergeMatch>();
+		for (const item of items) {
+			const match = findMergeMatch(item);
+			if (match) map.set(item.id, match);
+		}
+		return map;
+	}, [items, findMergeMatch]);
+
 	// Handle submit
 	const handleSubmit = () => {
-		const itemsToAdd = selectedItems.map((item) => ({
-			name: item.name,
-			quantity: item.quantity,
-			unit: item.unit,
-			domain: item.domain,
-			tags: item.tags,
-			expiresAt: item.expiresAt,
-		}));
+		const itemsToAdd = selectedItems.map((item) => {
+			const mergeMatch = mergeMatches.get(item.id);
+			return {
+				name: item.name,
+				quantity: mergeMatch ? mergeMatch.convertedQuantity : item.quantity,
+				unit: mergeMatch ? mergeMatch.target.unit : item.unit,
+				domain: item.domain,
+				tags: item.tags,
+				expiresAt: item.expiresAt,
+				mergeTargetId: mergeMatch?.target.id,
+			};
+		});
 
 		// biome-ignore lint/suspicious/noExplicitAny: fetcher submit type limitation
 		fetcher.submit(JSON.stringify({ items: itemsToAdd }) as any, {
@@ -168,20 +247,24 @@ export function ScanResultsModal({
 
 				{/* Items List */}
 				<div className="flex-1 overflow-y-auto p-4 space-y-2">
-					{items.map((item) => (
-						<ScanResultItemRow
-							key={item.id}
-							item={item}
-							isEditing={editingId === item.id}
-							onToggleSelection={toggleSelection}
-							onStartEdit={(id) => setEditingId(id)}
-							onCancelEdit={() => setEditingId(null)}
-							onUpdate={(updates) => {
-								updateItem(item.id, updates);
-								setEditingId(null);
-							}}
-						/>
-					))}
+					{items.map((item) => {
+						const mergeMatch = mergeMatches.get(item.id);
+						return (
+							<ScanResultItemRow
+								key={item.id}
+								item={item}
+								mergeMatch={mergeMatch ?? null}
+								isEditing={editingId === item.id}
+								onToggleSelection={toggleSelection}
+								onStartEdit={(id) => setEditingId(id)}
+								onCancelEdit={() => setEditingId(null)}
+								onUpdate={(updates) => {
+									updateItem(item.id, updates);
+									setEditingId(null);
+								}}
+							/>
+						);
+					})}
 
 					{items.length === 0 && (
 						<div className="text-center py-12 text-muted">
@@ -224,6 +307,7 @@ export function ScanResultsModal({
 // Individual item row component
 interface ScanResultItemRowProps {
 	item: ScanResultItem;
+	mergeMatch: MergeMatch | null;
 	isEditing: boolean;
 	onToggleSelection: (id: string) => void;
 	onStartEdit: (id: string) => void;
@@ -233,6 +317,7 @@ interface ScanResultItemRowProps {
 
 function ScanResultItemRow({
 	item,
+	mergeMatch,
 	isEditing,
 	onToggleSelection,
 	onStartEdit,
@@ -400,7 +485,9 @@ function ScanResultItemRow({
 								{item.name}
 							</h3>
 							<p className="text-sm text-muted">
-								{item.quantity} {item.unit}
+								{mergeMatch
+									? mergeMatch.displayDelta
+									: `${item.quantity} ${item.unit}`}
 								{item.domain && <> • {DOMAIN_LABELS[item.domain]}</>}
 								{item.expiresAt && (
 									<>
@@ -409,6 +496,12 @@ function ScanResultItemRow({
 									</>
 								)}
 							</p>
+							{mergeMatch && (
+								<p className="text-xs text-hyper-green/80 mt-1">
+									Will add to existing: {mergeMatch.target.name} (
+									{mergeMatch.target.quantity} {mergeMatch.target.unit})
+								</p>
+							)}
 						</div>
 						<button
 							type="button"

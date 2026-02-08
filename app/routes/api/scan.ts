@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { getInventory } from "~/lib/inventory.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { ScanResultSchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/scan";
@@ -38,11 +39,21 @@ You MUST respond with ONLY a valid JSON object matching this exact schema — no
 
 Rules:
 - Use lowercase item names
+- IMPORTANT: Strip all brand names, store names, and marketing terms from item names
+- Normalize to generic ingredient names (e.g., "whole milk" not "tesco brand a milk")
+- Keep meaningful qualifiers that affect cooking: whole/skimmed, salted/unsalted, fresh/dried, minced/diced
+- Extract size/weight into quantity+unit; do not embed sizes in the name
+- If the same item appears multiple times, combine into one entry with summed quantity
 - quantity defaults to 1 if unknown
 - unit must be one of: ${SCAN_UNITS.join(", ")}
 - tags are descriptive strings in an array (e.g. ["produce","fruit"])
 - expiresAt must be YYYY-MM-DD or null
-- Respond with ONLY the JSON object, nothing else.`;
+- Respond with ONLY the JSON object, nothing else.
+
+Examples:
+- "Tesco Finest Irish Whole Milk 1L" -> name: "whole milk", quantity: 1, unit: "l"
+- "Lidl Deluxe Free Range Eggs 12pk" -> name: "free range eggs", quantity: 12, unit: "unit"
+- "SuperValu Own Brand Cheddar 200g" -> name: "cheddar cheese", quantity: 200, unit: "g"`;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -78,6 +89,7 @@ function extractModelText(payload: unknown) {
 export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
 	const {
+		groupId,
 		session: { user },
 	} = await requireActiveGroup(context, request);
 	const userId = user.id;
@@ -263,7 +275,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 				throw data({ error: "Scan processing failed" }, { status: 500 });
 			}
 
-			return { success: true, ...validatedScan.data };
+			const existingInventory = await getInventory(
+				context.cloudflare.env.DB,
+				groupId,
+			);
+
+			return { success: true, ...validatedScan.data, existingInventory };
 		} catch (innerError) {
 			// data() returns DataWithResponseInit, not Response — re-throw it for React Router
 			if (

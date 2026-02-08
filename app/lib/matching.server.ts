@@ -50,6 +50,36 @@ function normalizeIngredientName(name: string): string {
 		.replace(/\s+/g, " "); // Normalize whitespace
 }
 
+export function normalizeForMatch(name: string): string {
+	return name
+		.toLowerCase()
+		.trim()
+		.replace(/[^\w\s]/g, "")
+		.replace(/\s+/g, " ");
+}
+
+const STOP_WORDS = new Set(["the", "a", "an", "of", "and", "or", "for"]);
+
+export function tokenize(name: string): Set<string> {
+	return new Set(
+		normalizeForMatch(name)
+			.split(" ")
+			.filter((word) => word.length > 1 && !STOP_WORDS.has(word)),
+	);
+}
+
+export function tokenMatchScore(a: string, b: string): number {
+	const tokensA = tokenize(a);
+	const tokensB = tokenize(b);
+	if (tokensA.size === 0 || tokensB.size === 0) return 0;
+	let intersection = 0;
+	for (const token of tokensA) {
+		if (tokensB.has(token)) intersection++;
+	}
+	const smaller = Math.min(tokensA.size, tokensB.size);
+	return intersection / smaller;
+}
+
 /**
  * Builds an inventory lookup map for efficient matching.
  * Groups inventory by normalized name with total quantities.
@@ -90,7 +120,26 @@ function getAvailableQuantity(
 	const matches = inventoryIndex.get(normalized);
 
 	if (!matches || matches.length === 0) {
-		return 0;
+		let bestMatches:
+			| {
+					original: typeof inventory.$inferSelect;
+					totalQuantity: number;
+					normalizedName: string;
+			  }[]
+			| null = null;
+		let bestScore = 0;
+
+		for (const [key, bucket] of inventoryIndex) {
+			const score = tokenMatchScore(ingredientName, key);
+			if (score >= 0.8 && score > bestScore) {
+				bestScore = score;
+				bestMatches = bucket;
+			}
+		}
+
+		if (!bestMatches) return 0;
+
+		return bestMatches.reduce((sum, match) => sum + match.totalQuantity, 0);
 	}
 
 	// Sum all matching inventory items

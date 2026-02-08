@@ -8,6 +8,7 @@ import {
 	mealIngredient,
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
+import { normalizeForMatch, tokenMatchScore } from "./matching.server";
 import { getSelectedMealIds } from "./meal-selection.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
@@ -506,18 +507,41 @@ export async function addItemsFromMeal(
 	// Create a map for quick lookup (normalized names)
 	const inventoryMap = new Map(
 		orgInventory.map((item) => [
-			item.name.toLowerCase().trim(),
+			normalizeForMatch(item.name),
 			{ quantity: item.quantity, unit: item.unit },
 		]),
 	);
+
+	const findInventoryItem = (name: string) => {
+		const normalizedName = normalizeForMatch(name);
+		const exactMatch = inventoryMap.get(normalizedName);
+		if (exactMatch) return exactMatch;
+
+		let bestMatch:
+			| {
+					quantity: number;
+					unit: string;
+			  }
+			| undefined;
+		let bestScore = 0;
+
+		for (const item of orgInventory) {
+			const score = tokenMatchScore(name, item.name);
+			if (score >= 0.8 && score > bestScore) {
+				bestScore = score;
+				bestMatch = { quantity: item.quantity, unit: item.unit };
+			}
+		}
+
+		return bestMatch;
+	};
 
 	const addedItems: (typeof groceryItem.$inferSelect)[] = [];
 	const skippedItems: { name: string; reason: string }[] = [];
 
 	// Check each ingredient against inventory
 	for (const ingredient of ingredients) {
-		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
-		const inventoryItem = inventoryMap.get(normalizedName);
+		const inventoryItem = findInventoryItem(ingredient.ingredientName);
 
 		if (inventoryItem && inventoryItem.quantity >= ingredient.quantity) {
 			// Organization has enough of this item
@@ -651,10 +675,34 @@ export async function createGroceryListFromAllMeals(
 	// Create inventory lookup map (normalized names)
 	const inventoryMap = new Map(
 		orgInventory.map((item) => [
-			item.name.toLowerCase().trim(),
+			normalizeForMatch(item.name),
 			{ quantity: item.quantity, unit: item.unit },
 		]),
 	);
+
+	const findInventoryItem = (name: string) => {
+		const normalizedName = normalizeForMatch(name);
+		const exactMatch = inventoryMap.get(normalizedName);
+		if (exactMatch) return exactMatch;
+
+		let bestMatch:
+			| {
+					quantity: number;
+					unit: string;
+			  }
+			| undefined;
+		let bestScore = 0;
+
+		for (const item of orgInventory) {
+			const score = tokenMatchScore(name, item.name);
+			if (score >= 0.8 && score > bestScore) {
+				bestScore = score;
+				bestMatch = { quantity: item.quantity, unit: item.unit };
+			}
+		}
+
+		return bestMatch;
+	};
 
 	// Aggregate ingredients by name (combine quantities for duplicates)
 	const ingredientAggregation = new Map<
@@ -738,8 +786,8 @@ export async function createGroceryListFromAllMeals(
 
 	// Check each aggregated ingredient against inventory
 	for (const [, aggregated] of ingredientAggregation) {
-		const normalizedName = aggregated.name.toLowerCase().trim();
-		const inventoryItem = inventoryMap.get(normalizedName);
+		const normalizedName = normalizeForMatch(aggregated.name);
+		const inventoryItem = findInventoryItem(aggregated.name);
 
 		// Skip if organization has sufficient quantity
 		if (
@@ -928,10 +976,34 @@ export async function createGroceryListFromSelectedMeals(
 
 	const inventoryMap = new Map(
 		orgInventory.map((item) => [
-			item.name.toLowerCase().trim(),
+			normalizeForMatch(item.name),
 			{ quantity: item.quantity, unit: item.unit },
 		]),
 	);
+
+	const findInventoryItem = (name: string) => {
+		const normalizedName = normalizeForMatch(name);
+		const exactMatch = inventoryMap.get(normalizedName);
+		if (exactMatch) return exactMatch;
+
+		let bestMatch:
+			| {
+					quantity: number;
+					unit: string;
+			  }
+			| undefined;
+		let bestScore = 0;
+
+		for (const item of orgInventory) {
+			const score = tokenMatchScore(name, item.name);
+			if (score >= 0.8 && score > bestScore) {
+				bestScore = score;
+				bestMatch = { quantity: item.quantity, unit: item.unit };
+			}
+		}
+
+		return bestMatch;
+	};
 
 	const ingredientAggregation = new Map<
 		string,
@@ -1008,8 +1080,8 @@ export async function createGroceryListFromSelectedMeals(
 	}> = [];
 
 	for (const [, aggregated] of ingredientAggregation) {
-		const normalizedName = aggregated.name.toLowerCase().trim();
-		const inventoryItem = inventoryMap.get(normalizedName);
+		const normalizedName = normalizeForMatch(aggregated.name);
+		const inventoryItem = findInventoryItem(aggregated.name);
 
 		if (
 			inventoryItem &&

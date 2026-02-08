@@ -47,6 +47,7 @@ export const BatchAddInventorySchema = z.object({
 			domain: z.enum(ITEM_DOMAINS).default("food"),
 			tags: z.array(z.string()).default([]),
 			expiresAt: z.coerce.date().optional(),
+			mergeTargetId: z.string().uuid().optional(),
 		}),
 	),
 });

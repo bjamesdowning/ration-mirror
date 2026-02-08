@@ -5,6 +5,7 @@ import { z } from "zod";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { addCredits, checkBalance, deductCredits } from "~/lib/ledger.server";
+import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.generate";
 
@@ -83,7 +84,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		body: JSON.stringify({
 			location: "meals.generate.ts:checkBalance",
 			message: "Balance after checkBalance",
-			data: { groupId, balance, required: GENERATE_COST, willPass: balance >= GENERATE_COST },
+			data: {
+				groupId,
+				balance,
+				required: GENERATE_COST,
+				willPass: balance >= GENERATE_COST,
+			},
 			timestamp: Date.now(),
 			hypothesisId: "H1",
 		}),
@@ -170,21 +176,28 @@ Generate 3 creative meal options I can cook right now.`;
 			creditsDeducted = true;
 		} catch (deductError) {
 			// #region agent log
-			fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					location: "meals.generate.ts:deductCredits catch",
-					message: "deductCredits threw",
-					data: {
-						groupId,
-						errorMsg: deductError instanceof Error ? deductError.message : String(deductError),
-						errorName: deductError instanceof Error ? deductError.name : undefined,
-					},
-					timestamp: Date.now(),
-					hypothesisId: "H5",
-				}),
-			}).catch(() => {});
+			fetch(
+				"http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						location: "meals.generate.ts:deductCredits catch",
+						message: "deductCredits threw",
+						data: {
+							groupId,
+							errorMsg:
+								deductError instanceof Error
+									? deductError.message
+									: String(deductError),
+							errorName:
+								deductError instanceof Error ? deductError.name : undefined,
+						},
+						timestamp: Date.now(),
+						hypothesisId: "H5",
+					}),
+				},
+			).catch(() => {});
 			// #endregion
 			throw data(
 				{ error: "Insufficient credits", required: GENERATE_COST },
@@ -289,8 +302,9 @@ Generate 3 creative meal options I can cook right now.`;
 
 					const exists = pantryItems.some(
 						(p) =>
-							p.name.toLowerCase() === ingInventoryName.toLowerCase() ||
-							p.name.toLowerCase().includes(ingName.toLowerCase()), // Fuzzy match fallback
+							normalizeForMatch(p.name) ===
+								normalizeForMatch(ingInventoryName) ||
+							tokenMatchScore(p.name, ingName) >= 0.8,
 					);
 
 					if (!exists) {

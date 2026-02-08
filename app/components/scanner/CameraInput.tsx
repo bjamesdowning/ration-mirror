@@ -19,13 +19,24 @@ interface CameraInputProps {
 	className?: string;
 }
 
+type ScanApiResponse = ScanResult & {
+	existingInventory?: Array<{
+		id: string;
+		name: string;
+		quantity: number;
+		unit: string;
+	}>;
+};
+
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	({ onScanComplete, className }, ref) => {
-		const fetcher = useFetcher<ScanResult>();
+		const fetcher = useFetcher<ScanApiResponse>();
 		const revalidator = useRevalidator();
 		const inputRef = useRef<HTMLInputElement>(null);
 		const [isAnalyzing, setIsAnalyzing] = useState(false);
 		const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+		const [existingInventory, setExistingInventory] =
+			useState<ScanApiResponse["existingInventory"]>(undefined);
 
 		// Expose openCamera method via ref
 		useImperativeHandle(ref, () => ({
@@ -174,6 +185,9 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 							},
 						};
 						setScanResult(transformedResult);
+						setExistingInventory(
+							(fetcher.data as ScanApiResponse | undefined)?.existingInventory,
+						);
 					}
 				} else {
 					// No data returned but idle (likely an unexpected error)
@@ -190,6 +204,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 
 		const handleModalClose = () => {
 			setScanResult(null);
+			setExistingInventory(undefined);
 			if (inputRef.current) inputRef.current.value = "";
 		};
 
@@ -250,6 +265,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				{scanResult && (
 					<ScanResultsModal
 						result={scanResult}
+						existingInventory={existingInventory ?? []}
 						onClose={handleModalClose}
 						onSuccess={handleModalSuccess}
 					/>

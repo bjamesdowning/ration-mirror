@@ -4,6 +4,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
+import { redactId } from "~/lib/logging.server";
 
 export async function action({ request, context }: ActionFunctionArgs) {
 	const { user } = await requireAuth(context, request);
@@ -31,14 +32,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 	// 2. Perform deletion
 	console.log(
-		`[DeleteGroup] Request to delete org ${organizationId} by user ${user.id}`,
+		`[DeleteGroup] Request to delete org ${redactId(organizationId)} by user ${redactId(user.id)}`,
 	);
 
 	try {
 		// Execute all deletions atomically via D1 batch API
 		// This ensures all-or-nothing semantics and reduces latency
 		console.log(
-			`[DeleteGroup] Executing atomic deletion of org ${organizationId}...`,
+			`[DeleteGroup] Executing atomic deletion of org ${redactId(organizationId)}...`,
 		);
 
 		await db.batch([
@@ -84,10 +85,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
 				.where(eq(schema.organization.id, organizationId)),
 		]);
 
-		console.log(`[DeleteGroup] Successfully deleted org ${organizationId}`);
+		console.log(
+			`[DeleteGroup] Successfully deleted org ${redactId(organizationId)}`,
+		);
 	} catch (error) {
 		console.error(
-			`[DeleteGroup] FATAL: Failed to delete group ${organizationId}:`,
+			`[DeleteGroup] FATAL: Failed to delete group ${redactId(organizationId)}:`,
 			error,
 		);
 		const message = error instanceof Error ? error.message : String(error);

@@ -5,6 +5,7 @@ import { groceryItem } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { dockGroceryItems } from "~/lib/inventory.server";
+import { redactId } from "~/lib/logging.server";
 
 /**
  * POST /api/grocery-lists/:id/complete
@@ -13,7 +14,9 @@ import { dockGroceryItems } from "~/lib/inventory.server";
 export async function action({ request, context, params }: ActionFunctionArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
-	console.log(`[DOCK] Request for list: ${listId}, Group: ${groupId}`);
+	console.log(
+		`[DOCK] Request for list: ${redactId(listId)}, Group: ${redactId(groupId)}`,
+	);
 
 	if (!listId) {
 		throw new Response("List ID required", { status: 400 });

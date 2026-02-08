@@ -76,6 +76,16 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:automation",
 	},
+	auth_public: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20,
+		keyPrefix: "rate:auth_public",
+	},
+	shared_public: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 60,
+		keyPrefix: "rate:shared_public",
+	},
 };
 
 /**

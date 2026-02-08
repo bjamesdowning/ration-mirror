@@ -13,8 +13,7 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
-
-const DEFAULT_ADMIN = "admin@ration.com";
+import { redactId } from "./logging.server";
 
 // Define access control for group management
 const statement = {
@@ -74,6 +73,12 @@ export function createAuth(env: Cloudflare.Env) {
 					required: false,
 					returned: true, // Include in getSession() response
 					input: false, // Don't allow setting via auth API
+				},
+				isAdmin: {
+					type: "boolean",
+					required: false,
+					returned: true,
+					input: false,
 				},
 			},
 		},
@@ -135,11 +140,11 @@ export function createAuth(env: Cloudflare.Env) {
 							});
 
 							console.log(
-								`[Auth] Created personal group ${personalOrgId} for user ${user.id}`,
+								`[Auth] Created personal group ${redactId(personalOrgId)} for user ${redactId(user.id)}`,
 							);
 						} catch (error) {
 							console.error(
-								`[Auth] Failed to create personal group for user ${user.id}:`,
+								`[Auth] Failed to create personal group for user ${redactId(user.id)}:`,
 								error,
 							);
 							// Don't throw - user can manually create a group
@@ -180,10 +185,11 @@ export async function ensureActiveOrganization(
 			});
 			const theme =
 				(user?.settings as { theme?: "light" | "dark" })?.theme || "light";
+			const secureFlag = request.url.startsWith("https://") ? "; Secure" : "";
 			syncHeaders = new Headers();
 			syncHeaders.set(
 				"Set-Cookie",
-				`theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`,
+				`theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax${secureFlag}`,
 			);
 		}
 	}
@@ -219,7 +225,7 @@ export async function ensureActiveOrganization(
 					.where(eq(schema.session.id, session.session.id));
 
 				console.log(
-					`[Auth] Auto-activated default group ${defaultGroupId} for session ${session.session.id}`,
+					`[Auth] Auto-activated default group ${redactId(defaultGroupId)} for session ${redactId(session.session.id)}`,
 				);
 
 				return {
@@ -234,7 +240,7 @@ export async function ensureActiveOrganization(
 				};
 			}
 			console.log(
-				`[Auth] User's default group ${defaultGroupId} is no longer accessible, falling back to personal group`,
+				`[Auth] User default group ${redactId(defaultGroupId)} no longer accessible, falling back to personal group`,
 			);
 		}
 
@@ -251,7 +257,7 @@ export async function ensureActiveOrganization(
 				.where(eq(schema.session.id, session.session.id));
 
 			console.log(
-				`[Auth] Auto-activated personal group ${personalGroup.id} for session ${session.session.id}`,
+				`[Auth] Auto-activated personal group ${redactId(personalGroup.id)} for session ${redactId(session.session.id)}`,
 			);
 
 			// Return updated session
@@ -292,16 +298,25 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 }
 
 export async function requireAdmin(context: AppLoadContext, request: Request) {
-	const { user } = await requireAuth(context, request);
+	const session = await requireAuth(context, request);
 
-	const adminEmails = context.cloudflare.env.ADMIN_EMAILS
-		? context.cloudflare.env.ADMIN_EMAILS.split(",").map((e) => e.trim())
-		: [DEFAULT_ADMIN];
+	if (session.user.isAdmin) {
+		return session.user;
+	}
 
-	if (!adminEmails.includes(user.email)) {
+	const db = drizzle(context.cloudflare.env.DB, { schema });
+	const user = await db.query.user.findFirst({
+		where: eq(schema.user.id, session.user.id),
+		columns: {
+			isAdmin: true,
+		},
+	});
+
+	if (!user?.isAdmin) {
 		throw redirect("/");
 	}
-	return user;
+
+	return { ...session.user, isAdmin: true };
 }
 
 /**

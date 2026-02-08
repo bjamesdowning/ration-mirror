@@ -1,8 +1,8 @@
 {
 	"version": "6",
 	"dialect": "sqlite",
-	"id": "b3b35e2a-4d16-45d4-9a3a-8b33a396faf6",
-	"prevId": "6b482f98-f97e-478a-8e7f-53b610f22256",
+	"id": "215c3666-b143-410c-bff3-e03101e4b48c",
+	"prevId": "b3b35e2a-4d16-45d4-9a3a-8b33a396faf6",
 	"tables": {
 		"account": {
 			"name": "account",
@@ -1292,6 +1292,14 @@
 					"notNull": true,
 					"autoincrement": false,
 					"default": "(unixepoch())"
+				},
+				"is_admin": {
+					"name": "is_admin",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": false
 				},
 				"settings": {
 					"name": "settings",

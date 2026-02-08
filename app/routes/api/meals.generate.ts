@@ -1,31 +1,37 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
+import { z } from "zod";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { checkBalance, deductCredits } from "~/lib/ledger.server";
+import { addCredits, checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.generate";
 
 const GENERATE_COST = 5;
 const GENERATE_MODEL = "gemini-3-flash-preview";
 
-// Response schema for structured output
-type AIResponse = {
-	recipes: Array<{
-		name: string;
-		description: string;
-		ingredients: Array<{
-			name: string;
-			quantity: number;
-			unit: string;
-			inventoryName: string; // The match from our list
-		}>;
-		directions: Array<string>;
-		prepTime: number;
-		cookTime: number;
-	}>;
-};
+const AIRecipeSchema = z.object({
+	name: z.string().min(1),
+	description: z.string().min(1),
+	ingredients: z.array(
+		z.object({
+			name: z.string().min(1),
+			quantity: z.number(),
+			unit: z.string().min(1),
+			inventoryName: z.string().min(1),
+		}),
+	),
+	directions: z.array(z.string().min(1)),
+	prepTime: z.number(),
+	cookTime: z.number(),
+});
+
+const AIResponseSchema = z.object({
+	recipes: z.array(AIRecipeSchema).min(1),
+});
+
+type AIResponse = z.infer<typeof AIResponseSchema>;
 
 function extractModelText(payload: unknown) {
 	if (!payload || typeof payload !== "object") return null;
@@ -99,9 +105,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	// 5. Construct Prompt
-	const pantryList = pantryItems
-		.map((i) => `- ${i.name} (${i.quantity} ${i.unit})`)
-		.join("\n");
+	const sanitizeName = (name: string) =>
+		name
+			.split("")
+			.filter((c) => {
+				const code = c.charCodeAt(0);
+				return (code >= 32 && code !== 127) || code === 9;
+			})
+			.join("")
+			.replace(/\s+/g, " ")
+			.trim()
+			.slice(0, 80);
+
+	const pantryPayload = pantryItems.map((item) => ({
+		name: sanitizeName(item.name),
+		quantity: item.quantity,
+		unit: item.unit,
+	}));
+	const pantryJson = JSON.stringify(pantryPayload);
 
 	const systemPrompt = `You are a strict Orbital Chef. You generate recipes based ONLY on available inventory.
 You have access to: Salt, Pepper, Water, Oil (Generic).
@@ -114,21 +135,38 @@ Rules:
 5. Respond with ONLY the JSON object, no markdown, no extra text.
 `;
 
-	const userPrompt = `Here is my current orbital pantry:
-${pantryList}
+	const userPrompt = `Here is my current orbital pantry in JSON:
+${pantryJson}
 
 Generate 3 creative meal options I can cook right now.`;
 
+	let creditsDeducted = false;
+
 	try {
-		// 6. AI Inference
+		// 6. Deduct Credits before AI call
+		try {
+			await deductCredits(
+				context.cloudflare.env,
+				groupId,
+				user.id,
+				GENERATE_COST,
+				"Meal Generation",
+			);
+			creditsDeducted = true;
+		} catch (_error) {
+			throw data(
+				{ error: "Insufficient credits", required: GENERATE_COST },
+				{ status: 402 },
+			);
+		}
+
+		// 7. AI Inference
 		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
 			context.cloudflare.env;
 		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
 			throw data(
 				{
 					error: "Meal generation configuration missing",
-					details:
-						"AI Gateway account/id or required secrets are not configured.",
 				},
 				{ status: 500 },
 			);
@@ -154,7 +192,7 @@ Generate 3 creative meal options I can cook right now.`;
 			},
 		);
 		if (!response.ok) {
-			const errorText = await response.text();
+			await response.text();
 			const status =
 				response.status === 408 ||
 				response.status === 504 ||
@@ -167,7 +205,6 @@ Generate 3 creative meal options I can cook right now.`;
 						status === 422
 							? "Meal generation took too long. Try again."
 							: "Meal generation failed",
-					details: errorText,
 				},
 				{ status },
 			);
@@ -176,10 +213,7 @@ Generate 3 creative meal options I can cook right now.`;
 		const payload = (await response.json()) as unknown;
 		const modelText = extractModelText(payload);
 		if (!modelText) {
-			throw data(
-				{ error: "Meal generation failed", details: "Empty AI response" },
-				{ status: 500 },
-			);
+			throw data({ error: "Meal generation failed" }, { status: 500 });
 		}
 
 		let recipes: AIResponse["recipes"] = [];
@@ -189,15 +223,14 @@ Generate 3 creative meal options I can cook right now.`;
 				.replace(/^```(?:json)?\s*\n?/i, "")
 				.replace(/\n?```\s*$/i, "")
 				.trim();
-			const parsed = JSON.parse(cleanedText) as AIResponse;
-			if (parsed && Array.isArray(parsed.recipes)) {
-				recipes = parsed.recipes;
-			} else {
+			const parsed = JSON.parse(cleanedText);
+			const parsedResult = AIResponseSchema.safeParse(parsed);
+			if (!parsedResult.success) {
 				throw new Error("Invalid structure");
 			}
+			recipes = parsedResult.data.recipes;
 		} catch (e) {
 			console.error("Failed to parse AI response", e);
-			console.error("Raw data causing failure:", modelText);
 			throw data(
 				{ error: "AI generation failed due to formatting error." },
 				{ status: 500 },
@@ -258,26 +291,34 @@ Generate 3 creative meal options I can cook right now.`;
 			);
 		}
 
-		// 8. Deduct Credits
-		await deductCredits(
-			context.cloudflare.env,
-			groupId,
-			user.id,
-			GENERATE_COST,
-			"Meal Generation",
-		);
-
 		return { success: true, recipes: verifiedRecipes };
 	} catch (error) {
+		if (creditsDeducted) {
+			try {
+				await addCredits(
+					context.cloudflare.env,
+					groupId,
+					user.id,
+					GENERATE_COST,
+					"Refund: Meal Generation",
+				);
+			} catch (refundError) {
+				console.error("Meal generation refund failed:", refundError);
+			}
+		}
+
+		if (error instanceof Response) {
+			throw error;
+		}
+
 		console.error("Analysis failed:", error);
 		if (
-			error instanceof Response ||
-			(error &&
-				typeof error === "object" &&
-				"type" in error &&
-				(error as { type: string }).type === "DataWithResponseInit")
+			error &&
+			typeof error === "object" &&
+			"type" in error &&
+			(error as { type: string }).type === "DataWithResponseInit"
 		) {
-			throw error;
+			throw error as Response;
 		}
 		throw data({ error: "Internal generation error" }, { status: 500 });
 	}

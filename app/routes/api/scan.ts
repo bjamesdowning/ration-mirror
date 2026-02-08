@@ -1,8 +1,9 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { checkBalance, deductCredits } from "~/lib/ledger.server";
+import { addCredits, checkBalance, deductCredits } from "~/lib/ledger.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { ScanResultSchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/scan";
 
 // Cost for a visual scan
@@ -134,15 +135,30 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	// 5. Prepare Image for AI
-	console.log(
-		`[SCAN DEBUG] Processing image: ${imageFile.name}, size: ${imageFile.size}, type: ${imageFile.type}`,
-	);
+	let creditsDeducted = false;
 
 	try {
 		const arrayBuffer = await imageFile.arrayBuffer();
 		const base64Image = arrayBufferToBase64(arrayBuffer);
 
-		// 6. Run AI Inference (AI Gateway -> Google AI Studio)
+		// 6. Deduct Credits before AI call
+		try {
+			await deductCredits(
+				context.cloudflare.env,
+				groupId, // Organization ID
+				userId, // User ID (Audit)
+				SCAN_COST,
+				"Standard visual scan",
+			);
+			creditsDeducted = true;
+		} catch (_error) {
+			throw data(
+				{ error: "Insufficient credits", required: SCAN_COST },
+				{ status: 402 },
+			);
+		}
+
+		// 7. Run AI Inference (AI Gateway -> Google AI Studio)
 		try {
 			const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
 				context.cloudflare.env;
@@ -151,8 +167,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 				throw data(
 					{
 						error: "Scan configuration missing",
-						details:
-							"AI Gateway account/id or required secrets are not configured.",
 					},
 					{ status: 500 },
 				);
@@ -187,7 +201,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				await response.text();
 				const status =
 					response.status === 408 ||
 					response.status === 504 ||
@@ -200,7 +214,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 							status === 422
 								? "The image took too long to process. Try a closer shot."
 								: "Scan processing failed",
-						details: errorText,
 					},
 					{ status },
 				);
@@ -209,10 +222,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const payload = (await response.json()) as unknown;
 			const modelText = extractModelText(payload);
 			if (!modelText) {
-				throw data(
-					{ error: "Scan processing failed", details: "Empty AI response" },
-					{ status: 500 },
-				);
+				throw data({ error: "Scan processing failed" }, { status: 500 });
 			}
 
 			// Strip markdown code fences if model wraps JSON in ```json ... ```
@@ -226,7 +236,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 				throw data(
 					{
 						error: "Scan processing failed",
-						details: parsedResult.error.flatten(),
 					},
 					{ status: 500 },
 				);
@@ -262,19 +271,41 @@ export async function action({ request, context }: Route.ActionArgs) {
 				})
 				.filter((item): item is NonNullable<typeof item> => item !== null);
 
-			const detectedItems = { items: parsedItems };
+			const scanResultCandidate = {
+				items: parsedItems.map((item) => ({
+					id: crypto.randomUUID(),
+					name: item.name,
+					quantity: item.quantity,
+					unit: item.unit,
+					domain: item.domain,
+					tags: item.tags,
+					expiresAt: item.expiresAt,
+					selected: true,
+				})),
+				metadata: {
+					source: "image",
+					filename: imageFile.name,
+					processedAt: new Date().toISOString(),
+				},
+			};
 
-			// 8. Deduct Credits (only on successful scan)
-			await deductCredits(
-				context.cloudflare.env,
-				groupId, // Organization ID
-				userId, // User ID (Audit)
-				SCAN_COST,
-				"Standard visual scan",
-			);
+			const validatedScan = ScanResultSchema.safeParse(scanResultCandidate);
+			if (!validatedScan.success) {
+				throw data({ error: "Scan processing failed" }, { status: 500 });
+			}
 
-			return { success: true, ...detectedItems };
+			return { success: true, ...validatedScan.data };
 		} catch (innerError) {
+			if (creditsDeducted) {
+				await addCredits(
+					context.cloudflare.env,
+					groupId,
+					userId,
+					SCAN_COST,
+					"Refund: Standard visual scan",
+				);
+			}
+
 			// data() returns DataWithResponseInit, not Response — re-throw it for React Router
 			if (
 				innerError instanceof Response ||
@@ -285,11 +316,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			) {
 				throw innerError;
 			}
-			console.error(
-				"[SCAN DEBUG] Inner error during AI processing:",
-				innerError,
-			);
-
 			const errorMessage =
 				innerError instanceof Error ? innerError.message : String(innerError);
 
@@ -311,10 +337,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw data(
 				{
 					error: "Scan processing failed",
-					details:
-						innerError instanceof Error
-							? innerError.message
-							: String(innerError),
 				},
 				{ status: 500 },
 			);
@@ -330,15 +352,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		) {
 			throw outerError;
 		}
-		console.error(
-			"[SCAN DEBUG] Outer error during image preparation:",
-			outerError,
-		);
 		throw data(
 			{
 				error: "Image processing failed",
-				details:
-					outerError instanceof Error ? outerError.message : String(outerError),
 			},
 			{ status: 500 },
 		);

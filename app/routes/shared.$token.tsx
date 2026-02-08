@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { DOMAIN_LABELS } from "~/lib/domain";
 import { getGroceryListByShareToken } from "~/lib/grocery.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 
 interface SharedItem {
 	id: string;
@@ -27,7 +28,27 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	];
 };
 
-export async function loader({ context, params }: LoaderFunctionArgs) {
+export async function loader({ context, params, request }: LoaderFunctionArgs) {
+	const clientIp =
+		request.headers.get("CF-Connecting-IP") ||
+		request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+		"unknown";
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"shared_public",
+		clientIp,
+	);
+	if (!rateLimitResult.allowed) {
+		throw new Response("Too many requests", {
+			status: 429,
+			headers: {
+				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				"X-RateLimit-Remaining": "0",
+				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+			},
+		});
+	}
+
 	const token = params.token;
 
 	if (!token) {

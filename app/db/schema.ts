@@ -22,6 +22,7 @@ export const user = sqliteTable("user", {
 	updatedAt: integer("updated_at", { mode: "timestamp" })
 		.notNull()
 		.default(sql`(unixepoch())`),
+	isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
 	// Extended fields
 	settings: text("settings", { mode: "json" })
 		.$type<UserSettings>()

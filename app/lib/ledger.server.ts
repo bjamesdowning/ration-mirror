@@ -26,37 +26,38 @@ export async function deductCredits(
 	cost: number,
 	reason: string,
 ) {
-	const db = drizzle(env.DB, { schema });
-
-	// 1. Pre-check balance (simple read, no transaction needed)
-	const org = await db.query.organization.findFirst({
-		where: (org, { eq }) => eq(org.id, organizationId),
-		columns: {
-			credits: true,
-		},
-	});
-
-	if (!org) {
-		throw new Error("Organization not found");
+	if (cost <= 0) {
+		throw new Error("Cost must be positive");
 	}
 
-	if (org.credits < cost) {
-		throw new Error("Insufficient credits"); // 402 Payment Required scenario
-	}
-
-	// 2. Execute both writes atomically via D1 batch API
-	await db.batch([
-		db
-			.update(schema.organization)
-			.set({ credits: sql`${schema.organization.credits} - ${cost}` })
-			.where(eq(schema.organization.id, organizationId)),
-		db.insert(schema.ledger).values({
+	const now = Math.floor(Date.now() / 1000);
+	const result = await env.DB.prepare(
+		`WITH updated AS (
+			UPDATE organization
+			SET credits = credits - ?
+			WHERE id = ? AND credits >= ?
+			RETURNING id
+		)
+		INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
+		SELECT ?, ?, ?, ?, ?, ?
+		WHERE EXISTS (SELECT 1 FROM updated);`,
+	)
+		.bind(
+			cost,
+			organizationId,
+			cost,
+			crypto.randomUUID(),
 			organizationId,
 			userId,
-			amount: -cost, // Negative for deduction
+			-cost,
 			reason,
-		}),
-	]);
+			now,
+		)
+		.run();
+
+	if ((result.meta?.changes ?? 0) === 0) {
+		throw new Error("Insufficient credits");
+	}
 }
 
 export async function addCredits(
@@ -67,6 +68,10 @@ export async function addCredits(
 	reason: string,
 	metadata?: { sessionId?: string },
 ) {
+	if (amount <= 0) {
+		throw new Error("Amount must be positive");
+	}
+
 	const db = drizzle(env.DB, { schema });
 
 	// 1. Check for idempotency: has this sessionId already been processed?

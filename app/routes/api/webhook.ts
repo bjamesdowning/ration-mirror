@@ -1,5 +1,6 @@
 import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import { processCheckoutSession } from "~/lib/ledger.server";
+import { redactId } from "~/lib/logging.server";
 import { getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/webhook";
 
@@ -29,7 +30,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const now = Date.now();
 
 		if (now - eventTimestamp > EVENT_EXPIRY_MS) {
-			console.warn(`Stale webhook event rejected: ${event.id}`);
+			console.warn(`Stale webhook event rejected: ${redactId(event.id)}`);
 			return new Response("Event too old", { status: 400 });
 		}
 
@@ -41,7 +42,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		if (idempotencyCheck.alreadyProcessed) {
 			console.warn(
-				`Duplicate webhook event: ${event.id} (processed at ${new Date(idempotencyCheck.record?.processedAt || 0).toISOString()})`,
+				`Duplicate webhook event: ${redactId(event.id)} (processed at ${new Date(idempotencyCheck.record?.processedAt || 0).toISOString()})`,
 			);
 			return new Response("Event already processed", { status: 200 });
 		}
@@ -57,7 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 
 			console.log(
-				`✅ Added ${result.credits} credits to user ${result.userId} (session: ${session.id}, event: ${event.id})`,
+				`✅ Added ${result.credits} credits to user ${redactId(result.userId)} (session: ${redactId(session.id)}, event: ${redactId(event.id)})`,
 			);
 		}
 

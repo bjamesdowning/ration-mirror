@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { redactId } from "~/lib/logging.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
 
@@ -52,7 +53,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	try {
 		console.log("[Match API] Starting match request:", {
-			groupId,
+			groupId: redactId(groupId),
 			mode,
 			minMatch,
 			limit,
@@ -73,12 +74,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			error instanceof Error ? error.message : "Unknown error",
 		);
 
-		return Response.json(
-			{
-				error: "Failed to match meals",
-				details: error instanceof Error ? error.message : String(error),
-			},
-			{ status: 500 },
-		);
+		return Response.json({ error: "Failed to match meals" }, { status: 500 });
 	}
 }

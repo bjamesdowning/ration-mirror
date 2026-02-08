@@ -52,6 +52,15 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	};
 };
 
+export const headers: Route.HeadersFunction = () => ({
+	"Content-Security-Policy":
+		"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com",
+	"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+	"X-Frame-Options": "DENY",
+	"X-Content-Type-Options": "nosniff",
+	"Referrer-Policy": "strict-origin-when-cross-origin",
+});
+
 export function Layout({ children }: { children: React.ReactNode }) {
 	const data = useRouteLoaderData<typeof loader>("root");
 	const themeClass = data?.theme === "dark" ? "dark" : "";

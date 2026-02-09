@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
+	activeMealSelection,
 	groceryItem,
 	groceryList,
 	inventory,
@@ -9,7 +10,6 @@ import {
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
-import { getSelectedMealIds } from "./meal-selection.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -899,29 +899,17 @@ export async function createGroceryListFromSelectedMeals(
 	summary: GenerationSummary;
 }> {
 	const d1 = drizzle(db);
-
-	const selectedMealIds = await getSelectedMealIds(db, organizationId);
-
-	if (selectedMealIds.length === 0) {
-		const supplyList = await ensureSupplyList(db, organizationId);
-		if (!supplyList) {
-			throw new Error("Failed to ensure supply list");
-		}
-		return {
-			list: supplyList,
-			summary: {
-				addedItems: 0,
-				skippedItems: 0,
-				mealsProcessed: 0,
-				totalIngredients: 0,
-			},
-		};
-	}
-
 	const meals = await d1
 		.select({ id: meal.id })
 		.from(meal)
-		.where(inArray(meal.id, selectedMealIds));
+		.innerJoin(
+			activeMealSelection,
+			and(
+				eq(activeMealSelection.mealId, meal.id),
+				eq(activeMealSelection.organizationId, organizationId),
+			),
+		)
+		.where(eq(meal.organizationId, organizationId));
 
 	if (meals.length === 0) {
 		const supplyList = await ensureSupplyList(db, organizationId);
@@ -951,7 +939,14 @@ export async function createGroceryListFromSelectedMeals(
 		})
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
-		.where(inArray(mealIngredient.mealId, selectedMealIds));
+		.innerJoin(
+			activeMealSelection,
+			and(
+				eq(activeMealSelection.mealId, meal.id),
+				eq(activeMealSelection.organizationId, organizationId),
+			),
+		)
+		.where(eq(meal.organizationId, organizationId));
 
 	if (allIngredients.length === 0) {
 		const supplyList = await ensureSupplyList(db, organizationId);

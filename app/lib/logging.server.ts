@@ -13,10 +13,14 @@ export function redactEmail(value: string | null | undefined) {
 }
 
 /**
- * Structured logging for server-side code. Use instead of console.warn/error
+ * Structured logging for server-side code. Use instead of console.log/warn/error
  * for consistency and future extensibility (e.g. log aggregation).
  */
 export const log = {
+	info(message: string, context?: Record<string, unknown>) {
+		const payload = context ? `${message} ${JSON.stringify(context)}` : message;
+		console.info(`[INFO] ${payload}`);
+	},
 	warn(message: string, context?: Record<string, unknown>) {
 		const payload = context ? `${message} ${JSON.stringify(context)}` : message;
 		console.warn(`[WARN] ${payload}`);

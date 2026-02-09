@@ -1,7 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
+import { log, redactId } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { chunkedQuery } from "./query-utils.server";
 export { normalizeForMatch, tokenMatchScore };
 
 /**
@@ -268,8 +270,8 @@ export async function matchMeals(
 	const d1 = drizzle(db);
 	const { mode, minMatch = 50, limit = 20, tag } = query;
 
-	console.log("[matchMeals] Starting with params:", {
-		organizationId,
+	log.info("[matchMeals] Starting", {
+		organizationId: redactId(organizationId),
 		mode,
 		minMatch,
 		limit,
@@ -302,7 +304,7 @@ export async function matchMeals(
 		: d1.select().from(meal).where(eq(meal.organizationId, organizationId));
 
 	const meals = await mealQuery;
-	console.log("[matchMeals] Found meals:", meals.length);
+	log.info("[matchMeals] Found meals", { count: meals.length });
 
 	if (meals.length === 0) {
 		return [];
@@ -317,15 +319,15 @@ export async function matchMeals(
 	}
 
 	const [ingredientsData, tagsData] = await Promise.all([
-		mealIds.length > 0
-			? d1
-					.select()
-					.from(mealIngredient)
-					.where(inArray(mealIngredient.mealId, mealIds))
-			: Promise.resolve([]),
-		mealIds.length > 0
-			? d1.select().from(mealTag).where(inArray(mealTag.mealId, mealIds))
-			: Promise.resolve([]),
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select()
+				.from(mealIngredient)
+				.where(inArray(mealIngredient.mealId, chunk)),
+		),
+		chunkedQuery(mealIds, (chunk) =>
+			d1.select().from(mealTag).where(inArray(mealTag.mealId, chunk)),
+		),
 	]);
 
 	// Group ingredients and tags by meal ID

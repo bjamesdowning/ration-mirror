@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
+import { chunkedQuery } from "./query-utils.server";
 import type { MealInput } from "./schemas/meal";
 
 /**
@@ -57,18 +58,22 @@ export async function getMeals(
 	// Fetch all tags and ingredients for the organization's meals in one query each
 	const mealIds = meals.map((m) => m.id);
 	const [allTags, allIngredients] = await Promise.all([
-		d1
-			.select({
-				mealId: mealTag.mealId,
-				tag: mealTag.tag,
-			})
-			.from(mealTag)
-			.where(inArray(mealTag.mealId, mealIds)),
-		d1
-			.select()
-			.from(mealIngredient)
-			.where(inArray(mealIngredient.mealId, mealIds))
-			.orderBy(mealIngredient.orderIndex),
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select({
+					mealId: mealTag.mealId,
+					tag: mealTag.tag,
+				})
+				.from(mealTag)
+				.where(inArray(mealTag.mealId, chunk)),
+		),
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select()
+				.from(mealIngredient)
+				.where(inArray(mealIngredient.mealId, chunk))
+				.orderBy(mealIngredient.orderIndex),
+		),
 	]);
 
 	// Group tags by meal ID

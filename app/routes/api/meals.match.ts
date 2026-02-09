@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { redactId } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
 
@@ -52,7 +52,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 	};
 
 	try {
-		console.log("[Match API] Starting match request:", {
+		log.info("[Match API] Starting match request", {
 			groupId: redactId(groupId),
 			mode,
 			minMatch,
@@ -63,16 +63,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 		// Perform matching
 		const results = await matchMeals(context.cloudflare.env.DB, groupId, query);
 
-		console.log("[Match API] Match complete, results count:", results.length);
+		log.info("[Match API] Match complete", { resultsCount: results.length });
 
 		return Response.json({
 			results,
 		});
 	} catch (error) {
-		console.error(
-			"[Match API] Error:",
-			error instanceof Error ? error.message : "Unknown error",
-		);
+		log.error("[Match API] Match failed", error, {
+			detail: error instanceof Error ? error.message : "Unknown error",
+		});
 
 		return Response.json({ error: "Failed to match meals" }, { status: 500 });
 	}

@@ -121,7 +121,7 @@ export const GenerateMealButton = forwardRef<
 									<Sparkles className="w-5 h-5 text-hyper-green" />
 								</div>
 								<div>
-									<h3 className="text-xl font-bold text-carbon">
+									<h3 className="text-xl font-bold text-carbon dark:text-white">
 										AI Meal Assistant
 									</h3>
 									<p className="text-xs text-muted">
@@ -132,7 +132,7 @@ export const GenerateMealButton = forwardRef<
 							<button
 								type="button"
 								onClick={() => setShowModal(false)}
-								className="p-2 hover:bg-platinum rounded-full transition-colors"
+								className="p-2 text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 rounded-full transition-colors"
 							>
 								✕
 							</button>
@@ -147,7 +147,7 @@ export const GenerateMealButton = forwardRef<
 											<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
 												<Sparkles className="w-8 h-8 text-hyper-green" />
 											</div>
-											<h4 className="text-lg font-medium text-carbon">
+											<h4 className="text-lg font-medium text-carbon dark:text-white">
 												Scanning Pantry...
 											</h4>
 											<p className="text-muted text-sm">
@@ -156,7 +156,7 @@ export const GenerateMealButton = forwardRef<
 										</div>
 									) : (
 										<div className="space-y-6">
-											<p className="text-carbon/80 max-w-md mx-auto">
+											<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
 												Ready to cook? I'll analyze your inventory and generate
 												3 personalized recipes.
 												<br />
@@ -195,7 +195,7 @@ export const GenerateMealButton = forwardRef<
 												{ method: "post", action: "/api/meals/generate" },
 											)
 										}
-										className="px-6 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80"
+										className="px-6 py-2 bg-platinum text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/80 dark:hover:bg-white/20"
 									>
 										Try Again
 									</button>
@@ -208,17 +208,17 @@ export const GenerateMealButton = forwardRef<
 									{recipes.map((recipe, _idx) => (
 										<div
 											key={recipe.name}
-											className="flex flex-col bg-white border border-carbon/5 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
+											className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
 										>
 											<div className="p-5 flex-1 cursor-default">
-												<h4 className="font-bold text-lg text-carbon mb-2 group-hover:text-hyper-green transition-colors">
+												<h4 className="font-bold text-lg text-carbon dark:text-white mb-2 group-hover:text-hyper-green transition-colors">
 													{recipe.name}
 												</h4>
 												<p className="text-sm text-muted line-clamp-3 mb-4">
 													{recipe.description}
 												</p>
 
-												<div className="flex gap-4 text-xs text-carbon/60 mb-4">
+												<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60 mb-4">
 													<div className="flex items-center gap-1">
 														<Timer className="w-3 h-3" />
 														{recipe.prepTime + recipe.cookTime}m
@@ -232,14 +232,14 @@ export const GenerateMealButton = forwardRef<
 												{/* Missing Ingredients Warning */}
 												{recipe.missingIngredients &&
 													recipe.missingIngredients.length > 0 && (
-														<div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+														<div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded text-xs text-yellow-800 dark:text-yellow-300">
 															<strong>Missing:</strong>{" "}
 															{recipe.missingIngredients.join(", ")}
 														</div>
 													)}
 
 												<div className="space-y-1">
-													<h5 className="text-xs font-bold text-carbon uppercase tracking-wider mb-2">
+													<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
 														Key Ingredients
 													</h5>
 													{recipe.ingredients.slice(0, 4).map((ing, _i) => (
@@ -261,12 +261,12 @@ export const GenerateMealButton = forwardRef<
 												</div>
 											</div>
 
-											<div className="p-4 bg-platinum/30 border-t border-carbon/5">
+											<div className="p-4 bg-platinum/30 dark:bg-white/5 border-t border-carbon/5 dark:border-white/10">
 												<button
 													type="button"
 													onClick={() => handleSave(recipe)}
 													disabled={saveFetcher.state !== "idle"}
-													className="w-full py-2 bg-carbon text-white font-medium rounded-lg hover:bg-carbon/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+													className="w-full py-2 bg-carbon dark:bg-white text-white dark:text-carbon font-medium rounded-lg hover:bg-carbon/90 dark:hover:bg-white/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
 												>
 													{saveFetcher.state !== "idle" ? (
 														<span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

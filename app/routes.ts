@@ -32,6 +32,9 @@ export default [
 	// Shared (public) routes
 	route("shared/:token", "routes/shared.$token.tsx"),
 
+	// API - Admin
+	route("api/admin/users", "routes/api/admin.users.ts"),
+
 	// API - Meals
 	route("api/meals", "routes/api/meals.ts"),
 	route("api/meals/match", "routes/api/meals.match.ts"),

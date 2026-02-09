@@ -1,14 +1,22 @@
 import { and, count, eq, gt, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { Link } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { data, Link, useFetcher } from "react-router";
+import { z } from "zod";
 
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
+import { handleApiError } from "../lib/error-handler";
 import type { Route } from "./+types/admin";
+
+const ToggleAdminSchema = z.object({
+	intent: z.literal("toggle-admin"),
+	userId: z.string().min(1),
+});
 
 export async function loader(args: Route.LoaderArgs) {
 	// Verify Admin Access (this handles auth check too)
-	await requireAdmin(args.context, args.request);
+	const adminUser = await requireAdmin(args.context, args.request);
 
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
@@ -96,6 +104,7 @@ export async function loader(args: Route.LoaderArgs) {
 		.get();
 
 	return {
+		currentUserId: adminUser.id,
 		userCount,
 		inventoryCount,
 		burnedCredits: burnedResult?.burned || 0,
@@ -114,6 +123,52 @@ export async function loader(args: Route.LoaderArgs) {
 		verifiedEmailRate:
 			userCount > 0 ? ((verifiedUsersResult?.count ?? 0) / userCount) * 100 : 0,
 	};
+}
+
+export async function action(args: Route.ActionArgs) {
+	const adminUser = await requireAdmin(args.context, args.request);
+
+	if (args.request.method !== "POST") {
+		return new Response("Method not allowed", { status: 405 });
+	}
+
+	try {
+		const formData = await args.request.formData();
+		const { userId } = ToggleAdminSchema.parse({
+			intent: formData.get("intent"),
+			userId: formData.get("userId"),
+		});
+
+		if (userId === adminUser.id) {
+			return new Response(
+				JSON.stringify({ error: "Cannot modify your own admin status" }),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			);
+		}
+
+		const db = drizzle(args.context.cloudflare.env.DB, { schema });
+		const [existing] = await db
+			.select({ isAdmin: schema.user.isAdmin })
+			.from(schema.user)
+			.where(eq(schema.user.id, userId))
+			.limit(1);
+
+		if (!existing) {
+			return new Response(JSON.stringify({ error: "User not found" }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		await db
+			.update(schema.user)
+			.set({ isAdmin: !existing.isAdmin, updatedAt: new Date() })
+			.where(eq(schema.user.id, userId));
+
+		return data({ success: true });
+	} catch (e) {
+		return handleApiError(e);
+	}
 }
 
 function MetricCard({
@@ -155,8 +210,17 @@ function MetricCard({
 	);
 }
 
+type SearchUser = {
+	id: string;
+	name: string;
+	email: string;
+	isAdmin: boolean;
+	createdAt: Date | null;
+};
+
 export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	const {
+		currentUserId,
 		userCount,
 		inventoryCount,
 		burnedCredits,
@@ -174,6 +238,67 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		expiringItems,
 		verifiedEmailRate,
 	} = loaderData;
+
+	const searchFetcher = useFetcher<{ users: SearchUser[] }>();
+	const toggleFetcher = useFetcher();
+	const [searchQuery, setSearchQuery] = useState("");
+	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedQuery(searchQuery.trim());
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [searchQuery]);
+
+	useEffect(() => {
+		if (debouncedQuery.length >= 2) {
+			searchFetcher.load(
+				`/api/admin/users?q=${encodeURIComponent(debouncedQuery)}`,
+			);
+		}
+	}, [debouncedQuery, searchFetcher.load]);
+
+	const users = searchFetcher.data?.users ?? [];
+	const isSearching = searchFetcher.state === "loading";
+
+	const handleToggleClick = useCallback(
+		(user: SearchUser) => {
+			if (user.id === currentUserId) return;
+			if (confirmingUserId === user.id) {
+				toggleFetcher.submit(
+					{ intent: "toggle-admin", userId: user.id },
+					{ method: "POST" },
+				);
+				setConfirmingUserId(null);
+			} else {
+				setConfirmingUserId(user.id);
+			}
+		},
+		[currentUserId, confirmingUserId, toggleFetcher],
+	);
+
+	const handleConfirmBlur = useCallback(() => {
+		setTimeout(() => setConfirmingUserId(null), 150);
+	}, []);
+
+	useEffect(() => {
+		if (
+			toggleFetcher.state === "idle" &&
+			(toggleFetcher.data as { success?: boolean } | undefined)?.success &&
+			debouncedQuery.length >= 2
+		) {
+			searchFetcher.load(
+				`/api/admin/users?q=${encodeURIComponent(debouncedQuery)}`,
+			);
+		}
+	}, [
+		toggleFetcher.state,
+		toggleFetcher.data,
+		debouncedQuery,
+		searchFetcher.load,
+	]);
 
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon p-8">
@@ -320,6 +445,131 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							subtitle="Users with verified email"
 							iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
 						/>
+					</div>
+				</section>
+
+				{/* User Management */}
+				<section>
+					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
+						User Management
+					</h2>
+					<p className="text-sm text-muted mb-4">
+						Search by name or email to find users and grant or revoke admin
+						privileges.
+					</p>
+					<div className="glass-panel rounded-2xl p-6">
+						<input
+							type="search"
+							placeholder="Search by name or email (min 2 chars)..."
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							className="w-full px-4 py-3 rounded-lg border border-carbon/10 bg-ceramic text-carbon placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50 mb-6"
+							aria-label="Search users"
+						/>
+						{isSearching && (
+							<div className="text-sm text-muted mb-4">Searching...</div>
+						)}
+						{debouncedQuery.length >= 2 && !isSearching && (
+							<div className="overflow-x-auto">
+								{users.length === 0 ? (
+									<p className="text-muted text-sm">No users found.</p>
+								) : (
+									<table className="w-full text-left">
+										<thead>
+											<tr className="border-b border-carbon/10">
+												<th className="text-label text-muted py-3 pr-4">
+													Name
+												</th>
+												<th className="text-label text-muted py-3 pr-4">
+													Email
+												</th>
+												<th className="text-label text-muted py-3 pr-4">
+													Status
+												</th>
+												<th className="text-label text-muted py-3 pr-4">
+													Joined
+												</th>
+												<th className="text-label text-muted py-3 pr-4">
+													Actions
+												</th>
+											</tr>
+										</thead>
+										<tbody>
+											{users.map((user) => {
+												const isSelf = user.id === currentUserId;
+												const isConfirming = confirmingUserId === user.id;
+												const isSubmitting =
+													toggleFetcher.state === "submitting" &&
+													toggleFetcher.formData?.get("userId") === user.id;
+												return (
+													<tr
+														key={user.id}
+														className={`border-b border-carbon/5 ${
+															isSelf ? "bg-hyper-green/5" : ""
+														}`}
+													>
+														<td className="py-3 pr-4 font-medium">
+															{user.name}
+														</td>
+														<td className="py-3 pr-4 text-muted text-sm">
+															{user.email}
+														</td>
+														<td className="py-3 pr-4">
+															{user.isAdmin ? (
+																<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-hyper-green/20 text-hyper-green text-xs font-medium">
+																	Admin
+																</span>
+															) : (
+																<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-platinum/50 text-muted text-xs font-medium">
+																	User
+																</span>
+															)}
+														</td>
+														<td className="py-3 pr-4 text-muted text-sm">
+															{user.createdAt
+																? new Date(user.createdAt).toLocaleDateString()
+																: "—"}
+														</td>
+														<td className="py-3 pr-4">
+															{isSelf ? (
+																<span
+																	className="text-xs text-muted"
+																	title="Cannot modify your own admin status"
+																>
+																	You
+																</span>
+															) : (
+																<button
+																	type="button"
+																	onClick={() => handleToggleClick(user)}
+																	onBlur={handleConfirmBlur}
+																	disabled={isSubmitting}
+																	className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+																		isConfirming
+																			? "bg-warning/20 text-warning hover:bg-warning/30"
+																			: user.isAdmin
+																				? "bg-danger/10 text-danger hover:bg-danger/20"
+																				: "bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20"
+																	}`}
+																>
+																	{isSubmitting
+																		? "Updating..."
+																		: isConfirming
+																			? "Confirm?"
+																			: user.isAdmin
+																				? "Revoke Admin"
+																				: "Grant Admin"}
+																</button>
+															)}
+														</td>
+													</tr>
+												);
+											})}
+										</tbody>
+									</table>
+								)}
+							</div>
+						)}
 					</div>
 				</section>
 			</main>

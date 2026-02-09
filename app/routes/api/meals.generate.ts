@@ -37,6 +37,51 @@ const AIResponseSchema = z.object({
 
 type AIResponse = z.infer<typeof AIResponseSchema>;
 
+/**
+ * Normalize AI output to match schema. Gemini often returns:
+ * - ingredients with only inventoryName (no name)
+ * - recipes without directions, prepTime, cookTime
+ */
+function normalizeAIResponse(parsed: unknown): unknown {
+	if (!parsed || typeof parsed !== "object") return parsed;
+	const obj = parsed as { recipes?: Array<Record<string, unknown>> };
+	if (!Array.isArray(obj.recipes)) return parsed;
+
+	const recipes = obj.recipes.map((recipe) => {
+		const ing = Array.isArray(recipe.ingredients)
+			? (recipe.ingredients as Array<Record<string, unknown>>).map(
+					(i: Record<string, unknown>) => ({
+						name: i.name ?? i.inventoryName ?? "unknown",
+						quantity:
+							typeof i.quantity === "number"
+								? i.quantity
+								: Number(i.quantity) || 1,
+						unit: String(i.unit ?? "unit"),
+						inventoryName: i.inventoryName ?? i.name ?? "unknown",
+					}),
+				)
+			: [];
+		return {
+			name: recipe.name ?? "Unnamed Recipe",
+			description:
+				recipe.description && String(recipe.description).trim()
+					? String(recipe.description)
+					: "No description",
+			ingredients: ing,
+			directions: Array.isArray(recipe.directions) ? recipe.directions : [],
+			prepTime:
+				typeof recipe.prepTime === "number"
+					? recipe.prepTime
+					: Number(recipe.prepTime) || 0,
+			cookTime:
+				typeof recipe.cookTime === "number"
+					? recipe.cookTime
+					: Number(recipe.cookTime) || 0,
+		};
+	});
+	return { recipes };
+}
+
 function extractModelText(payload: unknown) {
 	if (!payload || typeof payload !== "object") return null;
 	const candidates = (payload as { candidates?: Array<unknown> }).candidates;
@@ -197,10 +242,6 @@ Generate 3 creative meal options I can cook right now.`;
 					throw data({ error: "Meal generation failed" }, { status: 500 });
 				}
 
-				// #region agent log
-				fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:"meals.generate.ts:parse-entry",message:"AI modelText received",data:{modelTextLen:modelText?.length,modelTextSample:modelText?.slice(0,1200)},timestamp:Date.now(),hypothesisId:"H1,H2,H3,H4,H5"})}).catch(()=>{});
-				// #endregion
-
 				let recipes: AIResponse["recipes"] = [];
 
 				try {
@@ -209,19 +250,13 @@ Generate 3 creative meal options I can cook right now.`;
 						.replace(/\n?```\s*$/i, "")
 						.trim();
 					const parsed = JSON.parse(cleanedText);
-					const parsedResult = AIResponseSchema.safeParse(parsed);
+					const normalized = normalizeAIResponse(parsed);
+					const parsedResult = AIResponseSchema.safeParse(normalized);
 					if (!parsedResult.success) {
-						// #region agent log
-						fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:"meals.generate.ts:safeParse-fail",message:"Zod validation failed",data:{issues:parsedResult.error.issues,parsedKeys:typeof parsed==="object"&&parsed!==null?Object.keys(parsed):null,sampleRecipe:Array.isArray(parsed?.recipes)?parsed.recipes[0]:null},timestamp:Date.now(),hypothesisId:"H1,H2,H3,H4"})}).catch(()=>{});
-						// #endregion
 						throw new Error("Invalid structure");
 					}
 					recipes = parsedResult.data.recipes;
 				} catch (e) {
-					const isJsonError = e instanceof SyntaxError;
-					// #region agent log
-					fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:"meals.generate.ts:catch",message:"Parse error in catch",data:{isJsonError,errorMsg:e instanceof Error?e.message:String(e)},timestamp:Date.now(),hypothesisId:"H5"})}).catch(()=>{});
-					// #endregion
 					console.error("Failed to parse AI response", e);
 					throw data(
 						{ error: "AI generation failed due to formatting error." },

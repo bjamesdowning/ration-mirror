@@ -47,6 +47,13 @@ export const GroceryItemUpdateSchema = z.object({
 		.optional(),
 });
 
+export const SharedItemToggleSchema = z.object({
+	isPurchased: z.union([
+		z.boolean(),
+		z.string().transform((val) => val === "true"),
+	]),
+});
+
 export const AddFromMealSchema = z.object({
 	mealId: z.string().uuid(),
 });

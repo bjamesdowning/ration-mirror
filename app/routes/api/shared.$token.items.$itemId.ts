@@ -1,0 +1,59 @@
+import type { ActionFunctionArgs } from "react-router";
+import { handleApiError } from "~/lib/error-handler";
+import { toggleSharedItemPurchased } from "~/lib/grocery.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { SharedItemToggleSchema } from "~/lib/schemas/grocery";
+
+/**
+ * PATCH /api/shared/:token/items/:itemId - Toggle purchased status for shared list
+ */
+export async function action({ request, context, params }: ActionFunctionArgs) {
+	const clientIp =
+		request.headers.get("CF-Connecting-IP") ||
+		request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+		"unknown";
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"shared_toggle",
+		clientIp,
+	);
+
+	if (!rateLimitResult.allowed) {
+		throw new Response("Too many requests", {
+			status: 429,
+			headers: {
+				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				"X-RateLimit-Remaining": "0",
+				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+			},
+		});
+	}
+
+	const token = params.token;
+	const itemId = params.itemId;
+
+	if (!token || !itemId) {
+		throw new Response("Token and Item ID required", { status: 400 });
+	}
+
+	try {
+		if (request.method !== "PATCH") {
+			throw new Response("Method not allowed", { status: 405 });
+		}
+
+		const json = await request.json();
+		const { isPurchased } = SharedItemToggleSchema.parse(json);
+
+		const result = await toggleSharedItemPurchased(
+			context.cloudflare.env.DB,
+			token,
+			itemId,
+			isPurchased,
+		);
+
+		return result;
+	} catch (e) {
+		return handleApiError(e);
+	}
+}

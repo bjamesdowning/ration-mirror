@@ -1,5 +1,6 @@
+import { useCallback, useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData, useParams } from "react-router";
 import { DOMAIN_LABELS } from "~/lib/domain";
 import { getGroceryListByShareToken } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -67,22 +68,119 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 	return { list };
 }
 
+function SharedGroceryItem({
+	item,
+	token,
+	onOptimisticToggle,
+}: {
+	item: SharedItem;
+	token: string | undefined;
+	onOptimisticToggle: (itemId: string, isPurchased: boolean) => void;
+}) {
+	const fetcher = useFetcher();
+	const isPending = fetcher.state !== "idle";
+
+	const optimisticPurchased =
+		fetcher.formData?.get("isPurchased") !== undefined
+			? fetcher.formData.get("isPurchased") === "true"
+			: item.isPurchased;
+
+	const handleToggle = () => {
+		if (!token || isPending) return;
+		const nextPurchased = !item.isPurchased;
+		onOptimisticToggle(item.id, nextPurchased);
+
+		fetcher.submit(
+			{ isPurchased: String(nextPurchased) },
+			{
+				method: "PATCH",
+				action: `/api/shared/${token}/items/${item.id}`,
+				encType: "application/json",
+			},
+		);
+	};
+
+	return (
+		<li
+			className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+				optimisticPurchased
+					? "bg-platinum/50 opacity-60"
+					: "bg-ceramic hover:bg-platinum/30"
+			}`}
+		>
+			<button
+				type="button"
+				onClick={handleToggle}
+				disabled={!token || isPending}
+				className={`w-5 h-5 flex items-center justify-center rounded-md border-2 transition-all ${
+					optimisticPurchased
+						? "border-hyper-green bg-hyper-green text-white"
+						: "border-carbon/30 hover:border-hyper-green"
+				}`}
+				aria-label={
+					optimisticPurchased ? "Mark as not purchased" : "Mark as purchased"
+				}
+			>
+				{optimisticPurchased && (
+					<svg
+						aria-hidden="true"
+						className="w-3 h-3"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={3}
+							d="M5 13l4 4L19 7"
+						/>
+					</svg>
+				)}
+			</button>
+			<span
+				className={`flex-1 ${optimisticPurchased ? "line-through text-muted" : "text-carbon"}`}
+			>
+				{item.name}
+			</span>
+			{item.quantity > 1 && (
+				<span className="text-sm text-muted">
+					{item.quantity} {item.unit}
+				</span>
+			)}
+		</li>
+	);
+}
+
 export default function SharedListPage() {
 	const { list } = useLoaderData<{ list: SharedList }>();
+	const { token } = useParams();
+	const [items, setItems] = useState<SharedItem[]>(list.items);
 
-	// Group items by domain
-	const groupedItems = list.items.reduce<Record<string, SharedItem[]>>(
-		(acc, item) => {
-			const domain = item.domain || "food";
-			if (!acc[domain]) acc[domain] = [];
-			acc[domain].push(item);
-			return acc;
+	const handleOptimisticToggle = useCallback(
+		(itemId: string, isPurchased: boolean) => {
+			setItems((current) =>
+				current.map((item) =>
+					item.id === itemId ? { ...item, isPurchased } : item,
+				),
+			);
 		},
-		{},
+		[],
 	);
 
-	const purchased = list.items.filter((i) => i.isPurchased).length;
-	const total = list.items.length;
+	const groupedItems = useMemo(
+		() =>
+			items.reduce<Record<string, SharedItem[]>>((acc, item) => {
+				const domain = item.domain || "food";
+				if (!acc[domain]) acc[domain] = [];
+				acc[domain].push(item);
+				return acc;
+			}, {}),
+		[items],
+	);
+
+	const purchased = items.filter((i) => i.isPurchased).length;
+	const total = items.length;
 	const progressPercent = total > 0 ? Math.round((purchased / total) * 100) : 0;
 
 	return (
@@ -111,7 +209,7 @@ export default function SharedListPage() {
 
 			{/* Content */}
 			<main className="max-w-2xl mx-auto p-4 space-y-6">
-				{list.items.length === 0 ? (
+				{items.length === 0 ? (
 					<div className="text-center py-16 glass-panel rounded-2xl">
 						<div className="text-6xl mb-4">📋</div>
 						<p className="text-muted">No items in this list</p>
@@ -124,49 +222,12 @@ export default function SharedListPage() {
 							</h2>
 							<ul className="space-y-2">
 								{items.map((item) => (
-									<li
+									<SharedGroceryItem
 										key={item.id}
-										className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-											item.isPurchased
-												? "bg-platinum/50 opacity-60"
-												: "bg-ceramic hover:bg-platinum/30"
-										}`}
-									>
-										<span
-											className={`w-5 h-5 flex items-center justify-center rounded-md border-2 ${
-												item.isPurchased
-													? "border-hyper-green bg-hyper-green text-white"
-													: "border-carbon/30"
-											}`}
-										>
-											{item.isPurchased && (
-												<svg
-													aria-hidden="true"
-													className="w-3 h-3"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke="currentColor"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={3}
-														d="M5 13l4 4L19 7"
-													/>
-												</svg>
-											)}
-										</span>
-										<span
-											className={`flex-1 ${item.isPurchased ? "line-through text-muted" : "text-carbon"}`}
-										>
-											{item.name}
-										</span>
-										{item.quantity > 1 && (
-											<span className="text-sm text-muted">
-												{item.quantity} {item.unit}
-											</span>
-										)}
-									</li>
+										item={item}
+										token={token}
+										onOptimisticToggle={handleOptimisticToggle}
+									/>
 								))}
 							</ul>
 						</section>

@@ -86,6 +86,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60,
 		keyPrefix: "rate:shared_public",
 	},
+	shared_toggle: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 30,
+		keyPrefix: "rate:shared_toggle",
+	},
 };
 
 /**

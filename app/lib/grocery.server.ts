@@ -156,6 +156,47 @@ export async function getGroceryListByShareToken(
 }
 
 /**
+ * Toggles a grocery item's purchased status using a share token.
+ * Public access - validates share token and expiry, and only updates isPurchased.
+ */
+export async function toggleSharedItemPurchased(
+	db: D1Database,
+	shareToken: string,
+	itemId: string,
+	isPurchased: boolean,
+) {
+	const d1 = drizzle(db);
+
+	const [list] = await d1
+		.select({
+			id: groceryList.id,
+			shareExpiresAt: groceryList.shareExpiresAt,
+		})
+		.from(groceryList)
+		.where(eq(groceryList.shareToken, shareToken));
+
+	if (!list) throw new Error("Shared list not found");
+
+	if (list.shareExpiresAt && new Date(list.shareExpiresAt) < new Date()) {
+		throw new Error("Share link has expired");
+	}
+
+	const [item] = await d1
+		.select({ id: groceryItem.id })
+		.from(groceryItem)
+		.where(and(eq(groceryItem.id, itemId), eq(groceryItem.listId, list.id)));
+
+	if (!item) throw new Error("Item not found");
+
+	await d1
+		.update(groceryItem)
+		.set({ isPurchased })
+		.where(eq(groceryItem.id, itemId));
+
+	return { id: itemId, isPurchased };
+}
+
+/**
  * Creates a new grocery list for an organization.
  */
 export async function createGroceryList(

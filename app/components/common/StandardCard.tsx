@@ -11,13 +11,13 @@ export interface StandardCardProps {
 export function StandardCard({ children, actions }: StandardCardProps) {
 	return (
 		<div className="relative group glass-panel rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
-			{/* Mobile Action Menu */}
+			{/* Mobile Action Menu - positioned to avoid overlapping content */}
 			<div className="md:hidden absolute top-2 right-2 z-20">
 				<ActionMenu actions={actions} />
 			</div>
 
-			{/* Main Content */}
-			{children}
+			{/* Main Content - reserve space for mobile menu to prevent overlap */}
+			<div className="pr-12 md:pr-0">{children}</div>
 
 			{/* Desktop Hover Overlay */}
 			<div className="absolute inset-0 bg-carbon/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center gap-3 backdrop-blur-[2px] rounded-xl z-30 hidden md:flex pointer-events-none group-hover:pointer-events-auto">

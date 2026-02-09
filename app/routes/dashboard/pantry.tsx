@@ -24,7 +24,7 @@ import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
-import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -285,7 +285,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* Mobile Header */}
-			<MobilePageHeader
+			<PageHeader
 				icon={<PackageIcon className="w-6 h-6 text-hyper-green" />}
 				title="Cargo"
 				itemCount={filteredInventory.length}

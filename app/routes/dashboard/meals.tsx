@@ -20,7 +20,7 @@ import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
-import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -233,7 +233,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			<GenerateMealButton ref={generateRef} className="hidden" />
 
 			{/* Mobile Header */}
-			<MobilePageHeader
+			<PageHeader
 				icon={<ChefHatIcon className="w-6 h-6 text-hyper-green" />}
 				title="Galley"
 				itemCount={filteredMeals.length}

@@ -9,7 +9,7 @@ import {
 	SuccessIcon,
 } from "~/components/icons/DashboardIcons";
 import { HomeIcon } from "~/components/icons/PageIcons";
-import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getSupplyList } from "~/lib/grocery.server";
@@ -69,7 +69,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			{/* Mobile Header */}
-			<MobilePageHeader
+			<PageHeader
 				icon={<HomeIcon className="w-6 h-6 text-hyper-green" />}
 				title="Hub"
 				itemCount={inventoryStats.totalItems}

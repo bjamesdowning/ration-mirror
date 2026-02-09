@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FilterSheet } from "./FilterSheet";
 
-interface MobilePageHeaderProps {
+interface PageHeaderProps {
 	/** Page icon (emoji or React node) */
 	icon: React.ReactNode;
 	/** Page title */
@@ -23,13 +23,13 @@ interface MobilePageHeaderProps {
 }
 
 /**
- * MobilePageHeader - A simplified, mobile-optimized page header.
+ * PageHeader - A streamlined page header for Cargo, Galley, and Supply.
  * Shows icon + title inline with optional item count badge.
  * Search and filters are cleanly integrated.
  *
  * Part of Option B: Unified Control Bar UI redesign.
  */
-export function MobilePageHeader({
+export function PageHeader({
 	icon,
 	title,
 	itemCount,
@@ -39,14 +39,25 @@ export function MobilePageHeader({
 	filterContent,
 	hasActiveFilters = false,
 	onFilterOpenChange,
-}: MobilePageHeaderProps) {
+}: PageHeaderProps) {
 	const [isFilterOpen, setIsFilterOpen] = useState(false);
+	const [isDesktop, setIsDesktop] = useState(false);
+	const [searchQuery, setSearchQuery] = useState("");
 
-	const _handleFilterOpenChange = (open: boolean) => {
+	useEffect(() => {
+		const mediaQuery = window.matchMedia("(min-width: 768px)");
+		setIsDesktop(mediaQuery.matches);
+		const handleChange = (event: MediaQueryListEvent) => {
+			setIsDesktop(event.matches);
+		};
+		mediaQuery.addEventListener("change", handleChange);
+		return () => mediaQuery.removeEventListener("change", handleChange);
+	}, []);
+
+	const handleFilterOpenChange = (open: boolean) => {
 		setIsFilterOpen(open);
 		onFilterOpenChange?.(open);
 	};
-	const [searchQuery, setSearchQuery] = useState("");
 
 	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		setSearchQuery(e.target.value);
@@ -70,13 +81,13 @@ export function MobilePageHeader({
 						)}
 					</div>
 
-					{/* Filter button (mobile only, if filterContent provided) */}
+					{/* Filter button (if filterContent provided) */}
 					{filterContent && (
 						<button
 							type="button"
-							onClick={() => setIsFilterOpen(true)}
+							onClick={() => handleFilterOpenChange(!isFilterOpen)}
 							className={`
-								md:hidden flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
+								flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
 								${
 									hasActiveFilters
 										? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
@@ -108,15 +119,22 @@ export function MobilePageHeader({
 
 				{/* Desktop filters inline */}
 				{filterContent && (
-					<div className="hidden md:block mt-4">{filterContent}</div>
+					<div
+						className={`
+							hidden md:block mt-4 overflow-hidden transition-[max-height,opacity] duration-200 ease-out
+							${isFilterOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"}
+						`}
+					>
+						{filterContent}
+					</div>
 				)}
 			</header>
 
 			{/* Mobile filter sheet */}
 			{filterContent && (
 				<FilterSheet
-					isOpen={isFilterOpen}
-					onClose={() => setIsFilterOpen(false)}
+					isOpen={isFilterOpen && !isDesktop}
+					onClose={() => handleFilterOpenChange(false)}
 					title="Filters"
 				>
 					{filterContent}

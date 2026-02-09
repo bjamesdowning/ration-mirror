@@ -9,13 +9,13 @@ import {
 	useNavigate,
 	useNavigation,
 } from "react-router";
+import { CreditShop } from "~/components/dashboard/CreditShop";
+import { SettingsIcon } from "~/components/icons/PageIcons";
+import { PageHeader } from "~/components/shell/PageHeader";
+import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
-import { CreditShop } from "../../components/dashboard/CreditShop";
-import { SettingsIcon } from "../../components/icons/PageIcons";
-import { MobilePageHeader } from "../../components/shell/MobilePageHeader";
-import * as schema from "../../db/schema";
-import type { UserSettings } from "../../lib/types";
+import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/settings";
 
 export async function loader(args: Route.LoaderArgs) {
@@ -241,7 +241,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-6">
-			<MobilePageHeader
+			<PageHeader
 				icon={<SettingsIcon className="w-6 h-6 text-hyper-green" />}
 				title="System"
 			/>

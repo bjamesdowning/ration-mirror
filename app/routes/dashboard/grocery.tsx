@@ -16,7 +16,7 @@ import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
-import { MobilePageHeader } from "~/components/shell/MobilePageHeader";
+import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
@@ -229,7 +229,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 	return (
 		<>
 			{/* Mobile Header */}
-			<MobilePageHeader
+			<PageHeader
 				icon={<ShoppingCartIcon className="w-6 h-6 text-hyper-green" />}
 				title="Supply"
 				itemCount={filteredItems.length}

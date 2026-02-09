@@ -164,8 +164,7 @@ export default function Home() {
 								</h3>
 								<div className="h-[2px] w-8 bg-hyper-green mb-4 group-hover:w-full transition-all duration-500 rounded-full" />
 								<p className="text-sm text-muted leading-relaxed">
-									Track your food inventory by category: dry goods, frozen,
-									fresh produce, and more.
+									Track your food inventory with tags and smart filters.
 								</p>
 							</div>
 

@@ -7,7 +7,7 @@ type GroceryListWithItems = typeof groceryList.$inferSelect & {
 
 /**
  * Exports a grocery list as plain text.
- * Groups items by category and formats them for easy copying.
+ * Groups items by domain and formats them for easy copying.
  */
 export function exportGroceryListAsText(list: GroceryListWithItems): string {
 	const lines: string[] = [];

@@ -171,7 +171,6 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 								name: item.name || "Unknown Item",
 								quantity: item.quantity ?? 1,
 								unit: item.unit || "unit",
-								category: item.category,
 								domain: item.domain ?? "food",
 								tags: item.tags || [],
 								expiresAt: item.expiresAt,

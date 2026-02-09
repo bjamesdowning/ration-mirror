@@ -19,7 +19,6 @@ export interface GroceryItemInput {
 	name: string;
 	quantity?: number;
 	unit?: string;
-	category?: string;
 	domain?: string;
 	sourceMealId?: string;
 }
@@ -134,7 +133,7 @@ export async function getGroceryListByShareToken(
 				name: groceryItem.name,
 				quantity: groceryItem.quantity,
 				unit: groceryItem.unit,
-				category: groceryItem.category,
+				domain: groceryItem.domain,
 				isPurchased: groceryItem.isPurchased,
 			})
 			.from(groceryItem)
@@ -264,7 +263,6 @@ export async function addGroceryItem(
 			name: data.name,
 			quantity: data.quantity || 1,
 			unit: data.unit || "unit",
-			category: data.category || "other",
 			domain: data.domain || "food",
 			sourceMealId: data.sourceMealId,
 		}),
@@ -322,7 +320,6 @@ export async function updateGroceryItem(
 				name: data.name ?? existing.name,
 				quantity: data.quantity ?? existing.quantity,
 				unit: data.unit ?? existing.unit,
-				category: data.category ?? existing.category,
 				domain: data.domain ?? existing.domain,
 				isPurchased: data.isPurchased ?? existing.isPurchased,
 			})
@@ -823,9 +820,6 @@ export async function createGroceryListFromAllMeals(
 				});
 			}
 		} else {
-			// Auto-categorize ingredient based on keywords
-			const category = categorizeIngredient(aggregated.name);
-
 			// Queue insert
 			itemsToInsert.push({
 				id: crypto.randomUUID(),
@@ -833,7 +827,6 @@ export async function createGroceryListFromAllMeals(
 				name: aggregated.name,
 				quantity: neededQuantity,
 				unit: aggregated.unit,
-				category,
 				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
 			});
@@ -1110,14 +1103,12 @@ export async function createGroceryListFromSelectedMeals(
 				});
 			}
 		} else {
-			const category = categorizeIngredient(aggregated.name);
 			itemsToInsert.push({
 				id: crypto.randomUUID(),
 				listId,
 				name: aggregated.name,
 				quantity: neededQuantity,
 				unit: aggregated.unit,
-				category,
 				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0],
 			});
@@ -1164,53 +1155,6 @@ export async function createGroceryListFromSelectedMeals(
 			totalIngredients: allIngredients.length,
 		},
 	};
-}
-
-/**
- * Simple keyword-based categorization
- */
-function categorizeIngredient(name: string): string {
-	const lower = name.toLowerCase();
-	if (
-		lower.includes("chicken") ||
-		lower.includes("beef") ||
-		lower.includes("pork") ||
-		lower.includes("fish") ||
-		lower.includes("meat")
-	)
-		return "protein";
-	if (
-		lower.includes("milk") ||
-		lower.includes("cheese") ||
-		lower.includes("yogurt") ||
-		lower.includes("cream") ||
-		lower.includes("butter")
-	)
-		return "dairy";
-	if (
-		lower.includes("apple") ||
-		lower.includes("banana") ||
-		lower.includes("carrot") ||
-		lower.includes("lettuce") ||
-		lower.includes("onion") ||
-		lower.includes("potato") ||
-		lower.includes("tomato") ||
-		lower.includes("vegetable") ||
-		lower.includes("fruit")
-	)
-		return "produce";
-	if (
-		lower.includes("bread") ||
-		lower.includes("pasta") ||
-		lower.includes("rice") ||
-		lower.includes("flour") ||
-		lower.includes("oat")
-	)
-		return "grains";
-	if (lower.includes("can") || lower.includes("jar") || lower.includes("sauce"))
-		return "canned";
-	if (lower.includes("frozen") || lower.includes("ice")) return "frozen";
-	return "other";
 }
 
 /**

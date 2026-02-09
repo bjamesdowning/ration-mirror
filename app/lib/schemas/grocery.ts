@@ -23,17 +23,6 @@ export const GroceryItemSchema = z.object({
 		.max(50)
 		.default("unit")
 		.transform((v) => v.toLowerCase()),
-	category: z
-		.enum([
-			"dry_goods",
-			"cryo_frozen",
-			"perishable",
-			"produce",
-			"canned",
-			"liquid",
-			"other",
-		])
-		.default("other"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	sourceMealId: z.string().uuid().optional(),
 });
@@ -52,17 +41,6 @@ export const GroceryItemUpdateSchema = z.object({
 		.max(50)
 		.optional()
 		.transform((v) => v?.toLowerCase()),
-	category: z
-		.enum([
-			"dry_goods",
-			"cryo_frozen",
-			"perishable",
-			"produce",
-			"canned",
-			"liquid",
-			"other",
-		])
-		.optional(),
 	domain: z.enum(ITEM_DOMAINS).optional(),
 	isPurchased: z
 		.union([z.boolean(), z.string().transform((val) => val === "true")])

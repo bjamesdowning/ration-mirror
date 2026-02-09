@@ -184,7 +184,6 @@ export const inventory = sqliteTable(
 		quantity: integer("quantity").notNull(), // Normalised value
 		unit: text("unit").notNull(), // kg, g, l, ml, piece
 		tags: text("tags", { mode: "json" }).notNull().default("[]"), // Array of strings
-		category: text("category").notNull().default("other"),
 		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
 		expiresAt: integer("expires_at", { mode: "timestamp" }),
@@ -197,7 +196,6 @@ export const inventory = sqliteTable(
 	},
 	(table) => [
 		index("inventory_org_idx").on(table.organizationId),
-		index("inventory_category_idx").on(table.organizationId, table.category),
 		index("inventory_domain_idx").on(table.organizationId, table.domain),
 	],
 );
@@ -423,7 +421,6 @@ export const groceryItem = sqliteTable(
 		name: text("name").notNull(),
 		quantity: integer("quantity").notNull().default(1),
 		unit: text("unit").notNull().default("unit"),
-		category: text("category").notNull().default("other"),
 		domain: text("domain").notNull().default("food"),
 		isPurchased: integer("is_purchased", { mode: "boolean" })
 			.notNull()

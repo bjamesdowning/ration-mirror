@@ -8,16 +8,6 @@ interface AddItemFormProps {
 	defaultDomain?: (typeof ITEM_DOMAINS)[number];
 }
 
-const CATEGORY_OPTIONS = [
-	{ value: "other", label: "Other" },
-	{ value: "produce", label: "Produce" },
-	{ value: "perishable", label: "Refrigerated" },
-	{ value: "cryo_frozen", label: "Frozen" },
-	{ value: "dry_goods", label: "Dry Goods" },
-	{ value: "canned", label: "Canned" },
-	{ value: "liquid", label: "Beverages" },
-];
-
 export function AddItemForm({
 	listId,
 	onAdd,
@@ -27,7 +17,6 @@ export function AddItemForm({
 	const [name, setName] = useState("");
 	const [quantity, setQuantity] = useState(1);
 	const [unit, setUnit] = useState("unit");
-	const [category, setCategory] = useState("other");
 	const [domain, setDomain] =
 		useState<(typeof ITEM_DOMAINS)[number]>(defaultDomain);
 	const [expanded, setExpanded] = useState(false);
@@ -44,7 +33,6 @@ export function AddItemForm({
 				name: name.trim(),
 				quantity,
 				unit,
-				category,
 				domain,
 			}),
 			{
@@ -58,7 +46,6 @@ export function AddItemForm({
 		setName("");
 		setQuantity(1);
 		setUnit("unit");
-		setCategory("other");
 		setDomain(defaultDomain);
 		setExpanded(false);
 		onAdd?.();
@@ -99,8 +86,7 @@ export function AddItemForm({
 							</>
 						) : (
 							<>
-								<span className="mr-1">+</span> Add Details (Qty, Category,
-								Domain)
+								<span className="mr-1">+</span> Add Details (Qty, Domain)
 							</>
 						)}
 					</button>
@@ -108,7 +94,7 @@ export function AddItemForm({
 
 				{/* Expanded options */}
 				{expanded && (
-					<div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-platinum/50 rounded-xl">
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-platinum/50 rounded-xl">
 						<div className="flex-1">
 							<label
 								htmlFor="quantity"
@@ -140,26 +126,6 @@ export function AddItemForm({
 								placeholder="kg, ml, pcs..."
 								className="w-full bg-platinum rounded-lg px-4 py-2 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>
-						</div>
-						<div className="flex-1">
-							<label
-								htmlFor="category"
-								className="block text-label text-muted mb-1"
-							>
-								Category
-							</label>
-							<select
-								id="category"
-								value={category}
-								onChange={(e) => setCategory(e.target.value)}
-								className="w-full bg-platinum rounded-lg px-4 py-2 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none cursor-pointer"
-							>
-								{CATEGORY_OPTIONS.map((opt) => (
-									<option key={opt.value} value={opt.value}>
-										{opt.label}
-									</option>
-								))}
-							</select>
 						</div>
 						<div className="flex-1">
 							<label

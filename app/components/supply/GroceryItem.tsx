@@ -90,11 +90,6 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 				</span>
 			)}
 
-			{/* Category Badge */}
-			<span className="text-xs px-2 py-0.5 bg-platinum rounded text-muted">
-				{item.category}
-			</span>
-
 			{/* Delete Button */}
 			<button
 				type="button"

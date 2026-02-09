@@ -17,6 +17,7 @@ import {
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
+import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { Toast } from "~/components/shell/Toast";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
@@ -29,6 +30,10 @@ import {
 	completeGroceryList,
 	createGroceryListFromSelectedMeals,
 } from "~/lib/grocery.server";
+import {
+	getInventory,
+	getOrganizationInventoryTags,
+} from "~/lib/inventory.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import type { Route } from "./+types/grocery";
 
@@ -46,19 +51,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		groupId,
 	);
 
-	// Fetch available tags for filtering
-	const { getOrganizationInventoryTags } = await import(
-		"~/lib/inventory.server"
-	);
-	const availableTags = await getOrganizationInventoryTags(
-		context.cloudflare.env.DB,
-		groupId,
-	);
+	const [inventory, availableTags] = await Promise.all([
+		getInventory(context.cloudflare.env.DB, groupId),
+		getOrganizationInventoryTags(context.cloudflare.env.DB, groupId),
+	]);
 
 	return {
 		list,
 		activeSelectionCount: activeSelections.length,
 		availableTags,
+		inventory,
 	};
 }
 
@@ -93,7 +95,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
-	const { list, activeSelectionCount } = loaderData;
+	const { list, activeSelectionCount, availableTags, inventory } = loaderData;
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
 	const revalidator = useRevalidator();
@@ -105,10 +107,12 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 	const dockToast = useToast({ duration: 4000 });
 	const {
 		activeDomain,
+		currentTag,
 		handleDomainChange,
+		handleTagChange,
 		clearAllFilters,
 		hasActiveFilters,
-	} = usePageFilters({ supportsTags: false });
+	} = usePageFilters();
 
 	// Local Search Logic (matches Cargo/Galley pattern)
 	const filteredItems = useMemo(() => {
@@ -120,6 +124,33 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 			items = items.filter((item) => item.domain === activeDomain);
 		}
 
+		// Filter by Tag: match grocery item names to inventory items with that tag
+		if (currentTag && inventory?.length) {
+			const parseTags = (t: unknown): string[] => {
+				if (Array.isArray(t))
+					return t.filter((x): x is string => typeof x === "string");
+				if (typeof t === "string") {
+					try {
+						const p = JSON.parse(t) as unknown;
+						return Array.isArray(p)
+							? p.filter((x): x is string => typeof x === "string")
+							: [];
+					} catch {
+						return [];
+					}
+				}
+				return [];
+			};
+			const inventoryNamesWithTag = new Set(
+				inventory
+					.filter((inv) => parseTags(inv.tags).includes(currentTag))
+					.map((inv) => inv.name.toLowerCase()),
+			);
+			items = items.filter((item) =>
+				inventoryNamesWithTag.has(item.name.toLowerCase()),
+			);
+		}
+
 		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
@@ -127,7 +158,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		}
 
 		return items;
-	}, [list?.items, searchQuery, activeDomain]);
+	}, [list?.items, searchQuery, activeDomain, currentTag, inventory]);
 
 	// Filter content for mobile sheet
 	const filterContent = (
@@ -136,6 +167,16 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 				activeDomain={activeDomain}
 				onDomainChange={handleDomainChange}
 			/>
+
+			{availableTags.length > 0 && (
+				<TagFilterDropdown
+					label="Filter by tag"
+					emptyLabel="All tags"
+					currentTag={currentTag}
+					availableTags={availableTags}
+					onTagChange={handleTagChange}
+				/>
+			)}
 
 			{/* Actions */}
 			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6 md:hidden">
@@ -343,9 +384,9 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 					{!(filteredItems.length === 0 && searchQuery) && (
 						<GroceryList
 							key={list.id}
-							list={list}
-							filterDomain={activeDomain}
-							filterSearch={searchQuery}
+							list={{ ...list, items: filteredItems }}
+							filterDomain="all"
+							filterSearch=""
 							onRefresh={() => revalidator.revalidate()}
 						/>
 					)}

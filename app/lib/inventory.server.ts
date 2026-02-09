@@ -363,7 +363,6 @@ export async function dockGroceryItems(
 					name: item.name,
 					quantity: item.quantity,
 					unit: item.unit,
-					category: item.category,
 					domain: item.domain,
 					status: "stable",
 					tags: [], // No tags from grocery list currently
@@ -379,7 +378,6 @@ export async function dockGroceryItems(
 				name: item.name,
 				quantity: item.quantity,
 				unit: item.unit,
-				category: item.category,
 				domain: item.domain,
 				status: "stable",
 				tags: "[]",

@@ -180,7 +180,7 @@ export function IngredientPicker({
 						{activeIndex === idx && (
 							<div
 								id="ingredient-dropdown"
-								className="absolute z-[100] left-0 right-0 mt-1 bg-white border border-platinum rounded-lg shadow-lg max-h-48 overflow-y-auto"
+								className="absolute z-[100] left-0 right-0 mt-1 bg-ceramic dark:bg-white/10 border border-platinum dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto"
 							>
 								{filteredOptions.length > 0 ? (
 									filteredOptions.map((option) => (
@@ -188,16 +188,16 @@ export function IngredientPicker({
 											key={option.id}
 											type="button"
 											onClick={() => selectOption(idx, option)}
-											className="w-full text-left px-3 py-2 text-sm text-carbon hover:bg-platinum transition-colors flex justify-between items-center"
+											className="w-full text-left px-3 py-2 text-sm text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors flex justify-between items-center"
 										>
 											<span>{option.name}</span>
-											<span className="text-xs text-muted font-mono bg-platinum/50 px-1.5 py-0.5 rounded">
+											<span className="text-xs text-muted font-mono bg-platinum/50 dark:bg-white/10 px-1.5 py-0.5 rounded">
 												{option.unit}
 											</span>
 										</button>
 									))
 								) : (
-									<div className="px-3 py-2 text-xs text-muted italic">
+									<div className="px-3 py-2 text-xs text-muted dark:text-white/70 italic">
 										{availableIngredients.length === 0 ? (
 											<>
 												Your pantry is empty.

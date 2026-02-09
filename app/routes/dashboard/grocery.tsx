@@ -9,7 +9,7 @@ import {
 	PlusIcon,
 	SearchIcon,
 	ShareIcon,
-	ShoppingBagIcon,
+	ShoppingCartIcon,
 } from "~/components/icons/PageIcons";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
@@ -230,7 +230,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		<>
 			{/* Mobile Header */}
 			<MobilePageHeader
-				icon={<ShoppingBagIcon className="w-6 h-6 text-hyper-green" />}
+				icon={<ShoppingCartIcon className="w-6 h-6 text-hyper-green" />}
 				title="Supply"
 				itemCount={filteredItems.length}
 				showSearch={true}
@@ -243,7 +243,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 
 			{!list ? (
 				<EmptyPanel
-					icon={<ShoppingBagIcon className="w-12 h-12 text-muted" />}
+					icon={<ShoppingCartIcon className="w-12 h-12 text-muted" />}
 					title="No Supply List"
 					description="We couldn't load your supply list. Please refresh and try again."
 					className="py-10"
@@ -252,7 +252,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 				<div className="space-y-6">
 					{activeSelectionCount === 0 && (
 						<EmptyPanel
-							icon={<ShoppingBagIcon className="w-12 h-12 text-muted" />}
+							icon={<ShoppingCartIcon className="w-12 h-12 text-muted" />}
 							title="No Meals Selected"
 							description="Visit the Galley and toggle meals to auto-populate this list."
 							className="py-8"

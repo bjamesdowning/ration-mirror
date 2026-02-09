@@ -12,7 +12,7 @@ import {
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { CreditShop } from "../../components/dashboard/CreditShop";
-import { HomeIcon } from "../../components/icons/PageIcons";
+import { SettingsIcon } from "../../components/icons/PageIcons";
 import { MobilePageHeader } from "../../components/shell/MobilePageHeader";
 import * as schema from "../../db/schema";
 import type { UserSettings } from "../../lib/types";
@@ -242,7 +242,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-6">
 			<MobilePageHeader
-				icon={<HomeIcon className="w-6 h-6 text-hyper-green" />}
+				icon={<SettingsIcon className="w-6 h-6 text-hyper-green" />}
 				title="System"
 			/>
 			<p className="text-sm text-muted">Preferences & Configuration</p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { LinkIcon } from "~/components/icons/PageIcons";
 
 interface ShareModalProps {
 	listId: string;
@@ -150,7 +151,7 @@ export function ShareModal({
 					</div>
 				) : (
 					<div className="text-center py-8">
-						<div className="text-4xl mb-4">🔗</div>
+						<LinkIcon className="w-12 h-12 text-muted mx-auto mb-4 block" />
 						<p className="text-sm text-muted mb-6">
 							No share link generated yet. Create one to share this list with
 							others.

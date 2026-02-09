@@ -148,7 +148,7 @@ export const GenerateMealButton = forwardRef<
 												<Sparkles className="w-8 h-8 text-hyper-green" />
 											</div>
 											<h4 className="text-lg font-medium text-carbon dark:text-white">
-												Scanning Pantry...
+												Scanning Cargo...
 											</h4>
 											<p className="text-muted text-sm">
 												Inventing recipes based on your stock.
@@ -157,8 +157,8 @@ export const GenerateMealButton = forwardRef<
 									) : (
 										<div className="space-y-6">
 											<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
-												Ready to cook? I'll analyze your inventory and generate
-												3 personalized recipes.
+												Ready to cook? I'll analyze your Cargo and generate 3
+												personalized recipes.
 												<br />
 												<span className="text-xs text-muted mt-2 block">
 													Cost: 5 Credits
@@ -266,10 +266,10 @@ export const GenerateMealButton = forwardRef<
 													type="button"
 													onClick={() => handleSave(recipe)}
 													disabled={saveFetcher.state !== "idle"}
-													className="w-full py-2 bg-carbon dark:bg-white text-white dark:text-carbon font-medium rounded-lg hover:bg-carbon/90 dark:hover:bg-white/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+													className="w-full py-2 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all flex items-center justify-center gap-2"
 												>
 													{saveFetcher.state !== "idle" ? (
-														<span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+														<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
 													) : (
 														<>
 															<Check className="w-4 h-4" />

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { Link } from "react-router";
 
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
@@ -44,7 +45,13 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 					<h1 className="text-display text-3xl text-carbon">Admin Dashboard</h1>
 					<p className="text-sm text-muted mt-1">System overview and metrics</p>
 				</div>
-				<div>
+				<div className="flex items-center gap-4">
+					<Link
+						to="/dashboard"
+						className="inline-flex items-center gap-2 px-4 py-2 bg-platinum/50 text-carbon rounded-lg font-medium hover:bg-platinum transition-colors"
+					>
+						Back to Dashboard
+					</Link>
 					<span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 text-success text-sm font-medium">
 						<span className="w-2 h-2 rounded-full bg-success animate-pulse" />
 						Online

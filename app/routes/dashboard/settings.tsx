@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
 	data,
 	Form,
+	Link,
 	redirect,
 	useFetcher,
 	useNavigate,
@@ -93,6 +94,7 @@ export async function loader(args: Route.LoaderArgs) {
 			credits,
 			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
 			transactionStatus,
+			isAdmin: user.isAdmin ?? false,
 		};
 	} catch (error) {
 		console.error("[Settings] Loader failed:", error);
@@ -250,6 +252,24 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			<div className="space-y-6">
 				{/* User Profile & Credits */}
 				<ReferenceIdSection credits={loaderData.credits} />
+
+				{/* Administration (admin only) */}
+				{loaderData.isAdmin && (
+					<section className="glass-panel rounded-xl p-6">
+						<h2 className="text-xl font-bold mb-2 text-carbon">
+							Administration
+						</h2>
+						<p className="text-sm text-muted mb-4">
+							System-wide management and metrics
+						</p>
+						<Link
+							to="/admin"
+							className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium hover:bg-hyper-green/20 transition-colors"
+						>
+							Admin Dashboard
+						</Link>
+					</section>
+				)}
 
 				{/* Purchase Credits */}
 				<section className="glass-panel rounded-xl p-6">

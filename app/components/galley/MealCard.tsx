@@ -161,6 +161,39 @@ export function MealCard({
 						))}
 					</div>
 
+					{(() => {
+						let cf: Record<string, unknown> | null = null;
+						if (typeof meal.customFields === "string") {
+							try {
+								cf = JSON.parse(meal.customFields) as Record<string, unknown>;
+							} catch {
+								return null;
+							}
+						} else if (
+							meal.customFields &&
+							typeof meal.customFields === "object"
+						) {
+							cf = meal.customFields as Record<string, unknown>;
+						}
+						const sourceUrl = cf?.sourceUrl;
+						if (!sourceUrl || typeof sourceUrl !== "string") return null;
+						try {
+							return (
+								<a
+									href={sourceUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-xs text-muted hover:text-hyper-green transition-colors truncate block mb-2"
+									onClick={(e) => e.stopPropagation()}
+								>
+									via {new URL(sourceUrl).hostname}
+								</a>
+							);
+						} catch {
+							return null;
+						}
+					})()}
+
 					<div className="flex justify-between items-end mt-4">
 						<div className="text-sm text-muted">
 							<div>Servings: {meal.servings}</div>

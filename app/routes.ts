@@ -47,6 +47,7 @@ export default [
 	route("api/meals/generate", "routes/api/meals.generate.ts"),
 	route("api/meals/clear-selections", "routes/api/meals.clear-selections.ts"),
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
+	route("api/recipes/import", "routes/api/recipes.import.ts"),
 
 	// API - Inventory
 	route("api/inventory/:id", "routes/api/inventory.$id.ts"),

@@ -50,6 +50,9 @@
 			"preview_id": "f00538f983d84810b478a6050a214963"
 		}
 	],
+	"ai": {
+		"binding": "AI"
+	},
 	/**
 	 * KV Namespace Setup Instructions:
 	 * 1. Create production namespace: wrangler kv namespace create "RATION_KV"

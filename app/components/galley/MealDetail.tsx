@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Form, Link, useFetcher } from "react-router";
 import { log } from "~/lib/logging.client";
@@ -143,6 +144,17 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					</h1>
 					{meal.description && (
 						<p className="text-muted text-lg max-w-2xl">{meal.description}</p>
+					)}
+					{meal.customFields?.sourceUrl && (
+						<a
+							href={meal.customFields.sourceUrl as string}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-1.5 text-sm text-hyper-green hover:underline mt-2"
+						>
+							<ExternalLink className="w-3.5 h-3.5" />
+							View Original Recipe
+						</a>
 					)}
 				</div>
 				<div className="flex flex-col gap-2 text-right">

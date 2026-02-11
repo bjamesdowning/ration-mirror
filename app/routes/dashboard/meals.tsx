@@ -6,11 +6,16 @@ import {
 	GenerateMealButton,
 	type GenerateMealButtonHandle,
 } from "~/components/galley/GenerateMealButton";
+import {
+	ImportRecipeButton,
+	type ImportRecipeButtonHandle,
+} from "~/components/galley/ImportRecipeButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
 import {
 	ChefHatIcon,
 	CloseIcon,
+	LinkIcon,
 	PlusIcon,
 	SearchIcon,
 	SparkleIcon,
@@ -111,6 +116,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	);
 	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 	const generateRef = useRef<GenerateMealButtonHandle>(null);
+	const importRef = useRef<ImportRecipeButtonHandle>(null);
 	const {
 		activeDomain,
 		currentTag,
@@ -168,12 +174,17 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
 		{
+			id: "import",
+			icon: <LinkIcon />,
+			label: "Import",
+			onClick: () => importRef.current?.open(),
+		},
+		{
 			id: "generate",
 			icon: <SparkleIcon />,
 			label: "Generate",
 			primary: true,
 			onClick: () => {
-				// Trigger the hidden GenerateMealButton
 				generateRef.current?.open();
 			},
 		},
@@ -230,8 +241,9 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			{/* Hidden instance for ref + modal (always in DOM, even on mobile) */}
+			{/* Hidden instances for ref + modal (always in DOM, even on mobile) */}
 			<GenerateMealButton ref={generateRef} className="hidden" />
+			<ImportRecipeButton ref={importRef} className="hidden" />
 
 			{/* Mobile Header */}
 			<PageHeader
@@ -278,6 +290,16 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								Generate Meal
 							</button>
 						}
+						secondaryAction={
+							<button
+								type="button"
+								onClick={() => importRef.current?.open()}
+								className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green transition-all"
+							>
+								<LinkIcon className="w-4 h-4" />
+								Import URL
+							</button>
+						}
 						quickAddPlaceholder="Add Meal"
 						showQuickAdd={showQuickAdd}
 						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
@@ -314,6 +336,13 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 								>
 									Generate Meal
+								</button>
+								<button
+									type="button"
+									onClick={() => importRef.current?.open()}
+									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all border border-platinum dark:border-white/20"
+								>
+									Import Recipe
 								</button>
 								<button
 									type="button"

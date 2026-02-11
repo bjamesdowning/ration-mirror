@@ -9,16 +9,18 @@ import {
 } from "~/lib/schemas/recipe-import";
 import type { Route } from "./+types/recipes.import";
 
-const RECIPE_IMPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+// Must use a model that supports JSON Schema; see https://developers.cloudflare.com/workers-ai/features/json-mode/
+const RECIPE_IMPORT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const SYSTEM_PROMPT = `You are a recipe extraction engine. You receive raw text scraped from a webpage.
 Your task is to extract the recipe into structured JSON.
 
 If the page content IS a recipe, return:
 { "status": "ok", "title": "...", "description": "...", "ingredients": [...], "steps": [...], ... }
+When status is "ok" you MUST include both "ingredients" (array of { name, quantity, unit }) and "steps" (array of strings). Without them the response is invalid.
 
 If the page content is NOT a recipe (e.g. a news article, homepage, error page), return:
-{ "status": "error", "code": "NOT_A_RECIPE", "message": "Brief explanation" }
+{ "status": "error", "code": "NOT_A_RECIPE", "message": "Brief explanation", "ingredients": [], "steps": [] }
 
 Rules:
 - Use lowercase for ingredient names
@@ -59,7 +61,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
+		return data(
 			{
 				error: "Too many import requests. Please try again later.",
 				retryAfter: rateLimitResult.retryAfter,
@@ -77,20 +79,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	if (request.method !== "POST") {
-		throw data({ error: "Method not allowed" }, { status: 405 });
+		return data({ error: "Method not allowed" }, { status: 405 });
 	}
 
 	let body: unknown;
 	try {
 		body = await request.json();
 	} catch {
-		throw data({ error: "Invalid JSON body" }, { status: 400 });
+		return data({ error: "Invalid JSON body" }, { status: 400 });
 	}
 
 	const parsedRequest = RecipeImportRequestSchema.safeParse(body);
 	if (!parsedRequest.success) {
 		const firstIssue = parsedRequest.error.issues[0];
-		throw data(
+		return data(
 			{ error: firstIssue?.message ?? "Invalid request" },
 			{ status: 400 },
 		);
@@ -113,7 +115,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		clearTimeout(timeoutId);
 
 		if (!response.ok) {
-			throw data(
+			return data(
 				{ error: "Could not fetch the page. Check the URL and try again." },
 				{ status: 422 },
 			);
@@ -121,7 +123,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const contentType = response.headers.get("Content-Type") ?? "";
 		if (!contentType.toLowerCase().includes("text/html")) {
-			throw data(
+			return data(
 				{ error: "URL did not return an HTML page." },
 				{ status: 422 },
 			);
@@ -129,12 +131,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const contentLength = response.headers.get("Content-Length");
 		if (contentLength && Number.parseInt(contentLength, 10) > MAX_HTML_BYTES) {
-			throw data({ error: "Page is too large to process." }, { status: 422 });
+			return data({ error: "Page is too large to process." }, { status: 422 });
 		}
 
 		const raw = await response.text();
 		if (raw.length > MAX_HTML_BYTES) {
-			throw data({ error: "Page is too large to process." }, { status: 422 });
+			return data({ error: "Page is too large to process." }, { status: 422 });
 		}
 		html = raw;
 	} catch (err) {
@@ -147,12 +149,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw err;
 		}
 		if (err instanceof Error && err.name === "AbortError") {
-			throw data(
+			return data(
 				{ error: "Request timed out. Try again or use a different URL." },
 				{ status: 422 },
 			);
 		}
-		throw data(
+		return data(
 			{ error: "Could not fetch the page. Check the URL and try again." },
 			{ status: 422 },
 		);
@@ -160,8 +162,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const sanitized = sanitizeHtml(html);
 	if (sanitized.length < 200) {
-		throw data(
+		return data(
 			{
+				error: "Page has too little text to extract a recipe.",
 				success: false,
 				code: "CONTENT_TOO_SHORT",
 				message: "Page has too little text to extract a recipe.",
@@ -172,7 +175,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const AI = context.cloudflare.env.AI;
 	if (!AI) {
-		throw data({ error: "Import configuration missing" }, { status: 500 });
+		return data({ error: "Import configuration missing" }, { status: 500 });
 	}
 
 	let aiResult: unknown;
@@ -198,7 +201,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				aiResult = JSON.parse(rawResponse) as unknown;
 			} catch (parseErr) {
 				log.error("Recipe import AI failed", parseErr);
-				throw data(
+				return data(
 					{
 						error:
 							"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
@@ -221,23 +224,46 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw err;
 		}
 		log.error("Recipe import AI failed", err);
-		throw data({ error: "Import processing failed" }, { status: 500 });
+		return data({ error: "Import processing failed" }, { status: 500 });
+	}
+
+	// AI sometimes returns status "ok" but omits ingredients/steps (e.g. JSON schema only requires "status"). Return 422 instead of 500.
+	const pre =
+		aiResult && typeof aiResult === "object"
+			? (aiResult as Record<string, unknown>)
+			: null;
+	if (pre?.status === "ok") {
+		const hasIngredients =
+			Array.isArray(pre.ingredients) &&
+			(pre.ingredients as unknown[]).length > 0;
+		const hasSteps =
+			Array.isArray(pre.steps) && (pre.steps as unknown[]).length > 0;
+		if (!hasIngredients || !hasSteps) {
+			return data(
+				{
+					error:
+						"The recipe could not be extracted completely. Try a different page or paste the recipe manually.",
+				},
+				{ status: 422 },
+			);
+		}
 	}
 
 	const parsed = RecipeImportAIResponseSchema.safeParse(aiResult);
 	if (!parsed.success) {
 		log.error("Recipe import validation failed", parsed.error);
-		throw data({ error: "Import processing failed" }, { status: 500 });
+		return data({ error: "Import processing failed" }, { status: 500 });
 	}
 
 	const result = parsed.data;
 
 	if (result.status === "error") {
-		throw data(
+		return data(
 			{
 				success: false,
 				code: result.code,
 				message: result.message,
+				error: result.message,
 			},
 			{ status: 422 },
 		);

@@ -294,7 +294,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => importRef.current?.open()}
-								className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green transition-all"
+								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 							>
 								<LinkIcon className="w-4 h-4" />
 								Import URL
@@ -340,7 +340,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => importRef.current?.open()}
-									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all border border-platinum dark:border-white/20"
+									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 								>
 									Import Recipe
 								</button>

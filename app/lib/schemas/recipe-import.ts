@@ -46,7 +46,8 @@ export const RECIPE_IMPORT_JSON_SCHEMA = {
 		},
 		message: { type: "string" },
 	},
-	required: ["status"],
+	// When status is "ok", model must include ingredients and steps; when status is "error", use [] for both.
+	required: ["status", "ingredients", "steps"],
 } as const;
 
 /** Zod schema for AI success response (semantic validation). */
@@ -58,7 +59,7 @@ export const RecipeImportAISuccessSchema = z.object({
 		.array(
 			z.object({
 				name: z.string().min(1),
-				quantity: z.number().positive(),
+				quantity: z.number().nonnegative(), // 0 allowed for "to taste", "pinch", etc.
 				unit: z.string().min(1),
 				isOptional: z.boolean().optional().default(false),
 			}),

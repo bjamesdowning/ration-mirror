@@ -141,7 +141,9 @@ export const ImportRecipeButton = forwardRef<
 				onClick={() => setShowModal(true)}
 				className={`
 					flex items-center gap-2 px-4 py-3 
-					border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green font-medium rounded-lg transition-all active:scale-95
+					bg-hyper-green text-carbon font-semibold rounded-lg
+					shadow-glow-sm hover:shadow-glow transition-all
+					active:scale-95
 					${className || ""}
 				`}
 			>

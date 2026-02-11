@@ -41,7 +41,7 @@ export const MealIngredientSchema = z.object({
 		.string()
 		.min(1, "Ingredient name is required")
 		.transform((v) => v.toLowerCase()),
-	quantity: z.coerce.number().positive("Quantity must be positive"),
+	quantity: z.coerce.number().nonnegative("Quantity must be zero or greater"),
 	unit: z
 		.string()
 		.min(1, "Unit is required")

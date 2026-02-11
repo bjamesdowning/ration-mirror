@@ -194,7 +194,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const rawResponse = (response as { response?: string | unknown }).response;
 		if (typeof rawResponse === "string") {
-			aiResult = JSON.parse(rawResponse) as unknown;
+			try {
+				aiResult = JSON.parse(rawResponse) as unknown;
+			} catch (parseErr) {
+				log.error("Recipe import AI failed", parseErr);
+				throw data(
+					{
+						error:
+							"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
+					},
+					{ status: 422 },
+				);
+			}
 		} else if (rawResponse && typeof rawResponse === "object") {
 			aiResult = rawResponse;
 		} else {

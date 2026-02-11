@@ -1,8 +1,20 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
-import { chunkedQuery } from "./query-utils.server";
+import {
+	chunkedQuery,
+	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+	D1_MAX_TAG_ROWS_PER_STATEMENT,
+} from "./query-utils.server";
 import type { MealInput } from "./schemas/meal";
+
+function chunk<T>(arr: T[], size: number): T[][] {
+	const out: T[][] = [];
+	for (let i = 0; i < arr.length; i += size) {
+		out.push(arr.slice(i, i + size));
+	}
+	return out;
+}
 
 /** Maximum number of meals allowed in a single batch create. */
 export const MAX_BATCH_MEALS = 10;
@@ -142,6 +154,7 @@ export async function getMeal(
 
 /**
  * Creates a new meal with ingredients and tags in a single atomic operation.
+ * Ingredient/tag inserts are chunked to respect D1's 100 bound-params-per-query limit.
  */
 export async function createMeal(
 	db: D1Database,
@@ -169,30 +182,39 @@ export async function createMeal(
 	];
 
 	if (data.ingredients.length > 0) {
-		batch.push(
-			d1.insert(mealIngredient).values(
-				data.ingredients.map((ing, idx) => ({
-					mealId,
-					inventoryId: ing.inventoryId,
-					ingredientName: ing.ingredientName,
-					quantity: ing.quantity,
-					unit: ing.unit,
-					isOptional: ing.isOptional,
-					orderIndex: idx,
-				})),
-			),
-		);
+		let baseIndex = 0;
+		for (const ingredientChunk of chunk(
+			data.ingredients,
+			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+		)) {
+			batch.push(
+				d1.insert(mealIngredient).values(
+					ingredientChunk.map((ing, i) => ({
+						mealId,
+						inventoryId: ing.inventoryId,
+						ingredientName: ing.ingredientName,
+						quantity: ing.quantity,
+						unit: ing.unit,
+						isOptional: ing.isOptional,
+						orderIndex: baseIndex + i,
+					})),
+				),
+			);
+			baseIndex += ingredientChunk.length;
+		}
 	}
 
 	if (data.tags.length > 0) {
-		batch.push(
-			d1.insert(mealTag).values(
-				data.tags.map((tag) => ({
-					mealId,
-					tag,
-				})),
-			),
-		);
+		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(
+				d1.insert(mealTag).values(
+					tagChunk.map((tag) => ({
+						mealId,
+						tag,
+					})),
+				),
+			);
+		}
 	}
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
@@ -243,30 +265,39 @@ export async function createMeals(
 		);
 
 		if (data.ingredients.length > 0) {
-			batch.push(
-				d1.insert(mealIngredient).values(
-					data.ingredients.map((ing, idx) => ({
-						mealId,
-						inventoryId: ing.inventoryId,
-						ingredientName: ing.ingredientName,
-						quantity: ing.quantity,
-						unit: ing.unit,
-						isOptional: ing.isOptional,
-						orderIndex: idx,
-					})),
-				),
-			);
+			let baseIndex = 0;
+			for (const ingredientChunk of chunk(
+				data.ingredients,
+				D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+			)) {
+				batch.push(
+					d1.insert(mealIngredient).values(
+						ingredientChunk.map((ing, i) => ({
+							mealId,
+							inventoryId: ing.inventoryId,
+							ingredientName: ing.ingredientName,
+							quantity: ing.quantity,
+							unit: ing.unit,
+							isOptional: ing.isOptional,
+							orderIndex: baseIndex + i,
+						})),
+					),
+				);
+				baseIndex += ingredientChunk.length;
+			}
 		}
 
 		if (data.tags.length > 0) {
-			batch.push(
-				d1.insert(mealTag).values(
-					data.tags.map((tag) => ({
-						mealId,
-						tag,
-					})),
-				),
-			);
+			for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+				batch.push(
+					d1.insert(mealTag).values(
+						tagChunk.map((tag) => ({
+							mealId,
+							tag,
+						})),
+					),
+				);
+			}
 		}
 	}
 
@@ -320,30 +351,39 @@ export async function updateMeal(
 	];
 
 	if (data.ingredients.length > 0) {
-		batch.push(
-			d1.insert(mealIngredient).values(
-				data.ingredients.map((ing, idx) => ({
-					mealId,
-					inventoryId: ing.inventoryId,
-					ingredientName: ing.ingredientName,
-					quantity: ing.quantity,
-					unit: ing.unit,
-					isOptional: ing.isOptional,
-					orderIndex: idx,
-				})),
-			),
-		);
+		let baseIndex = 0;
+		for (const ingredientChunk of chunk(
+			data.ingredients,
+			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+		)) {
+			batch.push(
+				d1.insert(mealIngredient).values(
+					ingredientChunk.map((ing, i) => ({
+						mealId,
+						inventoryId: ing.inventoryId,
+						ingredientName: ing.ingredientName,
+						quantity: ing.quantity,
+						unit: ing.unit,
+						isOptional: ing.isOptional,
+						orderIndex: baseIndex + i,
+					})),
+				),
+			);
+			baseIndex += ingredientChunk.length;
+		}
 	}
 
 	if (data.tags.length > 0) {
-		batch.push(
-			d1.insert(mealTag).values(
-				data.tags.map((tag) => ({
-					mealId,
-					tag,
-				})),
-			),
-		);
+		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(
+				d1.insert(mealTag).values(
+					tagChunk.map((tag) => ({
+						mealId,
+						tag,
+					})),
+				),
+			);
+		}
 	}
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex

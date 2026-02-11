@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
-import { z } from "zod";
 import { inventory } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
@@ -9,78 +8,17 @@ import {
 	InsufficientCreditsError,
 	withCreditGate,
 } from "~/lib/ledger.server";
+import { log } from "~/lib/logging.server";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import {
+	type AIResponse,
+	AIResponseSchema,
+	normalizeAIResponse,
+} from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.generate";
 
 const GENERATE_MODEL = "gemini-3-flash-preview";
-
-const AIRecipeSchema = z.object({
-	name: z.string().min(1),
-	description: z.string().min(1),
-	ingredients: z.array(
-		z.object({
-			name: z.string().min(1),
-			quantity: z.number(),
-			unit: z.string().min(1),
-			inventoryName: z.string().min(1),
-		}),
-	),
-	directions: z.array(z.string().min(1)),
-	prepTime: z.number(),
-	cookTime: z.number(),
-});
-
-const AIResponseSchema = z.object({
-	recipes: z.array(AIRecipeSchema).min(1),
-});
-
-type AIResponse = z.infer<typeof AIResponseSchema>;
-
-/**
- * Normalize AI output to match schema. Gemini often returns:
- * - ingredients with only inventoryName (no name)
- * - recipes without directions, prepTime, cookTime
- */
-function normalizeAIResponse(parsed: unknown): unknown {
-	if (!parsed || typeof parsed !== "object") return parsed;
-	const obj = parsed as { recipes?: Array<Record<string, unknown>> };
-	if (!Array.isArray(obj.recipes)) return parsed;
-
-	const recipes = obj.recipes.map((recipe) => {
-		const ing = Array.isArray(recipe.ingredients)
-			? (recipe.ingredients as Array<Record<string, unknown>>).map(
-					(i: Record<string, unknown>) => ({
-						name: i.name ?? i.inventoryName ?? "unknown",
-						quantity:
-							typeof i.quantity === "number"
-								? i.quantity
-								: Number(i.quantity) || 1,
-						unit: String(i.unit ?? "unit"),
-						inventoryName: i.inventoryName ?? i.name ?? "unknown",
-					}),
-				)
-			: [];
-		return {
-			name: recipe.name ?? "Unnamed Recipe",
-			description:
-				recipe.description && String(recipe.description).trim()
-					? String(recipe.description)
-					: "No description",
-			ingredients: ing,
-			directions: Array.isArray(recipe.directions) ? recipe.directions : [],
-			prepTime:
-				typeof recipe.prepTime === "number"
-					? recipe.prepTime
-					: Number(recipe.prepTime) || 0,
-			cookTime:
-				typeof recipe.cookTime === "number"
-					? recipe.cookTime
-					: Number(recipe.cookTime) || 0,
-		};
-	});
-	return { recipes };
-}
 
 function extractModelText(payload: unknown) {
 	if (!payload || typeof payload !== "object") return null;
@@ -257,7 +195,7 @@ Generate 3 creative meal options I can cook right now.`;
 					}
 					recipes = parsedResult.data.recipes;
 				} catch (e) {
-					console.error("Failed to parse AI response", e);
+					log.error("Failed to parse AI response", e);
 					throw data(
 						{ error: "AI generation failed due to formatting error." },
 						{ status: 500 },
@@ -339,7 +277,7 @@ Generate 3 creative meal options I can cook right now.`;
 			throw error;
 		}
 
-		console.error("Meal generation failed:", error);
+		log.error("Meal generation failed", error);
 		if (
 			error &&
 			typeof error === "object" &&

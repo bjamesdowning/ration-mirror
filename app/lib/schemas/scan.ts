@@ -53,3 +53,34 @@ export const BatchAddInventorySchema = z.object({
 });
 
 export type BatchAddInventoryInput = z.infer<typeof BatchAddInventorySchema>;
+
+/** Unit strings allowed in scan AI output and prompts */
+export const SCAN_UNITS = [
+	"kg",
+	"g",
+	"lb",
+	"oz",
+	"l",
+	"ml",
+	"unit",
+	"can",
+	"pack",
+] as const;
+
+/**
+ * Schema for a single item in AI scan response (image/receipt parsing).
+ */
+export const ScanAIItemSchema = z.object({
+	name: z.string().min(1),
+	quantity: z.number().optional(),
+	unit: z.enum(SCAN_UNITS).optional(),
+	tags: z.array(z.string()).optional(),
+	expiresAt: z.union([z.string(), z.null()]).optional(),
+});
+
+/**
+ * Schema for full AI scan response.
+ */
+export const ScanAIResponseSchema = z.object({
+	items: z.array(ScanAIItemSchema).default([]),
+});

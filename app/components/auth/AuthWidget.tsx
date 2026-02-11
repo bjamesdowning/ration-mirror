@@ -70,7 +70,7 @@ export function AuthWidget({
 			window.location.href = "/dashboard";
 		} catch (err) {
 			setError("Dev login failed. Please check the console.");
-			console.error("[Dev Login Error]:", err);
+			if (import.meta.env.DEV) console.error("[Dev Login Error]:", err);
 			setLoading(false);
 		}
 	};

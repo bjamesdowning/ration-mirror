@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useFetcher, useLoaderData, useParams } from "react-router";
+import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
 import { DOMAIN_LABELS } from "~/lib/domain";
 import { getGroceryListByShareToken } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import type { Route } from "./+types/shared.$token";
 
 interface SharedItem {
 	id: string;
@@ -19,7 +19,7 @@ interface SharedList {
 	items: SharedItem[];
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: Route.MetaFunction = ({ data }) => {
 	if (!data?.list) {
 		return [{ title: "List Not Found - Ration" }];
 	}
@@ -29,7 +29,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	];
 };
 
-export async function loader({ context, params, request }: LoaderFunctionArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
 	const clientIp =
 		request.headers.get("CF-Connecting-IP") ||
 		request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
@@ -40,20 +40,23 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 		clientIp,
 	);
 	if (!rateLimitResult.allowed) {
-		throw new Response("Too many requests", {
-			status: 429,
-			headers: {
-				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				"X-RateLimit-Remaining": "0",
-				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+		throw data(
+			{ error: "Too many requests" },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
 			},
-		});
+		);
 	}
 
 	const token = params.token;
 
 	if (!token) {
-		throw new Response("Invalid share link", { status: 400 });
+		throw data({ error: "Invalid share link" }, { status: 400 });
 	}
 
 	const list = await getGroceryListByShareToken(
@@ -62,7 +65,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 	);
 
 	if (!list) {
-		throw new Response("List not found or link expired", { status: 404 });
+		throw data({ error: "List not found or link expired" }, { status: 404 });
 	}
 
 	return { list };

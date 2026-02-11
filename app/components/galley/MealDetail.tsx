@@ -107,7 +107,8 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					}
 				}
 			} catch (error) {
-				console.error("Failed to fetch ingredient availability:", error);
+				if (import.meta.env.DEV)
+					console.error("Failed to fetch ingredient availability:", error);
 			} finally {
 				setIsLoadingAvailability(false);
 			}

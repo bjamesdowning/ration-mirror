@@ -16,6 +16,7 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { log } from "~/lib/logging.server";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/settings";
 
@@ -77,7 +78,7 @@ export async function loader(args: Route.LoaderArgs) {
 				await processCheckoutSession(env, sessionId);
 				transactionStatus = "success";
 			} catch (error) {
-				console.error("Manual fulfillment failed:", error);
+				log.error("Manual fulfillment failed", error);
 				transactionStatus = "failed";
 			}
 		}
@@ -97,7 +98,7 @@ export async function loader(args: Route.LoaderArgs) {
 			isAdmin: user.isAdmin ?? false,
 		};
 	} catch (error) {
-		console.error("[Settings] Loader failed:", error);
+		log.error("[Settings] Loader failed", error);
 		if (error instanceof Response) throw error;
 		throw data({ error: "Failed to load settings" }, { status: 500 });
 	}

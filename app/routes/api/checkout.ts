@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { CREDIT_PACKS, getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
@@ -58,7 +59,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		// 4. Create Stripe Checkout Session (Embedded Mode)
 		if (!context.cloudflare.env.STRIPE_SECRET_KEY) {
-			console.error("STRIPE_SECRET_KEY missing in checkout action");
+			log.error("STRIPE_SECRET_KEY missing in checkout action");
 			throw data(
 				{ error: "Payment system configuration error" },
 				{ status: 503 },
@@ -90,7 +91,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			clientSecret: session.client_secret,
 		};
 	} catch (error) {
-		console.error("Stripe checkout creation failed:", error);
+		log.error("Stripe checkout creation failed", error);
 		throw data({ error: "Failed to create checkout session" }, { status: 500 });
 	}
 }

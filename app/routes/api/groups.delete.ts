@@ -1,14 +1,27 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
-import { redactId } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
+import type { Route } from "./+types/groups.delete";
 
-export async function action({ request, context }: ActionFunctionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const db = drizzle(context.cloudflare.env.DB, { schema });
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"group_create",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many requests. Please try again later." },
+			{ status: 429, headers: { "Retry-After": "60" } },
+		);
+	}
 
 	const formData = await request.formData();
 	const organizationId = formData.get("organizationId")?.toString();
@@ -31,16 +44,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
 	}
 
 	// 2. Perform deletion
-	console.log(
-		`[DeleteGroup] Request to delete org ${redactId(organizationId)} by user ${redactId(user.id)}`,
-	);
+	log.info("[DeleteGroup] Request to delete org", {
+		orgId: redactId(organizationId),
+		userId: redactId(user.id),
+	});
 
 	try {
 		// Execute all deletions atomically via D1 batch API
 		// This ensures all-or-nothing semantics and reduces latency
-		console.log(
-			`[DeleteGroup] Executing atomic deletion of org ${redactId(organizationId)}...`,
-		);
+		log.info("[DeleteGroup] Executing atomic deletion", {
+			orgId: redactId(organizationId),
+		});
 
 		await db.batch([
 			// 1. Clear active org for all sessions
@@ -85,14 +99,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
 				.where(eq(schema.organization.id, organizationId)),
 		]);
 
-		console.log(
-			`[DeleteGroup] Successfully deleted org ${redactId(organizationId)}`,
-		);
+		log.info("[DeleteGroup] Successfully deleted org", {
+			orgId: redactId(organizationId),
+		});
 	} catch (error) {
-		console.error(
-			`[DeleteGroup] FATAL: Failed to delete group ${redactId(organizationId)}:`,
-			error,
-		);
+		log.error("[DeleteGroup] FATAL: Failed to delete group", error, {
+			orgId: redactId(organizationId),
+		});
 		const message = error instanceof Error ? error.message : String(error);
 		throw data(
 			{ error: `Failed to delete group: ${message}` },

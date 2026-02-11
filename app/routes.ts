@@ -69,6 +69,10 @@ export default [
 		"api/grocery-lists/:id/export",
 		"routes/api/grocery-lists.$id.export.ts",
 	),
+	route(
+		"api/grocery-lists/:id/complete",
+		"routes/api/grocery-lists.$id.complete.ts",
+	),
 
 	// API - Other
 	route("api/scan", "routes/api/scan.ts"),

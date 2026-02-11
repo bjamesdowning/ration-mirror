@@ -1,6 +1,6 @@
 import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import { processCheckoutSession } from "~/lib/ledger.server";
-import { redactId } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
 import { getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/webhook";
 
@@ -30,7 +30,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const now = Date.now();
 
 		if (now - eventTimestamp > EVENT_EXPIRY_MS) {
-			console.warn(`Stale webhook event rejected: ${redactId(event.id)}`);
+			log.warn("Stale webhook event rejected", { eventId: redactId(event.id) });
 			return new Response("Event too old", { status: 400 });
 		}
 
@@ -41,9 +41,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 
 		if (idempotencyCheck.alreadyProcessed) {
-			console.warn(
-				`Duplicate webhook event: ${redactId(event.id)} (processed at ${new Date(idempotencyCheck.record?.processedAt || 0).toISOString()})`,
-			);
+			log.warn("Duplicate webhook event", {
+				eventId: redactId(event.id),
+				processedAt: idempotencyCheck.record?.processedAt,
+			});
 			return new Response("Event already processed", { status: 200 });
 		}
 
@@ -57,14 +58,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 				session.id,
 			);
 
-			console.log(
-				`✅ Added ${result.credits} credits to user ${redactId(result.userId)} (session: ${redactId(session.id)}, event: ${redactId(event.id)})`,
-			);
+			log.info("Added credits from checkout", {
+				credits: result.credits,
+				userId: redactId(result.userId),
+				sessionId: redactId(session.id),
+				eventId: redactId(event.id),
+			});
 		}
 
 		return new Response("Webhook processed", { status: 200 });
 	} catch (error) {
-		console.error("Webhook processing failed:", error);
+		log.error("Webhook processing failed", error);
 
 		// Don't expose internal errors to Stripe
 		if (error instanceof Error && error.message.includes("signature")) {

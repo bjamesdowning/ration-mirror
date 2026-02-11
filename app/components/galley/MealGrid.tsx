@@ -73,7 +73,7 @@ export function MealGrid({
 
 				setMatchResults(data.results);
 			} catch (err) {
-				console.error("Match fetch error:", err);
+				if (import.meta.env.DEV) console.error("Match fetch error:", err);
 				setError(err instanceof Error ? err.message : "Unknown error");
 			} finally {
 				setIsLoading(false);

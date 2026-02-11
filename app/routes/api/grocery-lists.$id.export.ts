@@ -1,28 +1,29 @@
-import type { LoaderFunctionArgs } from "react-router";
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	exportGroceryListAsMarkdown,
 	exportGroceryListAsText,
 } from "~/lib/export.server";
 import { getGroceryList } from "~/lib/grocery.server";
+import type { Route } from "./+types/grocery-lists.$id.export";
 
 /**
  * GET /api/grocery-lists/:id/export - Export grocery list as text
  * Query params:
  *   - format: 'text' | 'markdown' (default: 'text')
  */
-export async function loader({ request, context, params }: LoaderFunctionArgs) {
+export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const listId = params.id;
 
 	if (!listId) {
-		throw new Response("List ID required", { status: 400 });
+		throw data({ error: "List ID required" }, { status: 400 });
 	}
 
 	const list = await getGroceryList(context.cloudflare.env.DB, groupId, listId);
 
 	if (!list) {
-		throw new Response("Grocery list not found", { status: 404 });
+		throw data({ error: "Grocery list not found" }, { status: 404 });
 	}
 
 	const url = new URL(request.url);

@@ -1,35 +1,15 @@
 import { data } from "react-router";
-import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getInventory } from "~/lib/inventory.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { ScanResultSchema } from "~/lib/schemas/scan";
+import {
+	SCAN_UNITS,
+	ScanAIResponseSchema,
+	ScanResultSchema,
+} from "~/lib/schemas/scan";
 import type { Route } from "./+types/scan";
 
 const SCAN_MODEL = "gemini-3-flash-preview";
-const SCAN_UNITS = [
-	"kg",
-	"g",
-	"lb",
-	"oz",
-	"l",
-	"ml",
-	"unit",
-	"can",
-	"pack",
-] as const;
-
-const ScanAIItemSchema = z.object({
-	name: z.string().min(1),
-	quantity: z.number().optional(),
-	unit: z.enum(SCAN_UNITS).optional(),
-	tags: z.array(z.string()).optional(),
-	expiresAt: z.union([z.string(), z.null()]).optional(),
-});
-
-const ScanAIResponseSchema = z.object({
-	items: z.array(ScanAIItemSchema).default([]),
-});
 
 const SCAN_PROMPT = `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.

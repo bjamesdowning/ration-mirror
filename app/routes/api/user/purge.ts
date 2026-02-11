@@ -3,7 +3,8 @@ import { drizzle } from "drizzle-orm/d1";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
-import { redactId } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/purge";
 
 async function deleteR2Prefix(bucket: R2Bucket, prefix: string) {
@@ -21,6 +22,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const userId = user.id;
 
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"user_purge",
+		userId,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Account deletion is rate limited. Please try again later." },
+			{ status: 429, headers: { "Retry-After": "300" } },
+		);
+	}
+
 	const env = context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 	const storage = env.STORAGE;
@@ -30,21 +43,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 	).VECTORIZE;
 
-	console.log(`[Purge] Request to delete user account: ${redactId(userId)}`);
+	log.info("[Purge] Request to delete user account", {
+		userId: redactId(userId),
+	});
 
 	try {
 		// D1 does not support traditional SQL transactions (BEGIN/COMMIT) via Drizzle's db.transaction.
 		// We use sequential execution.
 
 		// 1. Clear activeOrganizationId for all the user's sessions first
-		console.log("[Purge] 1. Clearing session org references...");
+		log.info("[Purge] 1. Clearing session org references...");
 		await db
 			.update(schema.session)
 			.set({ activeOrganizationId: null })
 			.where(eq(schema.session.userId, userId));
 
 		// 2. Handle Organizations Owned by User
-		console.log("[Purge] 2. Checking owned organizations...");
+		log.info("[Purge] 2. Checking owned organizations...");
 		const userMemberships = await db
 			.select()
 			.from(schema.member)
@@ -65,9 +80,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const otherMembers = allMembers.filter((m) => m.userId !== userId);
 
 			if (otherMembers.length === 0) {
-				console.log(
-					`[Purge] Deleting sole-owned organization ${redactId(orgId)}...`,
-				);
+				log.info("[Purge] Deleting sole-owned organization", {
+					orgId: redactId(orgId),
+				});
 				// Clear activeOrganizationId for ALL users if this org is about to be deleted
 				await db
 					.update(schema.session)
@@ -97,7 +112,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 				await db
 					.delete(schema.organization)
 					.where(eq(schema.organization.id, orgId));
-				console.log(`[Purge] Deleted owned organization ${redactId(orgId)}`);
+				log.info("[Purge] Deleted owned organization", {
+					orgId: redactId(orgId),
+				});
 
 				if (storage) {
 					await deleteR2Prefix(storage, `organizations/${orgId}/`);
@@ -106,9 +123,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					await vectorize.deleteByPrefix(`organizations/${orgId}/`);
 				}
 			} else {
-				console.log(
-					`[Purge] Transferring ownership of shared organization ${orgId}...`,
-				);
+				log.info("[Purge] Transferring ownership of shared organization", {
+					orgId: redactId(orgId),
+				});
 				const newOwner =
 					otherMembers.find((m) => m.role === "admin") || otherMembers[0];
 
@@ -117,37 +134,38 @@ export async function action({ request, context }: Route.ActionArgs) {
 						.update(schema.member)
 						.set({ role: "owner" })
 						.where(eq(schema.member.id, newOwner.id));
-					console.log(
-						`[Purge] Transferred org ${redactId(orgId)} ownership to ${redactId(newOwner.userId)}`,
-					);
+					log.info("[Purge] Transferred org ownership", {
+						orgId: redactId(orgId),
+						newOwnerId: redactId(newOwner.userId),
+					});
 				}
 			}
 		}
 
 		// 3. Delete all remaining memberships
-		console.log("[Purge] 3. Deleting all memberships...");
+		log.info("[Purge] 3. Deleting all memberships...");
 		await db.delete(schema.member).where(eq(schema.member.userId, userId));
 
 		// 4. Delete Invitations sent by user
-		console.log("[Purge] 4. Deleting invitations...");
+		log.info("[Purge] 4. Deleting invitations...");
 		await db
 			.delete(schema.invitation)
 			.where(eq(schema.invitation.inviterId, userId));
 
 		// 5. Anonymize Ledger
-		console.log("[Purge] 5. Anonymizing ledger entries...");
+		log.info("[Purge] 5. Anonymizing ledger entries...");
 		await db
 			.update(schema.ledger)
 			.set({ userId: null })
 			.where(eq(schema.ledger.userId, userId));
 
 		// 6. Delete Session and Account (Better Auth tables)
-		console.log("[Purge] 6. Deleting sessions and accounts...");
+		log.info("[Purge] 6. Deleting sessions and accounts...");
 		await db.delete(schema.session).where(eq(schema.session.userId, userId));
 		await db.delete(schema.account).where(eq(schema.account.userId, userId));
 
 		// 7. Finally delete the User
-		console.log("[Purge] 7. Deleting user record...");
+		log.info("[Purge] 7. Deleting user record...");
 		await db.delete(schema.user).where(eq(schema.user.id, userId));
 
 		// 8. Delete user assets (R2/Vectorize)
@@ -158,14 +176,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await vectorize.deleteByPrefix(`users/${userId}/`);
 		}
 
-		console.log(
-			`[Purge] Successfully deleted user account ${redactId(userId)}`,
-		);
+		log.info("[Purge] Successfully deleted user account", {
+			userId: redactId(userId),
+		});
 	} catch (error) {
-		console.error(
-			`[Purge] FATAL Error during user purge for ${redactId(userId)}:`,
-			error,
-		);
+		log.error("[Purge] FATAL Error during user purge", error, {
+			userId: redactId(userId),
+		});
 		const message = error instanceof Error ? error.message : String(error);
 		throw data(
 			{ error: `Account deletion failed: ${message}` },

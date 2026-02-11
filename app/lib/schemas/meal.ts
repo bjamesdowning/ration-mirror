@@ -42,3 +42,74 @@ export const MealSchema = z.object({
 
 export type MealInput = z.infer<typeof MealSchema>;
 export type MealIngredientInput = z.infer<typeof MealIngredientSchema>;
+
+/**
+ * AI-generated recipe schema (e.g. from meal generation endpoint).
+ * Used to parse and validate LLM output.
+ */
+export const AIRecipeSchema = z.object({
+	name: z.string().min(1),
+	description: z.string().min(1),
+	ingredients: z.array(
+		z.object({
+			name: z.string().min(1),
+			quantity: z.number(),
+			unit: z.string().min(1),
+			inventoryName: z.string().min(1),
+		}),
+	),
+	directions: z.array(z.string().min(1)),
+	prepTime: z.number(),
+	cookTime: z.number(),
+});
+
+export const AIResponseSchema = z.object({
+	recipes: z.array(AIRecipeSchema).min(1),
+});
+
+export type AIResponse = z.infer<typeof AIResponseSchema>;
+
+/**
+ * Normalize AI output to match schema. Gemini often returns:
+ * - ingredients with only inventoryName (no name)
+ * - recipes without directions, prepTime, cookTime
+ */
+export function normalizeAIResponse(parsed: unknown): unknown {
+	if (!parsed || typeof parsed !== "object") return parsed;
+	const obj = parsed as { recipes?: Array<Record<string, unknown>> };
+	if (!Array.isArray(obj.recipes)) return parsed;
+
+	const recipes = obj.recipes.map((recipe) => {
+		const ing = Array.isArray(recipe.ingredients)
+			? (recipe.ingredients as Array<Record<string, unknown>>).map(
+					(i: Record<string, unknown>) => ({
+						name: i.name ?? i.inventoryName ?? "unknown",
+						quantity:
+							typeof i.quantity === "number"
+								? i.quantity
+								: Number(i.quantity) || 1,
+						unit: String(i.unit ?? "unit"),
+						inventoryName: i.inventoryName ?? i.name ?? "unknown",
+					}),
+				)
+			: [];
+		return {
+			name: recipe.name ?? "Unnamed Recipe",
+			description:
+				recipe.description && String(recipe.description).trim()
+					? String(recipe.description)
+					: "No description",
+			ingredients: ing,
+			directions: Array.isArray(recipe.directions) ? recipe.directions : [],
+			prepTime:
+				typeof recipe.prepTime === "number"
+					? recipe.prepTime
+					: Number(recipe.prepTime) || 0,
+			cookTime:
+				typeof recipe.cookTime === "number"
+					? recipe.cookTime
+					: Number(recipe.cookTime) || 0,
+		};
+	});
+	return { recipes };
+}

@@ -1,10 +1,12 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { createMeal, getMeals } from "~/lib/meals.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MealSchema } from "~/lib/schemas/meal";
+import type { Route } from "./+types/meals";
 
-export async function loader({ request, context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
@@ -13,11 +15,26 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 	return { meals };
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+export async function action({ request, context }: Route.ActionArgs) {
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"meal_mutation",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many requests. Please try again later." },
+			{ status: 429, headers: { "Retry-After": "60" } },
+		);
+	}
 
 	if (request.method !== "POST") {
-		throw new Response("Method not allowed", { status: 405 });
+		throw data({ error: "Method not allowed" }, { status: 405 });
 	}
 
 	try {

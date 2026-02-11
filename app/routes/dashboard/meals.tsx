@@ -26,6 +26,7 @@ import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import { getInventory } from "~/lib/inventory.server";
+import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
 import type { Route } from "./+types/meals";
@@ -91,7 +92,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input);
 			return { success: true };
 		} catch (error) {
-			console.error("Update failed", error);
+			log.error("Update failed", error);
 			return { success: false, error: "Validation failed" };
 		}
 	}

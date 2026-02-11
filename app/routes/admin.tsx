@@ -2,17 +2,12 @@ import { and, count, eq, gt, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useCallback, useEffect, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
-import { z } from "zod";
 
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
 import { handleApiError } from "../lib/error-handler";
+import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
-
-const ToggleAdminSchema = z.object({
-	intent: z.literal("toggle-admin"),
-	userId: z.string().min(1),
-});
 
 export async function loader(args: Route.LoaderArgs) {
 	// Verify Admin Access (this handles auth check too)
@@ -129,7 +124,7 @@ export async function action(args: Route.ActionArgs) {
 	const adminUser = await requireAdmin(args.context, args.request);
 
 	if (args.request.method !== "POST") {
-		return new Response("Method not allowed", { status: 405 });
+		return data({ error: "Method not allowed" }, { status: 405 });
 	}
 
 	try {
@@ -140,9 +135,9 @@ export async function action(args: Route.ActionArgs) {
 		});
 
 		if (userId === adminUser.id) {
-			return new Response(
-				JSON.stringify({ error: "Cannot modify your own admin status" }),
-				{ status: 400, headers: { "Content-Type": "application/json" } },
+			return data(
+				{ error: "Cannot modify your own admin status" },
+				{ status: 400 },
 			);
 		}
 
@@ -154,10 +149,7 @@ export async function action(args: Route.ActionArgs) {
 			.limit(1);
 
 		if (!existing) {
-			return new Response(JSON.stringify({ error: "User not found" }), {
-				status: 404,
-				headers: { "Content-Type": "application/json" },
-			});
+			return data({ error: "User not found" }, { status: 404 });
 		}
 
 		await db

@@ -1,29 +1,47 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { ActionFunctionArgs } from "react-router";
+import { data } from "react-router";
 import { groceryItem } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { dockGroceryItems } from "~/lib/inventory.server";
-import { redactId } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
+import type { Route } from "./+types/grocery-lists.$id.complete";
 
 /**
  * POST /api/grocery-lists/:id/complete
  * Docks all purchased items from the list into inventory and removes them from the list.
  */
-export async function action({ request, context, params }: ActionFunctionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+export async function action({ request, context, params }: Route.ActionArgs) {
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const listId = params.id;
-	console.log(
-		`[DOCK] Request for list: ${redactId(listId)}, Group: ${redactId(groupId)}`,
+	log.info("[DOCK] Request for list", {
+		listId: redactId(listId),
+		groupId: redactId(groupId),
+	});
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"grocery_mutation",
+		user.id,
 	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many requests. Please try again later." },
+			{ status: 429, headers: { "Retry-After": "60" } },
+		);
+	}
 
 	if (!listId) {
-		throw new Response("List ID required", { status: 400 });
+		throw data({ error: "List ID required" }, { status: 400 });
 	}
 
 	if (request.method !== "POST") {
-		throw new Response("Method not allowed", { status: 405 });
+		throw data({ error: "Method not allowed" }, { status: 405 });
 	}
 
 	try {
@@ -37,7 +55,9 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 				and(eq(groceryItem.listId, listId), eq(groceryItem.isPurchased, true)),
 			);
 
-		console.log(`[DOCK] Found ${purchasedItems.length} purchased items`);
+		log.info("[DOCK] Found purchased items", {
+			count: purchasedItems.length,
+		});
 
 		if (purchasedItems.length === 0) {
 			return {
@@ -68,7 +88,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 			summary: results,
 		};
 	} catch (e) {
-		console.error("[DOCK] Error:", e);
+		log.error("[DOCK] Error", e);
 		return handleApiError(e);
 	}
 }

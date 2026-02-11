@@ -1,3 +1,4 @@
+import { data } from "react-router";
 import { createAuth } from "../lib/auth.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
 import type { Route } from "./+types/api.auth.$";
@@ -17,14 +18,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getClientIp(request),
 	);
 	if (!rateLimitResult.allowed) {
-		return new Response("Too many requests", {
-			status: 429,
-			headers: {
-				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				"X-RateLimit-Remaining": "0",
-				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+		throw data(
+			{ error: "Too many requests" },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
 			},
-		});
+		);
 	}
 
 	const auth = createAuth(context.cloudflare.env);
@@ -38,14 +42,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 		getClientIp(request),
 	);
 	if (!rateLimitResult.allowed) {
-		return new Response("Too many requests", {
-			status: 429,
-			headers: {
-				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				"X-RateLimit-Remaining": "0",
-				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+		throw data(
+			{ error: "Too many requests" },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
 			},
-		});
+		);
 	}
 
 	const auth = createAuth(context.cloudflare.env);

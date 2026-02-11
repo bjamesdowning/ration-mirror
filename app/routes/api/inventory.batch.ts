@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-
+import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/inventory.batch";
@@ -126,7 +126,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			errors: errors.length > 0 ? errors : undefined,
 		};
 	} catch (error) {
-		console.error("Batch add failed:", error);
+		log.error("Batch add failed", error);
 		if (error instanceof Response) {
 			throw error;
 		}

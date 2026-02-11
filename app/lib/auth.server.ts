@@ -13,7 +13,7 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
-import { redactId } from "./logging.server";
+import { log, redactId } from "./logging.server";
 
 // Define access control for group management
 const statement = {
@@ -139,14 +139,14 @@ export function createAuth(env: Cloudflare.Env) {
 								createdAt: new Date(),
 							});
 
-							console.log(
-								`[Auth] Created personal group ${redactId(personalOrgId)} for user ${redactId(user.id)}`,
-							);
+							log.info("[Auth] Created personal group", {
+								orgId: redactId(personalOrgId),
+								userId: redactId(user.id),
+							});
 						} catch (error) {
-							console.error(
-								`[Auth] Failed to create personal group for user ${redactId(user.id)}:`,
-								error,
-							);
+							log.error("[Auth] Failed to create personal group", error, {
+								userId: redactId(user.id),
+							});
 							// Don't throw - user can manually create a group
 						}
 					},
@@ -224,9 +224,10 @@ export async function ensureActiveOrganization(
 					.set({ activeOrganizationId: defaultGroupId })
 					.where(eq(schema.session.id, session.session.id));
 
-				console.log(
-					`[Auth] Auto-activated default group ${redactId(defaultGroupId)} for session ${redactId(session.session.id)}`,
-				);
+				log.info("[Auth] Auto-activated default group", {
+					groupId: redactId(defaultGroupId),
+					sessionId: redactId(session.session.id),
+				});
 
 				return {
 					session: {
@@ -239,9 +240,9 @@ export async function ensureActiveOrganization(
 					headers: syncHeaders,
 				};
 			}
-			console.log(
-				`[Auth] User default group ${redactId(defaultGroupId)} no longer accessible, falling back to personal group`,
-			);
+			log.info("[Auth] User default group no longer accessible", {
+				groupId: redactId(defaultGroupId),
+			});
 		}
 
 		// Fallback: Find user's personal group
@@ -256,9 +257,10 @@ export async function ensureActiveOrganization(
 				.set({ activeOrganizationId: personalGroup.id })
 				.where(eq(schema.session.id, session.session.id));
 
-			console.log(
-				`[Auth] Auto-activated personal group ${redactId(personalGroup.id)} for session ${redactId(session.session.id)}`,
-			);
+			log.info("[Auth] Auto-activated personal group", {
+				orgId: redactId(personalGroup.id),
+				sessionId: redactId(session.session.id),
+			});
 
 			// Return updated session
 			return {
@@ -273,7 +275,7 @@ export async function ensureActiveOrganization(
 			};
 		}
 	} catch (error) {
-		console.error("[Auth] Failed to auto-activate organization:", error);
+		log.error("[Auth] Failed to auto-activate organization", error);
 	}
 
 	return { session, headers: syncHeaders };

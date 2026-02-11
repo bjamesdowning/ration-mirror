@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { ActionFunctionArgs } from "react-router";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
+import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import type { Route } from "./+types/groups.create";
 
-export async function action({ request, context }: ActionFunctionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
 	const { user, session } = await requireAuth(context, request);
 
 	// Rate limiting to prevent group spam
@@ -91,7 +92,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 				.where(eq(schema.session.id, session.id)),
 		]);
 	} catch (e) {
-		console.error("Group creation failed:", e);
+		log.error("Group creation failed", e);
 		throw data(
 			{ error: "Failed to create group. Please try again." },
 			{ status: 500 },

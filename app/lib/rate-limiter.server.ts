@@ -91,6 +91,26 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:shared_toggle",
 	},
+	inventory_mutation: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:inventory_mut",
+	},
+	meal_mutation: {
+		windowMs: 60_000,
+		maxRequests: 30,
+		keyPrefix: "rate:meal_mut",
+	},
+	grocery_mutation: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:grocery_mut",
+	},
+	user_purge: {
+		windowMs: 300_000, // 5 minutes
+		maxRequests: 1,
+		keyPrefix: "rate:user_purge",
+	},
 };
 
 /**

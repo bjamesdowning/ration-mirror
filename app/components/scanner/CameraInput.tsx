@@ -74,7 +74,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					encType: "multipart/form-data",
 				});
 			} catch (error) {
-				console.error("Image processing failed:", error);
+				if (import.meta.env.DEV)
+					console.error("Image processing failed:", error);
 				alert("Failed to process image. Please try again.");
 				setIsAnalyzing(false);
 				if (inputRef.current) inputRef.current.value = "";
@@ -155,7 +156,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				setIsAnalyzing(false);
 
 				if (fetcher.data) {
-					console.log("[SCAN] Fetcher success data:", fetcher.data);
+					if (import.meta.env.DEV)
+						console.log("[SCAN] Fetcher success data:", fetcher.data);
 					if ("error" in fetcher.data) {
 						alert(`Scan failed: ${fetcher.data.error}`);
 						if (inputRef.current) inputRef.current.value = "";
@@ -163,7 +165,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						// Success - transform raw items to include required properties
 						// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
 						const rawItems = (fetcher.data as any).items || [];
-						console.log(`[SCAN] Found ${rawItems.length} items`);
+						if (import.meta.env.DEV)
+							console.log(`[SCAN] Found ${rawItems.length} items`);
 						const transformedResult: ScanResult = {
 							// biome-ignore lint/suspicious/noExplicitAny: legacy
 							items: rawItems.map((item: any) => ({
@@ -190,10 +193,11 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					}
 				} else {
 					// No data returned but idle (likely an unexpected error)
-					console.error(
-						"[SCAN] Fetcher completed with NO data. State:",
-						fetcher.state,
-					);
+					if (import.meta.env.DEV)
+						console.error(
+							"[SCAN] Fetcher completed with NO data. State:",
+							fetcher.state,
+						);
 					alert("Scan failed. Please try again.");
 					if (inputRef.current) inputRef.current.value = "";
 				}

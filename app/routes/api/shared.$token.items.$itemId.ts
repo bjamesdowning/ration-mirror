@@ -1,13 +1,14 @@
-import type { ActionFunctionArgs } from "react-router";
+import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { toggleSharedItemPurchased } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { SharedItemToggleSchema } from "~/lib/schemas/grocery";
+import type { Route } from "./+types/shared.$token.items.$itemId";
 
 /**
  * PATCH /api/shared/:token/items/:itemId - Toggle purchased status for shared list
  */
-export async function action({ request, context, params }: ActionFunctionArgs) {
+export async function action({ request, context, params }: Route.ActionArgs) {
 	const clientIp =
 		request.headers.get("CF-Connecting-IP") ||
 		request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
@@ -20,26 +21,29 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw new Response("Too many requests", {
-			status: 429,
-			headers: {
-				"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				"X-RateLimit-Remaining": "0",
-				"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+		throw data(
+			{ error: "Too many requests" },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
 			},
-		});
+		);
 	}
 
 	const token = params.token;
 	const itemId = params.itemId;
 
 	if (!token || !itemId) {
-		throw new Response("Token and Item ID required", { status: 400 });
+		throw data({ error: "Token and Item ID required" }, { status: 400 });
 	}
 
 	try {
 		if (request.method !== "PATCH") {
-			throw new Response("Method not allowed", { status: 405 });
+			throw data({ error: "Method not allowed" }, { status: 405 });
 		}
 
 		const json = await request.json();

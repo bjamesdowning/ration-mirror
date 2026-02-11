@@ -1,28 +1,46 @@
-import {
-	type ActionFunctionArgs,
-	data,
-	type LoaderFunctionArgs,
-} from "react-router";
-import { z } from "zod";
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import { deleteMeal, getMeal, updateMeal } from "~/lib/meals.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MealSchema } from "~/lib/schemas/meal";
+import type { Route } from "./+types/meals.$id";
 
-export async function loader({ request, params, context }: LoaderFunctionArgs) {
+export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
-	if (!id) throw new Response("Not Found", { status: 404 });
+	if (!id) throw data({ error: "Not Found" }, { status: 404 });
 
 	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
-	if (!meal) throw new Response("Not Found", { status: 404 });
+	if (!meal) throw data({ error: "Not Found" }, { status: 404 });
 
 	return { meal };
 }
 
-export async function action({ request, params, context }: ActionFunctionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+export async function action({ request, params, context }: Route.ActionArgs) {
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const { id } = params;
-	if (!id) throw new Response("Not Found", { status: 404 });
+	if (!id) throw data({ error: "Not Found" }, { status: 404 });
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"meal_mutation",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many requests. Please try again later." },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
 
 	try {
 		if (request.method === "PUT") {
@@ -42,14 +60,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 			return { success: true };
 		}
 	} catch (e) {
-		if (e instanceof z.ZodError) {
-			return data(
-				{ error: "Validation failed", details: e.issues },
-				{ status: 400 },
-			);
-		}
-		console.error(e);
-		return data({ error: "Internal Server Error" }, { status: 500 });
+		return handleApiError(e);
 	}
 
 	return data({ error: "Method not allowed" }, { status: 405 });

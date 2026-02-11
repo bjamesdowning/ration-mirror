@@ -1,8 +1,9 @@
-import type { LoaderFunctionArgs } from "react-router";
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { log, redactId } from "~/lib/logging.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
+import type { Route } from "./+types/meals.match";
 
 /**
  * GET /api/meals/match
@@ -15,7 +16,7 @@ import { matchMeals } from "~/lib/matching.server";
  * - limit: number, default 20
  * - tag: string, optional meal tag filter
  */
-export async function loader({ request, context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 
@@ -30,7 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	// Validate mode parameter
 	if (mode !== "strict" && mode !== "delta") {
-		return Response.json(
+		throw data(
 			{ error: "Invalid mode. Must be 'strict' or 'delta'" },
 			{ status: 400 },
 		);
@@ -38,7 +39,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	// Validate minMatch range
 	if (minMatch < 0 || minMatch > 100) {
-		return Response.json(
+		throw data(
 			{ error: "minMatch must be between 0 and 100" },
 			{ status: 400 },
 		);
@@ -65,14 +66,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 		log.info("[Match API] Match complete", { resultsCount: results.length });
 
-		return Response.json({
-			results,
-		});
+		return { results };
 	} catch (error) {
 		log.error("[Match API] Match failed", error, {
 			detail: error instanceof Error ? error.message : "Unknown error",
 		});
 
-		return Response.json({ error: "Failed to match meals" }, { status: 500 });
+		throw data({ error: "Failed to match meals" }, { status: 500 });
 	}
 }

@@ -264,6 +264,39 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					)}
 				</div>
 
+				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
+				{isAnalyzing && (
+					<div
+						className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="scan-progress-title"
+						aria-describedby="scan-progress-desc"
+					>
+						{/* Non-dismissable backdrop - no onClick */}
+						<div
+							className="absolute inset-0 bg-transparent cursor-default"
+							aria-hidden="true"
+						/>
+						<div className="bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl p-8">
+							<div className="animate-pulse space-y-4 text-center">
+								<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
+									<Camera className="w-8 h-8 text-hyper-green" />
+								</div>
+								<h4
+									id="scan-progress-title"
+									className="text-lg font-medium text-carbon dark:text-white"
+								>
+									Analyzing image...
+								</h4>
+								<p id="scan-progress-desc" className="text-muted text-sm">
+									Identifying items. This may take a moment.
+								</p>
+							</div>
+						</div>
+					</div>
+				)}
+
 				{/* Scan Results Modal */}
 				{scanResult && (
 					<ScanResultsModal

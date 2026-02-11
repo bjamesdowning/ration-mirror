@@ -1,11 +1,11 @@
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
-import { createMeal } from "~/lib/meals.server";
+import { createMeal, createMeals, MAX_BATCH_MEALS } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.new";
 
@@ -26,6 +26,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 		} else {
 			const formData = await request.formData();
 			inputData = parseFormData(formData);
+		}
+
+		if (Array.isArray(inputData)) {
+			if (inputData.length > MAX_BATCH_MEALS) {
+				throw data(
+					{
+						error: `Cannot create more than ${MAX_BATCH_MEALS} meals at once`,
+					},
+					{ status: 400 },
+				);
+			}
+			const inputs = inputData.map((item) => MealSchema.parse(item));
+			const meals = await createMeals(
+				context.cloudflare.env.DB,
+				groupId,
+				inputs,
+			);
+			if (meals.length === 0) throw new Error("Failed to create meals");
+			return redirect("/dashboard/meals");
 		}
 
 		const input = MealSchema.parse(inputData);

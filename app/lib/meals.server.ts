@@ -4,6 +4,9 @@ import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
 import { chunkedQuery } from "./query-utils.server";
 import type { MealInput } from "./schemas/meal";
 
+/** Maximum number of meals allowed in a single batch create. */
+export const MAX_BATCH_MEALS = 10;
+
 /**
  * Retrieves all meals for an organization, optionally filtered by tag.
  * Returns meals with their associated tags for client-side filtering.
@@ -196,6 +199,84 @@ export async function createMeal(
 	await d1.batch(batch as [any, ...any[]]);
 
 	return await getMeal(db, organizationId, mealId);
+}
+
+/**
+ * Creates multiple meals in a single atomic batch. All-or-nothing.
+ * Returns the created meals with ingredients and tags.
+ */
+export async function createMeals(
+	db: D1Database,
+	organizationId: string,
+	inputs: MealInput[],
+) {
+	if (inputs.length === 0) return [];
+	if (inputs.length > MAX_BATCH_MEALS) {
+		throw new Error(
+			`Batch size exceeds maximum of ${MAX_BATCH_MEALS} meals per request`,
+		);
+	}
+	const d1 = drizzle(db);
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
+	const batch: any[] = [];
+	const mealIds: string[] = [];
+
+	for (const data of inputs) {
+		const mealId = crypto.randomUUID();
+		mealIds.push(mealId);
+
+		batch.push(
+			d1.insert(meal).values({
+				id: mealId,
+				organizationId,
+				name: data.name,
+				domain: data.domain,
+				description: data.description,
+				directions: data.directions,
+				equipment: data.equipment,
+				servings: data.servings,
+				prepTime: data.prepTime,
+				cookTime: data.cookTime,
+				customFields: data.customFields || {},
+			}),
+		);
+
+		if (data.ingredients.length > 0) {
+			batch.push(
+				d1.insert(mealIngredient).values(
+					data.ingredients.map((ing, idx) => ({
+						mealId,
+						inventoryId: ing.inventoryId,
+						ingredientName: ing.ingredientName,
+						quantity: ing.quantity,
+						unit: ing.unit,
+						isOptional: ing.isOptional,
+						orderIndex: idx,
+					})),
+				),
+			);
+		}
+
+		if (data.tags.length > 0) {
+			batch.push(
+				d1.insert(mealTag).values(
+					data.tags.map((tag) => ({
+						mealId,
+						tag,
+					})),
+				),
+			);
+		}
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(batch as [any, ...any[]]);
+
+	const results = await Promise.all(
+		mealIds.map((id) => getMeal(db, organizationId, id)),
+	);
+	return results.filter((m): m is NonNullable<typeof m> => m !== null);
 }
 
 /**

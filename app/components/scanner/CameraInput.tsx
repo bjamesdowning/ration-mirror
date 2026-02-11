@@ -7,6 +7,7 @@ import {
 	useState,
 } from "react";
 import { useFetcher, useRevalidator } from "react-router";
+import { log } from "~/lib/logging.client";
 import type { ScanResult } from "~/lib/schemas/scan";
 import { ScanResultsModal } from "./ScanResultsModal";
 
@@ -74,8 +75,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					encType: "multipart/form-data",
 				});
 			} catch (error) {
-				if (import.meta.env.DEV)
-					console.error("Image processing failed:", error);
+				log.error("Image processing failed", error);
 				alert("Failed to process image. Please try again.");
 				setIsAnalyzing(false);
 				if (inputRef.current) inputRef.current.value = "";
@@ -156,8 +156,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				setIsAnalyzing(false);
 
 				if (fetcher.data) {
-					if (import.meta.env.DEV)
-						console.log("[SCAN] Fetcher success data:", fetcher.data);
+					log.debug("Scan fetcher success", { hasData: !!fetcher.data });
 					if ("error" in fetcher.data) {
 						alert(`Scan failed: ${fetcher.data.error}`);
 						if (inputRef.current) inputRef.current.value = "";
@@ -165,8 +164,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						// Success - transform raw items to include required properties
 						// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
 						const rawItems = (fetcher.data as any).items || [];
-						if (import.meta.env.DEV)
-							console.log(`[SCAN] Found ${rawItems.length} items`);
+						log.debug("Scan found items", { count: rawItems.length });
 						const transformedResult: ScanResult = {
 							// biome-ignore lint/suspicious/noExplicitAny: legacy
 							items: rawItems.map((item: any) => ({
@@ -193,11 +191,9 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					}
 				} else {
 					// No data returned but idle (likely an unexpected error)
-					if (import.meta.env.DEV)
-						console.error(
-							"[SCAN] Fetcher completed with NO data. State:",
-							fetcher.state,
-						);
+					log.error("Scan fetcher completed with no data", undefined, {
+						state: fetcher.state,
+					});
 					alert("Scan failed. Please try again.");
 					if (inputRef.current) inputRef.current.value = "";
 				}

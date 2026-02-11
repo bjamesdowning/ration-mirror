@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { authClient } from "~/lib/auth-client";
+import { log } from "~/lib/logging.client";
 import { AuthButton } from "./AuthButton";
 
 type AuthMode = "signUp" | "signIn";
@@ -70,7 +71,7 @@ export function AuthWidget({
 			window.location.href = "/dashboard";
 		} catch (err) {
 			setError("Dev login failed. Please check the console.");
-			if (import.meta.env.DEV) console.error("[Dev Login Error]:", err);
+			log.error("Dev login error", err);
 			setLoading(false);
 		}
 	};

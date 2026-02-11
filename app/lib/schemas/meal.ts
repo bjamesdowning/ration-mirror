@@ -1,6 +1,41 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 
+/** Rejects common prompt injection patterns before user customization reaches the LLM */
+export const INJECTION_PATTERNS =
+	/(?:ignore|forget|disregard)\s+(?:previous|above|all)|(?:you\s+are\s+now|act\s+as|pretend\s+to\s+be)|(?:system\s*:|<\/?(?:system|user|assistant)>)|```/i;
+
+/** Request body schema for meal generation API. Validates and sanitizes customization. */
+export const MealGenerateRequestSchema = z
+	.object({
+		customization: z
+			.string()
+			.max(200, "Customization must be 200 characters or less")
+			.optional()
+			.transform((v) => {
+				if (!v || typeof v !== "string") return undefined;
+				const sanitized = v
+					.split("")
+					.filter((c) => {
+						const code = c.charCodeAt(0);
+						return (code >= 32 && code !== 127) || code === 9;
+					})
+					.join("")
+					.replace(/\s+/g, " ")
+					.trim();
+				return sanitized.length > 0 ? sanitized : undefined;
+			}),
+	})
+	.refine(
+		(data) => {
+			const c = data.customization;
+			return !c || !INJECTION_PATTERNS.test(c);
+		},
+		{ message: "Invalid customization text", path: ["customization"] },
+	);
+
+export type MealGenerateRequest = z.infer<typeof MealGenerateRequestSchema>;
+
 export const MealIngredientSchema = z.object({
 	ingredientName: z
 		.string()

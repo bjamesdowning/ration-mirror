@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { meal } from "~/db/schema";
+import { log } from "~/lib/logging.client";
 import type { MealMatchResult } from "~/lib/matching.server";
 import type { MealCustomFields } from "~/lib/types";
 import { MealCard } from "./MealCard";
@@ -73,7 +74,7 @@ export function MealGrid({
 
 				setMatchResults(data.results);
 			} catch (err) {
-				if (import.meta.env.DEV) console.error("Match fetch error:", err);
+				log.error("Match fetch error", err);
 				setError(err instanceof Error ? err.message : "Unknown error");
 			} finally {
 				setIsLoading(false);

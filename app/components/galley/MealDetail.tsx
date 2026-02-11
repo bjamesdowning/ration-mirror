@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Form, Link, useFetcher } from "react-router";
+import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
 
@@ -107,8 +108,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					}
 				}
 			} catch (error) {
-				if (import.meta.env.DEV)
-					console.error("Failed to fetch ingredient availability:", error);
+				log.error("Failed to fetch ingredient availability", error);
 			} finally {
 				setIsLoadingAvailability(false);
 			}

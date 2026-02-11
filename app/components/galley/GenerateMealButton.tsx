@@ -1,5 +1,11 @@
 import { AlertCircle, Check, ChefHat, Sparkles, Timer } from "lucide-react";
-import { forwardRef, useImperativeHandle, useState } from "react";
+import {
+	forwardRef,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react";
 import { useFetcher, useNavigate } from "react-router";
 
 interface GeneratedRecipe {
@@ -22,21 +28,27 @@ export interface GenerateMealButtonHandle {
 }
 
 interface GenerateMealButtonProps {
-	onGenerate?: () => void;
 	className?: string;
 }
+
+const MAX_CUSTOMIZATION = 200;
 
 export const GenerateMealButton = forwardRef<
 	GenerateMealButtonHandle,
 	GenerateMealButtonProps
->(({ onGenerate, className }, ref) => {
+>(({ className }, ref) => {
 	const [showModal, setShowModal] = useState(false);
+	const [customization, setCustomization] = useState("");
+	const [selectedRecipes, setSelectedRecipes] = useState<Set<number>>(
+		new Set(),
+	);
+	const batchSaveInFlight = useRef(false);
 	const generateFetcher = useFetcher<{
 		recipes: GeneratedRecipe[];
 		error?: string;
 	}>();
 	const saveFetcher = useFetcher();
-	const _navigate = useNavigate();
+	const navigate = useNavigate();
 
 	// Expose open method via ref
 	useImperativeHandle(ref, () => ({
@@ -51,21 +63,24 @@ export const GenerateMealButton = forwardRef<
 	const recipes = generateFetcher.data?.recipes;
 	const error = generateFetcher.data?.error;
 
-	const _handleGenerate = () => {
-		if (onGenerate) {
-			onGenerate();
-		} else {
-			setShowModal(true);
-			generateFetcher.submit(
-				{},
-				{ method: "post", action: "/api/meals/generate" },
-			);
-		}
+	const handleGenerate = () => {
+		const payload: Record<string, string> = {};
+		const trimmed = customization.trim();
+		if (trimmed) payload.customization = trimmed;
+		generateFetcher.submit(payload, {
+			method: "post",
+			action: "/api/meals/generate",
+		});
 	};
 
-	const handleSave = (recipe: GeneratedRecipe) => {
-		// Transform to MealInput format
-		const mealData = {
+	const handleBatchSave = () => {
+		if (!recipes || selectedRecipes.size === 0) return;
+		batchSaveInFlight.current = true;
+		const toSave = Array.from(selectedRecipes)
+			.sort((a, b) => a - b)
+			.map((idx) => recipes[idx])
+			.filter(Boolean);
+		const mealDataArray = toSave.map((recipe) => ({
 			name: recipe.name,
 			description: recipe.description,
 			directions: recipe.directions.join("\n"),
@@ -73,14 +88,47 @@ export const GenerateMealButton = forwardRef<
 			cookTime: recipe.cookTime,
 			ingredients: recipe.ingredients,
 			tags: ["ai-generated"],
-		};
+		}));
 
-		saveFetcher.submit(JSON.stringify(mealData), {
+		saveFetcher.submit(JSON.stringify(mealDataArray), {
 			method: "post",
 			action: "/dashboard/meals/new",
 			encType: "application/json",
 		});
 	};
+
+	const toggleRecipe = (idx: number) => {
+		setSelectedRecipes((prev) => {
+			const next = new Set(prev);
+			if (next.has(idx)) next.delete(idx);
+			else next.add(idx);
+			return next;
+		});
+	};
+
+	const selectAll = () => {
+		if (!recipes) return;
+		if (selectedRecipes.size === recipes.length) {
+			setSelectedRecipes(new Set());
+		} else {
+			setSelectedRecipes(new Set(recipes.map((_, i) => i)));
+		}
+	};
+
+	useEffect(() => {
+		if (saveFetcher.state === "idle" && batchSaveInFlight.current) {
+			batchSaveInFlight.current = false;
+			const hasError =
+				saveFetcher.data &&
+				typeof saveFetcher.data === "object" &&
+				"error" in saveFetcher.data;
+			if (!hasError) {
+				setShowModal(false);
+				setSelectedRecipes(new Set());
+				navigate("/dashboard/meals");
+			}
+		}
+	}, [saveFetcher.state, saveFetcher.data, navigate]);
 
 	return (
 		<>
@@ -164,14 +212,44 @@ export const GenerateMealButton = forwardRef<
 													Cost: 5 Credits
 												</span>
 											</p>
+											<div className="max-w-md mx-auto text-left">
+												<label
+													htmlFor="meal-customization"
+													className="block text-sm font-medium text-carbon dark:text-white mb-1"
+												>
+													Customize results{" "}
+													<span className="font-normal text-muted">
+														(optional)
+													</span>
+												</label>
+												<p className="text-xs text-muted mb-2">
+													Dietary preference, cuisine type, or time constraint —
+													e.g. vegan, Mexican, under 30 min
+												</p>
+												<input
+													id="meal-customization"
+													type="text"
+													value={customization}
+													onChange={(e) =>
+														setCustomization(
+															e.target.value.slice(0, MAX_CUSTOMIZATION),
+														)
+													}
+													placeholder="e.g. vegan, Mexican, under 30 min"
+													className="w-full px-4 py-3 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted mb-2"
+													maxLength={MAX_CUSTOMIZATION}
+													aria-describedby="meal-customization-hint"
+												/>
+												<p
+													id="meal-customization-hint"
+													className="text-xs text-muted text-right"
+												>
+													{customization.length}/{MAX_CUSTOMIZATION}
+												</p>
+											</div>
 											<button
 												type="button"
-												onClick={() =>
-													generateFetcher.submit(
-														{},
-														{ method: "post", action: "/api/meals/generate" },
-													)
-												}
+												onClick={handleGenerate}
 												className="px-8 py-4 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-105 transition-all"
 											>
 												Generate Ideas
@@ -189,12 +267,7 @@ export const GenerateMealButton = forwardRef<
 									<p className="text-sm opacity-80 mb-6">{error}</p>
 									<button
 										type="button"
-										onClick={() =>
-											generateFetcher.submit(
-												{},
-												{ method: "post", action: "/api/meals/generate" },
-											)
-										}
+										onClick={handleGenerate}
 										className="px-6 py-2 bg-platinum text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/80 dark:hover:bg-white/20"
 									>
 										Try Again
@@ -204,82 +277,127 @@ export const GenerateMealButton = forwardRef<
 
 							{/* Results Grid */}
 							{recipes && (
-								<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-									{recipes.map((recipe, _idx) => (
-										<div
-											key={recipe.name}
-											className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
-										>
-											<div className="p-5 flex-1 cursor-default">
-												<h4 className="font-bold text-lg text-carbon dark:text-white mb-2 group-hover:text-hyper-green transition-colors">
-													{recipe.name}
-												</h4>
-												<p className="text-sm text-muted line-clamp-3 mb-4">
-													{recipe.description}
-												</p>
+								<div className="space-y-6">
+									<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+										{recipes.map((recipe, idx) => (
+											<div
+												key={`${recipe.name}-${idx}`}
+												className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
+											>
+												<div className="p-5 flex-1 cursor-default flex flex-col">
+													<div className="flex items-start gap-3 mb-2">
+														<input
+															type="checkbox"
+															id={`recipe-select-${idx}`}
+															checked={selectedRecipes.has(idx)}
+															onChange={() => toggleRecipe(idx)}
+															className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
+															aria-label={`Select ${recipe.name}`}
+														/>
+														<div className="flex-1 min-w-0">
+															<h4 className="font-bold text-lg text-carbon dark:text-white group-hover:text-hyper-green transition-colors">
+																{recipe.name}
+															</h4>
+															<p className="text-sm text-muted line-clamp-3 mb-4">
+																{recipe.description}
+															</p>
 
-												<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60 mb-4">
-													<div className="flex items-center gap-1">
-														<Timer className="w-3 h-3" />
-														{recipe.prepTime + recipe.cookTime}m
+															<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60 mb-4">
+																<div className="flex items-center gap-1">
+																	<Timer className="w-3 h-3" />
+																	{recipe.prepTime + recipe.cookTime}m
+																</div>
+																<div className="flex items-center gap-1">
+																	<ChefHat className="w-3 h-3" />
+																	{recipe.ingredients.length} ingr.
+																</div>
+															</div>
+
+															{/* Missing Ingredients Warning */}
+															{recipe.missingIngredients &&
+																recipe.missingIngredients.length > 0 && (
+																	<div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded text-xs text-yellow-800 dark:text-yellow-300">
+																		<strong>Missing:</strong>{" "}
+																		{recipe.missingIngredients.join(", ")}
+																	</div>
+																)}
+
+															<div className="space-y-1">
+																<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
+																	Key Ingredients
+																</h5>
+																{recipe.ingredients
+																	.slice(0, 4)
+																	.map((ing, _i) => (
+																		<div
+																			key={ing.ingredientName}
+																			className="flex justify-between text-xs text-muted"
+																		>
+																			<span>{ing.ingredientName}</span>
+																			<span>
+																				{ing.quantity} {ing.unit}
+																			</span>
+																		</div>
+																	))}
+																{recipe.ingredients.length > 4 && (
+																	<div className="text-xs text-muted italic pt-1">
+																		+ {recipe.ingredients.length - 4} more
+																	</div>
+																)}
+															</div>
+														</div>
 													</div>
-													<div className="flex items-center gap-1">
-														<ChefHat className="w-3 h-3" />
-														{recipe.ingredients.length} ingr.
-													</div>
-												</div>
-
-												{/* Missing Ingredients Warning */}
-												{recipe.missingIngredients &&
-													recipe.missingIngredients.length > 0 && (
-														<div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded text-xs text-yellow-800 dark:text-yellow-300">
-															<strong>Missing:</strong>{" "}
-															{recipe.missingIngredients.join(", ")}
-														</div>
-													)}
-
-												<div className="space-y-1">
-													<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
-														Key Ingredients
-													</h5>
-													{recipe.ingredients.slice(0, 4).map((ing, _i) => (
-														<div
-															key={ing.ingredientName}
-															className="flex justify-between text-xs text-muted"
-														>
-															<span>{ing.ingredientName}</span>
-															<span>
-																{ing.quantity} {ing.unit}
-															</span>
-														</div>
-													))}
-													{recipe.ingredients.length > 4 && (
-														<div className="text-xs text-muted italic pt-1">
-															+ {recipe.ingredients.length - 4} more
-														</div>
-													)}
 												</div>
 											</div>
+										))}
+									</div>
 
-											<div className="p-4 bg-platinum/30 dark:bg-white/5 border-t border-carbon/5 dark:border-white/10">
-												<button
-													type="button"
-													onClick={() => handleSave(recipe)}
-													disabled={saveFetcher.state !== "idle"}
-													className="w-full py-2 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+									{/* Batch Save Footer */}
+									<div className="sticky bottom-0 p-4 bg-ceramic/95 dark:bg-[#1A1A1A]/95 border-t border-platinum dark:border-white/10 rounded-b-2xl flex flex-col gap-3">
+										{saveFetcher.data &&
+											typeof saveFetcher.data === "object" &&
+											"error" in saveFetcher.data && (
+												<div
+													className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm"
+													role="alert"
 												>
-													{saveFetcher.state !== "idle" ? (
-														<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
-													) : (
-														<>
-															<Check className="w-4 h-4" />
-															Save Recipe
-														</>
-													)}
-												</button>
-											</div>
+													<AlertCircle className="w-4 h-4 shrink-0" />
+													<span>
+														{(saveFetcher.data as { error?: string }).error ??
+															"Save failed"}
+													</span>
+												</div>
+											)}
+										<div className="flex flex-wrap items-center justify-between gap-4">
+											<button
+												type="button"
+												onClick={selectAll}
+												className="text-sm text-muted hover:text-hyper-green transition-colors"
+											>
+												{selectedRecipes.size === recipes.length
+													? "Deselect All"
+													: "Select All"}
+											</button>
+											<button
+												type="button"
+												onClick={handleBatchSave}
+												disabled={
+													saveFetcher.state !== "idle" ||
+													selectedRecipes.size === 0
+												}
+												className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
+											>
+												{saveFetcher.state !== "idle" ? (
+													<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
+												) : (
+													<>
+														<Check className="w-4 h-4" />
+														Save Selected ({selectedRecipes.size})
+													</>
+												)}
+											</button>
 										</div>
-									))}
+									</div>
 								</div>
 							)}
 						</div>

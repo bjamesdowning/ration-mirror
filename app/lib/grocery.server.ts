@@ -9,6 +9,7 @@ import {
 	mealIngredient,
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
+import { log } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
 import {
 	chunkArray,
@@ -27,6 +28,7 @@ import {
 	getUnitMultiplier,
 	normalizeToBaseUnit,
 	type SupportedUnit,
+	toSupportedUnit,
 } from "./units";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
@@ -84,7 +86,7 @@ function getAvailableInventoryQuantity(
 	let bestFuzzyScore = 0;
 
 	for (const item of orgInventory) {
-		const itemUnit = item.unit as SupportedUnit;
+		const itemUnit = toSupportedUnit(item.unit);
 		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
 		if (multiplier === null) continue;
 
@@ -119,7 +121,7 @@ function getExistingListQuantity(
 		if (normalizeForMatch(item.name) !== normalizedName) continue;
 
 		const multiplier = getUnitMultiplier(
-			item.unit as SupportedUnit,
+			toSupportedUnit(item.unit),
 			targetUnit,
 		);
 		if (multiplier === null) continue;
@@ -146,10 +148,16 @@ function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
 		const ingredient = row.meal_ingredient;
 		const domain = row.meal_domain ?? "food";
 		const normalizedName = normalizeForMatch(ingredient.ingredientName);
-		const normalized = normalizeToBaseUnit(
-			ingredient.quantity,
-			ingredient.unit as SupportedUnit,
-		);
+		const rawUnit = ingredient.unit ?? "";
+		const safeUnit = toSupportedUnit(rawUnit);
+		if (String(rawUnit).trim().toLowerCase() !== safeUnit) {
+			log.warn("[Supply] Unsupported ingredient unit, using count", {
+				rawUnit: String(rawUnit),
+				safeUnit,
+				ingredientName: ingredient.ingredientName,
+			});
+		}
+		const normalized = normalizeToBaseUnit(ingredient.quantity, safeUnit);
 		const key = `${normalizedName}__${domain}__${normalized.unit}`;
 
 		const existing = aggregation.get(key);

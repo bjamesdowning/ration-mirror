@@ -14,6 +14,22 @@ export type SupportedUnit = keyof typeof UNIT_FACTORS_TO_BASE;
 export type UnitFamily = (typeof UNIT_FACTORS_TO_BASE)[SupportedUnit]["family"];
 export type BaseUnit = (typeof UNIT_FACTORS_TO_BASE)[SupportedUnit]["baseUnit"];
 
+const SUPPORTED_UNIT_KEYS = new Set<string>(
+	Object.keys(UNIT_FACTORS_TO_BASE) as SupportedUnit[],
+);
+
+/**
+ * Coerces a raw unit string (e.g. from DB) to SupportedUnit. Unknown/empty values
+ * return "unit" so callers never pass an invalid key into UNIT_FACTORS_TO_BASE.
+ */
+export function toSupportedUnit(raw: string | null | undefined): SupportedUnit {
+	const u = String(raw ?? "")
+		.trim()
+		.toLowerCase();
+	if (u && SUPPORTED_UNIT_KEYS.has(u)) return u as SupportedUnit;
+	return "unit";
+}
+
 export function getUnitFamily(unit: SupportedUnit): UnitFamily {
 	return UNIT_FACTORS_TO_BASE[unit].family;
 }

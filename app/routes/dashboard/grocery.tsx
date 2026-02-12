@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
@@ -29,6 +29,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	completeGroceryList,
 	createGroceryListFromSelectedMeals,
+	getSupplyList,
 } from "~/lib/grocery.server";
 import {
 	getInventory,
@@ -40,18 +41,11 @@ import type { Route } from "./+types/grocery";
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 
-	// Auto-sync: Always ensure we have a list and it's up to date with missing meal ingredients
-	// This fulfills: "when the supply page is opened, it should automatically update"
-	const { list } = await createGroceryListFromSelectedMeals(
-		context.cloudflare.env.DB,
-		groupId,
-	);
-	const activeSelections = await getActiveMealSelections(
-		context.cloudflare.env.DB,
-		groupId,
-	);
-
-	const [inventory, availableTags] = await Promise.all([
+	// Light loader: ensure list exists and load current state. Heavy sync (createGroceryListFromSelectedMeals)
+	// runs only via action (Update list button or background sync) to avoid Worker resource limits in production.
+	const [list, activeSelections, inventory, availableTags] = await Promise.all([
+		getSupplyList(context.cloudflare.env.DB, groupId),
+		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getInventory(context.cloudflare.env.DB, groupId),
 		getOrganizationInventoryTags(context.cloudflare.env.DB, groupId),
 	]);
@@ -230,9 +224,31 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		);
 	};
 
+	// One-time background sync when page loads with selected meals (keeps list fresh without heavy work in loader)
+	const hasTriggeredSync = useRef(false);
+	useEffect(() => {
+		if (
+			activeSelectionCount === 0 ||
+			hasTriggeredSync.current ||
+			fetcher.state !== "idle"
+		)
+			return;
+		hasTriggeredSync.current = true;
+		const formData = new FormData();
+		formData.set("intent", "update-list");
+		fetcher.submit(formData, { method: "POST" });
+	}, [activeSelectionCount, fetcher.state, fetcher.submit]);
+	useEffect(() => {
+		if (
+			fetcher.state === "idle" &&
+			hasTriggeredSync.current &&
+			fetcher.data?.list
+		) {
+			revalidator.revalidate();
+		}
+	}, [fetcher.state, fetcher.data?.list, revalidator]);
+
 	// Show summary toast when auto-update or manual update occurs with new items?
-	// Loader auto-updates but doesn't return summary easily to the component unless we pass it.
-	// For manual update, we get it in fetcher.data.
 	useEffect(() => {
 		if (!fetcher.data?.summary) return;
 		summaryToast.show();
@@ -398,7 +414,6 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 				<Toast
 					variant="info"
 					position="top-right"
-					icon="📋"
 					title="List Updated"
 					description={
 						<>

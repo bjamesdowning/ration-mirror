@@ -37,6 +37,7 @@ import {
 	getOrganizationInventoryTags,
 } from "~/lib/inventory.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
+import { ListIdSchema } from "~/lib/schemas/grocery";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -117,8 +118,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		// Dock Cargo (Complete List / Move purchased to inventory)
 		if (intent === "dock-cargo") {
-			const listId = formData.get("listId") as string;
-			if (!listId) return { error: "Missing List ID" };
+			const parsed = ListIdSchema.safeParse({
+				listId: formData.get("listId") ?? undefined,
+			});
+			if (!parsed.success) {
+				return { error: "Invalid or missing list ID" };
+			}
+			const { listId } = parsed.data;
 
 			const result = await completeGroceryList(
 				context.cloudflare.env.DB,
@@ -272,6 +278,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 
 	// One-time background sync when page loads with selected meals (keeps list fresh without heavy work in loader)
 	const hasTriggeredSync = useRef(false);
+	const hasRevalidatedAfterSync = useRef(false);
 	useEffect(() => {
 		if (
 			activeSelectionCount === 0 ||
@@ -280,6 +287,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		)
 			return;
 		hasTriggeredSync.current = true;
+		hasRevalidatedAfterSync.current = false;
 		const formData = new FormData();
 		formData.set("intent", "update-list");
 		formData.set("syncSource", "background");
@@ -289,8 +297,10 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		if (
 			fetcher.state === "idle" &&
 			hasTriggeredSync.current &&
-			fetcher.data?.list
+			fetcher.data?.list &&
+			!hasRevalidatedAfterSync.current
 		) {
+			hasRevalidatedAfterSync.current = true;
 			revalidator.revalidate();
 		}
 	}, [fetcher.state, fetcher.data?.list, revalidator]);

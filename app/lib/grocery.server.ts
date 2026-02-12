@@ -32,7 +32,8 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
-const D1_MAX_GROCERY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 7);
+/** grocery_item insert: id, listId, name, quantity, unit, domain, isPurchased, sourceMealId, createdAt = 9 params/row */
+const D1_MAX_GROCERY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 9);
 
 export interface GroceryItemInput {
 	name: string;

@@ -58,6 +58,11 @@ export const AddFromMealSchema = z.object({
 	mealId: z.string().uuid(),
 });
 
+/** For dock-cargo and other actions that take a list id from form/params. */
+export const ListIdSchema = z.object({
+	listId: z.string().uuid(),
+});
+
 export type GroceryListInput = z.infer<typeof GroceryListSchema>;
 export type GroceryItemInput = z.infer<typeof GroceryItemSchema>;
 export type GroceryItemUpdateInput = z.infer<typeof GroceryItemUpdateSchema>;

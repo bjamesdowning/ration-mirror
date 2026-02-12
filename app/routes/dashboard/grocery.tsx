@@ -26,6 +26,7 @@ import { ShareModal } from "~/components/supply/ShareModal";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import {
 	completeGroceryList,
 	createGroceryListFromSelectedMeals,
@@ -60,32 +61,37 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
-	const formData = await request.formData();
-	const intent = formData.get("intent");
 
-	// Manual Update / Refresh
-	if (intent === "update-list") {
-		const result = await createGroceryListFromSelectedMeals(
-			context.cloudflare.env.DB,
-			groupId,
-		);
-		return { list: result.list, summary: result.summary };
+	try {
+		const formData = await request.formData();
+		const intent = formData.get("intent");
+
+		// Manual Update / Refresh
+		if (intent === "update-list") {
+			const result = await createGroceryListFromSelectedMeals(
+				context.cloudflare.env.DB,
+				groupId,
+			);
+			return { list: result.list, summary: result.summary };
+		}
+
+		// Dock Cargo (Complete List / Move purchased to inventory)
+		if (intent === "dock-cargo") {
+			const listId = formData.get("listId") as string;
+			if (!listId) return { error: "Missing List ID" };
+
+			const result = await completeGroceryList(
+				context.cloudflare.env.DB,
+				groupId,
+				listId,
+			);
+			return { success: true, docked: result.docked };
+		}
+
+		return { error: "Invalid intent" };
+	} catch (e) {
+		return handleApiError(e);
 	}
-
-	// Dock Cargo (Complete List / Move purchased to inventory)
-	if (intent === "dock-cargo") {
-		const listId = formData.get("listId") as string;
-		if (!listId) return { error: "Missing List ID" };
-
-		const result = await completeGroceryList(
-			context.cloudflare.env.DB,
-			groupId,
-			listId,
-		);
-		return { success: true, docked: result.docked };
-	}
-
-	return { error: "Invalid intent" };
 }
 
 export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {

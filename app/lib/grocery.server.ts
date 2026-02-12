@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -10,6 +10,14 @@ import {
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
+import {
+	type BaseUnit,
+	chooseReadableUnit,
+	convertQuantity,
+	getUnitMultiplier,
+	normalizeToBaseUnit,
+	type SupportedUnit,
+} from "./units";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -32,6 +40,134 @@ export interface GenerationSummary {
 	skippedItems: number;
 	mealsProcessed: number;
 	totalIngredients: number;
+}
+
+type IngredientRow = {
+	meal_ingredient: {
+		ingredientName: string;
+		quantity: number;
+		unit: string;
+		mealId: string;
+	};
+	meal_domain: string | null;
+};
+
+type AggregatedIngredient = {
+	name: string;
+	normalizedName: string;
+	quantity: number;
+	unit: SupportedUnit;
+	domain: string;
+	sourceMealIds: string[];
+};
+
+function getAvailableInventoryQuantity(
+	name: string,
+	targetUnit: SupportedUnit,
+	orgInventory: (typeof inventory.$inferSelect)[],
+): number {
+	const normalizedName = normalizeForMatch(name);
+	let exactTotal = 0;
+	let bestFuzzyQuantity = 0;
+	let bestFuzzyScore = 0;
+
+	for (const item of orgInventory) {
+		const itemUnit = item.unit as SupportedUnit;
+		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+		if (multiplier === null) continue;
+
+		const normalizedItem = normalizeForMatch(item.name);
+		const convertedQuantity = item.quantity * multiplier;
+		if (normalizedItem === normalizedName) {
+			exactTotal += convertedQuantity;
+			continue;
+		}
+
+		const fuzzyScore = tokenMatchScore(name, item.name);
+		if (fuzzyScore < 0.8) continue;
+		if (fuzzyScore > bestFuzzyScore) {
+			bestFuzzyScore = fuzzyScore;
+			bestFuzzyQuantity = convertedQuantity;
+		}
+	}
+
+	if (exactTotal > 0) return exactTotal;
+	return bestFuzzyQuantity;
+}
+
+function getExistingListQuantity(
+	items: (typeof groceryItem.$inferSelect)[],
+	normalizedName: string,
+	targetUnit: SupportedUnit,
+	domain: string,
+): number {
+	let total = 0;
+	for (const item of items) {
+		if ((item.domain ?? "food") !== domain) continue;
+		if (normalizeForMatch(item.name) !== normalizedName) continue;
+
+		const multiplier = getUnitMultiplier(
+			item.unit as SupportedUnit,
+			targetUnit,
+		);
+		if (multiplier === null) continue;
+		total += item.quantity * multiplier;
+	}
+
+	return total;
+}
+
+function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
+	const aggregation = new Map<
+		string,
+		{
+			name: string;
+			normalizedName: string;
+			baseQuantity: number;
+			baseUnit: BaseUnit;
+			domain: string;
+			sourceMealIds: Set<string>;
+		}
+	>();
+
+	for (const row of rows) {
+		const ingredient = row.meal_ingredient;
+		const domain = row.meal_domain ?? "food";
+		const normalizedName = normalizeForMatch(ingredient.ingredientName);
+		const normalized = normalizeToBaseUnit(
+			ingredient.quantity,
+			ingredient.unit as SupportedUnit,
+		);
+		const key = `${normalizedName}__${domain}__${normalized.unit}`;
+
+		const existing = aggregation.get(key);
+		if (existing) {
+			existing.baseQuantity += normalized.quantity;
+			existing.sourceMealIds.add(ingredient.mealId);
+			continue;
+		}
+
+		aggregation.set(key, {
+			name: ingredient.ingredientName,
+			normalizedName,
+			baseQuantity: normalized.quantity,
+			baseUnit: normalized.unit,
+			domain,
+			sourceMealIds: new Set([ingredient.mealId]),
+		});
+	}
+
+	return Array.from(aggregation.values()).map((entry) => {
+		const readable = chooseReadableUnit(entry.baseQuantity, entry.baseUnit);
+		return {
+			name: entry.name,
+			normalizedName: entry.normalizedName,
+			quantity: readable.quantity,
+			unit: readable.unit,
+			domain: entry.domain,
+			sourceMealIds: Array.from(entry.sourceMealIds),
+		};
+	});
 }
 
 /**
@@ -541,47 +677,25 @@ export async function addItemsFromMeal(
 		.select()
 		.from(inventory)
 		.where(eq(inventory.organizationId, organizationId));
-
-	// Create a map for quick lookup (normalized names)
-	const inventoryMap = new Map(
-		orgInventory.map((item) => [
-			normalizeForMatch(item.name),
-			{ quantity: item.quantity, unit: item.unit },
-		]),
-	);
-
-	const findInventoryItem = (name: string) => {
-		const normalizedName = normalizeForMatch(name);
-		const exactMatch = inventoryMap.get(normalizedName);
-		if (exactMatch) return exactMatch;
-
-		let bestMatch:
-			| {
-					quantity: number;
-					unit: string;
-			  }
-			| undefined;
-		let bestScore = 0;
-
-		for (const item of orgInventory) {
-			const score = tokenMatchScore(name, item.name);
-			if (score >= 0.8 && score > bestScore) {
-				bestScore = score;
-				bestMatch = { quantity: item.quantity, unit: item.unit };
-			}
-		}
-
-		return bestMatch;
-	};
+	const existingListItems = await d1
+		.select()
+		.from(groceryItem)
+		.where(eq(groceryItem.listId, listId));
 
 	const addedItems: (typeof groceryItem.$inferSelect)[] = [];
 	const skippedItems: { name: string; reason: string }[] = [];
 
 	// Check each ingredient against inventory
 	for (const ingredient of ingredients) {
-		const inventoryItem = findInventoryItem(ingredient.ingredientName);
+		const targetUnit = ingredient.unit as SupportedUnit;
+		const normalizedName = normalizeForMatch(ingredient.ingredientName);
+		const availableInInventory = getAvailableInventoryQuantity(
+			ingredient.ingredientName,
+			targetUnit,
+			orgInventory,
+		);
 
-		if (inventoryItem && inventoryItem.quantity >= ingredient.quantity) {
+		if (availableInInventory >= ingredient.quantity) {
 			// Organization has enough of this item
 			skippedItems.push({
 				name: ingredient.ingredientName,
@@ -590,29 +704,65 @@ export async function addItemsFromMeal(
 			continue;
 		}
 
-		// Calculate needed quantity (either full amount or the difference)
-		const neededQuantity = inventoryItem
-			? ingredient.quantity - inventoryItem.quantity
-			: ingredient.quantity;
+		const neededQuantity = ingredient.quantity - availableInInventory;
+		const alreadyInList = getExistingListQuantity(
+			existingListItems,
+			normalizedName,
+			targetUnit,
+			mealDomain,
+		);
+		const remainingToAdd = Math.max(0, neededQuantity - alreadyInList);
+
+		if (remainingToAdd <= 0) {
+			skippedItems.push({
+				name: ingredient.ingredientName,
+				reason: "Already present in list",
+			});
+			continue;
+		}
+
+		const mergeTarget = existingListItems.find((item) => {
+			if ((item.domain ?? "food") !== mealDomain) return false;
+			if (normalizeForMatch(item.name) !== normalizedName) return false;
+			return getUnitMultiplier(targetUnit, item.unit as SupportedUnit) !== null;
+		});
+
+		if (mergeTarget) {
+			const delta = convertQuantity(
+				remainingToAdd,
+				targetUnit,
+				mergeTarget.unit as SupportedUnit,
+			);
+			if (delta !== null) {
+				await d1
+					.update(groceryItem)
+					.set({ quantity: mergeTarget.quantity + delta })
+					.where(eq(groceryItem.id, mergeTarget.id));
+
+				mergeTarget.quantity += delta;
+				addedItems.push(mergeTarget);
+				continue;
+			}
+		}
 
 		const itemId = crypto.randomUUID();
-
-		await d1.insert(groceryItem).values({
+		const newItemPayload = {
 			id: itemId,
 			listId,
 			name: ingredient.ingredientName,
-			quantity: neededQuantity,
+			quantity: remainingToAdd,
 			unit: ingredient.unit,
 			domain: mealDomain,
 			sourceMealId: mealId,
-		});
+		} satisfies typeof groceryItem.$inferInsert;
 
+		await d1.insert(groceryItem).values(newItemPayload);
 		const [newItem] = await d1
 			.select()
 			.from(groceryItem)
 			.where(eq(groceryItem.id, itemId));
-
 		addedItems.push(newItem);
+		existingListItems.push(newItem);
 	}
 
 	// Update list timestamp
@@ -632,7 +782,7 @@ export async function addItemsFromMeal(
 export async function createGroceryListFromAllMeals(
 	db: D1Database,
 	organizationId: string,
-	listName?: string,
+	_listName?: string,
 ): Promise<{
 	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
 	summary: GenerationSummary;
@@ -646,16 +796,8 @@ export async function createGroceryListFromAllMeals(
 		.where(eq(meal.organizationId, organizationId));
 
 	if (meals.length === 0) {
-		// Create empty list if no meals exist
-		const listId = crypto.randomUUID();
-		await d1.insert(groceryList).values({
-			id: listId,
-			organizationId,
-			name: listName || "Shopping from Meals",
-		});
-
-		const list = await getGroceryList(db, organizationId, listId);
-		if (!list) throw new Error("List creation failed");
+		const list = await ensureSupplyList(db, organizationId);
+		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
 			summary: {
@@ -683,16 +825,8 @@ export async function createGroceryListFromAllMeals(
 		.where(eq(meal.organizationId, organizationId));
 
 	if (allIngredients.length === 0) {
-		// Create empty list if no ingredients
-		const listId = crypto.randomUUID();
-		await d1.insert(groceryList).values({
-			id: listId,
-			organizationId,
-			name: listName || "Shopping from Meals",
-		});
-
-		const list = await getGroceryList(db, organizationId, listId);
-		if (!list) throw new Error("List creation failed");
+		const list = await ensureSupplyList(db, organizationId);
+		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
 			summary: {
@@ -704,220 +838,12 @@ export async function createGroceryListFromAllMeals(
 		};
 	}
 
-	// Get organization's current inventory
-	const orgInventory = await d1
-		.select()
-		.from(inventory)
-		.where(eq(inventory.organizationId, organizationId));
-
-	// Create inventory lookup map (normalized names)
-	const inventoryMap = new Map(
-		orgInventory.map((item) => [
-			normalizeForMatch(item.name),
-			{ quantity: item.quantity, unit: item.unit },
-		]),
+	return syncSupplyFromIngredientRows(
+		db,
+		organizationId,
+		allIngredients,
+		meals.length,
 	);
-
-	const findInventoryItem = (name: string) => {
-		const normalizedName = normalizeForMatch(name);
-		const exactMatch = inventoryMap.get(normalizedName);
-		if (exactMatch) return exactMatch;
-
-		let bestMatch:
-			| {
-					quantity: number;
-					unit: string;
-			  }
-			| undefined;
-		let bestScore = 0;
-
-		for (const item of orgInventory) {
-			const score = tokenMatchScore(name, item.name);
-			if (score >= 0.8 && score > bestScore) {
-				bestScore = score;
-				bestMatch = { quantity: item.quantity, unit: item.unit };
-			}
-		}
-
-		return bestMatch;
-	};
-
-	// Aggregate ingredients by name (combine quantities for duplicates)
-	const ingredientAggregation = new Map<
-		string,
-		{
-			name: string;
-			quantity: number;
-			unit: string;
-			domain: string;
-			sourceMealIds: string[];
-		}
-	>();
-
-	for (const row of allIngredients) {
-		const ingredient = row.meal_ingredient;
-		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
-		const domain = row.meal_domain ?? "food";
-
-		if (ingredientAggregation.has(normalizedName)) {
-			const existing = ingredientAggregation.get(normalizedName);
-			if (!existing) continue;
-
-			// Only aggregate if units match
-			if (existing.unit === ingredient.unit && existing.domain === domain) {
-				existing.quantity += ingredient.quantity;
-				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
-					existing.sourceMealIds.push(ingredient.mealId);
-				}
-			} else {
-				// Different units - create separate entry with unit suffix
-				const keyWithUnit = `${normalizedName}__${ingredient.unit}__${domain}`;
-				ingredientAggregation.set(keyWithUnit, {
-					name: ingredient.ingredientName,
-					quantity: ingredient.quantity,
-					unit: ingredient.unit,
-					domain,
-					sourceMealIds: [ingredient.mealId],
-				});
-			}
-		} else {
-			ingredientAggregation.set(normalizedName, {
-				name: ingredient.ingredientName,
-				quantity: ingredient.quantity,
-				unit: ingredient.unit,
-				domain,
-				sourceMealIds: [ingredient.mealId],
-			});
-		}
-	}
-
-	// Use the Supply list instead of creating a new one
-	const supplyList = await ensureSupplyList(db, organizationId);
-
-	if (!supplyList) {
-		throw new Error("Failed to ensure supply list");
-	}
-
-	const listId = supplyList.id;
-
-	// Create map of existing items for deduplication
-	const existingItemsMap = new Map<string, typeof groceryItem.$inferSelect>();
-
-	if (supplyList.items) {
-		for (const item of supplyList.items) {
-			const key = `${item.name.toLowerCase().trim()}__${item.unit}__${
-				item.domain ?? "food"
-			}`;
-			existingItemsMap.set(key, item);
-		}
-	}
-
-	let addedCount = 0;
-	let skippedCount = 0;
-
-	// Collect batch operations
-	const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
-	const itemsToUpdate: Array<{
-		id: string;
-		quantity: number;
-	}> = [];
-
-	// Check each aggregated ingredient against inventory
-	for (const [, aggregated] of ingredientAggregation) {
-		const normalizedName = normalizeForMatch(aggregated.name);
-		const inventoryItem = findInventoryItem(aggregated.name);
-
-		// Skip if organization has sufficient quantity
-		if (
-			inventoryItem &&
-			inventoryItem.unit === aggregated.unit &&
-			inventoryItem.quantity >= aggregated.quantity
-		) {
-			skippedCount++;
-			continue;
-		}
-
-		// Calculate needed quantity
-		const neededQuantity =
-			inventoryItem && inventoryItem.unit === aggregated.unit
-				? Math.max(0, aggregated.quantity - inventoryItem.quantity)
-				: aggregated.quantity;
-
-		if (neededQuantity <= 0) {
-			skippedCount++;
-			continue;
-		}
-
-		// Check if item already exists in the list
-		const existingKey = `${normalizedName}__${aggregated.unit}__${aggregated.domain}`;
-		const existingItem = existingItemsMap.get(existingKey);
-
-		if (existingItem) {
-			// Queue update if quantity changed
-			if (existingItem.quantity !== neededQuantity) {
-				itemsToUpdate.push({
-					id: existingItem.id,
-					quantity: neededQuantity,
-				});
-			}
-		} else {
-			// Queue insert
-			itemsToInsert.push({
-				id: crypto.randomUUID(),
-				listId,
-				name: aggregated.name,
-				quantity: neededQuantity,
-				unit: aggregated.unit,
-				domain: aggregated.domain,
-				sourceMealId: aggregated.sourceMealIds[0], // Link to first meal
-			});
-
-			addedCount++;
-		}
-	}
-
-	// Execute batched operations
-	const batchOperations: Array<Parameters<typeof d1.batch>[0][number]> = [];
-
-	// Batch inserts
-	if (itemsToInsert.length > 0) {
-		batchOperations.push(d1.insert(groceryItem).values(itemsToInsert));
-	}
-
-	// Batch updates (Drizzle doesn't support bulk updates directly, so we batch them)
-	if (itemsToUpdate.length > 0) {
-		for (const update of itemsToUpdate) {
-			batchOperations.push(
-				d1
-					.update(groceryItem)
-					.set({ quantity: update.quantity })
-					.where(eq(groceryItem.id, update.id)),
-			);
-		}
-	}
-
-	// Execute all operations in a single batch
-	if (batchOperations.length > 0) {
-		await d1.batch(
-			batchOperations as [
-				Parameters<typeof d1.batch>[0][number],
-				...Parameters<typeof d1.batch>[0][number][],
-			],
-		);
-	}
-
-	const list = await getGroceryList(db, organizationId, listId);
-	if (!list) throw new Error("List retrieval failed");
-
-	return {
-		list,
-		summary: {
-			addedItems: addedCount,
-			skippedItems: skippedCount,
-			mealsProcessed: meals.length,
-			totalIngredients: allIngredients.length,
-		},
-	};
 }
 
 /**
@@ -998,193 +924,109 @@ export async function createGroceryListFromSelectedMeals(
 		};
 	}
 
-	const orgInventory = await d1
-		.select()
-		.from(inventory)
-		.where(eq(inventory.organizationId, organizationId));
-
-	const inventoryMap = new Map(
-		orgInventory.map((item) => [
-			normalizeForMatch(item.name),
-			{ quantity: item.quantity, unit: item.unit },
-		]),
+	return syncSupplyFromIngredientRows(
+		db,
+		organizationId,
+		allIngredients,
+		meals.length,
 	);
+}
 
-	const findInventoryItem = (name: string) => {
-		const normalizedName = normalizeForMatch(name);
-		const exactMatch = inventoryMap.get(normalizedName);
-		if (exactMatch) return exactMatch;
-
-		let bestMatch:
-			| {
-					quantity: number;
-					unit: string;
-			  }
-			| undefined;
-		let bestScore = 0;
-
-		for (const item of orgInventory) {
-			const score = tokenMatchScore(name, item.name);
-			if (score >= 0.8 && score > bestScore) {
-				bestScore = score;
-				bestMatch = { quantity: item.quantity, unit: item.unit };
-			}
-		}
-
-		return bestMatch;
-	};
-
-	const ingredientAggregation = new Map<
-		string,
-		{
-			name: string;
-			quantity: number;
-			unit: string;
-			domain: string;
-			sourceMealIds: string[];
-		}
-	>();
-
-	for (const row of allIngredients) {
-		const ingredient = row.meal_ingredient;
-		const normalizedName = ingredient.ingredientName.toLowerCase().trim();
-		const domain = row.meal_domain ?? "food";
-
-		if (ingredientAggregation.has(normalizedName)) {
-			const existing = ingredientAggregation.get(normalizedName);
-			if (!existing) continue;
-
-			if (existing.unit === ingredient.unit && existing.domain === domain) {
-				existing.quantity += ingredient.quantity;
-				if (!existing.sourceMealIds.includes(ingredient.mealId)) {
-					existing.sourceMealIds.push(ingredient.mealId);
-				}
-			} else {
-				const keyWithUnit = `${normalizedName}__${ingredient.unit}__${domain}`;
-				ingredientAggregation.set(keyWithUnit, {
-					name: ingredient.ingredientName,
-					quantity: ingredient.quantity,
-					unit: ingredient.unit,
-					domain,
-					sourceMealIds: [ingredient.mealId],
-				});
-			}
-		} else {
-			ingredientAggregation.set(normalizedName, {
-				name: ingredient.ingredientName,
-				quantity: ingredient.quantity,
-				unit: ingredient.unit,
-				domain,
-				sourceMealIds: [ingredient.mealId],
-			});
-		}
-	}
-
+async function syncSupplyFromIngredientRows(
+	db: D1Database,
+	organizationId: string,
+	allIngredients: IngredientRow[],
+	mealsProcessed: number,
+): Promise<{
+	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
+	summary: GenerationSummary;
+}> {
+	const d1 = drizzle(db);
 	const supplyList = await ensureSupplyList(db, organizationId);
 
 	if (!supplyList) {
 		throw new Error("Failed to ensure supply list");
 	}
 
-	const listId = supplyList.id;
+	await d1
+		.delete(groceryItem)
+		.where(
+			and(
+				eq(groceryItem.listId, supplyList.id),
+				eq(groceryItem.isPurchased, false),
+				isNotNull(groceryItem.sourceMealId),
+			),
+		);
 
-	const existingItemsMap = new Map<string, typeof groceryItem.$inferSelect>();
+	const refreshedList = await getGroceryList(db, organizationId, supplyList.id);
+	if (!refreshedList) throw new Error("List retrieval failed");
 
-	if (supplyList.items) {
-		for (const item of supplyList.items) {
-			const key = `${item.name.toLowerCase().trim()}__${item.unit}__${
-				item.domain ?? "food"
-			}`;
-			existingItemsMap.set(key, item);
-		}
-	}
+	const orgInventory = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+	const aggregatedIngredients = aggregateIngredients(allIngredients);
+	const existingItems = refreshedList.items ?? [];
 
 	let addedCount = 0;
 	let skippedCount = 0;
-
 	const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
-	const itemsToUpdate: Array<{
-		id: string;
-		quantity: number;
-	}> = [];
 
-	for (const [, aggregated] of ingredientAggregation) {
-		const normalizedName = normalizeForMatch(aggregated.name);
-		const inventoryItem = findInventoryItem(aggregated.name);
+	for (const aggregated of aggregatedIngredients) {
+		const availableInInventory = getAvailableInventoryQuantity(
+			aggregated.name,
+			aggregated.unit,
+			orgInventory,
+		);
+		const missingAfterInventory = Math.max(
+			0,
+			aggregated.quantity - availableInInventory,
+		);
 
-		if (
-			inventoryItem &&
-			inventoryItem.unit === aggregated.unit &&
-			inventoryItem.quantity >= aggregated.quantity
-		) {
+		if (missingAfterInventory <= 0) {
 			skippedCount++;
 			continue;
 		}
 
-		const neededQuantity =
-			inventoryItem && inventoryItem.unit === aggregated.unit
-				? Math.max(0, aggregated.quantity - inventoryItem.quantity)
-				: aggregated.quantity;
+		const existingQuantityInList = getExistingListQuantity(
+			existingItems,
+			aggregated.normalizedName,
+			aggregated.unit,
+			aggregated.domain,
+		);
+		const remainingNeeded = Math.max(
+			0,
+			missingAfterInventory - existingQuantityInList,
+		);
 
-		if (neededQuantity <= 0) {
+		if (remainingNeeded <= 0) {
 			skippedCount++;
 			continue;
 		}
 
-		const existingKey = `${normalizedName}__${aggregated.unit}__${
-			aggregated.domain
-		}`;
-		const existingItem = existingItemsMap.get(existingKey);
-
-		if (existingItem) {
-			if (existingItem.quantity !== neededQuantity) {
-				itemsToUpdate.push({
-					id: existingItem.id,
-					quantity: neededQuantity,
-				});
-			}
-		} else {
-			itemsToInsert.push({
-				id: crypto.randomUUID(),
-				listId,
-				name: aggregated.name,
-				quantity: neededQuantity,
-				unit: aggregated.unit,
-				domain: aggregated.domain,
-				sourceMealId: aggregated.sourceMealIds[0],
-			});
-
-			addedCount++;
-		}
+		itemsToInsert.push({
+			id: crypto.randomUUID(),
+			listId: supplyList.id,
+			name: aggregated.name,
+			quantity: remainingNeeded,
+			unit: aggregated.unit,
+			domain: aggregated.domain,
+			sourceMealId: aggregated.sourceMealIds[0],
+		});
+		addedCount++;
 	}
-
-	const batchOperations: Array<Parameters<typeof d1.batch>[0][number]> = [];
 
 	if (itemsToInsert.length > 0) {
-		batchOperations.push(d1.insert(groceryItem).values(itemsToInsert));
+		await d1.batch([
+			d1.insert(groceryItem).values(itemsToInsert),
+			d1
+				.update(groceryList)
+				.set({ updatedAt: new Date() })
+				.where(eq(groceryList.id, supplyList.id)),
+		]);
 	}
 
-	if (itemsToUpdate.length > 0) {
-		for (const update of itemsToUpdate) {
-			batchOperations.push(
-				d1
-					.update(groceryItem)
-					.set({ quantity: update.quantity })
-					.where(eq(groceryItem.id, update.id)),
-			);
-		}
-	}
-
-	if (batchOperations.length > 0) {
-		await d1.batch(
-			batchOperations as [
-				Parameters<typeof d1.batch>[0][number],
-				...Parameters<typeof d1.batch>[0][number][],
-			],
-		);
-	}
-
-	const list = await getGroceryList(db, organizationId, listId);
+	const list = await getGroceryList(db, organizationId, supplyList.id);
 	if (!list) throw new Error("List retrieval failed");
 
 	return {
@@ -1192,7 +1034,7 @@ export async function createGroceryListFromSelectedMeals(
 		summary: {
 			addedItems: addedCount,
 			skippedItems: skippedCount,
-			mealsProcessed: meals.length,
+			mealsProcessed,
 			totalIngredients: allIngredients.length,
 		},
 	};

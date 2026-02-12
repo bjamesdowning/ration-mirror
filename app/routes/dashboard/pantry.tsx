@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import {
 	CsvImportButton,
 	type CsvImportButtonHandle,
@@ -30,7 +31,7 @@ import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import {
-	addItem,
+	addOrMergeItem,
 	getInventory,
 	getOrganizationInventoryTags,
 	InventoryItemSchema,
@@ -40,6 +41,21 @@ import {
 import type { Route } from "./+types/pantry";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
+
+const CreateMergeIntentSchema = z
+	.object({
+		mergeChoice: z.enum(["merge", "new"]).optional(),
+		mergeTargetId: z.string().min(1).optional(),
+	})
+	.superRefine((value, ctx) => {
+		if (value.mergeChoice === "merge" && !value.mergeTargetId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["mergeTargetId"],
+				message: "mergeTargetId is required when mergeChoice is merge",
+			});
+		}
+	});
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -96,7 +112,62 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return { success: false, errors: result.error.flatten() };
 		}
 
-		await addItem(context.cloudflare.env, groupId, result.data);
+		const mergeMetaResult = CreateMergeIntentSchema.safeParse({
+			mergeChoice:
+				typeof formData.get("mergeChoice") === "string"
+					? formData.get("mergeChoice")
+					: undefined,
+			mergeTargetId:
+				typeof formData.get("mergeTargetId") === "string"
+					? formData.get("mergeTargetId")
+					: undefined,
+		});
+		if (!mergeMetaResult.success) {
+			return {
+				success: false,
+				error: "Invalid merge metadata",
+				errors: mergeMetaResult.error.flatten(),
+			};
+		}
+
+		const { mergeChoice, mergeTargetId } = mergeMetaResult.data;
+		const addResult = await addOrMergeItem(
+			context.cloudflare.env,
+			groupId,
+			result.data,
+			{
+				allowFuzzyCandidate: true,
+				forceCreateNew: mergeChoice === "new",
+				mergeTargetId:
+					mergeChoice === "merge" && typeof mergeTargetId === "string"
+						? mergeTargetId
+						: undefined,
+			},
+		);
+
+		if (addResult.status === "invalid_merge_target") {
+			return {
+				success: false,
+				error: "Invalid merge target",
+			};
+		}
+
+		if (addResult.status === "merge_candidate") {
+			return {
+				success: false,
+				requiresMergeConfirmation: true,
+				candidate: addResult.candidate,
+				submittedInput: {
+					name: result.data.name,
+					quantity: result.data.quantity,
+					unit: result.data.unit,
+					domain: result.data.domain,
+					tags: rawTags.join(", "),
+					expiresAt: expiresAtValue ? String(expiresAtValue) : "",
+				},
+			};
+		}
+
 		return { success: true };
 	}
 

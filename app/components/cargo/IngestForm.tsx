@@ -8,12 +8,33 @@ interface IngestFormProps {
 	defaultDomain?: ItemDomain;
 }
 
+interface PendingMergeState {
+	candidate: {
+		id: string;
+		name: string;
+		quantity: number;
+		unit: string;
+		convertedQuantity: number;
+	};
+	submittedInput: {
+		name: string;
+		quantity: number;
+		unit: string;
+		domain: ItemDomain;
+		tags: string;
+		expiresAt: string;
+	};
+}
+
 export function IngestForm({ defaultDomain }: IngestFormProps) {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const isSubmitting = fetcher.state !== "idle";
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [domain, setDomain] = useState<ItemDomain>(defaultDomain ?? "food");
+	const [pendingMerge, setPendingMerge] = useState<PendingMergeState | null>(
+		null,
+	);
 
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -27,15 +48,48 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 
 	// Reset form on success
 	useEffect(() => {
+		if (fetcher.state !== "idle" || !fetcher.data) return;
+
+		// biome-ignore lint/suspicious/noExplicitAny: generic fetcher data
+		const data = fetcher.data as any;
 		if (
-			fetcher.state === "idle" &&
-			fetcher.data &&
-			// biome-ignore lint/suspicious/noExplicitAny: generic fetcher data
-			(fetcher.data as any).success
+			data.requiresMergeConfirmation &&
+			data.candidate &&
+			data.submittedInput
 		) {
+			setPendingMerge({
+				candidate: data.candidate,
+				submittedInput: data.submittedInput,
+			});
+			return;
+		}
+
+		if (data.success) {
 			formRef.current?.reset();
+			setPendingMerge(null);
 		}
 	}, [fetcher.state, fetcher.data]);
+
+	const handleMergeChoice = (choice: "merge" | "new") => {
+		if (!pendingMerge) return;
+
+		const formData = new FormData();
+		formData.set("intent", "create");
+		formData.set("name", pendingMerge.submittedInput.name);
+		formData.set("quantity", String(pendingMerge.submittedInput.quantity));
+		formData.set("unit", pendingMerge.submittedInput.unit);
+		formData.set("domain", pendingMerge.submittedInput.domain);
+		formData.set("tags", pendingMerge.submittedInput.tags);
+		if (pendingMerge.submittedInput.expiresAt) {
+			formData.set("expiresAt", pendingMerge.submittedInput.expiresAt);
+		}
+		formData.set("mergeChoice", choice);
+		if (choice === "merge") {
+			formData.set("mergeTargetId", pendingMerge.candidate.id);
+		}
+
+		fetcher.submit(formData, { method: "post" });
+	};
 
 	return (
 		<div className="glass-panel rounded-xl p-6">
@@ -186,6 +240,38 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 								placeholder="e.g. Dry, Italian, Snack"
 								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none placeholder-muted/50"
 							/>
+						</div>
+					</div>
+				)}
+
+				{pendingMerge && (
+					<div className="rounded-lg border border-hyper-green/30 bg-hyper-green/10 p-4 space-y-3">
+						<p className="text-sm text-carbon">
+							Potential duplicate found:{" "}
+							<strong>{pendingMerge.candidate.name}</strong> (
+							{pendingMerge.candidate.quantity} {pendingMerge.candidate.unit}).
+							Add{" "}
+							<strong>
+								{pendingMerge.candidate.convertedQuantity.toFixed(2)}{" "}
+								{pendingMerge.candidate.unit}
+							</strong>{" "}
+							to the existing item, or create a new row?
+						</p>
+						<div className="flex flex-wrap gap-2">
+							<button
+								type="button"
+								onClick={() => handleMergeChoice("merge")}
+								className="px-4 py-2 bg-hyper-green text-carbon font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors"
+							>
+								Add to Existing
+							</button>
+							<button
+								type="button"
+								onClick={() => handleMergeChoice("new")}
+								className="px-4 py-2 bg-platinum text-carbon font-semibold rounded-lg hover:bg-platinum/80 transition-colors"
+							>
+								Create New Item
+							</button>
 						</div>
 					</div>
 				)}

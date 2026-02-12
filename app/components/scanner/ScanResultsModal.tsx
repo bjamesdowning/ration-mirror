@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
+import { getUnitMultiplier, type SupportedUnit } from "~/lib/units";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -18,20 +19,6 @@ interface MergeMatch {
 	target: ExistingInventoryItem;
 	convertedQuantity: number;
 	displayDelta: string;
-}
-
-function getUnitMultiplier(from: string, to: string): number | null {
-	if (from === to) return 1;
-	const key = `${from}->${to}`;
-	const conversions: Record<string, number> = {
-		"kg->g": 1000,
-		"g->kg": 1 / 1000,
-		"l->ml": 1000,
-		"ml->l": 1 / 1000,
-		"lb->oz": 16,
-		"oz->lb": 1 / 16,
-	};
-	return conversions[key] ?? null;
 }
 
 function formatQuantity(value: number): string {
@@ -105,7 +92,10 @@ export function ScanResultsModal({
 			let bestScore = 0;
 
 			for (const candidate of existingInventory) {
-				const multiplier = getUnitMultiplier(item.unit, candidate.unit);
+				const multiplier = getUnitMultiplier(
+					item.unit as SupportedUnit,
+					candidate.unit as SupportedUnit,
+				);
 				if (multiplier === null) continue;
 				const normalizedCandidate = normalizeForMatch(candidate.name);
 

@@ -1,8 +1,14 @@
-import { and, asc, desc, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { type groceryItem, inventory, ledger } from "../db/schema";
 import { ITEM_DOMAINS } from "./domain";
+import { normalizeForMatch, tokenMatchScore } from "./matching";
+import {
+	convertQuantity,
+	getUnitMultiplier,
+	type SupportedUnit,
+} from "./units";
 
 // --- Validation Schemas ---
 
@@ -102,16 +108,168 @@ export async function getOrganizationInventoryTags(
 	return Array.from(allTags).sort();
 }
 
+type MergeCandidate = {
+	id: string;
+	name: string;
+	quantity: number;
+	unit: SupportedUnit;
+	score: number;
+	convertedQuantity: number;
+};
+
+export type AddOrMergeItemResult =
+	| {
+			status: "created";
+			item: typeof inventory.$inferSelect;
+	  }
+	| {
+			status: "merged";
+			item: typeof inventory.$inferSelect;
+	  }
+	| {
+			status: "merge_candidate";
+			candidate: MergeCandidate;
+	  }
+	| {
+			status: "invalid_merge_target";
+	  };
+
+export interface AddOrMergeItemOptions {
+	forceCreateNew?: boolean;
+	allowFuzzyCandidate?: boolean;
+	mergeTargetId?: string;
+}
+
+function isCompatibleUnit(a: string, b: string): boolean {
+	return getUnitMultiplier(a as SupportedUnit, b as SupportedUnit) !== null;
+}
+
 /**
  * Add a new item to the organization's inventory.
- * Triggers an asynchronous vector embedding update.
+ * Supports merge-on-add to prevent duplicate inventory rows.
  */
-export async function addItem(
+export async function addOrMergeItem(
 	env: Env,
 	organizationId: string,
 	data: InventoryItemInput,
+	options: AddOrMergeItemOptions = {},
 ) {
 	const d1 = drizzle(env.DB);
+	const normalizedName = normalizeForMatch(data.name);
+	const requestedUnit = data.unit as SupportedUnit;
+	const existingItems = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+
+	const mergeIntoExisting = async (targetId: string, score: number) => {
+		const target = existingItems.find((item) => item.id === targetId);
+		if (!target) return null;
+
+		const convertedQuantity = convertQuantity(
+			data.quantity,
+			requestedUnit,
+			target.unit as SupportedUnit,
+		);
+		if (convertedQuantity === null) return null;
+
+		const [updatedItem] = await d1
+			.update(inventory)
+			.set({
+				quantity: target.quantity + convertedQuantity,
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(inventory.id, target.id),
+					eq(inventory.organizationId, organizationId),
+				),
+			)
+			.returning();
+
+		if (!updatedItem) return null;
+
+		return {
+			status: "merged" as const,
+			item: updatedItem,
+			candidate: {
+				id: target.id,
+				name: target.name,
+				quantity: target.quantity,
+				unit: target.unit as SupportedUnit,
+				score,
+				convertedQuantity,
+			},
+		};
+	};
+
+	if (!options.forceCreateNew && options.mergeTargetId) {
+		const explicitTarget = existingItems.find(
+			(item) =>
+				item.id === options.mergeTargetId &&
+				item.domain === data.domain &&
+				isCompatibleUnit(item.unit, data.unit),
+		);
+		if (!explicitTarget) {
+			return { status: "invalid_merge_target" as const };
+		}
+		const merged = await mergeIntoExisting(explicitTarget.id, 1);
+		if (!merged) {
+			return { status: "invalid_merge_target" as const };
+		}
+		return { status: "merged" as const, item: merged.item };
+	}
+
+	if (!options.forceCreateNew) {
+		const exactMatches = existingItems
+			.filter(
+				(item) =>
+					item.domain === data.domain &&
+					normalizeForMatch(item.name) === normalizedName &&
+					isCompatibleUnit(item.unit, data.unit),
+			)
+			.sort((a, b) =>
+				a.unit === data.unit ? -1 : b.unit === data.unit ? 1 : 0,
+			);
+
+		if (exactMatches.length > 0) {
+			const merged = await mergeIntoExisting(exactMatches[0].id, 1);
+			if (merged) {
+				return { status: "merged" as const, item: merged.item };
+			}
+		}
+
+		if (options.allowFuzzyCandidate) {
+			let bestCandidate: MergeCandidate | null = null;
+			for (const item of existingItems) {
+				if (item.domain !== data.domain) continue;
+				if (!isCompatibleUnit(item.unit, data.unit)) continue;
+				const score = tokenMatchScore(data.name, item.name);
+				if (score < 0.8) continue;
+				const convertedQuantity = convertQuantity(
+					data.quantity,
+					requestedUnit,
+					item.unit as SupportedUnit,
+				);
+				if (convertedQuantity === null) continue;
+
+				if (!bestCandidate || score > bestCandidate.score) {
+					bestCandidate = {
+						id: item.id,
+						name: item.name,
+						quantity: item.quantity,
+						unit: item.unit as SupportedUnit,
+						score,
+						convertedQuantity,
+					};
+				}
+			}
+
+			if (bestCandidate) {
+				return { status: "merge_candidate" as const, candidate: bestCandidate };
+			}
+		}
+	}
 
 	const [newItem] = await d1
 		.insert(inventory)
@@ -128,10 +286,23 @@ export async function addItem(
 		})
 		.returning();
 
-	// Fire-and-forget vector update (or await if strict consistency needed)
-	// We await it here to ensure it's done before returning, but catch errors to not fail the user action
+	return { status: "created" as const, item: newItem };
+}
 
-	return [newItem];
+/**
+ * Legacy wrapper that always creates a new row.
+ * Kept for backwards compatibility with existing call sites.
+ */
+export async function addItem(
+	env: Env,
+	organizationId: string,
+	data: InventoryItemInput,
+) {
+	const result = await addOrMergeItem(env, organizationId, data, {
+		forceCreateNew: true,
+	});
+
+	return [result.item];
 }
 
 /**
@@ -296,6 +467,73 @@ export async function getInventoryStats(
 		expiringCount,
 		expiredCount,
 	};
+}
+
+/**
+ * One-time cleanup utility to merge duplicate inventory records.
+ * Groups by normalized name + unit compatibility and consolidates quantities.
+ */
+export async function deduplicateInventory(
+	db: D1Database,
+	organizationId: string,
+) {
+	const d1 = drizzle(db);
+	const items = await d1
+		.select()
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId))
+		.orderBy(asc(inventory.createdAt));
+
+	const groups = new Map<string, (typeof inventory.$inferSelect)[]>();
+	for (const item of items) {
+		const normalizedName = normalizeForMatch(item.name);
+		const key = `${normalizedName}__${item.domain}`;
+		const existing = groups.get(key) ?? [];
+		existing.push(item);
+		groups.set(key, existing);
+	}
+
+	let mergedGroups = 0;
+	let deletedItems = 0;
+
+	for (const bucket of groups.values()) {
+		const processed = new Set<string>();
+		for (const primary of bucket) {
+			if (processed.has(primary.id)) continue;
+			processed.add(primary.id);
+
+			let mergedQuantity = primary.quantity;
+			const toDelete: string[] = [];
+			for (const candidate of bucket) {
+				if (candidate.id === primary.id || processed.has(candidate.id))
+					continue;
+				const converted = convertQuantity(
+					candidate.quantity,
+					candidate.unit as SupportedUnit,
+					primary.unit as SupportedUnit,
+				);
+				if (converted === null) continue;
+
+				mergedQuantity += converted;
+				toDelete.push(candidate.id);
+				processed.add(candidate.id);
+			}
+
+			if (toDelete.length === 0) continue;
+
+			await d1.batch([
+				d1
+					.update(inventory)
+					.set({ quantity: mergedQuantity, updatedAt: new Date() })
+					.where(eq(inventory.id, primary.id)),
+				d1.delete(inventory).where(inArray(inventory.id, toDelete)),
+			]);
+			mergedGroups++;
+			deletedItems += toDelete.length;
+		}
+	}
+
+	return { mergedGroups, deletedItems };
 }
 
 /**

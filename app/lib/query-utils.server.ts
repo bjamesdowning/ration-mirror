@@ -24,6 +24,35 @@ export const D1_MAX_TAG_ROWS_PER_STATEMENT = Math.floor(
 	D1_MAX_BOUND_PARAMS / 3,
 );
 
+export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+	if (chunkSize <= 0) {
+		throw new Error("chunkSize must be greater than 0");
+	}
+
+	if (items.length === 0) return [];
+
+	const chunks: T[][] = [];
+	for (let i = 0; i < items.length; i += chunkSize) {
+		chunks.push(items.slice(i, i + chunkSize));
+	}
+
+	return chunks;
+}
+
+export async function chunkedInsert<T>(
+	rows: T[],
+	rowsPerStatement: number,
+	writeChunk: (chunk: T[]) => Promise<unknown>,
+): Promise<void> {
+	if (rowsPerStatement <= 0) {
+		throw new Error("rowsPerStatement must be greater than 0");
+	}
+
+	for (const rowChunk of chunkArray(rows, rowsPerStatement)) {
+		await writeChunk(rowChunk);
+	}
+}
+
 export async function chunkedQuery<T, TId extends string = string>(
 	ids: TId[],
 	queryFn: (chunk: TId[]) => Promise<T[]>,

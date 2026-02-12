@@ -4,6 +4,7 @@ import { z } from "zod";
 import { type groceryItem, inventory, ledger } from "../db/schema";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
 import {
 	convertQuantity,
 	getUnitMultiplier,
@@ -521,13 +522,14 @@ export async function deduplicateInventory(
 
 			if (toDelete.length === 0) continue;
 
-			await d1.batch([
-				d1
-					.update(inventory)
-					.set({ quantity: mergedQuantity, updatedAt: new Date() })
-					.where(eq(inventory.id, primary.id)),
-				d1.delete(inventory).where(inArray(inventory.id, toDelete)),
-			]);
+			await d1
+				.update(inventory)
+				.set({ quantity: mergedQuantity, updatedAt: new Date() })
+				.where(eq(inventory.id, primary.id));
+
+			for (const deleteChunk of chunkArray(toDelete, D1_MAX_BOUND_PARAMS)) {
+				await d1.delete(inventory).where(inArray(inventory.id, deleteChunk));
+			}
 			mergedGroups++;
 			deletedItems += toDelete.length;
 		}

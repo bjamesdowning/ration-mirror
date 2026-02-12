@@ -11,6 +11,16 @@ import {
 import { dockGroceryItems } from "./inventory.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
 import {
+	chunkArray,
+	chunkedInsert,
+	D1_MAX_BOUND_PARAMS,
+} from "./query-utils.server";
+import {
+	emitSupplySyncError,
+	emitSupplySyncInfo,
+	type SupplySyncTelemetryContext,
+} from "./telemetry.server";
+import {
 	type BaseUnit,
 	chooseReadableUnit,
 	convertQuantity,
@@ -22,6 +32,7 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
+const D1_MAX_GROCERY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 7);
 
 export interface GroceryItemInput {
 	name: string;
@@ -205,7 +216,9 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 	// Delete extra lists if any
 	if (listsToDelete.length > 0) {
 		const idsToDelete = listsToDelete.map((l) => l.id);
-		await d1.delete(groceryList).where(inArray(groceryList.id, idsToDelete));
+		for (const deleteChunk of chunkArray(idsToDelete, D1_MAX_BOUND_PARAMS)) {
+			await d1.delete(groceryList).where(inArray(groceryList.id, deleteChunk));
+		}
 	}
 
 	// Return the full list with items
@@ -854,82 +867,166 @@ export async function createGroceryListFromSelectedMeals(
 	db: D1Database,
 	organizationId: string,
 	_listName?: string,
+	telemetryContext?: SupplySyncTelemetryContext,
 ): Promise<{
 	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
 	summary: GenerationSummary;
 }> {
+	const startedAtMs = Date.now();
 	const d1 = drizzle(db);
-	const meals = await d1
-		.select({ id: meal.id })
-		.from(meal)
-		.innerJoin(
-			activeMealSelection,
-			and(
-				eq(activeMealSelection.mealId, meal.id),
-				eq(activeMealSelection.organizationId, organizationId),
-			),
-		)
-		.where(eq(meal.organizationId, organizationId));
+	const telemetry = telemetryContext
+		? { ...telemetryContext, organizationId }
+		: undefined;
 
-	if (meals.length === 0) {
-		const supplyList = await ensureSupplyList(db, organizationId);
-		if (!supplyList) {
-			throw new Error("Failed to ensure supply list");
+	try {
+		emitSupplySyncInfo(
+			"supply_sync.create_selected.start",
+			telemetry ?? {
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+		);
+
+		const mealsQueryStartedAtMs = Date.now();
+		const meals = await d1
+			.select({ id: meal.id })
+			.from(meal)
+			.innerJoin(
+				activeMealSelection,
+				and(
+					eq(activeMealSelection.mealId, meal.id),
+					eq(activeMealSelection.organizationId, organizationId),
+				),
+			)
+			.where(eq(meal.organizationId, organizationId));
+		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
+
+		if (meals.length === 0) {
+			const supplyList = await ensureSupplyList(db, organizationId);
+			if (!supplyList) {
+				throw new Error("Failed to ensure supply list");
+			}
+
+			emitSupplySyncInfo(
+				"supply_sync.create_selected.success",
+				{
+					...(telemetry ?? { trigger: "dashboard_grocery_action_update_list" }),
+					listId: supplyList.id,
+					organizationId,
+				},
+				{
+					duration_ms: Date.now() - startedAtMs,
+					meals_selected_count: 0,
+					ingredient_rows_count: 0,
+					meals_query_duration_ms: mealsQueryDurationMs,
+				},
+			);
+
+			return {
+				list: supplyList,
+				summary: {
+					addedItems: 0,
+					skippedItems: 0,
+					mealsProcessed: 0,
+					totalIngredients: 0,
+				},
+			};
 		}
-		return {
-			list: supplyList,
-			summary: {
-				addedItems: 0,
-				skippedItems: 0,
-				mealsProcessed: 0,
-				totalIngredients: 0,
-			},
-		};
-	}
 
-	const allIngredients = await d1
-		.select({
-			meal_ingredient: {
-				ingredientName: mealIngredient.ingredientName,
-				quantity: mealIngredient.quantity,
-				unit: mealIngredient.unit,
-				mealId: mealIngredient.mealId,
-			},
-			meal_domain: meal.domain,
-		})
-		.from(mealIngredient)
-		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
-		.innerJoin(
-			activeMealSelection,
-			and(
-				eq(activeMealSelection.mealId, meal.id),
-				eq(activeMealSelection.organizationId, organizationId),
-			),
-		)
-		.where(eq(meal.organizationId, organizationId));
+		const ingredientQueryStartedAtMs = Date.now();
+		const allIngredients = await d1
+			.select({
+				meal_ingredient: {
+					ingredientName: mealIngredient.ingredientName,
+					quantity: mealIngredient.quantity,
+					unit: mealIngredient.unit,
+					mealId: mealIngredient.mealId,
+				},
+				meal_domain: meal.domain,
+			})
+			.from(mealIngredient)
+			.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+			.innerJoin(
+				activeMealSelection,
+				and(
+					eq(activeMealSelection.mealId, meal.id),
+					eq(activeMealSelection.organizationId, organizationId),
+				),
+			)
+			.where(eq(meal.organizationId, organizationId));
+		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
 
-	if (allIngredients.length === 0) {
-		const supplyList = await ensureSupplyList(db, organizationId);
-		if (!supplyList) {
-			throw new Error("Failed to ensure supply list");
+		if (allIngredients.length === 0) {
+			const supplyList = await ensureSupplyList(db, organizationId);
+			if (!supplyList) {
+				throw new Error("Failed to ensure supply list");
+			}
+
+			emitSupplySyncInfo(
+				"supply_sync.create_selected.success",
+				{
+					...(telemetry ?? { trigger: "dashboard_grocery_action_update_list" }),
+					listId: supplyList.id,
+					organizationId,
+				},
+				{
+					duration_ms: Date.now() - startedAtMs,
+					meals_selected_count: meals.length,
+					ingredient_rows_count: 0,
+					meals_query_duration_ms: mealsQueryDurationMs,
+					ingredients_query_duration_ms: ingredientQueryDurationMs,
+				},
+			);
+
+			return {
+				list: supplyList,
+				summary: {
+					addedItems: 0,
+					skippedItems: 0,
+					mealsProcessed: meals.length,
+					totalIngredients: 0,
+				},
+			};
 		}
-		return {
-			list: supplyList,
-			summary: {
-				addedItems: 0,
-				skippedItems: 0,
-				mealsProcessed: meals.length,
-				totalIngredients: 0,
-			},
-		};
-	}
 
-	return syncSupplyFromIngredientRows(
-		db,
-		organizationId,
-		allIngredients,
-		meals.length,
-	);
+		const syncResult = await syncSupplyFromIngredientRows(
+			db,
+			organizationId,
+			allIngredients,
+			meals.length,
+			telemetry,
+		);
+
+		emitSupplySyncInfo(
+			"supply_sync.create_selected.success",
+			telemetry ?? {
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+			{
+				duration_ms: Date.now() - startedAtMs,
+				meals_selected_count: meals.length,
+				ingredient_rows_count: allIngredients.length,
+				meals_query_duration_ms: mealsQueryDurationMs,
+				ingredients_query_duration_ms: ingredientQueryDurationMs,
+			},
+		);
+
+		return syncResult;
+	} catch (error) {
+		emitSupplySyncError(
+			"supply_sync.create_selected.error",
+			telemetry ?? {
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+			error,
+			{
+				duration_ms: Date.now() - startedAtMs,
+			},
+		);
+		throw error;
+	}
 }
 
 async function syncSupplyFromIngredientRows(
@@ -937,107 +1034,190 @@ async function syncSupplyFromIngredientRows(
 	organizationId: string,
 	allIngredients: IngredientRow[],
 	mealsProcessed: number,
+	telemetryContext?: SupplySyncTelemetryContext,
 ): Promise<{
 	list: ReturnType<typeof getGroceryList> extends Promise<infer T> ? T : never;
 	summary: GenerationSummary;
 }> {
+	const startedAtMs = Date.now();
 	const d1 = drizzle(db);
-	const supplyList = await ensureSupplyList(db, organizationId);
-
-	if (!supplyList) {
-		throw new Error("Failed to ensure supply list");
-	}
-
-	await d1
-		.delete(groceryItem)
-		.where(
-			and(
-				eq(groceryItem.listId, supplyList.id),
-				eq(groceryItem.isPurchased, false),
-				isNotNull(groceryItem.sourceMealId),
-			),
+	try {
+		emitSupplySyncInfo(
+			"supply_sync.materialize.start",
+			telemetryContext ?? {
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+			{
+				meals_processed_count: mealsProcessed,
+				ingredient_rows_count: allIngredients.length,
+			},
 		);
 
-	const refreshedList = await getGroceryList(db, organizationId, supplyList.id);
-	if (!refreshedList) throw new Error("List retrieval failed");
+		const ensureListStartedAtMs = Date.now();
+		const supplyList = await ensureSupplyList(db, organizationId);
+		const ensureListDurationMs = Date.now() - ensureListStartedAtMs;
 
-	const orgInventory = await d1
-		.select()
-		.from(inventory)
-		.where(eq(inventory.organizationId, organizationId));
-	const aggregatedIngredients = aggregateIngredients(allIngredients);
-	const existingItems = refreshedList.items ?? [];
-
-	let addedCount = 0;
-	let skippedCount = 0;
-	const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
-
-	for (const aggregated of aggregatedIngredients) {
-		const availableInInventory = getAvailableInventoryQuantity(
-			aggregated.name,
-			aggregated.unit,
-			orgInventory,
-		);
-		const missingAfterInventory = Math.max(
-			0,
-			aggregated.quantity - availableInInventory,
-		);
-
-		if (missingAfterInventory <= 0) {
-			skippedCount++;
-			continue;
+		if (!supplyList) {
+			throw new Error("Failed to ensure supply list");
 		}
 
-		const existingQuantityInList = getExistingListQuantity(
-			existingItems,
-			aggregated.normalizedName,
-			aggregated.unit,
-			aggregated.domain,
-		);
-		const remainingNeeded = Math.max(
-			0,
-			missingAfterInventory - existingQuantityInList,
-		);
-
-		if (remainingNeeded <= 0) {
-			skippedCount++;
-			continue;
-		}
-
-		itemsToInsert.push({
-			id: crypto.randomUUID(),
+		const telemetryWithList = {
+			...(telemetryContext ?? {
+				trigger: "dashboard_grocery_action_update_list",
+			}),
+			organizationId,
 			listId: supplyList.id,
-			name: aggregated.name,
-			quantity: remainingNeeded,
-			unit: aggregated.unit,
-			domain: aggregated.domain,
-			sourceMealId: aggregated.sourceMealIds[0],
-		});
-		addedCount++;
-	}
+		};
 
-	if (itemsToInsert.length > 0) {
-		await d1.batch([
-			d1.insert(groceryItem).values(itemsToInsert),
-			d1
+		const clearStartedAtMs = Date.now();
+		await d1
+			.delete(groceryItem)
+			.where(
+				and(
+					eq(groceryItem.listId, supplyList.id),
+					eq(groceryItem.isPurchased, false),
+					isNotNull(groceryItem.sourceMealId),
+				),
+			);
+		const clearDurationMs = Date.now() - clearStartedAtMs;
+
+		const refreshListStartedAtMs = Date.now();
+		const refreshedList = await getGroceryList(
+			db,
+			organizationId,
+			supplyList.id,
+		);
+		const refreshListDurationMs = Date.now() - refreshListStartedAtMs;
+		if (!refreshedList) throw new Error("List retrieval failed");
+
+		const inventoryFetchStartedAtMs = Date.now();
+		const orgInventory = await d1
+			.select()
+			.from(inventory)
+			.where(eq(inventory.organizationId, organizationId));
+		const inventoryFetchDurationMs = Date.now() - inventoryFetchStartedAtMs;
+
+		const aggregateStartedAtMs = Date.now();
+		const aggregatedIngredients = aggregateIngredients(allIngredients);
+		const aggregateDurationMs = Date.now() - aggregateStartedAtMs;
+		const existingItems = refreshedList.items ?? [];
+
+		let addedCount = 0;
+		let skippedCount = 0;
+		const itemsToInsert: (typeof groceryItem.$inferInsert)[] = [];
+
+		for (const aggregated of aggregatedIngredients) {
+			const availableInInventory = getAvailableInventoryQuantity(
+				aggregated.name,
+				aggregated.unit,
+				orgInventory,
+			);
+			const missingAfterInventory = Math.max(
+				0,
+				aggregated.quantity - availableInInventory,
+			);
+
+			if (missingAfterInventory <= 0) {
+				skippedCount++;
+				continue;
+			}
+
+			const existingQuantityInList = getExistingListQuantity(
+				existingItems,
+				aggregated.normalizedName,
+				aggregated.unit,
+				aggregated.domain,
+			);
+			const remainingNeeded = Math.max(
+				0,
+				missingAfterInventory - existingQuantityInList,
+			);
+
+			if (remainingNeeded <= 0) {
+				skippedCount++;
+				continue;
+			}
+
+			itemsToInsert.push({
+				id: crypto.randomUUID(),
+				listId: supplyList.id,
+				name: aggregated.name,
+				quantity: remainingNeeded,
+				unit: aggregated.unit,
+				domain: aggregated.domain,
+				sourceMealId: aggregated.sourceMealIds[0],
+			});
+			addedCount++;
+		}
+
+		const insertChunkCount = Math.ceil(
+			itemsToInsert.length / D1_MAX_GROCERY_ROWS_PER_STATEMENT,
+		);
+		const insertStartedAtMs = Date.now();
+		if (itemsToInsert.length > 0) {
+			await chunkedInsert(
+				itemsToInsert,
+				D1_MAX_GROCERY_ROWS_PER_STATEMENT,
+				(insertChunk) => d1.insert(groceryItem).values(insertChunk),
+			);
+
+			await d1
 				.update(groceryList)
 				.set({ updatedAt: new Date() })
-				.where(eq(groceryList.id, supplyList.id)),
-		]);
+				.where(eq(groceryList.id, supplyList.id));
+		}
+		const insertDurationMs = Date.now() - insertStartedAtMs;
+
+		const finalListFetchStartedAtMs = Date.now();
+		const list = await getGroceryList(db, organizationId, supplyList.id);
+		const finalListFetchDurationMs = Date.now() - finalListFetchStartedAtMs;
+		if (!list) throw new Error("List retrieval failed");
+
+		emitSupplySyncInfo("supply_sync.materialize.success", telemetryWithList, {
+			duration_ms: Date.now() - startedAtMs,
+			meals_processed_count: mealsProcessed,
+			ingredient_rows_count: allIngredients.length,
+			aggregated_ingredients_count: aggregatedIngredients.length,
+			insert_candidate_rows_count: itemsToInsert.length,
+			insert_chunk_count: insertChunkCount,
+			insert_rows_per_statement: D1_MAX_GROCERY_ROWS_PER_STATEMENT,
+			added_items_count: addedCount,
+			skipped_items_count: skippedCount,
+			ensure_list_duration_ms: ensureListDurationMs,
+			clear_generated_items_duration_ms: clearDurationMs,
+			refresh_list_duration_ms: refreshListDurationMs,
+			inventory_fetch_duration_ms: inventoryFetchDurationMs,
+			aggregate_duration_ms: aggregateDurationMs,
+			insert_duration_ms: insertDurationMs,
+			final_list_fetch_duration_ms: finalListFetchDurationMs,
+		});
+
+		return {
+			list,
+			summary: {
+				addedItems: addedCount,
+				skippedItems: skippedCount,
+				mealsProcessed,
+				totalIngredients: allIngredients.length,
+			},
+		};
+	} catch (error) {
+		emitSupplySyncError(
+			"supply_sync.materialize.error",
+			telemetryContext ?? {
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+			error,
+			{
+				duration_ms: Date.now() - startedAtMs,
+				meals_processed_count: mealsProcessed,
+				ingredient_rows_count: allIngredients.length,
+			},
+		);
+		throw error;
 	}
-
-	const list = await getGroceryList(db, organizationId, supplyList.id);
-	if (!list) throw new Error("List retrieval failed");
-
-	return {
-		list,
-		summary: {
-			addedItems: addedCount,
-			skippedItems: skippedCount,
-			mealsProcessed,
-			totalIngredients: allIngredients.length,
-		},
-	};
 }
 
 /**
@@ -1070,8 +1250,14 @@ export async function completeGroceryList(
 	const results = await dockGroceryItems(db, organizationId, purchasedItems);
 
 	// 3. Remove them from the list (cleanup)
-	for (const item of purchasedItems) {
-		await d1.delete(groceryItem).where(eq(groceryItem.id, item.id));
+	for (const deleteChunk of chunkArray(purchasedItems, D1_MAX_BOUND_PARAMS)) {
+		const deleteOps = deleteChunk.map((item) =>
+			d1.delete(groceryItem).where(eq(groceryItem.id, item.id)),
+		);
+		const [firstDelete, ...remainingDeletes] = deleteOps;
+
+		if (!firstDelete) continue;
+		await d1.batch([firstDelete, ...remainingDeletes]);
 	}
 
 	return {

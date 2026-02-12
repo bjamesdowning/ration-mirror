@@ -37,6 +37,10 @@ import {
 	getOrganizationInventoryTags,
 } from "~/lib/inventory.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
+import {
+	emitSupplySyncError,
+	emitSupplySyncInfo,
+} from "~/lib/telemetry.server";
 import type { Route } from "./+types/grocery";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -68,11 +72,47 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		// Manual Update / Refresh
 		if (intent === "update-list") {
-			const result = await createGroceryListFromSelectedMeals(
-				context.cloudflare.env.DB,
-				groupId,
-			);
-			return { list: result.list, summary: result.summary };
+			const syncSource = formData.get("syncSource");
+			const telemetryContext = {
+				requestId: request.headers.get("cf-ray") ?? undefined,
+				trigger:
+					syncSource === "background"
+						? ("dashboard_grocery_background_sync" as const)
+						: ("dashboard_grocery_action_update_list" as const),
+				organizationId: groupId,
+			};
+			const startedAtMs = Date.now();
+			emitSupplySyncInfo("supply_sync.action.start", telemetryContext, {
+				intent: "update-list",
+			});
+			try {
+				const result = await createGroceryListFromSelectedMeals(
+					context.cloudflare.env.DB,
+					groupId,
+					undefined,
+					telemetryContext,
+				);
+				emitSupplySyncInfo("supply_sync.action.success", telemetryContext, {
+					intent: "update-list",
+					duration_ms: Date.now() - startedAtMs,
+					added_items_count: result.summary.addedItems,
+					skipped_items_count: result.summary.skippedItems,
+					meals_processed_count: result.summary.mealsProcessed,
+					ingredient_rows_count: result.summary.totalIngredients,
+				});
+				return { list: result.list, summary: result.summary };
+			} catch (error) {
+				emitSupplySyncError(
+					"supply_sync.action.error",
+					telemetryContext,
+					error,
+					{
+						intent: "update-list",
+						duration_ms: Date.now() - startedAtMs,
+					},
+				);
+				throw error;
+			}
 		}
 
 		// Dock Cargo (Complete List / Move purchased to inventory)
@@ -242,6 +282,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 		hasTriggeredSync.current = true;
 		const formData = new FormData();
 		formData.set("intent", "update-list");
+		formData.set("syncSource", "background");
 		fetcher.submit(formData, { method: "POST" });
 	}, [activeSelectionCount, fetcher.state, fetcher.submit]);
 	useEffect(() => {

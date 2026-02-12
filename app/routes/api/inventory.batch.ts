@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { log } from "~/lib/logging.server";
+import { chunkArray, D1_MAX_BOUND_PARAMS } from "~/lib/query-utils.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddInventorySchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/inventory.batch";
@@ -56,15 +57,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const mergeIds = mergeItems
 				.map((item) => item.mergeTargetId)
 				.filter((id): id is string => Boolean(id));
-			const placeholders = mergeIds.map(() => "?").join(", ");
-			const existingResults = await context.cloudflare.env.DB.prepare(
-				`SELECT id FROM inventory WHERE organization_id = ? AND id IN (${placeholders})`,
-			)
-				.bind(groupId, ...mergeIds)
-				.all();
-			const allowedIds = new Set(
-				(existingResults.results ?? []).map((row) => row.id as string),
-			);
+			const allowedIds = new Set<string>();
+			for (const mergeChunk of chunkArray(mergeIds, D1_MAX_BOUND_PARAMS - 1)) {
+				const placeholders = mergeChunk.map(() => "?").join(", ");
+				const existingResults = await context.cloudflare.env.DB.prepare(
+					`SELECT id FROM inventory WHERE organization_id = ? AND id IN (${placeholders})`,
+				)
+					.bind(groupId, ...mergeChunk)
+					.all();
+				for (const row of existingResults.results ?? []) {
+					allowedIds.add(row.id as string);
+				}
+			}
 
 			for (const item of mergeItems) {
 				if (!item.mergeTargetId || !allowedIds.has(item.mergeTargetId)) {

@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
 import {
 	chunkedQuery,
+	D1_MAX_BOUND_PARAMS,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
@@ -448,15 +449,20 @@ export async function cookMeal(
 			(ing) => ing.inventoryId as string,
 		);
 
-		const currentInventory = await d1
-			.select()
-			.from(inventory)
-			.where(
-				and(
-					eq(inventory.organizationId, organizationId),
-					inArray(inventory.id, inventoryIds),
-				),
-			);
+		const currentInventory = await chunkedQuery(
+			inventoryIds,
+			(chunk) =>
+				d1
+					.select()
+					.from(inventory)
+					.where(
+						and(
+							eq(inventory.organizationId, organizationId),
+							inArray(inventory.id, chunk),
+						),
+					),
+			D1_MAX_BOUND_PARAMS - 1,
+		);
 
 		const inventoryMap = new Map(
 			currentInventory.map((i) => [i.id, i.quantity]),

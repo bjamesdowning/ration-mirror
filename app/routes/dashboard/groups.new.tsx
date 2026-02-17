@@ -1,7 +1,16 @@
-import { Form, useActionData, useNavigation } from "react-router";
+import { useEffect, useState } from "react";
+import { useFetcher } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { requireAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/groups.new";
+
+type CreateGroupResponse = {
+	error?: string;
+	upgradePath?: string;
+	resource?: string;
+	tier?: string;
+};
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	await requireAuth(context, request);
@@ -9,9 +18,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function CreateGroupPage() {
-	const actionData = useActionData<{ error?: string }>();
-	const navigation = useNavigation();
-	const isSubmitting = navigation.state === "submitting";
+	const fetcher = useFetcher<CreateGroupResponse>({ key: "create-group" });
+	const [dismissedUpgrade, setDismissedUpgrade] = useState(false);
+	const isSubmitting = fetcher.state === "submitting";
+	const showUpgradePrompt =
+		!dismissedUpgrade &&
+		fetcher.data?.error === "capacity_exceeded" &&
+		fetcher.data?.upgradePath === "crew_member";
+
+	// Reset dismissed when user submits again so a new 403 shows the prompt
+	useEffect(() => {
+		if (fetcher.state === "submitting") setDismissedUpgrade(false);
+	}, [fetcher.state]);
 
 	return (
 		<div className="max-w-2xl mx-auto">
@@ -22,12 +40,17 @@ export default function CreateGroupPage() {
 			/>
 
 			<div className="glass-panel rounded-xl p-8">
-				<Form method="post" action="/api/groups/create" className="space-y-6">
-					{actionData?.error && (
-						<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
-							{actionData.error}
-						</div>
-					)}
+				<fetcher.Form
+					method="post"
+					action="/api/groups/create"
+					className="space-y-6"
+				>
+					{fetcher.data?.error &&
+						fetcher.data.error !== "capacity_exceeded" && (
+							<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
+								{fetcher.data.error}
+							</div>
+						)}
 
 					<div>
 						<label
@@ -86,8 +109,15 @@ export default function CreateGroupPage() {
 							{isSubmitting ? "Creating..." : "Create Group"}
 						</button>
 					</div>
-				</Form>
+				</fetcher.Form>
 			</div>
+
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setDismissedUpgrade(true)}
+				title="Crew Member required"
+				description="Creating additional groups requires a Crew Member subscription. Upgrade to unlock multiple groups and invite members."
+			/>
 		</div>
 	);
 }

@@ -8,6 +8,14 @@ import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.create";
 
+/** GET is not supported; this route is action-only (POST). */
+export async function loader() {
+	throw data(
+		{ error: "Method not allowed. Use POST to create a group." },
+		{ status: 405 },
+	);
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user, session } = await requireAuth(context, request);
 

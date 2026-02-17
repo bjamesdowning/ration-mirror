@@ -9,6 +9,7 @@ import {
 	useFetcher,
 	useNavigate,
 	useNavigation,
+	useRevalidator,
 } from "react-router";
 import { CreditShop } from "~/components/dashboard/CreditShop";
 import { SettingsIcon } from "~/components/icons/PageIcons";
@@ -225,6 +226,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings, members, isOwner, organizationId, userOrganizations } =
 		loaderData;
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
+	const revalidator = useRevalidator();
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
@@ -251,6 +253,13 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			window.location.href = billingPortalFetcher.data.url;
 		}
 	}, [billingPortalFetcher.data]);
+
+	// After successful checkout (Stripe return), revalidate so dashboard header shows updated tier/credits
+	useEffect(() => {
+		if (loaderData.transactionStatus === "success") {
+			revalidator.revalidate();
+		}
+	}, [loaderData.transactionStatus, revalidator]);
 
 	return (
 		<div className="space-y-6">

@@ -29,6 +29,23 @@ export function handleApiError(error: unknown) {
 		throw error;
 	}
 
+	// Graceful tier gate: convert capacity_exceeded throws to 403 with upgrade path
+	if (
+		error instanceof Error &&
+		error.message.startsWith("capacity_exceeded:")
+	) {
+		const parts = error.message.split(":");
+		const resource = parts[1] ?? "unknown";
+		return data(
+			{
+				error: "capacity_exceeded",
+				resource,
+				upgradePath: "crew_member",
+			},
+			{ status: 403 },
+		);
+	}
+
 	const message =
 		error instanceof Error ? error.message : "Internal Server Error";
 	log.error("[API] Unhandled error", error);

@@ -283,11 +283,33 @@ async function invalidateTierCacheForUser(env: Env, userId: string) {
 		},
 	});
 
-	await Promise.all(
-		ownedMemberships.map((membership) =>
-			invalidateGroupTierCache(env.RATION_KV, membership.organizationId),
-		),
-	);
+	// #region agent log
+	try {
+		await Promise.all(
+			ownedMemberships.map((membership) =>
+				invalidateGroupTierCache(env.RATION_KV, membership.organizationId),
+			),
+		);
+	} catch (kvErr) {
+		fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				location: "ledger.server.ts:invalidateTierCacheForUser",
+				message: "KV tier cache invalidation failed (best-effort)",
+				data: {
+					errorMessage: kvErr instanceof Error ? kvErr.message : String(kvErr),
+					hypothesisId: "H4",
+				},
+				timestamp: Date.now(),
+			}),
+		}).catch(() => {});
+		log.warn("Tier cache invalidation failed (continuing)", {
+			errorMessage: kvErr instanceof Error ? kvErr.message : String(kvErr),
+		});
+		// Best-effort: do not throw so checkout fulfillment still succeeds
+	}
+	// #endregion
 }
 
 export async function processSubscriptionCheckoutSession(

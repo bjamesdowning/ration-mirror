@@ -184,6 +184,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			id: "import",
 			icon: <LinkIcon />,
 			label: "Import",
+			variant: "primary",
 			onClick: () => importRef.current?.open(),
 		},
 		{

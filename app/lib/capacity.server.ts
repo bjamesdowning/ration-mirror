@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { log } from "~/lib/logging.server";
 import {
 	TIER_LIMITS,
 	type TierLimits,
@@ -116,18 +117,44 @@ export async function getGroupTierLimits(
 	const tierExpiresAt = owner?.tierExpiresAt ?? null;
 	const { tier, isExpired } = getEffectiveTier(rawTier, tierExpiresAt, now);
 
-	await env.RATION_KV.put(
-		cacheKey,
-		JSON.stringify({
-			tier: rawTier,
-			tierExpiresAt: tierExpiresAt
-				? Math.floor(tierExpiresAt.getTime() / 1000)
-				: null,
-		}),
-		{
-			expirationTtl: TIER_CACHE_TTL_SECONDS,
-		},
-	);
+	// #region agent log
+	try {
+		await env.RATION_KV.put(
+			cacheKey,
+			JSON.stringify({
+				tier: rawTier,
+				tierExpiresAt: tierExpiresAt
+					? Math.floor(tierExpiresAt.getTime() / 1000)
+					: null,
+			}),
+			{
+				expirationTtl: TIER_CACHE_TTL_SECONDS,
+			},
+		);
+	} catch (kvErr) {
+		const msg = kvErr instanceof Error ? kvErr.message : String(kvErr);
+		fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				location: "capacity.server.ts:getGroupTierLimits",
+				message: "KV PUT failed (degrading without cache)",
+				data: {
+					organizationId,
+					rawTier,
+					errorMessage: msg,
+					hypothesisId: "H1",
+				},
+				timestamp: Date.now(),
+			}),
+		}).catch(() => {});
+		log.warn("Tier cache PUT failed (returning tier without cache)", {
+			organizationId,
+			errorMessage: msg,
+		});
+		// Degrade gracefully: return correct tier from DB without caching (avoids 500 on KV 429)
+	}
+	// #endregion
 
 	return { tier, limits: TIER_LIMITS[tier], isExpired };
 }

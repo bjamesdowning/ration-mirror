@@ -27,6 +27,7 @@ import {
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
@@ -114,6 +115,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	} | null;
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
+	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [selectedMealIds, setSelectedMealIds] = useState(
@@ -246,6 +248,13 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setShowUpgradePrompt(false)}
+				title="Meal capacity reached"
+				description="You've reached the free plan limit of 20 meals. Upgrade to Crew Member for unlimited meals."
+			/>
+
 			{/* Hidden instances for ref + modal (always in DOM, even on mobile) */}
 			<GenerateMealButton ref={generateRef} className="hidden" />
 			<ImportRecipeButton ref={importRef} className="hidden" />
@@ -262,14 +271,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{dashboardData?.capacity?.meals && (
-				<p className="text-xs text-muted -mt-2 mb-2">
-					Capacity:{" "}
-					{dashboardData.capacity.meals.limit === -1
-						? `${dashboardData.capacity.meals.current} meals (unlimited)`
-						: `${dashboardData.capacity.meals.current}/${dashboardData.capacity.meals.limit} meals`}
-				</p>
-			)}
+			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
+			{dashboardData?.capacity?.meals &&
+				dashboardData.capacity.meals.limit !== -1 && (
+					<p className="text-xs text-muted -mt-2 mb-2">
+						{dashboardData.capacity.meals.current}/
+						{dashboardData.capacity.meals.limit} meals
+					</p>
+				)}
 
 			<div className="space-y-6">
 				{/* Selection status bar */}
@@ -319,6 +328,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						quickAddForm={
 							<MealQuickAdd
 								onSuccess={() => setShowQuickAdd(false)}
+								onUpgradeRequired={() => {
+									setShowQuickAdd(false);
+									setShowUpgradePrompt(true);
+								}}
 								availableIngredients={inventory}
 							/>
 						}
@@ -330,6 +343,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						<MealQuickAdd
 							onSuccess={() => setShowQuickAdd(false)}
+							onUpgradeRequired={() => {
+								setShowQuickAdd(false);
+								setShowUpgradePrompt(true);
+							}}
 							availableIngredients={inventory}
 						/>
 					</div>

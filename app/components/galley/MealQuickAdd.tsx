@@ -14,6 +14,8 @@ type InventoryItem = {
 interface MealQuickAddProps {
 	/** Callback when form is successfully submitted */
 	onSuccess?: () => void;
+	/** Called when the action returns a capacity_exceeded error so the parent can show an upgrade prompt */
+	onUpgradeRequired?: () => void;
 	/** Available pantry items for ingredient picker */
 	availableIngredients?: InventoryItem[];
 }
@@ -24,6 +26,7 @@ interface MealQuickAddProps {
  */
 export function MealQuickAdd({
 	onSuccess,
+	onUpgradeRequired,
 	availableIngredients = [],
 }: MealQuickAddProps) {
 	const fetcher = useFetcher();
@@ -37,16 +40,19 @@ export function MealQuickAdd({
 		nameInputRef.current?.focus();
 	}, []);
 
-	// Handle successful submission
+	// Handle successful submission or capacity gate
 	useEffect(() => {
-		if (fetcher.state === "idle" && fetcher.data && !fetcher.data?.error) {
+		if (fetcher.state !== "idle" || !fetcher.data) return;
+		if (fetcher.data.error === "capacity_exceeded") {
+			onUpgradeRequired?.();
+			return;
+		}
+		if (!fetcher.data.error) {
 			formRef.current?.reset();
-			// Reset expansion state if desired, or keep it?
-			// Resetting is cleaner for next add.
 			setIsExpanded(false);
 			onSuccess?.();
 		}
-	}, [fetcher.state, fetcher.data, onSuccess]);
+	}, [fetcher.state, fetcher.data, onSuccess, onUpgradeRequired]);
 
 	return (
 		<fetcher.Form
@@ -207,8 +213,8 @@ export function MealQuickAdd({
 				</p>
 			)}
 
-			{/* Error Display */}
-			{fetcher.data?.error && (
+			{/* Error Display (non-capacity errors only; capacity_exceeded is handled by parent via onUpgradeRequired) */}
+			{fetcher.data?.error && fetcher.data.error !== "capacity_exceeded" && (
 				<div className="bg-danger/10 text-danger text-sm px-4 py-2 rounded-lg">
 					{fetcher.data.error}
 				</div>

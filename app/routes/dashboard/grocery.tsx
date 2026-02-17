@@ -24,6 +24,7 @@ import {
 import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { Toast } from "~/components/shell/Toast";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
 import { GroceryList } from "~/components/supply/GroceryList";
@@ -175,6 +176,7 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showShareModal, setShowShareModal] = useState(false);
+	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
 	const {
@@ -380,14 +382,14 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{dashboardData?.capacity?.groceryLists && (
-				<p className="text-xs text-muted -mt-2 mb-2">
-					Capacity:{" "}
-					{dashboardData.capacity.groceryLists.limit === -1
-						? `${dashboardData.capacity.groceryLists.current} lists (unlimited)`
-						: `${dashboardData.capacity.groceryLists.current}/${dashboardData.capacity.groceryLists.limit} lists`}
-				</p>
-			)}
+			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
+			{dashboardData?.capacity?.groceryLists &&
+				dashboardData.capacity.groceryLists.limit !== -1 && (
+					<p className="text-xs text-muted -mt-2 mb-2">
+						{dashboardData.capacity.groceryLists.current}/
+						{dashboardData.capacity.groceryLists.limit} lists
+					</p>
+				)}
 
 			{!list ? (
 				<EmptyPanel
@@ -539,8 +541,17 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 					listId={list.id}
 					existingShareToken={list.shareToken}
 					onClose={() => setShowShareModal(false)}
+					onUpgradeRequired={() => setShowUpgradePrompt(true)}
 				/>
 			)}
+
+			{/* Upgrade Prompt (shown when free-tier user attempts a crew-only feature) */}
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setShowUpgradePrompt(false)}
+				title="Crew Member required"
+				description="Sharing grocery lists is a Crew Member feature. Upgrade to unlock sharing, member invites, and unlimited capacity."
+			/>
 		</>
 	);
 }

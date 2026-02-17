@@ -65,9 +65,11 @@ export async function loader(args: Route.LoaderArgs) {
 		});
 
 		// Fetch credits for the current group
-		const { checkBalance, processCheckoutSession } = await import(
-			"../../lib/ledger.server"
-		);
+		const {
+			checkBalance,
+			processCheckoutSession,
+			processSubscriptionCheckoutSession,
+		} = await import("../../lib/ledger.server");
 
 		// Handle Stripe Return
 		const url = new URL(args.request.url);
@@ -76,7 +78,20 @@ export async function loader(args: Route.LoaderArgs) {
 
 		if (sessionId) {
 			try {
-				await processCheckoutSession(env, sessionId);
+				// Detect checkout type so we apply the right fulfillment path.
+				// Subscription checkouts update user.tier AND clear the KV tier cache
+				// so the revalidation after redirect shows CREW immediately.
+				const { getStripe } = await import("../../lib/stripe.server");
+				const stripe = getStripe(env);
+				const stripeSession =
+					await stripe.checkout.sessions.retrieve(sessionId);
+				const checkoutType = stripeSession.metadata?.type ?? "credits";
+
+				if (checkoutType === "subscription") {
+					await processSubscriptionCheckoutSession(env, sessionId);
+				} else {
+					await processCheckoutSession(env, sessionId);
+				}
 				transactionStatus = "success";
 			} catch (error) {
 				log.error("Manual fulfillment failed", error);

@@ -6,12 +6,15 @@ interface ShareModalProps {
 	listId: string;
 	existingShareToken?: string | null;
 	onClose: () => void;
+	/** Called when the share API returns a feature_gated 403 — parent should show UpgradePrompt */
+	onUpgradeRequired?: () => void;
 }
 
 export function ShareModal({
 	listId,
 	existingShareToken,
 	onClose,
+	onUpgradeRequired,
 }: ShareModalProps) {
 	const fetcher = useFetcher();
 	const [copied, setCopied] = useState(false);
@@ -28,13 +31,19 @@ export function ShareModal({
 
 	// Handle response from fetcher
 	useEffect(() => {
-		if (fetcher.data?.shareUrl) {
+		if (!fetcher.data) return;
+		if (fetcher.data.error === "feature_gated") {
+			onClose();
+			onUpgradeRequired?.();
+			return;
+		}
+		if (fetcher.data.shareUrl) {
 			setShareUrl(fetcher.data.shareUrl);
 		}
-		if (fetcher.data?.revoked) {
+		if (fetcher.data.revoked) {
 			setShareUrl(null);
 		}
-	}, [fetcher.data]);
+	}, [fetcher.data, onClose, onUpgradeRequired]);
 
 	const handleGenerateLink = () => {
 		fetcher.submit(null, {

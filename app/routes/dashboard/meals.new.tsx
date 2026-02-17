@@ -1,6 +1,8 @@
-import { data, redirect } from "react-router";
+import { useState } from "react";
+import { data, redirect, useActionData } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
@@ -46,15 +48,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 				inputs.length,
 			);
 			if (!capacity.allowed) {
-				throw data(
+				// Return (not throw) so fetchers receive the data instead of hitting ErrorBoundary
+				return data(
 					{
 						error: "capacity_exceeded",
 						resource: "meals",
 						current: capacity.current,
 						limit: capacity.limit,
-						tier: capacity.tier,
-						isExpired: capacity.isExpired,
-						canAdd: capacity.canAdd,
 						upgradePath: "crew_member",
 					},
 					{ status: 403 },
@@ -77,15 +77,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			1,
 		);
 		if (!capacity.allowed) {
-			throw data(
+			// Return (not throw) so fetchers receive the data instead of hitting ErrorBoundary
+			return data(
 				{
 					error: "capacity_exceeded",
 					resource: "meals",
 					current: capacity.current,
 					limit: capacity.limit,
-					tier: capacity.tier,
-					isExpired: capacity.isExpired,
-					canAdd: capacity.canAdd,
 					upgradePath: "crew_member",
 				},
 				{ status: 403 },
@@ -100,8 +98,28 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function NewMeal({ loaderData }: Route.ComponentProps) {
+	const actionData = useActionData<typeof action>();
+	const [dismissUpgrade, setDismissUpgrade] = useState(false);
+	const isCapacityExceeded = actionData?.error === "capacity_exceeded";
+	const capacityData = isCapacityExceeded
+		? (actionData as unknown as { current: number; limit: number })
+		: null;
+	const current = capacityData?.current;
+	const limit = capacityData?.limit;
+	const showUpgradePrompt = !dismissUpgrade && isCapacityExceeded;
+
 	return (
 		<>
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setDismissUpgrade(true)}
+				title="Meal capacity reached"
+				description={
+					typeof current === "number" && typeof limit === "number"
+						? `You have ${current}/${limit} meals. Upgrade to Crew Member for unlimited meals.`
+						: "Upgrade to Crew Member for unlimited meals and more."
+				}
+			/>
 			<DashboardHeader title="New Recipe" subtitle="Create a new meal" />
 			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
 				<MealBuilder availableIngredients={loaderData?.inventory} />

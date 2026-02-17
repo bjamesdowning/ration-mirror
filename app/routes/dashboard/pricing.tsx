@@ -11,10 +11,12 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getGroupTierLimits } from "~/lib/capacity.server";
-import { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } from "~/lib/stripe.server";
 import type { Route } from "./+types/pricing";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
+	const { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } = await import(
+		"~/lib/stripe.server"
+	);
 	const {
 		groupId,
 		session: { user },
@@ -62,6 +64,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			groceryLists: listCount[0]?.count ?? 0,
 		},
 		limits: tierLimits.limits,
+		creditPacks: CREDIT_PACKS,
+		subscriptionProducts: SUBSCRIPTION_PRODUCTS,
 	};
 }
 
@@ -88,7 +92,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		setClientSecret(checkoutFetcher.data.clientSecret);
 	}
 
-	const startCreditCheckout = (pack: keyof typeof CREDIT_PACKS) => {
+	const startCreditCheckout = (pack: keyof typeof loaderData.creditPacks) => {
 		const formData = new FormData();
 		formData.append("type", "credits");
 		formData.append("pack", pack);
@@ -174,14 +178,18 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 				<div className="glass-panel rounded-xl p-6 border border-hyper-green/40">
 					<h2 className="text-xl font-bold text-carbon mb-1">Crew Member</h2>
 					<p className="text-sm text-muted mb-4">
-						{SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.price} with yearly credits
+						{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} with
+						yearly credits
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited pantry items, meals, and lists</li>
 						<li>Invite members and share grocery lists</li>
 						<li>
-							{SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.creditsOnStart} credits
-							on start and renewal
+							{
+								loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL
+									.creditsOnStart
+							}{" "}
+							credits on start and renewal
 						</li>
 					</ul>
 					<button
@@ -196,10 +204,10 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 
 			<div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
 				{(
-					Object.entries(CREDIT_PACKS) as Array<
+					Object.entries(loaderData.creditPacks) as Array<
 						[
-							keyof typeof CREDIT_PACKS,
-							(typeof CREDIT_PACKS)[keyof typeof CREDIT_PACKS],
+							keyof typeof loaderData.creditPacks,
+							(typeof loaderData.creditPacks)[keyof typeof loaderData.creditPacks],
 						]
 					>
 				).map(([packKey, pack]) => (

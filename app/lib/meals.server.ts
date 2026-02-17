@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
+import { checkCapacity } from "./capacity.server";
 import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -161,7 +162,17 @@ export async function createMeal(
 	db: D1Database,
 	organizationId: string,
 	data: MealInput,
+	env?: Env,
 ) {
+	if (env) {
+		const capacity = await checkCapacity(env, organizationId, "meals", 1);
+		if (!capacity.allowed) {
+			throw new Error(
+				`capacity_exceeded:meals:${capacity.current}:${capacity.limit}`,
+			);
+		}
+	}
+
 	const d1 = drizzle(db);
 	const mealId = crypto.randomUUID();
 

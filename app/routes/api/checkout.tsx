@@ -2,7 +2,14 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { CREDIT_PACKS, getStripe } from "~/lib/stripe.server";
+import {
+	CREDIT_PACKS,
+	getCreditPackPriceId,
+	getPromotionCodeId,
+	getStripe,
+	getSubscriptionPriceId,
+	SUBSCRIPTION_PRODUCTS,
+} from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -40,7 +47,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	// 3. Parse Input
 	const formData = await request.formData();
+	const checkoutType = (formData.get("type") as string) || "credits";
 	const packKey = formData.get("pack") as keyof typeof CREDIT_PACKS;
+	const subscriptionKey = formData.get(
+		"subscription",
+	) as keyof typeof SUBSCRIPTION_PRODUCTS;
 	const returnUrlPath =
 		(formData.get("returnUrl") as string) || "/dashboard/settings";
 
@@ -49,12 +60,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (!returnUrlPath.startsWith("/dashboard")) {
 		throw data({ error: "Invalid return URL" }, { status: 400 });
 	}
-
-	if (!packKey || !CREDIT_PACKS[packKey]) {
-		throw data({ error: "Invalid credit pack" }, { status: 400 });
-	}
-
-	const selectedPack = CREDIT_PACKS[packKey];
 
 	try {
 		// 4. Create Stripe Checkout Session (Embedded Mode)
@@ -68,19 +73,64 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const stripe = getStripe(context.cloudflare.env);
 
+		if (checkoutType === "subscription" || checkoutType === "tier") {
+			if (!subscriptionKey || !SUBSCRIPTION_PRODUCTS[subscriptionKey]) {
+				throw data({ error: "Invalid subscription product" }, { status: 400 });
+			}
+
+			const selectedSubscription = SUBSCRIPTION_PRODUCTS[subscriptionKey];
+			const session = await stripe.checkout.sessions.create({
+				ui_mode: "embedded",
+				mode: "subscription",
+				line_items: [
+					{
+						price: getSubscriptionPriceId(
+							context.cloudflare.env,
+							subscriptionKey,
+						),
+						quantity: 1,
+					},
+				],
+				metadata: {
+					type: "subscription",
+					userId,
+					organizationId: groupId,
+					tier: selectedSubscription.tier,
+				},
+				return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
+			});
+
+			return {
+				success: true,
+				clientSecret: session.client_secret,
+			};
+		}
+
+		if (!packKey || !CREDIT_PACKS[packKey]) {
+			throw data({ error: "Invalid credit pack" }, { status: 400 });
+		}
+
+		const selectedPack = CREDIT_PACKS[packKey];
 		const session = await stripe.checkout.sessions.create({
 			ui_mode: "embedded", // Embedded Checkout
 			mode: "payment",
 			line_items: [
 				{
-					price: selectedPack.priceId,
+					price: getCreditPackPriceId(context.cloudflare.env, packKey),
 					quantity: 1,
 				},
 			],
+			allow_promotion_codes: true,
 			metadata: {
+				type: "credits",
 				userId, // Who triggered it
 				organizationId: groupId, // Who gets the credits
 				credits: selectedPack.credits.toString(),
+				pack: packKey,
+				welcomePromoCodeId: getPromotionCodeId(
+					context.cloudflare.env,
+					"WELCOME60",
+				),
 			},
 			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
 		});

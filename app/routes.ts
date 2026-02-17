@@ -9,6 +9,7 @@ export default [
 	route("dashboard", "routes/dashboard.tsx", [
 		index("routes/dashboard/index.tsx"),
 		route("settings", "routes/dashboard/settings.tsx"),
+		route("pricing", "routes/dashboard/pricing.tsx"),
 
 		// Pantry/Inventory
 		route("pantry", "routes/dashboard/pantry.tsx"),
@@ -80,6 +81,7 @@ export default [
 	route("api/search", "routes/api/search.ts"),
 	route("api/checkout", "routes/api/checkout.tsx"),
 	route("api/webhook", "routes/api/webhook.tsx"),
+	route("api/billing-portal", "routes/api/billing-portal.ts"),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/groups/create", "routes/api/groups.create.ts"),

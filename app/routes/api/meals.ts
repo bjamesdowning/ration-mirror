@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { createMeal, getMeals } from "~/lib/meals.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -40,6 +41,29 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		const json = await request.json();
 		const input = MealSchema.parse(json);
+
+		const capacity = await checkCapacity(
+			context.cloudflare.env,
+			groupId,
+			"meals",
+			1,
+		);
+		if (!capacity.allowed) {
+			throw data(
+				{
+					error: "capacity_exceeded",
+					resource: "meals",
+					current: capacity.current,
+					limit: capacity.limit,
+					tier: capacity.tier,
+					isExpired: capacity.isExpired,
+					canAdd: capacity.canAdd,
+					upgradePath: "crew_member",
+				},
+				{ status: 403 },
+			);
+		}
+
 		const meal = await createMeal(context.cloudflare.env.DB, groupId, input);
 		return { meal };
 	} catch (e) {

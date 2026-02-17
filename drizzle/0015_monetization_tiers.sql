@@ -1,0 +1,4 @@
+ALTER TABLE user ADD COLUMN tier TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE user ADD COLUMN tier_expires_at INTEGER;
+ALTER TABLE user ADD COLUMN welcome_voucher_redeemed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE user ADD COLUMN stripe_customer_id TEXT;

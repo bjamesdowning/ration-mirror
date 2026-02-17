@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { groceryItem } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { dockGroceryItems } from "~/lib/inventory.server";
 import { log, redactId } from "~/lib/logging.server";
@@ -69,7 +70,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 		// 2. Dock them
 		const results = await dockGroceryItems(
-			context.cloudflare.env.DB,
+			context.cloudflare.env,
 			groupId,
 			purchasedItems,
 		);
@@ -88,6 +89,21 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			summary: results,
 		};
 	} catch (e) {
+		if (e instanceof CapacityExceededError) {
+			throw data(
+				{
+					error: "capacity_exceeded",
+					resource: e.resource,
+					current: e.current,
+					limit: e.limit,
+					tier: e.tier,
+					isExpired: e.isExpired,
+					canAdd: e.canAdd,
+					upgradePath: "crew_member",
+				},
+				{ status: 403 },
+			);
+		}
 		log.error("[DOCK] Error", e);
 		return handleApiError(e);
 	}

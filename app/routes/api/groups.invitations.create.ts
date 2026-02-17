@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { getGroupTierLimits } from "~/lib/capacity.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.invitations.create";
 
@@ -47,6 +48,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (!membership || !["owner", "admin"].includes(membership.role)) {
 		throw data(
 			{ error: "You don't have permission to invite members to this group" },
+			{ status: 403 },
+		);
+	}
+
+	const tierLimits = await getGroupTierLimits(context.cloudflare.env, groupId);
+	if (!tierLimits.limits.canInviteMembers) {
+		throw data(
+			{
+				error: "feature_gated",
+				feature: "invite_members",
+				tier: tierLimits.tier,
+				upgradePath: "crew_member",
+			},
 			{ status: 403 },
 		);
 	}

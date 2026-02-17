@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { ExpiringItemsCard } from "~/components/dashboard/ExpiringItemsCard";
 import { GroceryPreviewCard } from "~/components/dashboard/GroceryPreviewCard";
 import { MealSuggestionsCard } from "~/components/dashboard/MealSuggestionsCard";
+import { WelcomeBanner } from "~/components/dashboard/WelcomeBanner";
 import {
 	ClockIcon,
 	GroceryIcon,
@@ -53,6 +54,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		latestGroceryList,
 		mealMatches,
 		expirationAlertDays,
+		welcomeVoucherRedeemed: userData?.welcomeVoucherRedeemed ?? false,
 	};
 }
 
@@ -64,6 +66,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		latestGroceryList,
 		mealMatches,
 		expirationAlertDays,
+		welcomeVoucherRedeemed,
 	} = loaderData;
 
 	return (
@@ -76,6 +79,8 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 			/>
 
 			<div className="space-y-8">
+				{!welcomeVoucherRedeemed && <WelcomeBanner promoCode="WELCOME60" />}
+
 				{/* Quick Stats Bar */}
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 					<StatCard

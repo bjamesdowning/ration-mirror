@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkCapacity } from "~/lib/capacity.server";
 import { log } from "~/lib/logging.server";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "~/lib/query-utils.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -48,6 +49,30 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const { items } = result.data;
 		const mergeItems = items.filter((item) => item.mergeTargetId);
 		const newItems = items.filter((item) => !item.mergeTargetId);
+
+		if (newItems.length > 0) {
+			const capacity = await checkCapacity(
+				context.cloudflare.env,
+				groupId,
+				"inventory",
+				newItems.length,
+			);
+			if (!capacity.allowed) {
+				throw data(
+					{
+						error: "capacity_exceeded",
+						resource: "inventory",
+						current: capacity.current,
+						limit: capacity.limit,
+						tier: capacity.tier,
+						isExpired: capacity.isExpired,
+						canAdd: capacity.canAdd,
+						upgradePath: "crew_member",
+					},
+					{ status: 403 },
+				);
+			}
+		}
 
 		// Collect all insert operations for batching
 		const batchOps = [];

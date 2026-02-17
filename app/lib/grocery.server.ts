@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -7,6 +7,8 @@ import {
 	inventory,
 	meal,
 	mealIngredient,
+	member,
+	user,
 } from "../db/schema";
 import { dockGroceryItems } from "./inventory.server";
 import { log } from "./logging.server";
@@ -21,6 +23,7 @@ import {
 	emitSupplySyncInfo,
 	type SupplySyncTelemetryContext,
 } from "./telemetry.server";
+import { TIER_LIMITS } from "./tiers.server";
 import {
 	type BaseUnit,
 	chooseReadableUnit,
@@ -36,6 +39,35 @@ const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
 /** grocery_item insert: id, listId, name, quantity, unit, domain, isPurchased, sourceMealId, createdAt = 9 params/row */
 const D1_MAX_GROCERY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 9);
+
+async function getGroupGroceryListCapacity(
+	d1: ReturnType<typeof drizzle>,
+	organizationId: string,
+) {
+	const [ownerRow] = await d1
+		.select({
+			tier: user.tier,
+			tierExpiresAt: user.tierExpiresAt,
+		})
+		.from(member)
+		.innerJoin(user, eq(member.userId, user.id))
+		.where(
+			and(eq(member.organizationId, organizationId), eq(member.role, "owner")),
+		);
+
+	// Fallback to free limits if owner lookup fails.
+	if (!ownerRow) return TIER_LIMITS.free.maxGroceryLists;
+
+	const now = Date.now();
+	const isExpired =
+		ownerRow.tier === "crew_member" &&
+		ownerRow.tierExpiresAt &&
+		new Date(ownerRow.tierExpiresAt).getTime() <= now;
+	const effectiveTier =
+		ownerRow.tier === "crew_member" && !isExpired ? "crew_member" : "free";
+
+	return TIER_LIMITS[effectiveTier].maxGroceryLists;
+}
 
 export interface GroceryItemInput {
 	name: string;
@@ -364,6 +396,20 @@ export async function createGroceryList(
 ) {
 	const d1 = drizzle(db);
 	const listId = crypto.randomUUID();
+	const maxGroceryLists = await getGroupGroceryListCapacity(d1, organizationId);
+
+	if (maxGroceryLists !== -1) {
+		const [countResult] = await d1
+			.select({ count: sql<number>`count(*)` })
+			.from(groceryList)
+			.where(eq(groceryList.organizationId, organizationId));
+		const currentCount = countResult?.count ?? 0;
+		if (currentCount >= maxGroceryLists) {
+			throw new Error(
+				`capacity_exceeded:groceryLists:${currentCount}:${maxGroceryLists}`,
+			);
+		}
+	}
 
 	await d1.insert(groceryList).values({
 		id: listId,
@@ -1233,11 +1279,11 @@ async function syncSupplyFromIngredientRows(
  * Docks all purchased items from the list into inventory and removes them from the list.
  */
 export async function completeGroceryList(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	listId: string,
 ) {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
 	// 1. Get purchased items
 	const purchasedItems = await d1
@@ -1256,7 +1302,7 @@ export async function completeGroceryList(
 	}
 
 	// 2. Dock them
-	const results = await dockGroceryItems(db, organizationId, purchasedItems);
+	const results = await dockGroceryItems(env, organizationId, purchasedItems);
 
 	// 3. Remove them from the list (cleanup)
 	for (const deleteChunk of chunkArray(purchasedItems, D1_MAX_BOUND_PARAMS)) {

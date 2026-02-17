@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
+import { invalidateGroupTierCache } from "./capacity.server";
 import { log } from "./logging.server";
 import { getStripe } from "./stripe.server";
 
@@ -10,7 +11,11 @@ import { getStripe } from "./stripe.server";
 // Centralised cost map for every credit-consuming operation. Add new entries
 // here when new AI features are introduced so pricing stays in one place.
 export const AI_COSTS = {
-	MEAL_GENERATE: 5,
+	SCAN: 2,
+	MEAL_GENERATE: 2,
+	IMPORT_URL: 1,
+	ORGANIZE_CARGO: 2,
+	MEAL_PLAN_WEEKLY: 3,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -219,6 +224,16 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 		throw new Error(`Session ${sessionId} is not paid`);
 	}
 
+	const checkoutType = session.metadata?.type ?? "credits";
+	if (checkoutType !== "credits") {
+		return {
+			success: true,
+			userId: session.metadata?.userId ?? null,
+			organizationId: session.metadata?.organizationId ?? null,
+			credits: 0,
+		};
+	}
+
 	// 2. Extract metadata
 	const userId = session.metadata?.userId; // Who made the purchase
 	const organizationId = session.metadata?.organizationId; // Who gets the credits
@@ -229,6 +244,14 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 	}
 
 	const credits = Number.parseInt(creditsStr, 10);
+
+	if (userId && typeof session.customer === "string") {
+		const db = drizzle(env.DB, { schema });
+		await db
+			.update(schema.user)
+			.set({ stripeCustomerId: session.customer })
+			.where(eq(schema.user.id, userId));
+	}
 
 	// 3. Fulfill credits (Idempotent)
 	await addCredits(
@@ -248,4 +271,129 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 		organizationId,
 		credits,
 	};
+}
+
+async function invalidateTierCacheForUser(env: Env, userId: string) {
+	const db = drizzle(env.DB, { schema });
+	const ownedMemberships = await db.query.member.findMany({
+		where: (member, { and, eq }) =>
+			and(eq(member.userId, userId), eq(member.role, "owner")),
+		columns: {
+			organizationId: true,
+		},
+	});
+
+	await Promise.all(
+		ownedMemberships.map((membership) =>
+			invalidateGroupTierCache(env.RATION_KV, membership.organizationId),
+		),
+	);
+}
+
+export async function processSubscriptionCheckoutSession(
+	env: Env,
+	sessionId: string,
+) {
+	const stripe = getStripe(env);
+	const session = await stripe.checkout.sessions.retrieve(sessionId);
+	const subscriptionId = session.subscription;
+	if (!subscriptionId || typeof subscriptionId !== "string") {
+		throw new Error(`Session ${sessionId} is missing subscription`);
+	}
+
+	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+	const userId = subscription.metadata?.userId ?? session.metadata?.userId;
+	const organizationId =
+		subscription.metadata?.organizationId ?? session.metadata?.organizationId;
+
+	if (!userId || !organizationId) {
+		throw new Error(`Subscription ${subscriptionId} missing metadata`);
+	}
+
+	const currentPeriodEnd =
+		(subscription as unknown as { current_period_end?: number })
+			.current_period_end ?? Math.floor(Date.now() / 1000);
+	const periodEnd = new Date(currentPeriodEnd * 1000);
+	const db = drizzle(env.DB, { schema });
+	await db
+		.update(schema.user)
+		.set({
+			tier: "crew_member",
+			tierExpiresAt: periodEnd,
+		})
+		.where(eq(schema.user.id, userId));
+
+	await invalidateTierCacheForUser(env, userId);
+
+	await addCredits(env, organizationId, userId, 60, "Crew Member Credits", {
+		sessionId,
+	});
+
+	return { userId, organizationId, periodEnd };
+}
+
+export async function processSubscriptionInvoice(
+	env: Env,
+	subscriptionId: string,
+	invoiceId: string,
+) {
+	const stripe = getStripe(env);
+	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+	const userId = subscription.metadata?.userId;
+	const organizationId = subscription.metadata?.organizationId;
+
+	if (!userId || !organizationId) {
+		throw new Error(`Subscription ${subscriptionId} missing metadata`);
+	}
+
+	const currentPeriodEnd =
+		(subscription as unknown as { current_period_end?: number })
+			.current_period_end ?? Math.floor(Date.now() / 1000);
+	const periodEnd = new Date(currentPeriodEnd * 1000);
+	const db = drizzle(env.DB, { schema });
+	await db
+		.update(schema.user)
+		.set({
+			tier: "crew_member",
+			tierExpiresAt: periodEnd,
+		})
+		.where(eq(schema.user.id, userId));
+
+	await invalidateTierCacheForUser(env, userId);
+
+	await addCredits(
+		env,
+		organizationId,
+		userId,
+		60,
+		"Crew Member Renewal Credits",
+		{ sessionId: invoiceId },
+	);
+
+	return { userId, organizationId, periodEnd };
+}
+
+export async function downgradeExpiredSubscription(
+	env: Env,
+	subscriptionId: string,
+) {
+	const stripe = getStripe(env);
+	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+	const userId = subscription.metadata?.userId;
+
+	if (!userId) {
+		throw new Error(`Subscription ${subscriptionId} missing user metadata`);
+	}
+
+	const db = drizzle(env.DB, { schema });
+	await db
+		.update(schema.user)
+		.set({
+			tier: "free",
+			tierExpiresAt: null,
+		})
+		.where(eq(schema.user.id, userId));
+
+	await invalidateTierCacheForUser(env, userId);
+	return { userId };
 }

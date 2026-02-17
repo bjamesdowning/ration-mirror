@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
+import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.create";
@@ -52,6 +53,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const db = drizzle(context.cloudflare.env.DB, { schema });
+
+	const groupCapacity = await checkOwnedGroupCapacity(
+		context.cloudflare.env,
+		user.id,
+	);
+	if (!groupCapacity.allowed) {
+		throw data(
+			{
+				error: "capacity_exceeded",
+				resource: "owned_groups",
+				current: groupCapacity.current,
+				limit: groupCapacity.limit,
+				tier: groupCapacity.tier,
+				canAdd: groupCapacity.canCreate,
+				upgradePath: "crew_member",
+			},
+			{ status: 403 },
+		);
+	}
 
 	// Check slug uniqueness
 	const existing = await db.query.organization.findFirst({

@@ -25,8 +25,15 @@ export function CreditShop({
 	// Initialize Stripe
 	const stripePromise = loadStripe(stripePublishableKey);
 
-	const handlePurchase = async (packKey: "SMALL" | "LARGE") => {
+	const handlePurchase = async (
+		packKey:
+			| "TASTE_TEST"
+			| "SUPPLY_RUN"
+			| "MISSION_CRATE"
+			| "ORBITAL_STOCKPILE",
+	) => {
 		const formData = new FormData();
+		formData.append("type", "credits");
 		formData.append("pack", packKey);
 		formData.append("returnUrl", returnUrl);
 
@@ -81,36 +88,34 @@ export function CreditShop({
 				</div>
 			)}
 
-			<div className="grid md:grid-cols-2 gap-6">
-				{/* 50 Credits Pack */}
+			<div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
 				<button
 					type="button"
-					onClick={() => handlePurchase("SMALL")}
+					onClick={() => handlePurchase("TASTE_TEST")}
 					disabled={checkoutFetcher.state !== "idle"}
 					className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
 				>
 					<div className="absolute inset-0 bg-gradient-to-br from-transparent to-platinum/10 opacity-0 group-hover:opacity-100 transition-opacity" />
 					<div className="relative z-10">
 						<div className="flex justify-between items-start mb-4">
-							<div className="text-label text-muted">Standard Pack</div>
-							<div className="text-2xl font-bold text-carbon">€5</div>
+							<div className="text-label text-muted">Taste Test</div>
+							<div className="text-2xl font-bold text-carbon">€0.99</div>
 						</div>
 						<div className="text-5xl font-bold text-carbon mb-2 group-hover:text-hyper-green transition-colors">
-							50
+							15
 						</div>
 						<div className="text-label text-muted">Credits</div>
 						<div className="mt-4 text-data text-muted">
-							≈ 10 meal generations
+							≈ 7 scans or generations
 						</div>
 					</div>
 				</button>
 
-				{/* 500 Credits Pack */}
 				<button
 					type="button"
-					onClick={() => handlePurchase("LARGE")}
+					onClick={() => handlePurchase("SUPPLY_RUN")}
 					disabled={checkoutFetcher.state !== "idle"}
-					className="glass-panel rounded-xl p-6 shadow-glow-sm hover:shadow-glow transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+					className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
 				>
 					<div className="absolute inset-0 bg-gradient-to-br from-transparent to-hyper-green/5 opacity-0 group-hover:opacity-100 transition-opacity" />
 					<div className="absolute top-4 right-4 text-xs bg-hyper-green text-carbon px-2 py-1 rounded-md font-semibold z-20">
@@ -118,15 +123,57 @@ export function CreditShop({
 					</div>
 					<div className="relative z-10">
 						<div className="flex justify-between items-start mb-4">
-							<div className="text-label text-muted">Bulk Pack</div>
-							<div className="text-2xl font-bold text-carbon">€40</div>
+							<div className="text-label text-muted">Supply Run</div>
+							<div className="text-2xl font-bold text-carbon">€4.99</div>
+						</div>
+						<div className="text-5xl font-bold text-carbon mb-2 group-hover:text-hyper-green transition-colors">
+							60
+						</div>
+						<div className="text-label text-muted">Credits</div>
+						<div className="mt-4 text-data text-muted">
+							≈ 30 scans or generations
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onClick={() => handlePurchase("MISSION_CRATE")}
+					disabled={checkoutFetcher.state !== "idle"}
+					className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+				>
+					<div className="relative z-10">
+						<div className="flex justify-between items-start mb-4">
+							<div className="text-label text-muted">Mission Crate</div>
+							<div className="text-2xl font-bold text-carbon">€9.99</div>
+						</div>
+						<div className="text-5xl font-bold text-carbon mb-2 group-hover:text-hyper-green transition-colors">
+							150
+						</div>
+						<div className="text-label text-muted">Credits</div>
+						<div className="mt-4 text-data text-muted">
+							≈ 75 scans or generations
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onClick={() => handlePurchase("ORBITAL_STOCKPILE")}
+					disabled={checkoutFetcher.state !== "idle"}
+					className="glass-panel rounded-xl p-6 hover:shadow-glow transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+				>
+					<div className="relative z-10">
+						<div className="flex justify-between items-start mb-4">
+							<div className="text-label text-muted">Orbital Stockpile</div>
+							<div className="text-2xl font-bold text-carbon">€24.99</div>
 						</div>
 						<div className="text-5xl font-bold text-carbon mb-2 group-hover:text-hyper-green transition-colors">
 							500
 						</div>
 						<div className="text-label text-muted">Credits</div>
 						<div className="mt-4 text-data text-muted">
-							≈ 100 meal generations
+							≈ 250 scans or generations
 						</div>
 					</div>
 				</button>

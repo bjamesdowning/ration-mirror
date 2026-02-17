@@ -4,6 +4,8 @@
 
 import type { Session, User } from "better-auth";
 
+export type TierSlug = "free" | "crew_member";
+
 // User settings stored in user.settings JSON field
 export interface UserSettings {
 	unitSystem?: "metric" | "imperial";

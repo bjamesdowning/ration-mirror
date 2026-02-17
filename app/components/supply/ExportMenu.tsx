@@ -91,6 +91,18 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 								<div className="text-xs text-muted">For notes apps</div>
 							</div>
 						</button>
+						<a
+							href="https://www.walmart.com/cp/grocery/976759"
+							target="_blank"
+							rel="noreferrer"
+							className="w-full px-4 py-2 rounded-lg text-left text-carbon hover:bg-platinum cursor-pointer transition-colors flex items-center gap-3"
+						>
+							<span className="w-5 h-5 text-muted shrink-0">🛒</span>
+							<div>
+								<div className="text-sm text-carbon">Order Groceries</div>
+								<div className="text-xs text-muted">Open Walmart Grocery</div>
+							</div>
+						</a>
 					</div>
 				</>
 			)}

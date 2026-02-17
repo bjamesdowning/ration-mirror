@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher, useRevalidator } from "react-router";
+import {
+	data,
+	useFetcher,
+	useRevalidator,
+	useRouteLoaderData,
+} from "react-router";
 
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
@@ -26,6 +31,7 @@ import { ShareModal } from "~/components/supply/ShareModal";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import {
 	completeGroceryList,
@@ -127,7 +133,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const { listId } = parsed.data;
 
 			const result = await completeGroceryList(
-				context.cloudflare.env.DB,
+				context.cloudflare.env,
 				groupId,
 				listId,
 			);
@@ -136,12 +142,32 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		return { error: "Invalid intent" };
 	} catch (e) {
+		if (e instanceof CapacityExceededError) {
+			throw data(
+				{
+					error: "capacity_exceeded",
+					resource: e.resource,
+					current: e.current,
+					limit: e.limit,
+					tier: e.tier,
+					isExpired: e.isExpired,
+					canAdd: e.canAdd,
+					upgradePath: "crew_member",
+				},
+				{ status: 403 },
+			);
+		}
 		return handleApiError(e);
 	}
 }
 
 export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 	const { list, activeSelectionCount, availableTags, inventory } = loaderData;
+	const dashboardData = useRouteLoaderData("routes/dashboard") as {
+		capacity?: {
+			groceryLists?: { current: number; limit: number };
+		};
+	} | null;
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
 	const revalidator = useRevalidator();
@@ -354,6 +380,14 @@ export default function GroceryDashboard({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
+			{dashboardData?.capacity?.groceryLists && (
+				<p className="text-xs text-muted -mt-2 mb-2">
+					Capacity:{" "}
+					{dashboardData.capacity.groceryLists.limit === -1
+						? `${dashboardData.capacity.groceryLists.current} lists (unlimited)`
+						: `${dashboardData.capacity.groceryLists.current}/${dashboardData.capacity.groceryLists.limit} lists`}
+				</p>
+			)}
 
 			{!list ? (
 				<EmptyPanel

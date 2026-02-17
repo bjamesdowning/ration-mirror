@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useActionData, useRouteLoaderData } from "react-router";
 import { z } from "zod";
 import {
 	CsvImportButton,
@@ -27,8 +28,10 @@ import {
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { CapacityExceededError } from "~/lib/capacity.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import {
 	addOrMergeItem,
@@ -131,19 +134,37 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const { mergeChoice, mergeTargetId } = mergeMetaResult.data;
-		const addResult = await addOrMergeItem(
-			context.cloudflare.env,
-			groupId,
-			result.data,
-			{
-				allowFuzzyCandidate: true,
-				forceCreateNew: mergeChoice === "new",
-				mergeTargetId:
-					mergeChoice === "merge" && typeof mergeTargetId === "string"
-						? mergeTargetId
-						: undefined,
-			},
-		);
+		let addResult: Awaited<ReturnType<typeof addOrMergeItem>>;
+		try {
+			addResult = await addOrMergeItem(
+				context.cloudflare.env,
+				groupId,
+				result.data,
+				{
+					allowFuzzyCandidate: true,
+					forceCreateNew: mergeChoice === "new",
+					mergeTargetId:
+						mergeChoice === "merge" && typeof mergeTargetId === "string"
+							? mergeTargetId
+							: undefined,
+				},
+			);
+		} catch (error) {
+			if (error instanceof CapacityExceededError) {
+				return {
+					success: false,
+					error: "capacity_exceeded",
+					resource: error.resource,
+					current: error.current,
+					limit: error.limit,
+					tier: error.tier,
+					isExpired: error.isExpired,
+					canAdd: error.canAdd,
+					upgradePath: "crew_member",
+				};
+			}
+			throw error;
+		}
 
 		if (addResult.status === "invalid_merge_target") {
 			return {
@@ -227,9 +248,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 // --- COMPONENT ---
 export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	const { inventory: initialInventory, availableTags } = loaderData;
+	const actionData = useActionData<{
+		error?: string;
+		current?: number;
+		limit?: number;
+	}>();
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	const dashboardData = useRouteLoaderData("routes/dashboard") as {
+		capacity?: {
+			inventory?: { current: number; limit: number };
+		};
+	} | null;
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const importRef = useRef<CsvImportButtonHandle>(null);
 	const {
@@ -279,6 +311,12 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 	const handleImportComplete = () => {
 		setShowQuickAdd(false);
 	};
+
+	useEffect(() => {
+		if (actionData?.error === "capacity_exceeded") {
+			setShowUpgradePrompt(true);
+		}
+	}, [actionData]);
 
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
@@ -342,6 +380,17 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setShowUpgradePrompt(false)}
+				title="Cargo capacity reached"
+				description={
+					typeof actionData?.current === "number" &&
+					typeof actionData?.limit === "number"
+						? `You are at ${actionData.current}/${actionData.limit} items. Upgrade to Crew Member for unlimited capacity.`
+						: undefined
+				}
+			/>
 			{/* Hidden instances for refs + modals (always in DOM, even on mobile) */}
 			<CameraInput
 				ref={cameraRef}
@@ -367,6 +416,14 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
+			{dashboardData?.capacity?.inventory && (
+				<p className="text-xs text-muted -mt-2 mb-2">
+					Capacity:{" "}
+					{dashboardData.capacity.inventory.limit === -1
+						? `${dashboardData.capacity.inventory.current} items (unlimited)`
+						: `${dashboardData.capacity.inventory.current}/${dashboardData.capacity.inventory.limit} items`}
+				</p>
+			)}
 
 			<div className="space-y-6">
 				<div className="hidden md:block">
@@ -435,6 +492,14 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 								>
 									Add First Item
 								</button>
+								<a
+									href="https://www.hellofresh.com/"
+									target="_blank"
+									rel="noreferrer"
+									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+								>
+									Explore Meal Kits
+								</a>
 							</div>
 						}
 					/>

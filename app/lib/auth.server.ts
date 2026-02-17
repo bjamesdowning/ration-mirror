@@ -80,6 +80,24 @@ export function createAuth(env: Cloudflare.Env) {
 					returned: true,
 					input: false,
 				},
+				tier: {
+					type: "string",
+					required: false,
+					returned: true,
+					input: false,
+				},
+				tierExpiresAt: {
+					type: "number",
+					required: false,
+					returned: true,
+					input: false,
+				},
+				welcomeVoucherRedeemed: {
+					type: "boolean",
+					required: false,
+					returned: true,
+					input: false,
+				},
 			},
 		},
 		plugins: [

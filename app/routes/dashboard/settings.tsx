@@ -96,6 +96,9 @@ export async function loader(args: Route.LoaderArgs) {
 			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
 			transactionStatus,
 			isAdmin: user.isAdmin ?? false,
+			tier: user.tier ?? "free",
+			tierExpiresAt: user.tierExpiresAt ?? null,
+			welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -221,6 +224,7 @@ export async function action(args: Route.ActionArgs) {
 export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings, members, isOwner, organizationId, userOrganizations } =
 		loaderData;
+	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
@@ -242,6 +246,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-default-group";
 
+	useEffect(() => {
+		if (billingPortalFetcher.data?.url) {
+			window.location.href = billingPortalFetcher.data.url;
+		}
+	}, [billingPortalFetcher.data]);
+
 	return (
 		<div className="space-y-6">
 			<PageHeader
@@ -251,6 +261,46 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			<p className="text-sm text-muted">Preferences & Configuration</p>
 
 			<div className="space-y-6">
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">Your Plan</h2>
+					<p className="text-sm text-muted mb-4">
+						Current tier:{" "}
+						<span className="font-semibold text-carbon">
+							{loaderData.tier === "crew_member" ? "Crew Member" : "Free"}
+						</span>
+					</p>
+					{loaderData.tier === "crew_member" && (
+						<p className="text-xs text-muted mb-4">
+							Renews on{" "}
+							{loaderData.tierExpiresAt
+								? new Date(loaderData.tierExpiresAt).toLocaleDateString()
+								: "unknown"}
+						</p>
+					)}
+					<div className="flex flex-wrap gap-3">
+						<Link
+							to="/dashboard/pricing"
+							className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold"
+						>
+							View Pricing
+						</Link>
+						{loaderData.tier === "crew_member" && (
+							<button
+								type="button"
+								onClick={() =>
+									billingPortalFetcher.submit(null, {
+										method: "post",
+										action: "/api/billing-portal",
+									})
+								}
+								className="px-4 py-2 bg-platinum text-carbon rounded-lg font-medium"
+							>
+								Manage Subscription
+							</button>
+						)}
+					</div>
+				</section>
+
 				{/* User Profile & Credits */}
 				<ReferenceIdSection credits={loaderData.credits} />
 

@@ -1,7 +1,18 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	lte,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { type groceryItem, inventory, ledger } from "../db/schema";
+import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
@@ -270,6 +281,18 @@ export async function addOrMergeItem(
 				return { status: "merge_candidate" as const, candidate: bestCandidate };
 			}
 		}
+	}
+
+	const capacity = await checkCapacity(env, organizationId, "inventory", 1);
+	if (!capacity.allowed) {
+		throw new CapacityExceededError({
+			resource: "inventory",
+			current: capacity.current,
+			limit: capacity.limit,
+			tier: capacity.tier,
+			isExpired: capacity.isExpired,
+			canAdd: capacity.canAdd,
+		});
 	}
 
 	const [newItem] = await d1
@@ -546,15 +569,22 @@ export async function deduplicateInventory(
  * - Logs to ledger.
  */
 export async function dockGroceryItems(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	items: (typeof groceryItem.$inferSelect)[],
 ) {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 	const results = {
 		updated: 0,
 		created: 0,
 	};
+
+	const currentInventoryCount = await d1
+		.select({ count: sql<number>`count(*)` })
+		.from(inventory)
+		.where(eq(inventory.organizationId, organizationId));
+
+	const inventoryMapCount = currentInventoryCount[0]?.count ?? 0;
 
 	// 1. Get current inventory for matching
 	const currentInventory = await d1
@@ -572,6 +602,7 @@ export async function dockGroceryItems(
 	// 2. Collect all operations for batching
 	const batchOps = [];
 	const now = new Date();
+	let newRowsCreated = 0;
 
 	for (const item of items) {
 		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
@@ -593,6 +624,23 @@ export async function dockGroceryItems(
 			existing.quantity += item.quantity;
 			results.updated++;
 		} else {
+			const capacity = await checkCapacity(
+				env,
+				organizationId,
+				"inventory",
+				newRowsCreated + 1,
+			);
+			if (!capacity.allowed) {
+				throw new CapacityExceededError({
+					resource: "inventory",
+					current: inventoryMapCount + newRowsCreated,
+					limit: capacity.limit,
+					tier: capacity.tier,
+					isExpired: capacity.isExpired,
+					canAdd: capacity.canAdd,
+				});
+			}
+
 			// Queue insert for new item
 			const newItemId = crypto.randomUUID();
 
@@ -626,6 +674,7 @@ export async function dockGroceryItems(
 				updatedAt: now,
 			});
 			results.created++;
+			newRowsCreated++;
 		}
 
 		// Queue ledger entry

@@ -23,6 +23,14 @@ export const user = sqliteTable("user", {
 		.notNull()
 		.default(sql`(unixepoch())`),
 	isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+	tier: text("tier").notNull().default("free"), // 'free' | 'crew_member'
+	tierExpiresAt: integer("tier_expires_at", { mode: "timestamp" }),
+	welcomeVoucherRedeemed: integer("welcome_voucher_redeemed", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(false),
+	stripeCustomerId: text("stripe_customer_id"),
 	// Extended fields
 	settings: text("settings", { mode: "json" })
 		.$type<UserSettings>()

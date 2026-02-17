@@ -2,16 +2,41 @@ import { Outlet } from "react-router";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkCapacity, getGroupTierLimits } from "~/lib/capacity.server";
 import { checkBalance } from "~/lib/ledger.server";
 import type { Route } from "./+types/dashboard";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 
-	// Fetch fresh balance for the active group
-	const balance = await checkBalance(context.cloudflare.env, groupId);
+	const [balance, tierInfo, inventoryCapacity, mealsCapacity, listCapacity] =
+		await Promise.all([
+			checkBalance(context.cloudflare.env, groupId),
+			getGroupTierLimits(context.cloudflare.env, groupId),
+			checkCapacity(context.cloudflare.env, groupId, "inventory", 0),
+			checkCapacity(context.cloudflare.env, groupId, "meals", 0),
+			checkCapacity(context.cloudflare.env, groupId, "groceryLists", 0),
+		]);
 
-	return { balance };
+	return {
+		balance,
+		tier: tierInfo.tier,
+		isTierExpired: tierInfo.isExpired,
+		capacity: {
+			inventory: {
+				current: inventoryCapacity.current,
+				limit: inventoryCapacity.limit,
+			},
+			meals: {
+				current: mealsCapacity.current,
+				limit: mealsCapacity.limit,
+			},
+			groceryLists: {
+				current: listCapacity.current,
+				limit: listCapacity.limit,
+			},
+		},
+	};
 }
 
 export default function DashboardLayout() {

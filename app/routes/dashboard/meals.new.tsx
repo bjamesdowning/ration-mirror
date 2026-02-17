@@ -2,6 +2,7 @@ import { data, redirect } from "react-router";
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
@@ -38,6 +39,27 @@ export async function action({ request, context }: Route.ActionArgs) {
 				);
 			}
 			const inputs = inputData.map((item) => MealSchema.parse(item));
+			const capacity = await checkCapacity(
+				context.cloudflare.env,
+				groupId,
+				"meals",
+				inputs.length,
+			);
+			if (!capacity.allowed) {
+				throw data(
+					{
+						error: "capacity_exceeded",
+						resource: "meals",
+						current: capacity.current,
+						limit: capacity.limit,
+						tier: capacity.tier,
+						isExpired: capacity.isExpired,
+						canAdd: capacity.canAdd,
+						upgradePath: "crew_member",
+					},
+					{ status: 403 },
+				);
+			}
 			const meals = await createMeals(
 				context.cloudflare.env.DB,
 				groupId,
@@ -48,6 +70,27 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const input = MealSchema.parse(inputData);
+		const capacity = await checkCapacity(
+			context.cloudflare.env,
+			groupId,
+			"meals",
+			1,
+		);
+		if (!capacity.allowed) {
+			throw data(
+				{
+					error: "capacity_exceeded",
+					resource: "meals",
+					current: capacity.current,
+					limit: capacity.limit,
+					tier: capacity.tier,
+					isExpired: capacity.isExpired,
+					canAdd: capacity.canAdd,
+					upgradePath: "crew_member",
+				},
+				{ status: 403 },
+			);
+		}
 		const meal = await createMeal(context.cloudflare.env.DB, groupId, input);
 		if (!meal) throw new Error("Failed to create meal");
 		return redirect(`/dashboard/meals/${meal.id}`);

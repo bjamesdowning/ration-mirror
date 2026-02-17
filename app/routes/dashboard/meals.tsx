@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRouteLoaderData } from "react-router";
 import { EmptyPanel } from "~/components/dashboard/EmptyPanel";
 import { PanelToolbar } from "~/components/dashboard/PanelToolbar";
 import {
@@ -107,6 +107,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const { meals, availableTags, inventory, activeMealIds } = loaderData;
+	const dashboardData = useRouteLoaderData("routes/dashboard") as {
+		capacity?: {
+			meals?: { current: number; limit: number };
+		};
+	} | null;
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -257,6 +262,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
+			{dashboardData?.capacity?.meals && (
+				<p className="text-xs text-muted -mt-2 mb-2">
+					Capacity:{" "}
+					{dashboardData.capacity.meals.limit === -1
+						? `${dashboardData.capacity.meals.current} meals (unlimited)`
+						: `${dashboardData.capacity.meals.current}/${dashboardData.capacity.meals.limit} meals`}
+				</p>
+			)}
 
 			<div className="space-y-6">
 				{/* Selection status bar */}

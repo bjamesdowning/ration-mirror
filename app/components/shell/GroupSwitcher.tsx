@@ -13,6 +13,7 @@ export function GroupSwitcher() {
 	// Get credits from dashboard loader
 	const dashboardData = useRouteLoaderData("routes/dashboard") as {
 		balance: number;
+		tier?: "free" | "crew_member";
 	} | null;
 
 	const activeOrgId = session.data?.session.activeOrganizationId;
@@ -27,6 +28,7 @@ export function GroupSwitcher() {
 	const displayName =
 		activeOrg?.name || (session.isPending ? "Loading..." : "Select Group");
 	const credits = dashboardData?.balance ?? activeOrg?.credits ?? 0;
+	const tierLabel = dashboardData?.tier === "crew_member" ? "CREW" : "FREE";
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -70,9 +72,20 @@ export function GroupSwitcher() {
 						{displayName}
 					</span>
 					{activeOrg && (
-						<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium">
-							{credits} Credits
-						</span>
+						<div className="flex items-center gap-2">
+							<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium">
+								{credits} Credits
+							</span>
+							<span
+								className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+									tierLabel === "CREW"
+										? "bg-hyper-green/10 text-hyper-green"
+										: "bg-platinum text-muted"
+								}`}
+							>
+								{tierLabel}
+							</span>
+						</div>
 					)}
 				</div>
 				<svg

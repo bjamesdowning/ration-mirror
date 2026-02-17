@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { generateShareToken, revokeShareToken } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -34,6 +35,22 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 	try {
 		if (request.method === "POST") {
+			const tierLimits = await getGroupTierLimits(
+				context.cloudflare.env,
+				groupId,
+			);
+			if (!tierLimits.limits.canShareGroceryLists) {
+				throw data(
+					{
+						error: "feature_gated",
+						feature: "share_grocery_list",
+						tier: tierLimits.tier,
+						upgradePath: "crew_member",
+					},
+					{ status: 403 },
+				);
+			}
+
 			const { shareToken, shareExpiresAt } = await generateShareToken(
 				context.cloudflare.env.DB,
 				groupId,

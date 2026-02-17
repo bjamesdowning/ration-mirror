@@ -51,7 +51,7 @@ export default [
 
 	// API - Inventory
 	route("api/inventory/:id", "routes/api/inventory.$id.ts"),
-	route("api/inventory/batch", "routes/api/inventory.batch.ts"),
+	route("api/inventory/batch", "routes/api/inventory.batch.tsx"),
 
 	// API - Grocery Lists
 	route("api/grocery-lists", "routes/api/grocery-lists.ts"),
@@ -76,11 +76,11 @@ export default [
 	),
 
 	// API - Other
-	route("api/scan", "routes/api/scan.ts"),
+	route("api/scan", "routes/api/scan.tsx"),
 	route("api/search", "routes/api/search.ts"),
-	route("api/checkout", "routes/api/checkout.ts"),
-	route("api/webhook", "routes/api/webhook.ts"),
-	route("api/user/purge", "routes/api/user/purge.ts"),
+	route("api/checkout", "routes/api/checkout.tsx"),
+	route("api/webhook", "routes/api/webhook.tsx"),
+	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/groups/create", "routes/api/groups.create.ts"),
 	route("api/groups/delete", "routes/api/groups.delete.ts"),

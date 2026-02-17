@@ -355,10 +355,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						</div>
 					)}
 
-					<CreditShop
-						stripePublishableKey={loaderData.stripePublishableKey}
-						returnUrl="/dashboard/settings"
-					/>
+					{loaderData.stripePublishableKey && (
+						<CreditShop
+							stripePublishableKey={loaderData.stripePublishableKey}
+							returnUrl="/dashboard/settings"
+						/>
+					)}
 				</section>
 
 				{/* Group Management */}

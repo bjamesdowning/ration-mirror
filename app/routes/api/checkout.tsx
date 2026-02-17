@@ -5,7 +5,6 @@ import { checkRateLimit } from "~/lib/rate-limiter.server";
 import {
 	CREDIT_PACKS,
 	getCreditPackPriceId,
-	getPromotionCodeId,
 	getStripe,
 	getSubscriptionPriceId,
 	SUBSCRIPTION_PRODUCTS,
@@ -91,6 +90,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 						quantity: 1,
 					},
 				],
+				subscription_data: {
+					metadata: {
+						userId,
+						organizationId: groupId,
+						tier: selectedSubscription.tier,
+					},
+				},
 				metadata: {
 					type: "subscription",
 					userId,
@@ -123,14 +129,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			allow_promotion_codes: true,
 			metadata: {
 				type: "credits",
-				userId, // Who triggered it
-				organizationId: groupId, // Who gets the credits
+				userId,
+				organizationId: groupId,
 				credits: selectedPack.credits.toString(),
 				pack: packKey,
-				welcomePromoCodeId: getPromotionCodeId(
-					context.cloudflare.env,
-					"WELCOME60",
-				),
 			},
 			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
 		});

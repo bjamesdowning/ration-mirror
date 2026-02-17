@@ -25,12 +25,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("Missing signature", { status: 400 });
 	}
 
+	const webhookSecret = context.cloudflare.env.STRIPE_WEBHOOK_SECRET;
+	if (!webhookSecret) {
+		return new Response("Webhook not configured", { status: 503 });
+	}
+
 	try {
 		// 2. Verify webhook signature
 		const event = stripe.webhooks.constructEvent(
 			body,
 			signature,
-			context.cloudflare.env.STRIPE_WEBHOOK_SECRET,
+			webhookSecret,
 		);
 
 		// 3. Check event timestamp for replay protection

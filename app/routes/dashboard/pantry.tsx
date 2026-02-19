@@ -416,14 +416,14 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{dashboardData?.capacity?.inventory && (
-				<p className="text-xs text-muted -mt-2 mb-2">
-					Capacity:{" "}
-					{dashboardData.capacity.inventory.limit === -1
-						? `${dashboardData.capacity.inventory.current} items (unlimited)`
-						: `${dashboardData.capacity.inventory.current}/${dashboardData.capacity.inventory.limit} items`}
-				</p>
-			)}
+			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
+			{dashboardData?.capacity?.inventory &&
+				dashboardData.capacity.inventory.limit !== -1 && (
+					<p className="text-xs text-muted -mt-2 mb-2">
+						{dashboardData.capacity.inventory.current}/
+						{dashboardData.capacity.inventory.limit} items
+					</p>
+				)}
 
 			<div className="space-y-6">
 				<div className="hidden md:block">
@@ -456,6 +456,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 								defaultDomain={
 									activeDomain === "all" ? undefined : activeDomain
 								}
+								onUpgradeRequired={() => setShowUpgradePrompt(true)}
 							/>
 						}
 					/>
@@ -466,6 +467,7 @@ export default function PantryPage({ loaderData }: Route.ComponentProps) {
 					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						<IngestForm
 							defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+							onUpgradeRequired={() => setShowUpgradePrompt(true)}
 						/>
 					</div>
 				)}

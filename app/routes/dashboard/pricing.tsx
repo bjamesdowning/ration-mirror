@@ -165,13 +165,12 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Pantry items: 50</li>
 						<li>Meals: 20</li>
-						<li>Grocery lists: 3</li>
+						<li>1 grocery list</li>
 						<li>No member invites</li>
 					</ul>
 					<div className="mt-4 text-xs text-muted">
 						Current usage: {loaderData.counts.inventory} items,{" "}
-						{loaderData.counts.meals} meals, {loaderData.counts.groceryLists}{" "}
-						lists
+						{loaderData.counts.meals} meals
 					</div>
 				</div>
 
@@ -182,8 +181,8 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						yearly credits
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
-						<li>Unlimited pantry items, meals, and lists</li>
-						<li>Invite members and share grocery lists</li>
+						<li>Unlimited pantry items and meals</li>
+						<li>Shared grocery lists and member invites</li>
 						<li>
 							{
 								loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL

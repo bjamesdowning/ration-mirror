@@ -40,7 +40,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				groupId,
 			);
 			if (!tierLimits.limits.canShareGroceryLists) {
-				throw data(
+				return data(
 					{
 						error: "feature_gated",
 						feature: "share_grocery_list",

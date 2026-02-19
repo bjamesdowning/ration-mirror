@@ -6,6 +6,8 @@ type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 interface IngestFormProps {
 	defaultDomain?: ItemDomain;
+	/** Called when the action returns capacity_exceeded so the parent can show UpgradePrompt */
+	onUpgradeRequired?: () => void;
 }
 
 interface PendingMergeState {
@@ -26,7 +28,10 @@ interface PendingMergeState {
 	};
 }
 
-export function IngestForm({ defaultDomain }: IngestFormProps) {
+export function IngestForm({
+	defaultDomain,
+	onUpgradeRequired,
+}: IngestFormProps) {
 	const fetcher = useFetcher();
 	const formRef = useRef<HTMLFormElement>(null);
 	const isSubmitting = fetcher.state !== "idle";
@@ -46,12 +51,16 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 		}
 	}, [defaultDomain]);
 
-	// Reset form on success
+	// Reset form on success; handle capacity_exceeded via onUpgradeRequired
 	useEffect(() => {
 		if (fetcher.state !== "idle" || !fetcher.data) return;
 
 		// biome-ignore lint/suspicious/noExplicitAny: generic fetcher data
 		const data = fetcher.data as any;
+		if (data.error === "capacity_exceeded") {
+			onUpgradeRequired?.();
+			return;
+		}
 		if (
 			data.requiresMergeConfirmation &&
 			data.candidate &&
@@ -68,7 +77,7 @@ export function IngestForm({ defaultDomain }: IngestFormProps) {
 			formRef.current?.reset();
 			setPendingMerge(null);
 		}
-	}, [fetcher.state, fetcher.data]);
+	}, [fetcher.state, fetcher.data, onUpgradeRequired]);
 
 	const handleMergeChoice = (choice: "merge" | "new") => {
 		if (!pendingMerge) return;

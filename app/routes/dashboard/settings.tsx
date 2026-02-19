@@ -79,8 +79,6 @@ export async function loader(args: Route.LoaderArgs) {
 		if (sessionId) {
 			try {
 				// Detect checkout type so we apply the right fulfillment path.
-				// Subscription checkouts update user.tier AND clear the KV tier cache
-				// so the revalidation after redirect shows CREW immediately.
 				const { getStripe } = await import("../../lib/stripe.server");
 				const stripe = getStripe(env);
 				const stripeSession =
@@ -101,6 +99,21 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const credits = await checkBalance(env, groupId);
 
+		// Re-read user after fulfillment so tier/tierExpiresAt reflect any subscription update
+		const freshUser =
+			transactionStatus === "success"
+				? await db.query.user.findFirst({
+						where: (u, { eq }) => eq(u.id, userId),
+						columns: {
+							tier: true,
+							tierExpiresAt: true,
+							isAdmin: true,
+							welcomeVoucherRedeemed: true,
+						},
+					})
+				: null;
+		const displayUser = freshUser ?? user;
+
 		return {
 			settings,
 			members,
@@ -111,10 +124,10 @@ export async function loader(args: Route.LoaderArgs) {
 			credits,
 			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
 			transactionStatus,
-			isAdmin: user.isAdmin ?? false,
-			tier: user.tier ?? "free",
-			tierExpiresAt: user.tierExpiresAt ?? null,
-			welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
+			isAdmin: displayUser.isAdmin ?? false,
+			tier: displayUser.tier ?? "free",
+			tierExpiresAt: displayUser.tierExpiresAt ?? null,
+			welcomeVoucherRedeemed: displayUser.welcomeVoucherRedeemed ?? false,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);

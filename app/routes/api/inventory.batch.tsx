@@ -58,7 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				newItems.length,
 			);
 			if (!capacity.allowed) {
-				throw data(
+				return data(
 					{
 						error: "capacity_exceeded",
 						resource: "inventory",

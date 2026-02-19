@@ -1,7 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
-import { invalidateGroupTierCache } from "./capacity.server";
 import { log } from "./logging.server";
 import { getStripe } from "./stripe.server";
 
@@ -273,45 +272,6 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 	};
 }
 
-async function invalidateTierCacheForUser(env: Env, userId: string) {
-	const db = drizzle(env.DB, { schema });
-	const ownedMemberships = await db.query.member.findMany({
-		where: (member, { and, eq }) =>
-			and(eq(member.userId, userId), eq(member.role, "owner")),
-		columns: {
-			organizationId: true,
-		},
-	});
-
-	// #region agent log
-	try {
-		await Promise.all(
-			ownedMemberships.map((membership) =>
-				invalidateGroupTierCache(env.RATION_KV, membership.organizationId),
-			),
-		);
-	} catch (kvErr) {
-		fetch("http://127.0.0.1:7242/ingest/0202d342-7d1c-4e4e-92f6-bbd90f6d215c", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				location: "ledger.server.ts:invalidateTierCacheForUser",
-				message: "KV tier cache invalidation failed (best-effort)",
-				data: {
-					errorMessage: kvErr instanceof Error ? kvErr.message : String(kvErr),
-					hypothesisId: "H4",
-				},
-				timestamp: Date.now(),
-			}),
-		}).catch(() => {});
-		log.warn("Tier cache invalidation failed (continuing)", {
-			errorMessage: kvErr instanceof Error ? kvErr.message : String(kvErr),
-		});
-		// Best-effort: do not throw so checkout fulfillment still succeeds
-	}
-	// #endregion
-}
-
 export async function processSubscriptionCheckoutSession(
 	env: Env,
 	sessionId: string,
@@ -344,8 +304,6 @@ export async function processSubscriptionCheckoutSession(
 			tierExpiresAt: periodEnd,
 		})
 		.where(eq(schema.user.id, userId));
-
-	await invalidateTierCacheForUser(env, userId);
 
 	await addCredits(env, organizationId, userId, 60, "Crew Member Credits", {
 		sessionId,
@@ -381,8 +339,6 @@ export async function processSubscriptionInvoice(
 		})
 		.where(eq(schema.user.id, userId));
 
-	await invalidateTierCacheForUser(env, userId);
-
 	await addCredits(
 		env,
 		organizationId,
@@ -416,6 +372,5 @@ export async function downgradeExpiredSubscription(
 		})
 		.where(eq(schema.user.id, userId));
 
-	await invalidateTierCacheForUser(env, userId);
 	return { userId };
 }

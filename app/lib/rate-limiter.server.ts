@@ -1,3 +1,5 @@
+import { log } from "./logging.server";
+
 /**
  * Distributed Rate Limiting using Cloudflare KV
  *
@@ -7,6 +9,7 @@
  *
  * Security: Prevents abuse by enforcing consistent rate limits globally
  * Performance: ~10-50ms latency per check (acceptable for security-critical operations)
+ * KV failures (e.g. 429) fail open to avoid cascading 500s; log.warn emitted.
  */
 
 interface RateLimitConfig {
@@ -155,11 +158,17 @@ export async function checkRateLimit(
 			windowStart: now,
 		};
 
-		// Store with TTL slightly longer than window to handle clock skew
 		const ttlSeconds = Math.ceil(config.windowMs / 1000) + 10;
-		await kv.put(key, JSON.stringify(newWindow), {
-			expirationTtl: ttlSeconds,
-		});
+		try {
+			await kv.put(key, JSON.stringify(newWindow), {
+				expirationTtl: ttlSeconds,
+			});
+		} catch (err) {
+			log.warn("Rate limit KV put failed (failing open)", {
+				limitType,
+				errorMessage: err instanceof Error ? err.message : String(err),
+			});
+		}
 
 		return {
 			allowed: true,
@@ -191,9 +200,16 @@ export async function checkRateLimit(
 	};
 
 	const ttlSeconds = Math.ceil(config.windowMs / 1000) + 10;
-	await kv.put(key, JSON.stringify(updatedWindow), {
-		expirationTtl: ttlSeconds,
-	});
+	try {
+		await kv.put(key, JSON.stringify(updatedWindow), {
+			expirationTtl: ttlSeconds,
+		});
+	} catch (err) {
+		log.warn("Rate limit KV put failed (failing open)", {
+			limitType,
+			errorMessage: err instanceof Error ? err.message : String(err),
+		});
+	}
 
 	return {
 		allowed: true,

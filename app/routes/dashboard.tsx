@@ -2,20 +2,41 @@ import { Outlet } from "react-router";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { checkCapacity, getGroupTierLimits } from "~/lib/capacity.server";
+import {
+	checkCapacityWithTier,
+	getGroupTierLimits,
+} from "~/lib/capacity.server";
 import { checkBalance } from "~/lib/ledger.server";
 import type { Route } from "./+types/dashboard";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 
-	const [balance, tierInfo, inventoryCapacity, mealsCapacity, listCapacity] =
+	const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
+	const [balance, inventoryCapacity, mealsCapacity, listCapacity] =
 		await Promise.all([
 			checkBalance(context.cloudflare.env, groupId),
-			getGroupTierLimits(context.cloudflare.env, groupId),
-			checkCapacity(context.cloudflare.env, groupId, "inventory", 0),
-			checkCapacity(context.cloudflare.env, groupId, "meals", 0),
-			checkCapacity(context.cloudflare.env, groupId, "groceryLists", 0),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"inventory",
+				tierInfo,
+				0,
+			),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"meals",
+				tierInfo,
+				0,
+			),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"groceryLists",
+				tierInfo,
+				0,
+			),
 		]);
 
 	return {

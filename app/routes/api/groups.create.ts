@@ -27,7 +27,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
+		return data(
 			{
 				error: "Too many group creation requests. Please try again later.",
 				retryAfter: rateLimitResult.retryAfter,
@@ -67,7 +67,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!groupCapacity.allowed) {
-		throw data(
+		return data(
 			{
 				error: "capacity_exceeded",
 				resource: "owned_groups",

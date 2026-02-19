@@ -8,12 +8,12 @@ import { useFetcher } from "react-router";
 
 interface CreditShopProps {
 	stripePublishableKey: string;
-	returnUrl?: string; // e.g. "/dashboard/settings"
+	returnUrl?: string; // e.g. "/dashboard/checkout/return"
 }
 
 export function CreditShop({
 	stripePublishableKey,
-	returnUrl = "/dashboard/settings",
+	returnUrl = "/dashboard/checkout/return",
 }: CreditShopProps) {
 	const checkoutFetcher = useFetcher<{
 		success: boolean;

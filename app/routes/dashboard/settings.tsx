@@ -9,7 +9,6 @@ import {
 	useFetcher,
 	useNavigate,
 	useNavigation,
-	useRevalidator,
 } from "react-router";
 import { CreditShop } from "~/components/dashboard/CreditShop";
 import { SettingsIcon } from "~/components/icons/PageIcons";
@@ -65,54 +64,19 @@ export async function loader(args: Route.LoaderArgs) {
 		});
 
 		// Fetch credits for the current group
-		const {
-			checkBalance,
-			processCheckoutSession,
-			processSubscriptionCheckoutSession,
-		} = await import("../../lib/ledger.server");
+		const { checkBalance } = await import("../../lib/ledger.server");
 
-		// Handle Stripe Return
+		// Transaction status from checkout return redirect (processed in checkout.return route)
 		const url = new URL(args.request.url);
-		const sessionId = url.searchParams.get("session_id");
-		let transactionStatus: "success" | "pending" | "failed" | null = null;
-
-		if (sessionId) {
-			try {
-				// Detect checkout type so we apply the right fulfillment path.
-				const { getStripe } = await import("../../lib/stripe.server");
-				const stripe = getStripe(env);
-				const stripeSession =
-					await stripe.checkout.sessions.retrieve(sessionId);
-				const checkoutType = stripeSession.metadata?.type ?? "credits";
-
-				if (checkoutType === "subscription") {
-					await processSubscriptionCheckoutSession(env, sessionId);
-				} else {
-					await processCheckoutSession(env, sessionId);
-				}
-				transactionStatus = "success";
-			} catch (error) {
-				log.error("Manual fulfillment failed", error);
-				transactionStatus = "failed";
-			}
-		}
+		const transactionParam = url.searchParams.get("transaction");
+		const transactionStatus: "success" | "pending" | "failed" | null =
+			transactionParam === "success"
+				? "success"
+				: transactionParam === "failed"
+					? "failed"
+					: null;
 
 		const credits = await checkBalance(env, groupId);
-
-		// Re-read user after fulfillment so tier/tierExpiresAt reflect any subscription update
-		const freshUser =
-			transactionStatus === "success"
-				? await db.query.user.findFirst({
-						where: (u, { eq }) => eq(u.id, userId),
-						columns: {
-							tier: true,
-							tierExpiresAt: true,
-							isAdmin: true,
-							welcomeVoucherRedeemed: true,
-						},
-					})
-				: null;
-		const displayUser = freshUser ?? user;
 
 		return {
 			settings,
@@ -124,10 +88,10 @@ export async function loader(args: Route.LoaderArgs) {
 			credits,
 			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
 			transactionStatus,
-			isAdmin: displayUser.isAdmin ?? false,
-			tier: displayUser.tier ?? "free",
-			tierExpiresAt: displayUser.tierExpiresAt ?? null,
-			welcomeVoucherRedeemed: displayUser.welcomeVoucherRedeemed ?? false,
+			isAdmin: user.isAdmin ?? false,
+			tier: user.tier ?? "free",
+			tierExpiresAt: user.tierExpiresAt ?? null,
+			welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -254,7 +218,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings, members, isOwner, organizationId, userOrganizations } =
 		loaderData;
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
-	const revalidator = useRevalidator();
 	const navigation = useNavigation();
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
@@ -281,13 +244,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 			window.location.href = billingPortalFetcher.data.url;
 		}
 	}, [billingPortalFetcher.data]);
-
-	// After successful checkout (Stripe return), revalidate so dashboard header shows updated tier/credits
-	useEffect(() => {
-		if (loaderData.transactionStatus === "success") {
-			revalidator.revalidate();
-		}
-	}, [loaderData.transactionStatus, revalidator]);
 
 	return (
 		<div className="space-y-6">
@@ -395,7 +351,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{loaderData.stripePublishableKey && (
 						<CreditShop
 							stripePublishableKey={loaderData.stripePublishableKey}
-							returnUrl="/dashboard/settings"
+							returnUrl="/dashboard/checkout/return"
 						/>
 					)}
 				</section>

@@ -9,6 +9,7 @@ export default [
 	route("dashboard", "routes/dashboard.tsx", [
 		index("routes/dashboard/index.tsx"),
 		route("settings", "routes/dashboard/settings.tsx"),
+		route("checkout/return", "routes/dashboard/checkout.return.tsx"),
 		route("pricing", "routes/dashboard/pricing.tsx"),
 
 		// Pantry/Inventory

@@ -96,7 +96,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		const formData = new FormData();
 		formData.append("type", "credits");
 		formData.append("pack", pack);
-		formData.append("returnUrl", "/dashboard/settings");
+		formData.append("returnUrl", "/dashboard/checkout/return");
 		checkoutFetcher.submit(formData, {
 			method: "post",
 			action: "/api/checkout",
@@ -107,7 +107,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		const formData = new FormData();
 		formData.append("type", "subscription");
 		formData.append("subscription", "CREW_MEMBER_ANNUAL");
-		formData.append("returnUrl", "/dashboard/settings");
+		formData.append("returnUrl", "/dashboard/checkout/return");
 		checkoutFetcher.submit(formData, {
 			method: "post",
 			action: "/api/checkout",

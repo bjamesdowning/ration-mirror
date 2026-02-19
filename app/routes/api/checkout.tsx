@@ -52,7 +52,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		"subscription",
 	) as keyof typeof SUBSCRIPTION_PRODUCTS;
 	const returnUrlPath =
-		(formData.get("returnUrl") as string) || "/dashboard/settings";
+		(formData.get("returnUrl") as string) || "/dashboard/checkout/return";
 
 	// Validate returnUrl to prevent open redirects (simple allowlist or path check)
 	// We only allow dashboard paths

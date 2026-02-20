@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { toExpiryDate } from "~/lib/date-utils";
 import {
 	TIER_LIMITS,
 	type TierLimits,
@@ -38,13 +39,14 @@ export class CapacityExceededError extends Error {
 
 function getEffectiveTier(
 	tier: TierSlug,
-	tierExpiresAt: Date | null,
+	tierExpiresAt: Date | number | string | null | undefined,
 	now = new Date(),
 ): { tier: TierSlug; isExpired: boolean } {
+	const expiresAt = toExpiryDate(tierExpiresAt);
 	if (
 		tier === "crew_member" &&
-		tierExpiresAt &&
-		tierExpiresAt.getTime() <= now.getTime()
+		expiresAt &&
+		expiresAt.getTime() <= now.getTime()
 	) {
 		return { tier: "free", isExpired: true };
 	}

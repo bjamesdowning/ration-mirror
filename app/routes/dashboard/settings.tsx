@@ -16,6 +16,7 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { toExpiryDate } from "~/lib/date-utils";
 import { log } from "~/lib/logging.server";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/settings";
@@ -266,7 +267,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<p className="text-xs text-muted mb-4">
 							Renews on{" "}
 							{loaderData.tierExpiresAt
-								? new Date(loaderData.tierExpiresAt).toLocaleDateString()
+								? (toExpiryDate(
+										loaderData.tierExpiresAt,
+									)?.toLocaleDateString() ?? "unknown")
 								: "unknown"}
 						</p>
 					)}

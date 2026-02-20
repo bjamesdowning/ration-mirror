@@ -1,4 +1,4 @@
-import { Outlet } from "react-router";
+import { Outlet, redirect } from "react-router";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -7,10 +7,51 @@ import {
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { checkBalance } from "~/lib/ledger.server";
+import { log } from "~/lib/logging.server";
 import type { Route } from "./+types/dashboard";
+
+export function shouldRevalidate({
+	nextUrl,
+	defaultShouldRevalidate,
+}: {
+	nextUrl: URL;
+	defaultShouldRevalidate: boolean;
+}) {
+	// Force layout revalidation when returning from checkout so tier/capacity reflect the purchase
+	if (nextUrl.searchParams.get("transaction") === "success") {
+		return true;
+	}
+	return defaultShouldRevalidate;
+}
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
+
+	// Run checkout fulfillment before tier/capacity fetch when on return URL.
+	// Layout runs before child loaders, so fulfillment would otherwise run too late.
+	const url = new URL(request.url);
+	const sessionId = url.searchParams.get("session_id");
+	if (sessionId && url.pathname.endsWith("/checkout/return")) {
+		try {
+			const { processCheckoutSession, processSubscriptionCheckoutSession } =
+				await import("~/lib/ledger.server");
+			const { getStripe } = await import("~/lib/stripe.server");
+			const stripe = getStripe(context.cloudflare.env);
+			const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+			const checkoutType = stripeSession.metadata?.type ?? "credits";
+			if (checkoutType === "subscription") {
+				await processSubscriptionCheckoutSession(
+					context.cloudflare.env,
+					sessionId,
+				);
+			} else {
+				await processCheckoutSession(context.cloudflare.env, sessionId);
+			}
+		} catch (error) {
+			log.error("Checkout fulfillment failed", error);
+			throw redirect("/dashboard/settings?transaction=failed");
+		}
+	}
 
 	const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
 	const [balance, inventoryCapacity, mealsCapacity, listCapacity] =

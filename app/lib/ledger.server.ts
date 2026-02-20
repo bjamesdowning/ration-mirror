@@ -292,17 +292,34 @@ export async function processSubscriptionCheckoutSession(
 		throw new Error(`Subscription ${subscriptionId} missing metadata`);
 	}
 
+	// Since API version 2025-03-31.basil, current_period_end lives on
+	// subscription items, not the subscription itself.
+	const sub = subscription as unknown as {
+		current_period_end?: number;
+		items?: { data?: Array<{ current_period_end?: number }> };
+	};
 	const currentPeriodEnd =
-		(subscription as unknown as { current_period_end?: number })
-			.current_period_end ?? Math.floor(Date.now() / 1000);
+		sub.items?.data?.[0]?.current_period_end ??
+		sub.current_period_end ??
+		Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60;
 	const periodEnd = new Date(currentPeriodEnd * 1000);
 	const db = drizzle(env.DB, { schema });
+
+	const updatePayload: {
+		tier: "crew_member";
+		tierExpiresAt: Date;
+		stripeCustomerId?: string;
+	} = {
+		tier: "crew_member",
+		tierExpiresAt: periodEnd,
+	};
+	if (typeof session.customer === "string") {
+		updatePayload.stripeCustomerId = session.customer;
+	}
+
 	await db
 		.update(schema.user)
-		.set({
-			tier: "crew_member",
-			tierExpiresAt: periodEnd,
-		})
+		.set(updatePayload)
 		.where(eq(schema.user.id, userId));
 
 	log.info("Tier updated to crew_member", {
@@ -332,9 +349,14 @@ export async function processSubscriptionInvoice(
 		throw new Error(`Subscription ${subscriptionId} missing metadata`);
 	}
 
+	const sub = subscription as unknown as {
+		current_period_end?: number;
+		items?: { data?: Array<{ current_period_end?: number }> };
+	};
 	const currentPeriodEnd =
-		(subscription as unknown as { current_period_end?: number })
-			.current_period_end ?? Math.floor(Date.now() / 1000);
+		sub.items?.data?.[0]?.current_period_end ??
+		sub.current_period_end ??
+		Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60;
 	const periodEnd = new Date(currentPeriodEnd * 1000);
 	const db = drizzle(env.DB, { schema });
 	await db

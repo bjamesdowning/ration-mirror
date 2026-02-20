@@ -10,6 +10,7 @@ import {
 	member,
 	user,
 } from "../db/schema";
+import { toExpiryDate } from "./date-utils";
 import { dockGroceryItems } from "./inventory.server";
 import { log } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
@@ -59,10 +60,9 @@ async function getGroupGroceryListCapacity(
 	if (!ownerRow) return TIER_LIMITS.free.maxGroceryLists;
 
 	const now = Date.now();
+	const expiresAt = toExpiryDate(ownerRow.tierExpiresAt);
 	const isExpired =
-		ownerRow.tier === "crew_member" &&
-		ownerRow.tierExpiresAt &&
-		new Date(ownerRow.tierExpiresAt).getTime() <= now;
+		ownerRow.tier === "crew_member" && expiresAt && expiresAt.getTime() <= now;
 	const effectiveTier =
 		ownerRow.tier === "crew_member" && !isExpired ? "crew_member" : "free";
 

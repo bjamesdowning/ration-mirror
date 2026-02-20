@@ -85,47 +85,6 @@ const AI_FEATURES = [
 	},
 ] as const;
 
-const PLATFORM_FEATURES = {
-	inventory: {
-		title: "Inventory Management",
-		items: [
-			"Manual item entry with tags, quantities, units",
-			"CSV/TSV bulk import with preview",
-			"Expiration tracking with configurable alerts",
-			"Domain categorization (food, household, etc.)",
-			"Smart filtering and search",
-		],
-	},
-	meals: {
-		title: "Meal Planning",
-		items: [
-			"Create and manage meals with ingredients and directions",
-			"Meal matching against pantry (strict and delta modes)",
-			"Select active meals to auto-populate grocery lists",
-			"Mark meals as cooked",
-		],
-	},
-	grocery: {
-		title: "Grocery Lists",
-		items: [
-			"Auto-generated from selected meal ingredients",
-			"Manual item addition",
-			"Share lists via public link (no login needed for viewers)",
-			"Export as plain text or markdown",
-			'"Dock Cargo" — complete a list and items flow back into pantry inventory',
-		],
-	},
-	collaboration: {
-		title: "Collaboration",
-		items: [
-			"Create groups (households, roommates)",
-			"Invite members via link",
-			"Shared inventory and credit pool across the group",
-			"Group switching",
-		],
-	},
-} as const;
-
 function FeatureRow({
 	label,
 	free = false,
@@ -191,6 +150,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Your kitchen, on autopilot. A closed-loop platform that tracks
 								what you have, plans what to cook, and knows what to buy next.
 							</p>
+							<p className="text-muted text-sm max-w-lg mx-auto">
+								Built for people who want simplicity, not another app to manage.
+								Free-form enough to build how you like, designed as a lifecycle.
+							</p>
 						</div>
 						<div className="w-full flex justify-center mt-4">
 							<AuthWidget defaultMode="signUp" />
@@ -216,10 +179,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
 							</h2>
 							<p className="text-muted leading-relaxed">
-								Built for people who want their kitchen to run itself — simple,
-								closed-loop, self-sustaining. AI powers ingestion and meal
-								generation; lists automate shopping; shopping refills inventory.
-								The cycle completes itself.
+								Built for people who want their kitchen to run itself. AI powers
+								ingestion and meal generation. Lists automate shopping. Shopping
+								refills inventory. The loop closes on its own.
 							</p>
 						</div>
 						<div className="flex justify-center">
@@ -227,6 +189,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								src="/static/lifecycle-diagram.webp"
 								alt="Ingest → Pantry → Meals → Lists → Shop → Pantry"
 								className="max-w-full h-auto max-h-64 md:max-h-80"
+								loading="lazy"
 							/>
 						</div>
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -254,7 +217,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								AI-Powered Features
 							</h2>
 							<div className="text-label text-muted">
-								Automate ingestion and meal planning
+								Let AI handle the tedious parts
 							</div>
 						</div>
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -268,6 +231,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											src={feature.img}
 											alt=""
 											className="w-full h-full object-cover object-center"
+											loading="lazy"
 										/>
 									</div>
 									<h3 className="text-display text-lg text-carbon mb-2 group-hover:text-hyper-green transition-colors">
@@ -276,42 +240,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									<p className="text-sm text-muted leading-relaxed">
 										{feature.desc}
 									</p>
-								</div>
-							))}
-						</div>
-					</section>
-
-					{/* Platform Features Section */}
-					<section className="w-full max-w-5xl space-y-12 border-t border-carbon/10 pt-16 md:pt-24">
-						<div className="space-y-4">
-							<h2 className="text-display text-2xl text-carbon flex items-center gap-4">
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-								Platform Features
-							</h2>
-							<div className="text-label text-muted">
-								Complete feature index
-							</div>
-						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-							{Object.entries(PLATFORM_FEATURES).map(([key, cat]) => (
-								<div
-									key={key}
-									className="glass-panel rounded-2xl p-6 hover:shadow-lg transition-all"
-								>
-									<h3 className="text-display text-lg text-carbon mb-4">
-										{cat.title}
-									</h3>
-									<ul className="space-y-2">
-										{cat.items.map((item) => (
-											<li
-												key={item}
-												className="flex items-start gap-2 text-sm text-muted"
-											>
-												<span className="w-2 h-2 rounded-full bg-hyper-green shrink-0 mt-1.5" />
-												<span>{item}</span>
-											</li>
-										))}
-									</ul>
 								</div>
 							))}
 						</div>

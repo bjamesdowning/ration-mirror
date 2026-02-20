@@ -18,7 +18,45 @@ export interface UserSettings {
 		frequency?: "off" | "daily" | "weekly" | "biweekly" | "custom";
 		intervalDays?: number;
 	};
+	hubLayout?: {
+		widgets: HubWidgetLayout[];
+	};
+	hubProfile?: HubProfile;
 	[key: string]: unknown; // Index signature for database compatibility
+}
+
+// Hub customization types
+export type HubWidgetId =
+	| "hub-stats"
+	| "meals-ready"
+	| "meals-partial"
+	| "cargo-expiring"
+	| "supply-preview";
+
+export type HubProfile = "cook" | "shop" | "minimal" | "full" | "custom";
+
+export interface HubWidgetLayout {
+	id: string;
+	order: number;
+	size?: "sm" | "md" | "lg";
+	visible: boolean;
+}
+
+/** Shape of loader data passed to Hub widgets. Aligns with hub route loader return. */
+export interface HubLoaderData {
+	expiringItems: unknown[];
+	cargoStats: { totalItems: number; expiringCount: number };
+	latestSupplyList: { items: unknown[] } | null;
+	mealMatches: Array<
+		{ canMake: boolean; matchPercentage: number } & Record<string, unknown>
+	>;
+	expirationAlertDays: number;
+}
+
+/** Props passed to each Hub widget component. */
+export interface HubWidgetProps {
+	data: HubLoaderData;
+	size: "sm" | "md" | "lg";
 }
 
 // Extended organization type with credits and metadata

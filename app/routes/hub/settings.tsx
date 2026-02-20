@@ -11,6 +11,7 @@ import {
 	useNavigation,
 } from "react-router";
 import { CreditShop } from "~/components/hub/CreditShop";
+import { HubCustomizePanel } from "~/components/hub/HubCustomizePanel";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
@@ -18,6 +19,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { toExpiryDate } from "~/lib/date-utils";
 import { log } from "~/lib/logging.server";
+import { HubLayoutSchema } from "~/lib/schemas/hub";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/settings";
 
@@ -189,6 +191,72 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-hub-profile") {
+		const hubProfileRaw = formData.get("hubProfile");
+		const validProfiles = [
+			"cook",
+			"shop",
+			"minimal",
+			"full",
+			"custom",
+		] as const;
+		const hubProfile =
+			typeof hubProfileRaw === "string" &&
+			validProfiles.includes(hubProfileRaw as (typeof validProfiles)[number])
+				? (hubProfileRaw as UserSettings["hubProfile"])
+				: null;
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user && hubProfile) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				hubProfile,
+				...(hubProfile !== "custom" ? { hubLayout: undefined } : {}),
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+		return { success: true };
+	}
+
+	if (intent === "update-hub-layout") {
+		const hubLayoutRaw = formData.get("hubLayout");
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user && typeof hubLayoutRaw === "string") {
+			try {
+				const parsed = JSON.parse(hubLayoutRaw) as unknown;
+				const result = HubLayoutSchema.safeParse(parsed);
+				if (result.success) {
+					const currentSettings = (user.settings as UserSettings) || {};
+					const newSettings: UserSettings = {
+						...currentSettings,
+						hubProfile: "custom",
+						hubLayout: result.data,
+					};
+
+					await db
+						.update(schema.user)
+						.set({ settings: newSettings })
+						.where(eq(schema.user.id, userId));
+				}
+			} catch {
+				// Invalid JSON or schema - ignore
+			}
+		}
+		return { success: true };
+	}
+
 	return null;
 }
 
@@ -335,6 +403,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 				{/* Group Management */}
 				<GroupManagement members={members} />
+
+				{/* Hub Layout */}
+				<HubCustomizePanel
+					hubProfile={settings.hubProfile}
+					hubLayout={settings.hubLayout}
+				/>
 
 				{/* Default Group */}
 				<section className="glass-panel rounded-xl p-6">

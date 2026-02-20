@@ -1,7 +1,7 @@
 import { and, desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
-import { inventory } from "~/db/schema";
+import { cargo } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/search";
@@ -52,18 +52,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	const items = await db
 		.select()
-		.from(inventory)
+		.from(cargo)
 		.where(
 			and(
-				eq(inventory.organizationId, groupId),
+				eq(cargo.organizationId, groupId),
 				or(
-					like(inventory.name, searchPattern),
+					like(cargo.name, searchPattern),
 					// Note: JSON array tags are harder to search with simple LIKE,
 					// so we prioritize name search for now.
 				),
 			),
 		)
-		.orderBy(desc(inventory.createdAt))
+		.orderBy(desc(cargo.createdAt))
 		.limit(20);
 
 	return { results: items };

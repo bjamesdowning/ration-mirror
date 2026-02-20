@@ -8,7 +8,7 @@ import {
 	type TierSlug,
 } from "~/lib/tiers.server";
 
-type CapacityResource = "inventory" | "meals" | "groceryLists";
+type CapacityResource = "cargo" | "meals" | "supplyLists";
 
 export class CapacityExceededError extends Error {
 	override name = "CapacityExceededError" as const;
@@ -114,11 +114,11 @@ async function getResourceCount(
 ) {
 	const db = drizzle(env.DB, { schema });
 
-	if (resource === "inventory") {
+	if (resource === "cargo") {
 		const [result] = await db
 			.select({ count: sql<number>`count(*)` })
-			.from(schema.inventory)
-			.where(eq(schema.inventory.organizationId, organizationId));
+			.from(schema.cargo)
+			.where(eq(schema.cargo.organizationId, organizationId));
 		return result?.count ?? 0;
 	}
 
@@ -132,8 +132,8 @@ async function getResourceCount(
 
 	const [result] = await db
 		.select({ count: sql<number>`count(*)` })
-		.from(schema.groceryList)
-		.where(eq(schema.groceryList.organizationId, organizationId));
+		.from(schema.supplyList)
+		.where(eq(schema.supplyList.organizationId, organizationId));
 	return result?.count ?? 0;
 }
 
@@ -155,7 +155,7 @@ export async function checkCapacityWithTier(
 ) {
 	const { tier, limits, isExpired } = tierInfo;
 	const limit =
-		resource === "inventory"
+		resource === "cargo"
 			? limits.maxInventoryItems
 			: resource === "meals"
 				? limits.maxMeals

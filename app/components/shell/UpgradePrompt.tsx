@@ -22,7 +22,7 @@ export function UpgradePrompt({
 				<p className="text-sm text-muted mt-2">{description}</p>
 				<div className="mt-5 flex gap-3">
 					<Link
-						to="/dashboard/pricing"
+						to="/hub/pricing"
 						className="px-4 py-2 rounded-lg bg-hyper-green text-carbon font-bold"
 					>
 						View Pricing

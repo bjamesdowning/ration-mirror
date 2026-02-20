@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getInventory } from "~/lib/inventory.server";
+import { getCargo } from "~/lib/cargo.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -268,12 +268,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 						throw data({ error: "Scan processing failed" }, { status: 500 });
 					}
 
-					const existingInventory = await getInventory(
+					const existingCargo = await getCargo(
 						context.cloudflare.env.DB,
 						groupId,
 					);
 
-					return { success: true, ...validatedScan.data, existingInventory };
+					return { success: true, ...validatedScan.data, existingCargo };
 				} catch (innerError) {
 					// data() returns DataWithResponseInit, not Response — re-throw it for React Router
 					if (

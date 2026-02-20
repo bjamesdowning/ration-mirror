@@ -36,9 +36,9 @@ export const ScanResultSchema = z.object({
 export type ScanResult = z.infer<typeof ScanResultSchema>;
 
 /**
- * Schema for batch adding items to inventory
+ * Schema for batch adding items to cargo
  */
-export const BatchAddInventorySchema = z.object({
+export const BatchAddCargoSchema = z.object({
 	items: z.array(
 		z.object({
 			name: z.string().min(1),
@@ -52,7 +52,7 @@ export const BatchAddInventorySchema = z.object({
 	),
 });
 
-export type BatchAddInventoryInput = z.infer<typeof BatchAddInventorySchema>;
+export type BatchAddCargoInput = z.infer<typeof BatchAddCargoSchema>;
 
 import { normalizeUnitAlias, SUPPORTED_UNITS } from "../units";
 

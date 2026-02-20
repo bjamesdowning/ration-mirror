@@ -58,7 +58,7 @@ export function MealQuickAdd({
 		<fetcher.Form
 			ref={formRef}
 			method="post"
-			action="/dashboard/meals/new"
+			action="/hub/galley/new"
 			className="space-y-4"
 		>
 			<div className="flex flex-col gap-4">
@@ -209,7 +209,7 @@ export function MealQuickAdd({
 			{/* Helper Text */}
 			{!isExpanded && (
 				<p className="text-xs text-muted">
-					Quick create a meal - or expand to add full recipe details.
+					Quick create a meal - or expand to add full meal details.
 				</p>
 			)}
 
@@ -230,7 +230,7 @@ export function MealQuickAdd({
 					{isSubmitting
 						? "Creating..."
 						: isExpanded
-							? "Create Full Recipe"
+							? "Create Full Meal"
 							: "Create Meal"}
 				</button>
 			</div>

@@ -39,7 +39,7 @@ export function MealBuilder({
 			{/* Basic Info */}
 			<div className="glass-panel rounded-xl p-6">
 				<h3 className="text-label text-muted mb-4 border-b border-platinum pb-4">
-					Recipe Details
+					Meal Details
 				</h3>
 				<div className="space-y-6">
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -203,8 +203,7 @@ export function MealBuilder({
 					type="submit"
 					className="bg-hyper-green text-carbon font-bold px-8 py-3 rounded-xl shadow-glow-sm hover:shadow-glow w-full md:w-auto transition-all"
 				>
-					{submitLabel ||
-						(method === "post" ? "Create Recipe" : "Update Recipe")}
+					{submitLabel || (method === "post" ? "Create Recipe" : "Update Meal")}
 				</button>
 			</div>
 		</FormComponent>

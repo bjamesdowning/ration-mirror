@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
+import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
 import { log, redactId } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
@@ -56,14 +56,14 @@ function normalizeIngredientName(name: string): string {
 }
 
 /**
- * Builds an inventory lookup map for efficient matching.
- * Groups inventory by normalized name with total quantities.
+ * Builds an cargo lookup map for efficient matching.
+ * Groups cargo by normalized name with total quantities.
  */
-function buildInventoryIndex(items: (typeof inventory.$inferSelect)[]) {
+function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
 	const index = new Map<
 		string,
 		{
-			original: typeof inventory.$inferSelect;
+			original: typeof cargo.$inferSelect;
 			totalQuantity: number;
 			normalizedName: string;
 		}[]
@@ -84,11 +84,11 @@ function buildInventoryIndex(items: (typeof inventory.$inferSelect)[]) {
 }
 
 /**
- * Converts inventory quantity to target unit and sums. Returns 0 if no convertible matches.
+ * Converts cargo quantity to target unit and sums. Returns 0 if no convertible matches.
  */
 function sumConvertedToTarget(
 	matches: {
-		original: typeof inventory.$inferSelect;
+		original: typeof cargo.$inferSelect;
 		totalQuantity: number;
 		normalizedName: string;
 	}[],
@@ -114,22 +114,22 @@ function sumConvertedToTarget(
 function getAvailableQuantity(
 	ingredientName: string,
 	targetUnit: SupportedUnit,
-	inventoryIndex: ReturnType<typeof buildInventoryIndex>,
+	cargoIndex: ReturnType<typeof buildCargoIndex>,
 ): number {
 	const normalized = normalizeIngredientName(ingredientName);
-	const matches = inventoryIndex.get(normalized);
+	const matches = cargoIndex.get(normalized);
 
 	if (!matches || matches.length === 0) {
 		let bestMatches:
 			| {
-					original: typeof inventory.$inferSelect;
+					original: typeof cargo.$inferSelect;
 					totalQuantity: number;
 					normalizedName: string;
 			  }[]
 			| null = null;
 		let bestScore = 0;
 
-		for (const [key, bucket] of inventoryIndex) {
+		for (const [key, bucket] of cargoIndex) {
 			const score = tokenMatchScore(ingredientName, key);
 			if (score >= 0.8 && score > bestScore) {
 				bestScore = score;
@@ -155,7 +155,7 @@ function strictMatch(
 		ingredients: (typeof mealIngredient.$inferSelect)[];
 		tags: string[];
 	}>,
-	inventoryIndex: ReturnType<typeof buildInventoryIndex>,
+	cargoIndex: ReturnType<typeof buildCargoIndex>,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
 
@@ -168,7 +168,7 @@ function strictMatch(
 			const available = getAvailableQuantity(
 				ingredient.ingredientName,
 				targetUnit,
-				inventoryIndex,
+				cargoIndex,
 			);
 			const required = ingredient.quantity;
 
@@ -217,7 +217,7 @@ function deltaMatch(
 		ingredients: (typeof mealIngredient.$inferSelect)[];
 		tags: string[];
 	}>,
-	inventoryIndex: ReturnType<typeof buildInventoryIndex>,
+	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	minMatch: number = 50,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
@@ -245,7 +245,7 @@ function deltaMatch(
 			const available = getAvailableQuantity(
 				ingredient.ingredientName,
 				targetUnit,
-				inventoryIndex,
+				cargoIndex,
 			);
 			const required = ingredient.quantity;
 			totalIngredients++;
@@ -289,7 +289,7 @@ function deltaMatch(
 
 /**
  * Main entry point for meal matching logic.
- * Fetches meals and inventory, then performs matching based on mode.
+ * Fetches meals and cargo, then performs matching based on mode.
  */
 export async function matchMeals(
 	db: D1Database,
@@ -378,14 +378,14 @@ export async function matchMeals(
 		tagsByMeal.set(tag.mealId, existing);
 	}
 
-	// 3. Fetch organization's current inventory
-	const orgInventory = await d1
+	// 3. Fetch organization's current cargo
+	const orgCargo = await d1
 		.select()
-		.from(inventory)
-		.where(eq(inventory.organizationId, organizationId));
+		.from(cargo)
+		.where(eq(cargo.organizationId, organizationId));
 
-	// 4. Build inventory index for efficient lookups
-	const inventoryIndex = buildInventoryIndex(orgInventory);
+	// 4. Build cargo index for efficient lookups
+	const cargoIndex = buildCargoIndex(orgCargo);
 
 	// 5. Combine meal data with ingredients and tags
 	const enrichedMeals = meals.map((m) => ({
@@ -397,9 +397,9 @@ export async function matchMeals(
 	// 6. Perform matching based on mode
 	let results: MealMatchResult[];
 	if (mode === "strict") {
-		results = strictMatch(enrichedMeals, inventoryIndex);
+		results = strictMatch(enrichedMeals, cargoIndex);
 	} else {
-		results = deltaMatch(enrichedMeals, inventoryIndex, minMatch);
+		results = deltaMatch(enrichedMeals, cargoIndex, minMatch);
 	}
 
 	// 7. Apply limit

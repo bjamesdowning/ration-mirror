@@ -1,15 +1,15 @@
-import type { groceryItem, groceryList } from "../db/schema";
+import type { supplyItem, supplyList } from "../db/schema";
 import { DOMAIN_LABELS } from "./domain";
 
-type GroceryListWithItems = typeof groceryList.$inferSelect & {
-	items: (typeof groceryItem.$inferSelect)[];
+type SupplyListWithItems = typeof supplyList.$inferSelect & {
+	items: (typeof supplyItem.$inferSelect)[];
 };
 
 /**
  * Exports a grocery list as plain text.
  * Groups items by domain and formats them for easy copying.
  */
-export function exportGroceryListAsText(list: GroceryListWithItems): string {
+export function exportGroceryListAsText(list: SupplyListWithItems): string {
 	const lines: string[] = [];
 
 	// Header
@@ -51,9 +51,7 @@ export function exportGroceryListAsText(list: GroceryListWithItems): string {
 /**
  * Exports a grocery list as Markdown format.
  */
-export function exportGroceryListAsMarkdown(
-	list: GroceryListWithItems,
-): string {
+export function exportGroceryListAsMarkdown(list: SupplyListWithItems): string {
 	const lines: string[] = [];
 
 	// Header
@@ -91,9 +89,9 @@ export function exportGroceryListAsMarkdown(
  * Groups grocery items by domain.
  */
 function groupItemsByDomain(
-	items: (typeof groceryItem.$inferSelect)[],
-): Record<string, (typeof groceryItem.$inferSelect)[]> {
-	const groups: Record<string, (typeof groceryItem.$inferSelect)[]> = {};
+	items: (typeof supplyItem.$inferSelect)[],
+): Record<string, (typeof supplyItem.$inferSelect)[]> {
+	const groups: Record<string, (typeof supplyItem.$inferSelect)[]> = {};
 
 	for (const item of items) {
 		const domain = item.domain || "food";

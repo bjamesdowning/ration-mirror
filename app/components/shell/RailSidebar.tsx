@@ -2,11 +2,11 @@ import { NavLink } from "react-router";
 import { NAV_ICONS } from "~/components/icons/PageIcons";
 
 const navItems = [
-	{ to: "/dashboard", icon: "home", label: "Hub" },
-	{ to: "/dashboard/pantry", icon: "package", label: "Cargo" },
-	{ to: "/dashboard/meals", icon: "chef-hat", label: "Galley" },
-	{ to: "/dashboard/grocery", icon: "shopping-cart", label: "Supply" },
-	{ to: "/dashboard/settings", icon: "settings", label: "System" },
+	{ to: "/hub", icon: "home", label: "Hub" },
+	{ to: "/hub/cargo", icon: "package", label: "Cargo" },
+	{ to: "/hub/galley", icon: "chef-hat", label: "Galley" },
+	{ to: "/hub/supply", icon: "shopping-cart", label: "Supply" },
+	{ to: "/hub/settings", icon: "settings", label: "System" },
 ];
 
 export function RailSidebar() {
@@ -23,7 +23,7 @@ export function RailSidebar() {
 					<NavLink
 						key={item.to}
 						to={item.to}
-						end={item.to === "/dashboard"}
+						end={item.to === "/hub"}
 						className={({ isActive }) =>
 							`w-14 h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
 								isActive

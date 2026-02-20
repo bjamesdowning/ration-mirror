@@ -47,7 +47,7 @@ export const MealIngredientSchema = z.object({
 	unit: z
 		.union([UnitSchema, z.string().min(1)])
 		.transform((v) => normalizeUnitAlias(typeof v === "string" ? v : v)),
-	inventoryId: z
+	cargoId: z
 		.string()
 		.optional()
 		.nullable()

@@ -1,0 +1,13 @@
+# Ration Terminology Glossary
+
+One term, one meaning, everywhere across the codebase:
+
+- **Hub** — The main authenticated layout/home page. Not "Dashboard".
+- **Cargo** — The inventory management section and its items. Not "Pantry" or "Inventory".
+- **Galley** — The meal planning section/page. Not "Meals page".
+- **Meal** — A single cookable recipe with ingredients. Not "Recipe".
+- **Ingredient** — A component of a Meal (references a Cargo item). Use only in meal context.
+- **Supply** — The shopping list section. Not "Grocery".
+- **Supply List** — A shopping list. Not "Grocery list".
+- **Supply Item** — An entry on a supply list. Not "Grocery item".
+- **Item** — Generic, acceptable in context (e.g., "Add Item" on Cargo page).

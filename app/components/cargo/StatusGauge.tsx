@@ -1,4 +1,4 @@
-import { formatInventoryStatus } from "~/lib/inventory";
+import { formatCargoStatus } from "~/lib/cargo";
 
 interface StatusGaugeProps {
 	status?: string | null;
@@ -55,7 +55,7 @@ export function StatusGauge({ status, expiresAt }: StatusGaugeProps) {
 				/>
 			</div>
 			<div className="mt-2 text-sm text-muted">
-				{formatInventoryStatus(resolvedStatus)}
+				{formatCargoStatus(resolvedStatus)}
 			</div>
 		</div>
 	);

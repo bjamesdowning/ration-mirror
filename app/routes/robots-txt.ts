@@ -14,7 +14,7 @@ Allow: /
 Allow: /legal/
 
 Disallow: /api/
-Disallow: /dashboard/
+Disallow: /hub/
 Disallow: /admin/
 Disallow: /invitations/
 Disallow: /select-group

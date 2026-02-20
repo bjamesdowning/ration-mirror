@@ -19,7 +19,7 @@ export async function loader(args: Route.LoaderArgs) {
 
 	// --- Overview ---
 	const userCount = await db.$count(schema.user);
-	const inventoryCount = await db.$count(schema.inventory);
+	const inventoryCount = await db.$count(schema.cargo);
 	const burnedResult = await db
 		.select({
 			burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
@@ -59,7 +59,7 @@ export async function loader(args: Route.LoaderArgs) {
 	const groupCount = await db.$count(schema.organization);
 	const mealCount = await db.$count(schema.meal);
 	const activeMealCount = await db.$count(schema.activeMealSelection);
-	const groceryListCount = await db.$count(schema.groceryList);
+	const groceryListCount = await db.$count(schema.supplyList);
 	const scanCountResult = await db
 		.select({ count: count() })
 		.from(schema.ledger)
@@ -83,11 +83,11 @@ export async function loader(args: Route.LoaderArgs) {
 	const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 	const expiringItemsResult = await db
 		.select({ count: count() })
-		.from(schema.inventory)
+		.from(schema.cargo)
 		.where(
 			and(
-				gt(schema.inventory.expiresAt, now),
-				lt(schema.inventory.expiresAt, sevenDaysFromNow),
+				gt(schema.cargo.expiresAt, now),
+				lt(schema.cargo.expiresAt, sevenDaysFromNow),
 			),
 		)
 		.get();
@@ -309,7 +309,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 				</div>
 				<div className="flex items-center gap-4">
 					<Link
-						to="/dashboard"
+						to="/hub"
 						className="inline-flex items-center gap-2 px-4 py-2 bg-platinum/50 text-carbon rounded-lg font-medium hover:bg-platinum transition-colors"
 					>
 						Back to Dashboard
@@ -337,7 +337,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 						<MetricCard
 							title="Items Tracked"
 							value={inventoryCount}
-							subtitle="Total inventory entries"
+							subtitle="Total Cargo entries"
 							iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 						/>
 						<MetricCard
@@ -401,7 +401,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							iconPath="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
 						/>
 						<MetricCard
-							title="Grocery Lists"
+							title="Supply Lists"
 							value={groceryListCount}
 							subtitle="Shopping lists created"
 							iconPath="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"

@@ -138,7 +138,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 			<div className="border-b border-platinum pb-6 flex justify-between items-start">
 				<div>
 					<div className="text-label text-muted text-xs mb-2">
-						Recipe ID: {meal.id.slice(0, 8)}
+						Meal ID: {meal.id.slice(0, 8)}
 					</div>
 					<h1 className="text-display text-3xl text-carbon mb-2">
 						{meal.name}
@@ -154,7 +154,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							className="inline-flex items-center gap-1.5 text-sm text-hyper-green hover:underline mt-2"
 						>
 							<ExternalLink className="w-3.5 h-3.5" />
-							View Original Recipe
+							View Source
 						</a>
 					)}
 				</div>
@@ -170,7 +170,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							<Form
 								method="delete"
 								onSubmit={(e) => {
-									if (!confirm("Delete this recipe?")) {
+									if (!confirm("Delete this meal?")) {
 										e.preventDefault();
 									}
 								}}
@@ -242,7 +242,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 												}`}
 												title={
 													isAvailable
-														? "Available in inventory"
+														? "Available in Cargo"
 														: hasPartialStock
 															? "Partial stock available"
 															: "Not available"
@@ -298,7 +298,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						onSubmit={(e: React.FormEvent) => {
 							if (
 								!confirm(
-									"Cook this meal? It will deduct ingredients from your pantry.",
+									"Cook this meal? It will deduct ingredients from your Cargo.",
 								)
 							) {
 								e.preventDefault();
@@ -322,12 +322,12 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						</button>
 						{isCooked && (
 							<p className="text-xs text-center mt-2 text-success font-medium">
-								Inventory updated successfully
+								Cargo updated successfully
 							</p>
 						)}
 						{!isCooked && (
 							<p className="text-xs text-center mt-2 text-muted">
-								This will deduct ingredients from inventory
+								This will deduct ingredients from Cargo
 							</p>
 						)}
 					</fetcher.Form>

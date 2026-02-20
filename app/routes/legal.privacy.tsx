@@ -53,11 +53,11 @@ export default function PrivacyPolicy() {
 				identifiers and other diagnostic data.
 			</p>
 
-			<h3>Inventory & Visual Data</h3>
+			<h3>Cargo & Visual Data</h3>
 			<p>
-				We collect data regarding items in your digital pantry ("Inventory
-				Data") and images you upload or scan for the purpose of item recognition
-				("Visual Data").
+				We collect data regarding items in your digital Cargo ("Cargo Data") and
+				images you upload or scan for the purpose of item recognition ("Visual
+				Data").
 			</p>
 
 			<h2>3. How We Use Your Information</h2>
@@ -150,9 +150,9 @@ export default function PrivacyPolicy() {
 			<p>
 				<strong>Right to be Forgotten:</strong> You have the right to request
 				the deletion of your account and all associated data. Upon such request,
-				we will permanently purge your Personal Data, Usage Data, Inventory
-				Data, and Visual Data from our systems (D1 Databases, Vectorize Indexes,
-				R2 Storage). You can initiate this process through the specific "Purge
+				we will permanently purge your Personal Data, Usage Data, Cargo Data,
+				and Visual Data from our systems (D1 Databases, Vectorize Indexes, R2
+				Storage). You can initiate this process through the specific "Purge
 				Account" function in the User Profile settings.
 			</p>
 

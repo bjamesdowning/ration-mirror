@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
 import { DOMAIN_LABELS } from "~/lib/domain";
-import { getGroceryListByShareToken } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { getSupplyListByShareToken } from "~/lib/supply.server";
 import type { Route } from "./+types/shared.$token";
 
 interface SharedItem {
@@ -25,7 +25,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
 	}
 	return [
 		{ title: `${data.list.name} - Shared List - Ration` },
-		{ name: "description", content: `Shared grocery list: ${data.list.name}` },
+		{ name: "description", content: `Shared supply list: ${data.list.name}` },
 	];
 };
 
@@ -59,7 +59,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		throw data({ error: "Invalid share link" }, { status: 400 });
 	}
 
-	const list = await getGroceryListByShareToken(
+	const list = await getSupplyListByShareToken(
 		context.cloudflare.env.DB,
 		token,
 	);
@@ -246,7 +246,7 @@ export default function SharedListPage() {
 						to="/"
 						className="text-sm text-hyper-green hover:text-hyper-green/80 transition-colors"
 					>
-						Create your own smart grocery lists →
+						Create your own smart supply lists →
 					</Link>
 				</div>
 			</footer>

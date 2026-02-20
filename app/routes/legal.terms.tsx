@@ -28,12 +28,12 @@ export default function TermsOfService() {
 
 			<h2>2. Description of Service</h2>
 			<p>
-				Ration is a smart pantry management system designed to track inventory,
+				Ration is a smart Cargo management system designed to track inventory,
 				facilitate meal planning, and reduce waste. Our services include:
 			</p>
 			<ul>
 				<li>Inventory tracking and management</li>
-				<li>AI-assisted recipe generation and meal planning</li>
+				<li>AI-assisted meal generation and meal planning</li>
 				<li>Visual scanning and item recognition</li>
 				<li>Free visual scanning utilizing third-party AI providers</li>
 			</ul>

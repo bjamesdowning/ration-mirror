@@ -91,14 +91,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 				// Manual cleanup of data
 				await db
-					.delete(schema.inventory)
-					.where(eq(schema.inventory.organizationId, orgId));
+					.delete(schema.cargo)
+					.where(eq(schema.cargo.organizationId, orgId));
 				await db
 					.delete(schema.meal)
 					.where(eq(schema.meal.organizationId, orgId));
 				await db
-					.delete(schema.groceryList)
-					.where(eq(schema.groceryList.organizationId, orgId));
+					.delete(schema.supplyList)
+					.where(eq(schema.supplyList.organizationId, orgId));
 				await db
 					.delete(schema.ledger)
 					.where(eq(schema.ledger.organizationId, orgId));

@@ -85,7 +85,7 @@ export const ImportRecipeButton = forwardRef<
 		setView("loading");
 		importFetcher.submit(JSON.stringify({ url: trimmed }), {
 			method: "post",
-			action: "/api/recipes/import",
+			action: "/api/meals/import",
 			encType: "application/json",
 		});
 	};
@@ -107,7 +107,7 @@ export const ImportRecipeButton = forwardRef<
 		];
 		saveFetcher.submit(JSON.stringify(mealData), {
 			method: "post",
-			action: "/dashboard/meals/new",
+			action: "/hub/galley/new",
 			encType: "application/json",
 		});
 	};
@@ -124,7 +124,7 @@ export const ImportRecipeButton = forwardRef<
 				setView("url");
 				setUrl("");
 				setImportedUrl(null);
-				navigate("/dashboard/meals");
+				navigate("/hub/galley");
 			}
 		}
 	}, [saveFetcher.state, saveFetcher.data, navigate]);
@@ -172,10 +172,10 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 								<div>
 									<h3 className="text-xl font-bold text-carbon dark:text-white">
-										Import Recipe
+										Import Meal
 									</h3>
 									<p className="text-xs text-muted">
-										Paste a URL to extract a recipe
+										Paste a URL to extract a meal
 									</p>
 								</div>
 							</div>
@@ -193,14 +193,14 @@ export const ImportRecipeButton = forwardRef<
 							{showUrlInput && (
 								<div className="space-y-6 text-center py-12">
 									<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
-										Paste a recipe URL and we'll extract it into your Galley.
+										Paste a meal URL and we'll extract it into your Galley.
 									</p>
 									<div className="max-w-md mx-auto text-left">
 										<label
 											htmlFor="import-recipe-url"
 											className="block text-sm font-medium text-carbon dark:text-white mb-1"
 										>
-											Recipe URL
+											Meal URL
 										</label>
 										<input
 											id="import-recipe-url"
@@ -221,7 +221,7 @@ export const ImportRecipeButton = forwardRef<
 										disabled={!url.trim()}
 										className="px-8 py-4 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 									>
-										Import Recipe
+										Import Meal
 									</button>
 								</div>
 							)}
@@ -233,7 +233,7 @@ export const ImportRecipeButton = forwardRef<
 										<Link2 className="w-8 h-8 text-hyper-green" />
 									</div>
 									<h4 className="text-lg font-medium text-carbon dark:text-white">
-										Extracting Recipe...
+										Extracting Meal...
 									</h4>
 									<p className="text-muted text-sm">
 										Reading and analyzing the page.

@@ -31,7 +31,7 @@ export function AuthWidget({
 		try {
 			await authClient.signIn.social({
 				provider: "google",
-				callbackURL: "/dashboard",
+				callbackURL: "/hub",
 			});
 		} catch {
 			setError(
@@ -50,7 +50,7 @@ export function AuthWidget({
 			const result = await authClient.signIn.email({
 				email: "dev@ration.app",
 				password: "ration-dev",
-				callbackURL: "/dashboard",
+				callbackURL: "/hub",
 			});
 
 			if (result.error) {
@@ -59,7 +59,7 @@ export function AuthWidget({
 					email: "dev@ration.app",
 					password: "ration-dev",
 					name: "Dev User",
-					callbackURL: "/dashboard",
+					callbackURL: "/hub",
 				});
 
 				if (signUpResult.error) {
@@ -68,7 +68,7 @@ export function AuthWidget({
 			}
 
 			// Redirect to dashboard
-			window.location.href = "/dashboard";
+			window.location.href = "/hub";
 		} catch (err) {
 			setError("Dev login failed. Please check the console.");
 			log.error("Dev login error", err);
@@ -79,8 +79,8 @@ export function AuthWidget({
 	const heading = mode === "signUp" ? "Create Account" : "Welcome Back";
 	const subheading =
 		mode === "signUp"
-			? "Get started with smart pantry management"
-			: "Sign in to access your pantry";
+			? "Get started with smart Cargo management"
+			: "Sign in to access your Cargo";
 
 	return (
 		<div className="w-full max-w-md">

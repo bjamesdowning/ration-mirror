@@ -16,7 +16,7 @@ export default function SelectGroupPage() {
 			await authClient.organization.setActive({
 				organizationId: orgId,
 			});
-			window.location.href = "/dashboard";
+			window.location.href = "/hub";
 		};
 
 		// If currently loading, just show loading state
@@ -39,7 +39,7 @@ export default function SelectGroupPage() {
 					Select Mission Control
 				</h1>
 				<p className="text-muted text-center mb-8">
-					Choose a group to access its pantry and supplies.
+					Choose a group to access its Cargo and Supply.
 				</p>
 
 				{isPending ? (
@@ -56,7 +56,7 @@ export default function SelectGroupPage() {
 									await authClient.organization.setActive({
 										organizationId: org.id,
 									});
-									window.location.href = "/dashboard";
+									window.location.href = "/hub";
 								}}
 								className="w-full flex items-center justify-between p-4 bg-platinum/30 hover:bg-hyper-green/10 border border-transparent hover:border-hyper-green/30 rounded-lg transition-all group"
 							>

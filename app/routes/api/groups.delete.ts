@@ -65,13 +65,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 			// 2. Delete inventory
 			db
-				.delete(schema.inventory)
-				.where(eq(schema.inventory.organizationId, organizationId)),
+				.delete(schema.cargo)
+				.where(eq(schema.cargo.organizationId, organizationId)),
 
 			// 3. Delete grocery lists (cascade deletes grocery items)
 			db
-				.delete(schema.groceryList)
-				.where(eq(schema.groceryList.organizationId, organizationId)),
+				.delete(schema.supplyList)
+				.where(eq(schema.supplyList.organizationId, organizationId)),
 
 			// 4. Delete meals (cascade deletes meal ingredients and tags)
 			db

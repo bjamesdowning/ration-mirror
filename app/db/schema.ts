@@ -119,10 +119,10 @@ export const organization = sqliteTable("organization", {
 
 export const organizationRelations = relations(organization, ({ many }) => ({
 	members: many(member),
-	inventory: many(inventory),
+	cargo: many(cargo),
 	meals: many(meal),
 	activeMealSelections: many(activeMealSelection),
-	groceryLists: many(groceryList),
+	supplyLists: many(supplyList),
 }));
 
 export const member = sqliteTable(
@@ -180,8 +180,8 @@ export const invitation = sqliteTable(
 	],
 );
 
-export const inventory = sqliteTable(
-	"inventory",
+export const cargo = sqliteTable(
+	"cargo",
 	{
 		id: text("id")
 			.primaryKey()
@@ -204,14 +204,14 @@ export const inventory = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("inventory_org_idx").on(table.organizationId),
-		index("inventory_domain_idx").on(table.organizationId, table.domain),
+		index("cargo_org_idx").on(table.organizationId),
+		index("cargo_domain_idx").on(table.organizationId, table.domain),
 	],
 );
 
-export const inventoryRelations = relations(inventory, ({ one }) => ({
+export const cargoRelations = relations(cargo, ({ one }) => ({
 	organization: one(organization, {
-		fields: [inventory.organizationId],
+		fields: [cargo.organizationId],
 		references: [organization.id],
 	}),
 }));
@@ -296,7 +296,7 @@ export const mealIngredient = sqliteTable(
 		mealId: text("meal_id")
 			.notNull()
 			.references(() => meal.id, { onDelete: "cascade" }),
-		inventoryId: text("inventory_id").references(() => inventory.id, {
+		cargoId: text("cargo_id").references(() => cargo.id, {
 			onDelete: "set null",
 		}),
 		ingredientName: text("ingredient_name").notNull(),
@@ -316,9 +316,9 @@ export const mealIngredientRelations = relations(mealIngredient, ({ one }) => ({
 		fields: [mealIngredient.mealId],
 		references: [meal.id],
 	}),
-	inventory: one(inventory, {
-		fields: [mealIngredient.inventoryId],
-		references: [inventory.id],
+	cargo: one(cargo, {
+		fields: [mealIngredient.cargoId],
+		references: [cargo.id],
 	}),
 }));
 
@@ -385,8 +385,8 @@ export const activeMealSelectionRelations = relations(
 	}),
 );
 
-export const groceryList = sqliteTable(
-	"grocery_list",
+export const supplyList = sqliteTable(
+	"supply_list",
 	{
 		id: text("id")
 			.primaryKey()
@@ -405,28 +405,28 @@ export const groceryList = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("grocery_list_org_idx").on(table.organizationId),
-		index("grocery_list_share_idx").on(table.shareToken),
+		index("supply_list_org_idx").on(table.organizationId),
+		index("supply_list_share_idx").on(table.shareToken),
 	],
 );
 
-export const groceryListRelations = relations(groceryList, ({ one, many }) => ({
+export const supplyListRelations = relations(supplyList, ({ one, many }) => ({
 	organization: one(organization, {
-		fields: [groceryList.organizationId],
+		fields: [supplyList.organizationId],
 		references: [organization.id],
 	}),
-	items: many(groceryItem),
+	items: many(supplyItem),
 }));
 
-export const groceryItem = sqliteTable(
-	"grocery_item",
+export const supplyItem = sqliteTable(
+	"supply_item",
 	{
 		id: text("id")
 			.primaryKey()
 			.$defaultFn(() => crypto.randomUUID()),
 		listId: text("list_id")
 			.notNull()
-			.references(() => groceryList.id, { onDelete: "cascade" }),
+			.references(() => supplyList.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		quantity: real("quantity").notNull().default(1),
 		unit: text("unit").notNull().default("unit"),
@@ -442,14 +442,14 @@ export const groceryItem = sqliteTable(
 			.default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index("grocery_item_list_idx").on(table.listId),
-		index("grocery_item_domain_idx").on(table.listId, table.domain),
+		index("supply_item_list_idx").on(table.listId),
+		index("supply_item_domain_idx").on(table.listId, table.domain),
 	],
 );
 
-export const groceryItemRelations = relations(groceryItem, ({ one }) => ({
-	list: one(groceryList, {
-		fields: [groceryItem.listId],
-		references: [groceryList.id],
+export const supplyItemRelations = relations(supplyItem, ({ one }) => ({
+	list: one(supplyList, {
+		fields: [supplyItem.listId],
+		references: [supplyList.id],
 	}),
 }));

@@ -63,7 +63,7 @@ export function IngredientPicker({
 				ingredientName: "",
 				quantity: 1,
 				unit: "unit",
-				inventoryId: null,
+				cargoId: null,
 				isOptional: false,
 				orderIndex: ingredients.length,
 			},
@@ -116,7 +116,7 @@ export function IngredientPicker({
 			...newIngredients[index],
 			ingredientName: item.name,
 			unit: toSupportedUnit(item.unit),
-			inventoryId: item.id,
+			cargoId: item.id,
 		};
 		setIngredients(newIngredients);
 		setActiveIndex(null);
@@ -152,8 +152,8 @@ export function IngredientPicker({
 					/>
 					<input
 						type="hidden"
-						name={`ingredients[${idx}].inventoryId`}
-						value={ing.inventoryId || ""}
+						name={`ingredients[${idx}].cargoId`}
+						value={ing.cargoId || ""}
 					/>
 
 					<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
@@ -200,7 +200,7 @@ export function IngredientPicker({
 									<div className="px-3 py-2 text-xs text-muted dark:text-white/70 italic">
 										{availableIngredients.length === 0 ? (
 											<>
-												Your pantry is empty.
+												Your Cargo is empty.
 												<br />
 												<span className="opacity-75">
 													Add items in Supply first.
@@ -208,7 +208,7 @@ export function IngredientPicker({
 											</>
 										) : (
 											<>
-												No matching pantry items.
+												No matching Cargo items.
 												<br />
 												Type to add custom.
 											</>

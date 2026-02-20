@@ -127,5 +127,5 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	return redirect("/dashboard");
+	return redirect("/hub");
 }

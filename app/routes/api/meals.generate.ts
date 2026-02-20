@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
-import { inventory } from "~/db/schema";
+import { cargo } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	AI_COSTS,
@@ -66,12 +66,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const d1 = drizzle(context.cloudflare.env.DB);
 	const pantryItems = await d1
 		.select({
-			name: inventory.name,
-			quantity: inventory.quantity,
-			unit: inventory.unit,
+			name: cargo.name,
+			quantity: cargo.quantity,
+			unit: cargo.unit,
 		})
-		.from(inventory)
-		.where(eq(inventory.organizationId, groupId));
+		.from(cargo)
+		.where(eq(cargo.organizationId, groupId));
 
 	if (pantryItems.length === 0) {
 		throw data(

@@ -2,11 +2,11 @@ import { NavLink } from "react-router";
 import { NAV_ICONS } from "~/components/icons/PageIcons";
 
 const navItems = [
-	{ to: "/dashboard", icon: "home", label: "Hub" },
-	{ to: "/dashboard/pantry", icon: "package", label: "Cargo" },
-	{ to: "/dashboard/meals", icon: "chef-hat", label: "Galley" },
-	{ to: "/dashboard/grocery", icon: "shopping-cart", label: "Supply" },
-	{ to: "/dashboard/settings", icon: "settings", label: "System" },
+	{ to: "/hub", icon: "home", label: "Hub" },
+	{ to: "/hub/cargo", icon: "package", label: "Cargo" },
+	{ to: "/hub/galley", icon: "chef-hat", label: "Galley" },
+	{ to: "/hub/supply", icon: "shopping-cart", label: "Supply" },
+	{ to: "/hub/settings", icon: "settings", label: "System" },
 ];
 
 export function BottomNav() {
@@ -33,7 +33,7 @@ function NavItem({
 	return (
 		<NavLink
 			to={to}
-			end={to === "/dashboard"}
+			end={to === "/hub"}
 			className={({ isActive }) =>
 				`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg transition-colors ${
 					isActive ? "text-hyper-green" : "text-muted"

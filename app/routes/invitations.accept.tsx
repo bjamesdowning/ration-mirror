@@ -84,7 +84,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		.where(eq(schema.invitation.id, invitationId));
 
 	// Redirect to dashboard (user can switch to new group manually)
-	return redirect("/dashboard");
+	return redirect("/hub");
 }
 
 export default function InvitationAcceptPage({
@@ -130,7 +130,7 @@ export default function InvitationAcceptPage({
 				</Form>
 
 				<p className="mt-6 text-xs text-muted">
-					By joining, you will gain access to shared inventory and credits.
+					By joining, you will gain access to shared Cargo and credits.
 				</p>
 			</div>
 		</div>

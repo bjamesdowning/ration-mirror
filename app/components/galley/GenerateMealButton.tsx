@@ -92,7 +92,7 @@ export const GenerateMealButton = forwardRef<
 
 		saveFetcher.submit(JSON.stringify(mealDataArray), {
 			method: "post",
-			action: "/dashboard/meals/new",
+			action: "/hub/galley/new",
 			encType: "application/json",
 		});
 	};
@@ -125,7 +125,7 @@ export const GenerateMealButton = forwardRef<
 			if (!hasError) {
 				setShowModal(false);
 				setSelectedRecipes(new Set());
-				navigate("/dashboard/meals");
+				navigate("/hub/galley");
 			}
 		}
 	}, [saveFetcher.state, saveFetcher.data, navigate]);

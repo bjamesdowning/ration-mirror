@@ -145,7 +145,7 @@ export function ScanResultsModal({
 		// biome-ignore lint/suspicious/noExplicitAny: fetcher submit type limitation
 		fetcher.submit(JSON.stringify({ items: itemsToAdd }) as any, {
 			method: "POST",
-			action: "/api/inventory/batch",
+			action: "/api/cargo/batch",
 			encType: "application/json",
 		});
 	};
@@ -284,7 +284,7 @@ export function ScanResultsModal({
 							<>
 								<Check className="w-5 h-5" />
 								Add {selectedItems.length} Item
-								{selectedItems.length !== 1 ? "s" : ""} to Pantry
+								{selectedItems.length !== 1 ? "s" : ""} to Cargo
 							</>
 						)}
 					</button>

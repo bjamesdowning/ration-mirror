@@ -37,7 +37,7 @@ export function AddItemForm({
 			}),
 			{
 				method: "POST",
-				action: `/api/grocery-lists/${listId}/items`,
+				action: `/api/supply-lists/${listId}/items`,
 				encType: "application/json",
 			},
 		);

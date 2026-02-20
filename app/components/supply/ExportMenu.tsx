@@ -13,7 +13,7 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 
 	const handleExport = (format: "text" | "markdown") => {
 		// Trigger download via browser
-		window.location.href = `/api/grocery-lists/${listId}/export?format=${format}`;
+		window.location.href = `/api/supply-lists/${listId}/export?format=${format}`;
 		setIsOpen(false);
 	};
 

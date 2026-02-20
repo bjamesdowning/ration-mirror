@@ -14,7 +14,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	// If user is logged in, redirect to dashboard
 	if (session?.user) {
-		throw redirect("/dashboard");
+		throw redirect("/hub");
 	}
 
 	return {
@@ -31,7 +31,7 @@ export function meta(_: Route.MetaArgs) {
 		{
 			name: "description",
 			content:
-				"Closed-loop kitchen management: track pantry, plan meals with AI, auto-generate grocery lists, and refill inventory. Simple, self-sustaining.",
+				"Closed-loop kitchen management: track Cargo, plan meals with AI, auto-generate supply lists, and refill Cargo. Simple, self-sustaining.",
 		},
 	];
 }
@@ -40,12 +40,12 @@ const LIFECYCLE_STAGES = [
 	{
 		id: "ingest",
 		title: "Ingest",
-		desc: "Scan receipts or pantry, import CSV, paste recipe URLs, or add items manually.",
+		desc: "Scan receipts or Cargo, import CSV, paste recipe URLs, or add items manually.",
 	},
 	{
-		id: "pantry",
-		title: "Pantry",
-		desc: "Track inventory with tags, quantities, units, and expiration alerts.",
+		id: "cargo",
+		title: "Cargo",
+		desc: "Track Cargo with tags, quantities, units, and expiration alerts.",
 	},
 	{
 		id: "meals",
@@ -55,12 +55,12 @@ const LIFECYCLE_STAGES = [
 	{
 		id: "lists",
 		title: "Lists",
-		desc: "Grocery lists auto-populate from selected meals. Share and export.",
+		desc: "Supply lists auto-populate from selected meals. Share and export.",
 	},
 	{
 		id: "shop",
 		title: "Shop",
-		desc: "Complete your list and dock cargo — purchased items flow back into your pantry.",
+		desc: "Complete your list and dock cargo — purchased items flow back into your Cargo.",
 	},
 ] as const;
 
@@ -68,19 +68,19 @@ const AI_FEATURES = [
 	{
 		id: "scan",
 		title: "Photo & Receipt Scanning",
-		desc: "Snap a photo of a receipt or your pantry shelf. AI extracts items, quantities, and expiry dates automatically.",
+		desc: "Snap a photo of a receipt or your Cargo shelf. AI extracts items, quantities, and expiry dates automatically.",
 		img: "/static/ai-scan-illustration.webp",
 	},
 	{
 		id: "url",
-		title: "Recipe Import via URL",
-		desc: "Paste a recipe URL. AI reads the page and extracts ingredients, steps, and metadata into a structured meal.",
+		title: "Meal Import via URL",
+		desc: "Paste a meal URL. AI reads the page and extracts ingredients, steps, and metadata into a structured meal.",
 		img: "/static/ai-url-import.webp",
 	},
 	{
 		id: "generate",
 		title: "AI Meal Generation",
-		desc: "Generate meal ideas from what you already have. AI builds options using your current pantry inventory and preferences.",
+		desc: "Generate meal ideas from what you already have. AI builds options using your current Cargo and preferences.",
 		img: "/static/ai-meal-generation.webp",
 	},
 ] as const;
@@ -181,13 +181,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<p className="text-muted leading-relaxed">
 								Built for people who want their kitchen to run itself. AI powers
 								ingestion and meal generation. Lists automate shopping. Shopping
-								refills inventory. The loop closes on its own.
+								refills Cargo. The loop closes on its own.
 							</p>
 						</div>
 						<div className="flex justify-center">
 							<img
 								src="/static/lifecycle-diagram.webp"
-								alt="Ingest → Pantry → Meals → Lists → Shop → Pantry"
+								alt="Ingest → Cargo → Meals → Lists → Shop → Cargo"
 								className="max-w-full h-auto max-h-64 md:max-h-80"
 								loading="lazy"
 							/>
@@ -302,11 +302,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											colSpan={3}
 											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
 										>
-											Inventory
+											Cargo
 										</td>
 									</tr>
 									<FeatureRow
-										label="Pantry items"
+										label="Cargo items"
 										free={`${loaderData.tierLimits.free.maxInventoryItems}`}
 										crew="Unlimited"
 									/>
@@ -344,7 +344,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									<FeatureRow label="Supply List" free crew />
 									<FeatureRow label="Auto-generate from meals" free crew />
 									<FeatureRow label="Export (text, markdown)" free crew />
-									<FeatureRow label="Dock Cargo (list → pantry)" free crew />
+									<FeatureRow label="Dock Cargo (list → Cargo)" free crew />
 									<FeatureRow label="Share via public link" crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
@@ -355,7 +355,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										</td>
 									</tr>
 									<FeatureRow label="Photo & receipt scanning" free crew />
-									<FeatureRow label="Recipe import via URL" free crew />
+									<FeatureRow label="Meal import via URL" free crew />
 									<FeatureRow label="AI meal generation" free crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
@@ -371,7 +371,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										crew={`${loaderData.tierLimits.crew_member.maxOwnedGroups}`}
 									/>
 									<FeatureRow label="Member invites" crew />
-									<FeatureRow label="Shared inventory & credits" crew />
+									<FeatureRow label="Shared Cargo & credits" crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
 											colSpan={3}
@@ -398,7 +398,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									Everything you need to run the cycle
 								</p>
 								<Link
-									to="/dashboard/pricing"
+									to="/hub/pricing"
 									className="inline-block w-full py-2.5 px-4 bg-platinum text-carbon rounded-lg text-sm font-medium hover:bg-platinum/80 transition-colors"
 								>
 									Get started free
@@ -413,7 +413,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									unlimited capacity, groups, and yearly credits
 								</p>
 								<Link
-									to="/dashboard/pricing"
+									to="/hub/pricing"
 									className="inline-block w-full py-2.5 px-4 bg-hyper-green text-carbon font-bold rounded-lg hover:opacity-90 transition-opacity"
 								>
 									Start Crew Member
@@ -425,7 +425,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<h3 className="text-display text-lg text-carbon">Credit Packs</h3>
 							<p className="text-sm text-muted">
 								Available on both tiers. Power AI scans, meal generation, and
-								recipe imports. One-time purchases.
+								meal imports. One-time purchases.
 							</p>
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 								{(
@@ -455,7 +455,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											</span>
 										)}
 										<Link
-											to="/dashboard/pricing"
+											to="/hub/pricing"
 											className="block mt-3 w-full py-2 px-3 bg-platinum text-carbon rounded-lg text-sm font-medium text-center hover:bg-platinum/80 transition-colors"
 										>
 											Buy Credits
@@ -476,7 +476,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					<p className="text-sm text-muted leading-relaxed max-w-lg mx-auto">
 						Ration uses Google OAuth for secure authentication. We access only
 						your basic profile (ID, email, name) to secure your account. Your
-						inventory and meal data stay yours. We{" "}
+						Cargo and meal data stay yours. We{" "}
 						<span className="text-carbon font-bold">never sell</span> or share
 						your personal information.
 					</p>

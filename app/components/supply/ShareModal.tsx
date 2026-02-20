@@ -48,7 +48,7 @@ export function ShareModal({
 	const handleGenerateLink = () => {
 		fetcher.submit(null, {
 			method: "POST",
-			action: `/api/grocery-lists/${listId}/share`,
+			action: `/api/supply-lists/${listId}/share`,
 		});
 	};
 
@@ -62,7 +62,7 @@ export function ShareModal({
 		}
 		fetcher.submit(null, {
 			method: "DELETE",
-			action: `/api/grocery-lists/${listId}/share`,
+			action: `/api/supply-lists/${listId}/share`,
 		});
 	};
 
@@ -115,7 +115,7 @@ export function ShareModal({
 				{/* Header */}
 				<h2 className="text-xl font-bold text-carbon mb-2">Share List</h2>
 				<p className="text-sm text-muted mb-6">
-					Generate a shareable link for this grocery list. Anyone with the link
+					Generate a shareable link for this supply list. Anyone with the link
 					can view (but not edit) your list.
 				</p>
 

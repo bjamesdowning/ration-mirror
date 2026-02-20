@@ -6,27 +6,27 @@ export default [
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
 
-	// Dashboard
-	route("dashboard", "routes/dashboard.tsx", [
-		index("routes/dashboard/index.tsx"),
-		route("settings", "routes/dashboard/settings.tsx"),
-		route("checkout/return", "routes/dashboard/checkout.return.tsx"),
-		route("pricing", "routes/dashboard/pricing.tsx"),
+	// Hub
+	route("hub", "routes/hub.tsx", [
+		index("routes/hub/index.tsx"),
+		route("settings", "routes/hub/settings.tsx"),
+		route("checkout/return", "routes/hub/checkout.return.tsx"),
+		route("pricing", "routes/hub/pricing.tsx"),
 
-		// Pantry/Inventory
-		route("pantry", "routes/dashboard/pantry.tsx"),
+		// Cargo
+		route("cargo", "routes/hub/cargo.tsx"),
 
-		// Meals
-		route("meals", "routes/dashboard/meals.tsx"),
-		route("meals/new", "routes/dashboard/meals.new.tsx"),
-		route("meals/:id", "routes/dashboard/meals.$id.tsx"),
-		route("meals/:id/edit", "routes/dashboard/meals.$id.edit.tsx"),
+		// Galley
+		route("galley", "routes/hub/galley.tsx"),
+		route("galley/new", "routes/hub/galley.new.tsx"),
+		route("galley/:id", "routes/hub/galley.$id.tsx"),
+		route("galley/:id/edit", "routes/hub/galley.$id.edit.tsx"),
 
 		// Groups
-		route("groups/new", "routes/dashboard/groups.new.tsx"),
+		route("groups/new", "routes/hub/groups.new.tsx"),
 
-		// Grocery Lists
-		route("grocery", "routes/dashboard/grocery.tsx"),
+		// Supply
+		route("supply", "routes/hub/supply.tsx"),
 	]),
 
 	// Admin
@@ -50,32 +50,29 @@ export default [
 	route("api/meals/generate", "routes/api/meals.generate.ts"),
 	route("api/meals/clear-selections", "routes/api/meals.clear-selections.ts"),
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
-	route("api/recipes/import", "routes/api/recipes.import.ts"),
+	route("api/meals/import", "routes/api/meals.import.ts"),
 
-	// API - Inventory
-	route("api/inventory/:id", "routes/api/inventory.$id.ts"),
-	route("api/inventory/batch", "routes/api/inventory.batch.tsx"),
+	// API - Cargo
+	route("api/cargo/:id", "routes/api/cargo.$id.ts"),
+	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
 
-	// API - Grocery Lists
-	route("api/grocery-lists", "routes/api/grocery-lists.ts"),
-	route("api/grocery-lists/:id", "routes/api/grocery-lists.$id.ts"),
-	route("api/grocery-lists/:id/items", "routes/api/grocery-lists.$id.items.ts"),
+	// API - Supply Lists
+	route("api/supply-lists", "routes/api/supply-lists.ts"),
+	route("api/supply-lists/:id", "routes/api/supply-lists.$id.ts"),
+	route("api/supply-lists/:id/items", "routes/api/supply-lists.$id.items.ts"),
 	route(
-		"api/grocery-lists/:id/items/:itemId",
-		"routes/api/grocery-lists.$id.items.$itemId.ts",
+		"api/supply-lists/:id/items/:itemId",
+		"routes/api/supply-lists.$id.items.$itemId.ts",
 	),
 	route(
-		"api/grocery-lists/:id/from-meal",
-		"routes/api/grocery-lists.$id.from-meal.ts",
+		"api/supply-lists/:id/from-meal",
+		"routes/api/supply-lists.$id.from-meal.ts",
 	),
-	route("api/grocery-lists/:id/share", "routes/api/grocery-lists.$id.share.ts"),
+	route("api/supply-lists/:id/share", "routes/api/supply-lists.$id.share.ts"),
+	route("api/supply-lists/:id/export", "routes/api/supply-lists.$id.export.ts"),
 	route(
-		"api/grocery-lists/:id/export",
-		"routes/api/grocery-lists.$id.export.ts",
-	),
-	route(
-		"api/grocery-lists/:id/complete",
-		"routes/api/grocery-lists.$id.complete.ts",
+		"api/supply-lists/:id/complete",
+		"routes/api/supply-lists.$id.complete.ts",
 	),
 
 	// API - Other

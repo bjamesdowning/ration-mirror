@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
+import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
 import {
 	chunkedQuery,
@@ -204,7 +204,7 @@ export async function createMeal(
 				d1.insert(mealIngredient).values(
 					ingredientChunk.map((ing, i) => ({
 						mealId,
-						inventoryId: ing.inventoryId,
+						cargoId: ing.cargoId,
 						ingredientName: ing.ingredientName,
 						quantity: ing.quantity,
 						unit: ing.unit,
@@ -287,7 +287,7 @@ export async function createMeals(
 					d1.insert(mealIngredient).values(
 						ingredientChunk.map((ing, i) => ({
 							mealId,
-							inventoryId: ing.inventoryId,
+							cargoId: ing.cargoId,
 							ingredientName: ing.ingredientName,
 							quantity: ing.quantity,
 							unit: ing.unit,
@@ -373,7 +373,7 @@ export async function updateMeal(
 				d1.insert(mealIngredient).values(
 					ingredientChunk.map((ing, i) => ({
 						mealId,
-						inventoryId: ing.inventoryId,
+						cargoId: ing.cargoId,
 						ingredientName: ing.ingredientName,
 						quantity: ing.quantity,
 						unit: ing.unit,
@@ -453,78 +453,74 @@ export async function cookMeal(
 
 	// 3. For linked inventory items, check quantities first
 	const linkedIngredients = ingredients.filter(
-		(ing) => ing.inventoryId && typeof ing.inventoryId === "string",
+		(ing) => ing.cargoId && typeof ing.cargoId === "string",
 	);
 
 	if (linkedIngredients.length > 0) {
-		const inventoryIds = linkedIngredients.map(
-			(ing) => ing.inventoryId as string,
-		);
+		const cargoIds = linkedIngredients.map((ing) => ing.cargoId as string);
 
-		const currentInventory = await chunkedQuery(
-			inventoryIds,
+		const currentCargo = await chunkedQuery(
+			cargoIds,
 			(chunk) =>
 				d1
 					.select()
-					.from(inventory)
+					.from(cargo)
 					.where(
 						and(
-							eq(inventory.organizationId, organizationId),
-							inArray(inventory.id, chunk),
+							eq(cargo.organizationId, organizationId),
+							inArray(cargo.id, chunk),
 						),
 					),
 			D1_MAX_BOUND_PARAMS - 1,
 		);
 
-		const inventoryById = new Map(currentInventory.map((i) => [i.id, i]));
+		const cargoById = new Map(currentCargo.map((i) => [i.id, i]));
 
 		const insufficient = linkedIngredients.filter((ing) => {
-			const inv = inventoryById.get(ing.inventoryId as string);
-			if (!inv) return true;
+			const c = cargoById.get(ing.cargoId as string);
+			if (!c) return true;
 			const ingUnit = toSupportedUnit(ing.unit);
-			const invUnit = toSupportedUnit(inv.unit);
-			const deductionInInvUnit = convertQuantity(
+			const cargoUnit = toSupportedUnit(c.unit);
+			const deductionInCargoUnit = convertQuantity(
 				ing.quantity,
 				ingUnit,
-				invUnit,
+				cargoUnit,
 			);
-			if (deductionInInvUnit === null) return true; // Incompatible units
-			return inv.quantity < deductionInInvUnit;
+			if (deductionInCargoUnit === null) return true; // Incompatible units
+			return c.quantity < deductionInCargoUnit;
 		});
 
 		if (insufficient.length > 0) {
 			const names = insufficient.map((i) => i.ingredientName).join(", ");
-			throw new Error(`Insufficient inventory for: ${names}`);
+			throw new Error(`Insufficient Cargo for: ${names}`);
 		}
 
-		// 4. Perform deductions in a single batch (convert to inventory unit before subtracting)
+		// 4. Perform deductions in a single batch (convert to cargo unit before subtracting)
 		const updates = linkedIngredients.map((ing) => {
-			const inv = inventoryById.get(ing.inventoryId as string);
-			if (!inv)
-				throw new Error(
-					`Inventory not found for ingredient ${ing.ingredientName}`,
-				);
+			const c = cargoById.get(ing.cargoId as string);
+			if (!c)
+				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
 			const ingUnit = toSupportedUnit(ing.unit);
-			const invUnit = toSupportedUnit(inv.unit);
-			const deductionInInvUnit = convertQuantity(
+			const cargoUnit = toSupportedUnit(c.unit);
+			const deductionInCargoUnit = convertQuantity(
 				ing.quantity,
 				ingUnit,
-				invUnit,
+				cargoUnit,
 			);
-			if (deductionInInvUnit === null) {
+			if (deductionInCargoUnit === null) {
 				throw new Error(
-					`Cannot convert ${ing.unit} to ${inv.unit} for ${ing.ingredientName}`,
+					`Cannot convert ${ing.unit} to ${c.unit} for ${ing.ingredientName}`,
 				);
 			}
 			return d1
-				.update(inventory)
+				.update(cargo)
 				.set({
-					quantity: sql`${inventory.quantity} - ${deductionInInvUnit}`,
+					quantity: sql`${cargo.quantity} - ${deductionInCargoUnit}`,
 				})
 				.where(
 					and(
-						eq(inventory.id, ing.inventoryId as string),
-						eq(inventory.organizationId, organizationId),
+						eq(cargo.id, ing.cargoId as string),
+						eq(cargo.organizationId, organizationId),
 					),
 				);
 		});

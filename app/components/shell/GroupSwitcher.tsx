@@ -11,7 +11,7 @@ export function GroupSwitcher() {
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
 	// Get credits from dashboard loader
-	const dashboardData = useRouteLoaderData("routes/dashboard") as {
+	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance: number;
 		tier?: "free" | "crew_member";
 	} | null;
@@ -156,7 +156,7 @@ export function GroupSwitcher() {
 						type="button"
 						onClick={() => {
 							setIsOpen(false);
-							navigate("/dashboard/groups/new");
+							navigate("/hub/groups/new");
 						}}
 						// Future: navigate("/groups/create")
 						className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-platinum hover:text-carbon transition-colors"

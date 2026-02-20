@@ -16,7 +16,7 @@ interface MealEditModalProps {
 	meal: typeof meal.$inferSelect & {
 		tags?: string[];
 		ingredients?: {
-			inventoryId?: string | null;
+			cargoId?: string | null;
 			ingredientName: string;
 			quantity: number;
 			unit: string;
@@ -64,7 +64,7 @@ export function MealEditModal({
 		),
 		directions: meal.directions || undefined,
 		ingredients: (meal.ingredients || []).map((ing) => ({
-			inventoryId: ing.inventoryId,
+			cargoId: ing.cargoId,
 			ingredientName: ing.ingredientName,
 			quantity: ing.quantity,
 			unit: toSupportedUnit(ing.unit),
@@ -77,7 +77,7 @@ export function MealEditModal({
 		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
 			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
 				<div className="flex justify-between items-center mb-6">
-					<h2 className="text-xl font-bold text-carbon">Edit Recipe</h2>
+					<h2 className="text-xl font-bold text-carbon">Edit Meal</h2>
 					<button
 						type="button"
 						onClick={onClose}

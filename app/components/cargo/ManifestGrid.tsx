@@ -1,8 +1,8 @@
-import { InventoryCard } from "~/components/cargo/InventoryCard";
-import type { inventory } from "~/db/schema";
+import { CargoCard } from "~/components/cargo/CargoCard";
+import type { cargo } from "~/db/schema";
 
 interface ManifestGridProps {
-	items: (typeof inventory.$inferSelect)[];
+	items: (typeof cargo.$inferSelect)[];
 }
 
 export function ManifestGrid({ items }: ManifestGridProps) {
@@ -19,7 +19,7 @@ export function ManifestGrid({ items }: ManifestGridProps) {
 		<div className="p-4 bg-platinum/30 rounded-2xl">
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 				{items.map((item) => (
-					<InventoryCard key={item.id} item={item} />
+					<CargoCard key={item.id} item={item} />
 				))}
 			</div>
 		</div>

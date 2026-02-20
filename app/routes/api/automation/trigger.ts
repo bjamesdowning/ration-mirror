@@ -1,7 +1,7 @@
 import { data, redirect } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { createGroceryListFromAllMeals } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { createSupplyListFromAllMeals } from "~/lib/supply.server";
 import type { Route } from "./+types/trigger";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -39,13 +39,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const dateStr = dateFormatter.format(new Date());
 	const listName = `Manual: ${dateStr}`;
 
-	await createGroceryListFromAllMeals(
+	await createSupplyListFromAllMeals(
 		context.cloudflare.env.DB,
 		groupId,
 		listName,
 	);
 
 	// Redirect back to referring page or dashboard
-	const referer = request.headers.get("Referer") || "/dashboard";
+	const referer = request.headers.get("Referer") || "/hub";
 	return redirect(referer);
 }

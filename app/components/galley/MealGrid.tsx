@@ -88,7 +88,7 @@ export function MealGrid({
 		return (
 			<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
 				<p className="font-medium text-carbon">No meals found</p>
-				<p className="text-sm mt-2">Create your first recipe to get started</p>
+				<p className="text-sm mt-2">Create your first meal to get started</p>
 			</div>
 		);
 	}
@@ -174,7 +174,7 @@ export function MealGrid({
 				{!isLoading && matchResults && (
 					<>
 						<div className="text-sm text-muted">
-							Found {matchResults.length} matching recipes
+							Found {matchResults.length} matching meals
 						</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 							{matchResults.map((result) => (

@@ -1,8 +1,8 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { toggleSharedItemPurchased } from "~/lib/grocery.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { SharedItemToggleSchema } from "~/lib/schemas/grocery";
+import { SharedItemToggleSchema } from "~/lib/schemas/supply";
+import { toggleSharedItemPurchased } from "~/lib/supply.server";
 import type { Route } from "./+types/shared.$token.items.$itemId";
 
 /**

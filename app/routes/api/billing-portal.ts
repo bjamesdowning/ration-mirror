@@ -30,7 +30,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const stripe = getStripe(context.cloudflare.env);
 	const session = await stripe.billingPortal.sessions.create({
 		customer: user.stripeCustomerId,
-		return_url: `${context.cloudflare.env.BETTER_AUTH_URL}/dashboard/settings`,
+		return_url: `${context.cloudflare.env.BETTER_AUTH_URL}/hub/settings`,
 	});
 
 	return { url: session.url };

@@ -118,7 +118,7 @@ export function MealCard({
 					actions={[
 						{
 							label: "View",
-							to: `/dashboard/meals/${meal.id}`,
+							to: `/hub/galley/${meal.id}`,
 						},
 						{
 							label: "Edit",

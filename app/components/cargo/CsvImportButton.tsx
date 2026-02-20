@@ -9,19 +9,8 @@ import { useRevalidator } from "react-router";
 import { parseInventoryCsv } from "~/lib/csv-parser";
 import type { ItemDomain } from "~/lib/domain";
 import type { ScanResult } from "~/lib/schemas/scan";
+import { normalizeUnitAlias } from "~/lib/units";
 import { ScanResultsModal } from "../scanner/ScanResultsModal";
-
-const SCAN_UNITS = [
-	"kg",
-	"g",
-	"lb",
-	"oz",
-	"l",
-	"ml",
-	"unit",
-	"can",
-	"pack",
-] as const;
 
 export interface CsvImportButtonHandle {
 	openImport: () => void;
@@ -80,9 +69,7 @@ export const CsvImportButton = forwardRef<
 				id: crypto.randomUUID(),
 				name: item.name,
 				quantity: item.quantity,
-				unit: SCAN_UNITS.includes(item.unit as (typeof SCAN_UNITS)[number])
-					? (item.unit as (typeof SCAN_UNITS)[number])
-					: "unit",
+				unit: normalizeUnitAlias(item.unit),
 				domain: (item.domain ?? defaultDomain ?? "food") as ItemDomain,
 				tags: item.tags ?? [],
 				expiresAt: item.expiresAt,

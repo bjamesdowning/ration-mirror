@@ -4,6 +4,7 @@ import { MealDetail } from "~/components/galley/MealDetail";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { deleteMeal, getMeal } from "~/lib/meals.server";
+import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/meals.$id";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -35,6 +36,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		ingredients: meal.ingredients.map((i) => ({
 			...i,
 			inventoryId: i.inventoryId ?? undefined,
+			unit: toSupportedUnit(i.unit),
 			isOptional: i.isOptional ?? false,
 			orderIndex: i.orderIndex ?? 0,
 		})),

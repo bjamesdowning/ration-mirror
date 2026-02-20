@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	index,
 	integer,
+	real,
 	sqliteTable,
 	text,
 	unique,
@@ -189,8 +190,8 @@ export const inventory = sqliteTable(
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
-		quantity: integer("quantity").notNull(), // Normalised value
-		unit: text("unit").notNull(), // kg, g, l, ml, piece
+		quantity: real("quantity").notNull(),
+		unit: text("unit").notNull(), // See app/lib/units.ts for supported units
 		tags: text("tags", { mode: "json" }).notNull().default("[]"), // Array of strings
 		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
@@ -299,7 +300,7 @@ export const mealIngredient = sqliteTable(
 			onDelete: "set null",
 		}),
 		ingredientName: text("ingredient_name").notNull(),
-		quantity: integer("quantity").notNull(),
+		quantity: real("quantity").notNull(),
 		unit: text("unit").notNull(),
 		isOptional: integer("is_optional", { mode: "boolean" }).default(false),
 		orderIndex: integer("order_index").default(0),
@@ -427,7 +428,7 @@ export const groceryItem = sqliteTable(
 			.notNull()
 			.references(() => groceryList.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
-		quantity: integer("quantity").notNull().default(1),
+		quantity: real("quantity").notNull().default(1),
 		unit: text("unit").notNull().default("unit"),
 		domain: text("domain").notNull().default("food"),
 		isPurchased: integer("is_purchased", { mode: "boolean" })

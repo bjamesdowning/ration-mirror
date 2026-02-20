@@ -1,5 +1,6 @@
 import { useFetcher } from "react-router";
 import type { groceryItem } from "~/db/schema";
+import { formatQuantity } from "~/lib/format-quantity";
 
 interface GroceryItemProps {
 	item: typeof groceryItem.$inferSelect;
@@ -84,11 +85,9 @@ export function GroceryItem({ item, listId, onDelete }: GroceryItemProps) {
 			</span>
 
 			{/* Quantity */}
-			{item.quantity > 1 && (
-				<span className="text-sm text-muted text-data">
-					{item.quantity} {item.unit}
-				</span>
-			)}
+			<span className="text-sm text-muted text-data">
+				{formatQuantity(item.quantity, item.unit)}
+			</span>
 
 			{/* Delete Button */}
 			<button

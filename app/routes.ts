@@ -1,6 +1,7 @@
 import { index, type RouteConfig, route } from "@react-router/dev/routes";
 
 export default [
+	route("robots.txt", "routes/robots-txt.ts"),
 	index("routes/home.tsx"),
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),

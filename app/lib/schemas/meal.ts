@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
+import { normalizeUnitAlias } from "../units";
+import { UnitSchema } from "./units";
 
 /** Rejects common prompt injection patterns before user customization reaches the LLM */
 export const INJECTION_PATTERNS =
@@ -43,9 +45,8 @@ export const MealIngredientSchema = z.object({
 		.transform((v) => v.toLowerCase()),
 	quantity: z.coerce.number().nonnegative("Quantity must be zero or greater"),
 	unit: z
-		.string()
-		.min(1, "Unit is required")
-		.transform((v) => v.toLowerCase()),
+		.union([UnitSchema, z.string().min(1)])
+		.transform((v) => normalizeUnitAlias(typeof v === "string" ? v : v)),
 	inventoryId: z
 		.string()
 		.optional()

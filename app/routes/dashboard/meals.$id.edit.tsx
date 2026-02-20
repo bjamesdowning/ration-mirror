@@ -8,6 +8,7 @@ import { parseFormData } from "~/lib/form-utils";
 import { getInventory } from "~/lib/inventory.server";
 import { getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
+import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/meals.$id.edit";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -38,6 +39,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		ingredients: meal.ingredients.map((i) => ({
 			...i,
 			inventoryId: i.inventoryId ?? undefined,
+			unit: toSupportedUnit(i.unit),
 			isOptional: i.isOptional ?? false,
 			orderIndex: i.orderIndex ?? 0,
 		})),

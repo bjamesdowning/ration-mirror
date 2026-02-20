@@ -19,7 +19,6 @@ import { matchMeals } from "~/lib/matching.server";
 import type { Route } from "./+types/index";
 
 interface UserSettings {
-	unitSystem?: "metric" | "imperial";
 	expirationAlertDays?: number;
 }
 

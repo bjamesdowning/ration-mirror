@@ -16,10 +16,12 @@ import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
+import { UnitSchema } from "./schemas/units";
 import {
 	convertQuantity,
 	getUnitMultiplier,
 	type SupportedUnit,
+	toSupportedUnit,
 } from "./units";
 
 // --- Validation Schemas ---
@@ -30,7 +32,7 @@ export const InventoryItemSchema = z.object({
 		.min(1, "Name is required")
 		.transform((v) => v.toLowerCase()),
 	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
-	unit: z.enum(["kg", "g", "lb", "oz", "l", "ml", "unit", "can", "pack"]),
+	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
 	expiresAt: z.coerce.date().optional(), // Optional date string coercion
@@ -592,11 +594,27 @@ export async function dockGroceryItems(
 		.from(inventory)
 		.where(eq(inventory.organizationId, organizationId));
 
-	// Create map for case-insensitive matching: "name|unit" -> InventoryItem
-	const inventoryMap = new Map<string, typeof inventory.$inferSelect>();
-	for (const item of currentInventory) {
-		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
-		inventoryMap.set(key, item);
+	// Find unit-aware match: same normalized name + convertible units
+	function findMatchingInventory(
+		groceryName: string,
+		groceryUnit: string,
+		invList: (typeof inventory.$inferSelect)[],
+	): typeof inventory.$inferSelect | null {
+		const normalizedName = normalizeForMatch(groceryName);
+		const groceryUnitSafe = toSupportedUnit(groceryUnit);
+		for (const inv of invList) {
+			if (normalizeForMatch(inv.name) !== normalizedName) continue;
+			const invUnit = toSupportedUnit(inv.unit);
+			if (getUnitMultiplier(groceryUnitSafe, invUnit) === null) continue;
+			return inv;
+		}
+		return null;
+	}
+
+	// Track current quantities (updated as we process) for duplicate grocery items
+	const quantityByInvId = new Map<string, number>();
+	for (const inv of currentInventory) {
+		quantityByInvId.set(inv.id, inv.quantity);
 	}
 
 	// 2. Collect all operations for batching
@@ -605,25 +623,50 @@ export async function dockGroceryItems(
 	let newRowsCreated = 0;
 
 	for (const item of items) {
-		const key = `${item.name.toLowerCase().trim()}|${item.unit.toLowerCase()}`;
-		const existing = inventoryMap.get(key);
+		const existing = findMatchingInventory(
+			item.name,
+			item.unit,
+			currentInventory,
+		);
 
 		if (existing) {
-			// Queue update for existing item
-			batchOps.push(
-				d1
-					.update(inventory)
-					.set({
-						quantity: existing.quantity + item.quantity,
-						updatedAt: now,
-					})
-					.where(eq(inventory.id, existing.id)),
+			const groceryUnit = toSupportedUnit(item.unit);
+			const invUnit = toSupportedUnit(existing.unit);
+			const addQtyInInvUnit = convertQuantity(
+				item.quantity,
+				groceryUnit,
+				invUnit,
 			);
+			if (addQtyInInvUnit === null) {
+				// Conversion failed (should not happen); fall through to create new
+			} else {
+				const newTotal =
+					(quantityByInvId.get(existing.id) ?? existing.quantity) +
+					addQtyInInvUnit;
+				quantityByInvId.set(existing.id, newTotal);
+				batchOps.push(
+					d1
+						.update(inventory)
+						.set({
+							quantity: newTotal,
+							updatedAt: now,
+						})
+						.where(eq(inventory.id, existing.id)),
+				);
+				results.updated++;
+				batchOps.push(
+					d1.insert(ledger).values({
+						organizationId,
+						amount: 0,
+						reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
+					}),
+				);
+				continue;
+			}
+		}
 
-			// Update local map in case duplicates in list
-			existing.quantity += item.quantity;
-			results.updated++;
-		} else {
+		// No match - create new item
+		{
 			const capacity = await checkCapacity(
 				env,
 				organizationId,
@@ -659,8 +702,8 @@ export async function dockGroceryItems(
 				}),
 			);
 
-			// Add to map for subsequent items in same batch
-			inventoryMap.set(key, {
+			// Add to currentInventory so duplicate grocery items in same batch can merge
+			currentInventory.push({
 				id: newItemId,
 				organizationId,
 				name: item.name,
@@ -672,7 +715,8 @@ export async function dockGroceryItems(
 				expiresAt: null,
 				createdAt: now,
 				updatedAt: now,
-			});
+			} as typeof inventory.$inferSelect);
+			quantityByInvId.set(newItemId, item.quantity);
 			results.created++;
 			newRowsCreated++;
 		}

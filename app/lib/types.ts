@@ -8,7 +8,6 @@ export type TierSlug = "free" | "crew_member";
 
 // User settings stored in user.settings JSON field
 export interface UserSettings {
-	unitSystem?: "metric" | "imperial";
 	expirationAlertDays?: number;
 	defaultGroupId?: string;
 	theme?: "light" | "dark";

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
+import { UnitSchema } from "./units";
 
 export const GroceryListSchema = z.object({
 	name: z
@@ -16,13 +17,8 @@ export const GroceryItemSchema = z.object({
 		.min(1)
 		.max(200)
 		.transform((v) => v.toLowerCase()),
-	quantity: z.number().int().positive().default(1),
-	unit: z
-		.string()
-		.min(1)
-		.max(50)
-		.default("unit")
-		.transform((v) => v.toLowerCase()),
+	quantity: z.coerce.number().min(0).default(1),
+	unit: UnitSchema.default("unit"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	sourceMealId: z.string().uuid().optional(),
 });
@@ -34,13 +30,8 @@ export const GroceryItemUpdateSchema = z.object({
 		.max(200)
 		.optional()
 		.transform((v) => v?.toLowerCase()),
-	quantity: z.number().int().positive().optional(),
-	unit: z
-		.string()
-		.min(1)
-		.max(50)
-		.optional()
-		.transform((v) => v?.toLowerCase()),
+	quantity: z.coerce.number().min(0).optional(),
+	unit: UnitSchema.optional(),
 	domain: z.enum(ITEM_DOMAINS).optional(),
 	isPurchased: z
 		.union([z.boolean(), z.string().transform((val) => val === "true")])

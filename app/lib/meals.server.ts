@@ -9,6 +9,7 @@ import {
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
 import type { MealInput } from "./schemas/meal";
+import { convertQuantity, toSupportedUnit } from "./units";
 
 function chunk<T>(arr: T[], size: number): T[][] {
 	const out: T[][] = [];
@@ -475,13 +476,20 @@ export async function cookMeal(
 			D1_MAX_BOUND_PARAMS - 1,
 		);
 
-		const inventoryMap = new Map(
-			currentInventory.map((i) => [i.id, i.quantity]),
-		);
+		const inventoryById = new Map(currentInventory.map((i) => [i.id, i]));
 
 		const insufficient = linkedIngredients.filter((ing) => {
-			const available = inventoryMap.get(ing.inventoryId as string) || 0;
-			return available < ing.quantity;
+			const inv = inventoryById.get(ing.inventoryId as string);
+			if (!inv) return true;
+			const ingUnit = toSupportedUnit(ing.unit);
+			const invUnit = toSupportedUnit(inv.unit);
+			const deductionInInvUnit = convertQuantity(
+				ing.quantity,
+				ingUnit,
+				invUnit,
+			);
+			if (deductionInInvUnit === null) return true; // Incompatible units
+			return inv.quantity < deductionInInvUnit;
 		});
 
 		if (insufficient.length > 0) {
@@ -489,12 +497,29 @@ export async function cookMeal(
 			throw new Error(`Insufficient inventory for: ${names}`);
 		}
 
-		// 4. Perform deductions in a single batch
+		// 4. Perform deductions in a single batch (convert to inventory unit before subtracting)
 		const updates = linkedIngredients.map((ing) => {
+			const inv = inventoryById.get(ing.inventoryId as string);
+			if (!inv)
+				throw new Error(
+					`Inventory not found for ingredient ${ing.ingredientName}`,
+				);
+			const ingUnit = toSupportedUnit(ing.unit);
+			const invUnit = toSupportedUnit(inv.unit);
+			const deductionInInvUnit = convertQuantity(
+				ing.quantity,
+				ingUnit,
+				invUnit,
+			);
+			if (deductionInInvUnit === null) {
+				throw new Error(
+					`Cannot convert ${ing.unit} to ${inv.unit} for ${ing.ingredientName}`,
+				);
+			}
 			return d1
 				.update(inventory)
 				.set({
-					quantity: sql`${inventory.quantity} - ${ing.quantity}`,
+					quantity: sql`${inventory.quantity} - ${deductionInInvUnit}`,
 				})
 				.where(
 					and(

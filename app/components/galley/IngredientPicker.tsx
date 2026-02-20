@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-
 import type { MealIngredientInput } from "~/lib/schemas/meal";
+import { SUPPORTED_UNITS, toSupportedUnit } from "~/lib/units";
 
 type IngredientWithId = MealIngredientInput & { localId: string };
 
@@ -115,7 +115,7 @@ export function IngredientPicker({
 		newIngredients[index] = {
 			...newIngredients[index],
 			ingredientName: item.name,
-			unit: item.unit,
+			unit: toSupportedUnit(item.unit),
 			inventoryId: item.id,
 		};
 		setIngredients(newIngredients);
@@ -238,14 +238,18 @@ export function IngredientPicker({
 					</div>
 
 					<div className="col-span-2">
-						<input
-							type="text"
+						<select
 							name={`ingredients[${idx}].unit`}
-							value={ing.unit}
+							value={toSupportedUnit(ing.unit)}
 							onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
-							placeholder="Unit"
-							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-xs placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						/>
+							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-xs focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+						>
+							{SUPPORTED_UNITS.map((u) => (
+								<option key={u} value={u}>
+									{u}
+								</option>
+							))}
+						</select>
 					</div>
 
 					<div className="col-span-2 text-right">

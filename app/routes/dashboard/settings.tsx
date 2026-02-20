@@ -143,29 +143,6 @@ export async function action(args: Route.ActionArgs) {
 		);
 	}
 
-	if (intent === "update-units") {
-		const unitSystem = formData.get("unitSystem"); // "metric" | "imperial"
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				unitSystem: unitSystem as "metric" | "imperial",
-			};
-
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
-
-		return { success: true };
-	}
-
 	if (intent === "update-expiration-alert") {
 		const days = Number(formData.get("expirationAlertDays")) || 7;
 		const clampedDays = Math.min(Math.max(days, 1), 30); // Clamp between 1-30
@@ -223,9 +200,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-theme";
-	const isUpdatingUnits =
-		navigation.state === "submitting" &&
-		navigation.formData?.get("intent") === "update-units";
 	const isUpdatingExpiration =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-expiration-alert";
@@ -433,46 +407,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						</label>
 
 						{isUpdatingTheme && (
-							<span className="text-hyper-green animate-pulse text-sm ml-4 my-auto">
-								Saving...
-							</span>
-						)}
-					</Form>
-				</section>
-
-				{/* Unit System */}
-				<section className="glass-panel rounded-xl p-6">
-					<h2 className="text-xl font-bold mb-4 text-carbon">
-						Measurement Standard
-					</h2>
-					<Form method="post" className="flex gap-4 flex-wrap">
-						<input type="hidden" name="intent" value="update-units" />
-
-						<label className="flex items-center gap-2 cursor-pointer">
-							<input
-								type="radio"
-								name="unitSystem"
-								value="metric"
-								defaultChecked={settings.unitSystem !== "imperial"}
-								className="w-4 h-4 accent-hyper-green"
-								onChange={(e) => e.target.form?.requestSubmit()}
-							/>
-							<span className="text-carbon">Metric (g, kg, ml)</span>
-						</label>
-
-						<label className="flex items-center gap-2 cursor-pointer">
-							<input
-								type="radio"
-								name="unitSystem"
-								value="imperial"
-								defaultChecked={settings.unitSystem === "imperial"}
-								className="w-4 h-4 accent-hyper-green"
-								onChange={(e) => e.target.form?.requestSubmit()}
-							/>
-							<span className="text-carbon">Imperial (oz, lb, fl oz)</span>
-						</label>
-
-						{isUpdatingUnits && (
 							<span className="text-hyper-green animate-pulse text-sm ml-4 my-auto">
 								Saving...
 							</span>

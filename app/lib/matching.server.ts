@@ -4,6 +4,7 @@ import { inventory, meal, mealIngredient, mealTag } from "../db/schema";
 import { log, redactId } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
+import { convertQuantity, type SupportedUnit, toSupportedUnit } from "./units";
 export { normalizeForMatch, tokenMatchScore };
 
 /**
@@ -83,11 +84,36 @@ function buildInventoryIndex(items: (typeof inventory.$inferSelect)[]) {
 }
 
 /**
- * Calculates the total available quantity for a given ingredient name.
- * Handles fuzzy matching via normalized names.
+ * Converts inventory quantity to target unit and sums. Returns 0 if no convertible matches.
+ */
+function sumConvertedToTarget(
+	matches: {
+		original: typeof inventory.$inferSelect;
+		totalQuantity: number;
+		normalizedName: string;
+	}[],
+	targetUnit: SupportedUnit,
+): number {
+	let total = 0;
+	for (const match of matches) {
+		const fromUnit = toSupportedUnit(match.original.unit);
+		const converted = convertQuantity(
+			match.totalQuantity,
+			fromUnit,
+			targetUnit,
+		);
+		if (converted !== null) total += converted;
+	}
+	return total;
+}
+
+/**
+ * Calculates the total available quantity for a given ingredient name in the ingredient's unit.
+ * Handles fuzzy matching and unit conversion.
  */
 function getAvailableQuantity(
 	ingredientName: string,
+	targetUnit: SupportedUnit,
 	inventoryIndex: ReturnType<typeof buildInventoryIndex>,
 ): number {
 	const normalized = normalizeIngredientName(ingredientName);
@@ -113,11 +139,10 @@ function getAvailableQuantity(
 
 		if (!bestMatches) return 0;
 
-		return bestMatches.reduce((sum, match) => sum + match.totalQuantity, 0);
+		return sumConvertedToTarget(bestMatches, targetUnit);
 	}
 
-	// Sum all matching inventory items
-	return matches.reduce((sum, match) => sum + match.totalQuantity, 0);
+	return sumConvertedToTarget(matches, targetUnit);
 }
 
 /**
@@ -139,8 +164,10 @@ function strictMatch(
 		const missingIngredients: MissingIngredient[] = [];
 
 		for (const ingredient of ingredients) {
+			const targetUnit = toSupportedUnit(ingredient.unit);
 			const available = getAvailableQuantity(
 				ingredient.ingredientName,
+				targetUnit,
 				inventoryIndex,
 			);
 			const required = ingredient.quantity;
@@ -214,8 +241,10 @@ function deltaMatch(
 		let availableCount = 0;
 
 		for (const ingredient of ingredients) {
+			const targetUnit = toSupportedUnit(ingredient.unit);
 			const available = getAvailableQuantity(
 				ingredient.ingredientName,
+				targetUnit,
 				inventoryIndex,
 			);
 			const required = ingredient.quantity;

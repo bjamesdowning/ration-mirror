@@ -2,6 +2,7 @@ import type { useFetcher } from "react-router";
 import { MealBuilder } from "~/components/galley/MealBuilder";
 import type { meal } from "~/db/schema";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
+import { toSupportedUnit } from "~/lib/units";
 
 // Helper type matching MealBuilder's expectation
 type InventoryItem = {
@@ -66,7 +67,7 @@ export function MealEditModal({
 			inventoryId: ing.inventoryId,
 			ingredientName: ing.ingredientName,
 			quantity: ing.quantity,
-			unit: ing.unit,
+			unit: toSupportedUnit(ing.unit),
 			isOptional: ing.isOptional || false,
 			orderIndex: ing.orderIndex || 0,
 		})),

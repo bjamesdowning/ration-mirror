@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Form, Link, useFetcher } from "react-router";
+import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import type { MealInput } from "~/lib/schemas/meal";
@@ -271,14 +272,16 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 									</div>
 									<div className="flex flex-col items-end">
 										<span className="text-data font-bold text-carbon">
-											{ing.quantity}{" "}
-											<span className="text-muted text-xs">{ing.unit}</span>
+											{formatQuantity(ing.quantity, ing.unit)}
 										</span>
 										{availability && !availability.available && (
 											<span className="text-xs text-danger">
 												Need:{" "}
-												{availability.requiredQuantity -
-													availability.availableQuantity}
+												{formatQuantity(
+													availability.requiredQuantity -
+														availability.availableQuantity,
+													ing.unit,
+												)}
 											</span>
 										)}
 									</div>

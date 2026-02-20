@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeUnitAlias } from "../units";
 
 /** Request body schema for recipe import API. HTTPS-only URLs. */
 export const RecipeImportRequestSchema = z.object({
@@ -60,7 +61,10 @@ export const RecipeImportAISuccessSchema = z.object({
 			z.object({
 				name: z.string().min(1),
 				quantity: z.number().nonnegative(), // 0 allowed for "to taste", "pinch", etc.
-				unit: z.string().min(1),
+				unit: z
+					.string()
+					.min(1)
+					.transform((v) => normalizeUnitAlias(v)),
 				isOptional: z.boolean().optional().default(false),
 			}),
 		)

@@ -98,6 +98,12 @@ export async function loader(args: Route.LoaderArgs) {
 		.where(eq(schema.user.emailVerified, true))
 		.get();
 
+	const crewMemberCountResult = await db
+		.select({ count: count() })
+		.from(schema.user)
+		.where(eq(schema.user.tier, "crew_member"))
+		.get();
+
 	return {
 		currentUserId: adminUser.id,
 		userCount,
@@ -117,6 +123,7 @@ export async function loader(args: Route.LoaderArgs) {
 		expiringItems: expiringItemsResult?.count ?? 0,
 		verifiedEmailRate:
 			userCount > 0 ? ((verifiedUsersResult?.count ?? 0) / userCount) * 100 : 0,
+		crewMemberCount: crewMemberCountResult?.count ?? 0,
 	};
 }
 
@@ -229,6 +236,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		pendingInvites,
 		expiringItems,
 		verifiedEmailRate,
+		crewMemberCount,
 	} = loaderData;
 
 	const searchFetcher = useFetcher<{ users: SearchUser[] }>();
@@ -413,6 +421,12 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 						Platform Health
 					</h2>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+						<MetricCard
+							title="Crew Members"
+							value={crewMemberCount}
+							subtitle="Paid tier subscriptions"
+							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+						/>
 						<MetricCard
 							title="Credit Balance"
 							value={totalCredits}

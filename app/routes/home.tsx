@@ -1,5 +1,6 @@
 import type { Route } from "./+types/home";
 import "../../load-context"; // Ensure augmentation is loaded
+import { useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { createAuth } from "~/lib/auth.server";
@@ -125,7 +126,31 @@ const PLATFORM_FEATURES = {
 	},
 } as const;
 
+function FeatureRow({
+	label,
+	free = false,
+	crew = false,
+}: {
+	label: string;
+	free?: boolean | string;
+	crew?: boolean | string;
+}) {
+	const renderCell = (value: boolean | string) => {
+		if (value === true) return <span className="text-hyper-green">✓</span>;
+		if (value === false) return <span className="text-carbon/20">—</span>;
+		return <span className="text-carbon">{value}</span>;
+	};
+	return (
+		<tr>
+			<td className="px-4 py-2.5 text-carbon">{label}</td>
+			<td className="px-4 py-2.5 text-center">{renderCell(free)}</td>
+			<td className="px-4 py-2.5 text-center">{renderCell(crew)}</td>
+		</tr>
+	);
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
+	const [voucherDismissed, setVoucherDismissed] = useState(false);
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
 			{/* Subtle gradient background */}
@@ -301,12 +326,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
 							</h2>
 							<p className="text-muted text-sm max-w-xl mx-auto">
-								Start free. Upgrade when you need more capacity and AI credits.
+								Start free with full access to the lifecycle. AI features run on
+								credits — buy packs anytime, or get yearly credits with Crew
+								Member.
 							</p>
 						</div>
 
-						{loaderData.welcomeVoucher && (
-							<div className="glass-panel rounded-xl p-4 border border-hyper-green/30 text-center max-w-xl mx-auto">
+						{loaderData.welcomeVoucher && !voucherDismissed && (
+							<div className="glass-panel rounded-xl p-4 border border-hyper-green/30 text-center max-w-xl mx-auto relative">
+								<button
+									type="button"
+									onClick={() => setVoucherDismissed(true)}
+									className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-muted hover:text-carbon hover:bg-carbon/5 transition-colors"
+									aria-label="Dismiss"
+								>
+									✕
+								</button>
 								<p className="text-sm text-carbon">
 									Welcome voucher: use code{" "}
 									<span className="font-bold text-hyper-green">
@@ -317,59 +352,141 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</div>
 						)}
 
+						{/* Feature comparison table */}
+						<div className="glass-panel rounded-2xl overflow-hidden">
+							<table className="w-full text-sm">
+								<thead>
+									<tr className="border-b border-carbon/10">
+										<th className="text-left p-4 text-muted font-normal">
+											Feature
+										</th>
+										<th className="p-4 text-center text-carbon font-semibold w-28">
+											Free
+										</th>
+										<th className="p-4 text-center text-hyper-green font-semibold w-28">
+											Crew
+										</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-carbon/5">
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Inventory
+										</td>
+									</tr>
+									<FeatureRow
+										label="Pantry items"
+										free={`${loaderData.tierLimits.free.maxInventoryItems}`}
+										crew="Unlimited"
+									/>
+									<FeatureRow label="Manual item entry" free crew />
+									<FeatureRow label="CSV/TSV bulk import" free crew />
+									<FeatureRow
+										label="Expiry alerts & domain filters"
+										free
+										crew
+									/>
+									<FeatureRow label="Search & smart filters" free crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Meals
+										</td>
+									</tr>
+									<FeatureRow
+										label="Meals"
+										free={`${loaderData.tierLimits.free.maxMeals}`}
+										crew="Unlimited"
+									/>
+									<FeatureRow label="Meal planning & matching" free crew />
+									<FeatureRow label="Mark meals as cooked" free crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Supply Lists
+										</td>
+									</tr>
+									<FeatureRow label="Supply List" free crew />
+									<FeatureRow label="Auto-generate from meals" free crew />
+									<FeatureRow label="Export (text, markdown)" free crew />
+									<FeatureRow label="Dock Cargo (list → pantry)" free crew />
+									<FeatureRow label="Share via public link" crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											AI (via credits)
+										</td>
+									</tr>
+									<FeatureRow label="Photo & receipt scanning" free crew />
+									<FeatureRow label="Recipe import via URL" free crew />
+									<FeatureRow label="AI meal generation" free crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Collaboration
+										</td>
+									</tr>
+									<FeatureRow
+										label="Groups"
+										free={`${loaderData.tierLimits.free.maxOwnedGroups}`}
+										crew={`${loaderData.tierLimits.crew_member.maxOwnedGroups}`}
+									/>
+									<FeatureRow label="Member invites" crew />
+									<FeatureRow label="Shared inventory & credits" crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Credits
+										</td>
+									</tr>
+									<FeatureRow label="Purchase credit packs" free crew />
+									<FeatureRow
+										label="Yearly credits included"
+										free={false}
+										crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
+									/>
+								</tbody>
+							</table>
+						</div>
+
+						{/* Tier CTAs */}
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-							{/* Free tier */}
-							<div className="glass-panel rounded-2xl p-6">
+							<div className="glass-panel rounded-2xl p-6 text-center">
 								<h3 className="text-display text-xl text-carbon mb-1">Free</h3>
-								<p className="text-sm text-muted mb-4">
-									Personal pantry starter tier
+								<p className="text-sm text-muted mb-5">
+									Everything you need to run the cycle
 								</p>
-								<ul className="space-y-2 text-sm text-carbon mb-6">
-									<li>
-										{loaderData.tierLimits.free.maxInventoryItems} pantry items
-									</li>
-									<li>{loaderData.tierLimits.free.maxMeals} meals</li>
-									<li>
-										{loaderData.tierLimits.free.maxGroceryLists} grocery list
-										{loaderData.tierLimits.free.maxGroceryLists !== 1
-											? "s"
-											: ""}
-									</li>
-									<li>No member invites</li>
-									<li>No list sharing</li>
-								</ul>
 								<Link
 									to="/dashboard/pricing"
-									className="block w-full py-2.5 px-4 bg-platinum text-carbon rounded-lg text-center text-sm font-medium hover:bg-platinum/80 transition-colors"
+									className="inline-block w-full py-2.5 px-4 bg-platinum text-carbon rounded-lg text-sm font-medium hover:bg-platinum/80 transition-colors"
 								>
 									Get started free
 								</Link>
 							</div>
-
-							{/* Crew Member tier */}
-							<div className="glass-panel rounded-2xl p-6 border border-hyper-green/40">
+							<div className="glass-panel rounded-2xl p-6 text-center border border-hyper-green/40">
 								<h3 className="text-display text-xl text-carbon mb-1">
 									Crew Member
 								</h3>
-								<p className="text-sm text-muted mb-4">
-									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price}{" "}
-									with yearly credits
+								<p className="text-sm text-muted mb-5">
+									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} —
+									unlimited capacity, groups, and yearly credits
 								</p>
-								<ul className="space-y-2 text-sm text-carbon mb-6">
-									<li>Unlimited pantry items and meals</li>
-									<li>Unlimited grocery lists</li>
-									<li>Member invites and list sharing</li>
-									<li>
-										{
-											loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL
-												.creditsOnStart
-										}{" "}
-										credits on start and renewal
-									</li>
-								</ul>
 								<Link
 									to="/dashboard/pricing"
-									className="block w-full py-2.5 px-4 bg-hyper-green text-carbon font-bold rounded-lg text-center hover:opacity-90 transition-opacity"
+									className="inline-block w-full py-2.5 px-4 bg-hyper-green text-carbon font-bold rounded-lg hover:opacity-90 transition-opacity"
 								>
 									Start Crew Member
 								</Link>
@@ -379,8 +496,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						<div className="space-y-4">
 							<h3 className="text-display text-lg text-carbon">Credit Packs</h3>
 							<p className="text-sm text-muted">
-								Power AI scans, meal generation, and recipe imports. One-time
-								purchases.
+								Available on both tiers. Power AI scans, meal generation, and
+								recipe imports. One-time purchases.
 							</p>
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 								{(

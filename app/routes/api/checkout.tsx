@@ -109,6 +109,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return {
 				success: true,
 				clientSecret: session.client_secret,
+				sessionId: session.id,
 			};
 		}
 
@@ -137,10 +138,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
 		});
 
-		// 5. Return client secret for frontend
+		// 5. Return client secret and session ID for frontend (sessionId used for onComplete navigation)
 		return {
 			success: true,
 			clientSecret: session.client_secret,
+			sessionId: session.id,
 		};
 	} catch (error) {
 		log.error("Stripe checkout creation failed", error);

@@ -47,7 +47,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return new Response("Event too old", { status: 400 });
 		}
 
-		// 4. Idempotency: Check if event already processed (Distributed via KV)
+		// 4. Log webhook receipt (for observability)
+		log.info("Stripe webhook received", {
+			eventType: event.type,
+			eventId: redactId(event.id),
+		});
+
+		// 5. Idempotency: Check if event already processed (Distributed via KV)
 		const idempotencyCheck = await checkStripeWebhookProcessed(
 			context.cloudflare.env.RATION_KV,
 			event.id,

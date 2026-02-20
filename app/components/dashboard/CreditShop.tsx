@@ -4,7 +4,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 
 interface CreditShopProps {
 	stripePublishableKey: string;
@@ -18,12 +18,21 @@ export function CreditShop({
 	const checkoutFetcher = useFetcher<{
 		success: boolean;
 		clientSecret: string;
+		sessionId?: string;
 		error?: string;
 	}>();
+	const navigate = useNavigate();
 	const [clientSecret, setClientSecret] = useState<string | null>(null);
+	const [sessionId, setSessionId] = useState<string | null>(null);
 
 	// Initialize Stripe
 	const stripePromise = loadStripe(stripePublishableKey);
+
+	const handleCheckoutComplete = () => {
+		if (sessionId) {
+			navigate(`/dashboard/checkout/return?session_id=${sessionId}`);
+		}
+	};
 
 	const handlePurchase = async (
 		packKey:
@@ -43,13 +52,16 @@ export function CreditShop({
 		});
 	};
 
-	// When checkout session is created, update clientSecret
+	// When checkout session is created, update clientSecret and sessionId
 	if (
 		checkoutFetcher.data?.success &&
 		checkoutFetcher.data.clientSecret &&
 		!clientSecret
 	) {
 		setClientSecret(checkoutFetcher.data.clientSecret);
+		if (checkoutFetcher.data.sessionId) {
+			setSessionId(checkoutFetcher.data.sessionId);
+		}
 	}
 
 	// Embedded Checkout view
@@ -69,7 +81,10 @@ export function CreditShop({
 				<div className="glass-panel rounded-xl p-2 min-h-[400px]">
 					<EmbeddedCheckoutProvider
 						stripe={stripePromise}
-						options={{ clientSecret }}
+						options={{
+							clientSecret,
+							onComplete: handleCheckoutComplete,
+						}}
 					>
 						<EmbeddedCheckout />
 					</EmbeddedCheckoutProvider>

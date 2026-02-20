@@ -6,7 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useMemo, useState } from "react";
-import { data, useFetcher } from "react-router";
+import { data, useFetcher, useNavigate } from "react-router";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -72,12 +72,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 type CheckoutResponse = {
 	success?: boolean;
 	clientSecret?: string;
+	sessionId?: string;
 	error?: string;
 };
 
 export default function PricingPage({ loaderData }: Route.ComponentProps) {
 	const checkoutFetcher = useFetcher<CheckoutResponse>();
+	const navigate = useNavigate();
 	const [clientSecret, setClientSecret] = useState<string | null>(null);
+	const [sessionId, setSessionId] = useState<string | null>(null);
 
 	const stripePromise = useMemo(
 		() => loadStripe(loaderData.stripePublishableKey),
@@ -90,7 +93,16 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		clientSecret !== checkoutFetcher.data.clientSecret
 	) {
 		setClientSecret(checkoutFetcher.data.clientSecret);
+		if (checkoutFetcher.data.sessionId) {
+			setSessionId(checkoutFetcher.data.sessionId);
+		}
 	}
+
+	const handleCheckoutComplete = () => {
+		if (sessionId) {
+			navigate(`/dashboard/checkout/return?session_id=${sessionId}`);
+		}
+	};
 
 	const startCreditCheckout = (pack: keyof typeof loaderData.creditPacks) => {
 		const formData = new FormData();
@@ -149,7 +161,10 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					</div>
 					<EmbeddedCheckoutProvider
 						stripe={stripePromise}
-						options={{ clientSecret }}
+						options={{
+							clientSecret,
+							onComplete: handleCheckoutComplete,
+						}}
 					>
 						<EmbeddedCheckout />
 					</EmbeddedCheckoutProvider>

@@ -53,7 +53,20 @@ function getEffectiveTier(
 }
 
 /**
- * Read tier from D1 (no KV cache). D1 free tier: 10M reads/day vs KV 1K writes/day.
+ * Get tier limits for a group (organization). Tier is derived from the
+ * **organization owner's** user.tier, not the current viewer.
+ *
+ * Owner-based (group-level): Use for capacity checks (inventory, meals, lists),
+ * feature gates (sharing, invites), and UI that shows group limits.
+ * Consumers: dashboard layout, API routes (inventory.batch, meals, grocery share).
+ *
+ * User-based: Use user.tier directly for "Your Plan" and other personal displays.
+ * Consumers: settings loader (Your Plan section), pricing page (user tier badge).
+ *
+ * When purchaser ≠ owner (e.g. admin buys for group), only purchaser's user.tier
+ * is updated; group limits stay based on owner's tier until owner upgrades.
+ *
+ * Read from D1 only (no KV cache). D1 free tier: 10M reads/day vs KV 1K writes/day.
  */
 export async function getGroupTierLimits(
 	env: Env,
@@ -180,6 +193,10 @@ export async function checkCapacity(
 	);
 }
 
+/**
+ * Check how many groups the current user can own. Uses **user-based** tier
+ * (the given userId's user.tier), not the group owner's tier.
+ */
 export async function checkOwnedGroupCapacity(env: Env, userId: string) {
 	const db = drizzle(env.DB, { schema });
 

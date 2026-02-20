@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
-import { log } from "./logging.server";
+import { log, redactId } from "./logging.server";
 import { getStripe } from "./stripe.server";
 
 // ---------------------------------------------------------------------------
@@ -304,6 +304,12 @@ export async function processSubscriptionCheckoutSession(
 			tierExpiresAt: periodEnd,
 		})
 		.where(eq(schema.user.id, userId));
+
+	log.info("Tier updated to crew_member", {
+		userId: redactId(userId),
+		organizationId: redactId(organizationId),
+		periodEnd: periodEnd.toISOString(),
+	});
 
 	await addCredits(env, organizationId, userId, 60, "Crew Member Credits", {
 		sessionId,

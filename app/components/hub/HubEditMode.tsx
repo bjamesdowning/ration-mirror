@@ -117,7 +117,7 @@ export function HubEditMode({
 	return (
 		<div>
 			{/* Edit mode banner */}
-			<div className="flex items-center justify-between mb-6 px-4 py-3 bg-carbon dark:bg-white/10 rounded-xl">
+			<div className="flex items-center justify-between mb-6 px-4 py-3 bg-[#111111] rounded-xl">
 				<div>
 					<p className="font-semibold text-white text-sm">Editing Hub Layout</p>
 					<p className="text-xs text-white/60">
@@ -157,7 +157,7 @@ export function HubEditMode({
 								}`}
 							>
 								{/* Per-widget control bar */}
-								<div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-carbon dark:bg-carbon rounded-lg gap-2">
+								<div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-[#111111] rounded-lg gap-2">
 									{/* Reorder arrows */}
 									<div className="flex items-center gap-0.5 shrink-0">
 										<button

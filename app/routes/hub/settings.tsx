@@ -11,7 +11,6 @@ import {
 	useNavigation,
 } from "react-router";
 import { CreditShop } from "~/components/hub/CreditShop";
-import { HubCustomizePanel } from "~/components/hub/HubCustomizePanel";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
@@ -405,10 +404,32 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				<GroupManagement members={members} />
 
 				{/* Hub Layout */}
-				<HubCustomizePanel
-					hubProfile={settings.hubProfile}
-					hubLayout={settings.hubLayout}
-				/>
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">Hub Layout</h2>
+					<p className="text-sm text-muted mb-4">
+						Customize which widgets appear on your Hub and how they're arranged.
+					</p>
+					<Link
+						to="/hub?edit=1"
+						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium hover:bg-hyper-green/20 transition-colors"
+					>
+						<svg
+							className="w-4 h-4"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+							/>
+						</svg>
+						Customize Hub
+					</Link>
+				</section>
 
 				{/* Default Group */}
 				<section className="glass-panel rounded-xl p-6">

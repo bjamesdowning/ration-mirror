@@ -9,6 +9,7 @@ import { MealPicker } from "~/components/manifest/MealPicker";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import { WeekNavigator } from "~/components/manifest/WeekNavigator";
 import { WeekView } from "~/components/manifest/WeekView";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { MealForPicker } from "~/lib/manifest.server";
@@ -100,6 +101,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 	// Share modal
 	const [shareOpen, setShareOpen] = useState(false);
+	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
 	const handleAdd = (slot: SlotType, date: string) => {
 		setPickerSlot(slot);
@@ -162,10 +164,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						<button
 							type="button"
 							onClick={() => setShareOpen(true)}
-							className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted hover:text-carbon bg-platinum/50 hover:bg-platinum rounded-lg transition-all"
+							className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors font-medium"
 						>
 							<ShareIcon className="w-4 h-4" />
-							<span className="hidden sm:inline">Share</span>
+							Share
 						</button>
 					</div>
 				</div>
@@ -228,8 +230,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					planId={plan.id}
 					existingShareToken={plan.shareToken ?? null}
 					onClose={() => setShareOpen(false)}
+					onUpgradeRequired={() => {
+						setShareOpen(false);
+						setShowUpgradePrompt(true);
+					}}
 				/>
 			)}
+
+			{/* Upgrade prompt when free-tier user tries to share manifest */}
+			<UpgradePrompt
+				open={showUpgradePrompt}
+				onClose={() => setShowUpgradePrompt(false)}
+				title="Crew Member required"
+				description="Sharing meal plans is a Crew Member feature. Upgrade to unlock sharing, member invites, and unlimited capacity."
+			/>
 		</>
 	);
 }

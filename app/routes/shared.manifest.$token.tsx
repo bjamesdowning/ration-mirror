@@ -129,6 +129,9 @@ function WeekGrid({
 								if (slotEntries.length === 0) return null;
 								return (
 									<div key={slot} className="space-y-0.5">
+										<p className="text-[10px] font-semibold text-muted uppercase tracking-wide">
+											{SLOT_LABELS[slot]}
+										</p>
 										{slotEntries.map((e, i) => (
 											<p
 												key={`${e.date}-${slot}-${i}`}

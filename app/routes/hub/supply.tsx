@@ -413,11 +413,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				/>
 			) : (
 				<div className="space-y-6">
-					{activeSelectionCount === 0 && (
+					{/* Show empty state only when no Galley selections AND no Manifest week meals */}
+					{activeSelectionCount === 0 && manifestWeekMealCount === 0 && (
 						<EmptyPanel
 							icon={<ShoppingCartIcon className="w-12 h-12 text-muted" />}
 							title="No Meals Selected"
-							description="Visit the Galley and toggle meals to auto-populate this list."
+							description="Select meals in the Galley or add meals in the Manifest to auto-populate this list."
 							className="py-8"
 						/>
 					)}

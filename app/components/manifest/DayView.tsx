@@ -48,6 +48,9 @@ export function DayView({
 	const dayName = DAY_NAMES[d.getDay()];
 	const formattedDate = `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
 
+	// Only show entries for this day (mobile shows one day at a time)
+	const dayEntries = entries.filter((e) => e.date === date);
+
 	const slots = showSnackSlot
 		? SLOT_TYPES
 		: SLOT_TYPES.filter((s) => s !== "snack");
@@ -64,7 +67,7 @@ export function DayView({
 					key={slot}
 					slot={slot}
 					date={date}
-					entries={entries}
+					entries={dayEntries}
 					planId={planId}
 					onAdd={onAdd}
 					readOnly={readOnly}

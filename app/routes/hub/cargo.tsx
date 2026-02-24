@@ -12,7 +12,7 @@ import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	CameraIcon,
 	CloseIcon,
-	DocumentTextIcon,
+	ExportIcon,
 	ImportIcon,
 	PackageIcon,
 	PlusIcon,
@@ -348,7 +348,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 		},
 		{
 			id: "export",
-			icon: <DocumentTextIcon />,
+			icon: <ExportIcon />,
 			label: "Export",
 			onClick: () => {
 				window.location.href = "/api/cargo/export";
@@ -462,7 +462,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 									download="ration-cargo.csv"
 									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 								>
-									<DocumentTextIcon className="w-4 h-4" />
+									<ExportIcon className="w-4 h-4" />
 									Export CSV
 								</a>
 							</div>

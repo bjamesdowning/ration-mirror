@@ -7,6 +7,7 @@ export interface CsvParseResult {
 }
 
 export interface ParsedCsvItem {
+	id?: string; // Optional UUID for round-trip upsert
 	name: string;
 	quantity: number;
 	unit: string;
@@ -28,6 +29,7 @@ const KNOWN_UNITS = [
 ] as const;
 
 const COLUMN_ALIASES: Record<string, string> = {
+	id: "id",
 	// name aliases
 	name: "name",
 	item: "name",
@@ -55,6 +57,14 @@ const COLUMN_ALIASES: Record<string, string> = {
 	expires_at: "expiresAt",
 	best_before: "expiresAt",
 };
+
+const UUID_REGEX =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function parseOptionalId(value?: string | null): string | undefined {
+	if (!value || !value.trim()) return undefined;
+	const trimmed = value.trim();
+	return UUID_REGEX.test(trimmed) ? trimmed : undefined;
+}
 
 const MAX_ROWS = 500;
 
@@ -240,7 +250,10 @@ export function parseInventoryCsv(csvText: string): CsvParseResult {
 			warnings.push(`Row ${rowNumber}: invalid expiresAt date`);
 		}
 
+		const id = parseOptionalId(values.id);
+
 		items.push({
+			id,
 			name,
 			quantity,
 			unit: normalizedUnit,

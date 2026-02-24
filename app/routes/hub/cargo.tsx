@@ -12,6 +12,7 @@ import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	CameraIcon,
 	CloseIcon,
+	DocumentTextIcon,
 	ImportIcon,
 	PackageIcon,
 	PlusIcon,
@@ -345,6 +346,14 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				importRef.current?.openImport();
 			},
 		},
+		{
+			id: "export",
+			icon: <DocumentTextIcon />,
+			label: "Export",
+			onClick: () => {
+				window.location.href = "/api/cargo/export";
+			},
+		},
 	];
 
 	// Filter content for mobile sheet
@@ -439,14 +448,24 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 							</button>
 						}
 						secondaryAction={
-							<button
-								type="button"
-								onClick={() => importRef.current?.openImport()}
-								className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
-							>
-								<ImportIcon className="w-4 h-4" />
-								Import CSV
-							</button>
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									onClick={() => importRef.current?.openImport()}
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									<ImportIcon className="w-4 h-4" />
+									Import CSV
+								</button>
+								<a
+									href="/api/cargo/export"
+									download="ration-cargo.csv"
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									<DocumentTextIcon className="w-4 h-4" />
+									Export CSV
+								</a>
+							</div>
 						}
 						quickAddPlaceholder="Add Item"
 						showQuickAdd={showQuickAdd}

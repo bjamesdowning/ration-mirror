@@ -453,3 +453,42 @@ export const supplyItemRelations = relations(supplyItem, ({ one }) => ({
 		references: [supplyList.id],
 	}),
 }));
+
+// API keys for programmatic access (inventory export/import)
+export const apiKey = sqliteTable(
+	"api_key",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		keyHash: text("key_hash").notNull(),
+		keyPrefix: text("key_prefix").notNull(),
+		name: text("name").notNull(),
+		scopes: text("scopes").notNull(), // JSON array e.g. ["inventory"]
+		lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("api_key_prefix_idx").on(table.keyPrefix),
+		index("api_key_org_idx").on(table.organizationId),
+	],
+);
+
+export const apiKeyRelations = relations(apiKey, ({ one }) => ({
+	organization: one(organization, {
+		fields: [apiKey.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [apiKey.userId],
+		references: [user.id],
+	}),
+}));

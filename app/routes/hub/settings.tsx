@@ -80,6 +80,19 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const credits = await checkBalance(env, groupId);
 
+		// API keys for current organization
+		const apiKeys = await db.query.apiKey.findMany({
+			where: (key, { eq }) => eq(key.organizationId, groupId),
+			columns: {
+				id: true,
+				keyPrefix: true,
+				name: true,
+				scopes: true,
+				lastUsedAt: true,
+				createdAt: true,
+			},
+		});
+
 		return {
 			settings,
 			members,
@@ -94,6 +107,7 @@ export async function loader(args: Route.LoaderArgs) {
 			tier: user.tier ?? "free",
 			tierExpiresAt: user.tierExpiresAt ?? null,
 			welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
+			apiKeys,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -340,6 +354,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 				{/* User Profile & Credits */}
 				<ReferenceIdSection credits={loaderData.credits} />
+
+				{/* API Keys */}
+				<ApiKeysSection
+					apiKeys={loaderData.apiKeys ?? []}
+					organizationName={loaderData.organizationName}
+				/>
 
 				{/* Administration (admin only) */}
 				{loaderData.isAdmin && (
@@ -622,6 +642,171 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					)}
 				</section>
 			</div>
+		</div>
+	);
+}
+
+type ApiKeyRow = {
+	id: string;
+	keyPrefix: string;
+	name: string;
+	scopes: string;
+	lastUsedAt: Date | null;
+	createdAt: Date;
+};
+
+function ApiKeysSection({
+	apiKeys,
+	organizationName,
+}: {
+	apiKeys: ApiKeyRow[];
+	organizationName: string;
+}) {
+	const createFetcher = useFetcher<{
+		key?: string;
+		prefix?: string;
+		id?: string;
+		name?: string;
+		createdAt?: string;
+		error?: string;
+	}>();
+	const [newKeyDisplay, setNewKeyDisplay] = useState<string | null>(null);
+	const [createName, setCreateName] = useState("");
+
+	useEffect(() => {
+		if (createFetcher.data?.key && createFetcher.state === "idle") {
+			setNewKeyDisplay(createFetcher.data.key);
+			setCreateName("");
+		}
+	}, [createFetcher.data?.key, createFetcher.state]);
+
+	const handleCreate = (e: React.FormEvent) => {
+		if (!createName.trim()) e.preventDefault();
+		else setNewKeyDisplay(null);
+	};
+
+	return (
+		<section className="glass-panel rounded-xl p-6">
+			<h2 className="text-xl font-bold mb-2 text-carbon">API Keys</h2>
+			<p className="text-sm text-muted mb-4">
+				Create keys to access Cargo export/import programmatically. Keys are
+				scoped to{" "}
+				<span className="font-medium text-carbon">{organizationName}</span>. Use
+				the key in the{" "}
+				<code className="text-xs bg-platinum/50 px-1 rounded">
+					Authorization: Bearer &lt;key&gt;
+				</code>{" "}
+				header or{" "}
+				<code className="text-xs bg-platinum/50 px-1 rounded">X-Api-Key</code>.
+			</p>
+
+			{newKeyDisplay && (
+				<div className="mb-6 p-4 bg-hyper-green/10 border border-hyper-green/20 rounded-lg">
+					<p className="text-xs text-muted font-bold uppercase mb-2">
+						Copy your key now — it won&apos;t be shown again
+					</p>
+					<div className="flex gap-2">
+						<input
+							type="text"
+							readOnly
+							value={newKeyDisplay}
+							className="flex-1 bg-white/50 border border-carbon/10 rounded px-3 py-1 text-sm font-mono text-carbon"
+							onClick={(e) => e.currentTarget.select()}
+						/>
+						<button
+							type="button"
+							onClick={() => {
+								navigator.clipboard.writeText(newKeyDisplay);
+								alert("Copied to clipboard!");
+							}}
+							className="px-3 py-1 bg-hyper-green text-carbon text-xs font-semibold rounded hover:bg-hyper-green/90"
+						>
+							Copy
+						</button>
+						<button
+							type="button"
+							onClick={() => setNewKeyDisplay(null)}
+							className="px-3 py-1 bg-platinum text-carbon text-xs font-semibold rounded"
+						>
+							Done
+						</button>
+					</div>
+				</div>
+			)}
+
+			<createFetcher.Form
+				method="post"
+				action="/api/api-keys"
+				onSubmit={handleCreate}
+				className="flex gap-2 mb-6"
+			>
+				<input
+					type="text"
+					name="name"
+					value={createName}
+					onChange={(e) => setCreateName(e.target.value)}
+					placeholder="Key name (e.g. My Script)"
+					className="flex-1 max-w-xs px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+					maxLength={100}
+				/>
+				<button
+					type="submit"
+					disabled={createFetcher.state !== "idle" || !createName.trim()}
+					className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold hover:bg-hyper-green/90 disabled:opacity-50"
+				>
+					{createFetcher.state === "submitting" ? "Creating..." : "Create key"}
+				</button>
+			</createFetcher.Form>
+
+			{createFetcher.data?.error && (
+				<p className="text-sm text-danger mb-4">{createFetcher.data.error}</p>
+			)}
+
+			<div className="space-y-3">
+				{apiKeys.length === 0 && !newKeyDisplay ? (
+					<p className="text-sm text-muted">
+						No API keys yet. Create one above.
+					</p>
+				) : (
+					apiKeys.map((k) => <ApiKeyRow key={k.id} keyRecord={k} />)
+				)}
+			</div>
+		</section>
+	);
+}
+
+function ApiKeyRow({ keyRecord }: { keyRecord: ApiKeyRow }) {
+	const revokeFetcher = useFetcher<{ success?: boolean; error?: string }>();
+
+	const handleRevoke = () => {
+		if (!confirm("Revoke this API key? It will stop working immediately."))
+			return;
+		revokeFetcher.submit(null, {
+			method: "delete",
+			action: `/api/api-keys/${keyRecord.id}`,
+		});
+	};
+
+	return (
+		<div className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg">
+			<div>
+				<p className="font-medium text-carbon">{keyRecord.name}</p>
+				<p className="text-xs font-mono text-muted">{keyRecord.keyPrefix}...</p>
+				<p className="text-xs text-muted mt-1">
+					Last used:{" "}
+					{keyRecord.lastUsedAt
+						? new Date(keyRecord.lastUsedAt).toLocaleString()
+						: "Never"}
+				</p>
+			</div>
+			<button
+				type="button"
+				onClick={handleRevoke}
+				disabled={revokeFetcher.state !== "idle"}
+				className="px-3 py-1 text-danger text-sm font-medium hover:bg-danger/10 rounded"
+			>
+				{revokeFetcher.state === "submitting" ? "Revoking..." : "Revoke"}
+			</button>
 		</div>
 	);
 }

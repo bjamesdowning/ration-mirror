@@ -13,13 +13,19 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { cargo, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
+import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
-import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
+import {
+	chunkArray,
+	chunkedInsert,
+	D1_MAX_BOUND_PARAMS,
+} from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
 import {
 	convertQuantity,
 	getUnitMultiplier,
+	normalizeUnitAlias,
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
@@ -472,6 +478,115 @@ export async function getCargoStats(db: D1Database, organizationId: string) {
 		expiringCount,
 		expiredCount,
 	};
+}
+
+const APPLY_IMPORT_MAX_ROWS = 500;
+/** Cargo insert: id, organizationId, name, quantity, unit, tags, domain, status, expiresAt, createdAt, updatedAt = 11 params */
+const D1_MAX_CARGO_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 11);
+
+export interface ApplyCargoImportResult {
+	imported: number;
+	updated: number;
+	errors: Array<{ name: string; error: string }>;
+}
+
+/**
+ * Shared import logic: apply parsed cargo rows (from CSV or batch JSON).
+ * Upsert by id when present and existing in org; otherwise create.
+ */
+export async function applyCargoImport(
+	env: Env,
+	organizationId: string,
+	parsedItems: ParsedCsvItem[],
+): Promise<ApplyCargoImportResult> {
+	const result: ApplyCargoImportResult = {
+		imported: 0,
+		updated: 0,
+		errors: [],
+	};
+	const items = parsedItems.slice(0, APPLY_IMPORT_MAX_ROWS);
+	const d1 = drizzle(env.DB);
+
+	const existingRows = await d1
+		.select({ id: cargo.id })
+		.from(cargo)
+		.where(eq(cargo.organizationId, organizationId));
+	const existingIds = new Set(existingRows.map((r) => r.id));
+
+	const toUpdate: ParsedCsvItem[] = [];
+	const toCreate: ParsedCsvItem[] = [];
+	for (const item of items) {
+		if (item.id && existingIds.has(item.id)) {
+			toUpdate.push(item);
+		} else {
+			toCreate.push(item);
+		}
+	}
+
+	const now = new Date();
+	for (const item of toUpdate) {
+		if (!item.id) continue;
+		try {
+			const updateData: CargoItemUpdateInput = {
+				name: item.name,
+				quantity: item.quantity,
+				unit: normalizeUnitAlias(item.unit) as CargoItemInput["unit"],
+				domain: (item.domain as CargoItemInput["domain"]) ?? "food",
+				tags: item.tags ?? [],
+				expiresAt: item.expiresAt
+					? new Date(`${item.expiresAt}T00:00:00Z`)
+					: undefined,
+			};
+			const updated = await updateItem(
+				env,
+				organizationId,
+				item.id,
+				updateData,
+			);
+			if (updated) result.updated += 1;
+		} catch (e) {
+			result.errors.push({
+				name: item.name,
+				error: e instanceof Error ? e.message : String(e),
+			});
+		}
+	}
+
+	if (toCreate.length > 0) {
+		const capacity = await checkCapacity(
+			env,
+			organizationId,
+			"cargo",
+			toCreate.length,
+		);
+		if (!capacity.allowed) {
+			for (const item of toCreate) {
+				result.errors.push({ name: item.name, error: "capacity_exceeded" });
+			}
+			return result;
+		}
+		const insertRows = toCreate.map((p) => ({
+			id: crypto.randomUUID(),
+			organizationId,
+			name: p.name,
+			quantity: p.quantity,
+			unit: normalizeUnitAlias(p.unit),
+			domain: (p.domain as (typeof ITEM_DOMAINS)[number]) ?? "food",
+			tags: p.tags ?? [],
+			status: calculateInventoryStatus(
+				p.expiresAt ? new Date(`${p.expiresAt}T00:00:00Z`) : undefined,
+			),
+			expiresAt: p.expiresAt ? new Date(`${p.expiresAt}T00:00:00Z`) : null,
+			createdAt: now,
+			updatedAt: now,
+		}));
+		await chunkedInsert(insertRows, D1_MAX_CARGO_ROWS_PER_STATEMENT, (chunk) =>
+			d1.insert(cargo).values(chunk),
+		);
+		result.imported = insertRows.length;
+	}
+
+	return result;
 }
 
 /**

@@ -52,9 +52,14 @@ export default [
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
 	route("api/meals/import", "routes/api/meals.import.ts"),
 
-	// API - Cargo
-	route("api/cargo/:id", "routes/api/cargo.$id.ts"),
+	// API - Cargo (static paths before :id)
+	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
+	route("api/cargo/:id", "routes/api/cargo.$id.ts"),
+
+	// API - v1 programmatic (API key auth)
+	route("api/v1/inventory/export", "routes/api/v1.inventory.export.ts"),
+	route("api/v1/inventory/import", "routes/api/v1.inventory.import.ts"),
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),
@@ -89,6 +94,8 @@ export default [
 		"api/groups/invitations/create",
 		"routes/api/groups.invitations.create.ts",
 	),
+	route("api/api-keys", "routes/api/api-keys.ts"),
+	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
 	// Legal

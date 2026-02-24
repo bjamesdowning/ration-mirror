@@ -1,19 +1,19 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { checkCapacity } from "~/lib/capacity.server";
+import { applyCargoImport, getCargo } from "~/lib/cargo.server";
+import type { ParsedCsvItem } from "~/lib/csv-parser";
 import { log } from "~/lib/logging.server";
-import { chunkArray, D1_MAX_BOUND_PARAMS } from "~/lib/query-utils.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
 import type { Route } from "./+types/cargo.batch";
 
 /**
- * Batch add multiple items to inventory from scan results
+ * Batch add multiple items to inventory from scan results.
+ * Uses shared applyCargoImport: merge items update existing row quantity; new items create rows.
  */
 export async function action({ request, context }: Route.ActionArgs) {
 	const { groupId, session } = await requireActiveGroup(context, request);
 
-	// Rate limiting to prevent DB overload
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"inventory_batch",
@@ -50,109 +50,68 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const mergeItems = items.filter((item) => item.mergeTargetId);
 		const newItems = items.filter((item) => !item.mergeTargetId);
 
-		if (newItems.length > 0) {
-			const capacity = await checkCapacity(
-				context.cloudflare.env,
-				groupId,
-				"cargo",
-				newItems.length,
-			);
-			if (!capacity.allowed) {
-				return data(
-					{
-						error: "capacity_exceeded",
-						resource: "cargo",
-						current: capacity.current,
-						limit: capacity.limit,
-						tier: capacity.tier,
-						isExpired: capacity.isExpired,
-						canAdd: capacity.canAdd,
-						upgradePath: "crew_member",
-					},
-					{ status: 403 },
-				);
-			}
-		}
-
-		// Collect all insert operations for batching
-		const batchOps = [];
-		const now = new Date();
+		const parsed: ParsedCsvItem[] = [];
 
 		if (mergeItems.length > 0) {
-			const mergeIds = mergeItems
-				.map((item) => item.mergeTargetId)
-				.filter((id): id is string => Boolean(id));
-			const allowedIds = new Set<string>();
-			for (const mergeChunk of chunkArray(mergeIds, D1_MAX_BOUND_PARAMS - 1)) {
-				const placeholders = mergeChunk.map(() => "?").join(", ");
-				const existingResults = await context.cloudflare.env.DB.prepare(
-					`SELECT id FROM cargo WHERE organization_id = ? AND id IN (${placeholders})`,
-				)
-					.bind(groupId, ...mergeChunk)
-					.all();
-				for (const row of existingResults.results ?? []) {
-					allowedIds.add(row.id as string);
-				}
-			}
-
+			const existingCargo = await getCargo(context.cloudflare.env.DB, groupId);
+			const byId = new Map(existingCargo.map((c) => [c.id, c]));
 			for (const item of mergeItems) {
-				if (!item.mergeTargetId || !allowedIds.has(item.mergeTargetId)) {
-					throw data({ error: "Invalid merge target" }, { status: 400 });
+				const targetId = item.mergeTargetId;
+				if (!targetId) continue;
+				const existing = byId.get(targetId);
+				if (!existing) {
+					parsed.push({
+						name: item.name,
+						quantity: item.quantity,
+						unit: item.unit,
+						domain: item.domain,
+						tags: item.tags,
+						expiresAt: item.expiresAt?.toISOString().slice(0, 10),
+					});
+					continue;
 				}
-			}
-
-			for (const item of mergeItems) {
-				batchOps.push(
-					context.cloudflare.env.DB.prepare(
-						`UPDATE inventory
-						 SET quantity = quantity + ?, updated_at = ?
-						 WHERE id = ? AND organization_id = ?`,
-					).bind(
-						item.quantity,
-						Math.floor(now.getTime() / 1000),
-						item.mergeTargetId,
-						groupId,
-					),
-				);
+				parsed.push({
+					id: targetId,
+					name: existing.name,
+					quantity: existing.quantity + item.quantity,
+					unit: existing.unit,
+					domain: existing.domain,
+					tags:
+						typeof existing.tags === "string"
+							? (JSON.parse(existing.tags || "[]") as string[])
+							: (existing.tags as string[]),
+					expiresAt: existing.expiresAt
+						? new Date(existing.expiresAt).toISOString().slice(0, 10)
+						: undefined,
+				});
 			}
 		}
 
 		for (const item of newItems) {
-			batchOps.push(
-				context.cloudflare.env.DB.prepare(
-					`INSERT INTO inventory (id, organization_id, name, quantity, unit, domain, status, tags, created_at, updated_at)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				).bind(
-					crypto.randomUUID(),
-					groupId,
-					item.name,
-					item.quantity,
-					item.unit,
-					item.domain,
-					"stable",
-					JSON.stringify(item.tags || []),
-					Math.floor(now.getTime() / 1000),
-					Math.floor(now.getTime() / 1000),
-				),
-			);
+			parsed.push({
+				name: item.name,
+				quantity: item.quantity,
+				unit: item.unit,
+				domain: item.domain,
+				tags: item.tags,
+				expiresAt: item.expiresAt?.toISOString().slice(0, 10),
+			});
 		}
 
-		// Execute all inserts in a single batch
-		const results = await context.cloudflare.env.DB.batch(batchOps);
+		const applyResult = await applyCargoImport(
+			context.cloudflare.env,
+			groupId,
+			parsed,
+		);
 
-		// Count successful inserts
-		const addedCount = results.filter((r) => r.success).length;
-		const errors = results
-			.map((r, idx) =>
-				!r.success ? { name: items[idx].name, error: r.error } : null,
-			)
-			.filter(Boolean);
-
+		const errors =
+			applyResult.errors.length > 0 ? applyResult.errors : undefined;
 		return {
 			success: true,
-			added: addedCount,
+			added: applyResult.imported,
+			updated: applyResult.updated,
 			total: items.length,
-			errors: errors.length > 0 ? errors : undefined,
+			errors,
 		};
 	} catch (error) {
 		log.error("Batch add failed", error);

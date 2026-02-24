@@ -119,6 +119,16 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 1,
 		keyPrefix: "rate:user_purge",
 	},
+	api_export: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 30,
+		keyPrefix: "rate:api_export",
+	},
+	api_import: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20,
+		keyPrefix: "rate:api_import",
+	},
 };
 
 /**

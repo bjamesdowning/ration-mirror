@@ -1,5 +1,57 @@
-import type { supplyItem, supplyList } from "../db/schema";
+import type { cargo, supplyItem, supplyList } from "../db/schema";
 import { DOMAIN_LABELS } from "./domain";
+
+type CargoItem = typeof cargo.$inferSelect;
+
+function escapeCsvCell(value: string): string {
+	if (/[",\r\n]/.test(value)) {
+		return `"${value.replace(/"/g, '""')}"`;
+	}
+	return value;
+}
+
+/**
+ * Export cargo (inventory) as CSV for round-trip import.
+ * Columns: id, name, quantity, unit, domain, tags, expires_at
+ */
+export function exportCargoAsCsv(items: CargoItem[]): string {
+	const headers = [
+		"id",
+		"name",
+		"quantity",
+		"unit",
+		"domain",
+		"tags",
+		"expires_at",
+	];
+	const rows = items.map((item) => {
+		const tagsRaw = item.tags;
+		const tagsStr =
+			typeof tagsRaw === "string"
+				? Array.isArray(JSON.parse(tagsRaw || "[]"))
+					? (JSON.parse(tagsRaw) as string[]).join(",")
+					: tagsRaw
+				: Array.isArray(tagsRaw)
+					? (tagsRaw as string[]).join(",")
+					: "";
+		const expiresAt =
+			item.expiresAt instanceof Date
+				? item.expiresAt.toISOString().slice(0, 10)
+				: item.expiresAt
+					? new Date(item.expiresAt).toISOString().slice(0, 10)
+					: "";
+		return [
+			item.id,
+			item.name,
+			String(item.quantity),
+			item.unit,
+			item.domain ?? "food",
+			tagsStr,
+			expiresAt,
+		].map((v) => escapeCsvCell(String(v ?? "")));
+	});
+	return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {
 	items: (typeof supplyItem.$inferSelect)[];

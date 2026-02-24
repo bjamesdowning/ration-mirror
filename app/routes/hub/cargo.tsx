@@ -22,6 +22,7 @@ import {
 	CameraInput,
 	type CameraInputHandle,
 } from "~/components/scanner/CameraInput";
+import { ScanIntroModal } from "~/components/scanner/ScanIntroModal";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -259,10 +260,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const dashboardData = useRouteLoaderData("routes/hub") as {
+		balance?: number;
+		aiCosts?: { SCAN: number };
 		capacity?: {
 			cargo?: { current: number; limit: number };
 		};
 	} | null;
+	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const importRef = useRef<CsvImportButtonHandle>(null);
 	const {
@@ -333,10 +337,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			icon: <CameraIcon />,
 			label: "Scan",
 			primary: true,
-			onClick: () => {
-				// Trigger the hidden CameraInput
-				cameraRef.current?.openCamera();
-			},
+			onClick: () => setShowScanIntroModal(true),
 		},
 		{
 			id: "import",
@@ -401,6 +402,16 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				}
 			/>
 			{/* Hidden instances for refs + modals (always in DOM, even on mobile) */}
+			<ScanIntroModal
+				open={showScanIntroModal}
+				onClose={() => setShowScanIntroModal(false)}
+				onConfirm={() => {
+					setShowScanIntroModal(false);
+					cameraRef.current?.openCamera();
+				}}
+				credits={dashboardData?.balance ?? 0}
+				costPerScan={dashboardData?.aiCosts?.SCAN ?? 2}
+			/>
 			<CameraInput
 				ref={cameraRef}
 				onScanComplete={handleScanComplete}
@@ -440,7 +451,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 						primaryAction={
 							<button
 								type="button"
-								onClick={() => cameraRef.current?.openCamera()}
+								onClick={() => setShowScanIntroModal(true)}
 								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 							>
 								<CameraIcon className="w-4 h-4" />
@@ -501,7 +512,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 							<div className="flex flex-wrap justify-center gap-3">
 								<button
 									type="button"
-									onClick={() => cameraRef.current?.openCamera()}
+									onClick={() => setShowScanIntroModal(true)}
 									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 								>
 									Scan Receipt

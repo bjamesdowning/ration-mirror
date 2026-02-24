@@ -7,7 +7,7 @@ import {
 	checkCapacityWithTier,
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
-import { checkBalance } from "~/lib/ledger.server";
+import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import type { Route } from "./+types/hub";
 
@@ -83,6 +83,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	return {
 		balance,
+		/** Credit cost per AI feature; keep in sync with ledger.server.ts AI_COSTS */
+		aiCosts: {
+			SCAN: AI_COSTS.SCAN,
+			MEAL_GENERATE: AI_COSTS.MEAL_GENERATE,
+			IMPORT_URL: AI_COSTS.IMPORT_URL,
+		},
 		tier: tierInfo.tier,
 		isTierExpired: tierInfo.isExpired,
 		capacity: {

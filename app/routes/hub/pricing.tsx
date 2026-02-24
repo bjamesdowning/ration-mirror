@@ -204,13 +204,32 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							credits on start and renewal
 						</li>
 					</ul>
-					<button
-						type="button"
-						onClick={startCrewCheckout}
-						className="mt-5 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg"
-					>
-						Start Crew Member
-					</button>
+					{loaderData.userTier === "crew_member" ? (
+						<div className="mt-5 space-y-1">
+							<p className="text-sm font-medium text-hyper-green">Your plan</p>
+							{loaderData.tierExpiresAt ? (
+								<p className="text-xs text-muted">
+									Renews on{" "}
+									{(loaderData.tierExpiresAt instanceof Date
+										? loaderData.tierExpiresAt
+										: new Date(loaderData.tierExpiresAt)
+									).toLocaleDateString(undefined, {
+										dateStyle: "long",
+									})}
+								</p>
+							) : (
+								<p className="text-xs text-muted">Active</p>
+							)}
+						</div>
+					) : (
+						<button
+							type="button"
+							onClick={startCrewCheckout}
+							className="mt-5 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg"
+						>
+							Start Crew Member
+						</button>
+					)}
 				</div>
 			</div>
 

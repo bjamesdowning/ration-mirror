@@ -7,6 +7,10 @@ import {
 	useState,
 } from "react";
 import { useFetcher, useNavigate } from "react-router";
+import {
+	AIFeatureIntroView,
+	AIFeatureModal,
+} from "~/components/ai/AIFeatureModal";
 
 interface GeneratedRecipe {
 	name: string;
@@ -29,6 +33,10 @@ export interface GenerateMealButtonHandle {
 
 interface GenerateMealButtonProps {
 	className?: string;
+	/** Current group credit balance (from hub loader); shown in modal when provided */
+	credits?: number;
+	/** Credit cost per generation (from hub loader aiCosts.MEAL_GENERATE) */
+	costPerGenerate?: number;
 }
 
 const MAX_CUSTOMIZATION = 200;
@@ -36,8 +44,9 @@ const MAX_CUSTOMIZATION = 200;
 export const GenerateMealButton = forwardRef<
 	GenerateMealButtonHandle,
 	GenerateMealButtonProps
->(({ className }, ref) => {
+>(({ className, credits, costPerGenerate = 2 }, ref) => {
 	const [showModal, setShowModal] = useState(false);
+	const [view, setView] = useState<"intro" | "form">("intro");
 	const [customization, setCustomization] = useState("");
 	const [selectedRecipes, setSelectedRecipes] = useState<Set<number>>(
 		new Set(),
@@ -54,6 +63,7 @@ export const GenerateMealButton = forwardRef<
 	useImperativeHandle(ref, () => ({
 		open: () => {
 			setShowModal(true);
+			setView("intro");
 		},
 	}));
 
@@ -124,11 +134,17 @@ export const GenerateMealButton = forwardRef<
 				"error" in saveFetcher.data;
 			if (!hasError) {
 				setShowModal(false);
+				setView("intro");
 				setSelectedRecipes(new Set());
 				navigate("/hub/galley");
 			}
 		}
 	}, [saveFetcher.state, saveFetcher.data, navigate]);
+
+	const handleClose = () => {
+		setShowModal(false);
+		setView("intro");
+	};
 
 	return (
 		<>
@@ -148,46 +164,27 @@ export const GenerateMealButton = forwardRef<
 			</button>
 
 			{showModal && (
-				<div
-					className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
-					role="dialog"
-					aria-modal="true"
+				<AIFeatureModal
+					open={showModal}
+					onClose={handleClose}
+					title="AI Meal Assistant"
+					subtitle="Powered by Orbital Intelligence"
+					icon={<Sparkles className="w-5 h-5 text-hyper-green" />}
+					maxWidth="lg"
 				>
-					{/* Backdrop */}
-					<button
-						type="button"
-						className="absolute inset-0 bg-transparent cursor-default"
-						onClick={() => setShowModal(false)}
-						aria-label="Close modal"
-					/>
-
-					<div className="bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full md:max-w-4xl max-h-[90vh] md:max-h-[85vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl">
-						{/* Header */}
-						<div className="p-6 border-b border-platinum dark:border-white/10 flex justify-between items-center sticky top-0 bg-ceramic/95 dark:bg-[#1A1A1A]/95 backdrop-blur z-20">
-							<div className="flex items-center gap-3">
-								<div className="w-10 h-10 rounded-full bg-hyper-green/20 flex items-center justify-center">
-									<Sparkles className="w-5 h-5 text-hyper-green" />
-								</div>
-								<div>
-									<h3 className="text-xl font-bold text-carbon dark:text-white">
-										AI Meal Assistant
-									</h3>
-									<p className="text-xs text-muted">
-										Powered by Orbital Intelligence
-									</p>
-								</div>
-							</div>
-							<button
-								type="button"
-								onClick={() => setShowModal(false)}
-								className="p-2 text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 rounded-full transition-colors"
-							>
-								✕
-							</button>
-						</div>
-
+					{view === "intro" ? (
+						<AIFeatureIntroView
+							description="AI uses your current Cargo to suggest 3 recipes you can make with what you have—no guessing what's in stock."
+							cost={costPerGenerate}
+							costLabel="per generation"
+							credits={typeof credits === "number" ? credits : 0}
+							onCancel={handleClose}
+							onConfirm={() => setView("form")}
+							confirmLabel="Continue"
+						/>
+					) : (
 						<div className="p-8">
-							{/* Initial State / Loading */}
+							{/* Form / Loading / Error / Results */}
 							{!recipes && !error && (
 								<div className="text-center py-12">
 									{isGenerating ? (
@@ -205,12 +202,8 @@ export const GenerateMealButton = forwardRef<
 									) : (
 										<div className="space-y-6">
 											<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
-												Ready to cook? I'll analyze your Cargo and generate 3
-												personalized recipes.
-												<br />
-												<span className="text-xs text-muted mt-2 block">
-													Cost: 5 Credits
-												</span>
+												Optional: add dietary preference, cuisine type, or time
+												constraint.
 											</p>
 											<div className="max-w-md mx-auto text-left">
 												<label
@@ -401,8 +394,8 @@ export const GenerateMealButton = forwardRef<
 								</div>
 							)}
 						</div>
-					</div>
-				</div>
+					)}
+				</AIFeatureModal>
 			)}
 		</>
 	);

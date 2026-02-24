@@ -7,6 +7,10 @@ import {
 	useState,
 } from "react";
 import { useFetcher, useNavigate } from "react-router";
+import {
+	AIFeatureIntroView,
+	AIFeatureModal,
+} from "~/components/ai/AIFeatureModal";
 
 interface ImportedRecipe {
 	name: string;
@@ -33,18 +37,22 @@ export interface ImportRecipeButtonHandle {
 
 interface ImportRecipeButtonProps {
 	className?: string;
+	/** Current group credit balance (from hub loader); shown in modal when provided */
+	credits?: number;
+	/** Credit cost per import (from hub loader aiCosts.IMPORT_URL) */
+	costPerImport?: number;
 }
 
 export const ImportRecipeButton = forwardRef<
 	ImportRecipeButtonHandle,
 	ImportRecipeButtonProps
->(({ className }, ref) => {
+>(({ className, credits, costPerImport = 1 }, ref) => {
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
 	const [importedUrl, setImportedUrl] = useState<string | null>(null);
-	const [view, setView] = useState<"url" | "loading" | "result" | "error">(
-		"url",
-	);
+	const [view, setView] = useState<
+		"intro" | "url" | "loading" | "result" | "error"
+	>("intro");
 	const saveInFlight = useRef(false);
 	const importFetcher = useFetcher<{
 		success: boolean;
@@ -61,7 +69,7 @@ export const ImportRecipeButton = forwardRef<
 			setShowModal(true);
 			setUrl("");
 			setImportedUrl(null);
-			setView("url");
+			setView("intro");
 		},
 	}));
 
@@ -96,6 +104,13 @@ export const ImportRecipeButton = forwardRef<
 		setView("url");
 	};
 
+	const handleClose = () => {
+		setShowModal(false);
+		setView("intro");
+		setUrl("");
+		setImportedUrl(null);
+	};
+
 	const handleSave = () => {
 		if (!recipe) return;
 		saveInFlight.current = true;
@@ -121,7 +136,7 @@ export const ImportRecipeButton = forwardRef<
 				"error" in saveFetcher.data;
 			if (!hasError) {
 				setShowModal(false);
-				setView("url");
+				setView("intro");
 				setUrl("");
 				setImportedUrl(null);
 				navigate("/hub/galley");
@@ -129,6 +144,7 @@ export const ImportRecipeButton = forwardRef<
 		}
 	}, [saveFetcher.state, saveFetcher.data, navigate]);
 
+	const showIntro = view === "intro";
 	const showUrlInput = view === "url";
 	const showProcessing = view === "loading";
 	const showError = view === "error";
@@ -152,42 +168,25 @@ export const ImportRecipeButton = forwardRef<
 			</button>
 
 			{showModal && (
-				<div
-					className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
-					role="dialog"
-					aria-modal="true"
+				<AIFeatureModal
+					open={showModal}
+					onClose={handleClose}
+					title="Import Meal"
+					subtitle="Paste a URL to extract a meal"
+					icon={<Link2 className="w-5 h-5 text-hyper-green" />}
+					maxWidth="md"
 				>
-					<button
-						type="button"
-						className="absolute inset-0 bg-transparent cursor-default"
-						onClick={() => setShowModal(false)}
-						aria-label="Close modal"
-					/>
-
-					<div className="bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-2xl w-full md:max-w-2xl max-h-[90vh] md:max-h-[85vh] overflow-y-auto m-4 relative z-10 flex flex-col shadow-xl">
-						<div className="p-6 border-b border-platinum dark:border-white/10 flex justify-between items-center sticky top-0 bg-ceramic/95 dark:bg-[#1A1A1A]/95 backdrop-blur z-20">
-							<div className="flex items-center gap-3">
-								<div className="w-10 h-10 rounded-full bg-hyper-green/20 flex items-center justify-center">
-									<Link2 className="w-5 h-5 text-hyper-green" />
-								</div>
-								<div>
-									<h3 className="text-xl font-bold text-carbon dark:text-white">
-										Import Meal
-									</h3>
-									<p className="text-xs text-muted">
-										Paste a URL to extract a meal
-									</p>
-								</div>
-							</div>
-							<button
-								type="button"
-								onClick={() => setShowModal(false)}
-								className="p-2 text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 rounded-full transition-colors"
-							>
-								✕
-							</button>
-						</div>
-
+					{showIntro ? (
+						<AIFeatureIntroView
+							description="Paste a recipe link. AI extracts ingredients and steps into your Galley so you have one place to cook from."
+							cost={costPerImport}
+							costLabel="per import"
+							credits={typeof credits === "number" ? credits : 0}
+							onCancel={handleClose}
+							onConfirm={() => setView("url")}
+							confirmLabel="Continue"
+						/>
+					) : (
 						<div className="p-8">
 							{/* Phase 1: URL Input */}
 							{showUrlInput && (
@@ -363,8 +362,8 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 						</div>
-					</div>
-				</div>
+					)}
+				</AIFeatureModal>
 			)}
 		</>
 	);

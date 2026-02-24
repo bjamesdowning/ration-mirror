@@ -109,6 +109,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const { meals, availableTags, inventory, activeMealIds } = loaderData;
 	const dashboardData = useRouteLoaderData("routes/hub") as {
+		balance?: number;
+		aiCosts?: { MEAL_GENERATE: number; IMPORT_URL: number };
 		capacity?: {
 			meals?: { current: number; limit: number };
 		};
@@ -257,8 +259,18 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* Hidden instances for ref + modal (always in DOM, even on mobile) */}
-			<GenerateMealButton ref={generateRef} className="hidden" />
-			<ImportRecipeButton ref={importRef} className="hidden" />
+			<GenerateMealButton
+				ref={generateRef}
+				className="hidden"
+				credits={dashboardData?.balance}
+				costPerGenerate={dashboardData?.aiCosts?.MEAL_GENERATE}
+			/>
+			<ImportRecipeButton
+				ref={importRef}
+				className="hidden"
+				credits={dashboardData?.balance}
+				costPerImport={dashboardData?.aiCosts?.IMPORT_URL}
+			/>
 
 			{/* Mobile Header */}
 			<PageHeader

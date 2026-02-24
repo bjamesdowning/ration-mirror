@@ -67,9 +67,7 @@ export function FloatingActionBar({
 						<span className="w-6 h-6 flex items-center justify-center shrink-0">
 							{action.icon}
 						</span>
-						{action.primary || action.variant === "primary" ? (
-							<span className="hidden xs:inline">{action.label}</span>
-						) : null}
+						<span className="hidden xs:inline">{action.label}</span>
 					</button>
 				))}
 			</div>

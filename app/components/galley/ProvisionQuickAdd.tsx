@@ -170,12 +170,11 @@ export function ProvisionQuickAdd({
 				/>
 			</div>
 
-			{fetcher.data?.error &&
-				fetcher.data.error !== "capacity_exceeded" && (
-					<div className="bg-danger/10 text-danger text-sm px-4 py-2 rounded-lg">
-						{fetcher.data.error}
-					</div>
-				)}
+			{fetcher.data?.error && fetcher.data.error !== "capacity_exceeded" && (
+				<div className="bg-danger/10 text-danger text-sm px-4 py-2 rounded-lg">
+					{fetcher.data.error}
+				</div>
+			)}
 
 			<div className="flex justify-end">
 				<button

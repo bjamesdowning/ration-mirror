@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
+import { AddTypeChoice } from "~/components/galley/AddTypeChoice";
 import {
 	GenerateMealButton,
 	type GenerateMealButtonHandle,
@@ -116,9 +117,9 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			meals?: { current: number; limit: number };
 		};
 	} | null;
+	type AddStep = null | "choice" | "recipe" | "provision";
+	const [addStep, setAddStep] = useState<AddStep>(null);
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
-	const [showQuickAdd, setShowQuickAdd] = useState(false);
-	const [showProvisionAdd, setShowProvisionAdd] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -176,27 +177,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	};
 
 	// FAB actions for mobile
-	const showAnyQuickAdd = showQuickAdd || showProvisionAdd;
 	const fabActions: FloatingAction[] = [
 		{
-			id: showAnyQuickAdd ? "cancel" : "add",
-			icon: showAnyQuickAdd ? <CloseIcon /> : <PlusIcon />,
-			label: showAnyQuickAdd ? "Cancel" : "Add Meal",
-			variant: showAnyQuickAdd ? "danger" : "default",
-			onClick: () => {
-				setShowQuickAdd(false);
-				setShowProvisionAdd(false);
-			},
-		},
-		{
-			id: "add-item",
-			icon: <PlusIcon />,
-			label: "Add Item",
-			variant: "default",
-			onClick: () => {
-				setShowProvisionAdd(true);
-				setShowQuickAdd(false);
-			},
+			id: addStep !== null ? "cancel" : "add",
+			icon: addStep !== null ? <CloseIcon /> : <PlusIcon />,
+			label: addStep !== null ? "Cancel" : "Add",
+			variant: addStep !== null ? "danger" : "default",
+			onClick: () =>
+				addStep !== null ? setAddStep(null) : setAddStep("choice"),
 		},
 		{
 			id: "import",
@@ -351,73 +339,66 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								Import URL
 							</button>
 						}
-						additionalControls={
-							<button
-								type="button"
-								onClick={() => {
-									setShowProvisionAdd(true);
-									setShowQuickAdd(false);
-								}}
-								className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green transition-all"
-							>
-								<PlusIcon className="w-4 h-4" />
-								Add Item
-							</button>
-						}
-						quickAddPlaceholder="Add Meal"
-						showQuickAdd={showQuickAdd || showProvisionAdd}
+						quickAddPlaceholder="Add"
+						showQuickAdd={addStep !== null}
 						onToggleQuickAdd={() => {
-							if (showQuickAdd || showProvisionAdd) {
-								setShowQuickAdd(false);
-								setShowProvisionAdd(false);
+							if (addStep !== null) {
+								setAddStep(null);
 							} else {
-								setShowQuickAdd(true);
-								setShowProvisionAdd(false);
+								setAddStep("choice");
 							}
 						}}
 						quickAddForm={
-							showProvisionAdd ? (
+							addStep === "choice" ? (
+								<AddTypeChoice
+									onSelectRecipe={() => setAddStep("recipe")}
+									onSelectItem={() => setAddStep("provision")}
+								/>
+							) : addStep === "provision" ? (
 								<ProvisionQuickAdd
 									defaultDomain={activeDomain !== "all" ? activeDomain : "food"}
-									onSuccess={() => {
-										setShowProvisionAdd(false);
-									}}
+									onSuccess={() => setAddStep(null)}
 									onUpgradeRequired={() => {
-										setShowProvisionAdd(false);
+										setAddStep(null);
 										setShowUpgradePrompt(true);
 									}}
 								/>
-							) : (
+							) : addStep === "recipe" ? (
 								<MealQuickAdd
-									onSuccess={() => setShowQuickAdd(false)}
+									onSuccess={() => setAddStep(null)}
 									onUpgradeRequired={() => {
-										setShowQuickAdd(false);
+										setAddStep(null);
 										setShowUpgradePrompt(true);
 									}}
 									availableIngredients={inventory}
 								/>
-							)
+							) : null
 						}
 					/>
 				</div>
 
-				{/* Mobile Quick Add Form */}
-				{(showQuickAdd || showProvisionAdd) && (
+				{/* Mobile Quick Add: choice step or form */}
+				{addStep !== null && (
 					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
-						{showProvisionAdd ? (
+						{addStep === "choice" ? (
+							<AddTypeChoice
+								onSelectRecipe={() => setAddStep("recipe")}
+								onSelectItem={() => setAddStep("provision")}
+							/>
+						) : addStep === "provision" ? (
 							<ProvisionQuickAdd
 								defaultDomain={activeDomain !== "all" ? activeDomain : "food"}
-								onSuccess={() => setShowProvisionAdd(false)}
+								onSuccess={() => setAddStep(null)}
 								onUpgradeRequired={() => {
-									setShowProvisionAdd(false);
+									setAddStep(null);
 									setShowUpgradePrompt(true);
 								}}
 							/>
 						) : (
 							<MealQuickAdd
-								onSuccess={() => setShowQuickAdd(false)}
+								onSuccess={() => setAddStep(null)}
 								onUpgradeRequired={() => {
-									setShowQuickAdd(false);
+									setAddStep(null);
 									setShowUpgradePrompt(true);
 								}}
 								availableIngredients={inventory}
@@ -450,20 +431,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								</button>
 								<button
 									type="button"
-									onClick={() => setShowQuickAdd(true)}
+									onClick={() => setAddStep("choice")}
 									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
 								>
-									Create Meal
-								</button>
-								<button
-									type="button"
-									onClick={() => {
-										setShowProvisionAdd(true);
-										setShowQuickAdd(false);
-									}}
-									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
-								>
-									Add Item
+									Add
 								</button>
 							</div>
 						}

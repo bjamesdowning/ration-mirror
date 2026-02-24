@@ -4,6 +4,7 @@ import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
 import { log, redactId } from "./logging.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
+import { getScaleFactor, scaleQuantity } from "./scale.server";
 import { convertQuantity, type SupportedUnit, toSupportedUnit } from "./units";
 export { normalizeForMatch, tokenMatchScore };
 
@@ -40,6 +41,8 @@ export interface MealMatchQuery {
 	minMatch?: number;
 	limit?: number;
 	tag?: string;
+	/** Override servings for all meals. Scales required quantities before comparing to cargo. */
+	servings?: number;
 }
 
 /**
@@ -148,6 +151,7 @@ function getAvailableQuantity(
 /**
  * Performs strict matching: only returns meals where ALL non-optional
  * ingredients are available in sufficient quantity.
+ * scaleFactor applies to required quantities (for serving-size scaling).
  */
 function strictMatch(
 	meals: Array<{
@@ -156,6 +160,7 @@ function strictMatch(
 		tags: string[];
 	}>,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
+	scaleFactor = 1,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
 
@@ -170,7 +175,11 @@ function strictMatch(
 				targetUnit,
 				cargoIndex,
 			);
-			const required = ingredient.quantity;
+			const required = scaleQuantity(
+				ingredient.quantity,
+				scaleFactor,
+				ingredient.unit,
+			);
 
 			if (available >= required) {
 				availableIngredients.push({
@@ -210,6 +219,7 @@ function strictMatch(
 /**
  * Performs delta matching: calculates percentage match based on
  * ingredient availability. Returns meals above minimum threshold.
+ * scaleFactor applies to required quantities (for serving-size scaling).
  */
 function deltaMatch(
 	meals: Array<{
@@ -218,7 +228,8 @@ function deltaMatch(
 		tags: string[];
 	}>,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
-	minMatch: number = 50,
+	minMatch = 50,
+	scaleFactor = 1,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
 
@@ -247,7 +258,11 @@ function deltaMatch(
 				targetUnit,
 				cargoIndex,
 			);
-			const required = ingredient.quantity;
+			const required = scaleQuantity(
+				ingredient.quantity,
+				scaleFactor,
+				ingredient.unit,
+			);
 			totalIngredients++;
 
 			if (available >= required) {
@@ -297,7 +312,7 @@ export async function matchMeals(
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
 	const d1 = drizzle(db);
-	const { mode, minMatch = 50, limit = 20, tag } = query;
+	const { mode, minMatch = 50, limit = 20, tag, servings } = query;
 
 	log.info("[matchMeals] Starting", {
 		organizationId: redactId(organizationId),
@@ -305,6 +320,7 @@ export async function matchMeals(
 		minMatch,
 		limit,
 		tag,
+		servings,
 	});
 
 	// 1. Fetch organization's meals (with optional tag filter)
@@ -394,15 +410,40 @@ export async function matchMeals(
 		tags: tagsByMeal.get(m.id) || [],
 	}));
 
-	// 6. Perform matching based on mode
+	// 6. Compute per-meal scale factors (servings override applies uniformly when given)
+	// Each meal carries its own base servings so scaling is independent per recipe.
+	const getScaleForMeal = (mealRecord: typeof meal.$inferSelect) => {
+		if (!servings) return 1;
+		return getScaleFactor(mealRecord.servings ?? 1, servings);
+	};
+
+	// 7. Perform matching based on mode
+	// When a global servings override is supplied we scale per meal; otherwise scale=1.
 	let results: MealMatchResult[];
 	if (mode === "strict") {
-		results = strictMatch(enrichedMeals, cargoIndex);
+		if (servings) {
+			// Scale each meal individually
+			const allResults: MealMatchResult[] = [];
+			for (const enriched of enrichedMeals) {
+				const sf = getScaleForMeal(enriched.meal);
+				allResults.push(...strictMatch([enriched], cargoIndex, sf));
+			}
+			results = allResults;
+		} else {
+			results = strictMatch(enrichedMeals, cargoIndex);
+		}
+	} else if (servings) {
+		const allResults: MealMatchResult[] = [];
+		for (const enriched of enrichedMeals) {
+			const sf = getScaleForMeal(enriched.meal);
+			allResults.push(...deltaMatch([enriched], cargoIndex, minMatch, sf));
+		}
+		results = allResults.sort((a, b) => b.matchPercentage - a.matchPercentage);
 	} else {
 		results = deltaMatch(enrichedMeals, cargoIndex, minMatch);
 	}
 
-	// 7. Apply limit
+	// 8. Apply limit
 	return results.slice(0, limit);
 }
 
@@ -413,6 +454,6 @@ export function getMatchCacheKey(
 	organizationId: string,
 	query: MealMatchQuery,
 ): string {
-	const { mode, minMatch = 50, limit = 20, tag } = query;
-	return `match:${organizationId}:${mode}:${minMatch}:${limit}:${tag || "all"}`;
+	const { mode, minMatch = 50, limit = 20, tag, servings } = query;
+	return `match:${organizationId}:${mode}:${minMatch}:${limit}:${tag || "all"}:${servings ?? "base"}`;
 }

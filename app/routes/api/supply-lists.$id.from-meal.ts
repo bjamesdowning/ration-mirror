@@ -38,12 +38,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 	try {
 		const json = await request.json();
-		const { mealId } = AddFromMealSchema.parse(json);
+		const { mealId, servings } = AddFromMealSchema.parse(json);
 		const result = await addItemsFromMeal(
 			context.cloudflare.env.DB,
 			groupId,
 			listId,
 			mealId,
+			{ servings },
 		);
 		return result;
 	} catch (e) {

@@ -1,9 +1,10 @@
-import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ExternalLink, Minus, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, useFetcher } from "react-router";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
+import { scaleQuantity } from "~/lib/scale";
 import type { MealInput } from "~/lib/schemas/meal";
 
 interface MealDetailProps {
@@ -19,24 +20,38 @@ interface IngredientAvailability {
 	unit: string;
 }
 
+const MIN_SERVINGS = 1;
+const MAX_SERVINGS = 99;
+
 export function MealDetail({ meal, isOwner }: MealDetailProps) {
+	const baseServings = meal.servings ?? 1;
+	const [desiredServings, setDesiredServings] = useState(baseServings);
+	const [inputValue, setInputValue] = useState(String(baseServings));
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	const scaleFactor = baseServings > 0 ? desiredServings / baseServings : 1;
+	const isScaled = desiredServings !== baseServings;
+
 	const [ingredientAvailability, setIngredientAvailability] = useState<
 		IngredientAvailability[]
 	>([]);
 	const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
 
-	// Fetch ingredient availability for this meal
+	// Re-fetch availability whenever desiredServings changes
 	useEffect(() => {
+		let cancelled = false;
+		setIsLoadingAvailability(true);
+
 		const fetchAvailability = async () => {
 			try {
-				// Fetch matching data in strict mode to check if meal can be made
 				const params = new URLSearchParams({
 					mode: "strict",
 					limit: "1",
+					servings: String(desiredServings),
 				});
 
 				const response = await fetch(`/api/meals/match?${params}`);
-				const data = (await response.json()) as {
+				const rawData = (await response.json()) as {
 					results: Array<{
 						meal: { id: string };
 						availableIngredients: IngredientMatch[];
@@ -44,14 +59,14 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					}>;
 				};
 
-				// Find our meal in the results
-				const matchResult = data.results.find(
+				if (cancelled) return;
+
+				const matchResult = rawData.results.find(
 					(result) => result.meal.id === meal.id,
 				);
 
 				if (matchResult) {
-					// Build availability map
-					const availability: IngredientAvailability[] = [
+					setIngredientAvailability([
 						...matchResult.availableIngredients.map((ing) => ({
 							name: ing.name,
 							available: true,
@@ -66,14 +81,14 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							requiredQuantity: ing.requiredQuantity,
 							unit: ing.unit,
 						})),
-					];
-					setIngredientAvailability(availability);
+					]);
 				} else {
-					// If meal not in results, check with delta mode to get status for all ingredients
+					// Delta fallback to get status for all ingredients
 					const deltaParams = new URLSearchParams({
 						mode: "delta",
 						minMatch: "0",
 						limit: "100",
+						servings: String(desiredServings),
 					});
 
 					const deltaResponse = await fetch(`/api/meals/match?${deltaParams}`);
@@ -85,12 +100,14 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						}>;
 					};
 
+					if (cancelled) return;
+
 					const deltaResult = deltaData.results.find(
 						(result) => result.meal.id === meal.id,
 					);
 
 					if (deltaResult) {
-						const availability: IngredientAvailability[] = [
+						setIngredientAvailability([
 							...deltaResult.availableIngredients.map((ing) => ({
 								name: ing.name,
 								available: true,
@@ -105,32 +122,47 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 								requiredQuantity: ing.requiredQuantity,
 								unit: ing.unit,
 							})),
-						];
-						setIngredientAvailability(availability);
+						]);
 					}
 				}
 			} catch (error) {
 				log.error("Failed to fetch ingredient availability", error);
 			} finally {
-				setIsLoadingAvailability(false);
+				if (!cancelled) setIsLoadingAvailability(false);
 			}
 		};
 
 		fetchAvailability();
-	}, [meal.id]);
+		return () => {
+			cancelled = true;
+		};
+	}, [meal.id, desiredServings]);
 
-	// Helper to get availability status for an ingredient
 	const getAvailabilityStatus = (ingredientName: string) => {
-		const match = ingredientAvailability.find(
+		return ingredientAvailability.find(
 			(ing) =>
 				ing.name.toLowerCase().trim() === ingredientName.toLowerCase().trim(),
 		);
-		return match;
 	};
 
 	const fetcher = useFetcher<{ result: { cooked: boolean } }>();
 	const isCooking = fetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
+
+	const handleServingsChange = (next: number) => {
+		const clamped = Math.max(MIN_SERVINGS, Math.min(MAX_SERVINGS, next));
+		setDesiredServings(clamped);
+		setInputValue(String(clamped));
+	};
+
+	const handleInputBlur = () => {
+		const parsed = Number.parseInt(inputValue, 10);
+		if (Number.isNaN(parsed) || parsed < MIN_SERVINGS) {
+			handleServingsChange(MIN_SERVINGS);
+		} else {
+			handleServingsChange(parsed);
+		}
+	};
 
 	return (
 		<div className="max-w-4xl mx-auto space-y-8">
@@ -197,11 +229,49 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 								{meal.cookTime || "--"}m
 							</span>
 						</div>
+						{/* Servings stepper */}
 						<div className="flex flex-col items-center">
 							<span className="text-label text-muted text-xs">Servings</span>
-							<span className="text-data font-bold text-carbon">
-								{meal.servings}
-							</span>
+							<div className="flex items-center gap-1 mt-0.5">
+								<button
+									type="button"
+									aria-label="Decrease servings"
+									disabled={desiredServings <= MIN_SERVINGS}
+									onClick={() => handleServingsChange(desiredServings - 1)}
+									className="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+								>
+									<Minus className="w-3.5 h-3.5" />
+								</button>
+								<input
+									ref={inputRef}
+									type="number"
+									min={MIN_SERVINGS}
+									max={MAX_SERVINGS}
+									value={inputValue}
+									onChange={(e) => setInputValue(e.target.value)}
+									onBlur={handleInputBlur}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") inputRef.current?.blur();
+									}}
+									className="w-9 text-center text-data font-bold text-carbon bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-hyper-green rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+								/>
+								<button
+									type="button"
+									aria-label="Increase servings"
+									disabled={desiredServings >= MAX_SERVINGS}
+									onClick={() => handleServingsChange(desiredServings + 1)}
+									className="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+								>
+									<Plus className="w-3.5 h-3.5" />
+								</button>
+							</div>
+							{isScaled && (
+								<span className="text-xs text-hyper-green font-medium mt-0.5">
+									{scaleFactor >= 1
+										? `${scaleFactor.toFixed(scaleFactor % 1 === 0 ? 0 : 1)}×`
+										: `÷${(1 / scaleFactor).toFixed((1 / scaleFactor) % 1 === 0 ? 0 : 1)}`}
+								</span>
+							)}
 						</div>
 					</div>
 				</div>
@@ -209,11 +279,16 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 
 			{/* Main Content Grid */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-				{/* Right Col: Ingredients (Visual hierarchy: Ingredients are crucial data) */}
+				{/* Right Col: Ingredients */}
 				<div className="lg:col-span-1 glass-panel rounded-xl p-6">
 					<h3 className="text-label text-muted mb-4 flex items-center gap-2">
-						<span className="w-2 h-2 rounded-full bg-hyper-green"></span>
+						<span className="w-2 h-2 rounded-full bg-hyper-green" />
 						Ingredients
+						{isScaled && (
+							<span className="text-xs text-hyper-green font-medium ml-auto">
+								scaled
+							</span>
+						)}
 					</h3>
 					<ul className="space-y-1">
 						{meal.ingredients.map((ing) => {
@@ -223,6 +298,12 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 								availability &&
 								!availability.available &&
 								availability.availableQuantity > 0;
+
+							const displayQty = scaleQuantity(
+								ing.quantity,
+								scaleFactor,
+								ing.unit,
+							);
 
 							return (
 								<li
@@ -256,7 +337,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 																? "bg-warning"
 																: "bg-danger"
 													}`}
-												></span>
+												/>
 											</div>
 										)}
 										<span
@@ -272,14 +353,17 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 									</div>
 									<div className="flex flex-col items-end">
 										<span className="text-data font-bold text-carbon">
-											{formatQuantity(ing.quantity, ing.unit)}
+											{formatQuantity(displayQty, ing.unit)}
 										</span>
 										{availability && !availability.available && (
 											<span className="text-xs text-danger">
 												Need:{" "}
 												{formatQuantity(
-													availability.requiredQuantity -
-														availability.availableQuantity,
+													Math.max(
+														0,
+														availability.requiredQuantity -
+															availability.availableQuantity,
+													),
 													ing.unit,
 												)}
 											</span>
@@ -296,15 +380,20 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						action={`/api/meals/${meal.id}/cook`}
 						className="mt-8"
 						onSubmit={(e: React.FormEvent) => {
+							const servingLabel =
+								desiredServings === 1
+									? "1 serving"
+									: `${desiredServings} servings`;
 							if (
 								!confirm(
-									"Cook this meal? It will deduct ingredients from your Cargo.",
+									`Cook this meal for ${servingLabel}? It will deduct ingredients from your Cargo.`,
 								)
 							) {
 								e.preventDefault();
 							}
 						}}
 					>
+						<input type="hidden" name="servings" value={desiredServings} />
 						<button
 							type="submit"
 							disabled={isCooking}
@@ -318,7 +407,9 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 								? "Cooking..."
 								: isCooked
 									? "Meal Cooked!"
-									: "Cook Now"}
+									: desiredServings !== baseServings
+										? `Cook × ${desiredServings}`
+										: "Cook Now"}
 						</button>
 						{isCooked && (
 							<p className="text-xs text-center mt-2 text-success font-medium">
@@ -327,7 +418,9 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						)}
 						{!isCooked && (
 							<p className="text-xs text-center mt-2 text-muted">
-								This will deduct ingredients from Cargo
+								{desiredServings === baseServings
+									? "This will deduct ingredients from Cargo"
+									: `Scaled for ${desiredServings} serving${desiredServings !== 1 ? "s" : ""} (base: ${baseServings})`}
 							</p>
 						)}
 					</fetcher.Form>
@@ -336,7 +429,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 				{/* Left Col: Directions */}
 				<div className="lg:col-span-2">
 					<h3 className="text-label text-muted mb-4 flex items-center gap-2">
-						<span className="w-2 h-2 rounded-full bg-hyper-green"></span>
+						<span className="w-2 h-2 rounded-full bg-hyper-green" />
 						Directions
 					</h3>
 					<div className="prose prose-sm max-w-none text-carbon">

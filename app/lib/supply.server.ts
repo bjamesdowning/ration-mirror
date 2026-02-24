@@ -19,6 +19,7 @@ import {
 	chunkedInsert,
 	D1_MAX_BOUND_PARAMS,
 } from "./query-utils.server";
+import { getScaleFactor, scaleQuantity } from "./scale.server";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -703,12 +704,14 @@ export async function revokeShareToken(
 /**
  * Adds missing ingredients from a meal to a supply list.
  * This performs cargo matching to only add items the organization doesn't have.
+ * When options.servings is provided, ingredient quantities are scaled accordingly.
  */
 export async function addItemsFromMeal(
 	db: D1Database,
 	organizationId: string,
 	listId: string,
 	mealId: string,
+	options?: { servings?: number },
 ) {
 	const d1 = drizzle(db);
 
@@ -725,16 +728,38 @@ export async function addItemsFromMeal(
 
 	if (!list) throw new Error("Supply list not found or unauthorized");
 
-	// Get meal ingredients
+	// Get meal ingredients and base servings
 	const ingredients = await d1
 		.select()
 		.from(mealIngredient)
 		.where(eq(mealIngredient.mealId, mealId));
 	const [mealRecord] = await d1
-		.select({ domain: meal.domain })
+		.select({ domain: meal.domain, servings: meal.servings })
 		.from(meal)
 		.where(eq(meal.id, mealId));
 	const mealDomain = mealRecord?.domain ?? "food";
+	const mealBaseServings = mealRecord?.servings ?? 1;
+
+	// Resolve effective servings: explicit option → selection override → base
+	let effectiveServings = mealBaseServings;
+	if (options?.servings != null) {
+		effectiveServings = options.servings;
+	} else {
+		const [selection] = await d1
+			.select({ servingsOverride: activeMealSelection.servingsOverride })
+			.from(activeMealSelection)
+			.where(
+				and(
+					eq(activeMealSelection.organizationId, organizationId),
+					eq(activeMealSelection.mealId, mealId),
+				),
+			);
+		if (selection?.servingsOverride != null) {
+			effectiveServings = selection.servingsOverride;
+		}
+	}
+
+	const scaleFactor = getScaleFactor(mealBaseServings, effectiveServings);
 
 	if (ingredients.length === 0) {
 		return { addedItems: [], skippedItems: [] };
@@ -757,13 +782,18 @@ export async function addItemsFromMeal(
 	for (const ingredient of ingredients) {
 		const targetUnit = ingredient.unit as SupportedUnit;
 		const normalizedName = normalizeForMatch(ingredient.ingredientName);
+		const scaledRequired = scaleQuantity(
+			ingredient.quantity,
+			scaleFactor,
+			ingredient.unit,
+		);
 		const availableInCargo = getAvailableCargoQuantity(
 			ingredient.ingredientName,
 			targetUnit,
 			orgCargo,
 		);
 
-		if (availableInCargo >= ingredient.quantity) {
+		if (availableInCargo >= scaledRequired) {
 			// Organization has enough of this item
 			skippedItems.push({
 				name: ingredient.ingredientName,
@@ -772,7 +802,7 @@ export async function addItemsFromMeal(
 			continue;
 		}
 
-		const neededQuantity = ingredient.quantity - availableInCargo;
+		const neededQuantity = scaledRequired - availableInCargo;
 		const alreadyInList = getExistingListQuantity(
 			existingListItems,
 			normalizedName,
@@ -993,7 +1023,7 @@ export async function createSupplyListFromSelectedMeals(
 		}
 
 		const ingredientQueryStartedAtMs = Date.now();
-		const allIngredients = await d1
+		const rawIngredients = await d1
 			.select({
 				meal_ingredient: {
 					ingredientName: mealIngredient.ingredientName,
@@ -1002,6 +1032,8 @@ export async function createSupplyListFromSelectedMeals(
 					mealId: mealIngredient.mealId,
 				},
 				meal_domain: meal.domain,
+				meal_servings: meal.servings,
+				servings_override: activeMealSelection.servingsOverride,
 			})
 			.from(mealIngredient)
 			.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
@@ -1014,6 +1046,24 @@ export async function createSupplyListFromSelectedMeals(
 			)
 			.where(eq(meal.organizationId, organizationId));
 		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
+
+		// Scale quantities by servingsOverride when set
+		const allIngredients: IngredientRow[] = rawIngredients.map((row) => {
+			const baseServings = row.meal_servings ?? 1;
+			const effectiveServings = row.servings_override ?? baseServings;
+			const scaleFactor = getScaleFactor(baseServings, effectiveServings);
+			return {
+				meal_ingredient: {
+					...row.meal_ingredient,
+					quantity: scaleQuantity(
+						row.meal_ingredient.quantity,
+						scaleFactor,
+						row.meal_ingredient.unit,
+					),
+				},
+				meal_domain: row.meal_domain,
+			};
+		});
 
 		if (allIngredients.length === 0) {
 			const supplyList = await ensureSupplyList(db, organizationId);

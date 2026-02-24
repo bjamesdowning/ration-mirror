@@ -15,6 +15,7 @@ import type { Route } from "./+types/meals.match";
  * - minMatch: number (0-100) for delta mode, default 50
  * - limit: number, default 20
  * - tag: string, optional meal tag filter
+ * - servings: number, optional desired servings (scales required quantities)
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
@@ -28,6 +29,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	);
 	const limit = Number.parseInt(url.searchParams.get("limit") || "20", 10);
 	const tag = url.searchParams.get("tag") || undefined;
+	const rawServings = url.searchParams.get("servings");
+	const servings =
+		rawServings != null ? Number.parseInt(rawServings, 10) : undefined;
 
 	// Validate mode parameter
 	if (mode !== "strict" && mode !== "delta") {
@@ -45,11 +49,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 	}
 
+	// Validate servings if provided
+	if (servings !== undefined && (Number.isNaN(servings) || servings < 1)) {
+		throw data(
+			{ error: "servings must be a positive integer" },
+			{ status: 400 },
+		);
+	}
+
 	const query: MealMatchQuery = {
 		mode,
 		minMatch,
 		limit,
 		tag,
+		servings,
 	};
 
 	try {
@@ -59,6 +72,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			minMatch,
 			limit,
 			tag,
+			servings,
 		});
 
 		// Perform matching

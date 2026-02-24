@@ -57,6 +57,78 @@ export async function toggleMealSelection(
 	return { isActive: true };
 }
 
+/**
+ * Selects a meal and persists a servings override in one operation.
+ * If the meal is already selected, only the servingsOverride is updated.
+ * If servingsOverride is null or undefined, the stored override is cleared.
+ */
+export async function upsertMealSelection(
+	db: D1Database,
+	organizationId: string,
+	mealId: string,
+	servingsOverride?: number | null,
+) {
+	const d1 = drizzle(db);
+
+	const [existing] = await d1
+		.select()
+		.from(activeMealSelection)
+		.where(
+			and(
+				eq(activeMealSelection.organizationId, organizationId),
+				eq(activeMealSelection.mealId, mealId),
+			),
+		);
+
+	if (existing) {
+		await d1
+			.update(activeMealSelection)
+			.set({ servingsOverride: servingsOverride ?? null })
+			.where(eq(activeMealSelection.id, existing.id));
+		return { isActive: true, servingsOverride: servingsOverride ?? null };
+	}
+
+	await d1.insert(activeMealSelection).values({
+		organizationId,
+		mealId,
+		servingsOverride: servingsOverride ?? null,
+	});
+
+	return { isActive: true, servingsOverride: servingsOverride ?? null };
+}
+
+/**
+ * Updates only the servingsOverride on an existing active selection.
+ * Returns null if the meal is not currently selected.
+ */
+export async function setServingsOverride(
+	db: D1Database,
+	organizationId: string,
+	mealId: string,
+	servingsOverride: number | null,
+) {
+	const d1 = drizzle(db);
+
+	const [existing] = await d1
+		.select()
+		.from(activeMealSelection)
+		.where(
+			and(
+				eq(activeMealSelection.organizationId, organizationId),
+				eq(activeMealSelection.mealId, mealId),
+			),
+		);
+
+	if (!existing) return null;
+
+	await d1
+		.update(activeMealSelection)
+		.set({ servingsOverride })
+		.where(eq(activeMealSelection.id, existing.id));
+
+	return { mealId, servingsOverride };
+}
+
 export async function clearMealSelections(
 	db: D1Database,
 	organizationId: string,

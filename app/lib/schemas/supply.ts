@@ -47,6 +47,7 @@ export const SharedItemToggleSchema = z.object({
 
 export const AddFromMealSchema = z.object({
 	mealId: z.string().uuid(),
+	servings: z.coerce.number().int().min(1).optional(),
 });
 
 /** For dock-cargo and other actions that take a list id from form/params. */

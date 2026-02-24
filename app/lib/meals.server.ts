@@ -1,6 +1,12 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
+import {
+	activeMealSelection,
+	cargo,
+	meal,
+	mealIngredient,
+	mealTag,
+} from "../db/schema";
 import { checkCapacity } from "./capacity.server";
 import {
 	chunkedQuery,
@@ -8,6 +14,7 @@ import {
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
+import { getScaleFactor, scaleQuantity } from "./scale.server";
 import type { MealInput } from "./schemas/meal";
 import { convertQuantity, toSupportedUnit } from "./units";
 
@@ -426,12 +433,16 @@ export async function deleteMeal(
  * 1. Ownership Verification: Ensures the meal belongs to the organization.
  * 2. Inventory Check: Verifies all linked inventory items have sufficient quantity.
  * 3. Race Condition Prevention: Uses a batch operation for deduction.
- * 4. Input Validation: Prevents SQL injection via type-safe Drizzle paramaters.
+ * 4. Input Validation: Prevents SQL injection via type-safe Drizzle parameters.
+ *
+ * Servings resolution order:
+ *   options.servings → activeMealSelection.servingsOverride → meal.servings
  */
 export async function cookMeal(
 	db: D1Database,
 	organizationId: string,
 	mealId: string,
+	options?: { servings?: number },
 ) {
 	const d1 = drizzle(db);
 
@@ -445,13 +456,37 @@ export async function cookMeal(
 		throw new Error("Meal not found or unauthorized for this organization.");
 	}
 
-	// 2. Get ingredients
+	// 2. Resolve effective servings (request → selection override → base)
+	let effectiveServings = mealRecord.servings ?? 1;
+	if (options?.servings != null) {
+		effectiveServings = options.servings;
+	} else {
+		const [selection] = await d1
+			.select({ servingsOverride: activeMealSelection.servingsOverride })
+			.from(activeMealSelection)
+			.where(
+				and(
+					eq(activeMealSelection.organizationId, organizationId),
+					eq(activeMealSelection.mealId, mealId),
+				),
+			);
+		if (selection?.servingsOverride != null) {
+			effectiveServings = selection.servingsOverride;
+		}
+	}
+
+	const scaleFactor = getScaleFactor(
+		mealRecord.servings ?? 1,
+		effectiveServings,
+	);
+
+	// 3. Get ingredients
 	const ingredients = await d1
 		.select()
 		.from(mealIngredient)
 		.where(eq(mealIngredient.mealId, mealId));
 
-	// 3. For linked inventory items, check quantities first
+	// 4. For linked inventory items, check quantities first
 	const linkedIngredients = ingredients.filter(
 		(ing) => ing.cargoId && typeof ing.cargoId === "string",
 	);
@@ -481,8 +516,9 @@ export async function cookMeal(
 			if (!c) return true;
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
+			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			const deductionInCargoUnit = convertQuantity(
-				ing.quantity,
+				scaledQty,
 				ingUnit,
 				cargoUnit,
 			);
@@ -495,15 +531,16 @@ export async function cookMeal(
 			throw new Error(`Insufficient Cargo for: ${names}`);
 		}
 
-		// 4. Perform deductions in a single batch (convert to cargo unit before subtracting)
+		// 5. Perform deductions in a single batch (scale then convert to cargo unit)
 		const updates = linkedIngredients.map((ing) => {
 			const c = cargoById.get(ing.cargoId as string);
 			if (!c)
 				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
+			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			const deductionInCargoUnit = convertQuantity(
-				ing.quantity,
+				scaledQty,
 				ingUnit,
 				cargoUnit,
 			);
@@ -527,10 +564,14 @@ export async function cookMeal(
 
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(updates as [any, ...any[]]);
-		return { cooked: true, ingredientsDeducted: updates.length };
+		return {
+			cooked: true,
+			ingredientsDeducted: updates.length,
+			servings: effectiveServings,
+		};
 	}
 
-	return { cooked: true, ingredientsDeducted: 0 };
+	return { cooked: true, ingredientsDeducted: 0, servings: effectiveServings };
 }
 
 /**

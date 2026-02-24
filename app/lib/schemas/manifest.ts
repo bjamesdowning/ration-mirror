@@ -29,7 +29,9 @@ export const MealPlanEntryCreateSchema = z.object({
 	date: z.string().regex(ISO_DATE_REGEX, "Must be YYYY-MM-DD format"),
 	slotType: z.enum(SLOT_TYPES),
 	orderIndex: z.coerce.number().int().min(0).default(0),
-	servingsOverride: z.coerce.number().int().min(1).optional(),
+	servingsOverride: z
+		.union([z.coerce.number().int().min(1), z.literal(null)])
+		.optional(),
 	notes: z.string().max(500).optional(),
 });
 

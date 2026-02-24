@@ -21,3 +21,6 @@ worker-configuration.d.ts
 # Legacy agent configs (preserved locally but ignored in git)
 .agent/
 .kilocode/
+
+# Cursor debug / session artifacts
+.cursor/

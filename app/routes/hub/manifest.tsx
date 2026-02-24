@@ -194,20 +194,21 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				</div>
 			</div>
 
-			{/* Desktop: Full week grid */}
+			{/* Desktop: Full week grid (always show so date/slot context is clear) */}
 			<div className="hidden md:block">
-				{!hasEntries ? (
-					<EmptyManifest onAddFirst={() => handleAdd("dinner", today)} />
-				) : (
-					<WeekView
-						dates={weekDates}
-						entries={entries}
-						planId={plan.id}
-						onAdd={handleAdd}
-						today={today}
-						showSnackSlot={showSnackSlot}
-					/>
+				{!hasEntries && (
+					<p className="text-sm text-muted mb-4">
+						Add meals from your Galley using the + on any slot below.
+					</p>
 				)}
+				<WeekView
+					dates={weekDates}
+					entries={entries}
+					planId={plan.id}
+					onAdd={handleAdd}
+					today={today}
+					showSnackSlot={showSnackSlot}
+				/>
 			</div>
 
 			{/* Meal picker */}

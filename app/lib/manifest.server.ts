@@ -179,7 +179,7 @@ export async function addEntry(
 		date: string;
 		slotType: string;
 		orderIndex?: number;
-		servingsOverride?: number;
+		servingsOverride?: number | null;
 		notes?: string;
 	},
 ): Promise<MealPlanEntryWithMeal> {

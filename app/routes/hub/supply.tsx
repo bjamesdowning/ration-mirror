@@ -35,6 +35,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { getCargo, getCargoTags } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
+import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { ListIdSchema } from "~/lib/schemas/supply";
 import {
@@ -51,20 +52,23 @@ import type { Route } from "./+types/supply";
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 
-	// Light loader: ensure list exists and load current state. Heavy sync (createGroceryListFromSelectedMeals)
+	// Light loader: ensure list exists and load current state. Heavy sync (createSupplyListFromSelectedMeals)
 	// runs only via action (Update list button or background sync) to avoid Worker resource limits in production.
-	const [list, activeSelections, cargo, availableTags] = await Promise.all([
-		getSupplyList(context.cloudflare.env.DB, groupId),
-		getActiveMealSelections(context.cloudflare.env.DB, groupId),
-		getCargo(context.cloudflare.env.DB, groupId),
-		getCargoTags(context.cloudflare.env.DB, groupId),
-	]);
+	const [list, activeSelections, cargoItems, availableTags, manifestWeekMeals] =
+		await Promise.all([
+			getSupplyList(context.cloudflare.env.DB, groupId),
+			getActiveMealSelections(context.cloudflare.env.DB, groupId),
+			getCargo(context.cloudflare.env.DB, groupId),
+			getCargoTags(context.cloudflare.env.DB, groupId),
+			getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
+		]);
 
 	return {
 		list,
 		activeSelectionCount: activeSelections.length,
+		manifestWeekMealCount: manifestWeekMeals.length,
 		availableTags,
-		cargo,
+		cargo: cargoItems,
 	};
 }
 
@@ -160,7 +164,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
-	const { list, activeSelectionCount, availableTags, cargo } = loaderData;
+	const {
+		list,
+		activeSelectionCount,
+		manifestWeekMealCount,
+		availableTags,
+		cargo,
+	} = loaderData;
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		capacity?: {
 			supplyLists?: { current: number; limit: number };
@@ -301,12 +311,13 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		);
 	};
 
-	// One-time background sync when page loads with selected meals (keeps list fresh without heavy work in loader)
+	// One-time background sync when page loads with selected meals or Manifest week entries
+	// (keeps list fresh without heavy work in loader)
 	const hasTriggeredSync = useRef(false);
 	const hasRevalidatedAfterSync = useRef(false);
 	useEffect(() => {
 		if (
-			activeSelectionCount === 0 ||
+			(activeSelectionCount === 0 && manifestWeekMealCount === 0) ||
 			hasTriggeredSync.current ||
 			fetcher.state !== "idle"
 		)
@@ -317,7 +328,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		formData.set("intent", "update-list");
 		formData.set("syncSource", "background");
 		fetcher.submit(formData, { method: "POST" });
-	}, [activeSelectionCount, fetcher.state, fetcher.submit]);
+	}, [
+		activeSelectionCount,
+		manifestWeekMealCount,
+		fetcher.state,
+		fetcher.submit,
+	]);
 	useEffect(() => {
 		if (
 			fetcher.state === "idle" &&

@@ -13,6 +13,7 @@ import {
 import { dockSupplyItems } from "./cargo.server";
 import { toExpiryDate } from "./date-utils";
 import { log } from "./logging.server";
+import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { normalizeForMatch, tokenMatchScore } from "./matching.server";
 import {
 	chunkArray,
@@ -947,8 +948,84 @@ export async function createSupplyListFromAllMeals(
 }
 
 /**
- * Creates/updates the Supply list from ONLY selected meals.
- * If no meals are selected, returns the Supply list unchanged.
+ * Builds IngredientRow[] for a flat list of { mealId, servingsOverride } occurrences.
+ * Each occurrence is included independently so the same meal on multiple days sums correctly.
+ */
+async function buildIngredientRowsFromOccurrences(
+	d1: ReturnType<typeof drizzle>,
+	organizationId: string,
+	occurrences: Array<{ mealId: string; servingsOverride: number | null }>,
+): Promise<IngredientRow[]> {
+	if (occurrences.length === 0) return [];
+
+	const mealIds = [...new Set(occurrences.map((o) => o.mealId))];
+
+	// Batch-load meal metadata and ingredients for all unique meal IDs
+	const allMealIds = mealIds;
+	const [mealRows, ingredientRows] = await Promise.all([
+		d1
+			.select({ id: meal.id, domain: meal.domain, servings: meal.servings })
+			.from(meal)
+			.where(
+				and(
+					eq(meal.organizationId, organizationId),
+					inArray(meal.id, allMealIds),
+				),
+			),
+		d1
+			.select({
+				mealId: mealIngredient.mealId,
+				ingredientName: mealIngredient.ingredientName,
+				quantity: mealIngredient.quantity,
+				unit: mealIngredient.unit,
+			})
+			.from(mealIngredient)
+			.where(inArray(mealIngredient.mealId, allMealIds)),
+	]);
+
+	const mealMeta = new Map(mealRows.map((m) => [m.id, m]));
+	const ingredientsByMeal = new Map<string, typeof ingredientRows>();
+	for (const row of ingredientRows) {
+		const list = ingredientsByMeal.get(row.mealId) ?? [];
+		list.push(row);
+		ingredientsByMeal.set(row.mealId, list);
+	}
+
+	const result: IngredientRow[] = [];
+
+	for (const occurrence of occurrences) {
+		const meta = mealMeta.get(occurrence.mealId);
+		if (!meta) continue;
+
+		const baseServings = meta.servings ?? 1;
+		const effectiveServings = occurrence.servingsOverride ?? baseServings;
+		const scaleFactor = getScaleFactor(baseServings, effectiveServings);
+		const domain = meta.domain ?? null;
+
+		const ingredients = ingredientsByMeal.get(occurrence.mealId) ?? [];
+		for (const ing of ingredients) {
+			result.push({
+				meal_ingredient: {
+					ingredientName: ing.ingredientName,
+					quantity: scaleQuantity(ing.quantity, scaleFactor, ing.unit),
+					unit: ing.unit,
+					mealId: ing.mealId,
+				},
+				meal_domain: domain,
+			});
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Creates/updates the Supply list from a UNIFIED list of:
+ *   - All Manifest current-week entries (each occurrence counts)
+ *   - Plus Galley selections whose mealId does NOT appear in the Manifest week
+ *     (prevents double-counting when a user plans a meal AND marks it in Galley)
+ *
+ * If neither source has meals, returns the Supply list unchanged.
  */
 export async function createSupplyListFromSelectedMeals(
 	db: D1Database,
@@ -977,24 +1054,37 @@ export async function createSupplyListFromSelectedMeals(
 		);
 
 		const mealsQueryStartedAtMs = Date.now();
-		const meals = await d1
-			.select({ id: meal.id })
-			.from(meal)
-			.innerJoin(
-				activeMealSelection,
-				and(
-					eq(activeMealSelection.mealId, meal.id),
-					eq(activeMealSelection.organizationId, organizationId),
-				),
-			)
-			.where(eq(meal.organizationId, organizationId));
+
+		// Step 1a: Get Manifest current-week occurrences (one row per plan entry)
+		const manifestOccurrences = await getManifestWeekMealsForSupply(
+			db,
+			organizationId,
+		);
+
+		// Step 1b: Get Galley selections
+		const galleyRows = await d1
+			.select({
+				mealId: activeMealSelection.mealId,
+				servingsOverride: activeMealSelection.servingsOverride,
+			})
+			.from(activeMealSelection)
+			.where(eq(activeMealSelection.organizationId, organizationId));
+
+		// Step 1c: Dedupe — exclude Galley selections already in Manifest
+		const manifestMealIds = new Set(manifestOccurrences.map((m) => m.mealId));
+		const galleySelections = galleyRows.filter(
+			(g) => !manifestMealIds.has(g.mealId),
+		);
+
+		// Step 1d: Unified list (manifest occurrences + deduped galley)
+		const unified: Array<{ mealId: string; servingsOverride: number | null }> =
+			[...manifestOccurrences, ...galleySelections];
+
 		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
 
-		if (meals.length === 0) {
+		if (unified.length === 0) {
 			const supplyList = await ensureSupplyList(db, organizationId);
-			if (!supplyList) {
-				throw new Error("Failed to ensure supply list");
-			}
+			if (!supplyList) throw new Error("Failed to ensure supply list");
 
 			emitSupplySyncInfo(
 				"supply_sync.create_selected.success",
@@ -1022,54 +1112,18 @@ export async function createSupplyListFromSelectedMeals(
 			};
 		}
 
+		// Step 2: Build IngredientRow[] from the unified list
 		const ingredientQueryStartedAtMs = Date.now();
-		const rawIngredients = await d1
-			.select({
-				meal_ingredient: {
-					ingredientName: mealIngredient.ingredientName,
-					quantity: mealIngredient.quantity,
-					unit: mealIngredient.unit,
-					mealId: mealIngredient.mealId,
-				},
-				meal_domain: meal.domain,
-				meal_servings: meal.servings,
-				servings_override: activeMealSelection.servingsOverride,
-			})
-			.from(mealIngredient)
-			.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
-			.innerJoin(
-				activeMealSelection,
-				and(
-					eq(activeMealSelection.mealId, meal.id),
-					eq(activeMealSelection.organizationId, organizationId),
-				),
-			)
-			.where(eq(meal.organizationId, organizationId));
+		const allIngredients = await buildIngredientRowsFromOccurrences(
+			d1,
+			organizationId,
+			unified,
+		);
 		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
-
-		// Scale quantities by servingsOverride when set
-		const allIngredients: IngredientRow[] = rawIngredients.map((row) => {
-			const baseServings = row.meal_servings ?? 1;
-			const effectiveServings = row.servings_override ?? baseServings;
-			const scaleFactor = getScaleFactor(baseServings, effectiveServings);
-			return {
-				meal_ingredient: {
-					...row.meal_ingredient,
-					quantity: scaleQuantity(
-						row.meal_ingredient.quantity,
-						scaleFactor,
-						row.meal_ingredient.unit,
-					),
-				},
-				meal_domain: row.meal_domain,
-			};
-		});
 
 		if (allIngredients.length === 0) {
 			const supplyList = await ensureSupplyList(db, organizationId);
-			if (!supplyList) {
-				throw new Error("Failed to ensure supply list");
-			}
+			if (!supplyList) throw new Error("Failed to ensure supply list");
 
 			emitSupplySyncInfo(
 				"supply_sync.create_selected.success",
@@ -1080,7 +1134,7 @@ export async function createSupplyListFromSelectedMeals(
 				},
 				{
 					duration_ms: Date.now() - startedAtMs,
-					meals_selected_count: meals.length,
+					meals_selected_count: unified.length,
 					ingredient_rows_count: 0,
 					meals_query_duration_ms: mealsQueryDurationMs,
 					ingredients_query_duration_ms: ingredientQueryDurationMs,
@@ -1092,17 +1146,18 @@ export async function createSupplyListFromSelectedMeals(
 				summary: {
 					addedItems: 0,
 					skippedItems: 0,
-					mealsProcessed: meals.length,
+					mealsProcessed: unified.length,
 					totalIngredients: 0,
 				},
 			};
 		}
 
+		// Step 3: Reuse existing sync path (unchanged)
 		const syncResult = await syncSupplyFromIngredientRows(
 			db,
 			organizationId,
 			allIngredients,
-			meals.length,
+			unified.length,
 			telemetry,
 		);
 
@@ -1114,10 +1169,13 @@ export async function createSupplyListFromSelectedMeals(
 			},
 			{
 				duration_ms: Date.now() - startedAtMs,
-				meals_selected_count: meals.length,
+				meals_selected_count: unified.length,
 				ingredient_rows_count: allIngredients.length,
 				meals_query_duration_ms: mealsQueryDurationMs,
 				ingredients_query_duration_ms: ingredientQueryDurationMs,
+				source: "manifest_and_selection",
+				manifest_occurrence_count: manifestOccurrences.length,
+				galley_selection_count: galleySelections.length,
 			},
 		);
 

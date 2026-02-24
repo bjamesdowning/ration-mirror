@@ -22,6 +22,11 @@ export interface UserSettings {
 		widgets: HubWidgetLayout[];
 	};
 	hubProfile?: HubProfile;
+	manifestSettings?: {
+		weekStart?: "sunday" | "monday";
+		defaultSlots?: string[]; // e.g. ["breakfast", "lunch", "dinner"]
+		showSnackSlot?: boolean;
+	};
 	[key: string]: unknown; // Index signature for database compatibility
 }
 
@@ -31,7 +36,8 @@ export type HubWidgetId =
 	| "meals-ready"
 	| "meals-partial"
 	| "cargo-expiring"
-	| "supply-preview";
+	| "supply-preview"
+	| "manifest-preview";
 
 export type HubProfile = "cook" | "shop" | "minimal" | "full" | "custom";
 
@@ -40,6 +46,18 @@ export interface HubWidgetLayout {
 	order: number;
 	size?: "sm" | "md" | "lg";
 	visible: boolean;
+}
+
+export interface ManifestPreviewEntry {
+	date: string; // YYYY-MM-DD
+	slotType: string;
+	mealName: string;
+	mealId: string;
+}
+
+export interface ManifestPreviewData {
+	planId: string | null;
+	entries: ManifestPreviewEntry[];
 }
 
 /** Shape of loader data passed to Hub widgets. Aligns with hub route loader return. */
@@ -51,6 +69,7 @@ export interface HubLoaderData {
 		{ canMake: boolean; matchPercentage: number } & Record<string, unknown>
 	>;
 	expirationAlertDays: number;
+	manifestPreview: ManifestPreviewData | null;
 }
 
 /** Props passed to each Hub widget component. */

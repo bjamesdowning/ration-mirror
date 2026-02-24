@@ -8,6 +8,7 @@ import type {
 } from "~/lib/types";
 import { CargoExpiringWidget } from "./CargoExpiringWidget";
 import { HubStatsWidget } from "./HubStatsWidget";
+import { ManifestWidget } from "./ManifestWidget";
 import { MealsPartialWidget } from "./MealsPartialWidget";
 import { MealsReadyWidget } from "./MealsReadyWidget";
 import { SupplyPreviewWidget } from "./SupplyPreviewWidget";
@@ -79,6 +80,17 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			defaultSize: "md",
 		},
 	],
+	[
+		"manifest-preview",
+		{
+			id: "manifest-preview",
+			title: "Manifest",
+			description: "Your upcoming meal plan at a glance",
+			dataKeys: ["manifestPreview"],
+			component: ManifestWidget,
+			defaultSize: "md",
+		},
+	],
 ]);
 
 const FULL_LAYOUT: HubWidgetLayout[] = [
@@ -87,18 +99,21 @@ const FULL_LAYOUT: HubWidgetLayout[] = [
 	{ id: "meals-partial", order: 2, size: "lg", visible: true },
 	{ id: "cargo-expiring", order: 3, size: "md", visible: true },
 	{ id: "supply-preview", order: 4, size: "md", visible: true },
+	{ id: "manifest-preview", order: 5, size: "md", visible: true },
 ];
 
 const COOK_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
 	{ id: "meals-ready", order: 1, size: "lg", visible: true },
 	{ id: "cargo-expiring", order: 2, size: "md", visible: true },
+	{ id: "manifest-preview", order: 3, size: "sm", visible: true },
 ];
 
 const SHOP_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
 	{ id: "supply-preview", order: 1, size: "md", visible: true },
-	{ id: "meals-partial", order: 2, size: "lg", visible: true },
+	{ id: "manifest-preview", order: 2, size: "md", visible: true },
+	{ id: "meals-partial", order: 3, size: "lg", visible: true },
 ];
 
 const MINIMAL_LAYOUT: HubWidgetLayout[] = [

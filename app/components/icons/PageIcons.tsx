@@ -360,10 +360,63 @@ export function DocumentEditIcon({ className = "w-5 h-5" }: IconProps) {
 	);
 }
 
+export function CalendarIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-label="Calendar"
+		>
+			<title>Calendar</title>
+			<rect
+				x="3"
+				y="4"
+				width="18"
+				height="18"
+				rx="2"
+				ry="2"
+				strokeWidth={2}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<line
+				x1="16"
+				y1="2"
+				x2="16"
+				y2="6"
+				strokeWidth={2}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<line
+				x1="8"
+				y1="2"
+				x2="8"
+				y2="6"
+				strokeWidth={2}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<line
+				x1="3"
+				y1="10"
+				x2="21"
+				y2="10"
+				strokeWidth={2}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
 export const NAV_ICONS: Record<string, ComponentType<IconProps>> = {
 	home: HomeIcon,
 	package: PackageIcon,
 	"chef-hat": ChefHatIcon,
 	"shopping-cart": ShoppingCartIcon,
 	settings: SettingsIcon,
+	calendar: CalendarIcon,
 };

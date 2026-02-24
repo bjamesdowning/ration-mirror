@@ -5,8 +5,8 @@ const navItems = [
 	{ to: "/hub", icon: "home", label: "Hub" },
 	{ to: "/hub/cargo", icon: "package", label: "Cargo" },
 	{ to: "/hub/galley", icon: "chef-hat", label: "Galley" },
+	{ to: "/hub/manifest", icon: "calendar", label: "Manifest" },
 	{ to: "/hub/supply", icon: "shopping-cart", label: "Supply" },
-	{ to: "/hub/settings", icon: "settings", label: "System" },
 ];
 
 export function BottomNav() {

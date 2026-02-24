@@ -9,6 +9,7 @@ import { HomeIcon } from "~/components/icons/PageIcons";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
+import { getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
 import { getSupplyList } from "~/lib/supply.server";
 import type { UserSettings } from "~/lib/types";
@@ -31,19 +32,26 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
 
-	const [expiringItems, cargoStats, latestSupplyList, mealMatches] =
-		await Promise.all([
-			getExpiringCargo(db, groupId, expirationAlertDays, 10),
-			getCargoStats(db, groupId),
-			getSupplyList(db, groupId),
-			matchMeals(db, groupId, { mode: "delta", minMatch: 50, limit: 6 }),
-		]);
+	const [
+		expiringItems,
+		cargoStats,
+		latestSupplyList,
+		mealMatches,
+		manifestPreview,
+	] = await Promise.all([
+		getExpiringCargo(db, groupId, expirationAlertDays, 10),
+		getCargoStats(db, groupId),
+		getSupplyList(db, groupId),
+		matchMeals(db, groupId, { mode: "delta", minMatch: 50, limit: 6 }),
+		getManifestPreview(db, groupId, 7),
+	]);
 
 	return {
 		expiringItems,
 		cargoStats,
 		latestSupplyList,
 		mealMatches,
+		manifestPreview,
 		expirationAlertDays,
 		hubProfile,
 		hubLayout,
@@ -61,6 +69,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		hubLayout,
 		latestSupplyList,
 		mealMatches,
+		manifestPreview,
 		welcomeVoucherRedeemed,
 	} = loaderData;
 
@@ -76,6 +85,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		expiringItems,
 		latestSupplyList,
 		mealMatches,
+		manifestPreview,
 	};
 
 	return (

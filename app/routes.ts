@@ -27,6 +27,9 @@ export default [
 
 		// Supply
 		route("supply", "routes/hub/supply.tsx"),
+
+		// Manifest (Meal Planning Calendar)
+		route("manifest", "routes/hub/manifest.tsx"),
 	]),
 
 	// Admin
@@ -34,6 +37,7 @@ export default [
 
 	// Shared (public) routes
 	route("shared/:token", "routes/shared.$token.tsx"),
+	route("shared/manifest/:token", "routes/shared.manifest.$token.tsx"),
 
 	// API - Admin
 	route("api/admin/users", "routes/api/admin.users.ts"),
@@ -60,6 +64,16 @@ export default [
 	// API - v1 programmatic (API key auth)
 	route("api/v1/inventory/export", "routes/api/v1.inventory.export.ts"),
 	route("api/v1/inventory/import", "routes/api/v1.inventory.import.ts"),
+
+	// API - Meal Plans
+	route("api/meal-plans", "routes/api/meal-plans.ts"),
+	route("api/meal-plans/:id", "routes/api/meal-plans.$id.ts"),
+	route("api/meal-plans/:id/entries", "routes/api/meal-plans.$id.entries.ts"),
+	route(
+		"api/meal-plans/:id/entries/:entryId",
+		"routes/api/meal-plans.$id.entries.$entryId.ts",
+	),
+	route("api/meal-plans/:id/share", "routes/api/meal-plans.$id.share.ts"),
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),

@@ -6,6 +6,7 @@ const HUB_WIDGET_IDS = [
 	"meals-partial",
 	"cargo-expiring",
 	"supply-preview",
+	"manifest-preview",
 ] as const;
 
 export const HubWidgetLayoutSchema = z.object({

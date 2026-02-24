@@ -123,6 +123,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	meals: many(meal),
 	activeMealSelections: many(activeMealSelection),
 	supplyLists: many(supplyList),
+	mealPlans: many(mealPlan),
 }));
 
 export const member = sqliteTable(
@@ -285,6 +286,7 @@ export const mealRelations = relations(meal, ({ one, many }) => ({
 		fields: [meal.id],
 		references: [activeMealSelection.mealId],
 	}),
+	planEntries: many(mealPlanEntry),
 }));
 
 export const mealIngredient = sqliteTable(
@@ -451,6 +453,85 @@ export const supplyItemRelations = relations(supplyItem, ({ one }) => ({
 	list: one(supplyList, {
 		fields: [supplyItem.listId],
 		references: [supplyList.id],
+	}),
+}));
+
+export const mealPlan = sqliteTable(
+	"meal_plan",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		name: text("name").notNull().default("Meal Plan"),
+		shareToken: text("share_token").unique(),
+		shareExpiresAt: integer("share_expires_at", { mode: "timestamp" }),
+		isArchived: integer("is_archived", { mode: "boolean" })
+			.notNull()
+			.default(false),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("meal_plan_org_idx").on(table.organizationId),
+		index("meal_plan_share_idx").on(table.shareToken),
+	],
+);
+
+export const mealPlanRelations = relations(mealPlan, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [mealPlan.organizationId],
+		references: [organization.id],
+	}),
+	entries: many(mealPlanEntry),
+}));
+
+export const mealPlanEntry = sqliteTable(
+	"meal_plan_entry",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		planId: text("plan_id")
+			.notNull()
+			.references(() => mealPlan.id, { onDelete: "cascade" }),
+		mealId: text("meal_id")
+			.notNull()
+			.references(() => meal.id, { onDelete: "cascade" }),
+		date: text("date").notNull(), // ISO date: YYYY-MM-DD
+		slotType: text("slot_type").notNull().default("dinner"), // breakfast|lunch|dinner|snack
+		orderIndex: integer("order_index").notNull().default(0),
+		servingsOverride: integer("servings_override"),
+		notes: text("notes"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("mpe_plan_date_idx").on(table.planId, table.date),
+		index("mpe_plan_date_slot_idx").on(
+			table.planId,
+			table.date,
+			table.slotType,
+		),
+		index("mpe_meal_idx").on(table.mealId),
+	],
+);
+
+export const mealPlanEntryRelations = relations(mealPlanEntry, ({ one }) => ({
+	plan: one(mealPlan, {
+		fields: [mealPlanEntry.planId],
+		references: [mealPlan.id],
+	}),
+	meal: one(meal, {
+		fields: [mealPlanEntry.mealId],
+		references: [meal.id],
 	}),
 }));
 

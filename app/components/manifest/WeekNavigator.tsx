@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { getTodayISO, getWeekEnd, getWeekStart } from "~/lib/manifest.server";
+import { getTodayISO, getWeekEnd, getWeekStart } from "~/lib/manifest-dates";
 
 interface WeekNavigatorProps {
 	currentWeekStart: string;

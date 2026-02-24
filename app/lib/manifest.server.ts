@@ -8,54 +8,22 @@ const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 
 // ---------------------------------------------------------------------------
-// Date utilities
+// Date utilities (shared with client via ~/lib/manifest-dates)
 // ---------------------------------------------------------------------------
 
-/** Returns today as YYYY-MM-DD using local date arithmetic. */
-export function getTodayISO(): string {
-	const now = new Date();
-	const y = now.getFullYear();
-	const m = String(now.getMonth() + 1).padStart(2, "0");
-	const d = String(now.getDate()).padStart(2, "0");
-	return `${y}-${m}-${d}`;
-}
+import {
+	getTodayISO as getTodayISOShared,
+	getWeekDates as getWeekDatesShared,
+	getWeekEnd as getWeekEndShared,
+	getWeekStart as getWeekStartShared,
+	toISODateString as toISODateStringShared,
+} from "./manifest-dates";
 
-/** Given a YYYY-MM-DD date string and a weekStart preference, returns the Sunday/Monday that starts that week. */
-export function getWeekStart(
-	date: string,
-	weekStart: "sunday" | "monday" = "sunday",
-): string {
-	const d = new Date(`${date}T00:00:00`);
-	const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-	const offset = weekStart === "monday" ? (day === 0 ? 6 : day - 1) : day;
-	d.setDate(d.getDate() - offset);
-	return toISODateString(d);
-}
-
-/** Returns the end of a week (6 days after start). */
-export function getWeekEnd(startDate: string): string {
-	const d = new Date(`${startDate}T00:00:00`);
-	d.setDate(d.getDate() + 6);
-	return toISODateString(d);
-}
-
-export function toISODateString(d: Date): string {
-	const y = d.getFullYear();
-	const m = String(d.getMonth() + 1).padStart(2, "0");
-	const day = String(d.getDate()).padStart(2, "0");
-	return `${y}-${m}-${day}`;
-}
-
-/** Returns an array of 7 YYYY-MM-DD strings for the week starting at startDate. */
-export function getWeekDates(startDate: string): string[] {
-	const dates: string[] = [];
-	const d = new Date(`${startDate}T00:00:00`);
-	for (let i = 0; i < 7; i++) {
-		dates.push(toISODateString(d));
-		d.setDate(d.getDate() + 1);
-	}
-	return dates;
-}
+export const getTodayISO = getTodayISOShared;
+export const getWeekStart = getWeekStartShared;
+export const getWeekEnd = getWeekEndShared;
+export const toISODateString = toISODateStringShared;
+export const getWeekDates = getWeekDatesShared;
 
 // ---------------------------------------------------------------------------
 // Plan management

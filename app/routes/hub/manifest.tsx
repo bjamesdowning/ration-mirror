@@ -16,11 +16,11 @@ import {
 	ensureMealPlan,
 	getMealsForPicker,
 	getTodayISO,
-	getWeekDates,
 	getWeekEnd,
 	getWeekEntries,
 	getWeekStart,
 } from "~/lib/manifest.server";
+import { getWeekDates } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/manifest";

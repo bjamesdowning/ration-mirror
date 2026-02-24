@@ -31,12 +31,22 @@ export function MealSlotCard({
 			}`}
 		>
 			<div className="flex-1 min-w-0 pr-2">
-				<p className="text-sm font-semibold text-carbon truncate">
+				<p className="text-sm font-semibold text-carbon truncate capitalize">
 					{entry.mealName}
 				</p>
 				<p className="text-xs text-muted mt-0.5 font-mono">
-					{effectiveServings} {effectiveServings === 1 ? "serving" : "servings"}
-					{entry.servingsOverride ? " (custom)" : ""}
+					{entry.mealType === "provision" ? (
+						<>
+							×{effectiveServings}
+							{entry.servingsOverride ? " (custom)" : ""}
+						</>
+					) : (
+						<>
+							{effectiveServings}{" "}
+							{effectiveServings === 1 ? "serving" : "servings"}
+							{entry.servingsOverride ? " (custom)" : ""}
+						</>
+					)}
 				</p>
 				{entry.notes && (
 					<p className="text-xs text-muted mt-1 italic truncate">

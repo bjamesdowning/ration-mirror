@@ -53,6 +53,8 @@ export interface ManifestPreviewEntry {
 	slotType: string;
 	mealName: string;
 	mealId: string;
+	mealType?: string;
+	servingsOverride?: number | null;
 }
 
 export interface ManifestPreviewData {

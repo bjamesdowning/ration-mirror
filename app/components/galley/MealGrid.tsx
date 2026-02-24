@@ -5,9 +5,11 @@ import type { MealMatchResult } from "~/lib/matching.server";
 import type { MealCustomFields } from "~/lib/types";
 import { MealCard } from "./MealCard";
 import { MealMatchBadge } from "./MealMatchBadge";
+import { ProvisionCard } from "./ProvisionCard";
 
 interface MealGridProps {
 	meals: (typeof meal.$inferSelect & {
+		type?: string;
 		tags?: string[];
 		ingredients?: {
 			inventoryId?: string | null;
@@ -179,12 +181,20 @@ export function MealGrid({
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 							{matchResults.map((result) => (
 								<div key={result.meal.id} className="relative">
-									<MealCard
-										meal={result.meal}
-										availableIngredients={inventory}
-										isActive={activeMealIds?.has(result.meal.id)}
-										onToggleActive={onToggleMealActive}
-									/>
+									{result.meal.type === "provision" ? (
+										<ProvisionCard
+											meal={result.meal}
+											isActive={activeMealIds?.has(result.meal.id)}
+											onToggleActive={onToggleMealActive}
+										/>
+									) : (
+										<MealCard
+											meal={result.meal}
+											availableIngredients={inventory}
+											isActive={activeMealIds?.has(result.meal.id)}
+											onToggleActive={onToggleMealActive}
+										/>
+									)}
 									<div className="absolute top-2 right-2">
 										<MealMatchBadge
 											percentage={result.matchPercentage}
@@ -217,15 +227,24 @@ export function MealGrid({
 	// Regular grid without matching
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-			{meals.map((meal) => (
-				<MealCard
-					key={meal.id}
-					meal={meal}
-					availableIngredients={inventory}
-					isActive={activeMealIds?.has(meal.id)}
-					onToggleActive={onToggleMealActive}
-				/>
-			))}
+			{meals.map((meal) =>
+				meal.type === "provision" ? (
+					<ProvisionCard
+						key={meal.id}
+						meal={meal}
+						isActive={activeMealIds?.has(meal.id)}
+						onToggleActive={onToggleMealActive}
+					/>
+				) : (
+					<MealCard
+						key={meal.id}
+						meal={meal}
+						availableIngredients={inventory}
+						isActive={activeMealIds?.has(meal.id)}
+						onToggleActive={onToggleMealActive}
+					/>
+				),
+			)}
 		</div>
 	);
 }

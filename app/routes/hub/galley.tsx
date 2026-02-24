@@ -10,6 +10,7 @@ import {
 } from "~/components/galley/ImportRecipeButton";
 import { MealGrid } from "~/components/galley/MealGrid";
 import { MealQuickAdd } from "~/components/galley/MealQuickAdd";
+import { ProvisionQuickAdd } from "~/components/galley/ProvisionQuickAdd";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
@@ -117,6 +118,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	} | null;
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
+	const [showProvisionAdd, setShowProvisionAdd] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -174,13 +176,27 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	};
 
 	// FAB actions for mobile
+	const showAnyQuickAdd = showQuickAdd || showProvisionAdd;
 	const fabActions: FloatingAction[] = [
 		{
-			id: showQuickAdd ? "cancel" : "add",
-			icon: showQuickAdd ? <CloseIcon /> : <PlusIcon />,
-			label: showQuickAdd ? "Cancel" : "Add Meal",
-			variant: showQuickAdd ? "danger" : "default",
-			onClick: () => setShowQuickAdd(!showQuickAdd),
+			id: showAnyQuickAdd ? "cancel" : "add",
+			icon: showAnyQuickAdd ? <CloseIcon /> : <PlusIcon />,
+			label: showAnyQuickAdd ? "Cancel" : "Add Meal",
+			variant: showAnyQuickAdd ? "danger" : "default",
+			onClick: () => {
+				setShowQuickAdd(false);
+				setShowProvisionAdd(false);
+			},
+		},
+		{
+			id: "add-item",
+			icon: <PlusIcon />,
+			label: "Add Item",
+			variant: "default",
+			onClick: () => {
+				setShowProvisionAdd(true);
+				setShowQuickAdd(false);
+			},
 		},
 		{
 			id: "import",
@@ -335,10 +351,69 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								Import URL
 							</button>
 						}
+						additionalControls={
+							<button
+								type="button"
+								onClick={() => {
+									setShowProvisionAdd(true);
+									setShowQuickAdd(false);
+								}}
+								className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green transition-all"
+							>
+								<PlusIcon className="w-4 h-4" />
+								Add Item
+							</button>
+						}
 						quickAddPlaceholder="Add Meal"
-						showQuickAdd={showQuickAdd}
-						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+						showQuickAdd={showQuickAdd || showProvisionAdd}
+						onToggleQuickAdd={() => {
+							if (showQuickAdd || showProvisionAdd) {
+								setShowQuickAdd(false);
+								setShowProvisionAdd(false);
+							} else {
+								setShowQuickAdd(true);
+								setShowProvisionAdd(false);
+							}
+						}}
 						quickAddForm={
+							showProvisionAdd ? (
+								<ProvisionQuickAdd
+									defaultDomain={activeDomain !== "all" ? activeDomain : "food"}
+									onSuccess={() => {
+										setShowProvisionAdd(false);
+									}}
+									onUpgradeRequired={() => {
+										setShowProvisionAdd(false);
+										setShowUpgradePrompt(true);
+									}}
+								/>
+							) : (
+								<MealQuickAdd
+									onSuccess={() => setShowQuickAdd(false)}
+									onUpgradeRequired={() => {
+										setShowQuickAdd(false);
+										setShowUpgradePrompt(true);
+									}}
+									availableIngredients={inventory}
+								/>
+							)
+						}
+					/>
+				</div>
+
+				{/* Mobile Quick Add Form */}
+				{(showQuickAdd || showProvisionAdd) && (
+					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
+						{showProvisionAdd ? (
+							<ProvisionQuickAdd
+								defaultDomain={activeDomain !== "all" ? activeDomain : "food"}
+								onSuccess={() => setShowProvisionAdd(false)}
+								onUpgradeRequired={() => {
+									setShowProvisionAdd(false);
+									setShowUpgradePrompt(true);
+								}}
+							/>
+						) : (
 							<MealQuickAdd
 								onSuccess={() => setShowQuickAdd(false)}
 								onUpgradeRequired={() => {
@@ -347,21 +422,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								}}
 								availableIngredients={inventory}
 							/>
-						}
-					/>
-				</div>
-
-				{/* Mobile Quick Add Form */}
-				{showQuickAdd && (
-					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
-						<MealQuickAdd
-							onSuccess={() => setShowQuickAdd(false)}
-							onUpgradeRequired={() => {
-								setShowQuickAdd(false);
-								setShowUpgradePrompt(true);
-							}}
-							availableIngredients={inventory}
-						/>
+						)}
 					</div>
 				)}
 
@@ -393,6 +454,16 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
 								>
 									Create Meal
+								</button>
+								<button
+									type="button"
+									onClick={() => {
+										setShowProvisionAdd(true);
+										setShowQuickAdd(false);
+									}}
+									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+								>
+									Add Item
 								</button>
 							</div>
 						}

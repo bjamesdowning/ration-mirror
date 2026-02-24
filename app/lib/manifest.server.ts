@@ -125,6 +125,7 @@ export interface MealPlanEntryWithMeal {
 	createdAt: Date;
 	mealName: string;
 	mealServings: number;
+	mealType: string;
 }
 
 export async function getWeekEntries(
@@ -148,6 +149,7 @@ export async function getWeekEntries(
 			createdAt: mealPlanEntry.createdAt,
 			mealName: meal.name,
 			mealServings: meal.servings,
+			mealType: meal.type,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -167,6 +169,7 @@ export async function getWeekEntries(
 	return rows.map((r) => ({
 		...r,
 		mealServings: r.mealServings ?? 1,
+		mealType: r.mealType ?? "recipe",
 	})) as MealPlanEntryWithMeal[];
 }
 
@@ -187,7 +190,12 @@ export async function addEntry(
 
 	// Verify meal belongs to this org
 	const [mealRow] = await d1
-		.select({ id: meal.id, name: meal.name, servings: meal.servings })
+		.select({
+			id: meal.id,
+			name: meal.name,
+			servings: meal.servings,
+			type: meal.type,
+		})
 		.from(meal)
 		.where(
 			and(eq(meal.id, input.mealId), eq(meal.organizationId, organizationId)),
@@ -215,6 +223,7 @@ export async function addEntry(
 		...entry,
 		mealName: mealRow.name,
 		mealServings: mealRow.servings ?? 1,
+		mealType: mealRow.type ?? "recipe",
 	} as MealPlanEntryWithMeal;
 }
 
@@ -262,7 +271,7 @@ export async function updateEntry(
 
 	// Fetch meal details for return
 	const [mealRow] = await d1
-		.select({ name: meal.name, servings: meal.servings })
+		.select({ name: meal.name, servings: meal.servings, type: meal.type })
 		.from(meal)
 		.where(
 			and(eq(meal.id, updated.mealId), eq(meal.organizationId, organizationId)),
@@ -273,6 +282,7 @@ export async function updateEntry(
 		...updated,
 		mealName: mealRow?.name ?? "",
 		mealServings: mealRow?.servings ?? 1,
+		mealType: mealRow?.type ?? "recipe",
 	} as MealPlanEntryWithMeal;
 }
 
@@ -438,6 +448,7 @@ export interface SharedMealPlan {
 		orderIndex: number;
 		servingsOverride: number | null;
 		mealName: string;
+		mealType?: string;
 	}>;
 }
 
@@ -477,6 +488,7 @@ export async function getMealPlanByShareToken(
 			orderIndex: mealPlanEntry.orderIndex,
 			servingsOverride: mealPlanEntry.servingsOverride,
 			mealName: meal.name,
+			mealType: meal.type,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -496,7 +508,10 @@ export async function getMealPlanByShareToken(
 	return {
 		id: plan.id,
 		name: plan.name,
-		entries,
+		entries: entries.map((e) => ({
+			...e,
+			mealType: e.mealType ?? "recipe",
+		})),
 	};
 }
 
@@ -596,6 +611,8 @@ export async function getManifestPreview(
 			slotType: mealPlanEntry.slotType,
 			mealName: meal.name,
 			mealId: mealPlanEntry.mealId,
+			mealType: meal.type,
+			servingsOverride: mealPlanEntry.servingsOverride,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -626,6 +643,7 @@ export interface MealForPicker {
 	prepTime: number | null;
 	cookTime: number | null;
 	tags: string[];
+	type: string;
 }
 
 export async function getMealsForPicker(
@@ -641,6 +659,7 @@ export async function getMealsForPicker(
 			servings: meal.servings,
 			prepTime: meal.prepTime,
 			cookTime: meal.cookTime,
+			type: meal.type,
 		})
 		.from(meal)
 		.where(eq(meal.organizationId, organizationId))
@@ -650,6 +669,7 @@ export async function getMealsForPicker(
 		...r,
 		servings: r.servings ?? 1,
 		tags: [],
+		type: r.type ?? "recipe",
 	}));
 }
 

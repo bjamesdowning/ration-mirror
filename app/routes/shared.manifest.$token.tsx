@@ -78,13 +78,35 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+function formatEntryLabel(entry: {
+	mealName: string;
+	mealType?: string;
+	servingsOverride?: number | null;
+}): string {
+	const name = entry.mealName.charAt(0).toUpperCase() + entry.mealName.slice(1);
+	if (
+		entry.mealType === "provision" &&
+		entry.servingsOverride &&
+		entry.servingsOverride > 1
+	) {
+		return `${name} (×${entry.servingsOverride})`;
+	}
+	return name;
+}
+
 function WeekGrid({
 	dates,
 	entries,
 	today,
 }: {
 	dates: string[];
-	entries: Array<{ date: string; slotType: string; mealName: string }>;
+	entries: Array<{
+		date: string;
+		slotType: string;
+		mealName: string;
+		mealType?: string;
+		servingsOverride?: number | null;
+	}>;
 	today: string;
 }) {
 	return (
@@ -137,7 +159,7 @@ function WeekGrid({
 												key={`${e.date}-${slot}-${i}`}
 												className="text-[11px] text-carbon truncate font-medium"
 											>
-												{e.mealName}
+												{formatEntryLabel(e)}
 											</p>
 										))}
 									</div>
@@ -160,7 +182,13 @@ function DayList({
 	today,
 }: {
 	dates: string[];
-	entries: Array<{ date: string; slotType: string; mealName: string }>;
+	entries: Array<{
+		date: string;
+		slotType: string;
+		mealName: string;
+		mealType?: string;
+		servingsOverride?: number | null;
+	}>;
 	today: string;
 }) {
 	const MONTH_NAMES = [
@@ -235,7 +263,7 @@ function DayList({
 														key={`${e.date}-${slot}-${i}`}
 														className="text-sm text-carbon font-medium"
 													>
-														{e.mealName}
+														{formatEntryLabel(e)}
 													</p>
 												))}
 											</div>

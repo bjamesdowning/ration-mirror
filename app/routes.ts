@@ -56,6 +56,10 @@ export default [
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
 	route("api/meals/import", "routes/api/meals.import.ts"),
 
+	// API - Provisions (single-item meals)
+	route("api/provisions", "routes/api/provisions.ts"),
+	route("api/provisions/:id", "routes/api/provisions.$id.ts"),
+
 	// API - Cargo (static paths before :id)
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),

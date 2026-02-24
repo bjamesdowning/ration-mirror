@@ -53,6 +53,18 @@ function formatDayHeader(date: string, short = false): string {
 	return short ? `${dayName} ${d.getDate()}` : `${dayName} ${d.getDate()}`;
 }
 
+function formatEntryLabel(entry: ManifestPreviewEntry): string {
+	const name = entry.mealName.charAt(0).toUpperCase() + entry.mealName.slice(1);
+	if (
+		entry.mealType === "provision" &&
+		entry.servingsOverride &&
+		entry.servingsOverride > 1
+	) {
+		return `${name} (×${entry.servingsOverride})`;
+	}
+	return name;
+}
+
 function getDayEntries(
 	entries: ManifestPreviewEntry[],
 	date: string,
@@ -99,7 +111,7 @@ function ManifestSmall({ data }: { data: ManifestPreviewData }) {
 										{SLOT_SHORT[slot]}
 									</span>
 									<span className="text-xs text-carbon font-medium truncate">
-										{slotEntries[0].mealName}
+										{formatEntryLabel(slotEntries[0])}
 										{slotEntries.length > 1 && (
 											<span className="text-muted ml-1">
 												+{slotEntries.length - 1}
@@ -176,7 +188,7 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 													key={slot}
 													className="text-[11px] text-carbon font-medium truncate"
 												>
-													{slotEntries[0].mealName}
+													{formatEntryLabel(slotEntries[0])}
 												</p>
 											);
 										})
@@ -250,7 +262,7 @@ function ManifestLarge({ data }: { data: ManifestPreviewData }) {
 												key={`${e.date}-${e.slotType}-${i}`}
 												className="text-[10px] text-carbon font-medium truncate"
 											>
-												{e.mealName}
+												{formatEntryLabel(e)}
 											</p>
 										))
 									)}

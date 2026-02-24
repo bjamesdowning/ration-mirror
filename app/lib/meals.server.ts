@@ -15,7 +15,11 @@ import {
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
-import type { MealInput } from "./schemas/meal";
+import type {
+	MealInput,
+	ProvisionInput,
+	ProvisionUpdateInput,
+} from "./schemas/meal";
 import { convertQuantity, toSupportedUnit } from "./units";
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -56,6 +60,7 @@ export async function getMeals(
 					organizationId: meal.organizationId,
 					name: meal.name,
 					domain: meal.domain,
+					type: meal.type,
 					description: meal.description,
 					directions: meal.directions,
 					equipment: meal.equipment,
@@ -403,6 +408,138 @@ export async function updateMeal(
 					})),
 				),
 			);
+		}
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(batch as [any, ...any[]]);
+
+	return await getMeal(db, organizationId, mealId);
+}
+
+/**
+ * Creates a provision (single-item "meal" with type='provision').
+ * Auto-creates exactly one meal_ingredient row. Counts toward meal capacity.
+ */
+export async function createProvision(
+	db: D1Database,
+	organizationId: string,
+	data: ProvisionInput,
+	env?: Env,
+) {
+	if (env) {
+		const capacity = await checkCapacity(env, organizationId, "meals", 1);
+		if (!capacity.allowed) {
+			throw new Error(
+				`capacity_exceeded:meals:${capacity.current}:${capacity.limit}`,
+			);
+		}
+	}
+
+	const d1 = drizzle(db);
+	const mealId = crypto.randomUUID();
+	const ingredientId = crypto.randomUUID();
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
+	const batch: any[] = [
+		d1.insert(meal).values({
+			id: mealId,
+			organizationId,
+			name: data.name,
+			domain: data.domain,
+			type: "provision",
+			servings: 1,
+		}),
+		d1.insert(mealIngredient).values({
+			id: ingredientId,
+			mealId,
+			ingredientName: data.name,
+			quantity: data.quantity,
+			unit: data.unit,
+			orderIndex: 0,
+		}),
+	];
+
+	if (data.tags.length > 0) {
+		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(
+				d1.insert(mealTag).values(
+					tagChunk.map((tag) => ({
+						mealId,
+						tag,
+					})),
+				),
+			);
+		}
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(batch as [any, ...any[]]);
+
+	return await getMeal(db, organizationId, mealId);
+}
+
+/**
+ * Updates a provision. Only meals with type='provision' can be updated this way.
+ * Updates meal name/domain and the single ingredient's name/quantity/unit; replaces tags.
+ */
+export async function updateProvision(
+	db: D1Database,
+	organizationId: string,
+	mealId: string,
+	data: ProvisionUpdateInput,
+) {
+	const d1 = drizzle(db);
+
+	const [existing] = await d1
+		.select()
+		.from(meal)
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
+
+	if (!existing) throw new Error("Provision not found or unauthorized");
+	if (existing.type !== "provision") {
+		throw new Error("Meal is not a provision; use updateMeal instead");
+	}
+
+	const [singleIngredient] = await d1
+		.select()
+		.from(mealIngredient)
+		.where(eq(mealIngredient.mealId, mealId))
+		.orderBy(mealIngredient.orderIndex)
+		.limit(1);
+
+	if (!singleIngredient) {
+		throw new Error("Provision has no ingredient row");
+	}
+
+	const mealUpdates: Partial<typeof meal.$inferInsert> = {
+		updatedAt: new Date(),
+	};
+	if (data.name !== undefined) mealUpdates.name = data.name;
+	if (data.domain !== undefined) mealUpdates.domain = data.domain;
+
+	const ingUpdates: Partial<typeof mealIngredient.$inferInsert> = {};
+	if (data.name !== undefined) ingUpdates.ingredientName = data.name;
+	if (data.quantity !== undefined) ingUpdates.quantity = data.quantity;
+	if (data.unit !== undefined) ingUpdates.unit = data.unit;
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
+	const batch: any[] = [
+		d1.update(meal).set(mealUpdates).where(eq(meal.id, mealId)),
+		d1
+			.update(mealIngredient)
+			.set(ingUpdates)
+			.where(eq(mealIngredient.id, singleIngredient.id)),
+	];
+
+	if (data.tags !== undefined) {
+		batch.push(d1.delete(mealTag).where(eq(mealTag.mealId, mealId)));
+		if (data.tags.length > 0) {
+			for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+				batch.push(
+					d1.insert(mealTag).values(tagChunk.map((tag) => ({ mealId, tag }))),
+				);
+			}
 		}
 	}
 

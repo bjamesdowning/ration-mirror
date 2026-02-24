@@ -122,9 +122,13 @@ export function MealPicker({
 													: "hover:bg-platinum text-carbon"
 											}`}
 										>
-											<span className="font-medium text-sm">{m.name}</span>
+											<span className="font-medium text-sm capitalize">
+												{m.name}
+											</span>
 											<span className="text-xs text-muted font-mono ml-2 shrink-0">
-												{m.servings} srv
+												{m.type === "provision"
+													? `${m.servings} unit`
+													: `${m.servings} srv`}
 											</span>
 										</button>
 									</li>
@@ -141,7 +145,9 @@ export function MealPicker({
 									htmlFor="servings-override"
 									className="text-sm font-medium text-carbon whitespace-nowrap"
 								>
-									Servings
+									{selectedMeal.type === "provision"
+										? "Amount (×)"
+										: "Servings"}
 								</label>
 								<input
 									id="servings-override"
@@ -155,7 +161,8 @@ export function MealPicker({
 									className="w-20 bg-platinum rounded-lg px-3 py-2 text-sm text-carbon text-center focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
 								/>
 								<span className="text-xs text-muted">
-									(default: {selectedMeal.servings})
+									(default: {selectedMeal.servings}
+									{selectedMeal.type === "provision" ? "×" : ""})
 								</span>
 							</div>
 							<button

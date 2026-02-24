@@ -79,6 +79,29 @@ export const MealSchema = z.object({
 export type MealInput = z.infer<typeof MealSchema>;
 export type MealIngredientInput = z.infer<typeof MealIngredientSchema>;
 
+/** Schema for creating/updating a provision (single-item "meal"). */
+export const ProvisionSchema = z.object({
+	name: z
+		.string()
+		.min(1, "Item name is required")
+		.transform((v) => v.trim().toLowerCase()),
+	domain: z.enum(ITEM_DOMAINS).default("food"),
+	quantity: z.coerce.number().positive("Quantity must be greater than zero"),
+	unit: z
+		.union([UnitSchema, z.string().min(1)])
+		.transform((v) => normalizeUnitAlias(typeof v === "string" ? v : v)),
+	tags: z
+		.array(z.string().transform((v) => v.toLowerCase().trim()))
+		.default([]),
+});
+
+export type ProvisionInput = z.infer<typeof ProvisionSchema>;
+
+/** Partial schema for updating a provision (all fields optional except validation). */
+export const ProvisionUpdateSchema = ProvisionSchema.partial();
+
+export type ProvisionUpdateInput = z.infer<typeof ProvisionUpdateSchema>;
+
 /**
  * AI-generated recipe schema (e.g. from meal generation endpoint).
  * Used to parse and validate LLM output.

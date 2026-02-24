@@ -250,6 +250,7 @@ export const meal = sqliteTable(
 			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		domain: text("domain").notNull().default("food"),
+		type: text("type").notNull().default("recipe"), // 'recipe' | 'provision'
 		description: text("description"),
 		directions: text("directions"),
 		equipment: text("equipment", { mode: "json" })
@@ -272,6 +273,7 @@ export const meal = sqliteTable(
 		// Compound index covers both single-column and multi-column queries
 		index("meal_org_id_idx").on(table.organizationId, table.id),
 		index("meal_domain_idx").on(table.organizationId, table.domain),
+		index("meal_type_idx").on(table.organizationId, table.type),
 	],
 );
 

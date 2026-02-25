@@ -61,7 +61,9 @@ export function SupplyList({
 					<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted" />
 					<p className="text-lg text-muted">No items in this list yet</p>
 					<p className="text-sm text-muted mt-2">
-						Add items using the form above
+						Select meals in the Galley or add meals in the Manifest to populate
+						your supply list. You can also add items manually using the form
+						above.
 					</p>
 				</div>
 			) : (

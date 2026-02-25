@@ -74,6 +74,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:group_invite",
 	},
+	credits_transfer: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 10,
+		keyPrefix: "rate:credits_transfer",
+	},
 	inventory_batch: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,

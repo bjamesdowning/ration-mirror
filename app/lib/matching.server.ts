@@ -263,10 +263,13 @@ function deltaMatch(
 				scaleFactor,
 				ingredient.unit,
 			);
-			totalIngredients++;
+
+			if (!ingredient.isOptional) {
+				totalIngredients++;
+				if (available >= required) availableCount++;
+			}
 
 			if (available >= required) {
-				availableCount++;
 				availableIngredients.push({
 					name: ingredient.ingredientName,
 					requiredQuantity: required,
@@ -283,9 +286,10 @@ function deltaMatch(
 			}
 		}
 
-		const matchPercentage = Math.round(
-			(availableCount / totalIngredients) * 100,
-		);
+		const matchPercentage =
+			totalIngredients === 0
+				? 100
+				: Math.round((availableCount / totalIngredients) * 100);
 
 		if (matchPercentage >= minMatch) {
 			results.push({

@@ -61,13 +61,21 @@ export async function loader(args: Route.LoaderArgs) {
 		const isOwner = currentMember?.role === "owner";
 		const currentOrg = members[0]?.organization;
 
-		// Fetch all organizations the user is a member of (for default group selector)
+		// Fetch all organizations the user is a member of (for default group selector and credit transfer)
 		const userOrganizations = await db.query.member.findMany({
 			where: (member, { eq }) => eq(member.userId, userId),
 			with: {
-				organization: true,
+				organization: { columns: { id: true, name: true, credits: true } },
 			},
 		});
+
+		// User memberships with role + org for transfer UI
+		const userMemberships = userOrganizations.map((m) => ({
+			organizationId: m.organizationId,
+			organizationName: m.organization.name,
+			role: m.role,
+			credits: m.organization.credits,
+		}));
 
 		// Fetch credits for the current group
 		const { checkBalance } = await import("../../lib/ledger.server");
@@ -104,6 +112,7 @@ export async function loader(args: Route.LoaderArgs) {
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
 			userOrganizations: userOrganizations.map((m) => m.organization),
+			userMemberships,
 			credits,
 			stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
 			transactionStatus,
@@ -279,8 +288,14 @@ export async function action(args: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-	const { settings, members, isOwner, organizationId, userOrganizations } =
-		loaderData;
+	const {
+		settings,
+		members,
+		isOwner,
+		organizationId,
+		userOrganizations,
+		userMemberships = [],
+	} = loaderData;
 	const { confirm } = useConfirm();
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
 	const purgeFetcher = useFetcher();
@@ -424,6 +439,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						/>
 					)}
 				</section>
+
+				{/* Transfer Credits */}
+				<TransferCreditsSection userMemberships={userMemberships} />
 
 				{/* Group Management */}
 				<GroupManagement members={members} />
@@ -961,6 +979,155 @@ function ApiKeyRow({ keyRecord }: { keyRecord: ApiKeyRow }) {
 				{revokeFetcher.state === "submitting" ? "Revoking..." : "Revoke"}
 			</button>
 		</div>
+	);
+}
+
+type UserMembership = {
+	organizationId: string;
+	organizationName: string;
+	role: string;
+	credits: number;
+};
+
+function TransferCreditsSection({
+	userMemberships,
+}: {
+	userMemberships: UserMembership[];
+}) {
+	const fetcher = useFetcher<{ success?: boolean; error?: string }>();
+	const toast = useToast({ duration: 3000 });
+	const [sourceId, setSourceId] = useState<string>("");
+
+	const sourceGroups = userMemberships.filter(
+		(m) => m.role === "owner" && m.credits > 0,
+	);
+	const destGroups = userMemberships.filter(
+		(m) => m.organizationId !== sourceId,
+	);
+	const sourceMembership = userMemberships.find(
+		(m) => m.organizationId === sourceId,
+	);
+	const maxAmount = sourceMembership?.credits ?? 0;
+	const canShow = sourceGroups.length > 0 && userMemberships.length > 1;
+
+	useEffect(() => {
+		if (fetcher.data?.success && fetcher.state === "idle") {
+			toast.show();
+			setSourceId("");
+		}
+	}, [fetcher.data?.success, fetcher.state, toast]);
+
+	if (!canShow) return null;
+
+	return (
+		<section className="glass-panel rounded-xl p-6">
+			<h2 className="text-xl font-bold mb-2 text-carbon">Transfer Credits</h2>
+			<p className="text-sm text-muted mb-4">
+				Move credits from groups you own to other groups you belong to.
+			</p>
+
+			{fetcher.data?.error && fetcher.state === "idle" && (
+				<div className="mb-4 p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+					{fetcher.data.error}
+				</div>
+			)}
+
+			<fetcher.Form
+				method="post"
+				action="/api/groups/credits/transfer"
+				className="space-y-4"
+			>
+				<div>
+					<label
+						htmlFor="transfer-source"
+						className="block text-sm font-medium text-carbon mb-1"
+					>
+						From (source)
+					</label>
+					<select
+						id="transfer-source"
+						name="sourceOrganizationId"
+						value={sourceId}
+						onChange={(e) => setSourceId(e.target.value)}
+						required
+						className="w-full px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+					>
+						<option value="">Select group...</option>
+						{sourceGroups.map((m) => (
+							<option key={m.organizationId} value={m.organizationId}>
+								{m.organizationName} ({m.credits} CR)
+							</option>
+						))}
+					</select>
+				</div>
+
+				<div>
+					<label
+						htmlFor="transfer-dest"
+						className="block text-sm font-medium text-carbon mb-1"
+					>
+						To (destination)
+					</label>
+					<select
+						id="transfer-dest"
+						name="destinationOrganizationId"
+						required
+						disabled={!sourceId || destGroups.length === 0}
+						className="w-full px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 disabled:opacity-60"
+					>
+						<option value="">Select group...</option>
+						{destGroups.map((m) => (
+							<option key={m.organizationId} value={m.organizationId}>
+								{m.organizationName}
+								{m.role === "owner" ? " (owner)" : " (member)"}
+							</option>
+						))}
+					</select>
+				</div>
+
+				<div>
+					<label
+						htmlFor="transfer-amount"
+						className="block text-sm font-medium text-carbon mb-1"
+					>
+						Amount
+					</label>
+					<input
+						id="transfer-amount"
+						type="number"
+						name="amount"
+						min={1}
+						max={maxAmount}
+						disabled={!sourceId}
+						required
+						className="w-full px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon focus:outline-none focus:ring-2 focus:ring-hyper-green/50 disabled:opacity-60"
+						placeholder={sourceId ? `Max ${maxAmount}` : "Select source first"}
+					/>
+					{sourceId && (
+						<p className="text-xs text-muted mt-1">Max: {maxAmount} CR</p>
+					)}
+				</div>
+
+				<button
+					type="submit"
+					disabled={
+						fetcher.state !== "idle" || !sourceId || destGroups.length === 0
+					}
+					className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold hover:bg-hyper-green/90 disabled:opacity-60 disabled:cursor-not-allowed"
+				>
+					{fetcher.state !== "idle" ? "Transferring..." : "Transfer Credits"}
+				</button>
+			</fetcher.Form>
+
+			{toast.isOpen && (
+				<Toast
+					variant="success"
+					title="Transfer complete"
+					description="Credits have been transferred."
+					onDismiss={toast.hide}
+				/>
+			)}
+		</section>
 	);
 }
 

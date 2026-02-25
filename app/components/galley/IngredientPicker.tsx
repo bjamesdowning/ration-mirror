@@ -252,7 +252,25 @@ export function IngredientPicker({
 						</select>
 					</div>
 
-					<div className="col-span-2 text-right">
+					<div className="col-span-1 flex items-center">
+						<label className="flex items-center gap-1 cursor-pointer">
+							<input
+								type="checkbox"
+								name={`ingredients[${idx}].isOptional`}
+								value="true"
+								checked={ing.isOptional ?? false}
+								onChange={(e) =>
+									updateIngredient(idx, "isOptional", e.target.checked)
+								}
+								className="rounded border-platinum text-hyper-green focus:ring-hyper-green/50"
+							/>
+							<span className="text-xs text-muted whitespace-nowrap">
+								Optional
+							</span>
+						</label>
+					</div>
+
+					<div className="col-span-1 text-right">
 						<button
 							type="button"
 							onClick={() => removeIngredient(idx)}

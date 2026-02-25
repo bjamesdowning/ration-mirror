@@ -155,6 +155,79 @@ export async function addCredits(
 }
 
 // ---------------------------------------------------------------------------
+// Credit Transfer Between Groups
+// ---------------------------------------------------------------------------
+// Atomically deducts from source org and adds to destination org. Owner-only
+// for source; destination can be any group the user is a member of.
+export async function transferCredits(
+	env: Env,
+	sourceOrganizationId: string,
+	destinationOrganizationId: string,
+	userId: string,
+	amount: number,
+) {
+	if (amount <= 0) {
+		throw new Error("Amount must be positive");
+	}
+	if (sourceOrganizationId === destinationOrganizationId) {
+		throw new Error("Source and destination must differ");
+	}
+
+	const ledgerIdSource = crypto.randomUUID();
+	const ledgerIdDest = crypto.randomUUID();
+	const now = Math.floor(Date.now() / 1000);
+
+	const batchResults = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE organization
+			SET credits = credits - ?1
+			WHERE id = ?2 AND credits >= ?1
+			RETURNING id;`,
+		).bind(amount, sourceOrganizationId),
+		env.DB.prepare(
+			`UPDATE organization
+			SET credits = credits + ?1
+			WHERE id = ?2;`,
+		).bind(amount, destinationOrganizationId),
+		env.DB.prepare(
+			`INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
+		).bind(
+			ledgerIdSource,
+			sourceOrganizationId,
+			userId,
+			-amount,
+			`Transfer Out: ${destinationOrganizationId}`,
+			now,
+		),
+		env.DB.prepare(
+			`INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
+		).bind(
+			ledgerIdDest,
+			destinationOrganizationId,
+			userId,
+			amount,
+			`Transfer In: ${sourceOrganizationId}`,
+			now,
+		),
+	]);
+
+	const sourceUpdateResult = batchResults[0];
+	if (!sourceUpdateResult.results || sourceUpdateResult.results.length === 0) {
+		// Source had insufficient credits; batch committed dest + ledger. Reverse.
+		await env.DB.batch([
+			env.DB.prepare(
+				`UPDATE organization SET credits = credits - ?1 WHERE id = ?2;`,
+			).bind(amount, destinationOrganizationId),
+			env.DB.prepare("DELETE FROM ledger WHERE id = ?1;").bind(ledgerIdSource),
+			env.DB.prepare("DELETE FROM ledger WHERE id = ?1;").bind(ledgerIdDest),
+		]);
+		throw new InsufficientCreditsError(amount);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Credit Gate  (the primary interface for AI feature routes)
 // ---------------------------------------------------------------------------
 // Wraps any credit-consuming operation with:

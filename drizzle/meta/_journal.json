@@ -162,6 +162,13 @@
 			"when": 1772022790811,
 			"tag": "0022_flowery_iron_fist",
 			"breakpoints": true
+		},
+		{
+			"idx": 23,
+			"version": "6",
+			"when": 1772023205946,
+			"tag": "0023_public_phalanx",
+			"breakpoints": true
 		}
 	]
 }

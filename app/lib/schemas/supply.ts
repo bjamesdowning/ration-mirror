@@ -56,6 +56,12 @@ export const ListIdSchema = z.object({
 	listId: z.string().uuid(),
 });
 
+/** Duration presets for snoozing supply items. */
+export const SnoozeDurationSchema = z.enum(["24h", "3d", "1w"]);
+export const SnoozeItemSchema = z.object({
+	duration: SnoozeDurationSchema,
+});
+
 export type SupplyListInput = z.infer<typeof SupplyListSchema>;
 export type SupplyItemInput = z.infer<typeof SupplyItemSchema>;
 export type SupplyItemUpdateInput = z.infer<typeof SupplyItemUpdateSchema>;

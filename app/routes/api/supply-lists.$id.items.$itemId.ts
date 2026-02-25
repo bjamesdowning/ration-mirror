@@ -2,13 +2,18 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { SupplyItemUpdateSchema } from "~/lib/schemas/supply";
-import { deleteSupplyItem, updateSupplyItem } from "~/lib/supply.server";
+import { SnoozeItemSchema, SupplyItemUpdateSchema } from "~/lib/schemas/supply";
+import {
+	deleteSupplyItem,
+	snoozeSupplyItem,
+	updateSupplyItem,
+} from "~/lib/supply.server";
 import type { Route } from "./+types/supply-lists.$id.items.$itemId";
 
 /**
- * PUT /api/grocery-lists/:id/items/:itemId - Update grocery item
- * DELETE /api/grocery-lists/:id/items/:itemId - Remove grocery item
+ * PUT /api/supply-lists/:id/items/:itemId - Update supply item
+ * POST /api/supply-lists/:id/items/:itemId - Snooze supply item (meal-sourced)
+ * DELETE /api/supply-lists/:id/items/:itemId - Remove supply item
  */
 export async function action({ request, context, params }: Route.ActionArgs) {
 	const {
@@ -46,6 +51,19 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				input,
 			);
 			return { item };
+		}
+
+		if (request.method === "POST") {
+			const json = await request.json();
+			const { duration } = SnoozeItemSchema.parse(json);
+			const result = await snoozeSupplyItem(
+				context.cloudflare.env.DB,
+				groupId,
+				listId,
+				itemId,
+				duration,
+			);
+			return result;
 		}
 
 		if (request.method === "DELETE") {

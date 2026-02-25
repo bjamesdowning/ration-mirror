@@ -100,6 +100,7 @@ export function SupplyList({
 											item={item}
 											listId={list.id}
 											onDelete={onRefresh}
+											onSnooze={onRefresh}
 										/>
 									))}
 								</div>

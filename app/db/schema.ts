@@ -462,6 +462,39 @@ export const supplyItemRelations = relations(supplyItem, ({ one }) => ({
 	}),
 }));
 
+export const supplySnooze = sqliteTable(
+	"supply_snooze",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		normalizedName: text("normalized_name").notNull(),
+		domain: text("domain").notNull().default("food"),
+		snoozedUntil: integer("snoozed_until", { mode: "timestamp" }).notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("supply_snooze_org_idx").on(table.organizationId),
+		unique("supply_snooze_key").on(
+			table.organizationId,
+			table.normalizedName,
+			table.domain,
+		),
+	],
+);
+
+export const supplySnoozeRelations = relations(supplySnooze, ({ one }) => ({
+	organization: one(organization, {
+		fields: [supplySnooze.organizationId],
+		references: [organization.id],
+	}),
+}));
+
 export const mealPlan = sqliteTable(
 	"meal_plan",
 	{

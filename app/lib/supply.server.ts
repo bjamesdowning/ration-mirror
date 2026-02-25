@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -8,6 +8,7 @@ import {
 	member,
 	supplyItem,
 	supplyList,
+	supplySnooze,
 	user,
 } from "../db/schema";
 import { dockSupplyItems } from "./cargo.server";
@@ -679,6 +680,120 @@ export async function deleteSupplyItem(
 	return { deleted: true };
 }
 
+/** Duration in ms for snooze presets. */
+const SNOOZE_DURATIONS_MS: Record<string, number> = {
+	"24h": 24 * 60 * 60 * 1000,
+	"3d": 3 * 24 * 60 * 60 * 1000,
+	"1w": 7 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Snoozes a supply item so it won't be re-added during sync until the duration expires.
+ * Meal-sourced items are identified by normalized name + domain.
+ */
+export async function snoozeSupplyItem(
+	db: D1Database,
+	organizationId: string,
+	listId: string,
+	itemId: string,
+	duration: "24h" | "3d" | "1w",
+) {
+	const d1 = drizzle(db);
+	const now = new Date();
+	const snoozedUntil = new Date(now.getTime() + SNOOZE_DURATIONS_MS[duration]);
+
+	const [list] = await d1
+		.select()
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.id, listId),
+				eq(supplyList.organizationId, organizationId),
+			),
+		);
+
+	if (!list) throw new Error("Supply list not found or unauthorized");
+
+	const [existing] = await d1
+		.select()
+		.from(supplyItem)
+		.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId)));
+
+	if (!existing) throw new Error("Supply item not found");
+
+	const normalizedName = normalizeForMatch(existing.name);
+	const domain = existing.domain ?? "food";
+
+	await d1
+		.insert(supplySnooze)
+		.values({
+			organizationId,
+			normalizedName,
+			domain,
+			snoozedUntil,
+		})
+		.onConflictDoUpdate({
+			target: [
+				supplySnooze.organizationId,
+				supplySnooze.normalizedName,
+				supplySnooze.domain,
+			],
+			set: { snoozedUntil, createdAt: now },
+		});
+
+	await d1.batch([
+		d1
+			.delete(supplyItem)
+			.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId))),
+		d1
+			.update(supplyList)
+			.set({ updatedAt: now })
+			.where(eq(supplyList.id, listId)),
+	]);
+
+	return { snoozed: true, snoozedUntil };
+}
+
+/**
+ * Returns a Set of "normalizedName__domain" keys that are currently snoozed for the org.
+ * Call once at sync start to avoid N queries.
+ */
+async function getActiveSnoozeKeys(
+	d1: ReturnType<typeof drizzle>,
+	organizationId: string,
+): Promise<Set<string>> {
+	const now = new Date();
+	const rows = await d1
+		.select({
+			normalizedName: supplySnooze.normalizedName,
+			domain: supplySnooze.domain,
+		})
+		.from(supplySnooze)
+		.where(
+			and(
+				eq(supplySnooze.organizationId, organizationId),
+				gt(supplySnooze.snoozedUntil, now),
+			),
+		);
+
+	const keys = new Set<string>();
+	for (const row of rows) {
+		keys.add(`${row.normalizedName}__${row.domain}`);
+	}
+
+	// Prune expired snoozes
+	await d1
+		.delete(supplySnooze)
+		.where(
+			and(
+				eq(supplySnooze.organizationId, organizationId),
+				lte(supplySnooze.snoozedUntil, now),
+			),
+		);
+
+	return keys;
+}
+
 /**
  * Generates a share token for a supply list.
  * Share tokens expire after 7 days.
@@ -1330,11 +1445,19 @@ async function syncSupplyFromIngredientRows(
 		const aggregateDurationMs = Date.now() - aggregateStartedAtMs;
 		const existingItems = refreshedList.items ?? [];
 
+		const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
+
 		let addedCount = 0;
 		let skippedCount = 0;
 		const itemsToInsert: (typeof supplyItem.$inferInsert)[] = [];
 
 		for (const aggregated of aggregatedIngredients) {
+			const snoozeKey = `${aggregated.normalizedName}__${aggregated.domain}`;
+			if (snoozeKeys.has(snoozeKey)) {
+				skippedCount++;
+				continue;
+			}
+
 			const availableInCargo = getAvailableCargoQuantity(
 				aggregated.name,
 				aggregated.unit,

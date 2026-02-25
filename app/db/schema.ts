@@ -441,6 +441,10 @@ export const supplyItem = sqliteTable(
 		sourceMealId: text("source_meal_id").references(() => meal.id, {
 			onDelete: "set null",
 		}),
+		sourceMealIds: text("source_meal_ids", { mode: "json" })
+			.$type<string[]>()
+			.notNull()
+			.default([]),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

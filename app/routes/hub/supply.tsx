@@ -464,7 +464,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() => setShowShareModal(true)}
-										className="flex items-center gap-2 px-4 py-2 bg-platinum text-carbon rounded-lg hover:bg-platinum/80 transition-colors font-medium"
+										className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 									>
 										<ShareIcon className="w-4 h-4" />
 										Share

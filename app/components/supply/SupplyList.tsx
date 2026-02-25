@@ -1,10 +1,11 @@
 import { ShoppingCart } from "lucide-react";
-import type { supplyItem, supplyList } from "~/db/schema";
+import type { supplyList } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { SupplyItemWithSource } from "~/lib/supply.server";
 import { SupplyItem } from "./SupplyItem";
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {
-	items: (typeof supplyItem.$inferSelect)[];
+	items: SupplyItemWithSource[];
 };
 
 interface SupplyListProps {
@@ -39,7 +40,7 @@ export function SupplyList({
 	const domainFilteredItems = filteredItems;
 
 	const groupedByDomain = domainFilteredItems.reduce<
-		Record<ItemDomain, (typeof supplyItem.$inferSelect)[]>
+		Record<ItemDomain, SupplyItemWithSource[]>
 	>(
 		(acc, item) => {
 			const domain = (item.domain ?? "food") as ItemDomain;

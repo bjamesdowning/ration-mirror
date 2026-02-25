@@ -1,0 +1,1 @@
+ALTER TABLE `supply_item` ADD `source_meal_ids` text DEFAULT '[]' NOT NULL;

@@ -77,11 +77,17 @@ export interface SupplyItemInput {
 	unit?: string;
 	domain?: string;
 	sourceMealId?: string;
+	sourceMealIds?: string[];
 }
 
 export interface SupplyListInput {
 	name?: string;
 }
+
+export type SupplyItemWithSource = typeof supplyItem.$inferSelect & {
+	sourceMealName: string | null;
+	sourceMealNames: string[];
+};
 
 export interface GenerationSummary {
 	addedItems: number;
@@ -152,6 +158,8 @@ function getExistingListQuantity(
 	let total = 0;
 	for (const item of items) {
 		if ((item.domain ?? "food") !== domain) continue;
+		// Defensive guard for legacy/corrupt rows so sync never crashes.
+		if (typeof item.name !== "string" || item.name.length === 0) continue;
 		if (normalizeForMatch(item.name) !== normalizedName) continue;
 
 		const multiplier = getUnitMultiplier(
@@ -286,7 +294,7 @@ export async function getSupplyListById(
 ) {
 	const d1 = drizzle(db);
 
-	const [lists, items] = await d1.batch([
+	const [lists, itemRows] = await d1.batch([
 		d1
 			.select()
 			.from(supplyList)
@@ -301,6 +309,49 @@ export async function getSupplyListById(
 
 	const list = lists[0];
 	if (!list) return null;
+
+	// Avoid join-column ambiguity by enriching source meal names in a second pass.
+	const sourceMealIds = Array.from(
+		new Set(
+			itemRows.flatMap((item) => {
+				const many =
+					Array.isArray(item.sourceMealIds) && item.sourceMealIds.length > 0
+						? item.sourceMealIds
+						: [];
+				if (many.length > 0) return many;
+				return item.sourceMealId ? [item.sourceMealId] : [];
+			}),
+		),
+	);
+
+	const mealNameById = new Map<string, string>();
+	if (sourceMealIds.length > 0) {
+		const sourceMeals = await d1
+			.select({ id: meal.id, name: meal.name })
+			.from(meal)
+			.where(inArray(meal.id, sourceMealIds));
+		for (const sourceMeal of sourceMeals) {
+			mealNameById.set(sourceMeal.id, sourceMeal.name);
+		}
+	}
+
+	const items: SupplyItemWithSource[] = itemRows.map((item) => {
+		const sourceIds =
+			Array.isArray(item.sourceMealIds) && item.sourceMealIds.length > 0
+				? item.sourceMealIds
+				: item.sourceMealId
+					? [item.sourceMealId]
+					: [];
+		const sourceMealNames = sourceIds
+			.map((id) => mealNameById.get(id))
+			.filter((name): name is string => typeof name === "string");
+		return {
+			...item,
+			sourceMealIds: sourceIds,
+			sourceMealName: sourceMealNames[0] ?? null,
+			sourceMealNames,
+		};
+	});
 
 	return {
 		...list,
@@ -512,6 +563,12 @@ export async function addSupplyItem(
 			unit: data.unit || "unit",
 			domain: data.domain || "food",
 			sourceMealId: data.sourceMealId,
+			sourceMealIds:
+				data.sourceMealIds && data.sourceMealIds.length > 0
+					? data.sourceMealIds
+					: data.sourceMealId
+						? [data.sourceMealId]
+						: [],
 		}),
 		d1
 			.update(supplyList)
@@ -853,6 +910,7 @@ export async function addItemsFromMeal(
 			unit: ingredient.unit,
 			domain: mealDomain,
 			sourceMealId: mealId,
+			sourceMealIds: [mealId],
 		} satisfies typeof supplyItem.$inferInsert;
 
 		await d1.insert(supplyItem).values(newItemPayload);
@@ -1316,6 +1374,7 @@ async function syncSupplyFromIngredientRows(
 				unit: aggregated.unit,
 				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0],
+				sourceMealIds: aggregated.sourceMealIds,
 			});
 			addedCount++;
 		}

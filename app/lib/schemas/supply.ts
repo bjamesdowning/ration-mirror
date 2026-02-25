@@ -21,6 +21,7 @@ export const SupplyItemSchema = z.object({
 	unit: UnitSchema.default("unit"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	sourceMealId: z.string().uuid().optional(),
+	sourceMealIds: z.array(z.string().uuid()).optional(),
 });
 
 export const SupplyItemUpdateSchema = z.object({

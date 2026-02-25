@@ -155,6 +155,13 @@
 			"when": 1771979362925,
 			"tag": "0021_cold_dormammu",
 			"breakpoints": true
+		},
+		{
+			"idx": 22,
+			"version": "6",
+			"when": 1772022790811,
+			"tag": "0022_flowery_iron_fist",
+			"breakpoints": true
 		}
 	]
 }

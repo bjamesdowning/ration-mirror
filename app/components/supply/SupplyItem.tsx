@@ -1,5 +1,6 @@
 import { useFetcher } from "react-router";
 import type { supplyItem } from "~/db/schema";
+import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
 
 interface SupplyItemProps {
@@ -9,6 +10,7 @@ interface SupplyItemProps {
 }
 
 export function SupplyItem({ item, listId, onDelete }: SupplyItemProps) {
+	const { confirm } = useConfirm();
 	const fetcher = useFetcher();
 
 	const isPending = fetcher.state !== "idle";
@@ -28,8 +30,16 @@ export function SupplyItem({ item, listId, onDelete }: SupplyItemProps) {
 		);
 	};
 
-	const handleDelete = () => {
-		if (!window.confirm("Remove this item from the list?")) return;
+	const handleDelete = async () => {
+		if (
+			!(await confirm({
+				title: "Remove this item from the list?",
+				message: "This will delete the item from your supply list.",
+				confirmLabel: "Remove",
+				variant: "danger",
+			}))
+		)
+			return;
 
 		fetcher.submit(null, {
 			method: "DELETE",

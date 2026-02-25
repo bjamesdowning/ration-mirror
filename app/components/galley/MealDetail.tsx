@@ -1,6 +1,7 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Form, Link, useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
+import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
@@ -145,11 +146,14 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		);
 	};
 
+	const { confirm } = useConfirm();
+	const deleteFetcher = useFetcher();
 	const fetcher = useFetcher<{
 		result?: { cooked: boolean };
 		error?: string;
 	}>();
 	const isCooking = fetcher.state !== "idle";
+	const isDeleting = deleteFetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
 	const cookError =
 		fetcher.state === "idle" && fetcher.data?.error
@@ -172,6 +176,42 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		} else {
 			handleServingsChange(parsed);
 		}
+	};
+
+	const handleDelete = async () => {
+		if (
+			!(await confirm({
+				title: "Delete this meal?",
+				message: "This cannot be undone.",
+				confirmLabel: "Delete",
+				variant: "danger",
+			}))
+		)
+			return;
+		deleteFetcher.submit(null, {
+			method: "DELETE",
+			action: `/hub/galley/${meal.id}`,
+		});
+	};
+
+	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		const servingLabel =
+			desiredServings === 1 ? "1 serving" : `${desiredServings} servings`;
+		if (
+			!(await confirm({
+				title: `Cook this meal for ${servingLabel}?`,
+				message: "It will deduct ingredients from your Cargo.",
+				confirmLabel: "Cook Now",
+				variant: "warning",
+			}))
+		)
+			return;
+		const form = e.currentTarget;
+		fetcher.submit(new FormData(form), {
+			method: "POST",
+			action: form.action,
+		});
 	};
 
 	return (
@@ -209,21 +249,14 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							>
 								Edit
 							</Link>
-							<Form
-								method="delete"
-								onSubmit={(e) => {
-									if (!confirm("Delete this meal?")) {
-										e.preventDefault();
-									}
-								}}
+							<button
+								type="button"
+								onClick={handleDelete}
+								disabled={isDeleting}
+								className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors disabled:opacity-50"
 							>
-								<button
-									type="submit"
-									className="text-muted hover:text-danger px-3 py-1 text-sm transition-colors"
-								>
-									Delete
-								</button>
-							</Form>
+								{isDeleting ? "Deleting..." : "Delete"}
+							</button>
 						</div>
 					)}
 					<div className="mt-4 flex gap-6 text-sm">
@@ -400,23 +433,11 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 							</p>
 						</div>
 					)}
-					<fetcher.Form
+					<form
 						method="post"
 						action={`/api/meals/${meal.id}/cook`}
 						className="mt-8"
-						onSubmit={(e: React.FormEvent) => {
-							const servingLabel =
-								desiredServings === 1
-									? "1 serving"
-									: `${desiredServings} servings`;
-							if (
-								!confirm(
-									`Cook this meal for ${servingLabel}? It will deduct ingredients from your Cargo.`,
-								)
-							) {
-								e.preventDefault();
-							}
-						}}
+						onSubmit={handleCookSubmit}
 					>
 						<input type="hidden" name="servings" value={desiredServings} />
 						<button
@@ -448,7 +469,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 									: `Scaled for ${desiredServings} serving${desiredServings !== 1 ? "s" : ""} (base: ${baseServings})`}
 							</p>
 						)}
-					</fetcher.Form>
+					</form>
 				</div>
 
 				{/* Left Col: Directions */}

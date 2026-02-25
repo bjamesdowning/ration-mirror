@@ -19,6 +19,7 @@ import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { useConfirm } from "~/lib/confirm-context";
 import type { MealForPicker } from "~/lib/manifest.server";
 import {
 	ensureMealPlan,
@@ -122,6 +123,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		error?: string;
 	}>();
 	const revalidator = useRevalidator();
+	const { confirm } = useConfirm();
 	const consumeToast = useToast({ duration: 4000 });
 	const consumeErrorToast = useToast({ duration: 6000 });
 
@@ -138,14 +140,17 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		handleConsume([entryId]);
 	};
 
-	const handleConsumeAll = (date: string) => {
+	const handleConsumeAll = async (date: string) => {
 		const unconsumed = entries.filter((e) => e.date === date && !e.consumedAt);
 		const ids = unconsumed.map((e) => e.id);
 		if (ids.length === 0) return;
 		if (
-			!confirm(
-				`Consume all ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day? Ingredients will be deducted from Cargo.`,
-			)
+			!(await confirm({
+				title: `Consume all ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day?`,
+				message: "Ingredients will be deducted from Cargo.",
+				confirmLabel: "Consume All",
+				variant: "warning",
+			}))
 		)
 			return;
 		handleConsume(ids);

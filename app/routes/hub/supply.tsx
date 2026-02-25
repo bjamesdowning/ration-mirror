@@ -34,6 +34,7 @@ import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { getCargo, getCargoTags } from "~/lib/cargo.server";
+import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
@@ -184,6 +185,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showShareModal, setShowShareModal] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
 	const {
@@ -295,13 +297,16 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	// Calculate purchased count for Dock button state
 	const purchasedCount = list?.items?.filter((i) => i.isPurchased).length || 0;
 
-	const handleDockCargo = () => {
+	const handleDockCargo = async () => {
 		if (!list) return;
 		if (purchasedCount === 0) return;
 		if (
-			!confirm(
-				`Ready to transfer ${purchasedCount} purchased items to your Cargo?`,
-			)
+			!(await confirm({
+				title: `Ready to transfer ${purchasedCount} purchased items to your Cargo?`,
+				message: "Items will be added to your Cargo inventory.",
+				confirmLabel: "Dock Cargo",
+				variant: "default",
+			}))
 		)
 			return;
 

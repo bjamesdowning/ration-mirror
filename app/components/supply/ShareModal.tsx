@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { LinkIcon } from "~/components/icons/PageIcons";
+import { useConfirm } from "~/lib/confirm-context";
 
 interface ShareModalProps {
 	listId: string;
@@ -16,6 +17,7 @@ export function ShareModal({
 	onClose,
 	onUpgradeRequired,
 }: ShareModalProps) {
+	const { confirm } = useConfirm();
 	const fetcher = useFetcher();
 	const [copied, setCopied] = useState(false);
 	const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -52,11 +54,15 @@ export function ShareModal({
 		});
 	};
 
-	const handleRevokeLink = () => {
+	const handleRevokeLink = async () => {
 		if (
-			!window.confirm(
-				"Revoke this share link? Anyone with the link will no longer be able to view the list.",
-			)
+			!(await confirm({
+				title: "Revoke this share link?",
+				message:
+					"Anyone with the link will no longer be able to view the list.",
+				confirmLabel: "Revoke",
+				variant: "danger",
+			}))
 		) {
 			return;
 		}

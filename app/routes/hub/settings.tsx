@@ -16,6 +16,7 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { log } from "~/lib/logging.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
@@ -276,20 +277,19 @@ export async function action(args: Route.ActionArgs) {
 export default function Settings({ loaderData }: Route.ComponentProps) {
 	const { settings, members, isOwner, organizationId, userOrganizations } =
 		loaderData;
+	const { confirm } = useConfirm();
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
+	const purgeFetcher = useFetcher();
+	const deleteGroupFetcher = useFetcher();
 	const navigation = useNavigation();
+	const isPurging = purgeFetcher.state !== "idle";
+	const isDeletingGroup = deleteGroupFetcher.state !== "idle";
 	const isUpdatingTheme =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-theme";
 	const isUpdatingExpiration =
 		navigation.state === "submitting" &&
 		navigation.formData?.get("intent") === "update-expiration-alert";
-	const isPurging =
-		navigation.state === "submitting" &&
-		navigation.formAction === "/api/user/purge";
-	const isDeletingGroup =
-		navigation.state === "submitting" &&
-		navigation.formAction === "/api/groups/delete";
 
 	const isUpdatingDefaultGroup =
 		navigation.state === "submitting" &&
@@ -580,27 +580,29 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						inventory, ledger history, and user records. This cannot be undone.
 					</p>
 
-					<Form
-						action="/api/user/purge"
-						method="post"
-						onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+					<button
+						type="button"
+						disabled={isPurging}
+						onClick={async () => {
 							if (
-								!confirm(
-									"Are you sure you want to delete your account? This cannot be undone.",
-								)
-							) {
-								e.preventDefault();
-							}
+								!(await confirm({
+									title: "Are you sure you want to delete your account?",
+									message:
+										"This cannot be undone. All data will be permanently removed.",
+									confirmLabel: "Delete Account",
+									variant: "danger",
+								}))
+							)
+								return;
+							purgeFetcher.submit(null, {
+								method: "post",
+								action: "/api/user/purge",
+							});
 						}}
+						className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
 					>
-						<button
-							type="submit"
-							disabled={isPurging}
-							className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
-						>
-							{isPurging ? "Deleting..." : "Delete Account"}
-						</button>
-					</Form>
+						{isPurging ? "Deleting..." : "Delete Account"}
+					</button>
 
 					{isOwner && (
 						<div className="mt-8 pt-8 border-t border-danger/20">
@@ -612,32 +614,31 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								meals, lists). This cannot be undone.
 							</p>
 
-							<Form
-								action="/api/groups/delete"
-								method="post"
-								onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+							<button
+								type="button"
+								disabled={isDeletingGroup}
+								onClick={async () => {
 									if (
-										!confirm(
-											"Are you sure you want to delete this group? All shared data will be lost forever.",
-										)
-									) {
-										e.preventDefault();
-									}
+										!(await confirm({
+											title: "Are you sure you want to delete this group?",
+											message:
+												"All shared data will be lost forever. This cannot be undone.",
+											confirmLabel: "Delete Group",
+											variant: "danger",
+										}))
+									)
+										return;
+									const formData = new FormData();
+									formData.set("organizationId", organizationId);
+									deleteGroupFetcher.submit(formData, {
+										method: "post",
+										action: "/api/groups/delete",
+									});
 								}}
+								className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
 							>
-								<input
-									type="hidden"
-									name="organizationId"
-									value={organizationId}
-								/>
-								<button
-									type="submit"
-									disabled={isDeletingGroup}
-									className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50"
-								>
-									{isDeletingGroup ? "Deleting..." : "Delete Group"}
-								</button>
-							</Form>
+								{isDeletingGroup ? "Deleting..." : "Delete Group"}
+							</button>
 						</div>
 					)}
 				</section>
@@ -776,10 +777,18 @@ function ApiKeysSection({
 }
 
 function ApiKeyRow({ keyRecord }: { keyRecord: ApiKeyRow }) {
+	const { confirm } = useConfirm();
 	const revokeFetcher = useFetcher<{ success?: boolean; error?: string }>();
 
-	const handleRevoke = () => {
-		if (!confirm("Revoke this API key? It will stop working immediately."))
+	const handleRevoke = async () => {
+		if (
+			!(await confirm({
+				title: "Revoke this API key?",
+				message: "It will stop working immediately.",
+				confirmLabel: "Revoke",
+				variant: "danger",
+			}))
+		)
 			return;
 		revokeFetcher.submit(null, {
 			method: "delete",

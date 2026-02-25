@@ -1,12 +1,14 @@
 import { NavLink, Outlet, redirect } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { BottomNav, RailSidebar } from "~/components/shell";
+import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	checkCapacityWithTier,
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
+import { ConfirmProvider } from "~/lib/confirm-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import type { Route } from "./+types/hub";
@@ -110,39 +112,42 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function DashboardLayout() {
 	return (
-		<div className="flex min-h-screen bg-ceramic">
-			{/* Desktop Rail Sidebar */}
-			<RailSidebar />
+		<ConfirmProvider>
+			<div className="flex min-h-screen bg-ceramic">
+				{/* Desktop Rail Sidebar */}
+				<RailSidebar />
 
-			{/* Main Content Area */}
-			<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
-				{/* Global Top Bar (Group Context) */}
-				<header className="px-4 md:px-8 py-3 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-16">
-					<GroupSwitcher />
-					<NavLink
-						to="/hub/settings"
-						className={({ isActive }) =>
-							`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
-								isActive
-									? "text-hyper-green bg-hyper-green/10"
-									: "text-muted hover:text-carbon hover:bg-platinum/60"
-							}`
-						}
-						aria-label="System settings"
-					>
-						<SettingsIcon className="w-4 h-4" />
-						<span className="hidden sm:inline">System</span>
-					</NavLink>
-				</header>
+				{/* Main Content Area */}
+				<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
+					{/* Global Top Bar (Group Context) */}
+					<header className="px-4 md:px-8 py-3 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-16">
+						<GroupSwitcher />
+						<NavLink
+							to="/hub/settings"
+							className={({ isActive }) =>
+								`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+									isActive
+										? "text-hyper-green bg-hyper-green/10"
+										: "text-muted hover:text-carbon hover:bg-platinum/60"
+								}`
+							}
+							aria-label="System settings"
+						>
+							<SettingsIcon className="w-4 h-4" />
+							<span className="hidden sm:inline">System</span>
+						</NavLink>
+					</header>
 
-				{/* Content */}
-				<div className="px-4 md:px-8 py-6">
-					<Outlet />
-				</div>
-			</main>
+					{/* Content */}
+					<div className="px-4 md:px-8 py-6">
+						<Outlet />
+					</div>
+				</main>
 
-			{/* Mobile Bottom Nav */}
-			<BottomNav />
-		</div>
+				{/* Mobile Bottom Nav */}
+				<BottomNav />
+			</div>
+			<ConfirmDialog />
+		</ConfirmProvider>
 	);
 }

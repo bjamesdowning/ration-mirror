@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Link, useFetcher } from "react-router";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
+import { useConfirm } from "~/lib/confirm-context";
 import type { MealMatchResult } from "~/lib/matching.server";
 import { CheckIcon, MealIcon, RecipeIcon } from "../icons/HubIcons";
 
@@ -41,6 +42,7 @@ function getMatchBgColor(percentage: number): string {
 
 export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 	const hasItems = meals.length > 0;
+	const { confirm } = useConfirm();
 	const fetcher = useFetcher<CookFetcherData>();
 	const successToast = useToast({ duration: 4000 });
 	const errorToast = useToast({ duration: 5000 });
@@ -143,19 +145,29 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 
 								{/* Cook Now — only when makeable; stops propagation so Link doesn't navigate */}
 								{result.canMake && (
-									<fetcher.Form
+									<form
 										method="post"
 										action={`/api/meals/${result.meal.id}/cook`}
 										className="mt-3 pt-3 border-t border-carbon/5"
 										onClick={(e) => e.stopPropagation()}
-										onSubmit={(e) => {
+										onKeyDown={(e) => e.stopPropagation()}
+										onSubmit={async (e) => {
+											e.preventDefault();
 											if (
-												!confirm(
-													`Cook ${result.meal.name} for ${servingLabel}? This will deduct ingredients from your Cargo.`,
-												)
-											) {
-												e.preventDefault();
-											}
+												!(await confirm({
+													title: `Cook ${result.meal.name} for ${servingLabel}?`,
+													message:
+														"This will deduct ingredients from your Cargo.",
+													confirmLabel: "Cook Now",
+													variant: "warning",
+												}))
+											)
+												return;
+											const form = e.currentTarget;
+											fetcher.submit(new FormData(form), {
+												method: "POST",
+												action: form.action,
+											});
 										}}
 									>
 										<button
@@ -173,7 +185,7 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 												</>
 											)}
 										</button>
-									</fetcher.Form>
+									</form>
 								)}
 							</Link>
 						);

@@ -117,9 +117,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	};
 
 	const addFetcher = useFetcher();
-	const consumeFetcher = useFetcher();
+	const consumeFetcher = useFetcher<{
+		consumed?: number;
+		error?: string;
+	}>();
 	const revalidator = useRevalidator();
 	const consumeToast = useToast({ duration: 4000 });
+	const consumeErrorToast = useToast({ duration: 6000 });
 
 	const handleConsume = (entryIds: string[]) => {
 		if (entryIds.length === 0) return;
@@ -157,20 +161,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	);
 
 	useEffect(() => {
-		if (
-			consumeFetcher.state === "idle" &&
-			consumeFetcher.data &&
-			typeof (consumeFetcher.data as { consumed?: number }).consumed ===
-				"number"
-		) {
+		if (consumeFetcher.state !== "idle" || !consumeFetcher.data) return;
+		const data = consumeFetcher.data;
+		if (typeof data.consumed === "number") {
 			revalidator.revalidate();
 			consumeToast.show();
+		} else if (data.error) {
+			consumeErrorToast.show();
 		}
 	}, [
 		consumeFetcher.state,
 		consumeFetcher.data,
 		revalidator.revalidate,
 		consumeToast.show,
+		consumeErrorToast.show,
 	]);
 
 	const handleMealSelect = (meal: MealForPicker, servingsOverride?: number) => {
@@ -339,6 +343,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					title="Meals consumed"
 					description="Ingredients deducted from Cargo."
 					onDismiss={consumeToast.hide}
+				/>
+			)}
+
+			{/* Consume error toast (e.g. insufficient Cargo) */}
+			{consumeErrorToast.isOpen && consumeFetcher.data?.error && (
+				<Toast
+					variant="info"
+					position="bottom-right"
+					title="Couldn't deduct ingredients"
+					description={consumeFetcher.data.error.replace(
+						/^Insufficient Cargo for:\s*/i,
+						"You don't have enough: ",
+					)}
+					onDismiss={consumeErrorToast.hide}
 				/>
 			)}
 

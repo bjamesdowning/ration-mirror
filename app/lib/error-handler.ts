@@ -46,6 +46,17 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
+	// Insufficient Cargo: cook/deduct failed — return 422 so clients can show a clear message
+	if (
+		error instanceof Error &&
+		error.message.startsWith("Insufficient Cargo for:")
+	) {
+		return data(
+			{ error: error.message, code: "insufficient_cargo" as const },
+			{ status: 422 },
+		);
+	}
+
 	const message =
 		error instanceof Error ? error.message : "Internal Server Error";
 	log.error("[API] Unhandled error", error);

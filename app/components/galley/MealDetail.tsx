@@ -145,9 +145,19 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		);
 	};
 
-	const fetcher = useFetcher<{ result: { cooked: boolean } }>();
+	const fetcher = useFetcher<{
+		result?: { cooked: boolean };
+		error?: string;
+	}>();
 	const isCooking = fetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
+	const cookError =
+		fetcher.state === "idle" && fetcher.data?.error
+			? fetcher.data.error.replace(
+					/^Insufficient Cargo for:\s*/i,
+					"You don't have enough: ",
+				)
+			: null;
 
 	const handleServingsChange = (next: number) => {
 		const clamped = Math.max(MIN_SERVINGS, Math.min(MAX_SERVINGS, next));
@@ -375,6 +385,21 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 					</ul>
 
 					{/* Cook Action */}
+					{cookError && (
+						<div
+							role="alert"
+							className="mb-4 rounded-xl border border-warning/50 bg-warning/5 px-4 py-3 text-sm text-carbon"
+						>
+							<p className="font-medium text-carbon">
+								We couldn't deduct ingredients from Cargo.
+							</p>
+							<p className="mt-1 text-muted">{cookError}</p>
+							<p className="mt-2 text-xs text-muted">
+								Update the quantities above or add items to Cargo, then try
+								again.
+							</p>
+						</div>
+					)}
 					<fetcher.Form
 						method="post"
 						action={`/api/meals/${meal.id}/cook`}
@@ -416,7 +441,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 								Cargo updated successfully
 							</p>
 						)}
-						{!isCooked && (
+						{!isCooked && !cookError && (
 							<p className="text-xs text-center mt-2 text-muted">
 								{desiredServings === baseServings
 									? "This will deduct ingredients from Cargo"

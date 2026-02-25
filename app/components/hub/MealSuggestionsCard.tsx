@@ -226,8 +226,13 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 				<Toast
 					variant="info"
 					position="bottom-right"
-					title="Could not cook"
-					description={errorMessageRef.current}
+					title="Couldn't deduct ingredients"
+					description={
+						errorMessageRef.current.replace(
+							/^Insufficient Cargo for:\s*/i,
+							"You don't have enough: ",
+						) || errorMessageRef.current
+					}
 					onDismiss={errorToast.hide}
 				/>
 			)}

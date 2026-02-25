@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	data,
 	Form,
@@ -14,6 +14,7 @@ import { CreditShop } from "~/components/hub/CreditShop";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
+import { API_RATE_LIMITS, V1_ENDPOINTS } from "~/lib/api-docs";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { useConfirm } from "~/lib/confirm-context";
@@ -109,6 +110,7 @@ export async function loader(args: Route.LoaderArgs) {
 			tierExpiresAt: user.tierExpiresAt ?? null,
 			welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 			apiKeys,
+			origin: url.origin,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -359,6 +361,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				<ApiKeysSection
 					apiKeys={loaderData.apiKeys ?? []}
 					organizationName={loaderData.organizationName}
+					origin={loaderData.origin ?? ""}
 				/>
 
 				{/* Administration (admin only) */}
@@ -659,10 +662,25 @@ type ApiKeyRow = {
 function ApiKeysSection({
 	apiKeys,
 	organizationName,
+	origin,
 }: {
 	apiKeys: ApiKeyRow[];
 	organizationName: string;
+	origin: string;
 }) {
+	const [apiRefExpanded, setApiRefExpanded] = useState(false);
+	const apiRefRef = useRef<HTMLDivElement>(null);
+
+	// Expand API Reference when arriving via #api
+	useEffect(() => {
+		if (typeof window !== "undefined" && window.location.hash === "#api") {
+			setApiRefExpanded(true);
+			queueMicrotask(() => {
+				apiRefRef.current?.scrollIntoView({ behavior: "smooth" });
+			});
+		}
+	}, []);
+
 	const createFetcher = useFetcher<{
 		key?: string;
 		prefix?: string;
@@ -690,8 +708,8 @@ function ApiKeysSection({
 		<section className="glass-panel rounded-xl p-6">
 			<h2 className="text-xl font-bold mb-2 text-carbon">API Keys</h2>
 			<p className="text-sm text-muted mb-4">
-				Create keys to access Cargo export/import programmatically. Keys are
-				scoped to{" "}
+				Create keys to access Inventory, Galley, and Supply import/export via
+				REST API. Keys are scoped to{" "}
 				<span className="font-medium text-carbon">{organizationName}</span>. Use
 				the key in the{" "}
 				<code className="text-xs bg-platinum/50 px-1 rounded">
@@ -770,6 +788,120 @@ function ApiKeysSection({
 					</p>
 				) : (
 					apiKeys.map((k) => <ApiKeyRow key={k.id} keyRecord={k} />)
+				)}
+			</div>
+
+			{/* Expandable API Reference */}
+			<div
+				id="api"
+				ref={apiRefRef}
+				className="mt-6 pt-6 border-t border-platinum"
+			>
+				<button
+					type="button"
+					onClick={() => setApiRefExpanded(!apiRefExpanded)}
+					className="flex items-center gap-2 text-sm font-medium text-carbon hover:text-hyper-green transition-colors"
+				>
+					<svg
+						className={`w-4 h-4 transition-transform ${apiRefExpanded ? "rotate-90" : ""}`}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+						aria-hidden
+					>
+						<title>Expand</title>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M9 5l7 7-7 7"
+						/>
+					</svg>
+					{apiRefExpanded ? "Hide API reference" : "View API reference"}
+				</button>
+				{apiRefExpanded && (
+					<div className="mt-4 space-y-4 text-sm">
+						<div>
+							<h4 className="font-semibold text-carbon mb-2">Authentication</h4>
+							<p className="text-muted mb-2">
+								Send your key in the{" "}
+								<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+									X-Api-Key
+								</code>{" "}
+								header or{" "}
+								<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+									Authorization: Bearer &lt;key&gt;
+								</code>
+							</p>
+						</div>
+						<div>
+							<h4 className="font-semibold text-carbon mb-2">Base URL</h4>
+							<code className="block text-xs bg-platinum/50 px-3 py-2 rounded-lg font-mono text-carbon break-all">
+								{origin || "https://yoursite.com"}/api/v1
+							</code>
+						</div>
+						<div>
+							<h4 className="font-semibold text-carbon mb-2">Rate limits</h4>
+							<p className="text-muted">
+								Exports: {API_RATE_LIMITS.export}. Imports:{" "}
+								{API_RATE_LIMITS.import}.
+							</p>
+						</div>
+						<div>
+							<h4 className="font-semibold text-carbon mb-2">Endpoints</h4>
+							<div className="overflow-x-auto rounded-lg border border-platinum">
+								<table className="w-full text-left text-xs">
+									<thead>
+										<tr className="bg-platinum/50">
+											<th className="px-3 py-2 font-semibold text-carbon">
+												Endpoint
+											</th>
+											<th className="px-3 py-2 font-semibold text-carbon">
+												Method
+											</th>
+											<th className="px-3 py-2 font-semibold text-carbon">
+												Scope
+											</th>
+											<th className="px-3 py-2 font-semibold text-carbon">
+												Format
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{V1_ENDPOINTS.map((ep) => (
+											<tr key={ep.path} className="border-t border-platinum/50">
+												<td className="px-3 py-2 font-mono text-carbon">
+													{ep.path}
+												</td>
+												<td className="px-3 py-2 text-muted">{ep.method}</td>
+												<td className="px-3 py-2 text-muted">{ep.scope}</td>
+												<td className="px-3 py-2 text-muted">{ep.format}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						</div>
+						<div>
+							<h4 className="font-semibold text-carbon mb-2">
+								Example: Export inventory
+							</h4>
+							<pre className="text-xs bg-carbon text-platinum p-3 rounded-lg overflow-x-auto font-mono">
+								{`curl -H "X-Api-Key: YOUR_KEY" ${origin || "https://yoursite.com"}/api/v1/inventory/export`}
+							</pre>
+						</div>
+						<div className="text-xs text-muted">
+							Inventory & supply use CSV. Galley uses JSON. See in-app export
+							for format details.
+						</div>
+						<button
+							type="button"
+							onClick={() => setApiRefExpanded(false)}
+							className="text-xs font-medium text-hyper-green hover:underline"
+						>
+							Close
+						</button>
+					</div>
 				)}
 			</div>
 		</section>

@@ -196,6 +196,7 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 
 	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
+		const form = e.currentTarget;
 		const servingLabel =
 			desiredServings === 1 ? "1 serving" : `${desiredServings} servings`;
 		if (
@@ -207,7 +208,6 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 			}))
 		)
 			return;
-		const form = e.currentTarget;
 		fetcher.submit(new FormData(form), {
 			method: "POST",
 			action: form.action,

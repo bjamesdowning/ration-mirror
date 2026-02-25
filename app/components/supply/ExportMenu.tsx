@@ -3,6 +3,7 @@ import {
 	DocumentEditIcon,
 	DocumentTextIcon,
 } from "~/components/icons/PageIcons";
+import { ApiHint } from "~/components/shell/ApiHint";
 
 interface ExportMenuProps {
 	listId: string;
@@ -91,6 +92,7 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 								<div className="text-xs text-muted">For notes apps</div>
 							</div>
 						</button>
+						<ApiHint variant="menu-item" onClick={() => setIsOpen(false)} />
 						<a
 							href="https://www.walmart.com/cp/grocery/976759"
 							target="_blank"

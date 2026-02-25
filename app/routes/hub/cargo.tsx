@@ -23,6 +23,7 @@ import {
 	type CameraInputHandle,
 } from "~/components/scanner/CameraInput";
 import { ScanIntroModal } from "~/components/scanner/ScanIntroModal";
+import { ApiHint } from "~/components/shell/ApiHint";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -476,6 +477,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 									<ExportIcon className="w-4 h-4" />
 									Export CSV
 								</a>
+								<ApiHint variant="icon" />
 							</div>
 						}
 						quickAddPlaceholder="Add Item"

@@ -28,6 +28,7 @@ import {
 	SearchIcon,
 	SparkleIcon,
 } from "~/components/icons/PageIcons";
+import { ApiHint } from "~/components/shell/ApiHint";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -373,6 +374,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<ExportIcon className="w-4 h-4" />
 									Export JSON
 								</a>
+								<ApiHint variant="icon" />
 								<button
 									type="button"
 									onClick={() => importRef.current?.open()}

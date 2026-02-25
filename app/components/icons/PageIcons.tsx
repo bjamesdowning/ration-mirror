@@ -454,6 +454,27 @@ export function CalendarIcon({ className = "w-5 h-5" }: IconProps) {
 	);
 }
 
+/** Code/API symbol — use for developer/API hints. */
+export function CodeIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-label="API"
+		>
+			<title>API</title>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+			/>
+		</svg>
+	);
+}
+
 export const NAV_ICONS: Record<string, ComponentType<IconProps>> = {
 	home: HomeIcon,
 	package: PackageIcon,

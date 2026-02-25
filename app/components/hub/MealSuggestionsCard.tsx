@@ -153,6 +153,7 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 										onKeyDown={(e) => e.stopPropagation()}
 										onSubmit={async (e) => {
 											e.preventDefault();
+											const form = e.currentTarget;
 											if (
 												!(await confirm({
 													title: `Cook ${result.meal.name} for ${servingLabel}?`,
@@ -163,7 +164,6 @@ export function MealSuggestionsCard({ meals }: MealSuggestionsCardProps) {
 												}))
 											)
 												return;
-											const form = e.currentTarget;
 											fetcher.submit(new FormData(form), {
 												method: "POST",
 												action: form.action,

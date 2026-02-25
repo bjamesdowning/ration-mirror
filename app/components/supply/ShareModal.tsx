@@ -114,10 +114,27 @@ export function ShareModal({
 
 				{/* Header */}
 				<h2 className="text-xl font-bold text-carbon mb-2">Share List</h2>
-				<p className="text-sm text-muted mb-6">
+				<p className="text-sm text-muted mb-4">
 					Generate a shareable link for this supply list. Anyone with the link
-					can view (but not edit) your list.
+					can view it and collaborate.
 				</p>
+				<div className="text-sm text-muted mb-6 space-y-2 rounded-lg bg-platinum/50 p-3">
+					<p className="font-medium text-carbon">What recipients can do:</p>
+					<ul className="space-y-1 text-xs">
+						<li className="flex items-start gap-2">
+							<span className="text-hyper-green mt-0.5">✓</span>
+							<span>
+								Check off items as they shop — changes sync back to your list
+							</span>
+						</li>
+						<li className="flex items-start gap-2">
+							<span className="text-muted mt-0.5">✕</span>
+							<span>
+								Cannot dock new items in cargo — only you can add items
+							</span>
+						</li>
+					</ul>
+				</div>
 
 				{/* Content */}
 				{shareUrl ? (

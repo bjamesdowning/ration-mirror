@@ -63,11 +63,18 @@ export default [
 	// API - Cargo (static paths before :id)
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
+
+	// API - Galley
+	route("api/galley/export", "routes/api/galley.export.ts"),
+	route("api/galley/import", "routes/api/galley.import.ts"),
 	route("api/cargo/:id", "routes/api/cargo.$id.ts"),
 
 	// API - v1 programmatic (API key auth)
 	route("api/v1/inventory/export", "routes/api/v1.inventory.export.ts"),
 	route("api/v1/inventory/import", "routes/api/v1.inventory.import.ts"),
+	route("api/v1/galley/export", "routes/api/v1.galley.export.ts"),
+	route("api/v1/galley/import", "routes/api/v1.galley.import.ts"),
+	route("api/v1/supply/export", "routes/api/v1.supply.export.ts"),
 
 	// API - Meal Plans
 	route("api/meal-plans", "routes/api/meal-plans.ts"),

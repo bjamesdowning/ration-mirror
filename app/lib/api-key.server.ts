@@ -96,7 +96,14 @@ export async function verifyApiKey(
 	};
 }
 
-const INVENTORY_SCOPE = "inventory";
+/** Supported API key scopes for programmatic access. */
+export const API_SCOPES = {
+	inventory: "inventory",
+	galley: "galley",
+	supply: "supply",
+} as const;
+
+const INVENTORY_SCOPE = API_SCOPES.inventory;
 
 /**
  * Require API key auth and return organizationId for RLS.

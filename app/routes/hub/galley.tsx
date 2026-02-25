@@ -2,6 +2,10 @@ import { useMemo, useRef, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
 import { AddTypeChoice } from "~/components/galley/AddTypeChoice";
 import {
+	GalleyImportButton,
+	type GalleyImportButtonHandle,
+} from "~/components/galley/GalleyImportButton";
+import {
 	GenerateMealButton,
 	type GenerateMealButtonHandle,
 } from "~/components/galley/GenerateMealButton";
@@ -17,6 +21,8 @@ import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	ChefHatIcon,
 	CloseIcon,
+	ExportIcon,
+	ImportIcon,
 	LinkIcon,
 	PlusIcon,
 	SearchIcon,
@@ -129,6 +135,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 	const generateRef = useRef<GenerateMealButtonHandle>(null);
 	const importRef = useRef<ImportRecipeButtonHandle>(null);
+	const galleyImportRef = useRef<GalleyImportButtonHandle>(null);
 	const {
 		activeDomain,
 		currentTag,
@@ -187,9 +194,23 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				addStep !== null ? setAddStep(null) : setAddStep("choice"),
 		},
 		{
-			id: "import",
+			id: "import-json",
+			icon: <ImportIcon />,
+			label: "Import JSON",
+			onClick: () => galleyImportRef.current?.openImport(),
+		},
+		{
+			id: "export",
+			icon: <ExportIcon />,
+			label: "Export",
+			onClick: () => {
+				window.location.href = "/api/galley/export";
+			},
+		},
+		{
+			id: "import-url",
 			icon: <LinkIcon />,
-			label: "Import",
+			label: "Import URL",
 			variant: "primary",
 			onClick: () => importRef.current?.open(),
 		},
@@ -269,6 +290,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				credits={dashboardData?.balance}
 				costPerGenerate={dashboardData?.aiCosts?.MEAL_GENERATE}
 			/>
+			<GalleyImportButton
+				ref={galleyImportRef}
+				onImportComplete={() => {}}
+				className="hidden"
+			/>
 			<ImportRecipeButton
 				ref={importRef}
 				className="hidden"
@@ -330,14 +356,32 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							</button>
 						}
 						secondaryAction={
-							<button
-								type="button"
-								onClick={() => importRef.current?.open()}
-								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
-							>
-								<LinkIcon className="w-4 h-4" />
-								Import URL
-							</button>
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									onClick={() => galleyImportRef.current?.openImport()}
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									<ImportIcon className="w-4 h-4" />
+									Import JSON
+								</button>
+								<a
+									href="/api/galley/export"
+									download="ration-galley.json"
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									<ExportIcon className="w-4 h-4" />
+									Export JSON
+								</a>
+								<button
+									type="button"
+									onClick={() => importRef.current?.open()}
+									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+								>
+									<LinkIcon className="w-4 h-4" />
+									Import URL
+								</button>
+							</div>
 						}
 						quickAddPlaceholder="Add"
 						showQuickAdd={addStep !== null}

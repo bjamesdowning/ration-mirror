@@ -1,5 +1,6 @@
 import type { cargo, supplyItem, supplyList } from "../db/schema";
 import { DOMAIN_LABELS } from "./domain";
+import type { GalleyManifest } from "./schemas/galley-manifest";
 
 type CargoItem = typeof cargo.$inferSelect;
 
@@ -51,6 +52,44 @@ export function exportCargoAsCsv(items: CargoItem[]): string {
 		].map((v) => escapeCsvCell(String(v ?? "")));
 	});
 	return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+/**
+ * Export galley manifest as JSON for round-trip import.
+ */
+export function exportGalleyAsJson(manifest: GalleyManifest): string {
+	return JSON.stringify(manifest, null, 2);
+}
+
+/**
+ * Export supply list as CSV for programmatic use (export-only, no import).
+ * Columns: id, list_id, name, quantity, unit, domain, is_purchased, source_meal_id
+ */
+export function exportSupplyAsCsv(list: SupplyListWithItems): string {
+	const headers = [
+		"id",
+		"list_id",
+		"name",
+		"quantity",
+		"unit",
+		"domain",
+		"is_purchased",
+		"source_meal_id",
+	];
+	const rows = list.items.map((item) => [
+		item.id,
+		item.listId,
+		item.name,
+		String(item.quantity),
+		item.unit,
+		item.domain ?? "food",
+		item.isPurchased ? "true" : "false",
+		item.sourceMealId ?? "",
+	]);
+	return [
+		headers.join(","),
+		...rows.map((r) => r.map((v) => escapeCsvCell(String(v ?? ""))).join(",")),
+	].join("\n");
 }
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {

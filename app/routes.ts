@@ -108,6 +108,14 @@ export default [
 		"api/supply-lists/:id/complete",
 		"routes/api/supply-lists.$id.complete.ts",
 	),
+	route(
+		"api/supply-lists/:id/snoozes",
+		"routes/api/supply-lists.$id.snoozes.ts",
+	),
+	route(
+		"api/supply-lists/:id/snoozes/:snoozeId",
+		"routes/api/supply-lists.$id.snoozes.$snoozeId.ts",
+	),
 
 	// API - Other
 	route("api/scan", "routes/api/scan.tsx"),

@@ -754,6 +754,66 @@ export async function snoozeSupplyItem(
 	return { snoozed: true, snoozedUntil };
 }
 
+export type ActiveSnooze = {
+	id: string;
+	normalizedName: string;
+	domain: string;
+	snoozedUntil: Date;
+	createdAt: Date;
+};
+
+/**
+ * Returns all active (non-expired) snoozes for the organization.
+ * Ordered by snoozedUntil ascending.
+ */
+export async function getActiveSnoozes(
+	db: D1Database,
+	organizationId: string,
+): Promise<ActiveSnooze[]> {
+	const d1 = drizzle(db);
+	const now = new Date();
+	const rows = await d1
+		.select({
+			id: supplySnooze.id,
+			normalizedName: supplySnooze.normalizedName,
+			domain: supplySnooze.domain,
+			snoozedUntil: supplySnooze.snoozedUntil,
+			createdAt: supplySnooze.createdAt,
+		})
+		.from(supplySnooze)
+		.where(
+			and(
+				eq(supplySnooze.organizationId, organizationId),
+				gt(supplySnooze.snoozedUntil, now),
+			),
+		)
+		.orderBy(supplySnooze.snoozedUntil);
+
+	return rows as ActiveSnooze[];
+}
+
+/**
+ * Unsnoozes (early expires) a supply item by deleting its snooze row.
+ * The item will be re-added on the next sync.
+ */
+export async function unsnoozeSupplyItem(
+	db: D1Database,
+	organizationId: string,
+	snoozeId: string,
+) {
+	const d1 = drizzle(db);
+	await d1
+		.delete(supplySnooze)
+		.where(
+			and(
+				eq(supplySnooze.id, snoozeId),
+				eq(supplySnooze.organizationId, organizationId),
+			),
+		);
+
+	return { unsnoozed: true };
+}
+
 /**
  * Returns a Set of "normalizedName__domain" keys that are currently snoozed for the org.
  * Call once at sync start to avoid N queries.

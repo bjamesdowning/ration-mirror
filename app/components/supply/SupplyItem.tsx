@@ -1,5 +1,5 @@
 import { Clock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import type { supplyItem } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
@@ -36,8 +36,12 @@ export function SupplyItem({
 	onSnooze,
 }: SupplyItemProps) {
 	const { confirm } = useConfirm();
-	const fetcher = useFetcher();
+	const fetcher = useFetcher<{
+		snoozed?: boolean;
+		deleted?: boolean;
+	}>();
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const pendingMutation = useRef<"snooze" | "delete" | null>(null);
 
 	const isPending = fetcher.state !== "idle";
 	const optimisticPurchased =
@@ -58,6 +62,7 @@ export function SupplyItem({
 	};
 
 	const handleSnooze = (duration: "24h" | "3d" | "1w") => {
+		pendingMutation.current = "snooze";
 		fetcher.submit(
 			{ duration },
 			{
@@ -67,7 +72,6 @@ export function SupplyItem({
 			},
 		);
 		setIsMenuOpen(false);
-		onSnooze?.();
 	};
 
 	const handleDelete = async () => {
@@ -85,9 +89,23 @@ export function SupplyItem({
 			method: "DELETE",
 			action: `/api/supply-lists/${listId}/items/${item.id}`,
 		});
+		pendingMutation.current = "delete";
 		setIsMenuOpen(false);
-		onDelete?.();
 	};
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || !pendingMutation.current) return;
+
+		if (pendingMutation.current === "snooze" && fetcher.data?.snoozed) {
+			onSnooze?.();
+		}
+
+		if (pendingMutation.current === "delete" && fetcher.data?.deleted) {
+			onDelete?.();
+		}
+
+		pendingMutation.current = null;
+	}, [fetcher.state, fetcher.data, onDelete, onSnooze]);
 
 	return (
 		<div

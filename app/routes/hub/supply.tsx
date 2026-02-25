@@ -28,6 +28,7 @@ import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
 import { ShareModal } from "~/components/supply/ShareModal";
+import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
@@ -42,6 +43,7 @@ import { ListIdSchema } from "~/lib/schemas/supply";
 import {
 	completeSupplyList,
 	createSupplyListFromSelectedMeals,
+	getActiveSnoozes,
 	getSupplyList,
 } from "~/lib/supply.server";
 import {
@@ -55,14 +57,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	// Light loader: ensure list exists and load current state. Heavy sync (createSupplyListFromSelectedMeals)
 	// runs only via action (Update list button or background sync) to avoid Worker resource limits in production.
-	const [list, activeSelections, cargoItems, availableTags, manifestWeekMeals] =
-		await Promise.all([
-			getSupplyList(context.cloudflare.env.DB, groupId),
-			getActiveMealSelections(context.cloudflare.env.DB, groupId),
-			getCargo(context.cloudflare.env.DB, groupId),
-			getCargoTags(context.cloudflare.env.DB, groupId),
-			getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
-		]);
+	const [
+		list,
+		activeSelections,
+		cargoItems,
+		availableTags,
+		manifestWeekMeals,
+		snoozes,
+	] = await Promise.all([
+		getSupplyList(context.cloudflare.env.DB, groupId),
+		getActiveMealSelections(context.cloudflare.env.DB, groupId),
+		getCargo(context.cloudflare.env.DB, groupId),
+		getCargoTags(context.cloudflare.env.DB, groupId),
+		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
+		getActiveSnoozes(context.cloudflare.env.DB, groupId),
+	]);
 
 	return {
 		list,
@@ -70,6 +79,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		manifestWeekMealCount: manifestWeekMeals.length,
 		availableTags,
 		cargo: cargoItems,
+		snoozes,
 	};
 }
 
@@ -171,6 +181,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		manifestWeekMealCount,
 		availableTags,
 		cargo,
+		snoozes = [],
 	} = loaderData;
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		capacity?: {
@@ -516,6 +527,15 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							filterDomain="all"
 							filterSearch=""
 							onRefresh={() => revalidator.revalidate()}
+						/>
+					)}
+
+					{/* Snoozed Items (collapsible) */}
+					{snoozes.length > 0 && (
+						<SnoozedItemsPanel
+							snoozes={snoozes}
+							listId={list.id}
+							onUnsnooze={() => revalidator.revalidate()}
 						/>
 					)}
 				</div>

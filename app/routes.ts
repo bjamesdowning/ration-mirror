@@ -74,6 +74,10 @@ export default [
 	route("api/meal-plans/:id", "routes/api/meal-plans.$id.ts"),
 	route("api/meal-plans/:id/entries", "routes/api/meal-plans.$id.entries.ts"),
 	route(
+		"api/meal-plans/:id/entries/consume",
+		"routes/api/meal-plans.$id.entries.consume.ts",
+	),
+	route(
 		"api/meal-plans/:id/entries/:entryId",
 		"routes/api/meal-plans.$id.entries.$entryId.ts",
 	),

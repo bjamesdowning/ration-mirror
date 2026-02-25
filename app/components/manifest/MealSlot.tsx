@@ -10,6 +10,8 @@ interface MealSlotProps {
 	entries: MealPlanEntryWithMeal[];
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
+	onConsume?: (entryId: string) => void;
+	isConsuming?: boolean;
 	readOnly?: boolean;
 	compact?: boolean;
 }
@@ -20,6 +22,8 @@ export function MealSlot({
 	entries,
 	planId,
 	onAdd,
+	onConsume,
+	isConsuming = false,
 	readOnly = false,
 	compact = false,
 }: MealSlotProps) {
@@ -49,6 +53,8 @@ export function MealSlot({
 								entry={entry}
 								planId={planId}
 								readOnly={readOnly}
+								onConsume={onConsume}
+								isConsuming={isConsuming}
 							/>
 						))}
 						{!readOnly && (
@@ -81,6 +87,8 @@ export function MealSlot({
 						entry={entry}
 						planId={planId}
 						readOnly={readOnly}
+						onConsume={onConsume}
+						isConsuming={isConsuming}
 					/>
 				))}
 			</div>

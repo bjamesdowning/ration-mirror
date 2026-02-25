@@ -511,6 +511,7 @@ export const mealPlanEntry = sqliteTable(
 		orderIndex: integer("order_index").notNull().default(0),
 		servingsOverride: integer("servings_override"),
 		notes: text("notes"),
+		consumedAt: integer("consumed_at", { mode: "timestamp" }),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

@@ -51,3 +51,7 @@ export const WeekQuerySchema = z.object({
 export const EntryIdParamSchema = z.object({
 	entryId: z.string().uuid(),
 });
+
+export const ConsumeEntriesRequestSchema = z.object({
+	entryIds: z.array(z.string().uuid()).min(1).max(50),
+});

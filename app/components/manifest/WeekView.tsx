@@ -8,6 +8,8 @@ interface WeekViewProps {
 	entries: MealPlanEntryWithMeal[];
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
+	onConsume?: (entryId: string) => void;
+	isConsuming?: boolean;
 	today: string;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
@@ -20,6 +22,8 @@ export function WeekView({
 	entries,
 	planId,
 	onAdd,
+	onConsume,
+	isConsuming = false,
 	today,
 	showSnackSlot = true,
 	readOnly = false,
@@ -74,6 +78,8 @@ export function WeekView({
 									entries={dayEntries}
 									planId={planId}
 									onAdd={onAdd}
+									onConsume={onConsume}
+									isConsuming={isConsuming}
 									readOnly={readOnly}
 									compact
 								/>

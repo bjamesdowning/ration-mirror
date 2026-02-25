@@ -1,7 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
-import { useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
-import { CalendarIcon, ShareIcon } from "~/components/icons/PageIcons";
+import { useEffect, useMemo, useState } from "react";
+import { useFetcher, useRevalidator, useSearchParams } from "react-router";
+import {
+	CalendarIcon,
+	ConsumeIcon,
+	ShareIcon,
+} from "~/components/icons/PageIcons";
 import { DayTab } from "~/components/manifest/DayTab";
 import { DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
@@ -9,8 +13,11 @@ import { MealPicker } from "~/components/manifest/MealPicker";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import { WeekNavigator } from "~/components/manifest/WeekNavigator";
 import { WeekView } from "~/components/manifest/WeekView";
+import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
+import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
+import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
 import type { MealForPicker } from "~/lib/manifest.server";
 import {
@@ -110,6 +117,61 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	};
 
 	const addFetcher = useFetcher();
+	const consumeFetcher = useFetcher();
+	const revalidator = useRevalidator();
+	const consumeToast = useToast({ duration: 4000 });
+
+	const handleConsume = (entryIds: string[]) => {
+		if (entryIds.length === 0) return;
+		consumeFetcher.submit(JSON.stringify({ entryIds }), {
+			method: "POST",
+			action: `/api/meal-plans/${plan.id}/entries/consume`,
+			encType: "application/json",
+		});
+	};
+
+	const handleConsumeSingle = (entryId: string) => {
+		handleConsume([entryId]);
+	};
+
+	const handleConsumeAll = (date: string) => {
+		const unconsumed = entries.filter((e) => e.date === date && !e.consumedAt);
+		const ids = unconsumed.map((e) => e.id);
+		if (ids.length === 0) return;
+		if (
+			!confirm(
+				`Consume all ${ids.length} meal${ids.length === 1 ? "" : "s"} for this day? Ingredients will be deducted from Cargo.`,
+			)
+		)
+			return;
+		handleConsume(ids);
+	};
+
+	const unconsumedForActiveDay = useMemo(
+		() => entries.filter((e) => e.date === activeDay && !e.consumedAt).length,
+		[entries, activeDay],
+	);
+	const unconsumedForToday = useMemo(
+		() => entries.filter((e) => e.date === today && !e.consumedAt).length,
+		[entries, today],
+	);
+
+	useEffect(() => {
+		if (
+			consumeFetcher.state === "idle" &&
+			consumeFetcher.data &&
+			typeof (consumeFetcher.data as { consumed?: number }).consumed ===
+				"number"
+		) {
+			revalidator.revalidate();
+			consumeToast.show();
+		}
+	}, [
+		consumeFetcher.state,
+		consumeFetcher.data,
+		revalidator.revalidate,
+		consumeToast.show,
+	]);
 
 	const handleMealSelect = (meal: MealForPicker, servingsOverride?: number) => {
 		setPickerOpen(false);
@@ -157,6 +219,18 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						</span>
 					</div>
 					<div className="flex items-center gap-2">
+						{unconsumedForToday > 0 && (
+							<button
+								type="button"
+								onClick={() => handleConsumeAll(today)}
+								disabled={consumeFetcher.state !== "idle"}
+								className="flex items-center justify-center w-10 h-10 bg-hyper-green text-carbon rounded-lg hover:shadow-glow-sm transition-all font-medium disabled:opacity-50"
+								title="Consume all meals for today (deduct from Cargo)"
+								aria-label="Consume all meals for today"
+							>
+								<ConsumeIcon className="w-5 h-5" />
+							</button>
+						)}
 						<WeekNavigator
 							currentWeekStart={currentWeekStart}
 							weekStart={weekStartPref}
@@ -190,6 +264,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							entries={entries}
 							planId={plan.id}
 							onAdd={handleAdd}
+							onConsume={handleConsumeSingle}
+							isConsuming={consumeFetcher.state !== "idle"}
 							showSnackSlot={showSnackSlot}
 						/>
 					)}
@@ -208,6 +284,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					entries={entries}
 					planId={plan.id}
 					onAdd={handleAdd}
+					onConsume={handleConsumeSingle}
+					isConsuming={consumeFetcher.state !== "idle"}
 					today={today}
 					showSnackSlot={showSnackSlot}
 				/>
@@ -234,6 +312,33 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						setShareOpen(false);
 						setShowUpgradePrompt(true);
 					}}
+				/>
+			)}
+
+			{/* Mobile FAB: Consume all for active day (icon only per spec) */}
+			{hasEntries && unconsumedForActiveDay > 0 && (
+				<FloatingActionBar
+					actions={[
+						{
+							id: "consume-all",
+							icon: <ConsumeIcon className="w-5 h-5" />,
+							label: "Consume all meals",
+							primary: true,
+							onClick: () => handleConsumeAll(activeDay),
+							disabled: consumeFetcher.state !== "idle",
+						},
+					]}
+				/>
+			)}
+
+			{/* Consume success toast */}
+			{consumeToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Meals consumed"
+					description="Ingredients deducted from Cargo."
+					onDismiss={consumeToast.hide}
 				/>
 			)}
 

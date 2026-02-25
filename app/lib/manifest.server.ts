@@ -1,7 +1,8 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal, mealPlan, mealPlanEntry, member, user } from "../db/schema";
 import { log } from "./logging.server";
+import { cookMeal } from "./meals.server";
 import type { ManifestPreviewData } from "./types";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
@@ -122,10 +123,15 @@ export interface MealPlanEntryWithMeal {
 	orderIndex: number;
 	servingsOverride: number | null;
 	notes: string | null;
+	consumedAt: Date | null;
 	createdAt: Date;
 	mealName: string;
 	mealServings: number;
 	mealType: string;
+}
+
+export interface ConsumeManifestEntriesResult {
+	consumed: number;
 }
 
 export async function getWeekEntries(
@@ -146,6 +152,7 @@ export async function getWeekEntries(
 			orderIndex: mealPlanEntry.orderIndex,
 			servingsOverride: mealPlanEntry.servingsOverride,
 			notes: mealPlanEntry.notes,
+			consumedAt: mealPlanEntry.consumedAt,
 			createdAt: mealPlanEntry.createdAt,
 			mealName: meal.name,
 			mealServings: meal.servings,
@@ -168,9 +175,88 @@ export async function getWeekEntries(
 
 	return rows.map((r) => ({
 		...r,
+		consumedAt: r.consumedAt ?? null,
 		mealServings: r.mealServings ?? 1,
 		mealType: r.mealType ?? "recipe",
 	})) as MealPlanEntryWithMeal[];
+}
+
+// ---------------------------------------------------------------------------
+// Consume entries (deduct ingredients from Cargo, mark as consumed)
+// ---------------------------------------------------------------------------
+
+export async function consumeManifestEntries(
+	db: D1Database,
+	organizationId: string,
+	planId: string,
+	entryIds: string[],
+): Promise<ConsumeManifestEntriesResult> {
+	const d1 = drizzle(db);
+
+	// 1. Verify plan belongs to org
+	const [plan] = await d1
+		.select({ id: mealPlan.id })
+		.from(mealPlan)
+		.where(
+			and(eq(mealPlan.id, planId), eq(mealPlan.organizationId, organizationId)),
+		)
+		.limit(1);
+
+	if (!plan) throw new Error("Meal plan not found or unauthorized");
+
+	// 2. Load entries with meal data (only unconsumed, belonging to plan)
+	const entries = await d1
+		.select({
+			id: mealPlanEntry.id,
+			mealId: mealPlanEntry.mealId,
+			servingsOverride: mealPlanEntry.servingsOverride,
+			mealServings: meal.servings,
+		})
+		.from(mealPlanEntry)
+		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
+		.where(
+			and(
+				eq(mealPlanEntry.planId, planId),
+				eq(meal.organizationId, organizationId),
+				inArray(mealPlanEntry.id, entryIds),
+				isNull(mealPlanEntry.consumedAt),
+			),
+		);
+
+	// Dedupe by entry id (inArray can repeat)
+	const seen = new Set<string>();
+	const uniqueEntries = entries.filter((e) => {
+		if (seen.has(e.id)) return false;
+		seen.add(e.id);
+		return true;
+	});
+
+	if (uniqueEntries.length === 0) return { consumed: 0 };
+
+	// 3. Cook each meal (deducts ingredients); first failure throws
+	for (const entry of uniqueEntries) {
+		const effectiveServings = entry.servingsOverride ?? entry.mealServings ?? 1;
+		await cookMeal(db, organizationId, entry.mealId, {
+			servings: effectiveServings,
+		});
+	}
+
+	// 4. Mark all as consumed
+	const now = new Date();
+	await d1
+		.update(mealPlanEntry)
+		.set({ consumedAt: now })
+		.where(
+			and(
+				eq(mealPlanEntry.planId, planId),
+				inArray(
+					mealPlanEntry.id,
+					uniqueEntries.map((e) => e.id),
+				),
+			),
+		);
+
+	return { consumed: uniqueEntries.length };
 }
 
 export async function addEntry(

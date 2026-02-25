@@ -8,6 +8,8 @@ interface DayViewProps {
 	entries: MealPlanEntryWithMeal[];
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
+	onConsume?: (entryId: string) => void;
+	isConsuming?: boolean;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
 }
@@ -41,6 +43,8 @@ export function DayView({
 	entries,
 	planId,
 	onAdd,
+	onConsume,
+	isConsuming = false,
 	showSnackSlot = true,
 	readOnly = false,
 }: DayViewProps) {
@@ -70,6 +74,8 @@ export function DayView({
 					entries={dayEntries}
 					planId={planId}
 					onAdd={onAdd}
+					onConsume={onConsume}
+					isConsuming={isConsuming}
 					readOnly={readOnly}
 				/>
 			))}

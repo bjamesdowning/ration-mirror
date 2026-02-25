@@ -13,7 +13,9 @@ import {
 import { CreditShop } from "~/components/hub/CreditShop";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
+import { Toast } from "~/components/shell/Toast";
 import * as schema from "~/db/schema";
+import { useToast } from "~/hooks/useToast";
 import { API_RATE_LIMITS, V1_ENDPOINTS } from "~/lib/api-docs";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
@@ -670,6 +672,7 @@ function ApiKeysSection({
 }) {
 	const [apiRefExpanded, setApiRefExpanded] = useState(false);
 	const apiRefRef = useRef<HTMLDivElement>(null);
+	const copyToast = useToast({ duration: 3000 });
 
 	// Expand API Reference when arriving via #api
 	useEffect(() => {
@@ -736,7 +739,7 @@ function ApiKeysSection({
 							type="button"
 							onClick={() => {
 								navigator.clipboard.writeText(newKeyDisplay);
-								alert("Copied to clipboard!");
+								copyToast.show();
 							}}
 							className="px-3 py-1 bg-hyper-green text-carbon text-xs font-semibold rounded hover:bg-hyper-green/90"
 						>
@@ -790,6 +793,15 @@ function ApiKeysSection({
 					apiKeys.map((k) => <ApiKeyRow key={k.id} keyRecord={k} />)
 				)}
 			</div>
+
+			{copyToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Copied"
+					description="API key copied to clipboard"
+					onDismiss={copyToast.hide}
+				/>
+			)}
 
 			{/* Expandable API Reference */}
 			<div

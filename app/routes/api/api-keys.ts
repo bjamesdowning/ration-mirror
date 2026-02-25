@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { createApiKey } from "~/lib/api-key.server";
+import { API_SCOPES, createApiKey } from "~/lib/api-key.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { CreateApiKeySchema } from "~/lib/schemas/api-keys";
@@ -77,7 +77,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			groupId,
 			session.user.id,
 			name,
-			["inventory"],
+			[API_SCOPES.inventory, API_SCOPES.galley, API_SCOPES.supply],
 		);
 
 		return {

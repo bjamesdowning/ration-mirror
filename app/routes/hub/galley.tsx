@@ -374,7 +374,6 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<ExportIcon className="w-4 h-4" />
 									Export JSON
 								</a>
-								<ApiHint variant="icon" />
 								<button
 									type="button"
 									onClick={() => importRef.current?.open()}
@@ -383,6 +382,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<LinkIcon className="w-4 h-4" />
 									Import URL
 								</button>
+								<ApiHint variant="icon" />
 							</div>
 						}
 						quickAddPlaceholder="Add"

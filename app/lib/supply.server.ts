@@ -400,14 +400,15 @@ export async function getSupplyListByShareToken(
 }
 
 /**
- * Toggles a grocery item's purchased status using a share token.
- * Public access - validates share token and expiry, and only updates isPurchased.
+ * Updates a shared grocery item's purchased status and optionally quantity/unit.
+ * Public access - validates share token and expiry.
  */
-export async function toggleSharedItemPurchased(
+export async function updateSharedItemPurchased(
 	db: D1Database,
 	shareToken: string,
 	itemId: string,
 	isPurchased: boolean,
+	updates: { quantity?: number; unit?: string },
 ) {
 	const d1 = drizzle(db);
 
@@ -432,12 +433,20 @@ export async function toggleSharedItemPurchased(
 
 	if (!item) throw new Error("Item not found");
 
-	await d1
-		.update(supplyItem)
-		.set({ isPurchased })
-		.where(eq(supplyItem.id, itemId));
+	const setValues: Partial<typeof supplyItem.$inferInsert> = {
+		isPurchased,
+		...(updates.quantity !== undefined && { quantity: updates.quantity }),
+		...(updates.unit !== undefined && { unit: updates.unit }),
+	};
 
-	return { id: itemId, isPurchased };
+	await d1.update(supplyItem).set(setValues).where(eq(supplyItem.id, itemId));
+
+	return {
+		id: itemId,
+		isPurchased,
+		quantity: updates.quantity,
+		unit: updates.unit,
+	};
 }
 
 /**

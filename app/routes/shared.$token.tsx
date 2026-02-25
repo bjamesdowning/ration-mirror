@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
+import { PurchaseQuantityModal } from "~/components/supply/PurchaseQuantityModal";
 import { DOMAIN_LABELS } from "~/lib/domain";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { getSupplyListByShareToken } from "~/lib/supply.server";
@@ -75,33 +76,63 @@ function SharedGroceryItem({
 	item,
 	token,
 	onOptimisticToggle,
+	onOptimisticUpdate,
 }: {
 	item: SharedItem;
 	token: string | undefined;
 	onOptimisticToggle: (itemId: string, isPurchased: boolean) => void;
+	onOptimisticUpdate: (
+		itemId: string,
+		isPurchased: boolean,
+		quantity: number,
+		unit: string,
+	) => void;
 }) {
 	const fetcher = useFetcher();
+	const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+	const [isMarkingPurchased, setIsMarkingPurchased] = useState(false);
 	const isPending = fetcher.state !== "idle";
 
 	const optimisticPurchased =
-		fetcher.formData?.get("isPurchased") !== undefined
+		isMarkingPurchased ||
+		(fetcher.formData?.get("isPurchased") !== undefined
 			? fetcher.formData.get("isPurchased") === "true"
-			: item.isPurchased;
+			: item.isPurchased);
 
 	const handleToggle = () => {
 		if (!token || isPending) return;
-		const nextPurchased = !item.isPurchased;
-		onOptimisticToggle(item.id, nextPurchased);
-
-		fetcher.submit(
-			{ isPurchased: String(nextPurchased) },
-			{
-				method: "PATCH",
-				action: `/api/shared/${token}/items/${item.id}`,
-				encType: "application/json",
-			},
-		);
+		if (item.isPurchased) {
+			const nextPurchased = false;
+			onOptimisticToggle(item.id, nextPurchased);
+			fetcher.submit(
+				{ isPurchased: "false" },
+				{
+					method: "PATCH",
+					action: `/api/shared/${token}/items/${item.id}`,
+					encType: "application/json",
+				},
+			);
+		} else {
+			setShowPurchaseModal(true);
+		}
 	};
+
+	const handlePurchaseConfirm = (quantity: number, unit: string) => {
+		setShowPurchaseModal(false);
+		setIsMarkingPurchased(true);
+		onOptimisticUpdate(item.id, true, quantity, unit);
+		fetcher.submit(JSON.stringify({ isPurchased: true, quantity, unit }), {
+			method: "PATCH",
+			action: `/api/shared/${token}/items/${item.id}`,
+			encType: "application/json",
+		});
+	};
+
+	useEffect(() => {
+		if (fetcher.state === "idle") {
+			setIsMarkingPurchased(false);
+		}
+	}, [fetcher.state]);
 
 	return (
 		<li
@@ -151,6 +182,16 @@ function SharedGroceryItem({
 					{item.quantity} {item.unit}
 				</span>
 			)}
+			{showPurchaseModal && (
+				<PurchaseQuantityModal
+					itemName={item.name}
+					quantity={item.quantity}
+					unit={item.unit ?? "unit"}
+					onConfirm={handlePurchaseConfirm}
+					onCancel={() => setShowPurchaseModal(false)}
+					isPending={isPending}
+				/>
+			)}
 		</li>
 	);
 }
@@ -163,8 +204,17 @@ export default function SharedListPage() {
 	const handleOptimisticToggle = useCallback(
 		(itemId: string, isPurchased: boolean) => {
 			setItems((current) =>
-				current.map((item) =>
-					item.id === itemId ? { ...item, isPurchased } : item,
+				current.map((i) => (i.id === itemId ? { ...i, isPurchased } : i)),
+			);
+		},
+		[],
+	);
+
+	const handleOptimisticUpdate = useCallback(
+		(itemId: string, isPurchased: boolean, quantity: number, unit: string) => {
+			setItems((current) =>
+				current.map((i) =>
+					i.id === itemId ? { ...i, isPurchased, quantity, unit } : i,
 				),
 			);
 		},
@@ -230,6 +280,7 @@ export default function SharedListPage() {
 										item={item}
 										token={token}
 										onOptimisticToggle={handleOptimisticToggle}
+										onOptimisticUpdate={handleOptimisticUpdate}
 									/>
 								))}
 							</ul>

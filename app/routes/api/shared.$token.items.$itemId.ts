@@ -1,8 +1,8 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { SharedItemToggleSchema } from "~/lib/schemas/supply";
-import { toggleSharedItemPurchased } from "~/lib/supply.server";
+import { SharedItemUpdateSchema } from "~/lib/schemas/supply";
+import { updateSharedItemPurchased } from "~/lib/supply.server";
 import type { Route } from "./+types/shared.$token.items.$itemId";
 
 /**
@@ -47,13 +47,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		}
 
 		const json = await request.json();
-		const { isPurchased } = SharedItemToggleSchema.parse(json);
+		const input = SharedItemUpdateSchema.parse(json);
 
-		const result = await toggleSharedItemPurchased(
+		const result = await updateSharedItemPurchased(
 			context.cloudflare.env.DB,
 			token,
 			itemId,
-			isPurchased,
+			input.isPurchased,
+			{ quantity: input.quantity, unit: input.unit },
 		);
 
 		return result;

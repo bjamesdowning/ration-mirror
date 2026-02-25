@@ -39,11 +39,13 @@ export const SupplyItemUpdateSchema = z.object({
 		.optional(),
 });
 
-export const SharedItemToggleSchema = z.object({
+export const SharedItemUpdateSchema = z.object({
 	isPurchased: z.union([
 		z.boolean(),
 		z.string().transform((val) => val === "true"),
 	]),
+	quantity: z.coerce.number().min(0).optional(),
+	unit: UnitSchema.optional(),
 });
 
 export const AddFromMealSchema = z.object({

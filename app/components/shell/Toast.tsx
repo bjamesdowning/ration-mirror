@@ -13,8 +13,9 @@ interface ToastProps {
 }
 
 const positionClasses: Record<ToastPosition, string> = {
-	"top-right": "fixed top-24 right-8 z-50",
-	"bottom-right": "fixed bottom-8 right-8 z-50",
+	"top-right": "fixed top-24 right-8 z-[60]",
+	"bottom-right":
+		"fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] md:bottom-8 right-8 z-[60]",
 };
 
 const variantClasses: Record<ToastVariant, string> = {

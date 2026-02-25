@@ -9,6 +9,8 @@ import { getStripe } from "./stripe.server";
 // ---------------------------------------------------------------------------
 // Centralised cost map for every credit-consuming operation. Add new entries
 // here when new AI features are introduced so pricing stays in one place.
+// Route mapping: SCAN -> /api/scan, MEAL_GENERATE -> /api/meals/generate,
+// IMPORT_URL -> /api/meals/import. ORGANIZE_CARGO and MEAL_PLAN_WEEKLY: not yet implemented.
 export const AI_COSTS = {
 	SCAN: 2,
 	MEAL_GENERATE: 2,

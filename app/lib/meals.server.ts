@@ -733,6 +733,7 @@ export async function cookMeal(
 		cargoById = new Map(currentCargo.map((i) => [i.id, i]));
 
 		const insufficient = linkedIngredients.filter((ing) => {
+			if (ing.isOptional) return false;
 			const c = cargoById.get(ing.cargoId as string);
 			if (!c) return true;
 			const ingUnit = toSupportedUnit(ing.unit);
@@ -754,8 +755,10 @@ export async function cookMeal(
 
 		for (const ing of linkedIngredients) {
 			const c = cargoById.get(ing.cargoId as string);
-			if (!c)
+			if (!c) {
+				if (ing.isOptional) continue;
 				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
+			}
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
@@ -765,9 +768,14 @@ export async function cookMeal(
 				cargoUnit,
 			);
 			if (deductionInCargoUnit === null) {
+				if (ing.isOptional) continue;
 				throw new Error(
 					`Cannot convert ${ing.unit} to ${c.unit} for ${ing.ingredientName}`,
 				);
+			}
+			if (c.quantity < deductionInCargoUnit) {
+				if (ing.isOptional) continue;
+				throw new Error(`Insufficient Cargo for: ${ing.ingredientName}`);
 			}
 			updates.push(
 				d1
@@ -802,12 +810,12 @@ export async function cookMeal(
 				const cargoUnit = toSupportedUnit(c.unit);
 				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 				const deduction = convertQuantity(scaledQty, ingUnit, cargoUnit);
-				if (deduction !== null) {
-					linkedDeductions.set(
-						c.id,
-						(linkedDeductions.get(c.id) ?? 0) + deduction,
-					);
-				}
+				if (deduction === null) continue;
+				if (c.quantity < deduction && ing.isOptional) continue;
+				linkedDeductions.set(
+					c.id,
+					(linkedDeductions.get(c.id) ?? 0) + deduction,
+				);
 			}
 			orgCargo = orgCargo.map((item) => ({
 				...item,
@@ -830,7 +838,7 @@ export async function cookMeal(
 			);
 
 			if (allocations.length === 0) {
-				insufficient.push(ing.ingredientName);
+				if (!ing.isOptional) insufficient.push(ing.ingredientName);
 				continue;
 			}
 

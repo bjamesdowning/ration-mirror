@@ -262,7 +262,7 @@ export function IngredientPicker({
 								onChange={(e) =>
 									updateIngredient(idx, "isOptional", e.target.checked)
 								}
-								className="rounded border-platinum text-hyper-green focus:ring-hyper-green/50"
+								className="rounded border-platinum accent-hyper-green text-hyper-green focus:ring-2 focus:ring-hyper-green/50 focus:ring-offset-0"
 							/>
 							<span className="text-xs text-muted whitespace-nowrap">
 								Optional

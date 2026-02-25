@@ -611,8 +611,9 @@ export interface ManifestMealForSupply {
 }
 
 /**
- * Returns one row per meal_plan_entry occurrence in the current week.
+ * Returns one row per unconsumed meal_plan_entry occurrence in the current week.
  * Used by supply.server.ts to merge Manifest meals with Galley selections.
+ * Consumed entries are excluded so they do not contribute to the supply list.
  * Returns [] if no active plan or no entries in the current week.
  */
 export async function getManifestWeekMealsForSupply(
@@ -650,6 +651,7 @@ export async function getManifestWeekMealsForSupply(
 				eq(mealPlanEntry.planId, plan.id),
 				gte(mealPlanEntry.date, startDate),
 				lte(mealPlanEntry.date, endDate),
+				isNull(mealPlanEntry.consumedAt),
 			),
 		);
 

@@ -8,6 +8,7 @@ import {
 	mealTag,
 } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
+import { normalizeForMatch, tokenMatchScore } from "./matching";
 import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -20,7 +21,12 @@ import type {
 	ProvisionInput,
 	ProvisionUpdateInput,
 } from "./schemas/meal";
-import { convertQuantity, toSupportedUnit } from "./units";
+import {
+	convertQuantity,
+	getUnitMultiplier,
+	type SupportedUnit,
+	toSupportedUnit,
+} from "./units";
 
 function chunk<T>(arr: T[], size: number): T[][] {
 	const out: T[][] = [];
@@ -564,13 +570,85 @@ export async function deleteMeal(
 }
 
 /**
+ * Finds cargo rows to deduct from when ingredient has no cargoId.
+ * Uses name-based matching (normalizeForMatch + tokenMatchScore) consistent with supply.
+ * Returns allocations in cargo's native unit for SQL update.
+ */
+function findCargoForDeduction(
+	orgCargo: (typeof cargo.$inferSelect)[],
+	ingredientName: string,
+	requiredQtyInTargetUnit: number,
+	targetUnit: SupportedUnit,
+): { cargoId: string; quantityToDeduct: number }[] {
+	const normalizedName = normalizeForMatch(ingredientName);
+	type Candidate = {
+		cargo: typeof cargo.$inferSelect;
+		qtyInTargetUnit: number;
+		isExact: boolean;
+		fuzzyScore: number;
+	};
+	const candidates: Candidate[] = [];
+
+	for (const item of orgCargo) {
+		const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
+		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+		if (multiplier === null) continue;
+
+		const qtyInTargetUnit = item.quantity * multiplier;
+		const normalizedItem = normalizeForMatch(item.name);
+		const isExact = normalizedItem === normalizedName;
+		const fuzzyScore = tokenMatchScore(ingredientName, item.name);
+
+		if (isExact || fuzzyScore >= 0.8) {
+			candidates.push({
+				cargo: item,
+				qtyInTargetUnit,
+				isExact,
+				fuzzyScore,
+			});
+		}
+	}
+
+	// Sort: exact first, then by fuzzy score desc, then by quantity desc
+	candidates.sort((a, b) => {
+		if (a.isExact !== b.isExact) return a.isExact ? -1 : 1;
+		if (a.fuzzyScore !== b.fuzzyScore) return b.fuzzyScore - a.fuzzyScore;
+		return b.qtyInTargetUnit - a.qtyInTargetUnit;
+	});
+
+	let remaining = requiredQtyInTargetUnit;
+	const allocations: { cargoId: string; quantityToDeduct: number }[] = [];
+
+	for (const { cargo: item } of candidates) {
+		if (remaining <= 0) break;
+
+		const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
+		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+		if (multiplier === null) continue;
+
+		const availableInTarget = item.quantity * multiplier;
+		const toDeductInTarget = Math.min(remaining, availableInTarget);
+		remaining -= toDeductInTarget;
+
+		const toDeductInCargoUnit = toDeductInTarget / multiplier;
+		allocations.push({
+			cargoId: item.id,
+			quantityToDeduct: toDeductInCargoUnit,
+		});
+	}
+
+	return remaining <= 0 ? allocations : [];
+}
+
+/**
  * Executes a meal cooking procedure.
  *
  * Safety Features:
  * 1. Ownership Verification: Ensures the meal belongs to the organization.
  * 2. Inventory Check: Verifies all linked inventory items have sufficient quantity.
- * 3. Race Condition Prevention: Uses a batch operation for deduction.
- * 4. Input Validation: Prevents SQL injection via type-safe Drizzle parameters.
+ * 3. Name-based fallback: When cargoId is null, matches cargo by name (same logic as supply).
+ * 4. Race Condition Prevention: Uses a batch operation for deduction.
+ * 5. Input Validation: Prevents SQL injection via type-safe Drizzle parameters.
  *
  * Servings resolution order:
  *   options.servings → activeMealSelection.servingsOverride → meal.servings
@@ -623,14 +701,20 @@ export async function cookMeal(
 		.from(mealIngredient)
 		.where(eq(mealIngredient.mealId, mealId));
 
-	// 4. For linked inventory items, check quantities first
 	const linkedIngredients = ingredients.filter(
 		(ing) => ing.cargoId && typeof ing.cargoId === "string",
 	);
+	const unlinkedIngredients = ingredients.filter(
+		(ing) => !ing.cargoId || typeof ing.cargoId !== "string",
+	);
+
+	// 4. Build deduction updates: linked (by cargoId) and unlinked (by name match)
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const updates: any[] = [];
+	let cargoById = new Map<string, typeof cargo.$inferSelect>();
 
 	if (linkedIngredients.length > 0) {
 		const cargoIds = linkedIngredients.map((ing) => ing.cargoId as string);
-
 		const currentCargo = await chunkedQuery(
 			cargoIds,
 			(chunk) =>
@@ -646,7 +730,7 @@ export async function cookMeal(
 			D1_MAX_BOUND_PARAMS - 1,
 		);
 
-		const cargoById = new Map(currentCargo.map((i) => [i.id, i]));
+		cargoById = new Map(currentCargo.map((i) => [i.id, i]));
 
 		const insufficient = linkedIngredients.filter((ing) => {
 			const c = cargoById.get(ing.cargoId as string);
@@ -659,7 +743,7 @@ export async function cookMeal(
 				ingUnit,
 				cargoUnit,
 			);
-			if (deductionInCargoUnit === null) return true; // Incompatible units
+			if (deductionInCargoUnit === null) return true;
 			return c.quantity < deductionInCargoUnit;
 		});
 
@@ -668,8 +752,7 @@ export async function cookMeal(
 			throw new Error(`Insufficient Cargo for: ${names}`);
 		}
 
-		// 5. Perform deductions in a single batch (scale then convert to cargo unit)
-		const updates = linkedIngredients.map((ing) => {
+		for (const ing of linkedIngredients) {
 			const c = cargoById.get(ing.cargoId as string);
 			if (!c)
 				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
@@ -686,29 +769,103 @@ export async function cookMeal(
 					`Cannot convert ${ing.unit} to ${c.unit} for ${ing.ingredientName}`,
 				);
 			}
-			return d1
-				.update(cargo)
-				.set({
-					quantity: sql`${cargo.quantity} - ${deductionInCargoUnit}`,
-				})
-				.where(
-					and(
-						eq(cargo.id, ing.cargoId as string),
-						eq(cargo.organizationId, organizationId),
+			updates.push(
+				d1
+					.update(cargo)
+					.set({
+						quantity: sql`${cargo.quantity} - ${deductionInCargoUnit}`,
+					})
+					.where(
+						and(
+							eq(cargo.id, ing.cargoId as string),
+							eq(cargo.organizationId, organizationId),
+						),
 					),
-				);
-		});
-
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(updates as [any, ...any[]]);
-		return {
-			cooked: true,
-			ingredientsDeducted: updates.length,
-			servings: effectiveServings,
-		};
+			);
+		}
 	}
 
-	return { cooked: true, ingredientsDeducted: 0, servings: effectiveServings };
+	// 5. Name-based deduction for unlinked ingredients
+	if (unlinkedIngredients.length > 0) {
+		let orgCargo = await d1
+			.select()
+			.from(cargo)
+			.where(eq(cargo.organizationId, organizationId));
+
+		// Adjust effective quantities for linked deductions (same cargo row may be used by both)
+		if (linkedIngredients.length > 0 && cargoById) {
+			const linkedDeductions = new Map<string, number>();
+			for (const ing of linkedIngredients) {
+				const c = cargoById.get(ing.cargoId as string);
+				if (!c) continue;
+				const ingUnit = toSupportedUnit(ing.unit);
+				const cargoUnit = toSupportedUnit(c.unit);
+				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+				const deduction = convertQuantity(scaledQty, ingUnit, cargoUnit);
+				if (deduction !== null) {
+					linkedDeductions.set(
+						c.id,
+						(linkedDeductions.get(c.id) ?? 0) + deduction,
+					);
+				}
+			}
+			orgCargo = orgCargo.map((item) => ({
+				...item,
+				quantity: item.quantity - (linkedDeductions.get(item.id) ?? 0),
+			}));
+		}
+
+		const insufficient: string[] = [];
+
+		for (const ing of unlinkedIngredients) {
+			const targetUnit = toSupportedUnit(ing.unit) as SupportedUnit;
+			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+			if (scaledQty <= 0) continue;
+
+			const allocations = findCargoForDeduction(
+				orgCargo,
+				ing.ingredientName,
+				scaledQty,
+				targetUnit,
+			);
+
+			if (allocations.length === 0) {
+				insufficient.push(ing.ingredientName);
+				continue;
+			}
+
+			for (const { cargoId, quantityToDeduct } of allocations) {
+				updates.push(
+					d1
+						.update(cargo)
+						.set({
+							quantity: sql`${cargo.quantity} - ${quantityToDeduct}`,
+						})
+						.where(
+							and(
+								eq(cargo.id, cargoId),
+								eq(cargo.organizationId, organizationId),
+							),
+						),
+				);
+			}
+		}
+
+		if (insufficient.length > 0) {
+			throw new Error(`Insufficient Cargo for: ${insufficient.join(", ")}`);
+		}
+	}
+
+	if (updates.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(updates as [any, ...any[]]);
+	}
+
+	return {
+		cooked: true,
+		ingredientsDeducted: updates.length,
+		servings: effectiveServings,
+	};
 }
 
 /**

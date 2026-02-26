@@ -13,6 +13,7 @@ import {
 } from "../db/schema";
 import { dockSupplyItems } from "./cargo.server";
 import { toExpiryDate } from "./date-utils";
+import { lookupDensity } from "./ingredient-density";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { normalizeForMatch } from "./matching.server";
@@ -32,6 +33,7 @@ import {
 	type BaseUnit,
 	chooseReadableUnit,
 	convertQuantity,
+	convertQuantityWithDensity,
 	getUnitMultiplier,
 	normalizeToBaseUnit,
 	type SupportedUnit,
@@ -117,6 +119,21 @@ type AggregatedIngredient = {
 	sourceMealIds: string[];
 };
 
+function convertCargoToTarget(
+	quantity: number,
+	fromUnit: SupportedUnit,
+	targetUnit: SupportedUnit,
+	ingredientName: string,
+): number | null {
+	const converted = convertQuantity(quantity, fromUnit, targetUnit);
+	if (converted !== null) return converted;
+
+	// Fallback: cross-family conversion using ingredient density (e.g. g → cup for flour)
+	const density = lookupDensity(ingredientName);
+	if (!density) return null;
+	return convertQuantityWithDensity(quantity, fromUnit, targetUnit, density);
+}
+
 async function getAvailableCargoQuantity(
 	env: Env,
 	organizationId: string,
@@ -128,15 +145,17 @@ async function getAvailableCargoQuantity(
 	let exactTotal = 0;
 
 	for (const item of orgCargo) {
-		const itemUnit = toSupportedUnit(item.unit);
-		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-		if (multiplier === null) continue;
-
 		const normalizedItem = normalizeForMatch(item.name);
-		const convertedQuantity = item.quantity * multiplier;
-		if (normalizedItem === normalizedName) {
-			exactTotal += convertedQuantity;
-		}
+		if (normalizedItem !== normalizedName) continue;
+
+		const itemUnit = toSupportedUnit(item.unit);
+		const converted = convertCargoToTarget(
+			item.quantity,
+			itemUnit,
+			targetUnit,
+			name,
+		);
+		if (converted !== null) exactTotal += converted;
 	}
 
 	if (exactTotal > 0) return exactTotal;
@@ -149,12 +168,15 @@ async function getAvailableCargoQuantity(
 
 	const matchedName = normalizeForMatch(similar[0].itemName);
 	for (const item of orgCargo) {
+		if (normalizeForMatch(item.name) !== matchedName) continue;
 		const itemUnit = toSupportedUnit(item.unit);
-		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-		if (multiplier === null) continue;
-		if (normalizeForMatch(item.name) === matchedName) {
-			return item.quantity * multiplier;
-		}
+		const converted = convertCargoToTarget(
+			item.quantity,
+			itemUnit,
+			targetUnit,
+			name,
+		);
+		if (converted !== null) return converted;
 	}
 	return 0;
 }
@@ -164,6 +186,7 @@ function getExistingListQuantity(
 	normalizedName: string,
 	targetUnit: SupportedUnit,
 	domain: string,
+	ingredientName?: string,
 ): number {
 	let total = 0;
 	for (const item of items) {
@@ -172,12 +195,22 @@ function getExistingListQuantity(
 		if (typeof item.name !== "string" || item.name.length === 0) continue;
 		if (normalizeForMatch(item.name) !== normalizedName) continue;
 
-		const multiplier = getUnitMultiplier(
-			toSupportedUnit(item.unit),
-			targetUnit,
-		);
-		if (multiplier === null) continue;
-		total += item.quantity * multiplier;
+		const itemUnit = toSupportedUnit(item.unit);
+		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+		let converted: number | null =
+			multiplier !== null ? item.quantity * multiplier : null;
+		if (converted === null && ingredientName) {
+			const density = lookupDensity(ingredientName);
+			if (density) {
+				converted = convertQuantityWithDensity(
+					item.quantity,
+					itemUnit,
+					targetUnit,
+					density,
+				);
+			}
+		}
+		if (converted !== null) total += converted;
 	}
 
 	return total;
@@ -1061,6 +1094,7 @@ export async function addItemsFromMeal(
 			normalizedName,
 			targetUnit,
 			mealDomain,
+			ingredient.ingredientName,
 		);
 		const remainingToAdd = Math.max(0, neededQuantity - alreadyInList);
 
@@ -1560,6 +1594,7 @@ async function syncSupplyFromIngredientRows(
 				aggregated.normalizedName,
 				aggregated.unit,
 				aggregated.domain,
+				aggregated.name,
 			);
 			const remainingNeeded = Math.max(
 				0,

@@ -169,6 +169,100 @@ export function convertQuantity(
 	return quantity * multiplier;
 }
 
+/** Weight unit families for cross-family conversion */
+const WEIGHT_FAMILIES = new Set<UnitFamily>([
+	"weight_metric",
+	"weight_imperial",
+]);
+/** Volume unit family */
+const VOLUME_FAMILY: UnitFamily = "volume";
+
+/** Grams per US fluid ounce (29.5735 ml). */
+const G_PER_FL_OZ = 29.5735;
+/** Ounces per gram (1/28.3495). */
+const OZ_PER_G = 1 / 28.3495;
+
+/**
+ * Converts between weight and volume using ingredient density (g/ml).
+ * Use when convertQuantity returns null due to cross-family (weight ↔ volume).
+ *
+ * @param quantity - Amount in the source unit
+ * @param from - Source unit (must be weight or volume)
+ * @param to - Target unit (must be the opposite family: volume if from is weight, weight if from is volume)
+ * @param densityGPerMl - Ingredient density in g/ml (from lookupDensity)
+ * @returns Converted quantity, or null if units are same family or invalid
+ */
+export function convertQuantityWithDensity(
+	quantity: number,
+	from: SupportedUnit,
+	to: SupportedUnit,
+	densityGPerMl: number,
+): number | null {
+	const fromFamily = getUnitFamily(from);
+	const toFamily = getUnitFamily(to);
+
+	if (fromFamily === toFamily) return null;
+	if (densityGPerMl <= 0 || !Number.isFinite(densityGPerMl)) return null;
+
+	let grams: number;
+
+	if (WEIGHT_FAMILIES.has(fromFamily)) {
+		// Source is weight -> convert to grams
+		if (from === "g") grams = quantity;
+		else if (from === "kg") grams = quantity * 1000;
+		else if (from === "oz") grams = quantity / OZ_PER_G;
+		else if (from === "lb") grams = (quantity * 16) / OZ_PER_G;
+		else return null;
+
+		// Target is volume -> grams / density = ml, then ml -> target unit
+		if (to === "ml") return grams / densityGPerMl;
+		if (to === "l") return grams / densityGPerMl / 1000;
+		if (to === "tsp") return grams / densityGPerMl / 4.92892;
+		if (to === "tbsp") return grams / densityGPerMl / 14.7868;
+		if (to === "fl oz") return grams / densityGPerMl / G_PER_FL_OZ;
+		if (to === "cup") return grams / densityGPerMl / 236.588;
+		if (to === "pt") return grams / densityGPerMl / 473.176;
+		if (to === "qt") return grams / densityGPerMl / 946.353;
+		if (to === "gal") return grams / densityGPerMl / 3785.41;
+		return null;
+	}
+
+	if (fromFamily === VOLUME_FAMILY) {
+		// Source is volume -> convert to ml, then ml * density = grams
+		const ml =
+			from === "ml"
+				? quantity
+				: from === "l"
+					? quantity * 1000
+					: from === "tsp"
+						? quantity * 4.92892
+						: from === "tbsp"
+							? quantity * 14.7868
+							: from === "fl oz"
+								? quantity * G_PER_FL_OZ
+								: from === "cup"
+									? quantity * 236.588
+									: from === "pt"
+										? quantity * 473.176
+										: from === "qt"
+											? quantity * 946.353
+											: from === "gal"
+												? quantity * 3785.41
+												: NaN;
+		if (!Number.isFinite(ml)) return null;
+		grams = ml * densityGPerMl;
+
+		// Target is weight -> grams -> target unit
+		if (to === "g") return grams;
+		if (to === "kg") return grams / 1000;
+		if (to === "oz") return grams * OZ_PER_G;
+		if (to === "lb") return (grams * OZ_PER_G) / 16;
+		return null;
+	}
+
+	return null;
+}
+
 export function convertFromBaseUnit(
 	baseQuantity: number,
 	baseUnit: BaseUnit,

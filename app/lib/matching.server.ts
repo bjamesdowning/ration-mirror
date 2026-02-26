@@ -1,11 +1,17 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
+import { lookupDensity } from "./ingredient-density";
 import { log, redactId } from "./logging.server";
 import { normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
-import { convertQuantity, type SupportedUnit, toSupportedUnit } from "./units";
+import {
+	convertQuantity,
+	convertQuantityWithDensity,
+	type SupportedUnit,
+	toSupportedUnit,
+} from "./units";
 import {
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
@@ -95,6 +101,7 @@ function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
 
 /**
  * Converts cargo quantity to target unit and sums. Returns 0 if no convertible matches.
+ * Falls back to density-based conversion (mass ↔ volume) when same-family conversion fails.
  */
 function sumConvertedToTarget(
 	matches: {
@@ -103,15 +110,24 @@ function sumConvertedToTarget(
 		normalizedName: string;
 	}[],
 	targetUnit: SupportedUnit,
+	ingredientName?: string,
 ): number {
 	let total = 0;
 	for (const match of matches) {
 		const fromUnit = toSupportedUnit(match.original.unit);
-		const converted = convertQuantity(
-			match.totalQuantity,
-			fromUnit,
-			targetUnit,
-		);
+		let converted = convertQuantity(match.totalQuantity, fromUnit, targetUnit);
+		// Fallback: cross-family conversion using ingredient density (e.g. g → cup for flour)
+		if (converted === null && ingredientName) {
+			const density = lookupDensity(ingredientName);
+			if (density) {
+				converted = convertQuantityWithDensity(
+					match.totalQuantity,
+					fromUnit,
+					targetUnit,
+					density,
+				);
+			}
+		}
 		if (converted !== null) total += converted;
 	}
 	return total;
@@ -136,13 +152,13 @@ function getAvailableQuantityWithMap(
 		for (const match of similar) {
 			const bucket = cargoIndex.get(normalizeIngredientName(match.itemName));
 			if (bucket?.length) {
-				return sumConvertedToTarget(bucket, targetUnit);
+				return sumConvertedToTarget(bucket, targetUnit, ingredientName);
 			}
 		}
 		return 0;
 	}
 
-	return sumConvertedToTarget(matches, targetUnit);
+	return sumConvertedToTarget(matches, targetUnit, ingredientName);
 }
 
 /** Similarity map from findSimilarCargoBatch: ingredientName -> cargo matches */

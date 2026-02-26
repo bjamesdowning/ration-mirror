@@ -6,6 +6,7 @@ import {
 	gte,
 	inArray,
 	isNotNull,
+	lt,
 	lte,
 	sql,
 } from "drizzle-orm";
@@ -456,27 +457,44 @@ export async function getExpiringCargo(
 export async function getCargoStats(db: D1Database, organizationId: string) {
 	const d1 = drizzle(db);
 
-	const items = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
-
 	const now = new Date();
 	const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-	const expiringCount = items.filter(
-		(item) =>
-			item.expiresAt && item.expiresAt >= now && item.expiresAt <= sevenDaysOut,
-	).length;
-
-	const expiredCount = items.filter(
-		(item) => item.expiresAt && item.expiresAt < now,
-	).length;
+	// Three SQL COUNT aggregates in a single D1 batch round-trip.
+	// Evaluates entirely inside D1 (SQLite) using the cargo_org_idx index —
+	// only three integer rows cross the network instead of all cargo row data.
+	const [totalResult, expiringResult, expiredResult] = await d1.batch([
+		d1
+			.select({ count: sql<number>`count(*)` })
+			.from(cargo)
+			.where(eq(cargo.organizationId, organizationId)),
+		d1
+			.select({ count: sql<number>`count(*)` })
+			.from(cargo)
+			.where(
+				and(
+					eq(cargo.organizationId, organizationId),
+					isNotNull(cargo.expiresAt),
+					gte(cargo.expiresAt, now),
+					lte(cargo.expiresAt, sevenDaysOut),
+				),
+			),
+		d1
+			.select({ count: sql<number>`count(*)` })
+			.from(cargo)
+			.where(
+				and(
+					eq(cargo.organizationId, organizationId),
+					isNotNull(cargo.expiresAt),
+					lt(cargo.expiresAt, now),
+				),
+			),
+	]);
 
 	return {
-		totalItems: items.length,
-		expiringCount,
-		expiredCount,
+		totalItems: totalResult[0]?.count ?? 0,
+		expiringCount: expiringResult[0]?.count ?? 0,
+		expiredCount: expiredResult[0]?.count ?? 0,
 	};
 }
 

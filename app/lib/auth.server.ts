@@ -177,6 +177,41 @@ export function createAuth(env: Cloudflare.Env) {
 export type Auth = ReturnType<typeof createAuth>;
 
 /**
+ * Module-level auth instance cache, keyed on BETTER_AUTH_SECRET.
+ *
+ * Cloudflare Workers V8 isolates share module-level state across all requests
+ * handled within the same isolate lifetime. Constructing a new `betterAuth`
+ * instance on every request is wasteful: it re-instantiates the Drizzle adapter,
+ * re-registers all plugin hook handlers, and re-builds the internal middleware
+ * chain. By caching the instance here, that work is done exactly once.
+ *
+ * The Map is keyed on BETTER_AUTH_SECRET rather than using a plain singleton
+ * variable so that local Wrangler dev (where different env objects may coexist
+ * within the same Node.js process) cannot accidentally share an auth instance
+ * across environments.
+ *
+ * Safety: isolates are recycled on every deploy, so there is no risk of a
+ * stale-config instance surviving an environment change in production.
+ */
+const authCache = new Map<string, Auth>();
+
+/**
+ * Returns a cached Better Auth instance for the given environment.
+ * Creates and caches the instance on first call within an isolate lifetime.
+ */
+export function getAuth(env: Cloudflare.Env): Auth {
+	// Fall back to a dev-mode sentinel key when no secret is configured.
+	// This is safe: if the secret changes, the cache key changes and a fresh
+	// instance is created.
+	const cacheKey = env.BETTER_AUTH_SECRET ?? "__dev__";
+	const cached = authCache.get(cacheKey);
+	if (cached) return cached;
+	const instance = createAuth(env);
+	authCache.set(cacheKey, instance);
+	return instance;
+}
+
+/**
  * Helper function to auto-activate personal organization if no active org is set.
  * Also syncs theme cookie if missing (e.g., new browser login).
  * Should be called in loaders/actions after getting session.
@@ -300,7 +335,7 @@ export async function ensureActiveOrganization(
 }
 
 export async function requireAuth(context: AppLoadContext, request: Request) {
-	const auth = createAuth(context.cloudflare.env);
+	const auth = getAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 
 	if (!session) {

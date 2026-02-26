@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { createAuth } from "../lib/auth.server";
+import { getAuth } from "../lib/auth.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
 import type { Route } from "./+types/api.auth.$";
 
@@ -31,7 +31,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 	}
 
-	const auth = createAuth(context.cloudflare.env);
+	const auth = getAuth(context.cloudflare.env);
 	return auth.handler(request);
 }
 
@@ -55,6 +55,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	const auth = createAuth(context.cloudflare.env);
+	const auth = getAuth(context.cloudflare.env);
 	return auth.handler(request);
 }

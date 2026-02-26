@@ -199,7 +199,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const itemId = formData.get("itemId") as string;
 		if (!itemId) return { success: false, error: "Missing Item ID" };
 
-		await jettisonItem(context.cloudflare.env.DB, groupId, itemId);
+		await jettisonItem(context.cloudflare.env, groupId, itemId);
 		return { success: true };
 	}
 

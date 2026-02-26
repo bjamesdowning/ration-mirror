@@ -56,7 +56,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 	}
 
 	try {
-		const result = await cookMeal(context.cloudflare.env.DB, groupId, id, {
+		const result = await cookMeal(context.cloudflare.env, groupId, id, {
 			servings,
 		});
 		return { result };

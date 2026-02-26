@@ -2,11 +2,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
 import { log, redactId } from "./logging.server";
-import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import { convertQuantity, type SupportedUnit, toSupportedUnit } from "./units";
-export { normalizeForMatch, tokenMatchScore };
+import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
+export { normalizeForMatch };
 
 /**
  * Type definitions for meal matching
@@ -112,37 +113,36 @@ function sumConvertedToTarget(
 
 /**
  * Calculates the total available quantity for a given ingredient name in the ingredient's unit.
- * Handles fuzzy matching and unit conversion.
+ * Exact match first, then vector similarity fallback.
  */
-function getAvailableQuantity(
+async function getAvailableQuantity(
+	env: Env,
+	organizationId: string,
 	ingredientName: string,
 	targetUnit: SupportedUnit,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
-): number {
+): Promise<number> {
 	const normalized = normalizeIngredientName(ingredientName);
 	const matches = cargoIndex.get(normalized);
 
 	if (!matches || matches.length === 0) {
-		let bestMatches:
-			| {
-					original: typeof cargo.$inferSelect;
-					totalQuantity: number;
-					normalizedName: string;
-			  }[]
-			| null = null;
-		let bestScore = 0;
-
-		for (const [key, bucket] of cargoIndex) {
-			const score = tokenMatchScore(ingredientName, key);
-			if (score >= 0.8 && score > bestScore) {
-				bestScore = score;
-				bestMatches = bucket;
+		const similar = await findSimilarCargo(
+			env,
+			organizationId,
+			ingredientName,
+			{
+				topK: 3,
+				threshold: SIMILARITY_THRESHOLDS.MEAL_MATCH,
+			},
+		);
+		if (similar.length === 0) return 0;
+		for (const match of similar) {
+			const bucket = cargoIndex.get(normalizeIngredientName(match.itemName));
+			if (bucket?.length) {
+				return sumConvertedToTarget(bucket, targetUnit);
 			}
 		}
-
-		if (!bestMatches) return 0;
-
-		return sumConvertedToTarget(bestMatches, targetUnit);
+		return 0;
 	}
 
 	return sumConvertedToTarget(matches, targetUnit);
@@ -153,7 +153,9 @@ function getAvailableQuantity(
  * ingredients are available in sufficient quantity.
  * scaleFactor applies to required quantities (for serving-size scaling).
  */
-function strictMatch(
+async function strictMatch(
+	env: Env,
+	organizationId: string,
 	meals: Array<{
 		meal: typeof meal.$inferSelect;
 		ingredients: (typeof mealIngredient.$inferSelect)[];
@@ -161,7 +163,7 @@ function strictMatch(
 	}>,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	scaleFactor = 1,
-): MealMatchResult[] {
+): Promise<MealMatchResult[]> {
 	const results: MealMatchResult[] = [];
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
@@ -170,7 +172,9 @@ function strictMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = getAvailableQuantity(
+			const available = await getAvailableQuantity(
+				env,
+				organizationId,
 				ingredient.ingredientName,
 				targetUnit,
 				cargoIndex,
@@ -221,7 +225,9 @@ function strictMatch(
  * ingredient availability. Returns meals above minimum threshold.
  * scaleFactor applies to required quantities (for serving-size scaling).
  */
-function deltaMatch(
+async function deltaMatch(
+	env: Env,
+	organizationId: string,
 	meals: Array<{
 		meal: typeof meal.$inferSelect;
 		ingredients: (typeof mealIngredient.$inferSelect)[];
@@ -230,7 +236,7 @@ function deltaMatch(
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	minMatch = 50,
 	scaleFactor = 1,
-): MealMatchResult[] {
+): Promise<MealMatchResult[]> {
 	const results: MealMatchResult[] = [];
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
@@ -253,7 +259,9 @@ function deltaMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = getAvailableQuantity(
+			const available = await getAvailableQuantity(
+				env,
+				organizationId,
 				ingredient.ingredientName,
 				targetUnit,
 				cargoIndex,
@@ -311,11 +319,11 @@ function deltaMatch(
  * Fetches meals and cargo, then performs matching based on mode.
  */
 export async function matchMeals(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 	const { mode, minMatch = 50, limit = 20, tag, servings } = query;
 
 	log.info("[matchMeals] Starting", {
@@ -431,21 +439,49 @@ export async function matchMeals(
 			const allResults: MealMatchResult[] = [];
 			for (const enriched of enrichedMeals) {
 				const sf = getScaleForMeal(enriched.meal);
-				allResults.push(...strictMatch([enriched], cargoIndex, sf));
+				allResults.push(
+					...(await strictMatch(
+						env,
+						organizationId,
+						[enriched],
+						cargoIndex,
+						sf,
+					)),
+				);
 			}
 			results = allResults;
 		} else {
-			results = strictMatch(enrichedMeals, cargoIndex);
+			results = await strictMatch(
+				env,
+				organizationId,
+				enrichedMeals,
+				cargoIndex,
+			);
 		}
 	} else if (servings) {
 		const allResults: MealMatchResult[] = [];
 		for (const enriched of enrichedMeals) {
 			const sf = getScaleForMeal(enriched.meal);
-			allResults.push(...deltaMatch([enriched], cargoIndex, minMatch, sf));
+			allResults.push(
+				...(await deltaMatch(
+					env,
+					organizationId,
+					[enriched],
+					cargoIndex,
+					minMatch,
+					sf,
+				)),
+			);
 		}
 		results = allResults.sort((a, b) => b.matchPercentage - a.matchPercentage);
 	} else {
-		results = deltaMatch(enrichedMeals, cargoIndex, minMatch);
+		results = await deltaMatch(
+			env,
+			organizationId,
+			enrichedMeals,
+			cargoIndex,
+			minMatch,
+		);
 	}
 
 	// 8. Apply limit

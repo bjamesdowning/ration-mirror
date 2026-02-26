@@ -9,7 +9,7 @@ import {
 	withCreditGate,
 } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
-import { normalizeForMatch, tokenMatchScore } from "~/lib/matching.server";
+import { normalizeForMatch } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import {
 	type AIResponse,
@@ -18,6 +18,10 @@ import {
 	normalizeAIResponse,
 } from "~/lib/schemas/meal";
 import { normalizeUnitAlias } from "~/lib/units";
+import {
+	findSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS,
+} from "~/lib/vector.server";
 import type { Route } from "./+types/meals.generate";
 
 const GENERATE_MODEL = "gemini-3-flash-preview";
@@ -66,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const d1 = drizzle(context.cloudflare.env.DB);
 	const pantryItems = await d1
 		.select({
+			id: cargo.id,
 			name: cargo.name,
 			quantity: cargo.quantity,
 			unit: cargo.unit,
@@ -239,47 +244,70 @@ ${customization}
 					);
 				}
 
+				const isBasic = (name: string) =>
+					["salt", "pepper", "water", "oil"].some((b) =>
+						name.toLowerCase().includes(b),
+					);
+
+				const allIngNames = [
+					...new Set(
+						recipes.flatMap((r) =>
+							(r.ingredients ?? [])
+								.filter((ing) => !isBasic(ing.name ?? ""))
+								.map((ing) => (ing.inventoryName ?? ing.name ?? "").trim())
+								.filter(Boolean),
+						),
+					),
+				];
+
+				const similarityBatch = await findSimilarCargoBatch(
+					context.cloudflare.env,
+					groupId,
+					allIngNames,
+					{ threshold: SIMILARITY_THRESHOLDS.GENERATION_VERIFY },
+				);
+
 				const verifiedRecipes = recipes
 					.map((recipe) => {
 						const missingIngredients: string[] = [];
-
 						const ingredients = recipe.ingredients ?? [];
 
-						// Check each ingredient
 						for (const ing of ingredients) {
 							const ingName = ing.name ?? "";
 							const ingInventoryName = ing.inventoryName ?? ingName;
 
-							if (!ingName) continue; // skip malformed entries
+							if (!ingName) continue;
+							if (isBasic(ingName)) continue;
 
-							const isBasic = ["salt", "pepper", "water", "oil"].some((b) =>
-								ingName.toLowerCase().includes(b),
-							);
-							if (isBasic) continue;
-
-							const exists = pantryItems.some(
+							const exactMatch = pantryItems.some(
 								(p) =>
 									normalizeForMatch(p.name) ===
-										normalizeForMatch(ingInventoryName) ||
-									tokenMatchScore(p.name, ingName) >= 0.8,
+									normalizeForMatch(ingInventoryName),
 							);
+							const semanticMatches =
+								similarityBatch.get(ingInventoryName) ?? [];
+							const exists = exactMatch || semanticMatches.length > 0;
 
 							if (!exists) {
 								missingIngredients.push(ingName);
 							}
 						}
 
-						// Map to App Schema — inherit the canonical unit from the
-						// matching pantry item so the meal always uses the same unit
-						// family as the actual inventory entry.
 						const mappedIngredients = ingredients.map((ing) => {
 							const ingInventoryName = ing.inventoryName ?? ing.name ?? "";
-							const pantryMatch = pantryItems.find(
+							const exactMatch = pantryItems.find(
 								(p) =>
 									normalizeForMatch(p.name) ===
-										normalizeForMatch(ingInventoryName) ||
-									tokenMatchScore(p.name, ing.name ?? "") >= 0.8,
+									normalizeForMatch(ingInventoryName),
 							);
+							const semanticMatches =
+								similarityBatch.get(ingInventoryName) ?? [];
+							const firstSemantic = semanticMatches[0];
+							const pantryMatch =
+								exactMatch ??
+								(firstSemantic
+									? pantryItems.find((p) => p.id === firstSemantic.itemId)
+									: undefined);
 							return {
 								ingredientName: ing.name ?? "unknown",
 								quantity: ing.quantity ?? 1,

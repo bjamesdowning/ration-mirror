@@ -39,11 +39,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const dateStr = dateFormatter.format(new Date());
 	const listName = `Manual: ${dateStr}`;
 
-	await createSupplyListFromAllMeals(
-		context.cloudflare.env.DB,
-		groupId,
-		listName,
-	);
+	await createSupplyListFromAllMeals(context.cloudflare.env, groupId, listName);
 
 	// Redirect back to referring page or dashboard
 	const referer = request.headers.get("Referer") || "/hub";

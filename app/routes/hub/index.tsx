@@ -42,7 +42,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getExpiringCargo(db, groupId, expirationAlertDays, 10),
 		getCargoStats(db, groupId),
 		getSupplyList(db, groupId),
-		matchMeals(db, groupId, { mode: "delta", minMatch: 50, limit: 6 }),
+		matchMeals(context.cloudflare.env, groupId, {
+			mode: "delta",
+			minMatch: 50,
+			limit: 6,
+		}),
 		getManifestPreview(db, groupId, 7),
 	]);
 

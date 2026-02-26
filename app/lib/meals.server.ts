@@ -8,7 +8,7 @@ import {
 	mealTag,
 } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
-import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { normalizeForMatch } from "./matching";
 import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -27,6 +27,7 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
+import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
 
 function chunk<T>(arr: T[], size: number): T[][] {
 	const out: T[][] = [];
@@ -571,21 +572,23 @@ export async function deleteMeal(
 
 /**
  * Finds cargo rows to deduct from when ingredient has no cargoId.
- * Uses name-based matching (normalizeForMatch + tokenMatchScore) consistent with supply.
+ * Uses exact match first, then vector similarity fallback.
  * Returns allocations in cargo's native unit for SQL update.
  */
-function findCargoForDeduction(
+async function findCargoForDeduction(
+	env: Env,
+	organizationId: string,
 	orgCargo: (typeof cargo.$inferSelect)[],
 	ingredientName: string,
 	requiredQtyInTargetUnit: number,
 	targetUnit: SupportedUnit,
-): { cargoId: string; quantityToDeduct: number }[] {
+): Promise<{ cargoId: string; quantityToDeduct: number }[]> {
 	const normalizedName = normalizeForMatch(ingredientName);
 	type Candidate = {
 		cargo: typeof cargo.$inferSelect;
 		qtyInTargetUnit: number;
 		isExact: boolean;
-		fuzzyScore: number;
+		score: number;
 	};
 	const candidates: Candidate[] = [];
 
@@ -597,22 +600,46 @@ function findCargoForDeduction(
 		const qtyInTargetUnit = item.quantity * multiplier;
 		const normalizedItem = normalizeForMatch(item.name);
 		const isExact = normalizedItem === normalizedName;
-		const fuzzyScore = tokenMatchScore(ingredientName, item.name);
 
-		if (isExact || fuzzyScore >= 0.8) {
+		if (isExact) {
 			candidates.push({
 				cargo: item,
 				qtyInTargetUnit,
-				isExact,
-				fuzzyScore,
+				isExact: true,
+				score: 1,
 			});
 		}
 	}
 
-	// Sort: exact first, then by fuzzy score desc, then by quantity desc
+	if (candidates.length === 0) {
+		const similar = await findSimilarCargo(
+			env,
+			organizationId,
+			ingredientName,
+			{
+				topK: 3,
+				threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION,
+			},
+		);
+		for (const match of similar) {
+			const item = orgCargo.find((c) => c.id === match.itemId);
+			if (!item) continue;
+			const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
+			const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+			if (multiplier === null) continue;
+			candidates.push({
+				cargo: item,
+				qtyInTargetUnit: item.quantity * multiplier,
+				isExact: false,
+				score: match.score,
+			});
+		}
+	}
+
+	// Sort: exact first, then by score desc, then by quantity desc
 	candidates.sort((a, b) => {
 		if (a.isExact !== b.isExact) return a.isExact ? -1 : 1;
-		if (a.fuzzyScore !== b.fuzzyScore) return b.fuzzyScore - a.fuzzyScore;
+		if (a.score !== b.score) return b.score - a.score;
 		return b.qtyInTargetUnit - a.qtyInTargetUnit;
 	});
 
@@ -654,12 +681,12 @@ function findCargoForDeduction(
  *   options.servings → activeMealSelection.servingsOverride → meal.servings
  */
 export async function cookMeal(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	mealId: string,
 	options?: { servings?: number },
 ) {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
 	// 1. Verify meal ownership and existence
 	const [mealRecord] = await d1
@@ -830,7 +857,9 @@ export async function cookMeal(
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (scaledQty <= 0) continue;
 
-			const allocations = findCargoForDeduction(
+			const allocations = await findCargoForDeduction(
+				env,
+				organizationId,
 				orgCargo,
 				ing.ingredientName,
 				scaledQty,

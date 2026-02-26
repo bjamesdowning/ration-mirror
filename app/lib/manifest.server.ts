@@ -186,12 +186,12 @@ export async function getWeekEntries(
 // ---------------------------------------------------------------------------
 
 export async function consumeManifestEntries(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	planId: string,
 	entryIds: string[],
 ): Promise<ConsumeManifestEntriesResult> {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
 	// 1. Verify plan belongs to org
 	const [plan] = await d1
@@ -236,7 +236,7 @@ export async function consumeManifestEntries(
 	// 3. Cook each meal (deducts ingredients); first failure throws
 	for (const entry of uniqueEntries) {
 		const effectiveServings = entry.servingsOverride ?? entry.mealServings ?? 1;
-		await cookMeal(db, organizationId, entry.mealId, {
+		await cookMeal(env, organizationId, entry.mealId, {
 			servings: effectiveServings,
 		});
 	}

@@ -5,6 +5,7 @@ import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { deleteCargoVectors } from "~/lib/vector.server";
 import type { Route } from "./+types/purge";
 
 async function deleteR2Prefix(bucket: R2Bucket, prefix: string) {
@@ -37,11 +38,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const env = context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 	const storage = env.STORAGE;
-	const vectorize = (
-		env as {
-			VECTORIZE?: { deleteByPrefix?: (prefix: string) => Promise<void> };
-		}
-	).VECTORIZE;
 
 	log.info("[Purge] Request to delete user account", {
 		userId: redactId(userId),
@@ -89,7 +85,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 					.set({ activeOrganizationId: null })
 					.where(eq(schema.session.activeOrganizationId, orgId));
 
-				// Manual cleanup of data
+				// Manual cleanup of data — delete cargo vectors before D1
+				const orgCargoRows = await db
+					.select({ id: schema.cargo.id })
+					.from(schema.cargo)
+					.where(eq(schema.cargo.organizationId, orgId));
+				const orgCargoIds = orgCargoRows.map((r) => r.id);
+				if (orgCargoIds.length > 0) {
+					await deleteCargoVectors(env, orgCargoIds);
+				}
 				await db
 					.delete(schema.cargo)
 					.where(eq(schema.cargo.organizationId, orgId));
@@ -118,9 +122,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 				if (storage) {
 					await deleteR2Prefix(storage, `organizations/${orgId}/`);
-				}
-				if (vectorize?.deleteByPrefix) {
-					await vectorize.deleteByPrefix(`organizations/${orgId}/`);
 				}
 			} else {
 				log.info("[Purge] Transferring ownership of shared organization", {
@@ -168,12 +169,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		log.info("[Purge] 7. Deleting user record...");
 		await db.delete(schema.user).where(eq(schema.user.id, userId));
 
-		// 8. Delete user assets (R2/Vectorize)
+		// 8. Delete user assets (R2)
 		if (storage) {
 			await deleteR2Prefix(storage, `users/${userId}/`);
-		}
-		if (vectorize?.deleteByPrefix) {
-			await vectorize.deleteByPrefix(`users/${userId}/`);
 		}
 
 		log.info("[Purge] Successfully deleted user account", {

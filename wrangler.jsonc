@@ -87,5 +87,11 @@
 			"pattern": "ration.mayutic.com",
 			"custom_domain": true
 		}
+	],
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo"
+		}
 	]
 }

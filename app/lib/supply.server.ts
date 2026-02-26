@@ -15,7 +15,7 @@ import { dockSupplyItems } from "./cargo.server";
 import { toExpiryDate } from "./date-utils";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
-import { normalizeForMatch, tokenMatchScore } from "./matching.server";
+import { normalizeForMatch } from "./matching.server";
 import {
 	chunkArray,
 	chunkedInsert,
@@ -37,6 +37,7 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
+import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -116,15 +117,15 @@ type AggregatedIngredient = {
 	sourceMealIds: string[];
 };
 
-function getAvailableCargoQuantity(
+async function getAvailableCargoQuantity(
+	env: Env,
+	organizationId: string,
 	name: string,
 	targetUnit: SupportedUnit,
 	orgCargo: (typeof cargo.$inferSelect)[],
-): number {
+): Promise<number> {
 	const normalizedName = normalizeForMatch(name);
 	let exactTotal = 0;
-	let bestFuzzyQuantity = 0;
-	let bestFuzzyScore = 0;
 
 	for (const item of orgCargo) {
 		const itemUnit = toSupportedUnit(item.unit);
@@ -135,19 +136,27 @@ function getAvailableCargoQuantity(
 		const convertedQuantity = item.quantity * multiplier;
 		if (normalizedItem === normalizedName) {
 			exactTotal += convertedQuantity;
-			continue;
-		}
-
-		const fuzzyScore = tokenMatchScore(name, item.name);
-		if (fuzzyScore < 0.8) continue;
-		if (fuzzyScore > bestFuzzyScore) {
-			bestFuzzyScore = fuzzyScore;
-			bestFuzzyQuantity = convertedQuantity;
 		}
 	}
 
 	if (exactTotal > 0) return exactTotal;
-	return bestFuzzyQuantity;
+
+	const similar = await findSimilarCargo(env, organizationId, name, {
+		topK: 1,
+		threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH,
+	});
+	if (similar.length === 0) return 0;
+
+	const matchedName = normalizeForMatch(similar[0].itemName);
+	for (const item of orgCargo) {
+		const itemUnit = toSupportedUnit(item.unit);
+		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
+		if (multiplier === null) continue;
+		if (normalizeForMatch(item.name) === matchedName) {
+			return item.quantity * multiplier;
+		}
+	}
+	return 0;
 }
 
 function getExistingListQuantity(
@@ -949,13 +958,13 @@ export async function revokeShareToken(
  * When options.servings is provided, ingredient quantities are scaled accordingly.
  */
 export async function addItemsFromMeal(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	listId: string,
 	mealId: string,
 	options?: { servings?: number },
 ) {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
 	// Verify list ownership
 	const [list] = await d1
@@ -1029,7 +1038,9 @@ export async function addItemsFromMeal(
 			scaleFactor,
 			ingredient.unit,
 		);
-		const availableInCargo = getAvailableCargoQuantity(
+		const availableInCargo = await getAvailableCargoQuantity(
+			env,
+			organizationId,
 			ingredient.ingredientName,
 			targetUnit,
 			orgCargo,
@@ -1121,7 +1132,7 @@ export async function addItemsFromMeal(
  * Only adds items that are missing or insufficient in inventory.
  */
 export async function createSupplyListFromAllMeals(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	_listName?: string,
 ): Promise<{
@@ -1130,7 +1141,7 @@ export async function createSupplyListFromAllMeals(
 		: never;
 	summary: GenerationSummary;
 }> {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
 	// Get all organization meals
 	const meals = await d1
@@ -1139,7 +1150,7 @@ export async function createSupplyListFromAllMeals(
 		.where(eq(meal.organizationId, organizationId));
 
 	if (meals.length === 0) {
-		const list = await ensureSupplyList(db, organizationId);
+		const list = await ensureSupplyList(env.DB, organizationId);
 		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
@@ -1168,7 +1179,7 @@ export async function createSupplyListFromAllMeals(
 		.where(eq(meal.organizationId, organizationId));
 
 	if (allIngredients.length === 0) {
-		const list = await ensureSupplyList(db, organizationId);
+		const list = await ensureSupplyList(env.DB, organizationId);
 		if (!list) throw new Error("Failed to ensure supply list");
 		return {
 			list,
@@ -1182,7 +1193,7 @@ export async function createSupplyListFromAllMeals(
 	}
 
 	return syncSupplyFromIngredientRows(
-		db,
+		env,
 		organizationId,
 		allIngredients,
 		meals.length,
@@ -1270,7 +1281,7 @@ async function buildIngredientRowsFromOccurrences(
  * If neither source has meals, returns the Supply list unchanged.
  */
 export async function createSupplyListFromSelectedMeals(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	_listName?: string,
 	telemetryContext?: SupplySyncTelemetryContext,
@@ -1281,7 +1292,7 @@ export async function createSupplyListFromSelectedMeals(
 	summary: GenerationSummary;
 }> {
 	const startedAtMs = Date.now();
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 	const telemetry = telemetryContext
 		? { ...telemetryContext, organizationId }
 		: undefined;
@@ -1299,7 +1310,7 @@ export async function createSupplyListFromSelectedMeals(
 
 		// Step 1a: Get Manifest current-week occurrences (one row per plan entry)
 		const manifestOccurrences = await getManifestWeekMealsForSupply(
-			db,
+			env.DB,
 			organizationId,
 		);
 
@@ -1325,7 +1336,7 @@ export async function createSupplyListFromSelectedMeals(
 		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
 
 		if (unified.length === 0) {
-			const supplyList = await ensureSupplyList(db, organizationId);
+			const supplyList = await ensureSupplyList(env.DB, organizationId);
 			if (!supplyList) throw new Error("Failed to ensure supply list");
 
 			emitSupplySyncInfo(
@@ -1364,7 +1375,7 @@ export async function createSupplyListFromSelectedMeals(
 		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
 
 		if (allIngredients.length === 0) {
-			const supplyList = await ensureSupplyList(db, organizationId);
+			const supplyList = await ensureSupplyList(env.DB, organizationId);
 			if (!supplyList) throw new Error("Failed to ensure supply list");
 
 			emitSupplySyncInfo(
@@ -1396,7 +1407,7 @@ export async function createSupplyListFromSelectedMeals(
 
 		// Step 3: Reuse existing sync path (unchanged)
 		const syncResult = await syncSupplyFromIngredientRows(
-			db,
+			env,
 			organizationId,
 			allIngredients,
 			unified.length,
@@ -1439,7 +1450,7 @@ export async function createSupplyListFromSelectedMeals(
 }
 
 async function syncSupplyFromIngredientRows(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	allIngredients: IngredientRow[],
 	mealsProcessed: number,
@@ -1451,7 +1462,7 @@ async function syncSupplyFromIngredientRows(
 	summary: GenerationSummary;
 }> {
 	const startedAtMs = Date.now();
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 	try {
 		emitSupplySyncInfo(
 			"supply_sync.materialize.start",
@@ -1466,7 +1477,7 @@ async function syncSupplyFromIngredientRows(
 		);
 
 		const ensureListStartedAtMs = Date.now();
-		const supplyListData = await ensureSupplyList(db, organizationId);
+		const supplyListData = await ensureSupplyList(env.DB, organizationId);
 		const ensureListDurationMs = Date.now() - ensureListStartedAtMs;
 
 		if (!supplyListData) {
@@ -1495,7 +1506,7 @@ async function syncSupplyFromIngredientRows(
 
 		const refreshListStartedAtMs = Date.now();
 		const refreshedList = await getSupplyListById(
-			db,
+			env.DB,
 			organizationId,
 			supplyListData.id,
 		);
@@ -1527,7 +1538,9 @@ async function syncSupplyFromIngredientRows(
 				continue;
 			}
 
-			const availableInCargo = getAvailableCargoQuantity(
+			const availableInCargo = await getAvailableCargoQuantity(
+				env,
+				organizationId,
 				aggregated.name,
 				aggregated.unit,
 				orgCargo,
@@ -1590,7 +1603,11 @@ async function syncSupplyFromIngredientRows(
 		const insertDurationMs = Date.now() - insertStartedAtMs;
 
 		const finalListFetchStartedAtMs = Date.now();
-		const list = await getSupplyListById(db, organizationId, supplyListData.id);
+		const list = await getSupplyListById(
+			env.DB,
+			organizationId,
+			supplyListData.id,
+		);
 		const finalListFetchDurationMs = Date.now() - finalListFetchStartedAtMs;
 		if (!list) throw new Error("List retrieval failed");
 

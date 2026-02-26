@@ -14,7 +14,7 @@ import { z } from "zod";
 import { cargo, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import { ITEM_DOMAINS } from "./domain";
-import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { normalizeForMatch } from "./matching";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
 import {
@@ -23,6 +23,7 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
+import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
 
 // --- Validation Schemas ---
 
@@ -251,12 +252,16 @@ export async function addOrMergeItem(
 		}
 
 		if (options.allowFuzzyCandidate) {
+			const similar = await findSimilarCargo(env, organizationId, data.name, {
+				topK: 5,
+				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
+				domain: data.domain,
+			});
 			let bestCandidate: MergeCandidate | null = null;
-			for (const item of existingItems) {
-				if (item.domain !== data.domain) continue;
+			for (const match of similar) {
+				const item = existingItems.find((i) => i.id === match.itemId);
+				if (!item || item.domain !== data.domain) continue;
 				if (!isCompatibleUnit(item.unit, data.unit)) continue;
-				const score = tokenMatchScore(data.name, item.name);
-				if (score < 0.8) continue;
 				const convertedQuantity = convertQuantity(
 					data.quantity,
 					requestedUnit,
@@ -264,13 +269,13 @@ export async function addOrMergeItem(
 				);
 				if (convertedQuantity === null) continue;
 
-				if (!bestCandidate || score > bestCandidate.score) {
+				if (!bestCandidate || match.score > bestCandidate.score) {
 					bestCandidate = {
 						id: item.id,
 						name: item.name,
 						quantity: item.quantity,
 						unit: item.unit as SupportedUnit,
-						score,
+						score: match.score,
 						convertedQuantity,
 					};
 				}

@@ -46,7 +46,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const { entryIds } = parsed.data;
 
 		const result = await consumeManifestEntries(
-			context.cloudflare.env.DB,
+			context.cloudflare.env,
 			groupId,
 			planId,
 			entryIds,

@@ -107,7 +107,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			});
 			try {
 				const result = await createSupplyListFromSelectedMeals(
-					context.cloudflare.env.DB,
+					context.cloudflare.env,
 					groupId,
 					undefined,
 					telemetryContext,

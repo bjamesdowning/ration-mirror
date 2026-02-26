@@ -40,7 +40,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const json = await request.json();
 		const { mealId, servings } = AddFromMealSchema.parse(json);
 		const result = await addItemsFromMeal(
-			context.cloudflare.env.DB,
+			context.cloudflare.env,
 			groupId,
 			listId,
 			mealId,

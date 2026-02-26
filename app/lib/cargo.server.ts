@@ -16,7 +16,8 @@ import { cargo, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
-import { normalizeForMatch, tokenMatchScore } from "./matching";
+import { log } from "./logging.server";
+import { normalizeForMatch } from "./matching";
 import {
 	chunkArray,
 	chunkedInsert,
@@ -30,6 +31,13 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
+import {
+	deleteCargoVectors,
+	findSimilarCargo,
+	SIMILARITY_THRESHOLDS,
+	upsertCargoVector,
+	upsertCargoVectors,
+} from "./vector.server";
 
 // --- Validation Schemas ---
 
@@ -258,33 +266,37 @@ export async function addOrMergeItem(
 		}
 
 		if (options.allowFuzzyCandidate) {
-			let bestCandidate: MergeCandidate | null = null;
-			for (const item of existingItems) {
-				if (item.domain !== data.domain) continue;
-				if (!isCompatibleUnit(item.unit, data.unit)) continue;
-				const score = tokenMatchScore(data.name, item.name);
-				if (score < 0.8) continue;
-				const convertedQuantity = convertQuantity(
-					data.quantity,
-					requestedUnit,
-					item.unit as SupportedUnit,
-				);
-				if (convertedQuantity === null) continue;
-
-				if (!bestCandidate || score > bestCandidate.score) {
-					bestCandidate = {
-						id: item.id,
-						name: item.name,
-						quantity: item.quantity,
-						unit: item.unit as SupportedUnit,
-						score,
-						convertedQuantity,
-					};
+			const similar = await findSimilarCargo(env, organizationId, data.name, {
+				topK: 1,
+				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
+				domain: data.domain,
+			});
+			if (similar.length > 0) {
+				const target = existingItems.find((i) => i.id === similar[0].itemId);
+				if (
+					target &&
+					target.domain === data.domain &&
+					isCompatibleUnit(target.unit, data.unit)
+				) {
+					const convertedQuantity = convertQuantity(
+						data.quantity,
+						requestedUnit,
+						target.unit as SupportedUnit,
+					);
+					if (convertedQuantity !== null) {
+						return {
+							status: "merge_candidate" as const,
+							candidate: {
+								id: target.id,
+								name: target.name,
+								quantity: target.quantity,
+								unit: target.unit as SupportedUnit,
+								score: similar[0].score,
+								convertedQuantity,
+							},
+						};
+					}
 				}
-			}
-
-			if (bestCandidate) {
-				return { status: "merge_candidate" as const, candidate: bestCandidate };
 			}
 		}
 	}
@@ -315,6 +327,14 @@ export async function addOrMergeItem(
 			updatedAt: new Date(),
 		})
 		.returning();
+
+	if (newItem) {
+		upsertCargoVector(env, organizationId, {
+			id: newItem.id,
+			name: newItem.name,
+			domain: newItem.domain ?? "food",
+		}).catch((err) => log.error("[Vector] upsert failed for new item:", err));
+	}
 
 	return { status: "created" as const, item: newItem };
 }
@@ -390,7 +410,13 @@ export async function updateItem(
 		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)))
 		.returning();
 
-	// Update vector embedding if item was found and updated
+	if (updatedItem && data.name !== undefined) {
+		upsertCargoVector(env, organizationId, {
+			id: updatedItem.id,
+			name: updatedItem.name,
+			domain: updatedItem.domain ?? "food",
+		}).catch((err) => log.error("[Vector] upsert failed for update:", err));
+	}
 
 	return updatedItem;
 }
@@ -400,15 +426,19 @@ export async function updateItem(
  * Security: Ensures the item belongs to the organization.
  */
 export async function jettisonItem(
-	db: D1Database,
+	env: Env,
 	organizationId: string,
 	itemId: string,
 ) {
-	const d1 = drizzle(db);
+	const d1 = drizzle(env.DB);
 
-	return await d1
+	await d1
 		.delete(cargo)
 		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)));
+
+	deleteCargoVectors(env, [itemId]).catch((err) =>
+		log.error("[Vector] delete failed:", err),
+	);
 }
 
 /**
@@ -602,6 +632,17 @@ export async function applyCargoImport(
 			d1.insert(cargo).values(chunk),
 		);
 		result.imported = insertRows.length;
+		upsertCargoVectors(
+			env,
+			organizationId,
+			insertRows.map((r) => ({
+				id: r.id,
+				name: r.name,
+				domain: r.domain ?? "food",
+			})),
+		).catch((err) =>
+			log.error("[Vector] batch upsert failed for import:", err),
+		);
 	}
 
 	return result;
@@ -730,6 +771,8 @@ export async function dockSupplyItems(
 	const batchOps = [];
 	const now = new Date();
 	let newRowsCreated = 0;
+	const newCargoForVector: Array<{ id: string; name: string; domain: string }> =
+		[];
 
 	for (const item of items) {
 		const existing = findMatchingCargo(item.name, item.unit, currentCargo);
@@ -824,6 +867,11 @@ export async function dockSupplyItems(
 			quantityByCargoId.set(newItemId, item.quantity);
 			results.created++;
 			newRowsCreated++;
+			newCargoForVector.push({
+				id: newItemId,
+				name: item.name,
+				domain: item.domain ?? "food",
+			});
 		}
 
 		// Queue ledger entry
@@ -840,6 +888,12 @@ export async function dockSupplyItems(
 	if (batchOps.length > 0) {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(batchOps as [any, ...any[]]);
+	}
+
+	if (newCargoForVector.length > 0) {
+		upsertCargoVectors(env, organizationId, newCargoForVector).catch((err) =>
+			log.error("[Vector] batch upsert failed for dock:", err),
+		);
 	}
 
 	return results;

@@ -76,7 +76,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		});
 
 		// Perform matching
-		const results = await matchMeals(context.cloudflare.env.DB, groupId, query);
+		const results = await matchMeals(context.cloudflare.env, groupId, query);
 
 		log.info("[Match API] Match complete", { resultsCount: results.length });
 

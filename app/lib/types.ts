@@ -62,14 +62,18 @@ export interface ManifestPreviewData {
 	entries: ManifestPreviewEntry[];
 }
 
+/** Meal match result shape (matches MealMatchResult from matching.server) */
+export type MealMatchResultShim = Array<
+	{ canMake: boolean; matchPercentage: number } & Record<string, unknown>
+>;
+
 /** Shape of loader data passed to Hub widgets. Aligns with hub route loader return. */
 export interface HubLoaderData {
 	expiringItems: unknown[];
 	cargoStats: { totalItems: number; expiringCount: number };
 	latestSupplyList: { items: unknown[] } | null;
-	mealMatches: Array<
-		{ canMake: boolean; matchPercentage: number } & Record<string, unknown>
-	>;
+	/** Deferred: Promise when using deferred loader; resolves to meal match results */
+	mealMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	expirationAlertDays: number;
 	manifestPreview: ManifestPreviewData | null;
 }

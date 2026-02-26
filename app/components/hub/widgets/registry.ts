@@ -22,6 +22,8 @@ export interface HubWidgetDefinition {
 	dataKeys: string[];
 	component: ComponentType<HubWidgetProps>;
 	defaultSize: "sm" | "md" | "lg";
+	/** If true, widget receives deferred data (Promise); must use Suspense + Await */
+	defer?: boolean;
 }
 
 export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
@@ -45,6 +47,7 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			dataKeys: ["mealMatches"],
 			component: MealsReadyWidget,
 			defaultSize: "lg",
+			defer: true,
 		},
 	],
 	[
@@ -56,6 +59,7 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			dataKeys: ["mealMatches"],
 			component: MealsPartialWidget,
 			defaultSize: "lg",
+			defer: true,
 		},
 	],
 	[

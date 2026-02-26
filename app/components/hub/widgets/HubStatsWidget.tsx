@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { Await } from "react-router";
 import {
 	ClockIcon,
 	GroceryIcon,
@@ -8,7 +10,7 @@ import type { HubWidgetProps } from "~/lib/types";
 
 interface StatCardProps {
 	label: string;
-	value: number;
+	value: number | string;
 	icon: React.ReactNode;
 	highlight?: boolean;
 }
@@ -33,9 +35,43 @@ function StatCard({ label, value, icon, highlight }: StatCardProps) {
 	);
 }
 
+function isPromise<T>(v: T | Promise<T>): v is Promise<T> {
+	return v != null && typeof (v as Promise<T>).then === "function";
+}
+
+function MealsReadyStat({ mealMatches }: { mealMatches: unknown }) {
+	if (isPromise(mealMatches)) {
+		return (
+			<Suspense
+				fallback={
+					<StatCard label="Meals Ready" value="—" icon={<SuccessIcon />} />
+				}
+			>
+				<Await resolve={mealMatches}>
+					{(resolved) => {
+						const count = (Array.isArray(resolved) ? resolved : []).filter(
+							(m: { canMake?: boolean }) => m.canMake,
+						).length;
+						return (
+							<StatCard
+								label="Meals Ready"
+								value={count}
+								icon={<SuccessIcon />}
+							/>
+						);
+					}}
+				</Await>
+			</Suspense>
+		);
+	}
+	const count = (Array.isArray(mealMatches) ? mealMatches : []).filter(
+		(m: { canMake?: boolean }) => m.canMake,
+	).length;
+	return <StatCard label="Meals Ready" value={count} icon={<SuccessIcon />} />;
+}
+
 export function HubStatsWidget({ data }: HubWidgetProps) {
 	const { cargoStats, mealMatches, latestSupplyList } = data;
-	const mealsReadyCount = mealMatches.filter((m) => m.canMake).length;
 	const supplyCount = latestSupplyList?.items.length ?? 0;
 
 	return (
@@ -51,11 +87,7 @@ export function HubStatsWidget({ data }: HubWidgetProps) {
 				icon={<ClockIcon />}
 				highlight={cargoStats.expiringCount > 0}
 			/>
-			<StatCard
-				label="Meals Ready"
-				value={mealsReadyCount}
-				icon={<SuccessIcon />}
-			/>
+			<MealsReadyStat mealMatches={mealMatches} />
 			<StatCard
 				label="Supply Items"
 				value={supplyCount}

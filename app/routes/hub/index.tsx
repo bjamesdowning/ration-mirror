@@ -32,34 +32,34 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
 
-	const [
-		expiringItems,
-		cargoStats,
-		latestSupplyList,
-		mealMatches,
-		manifestPreview,
-	] = await Promise.all([
-		getExpiringCargo(db, groupId, expirationAlertDays, 10),
-		getCargoStats(db, groupId),
-		getSupplyList(db, groupId),
-		matchMeals(context.cloudflare.env, groupId, {
-			mode: "delta",
-			minMatch: 50,
-			limit: 6,
-		}),
-		getManifestPreview(db, groupId, 7),
-	]);
+	// Fast data — awaited immediately; page shell renders right away
+	const [expiringItems, cargoStats, latestSupplyList, manifestPreview] =
+		await Promise.all([
+			getExpiringCargo(db, groupId, expirationAlertDays, 10),
+			getCargoStats(db, groupId),
+			getSupplyList(db, groupId),
+			getManifestPreview(db, groupId, 7),
+		]);
+
+	// Deferred — raw promise; meal widgets show skeletons until resolved
+	// preLimit: 12 caps meals matched; bounds vector work for large orgs
+	const mealMatches = matchMeals(context.cloudflare.env, groupId, {
+		mode: "delta",
+		minMatch: 50,
+		limit: 6,
+		preLimit: 12,
+	});
 
 	return {
 		expiringItems,
 		cargoStats,
 		latestSupplyList,
-		mealMatches,
 		manifestPreview,
 		expirationAlertDays,
 		hubProfile,
 		hubLayout,
 		welcomeVoucherRedeemed: userData?.welcomeVoucherRedeemed ?? false,
+		mealMatches,
 	};
 }
 

@@ -6,7 +6,11 @@ import { normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import { convertQuantity, type SupportedUnit, toSupportedUnit } from "./units";
-import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
+import {
+	findSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS,
+	type SimilarCargoMatch,
+} from "./vector.server";
 export { normalizeForMatch };
 
 /**
@@ -41,6 +45,8 @@ export interface MealMatchQuery {
 	mode: "strict" | "delta";
 	minMatch?: number;
 	limit?: number;
+	/** Cap meals fetched before matching; bounds work for large orgs. Applied to SQL. */
+	preLimit?: number;
 	tag?: string;
 	/** Override servings for all meals. Scales required quantities before comparing to cargo. */
 	servings?: number;
@@ -112,29 +118,20 @@ function sumConvertedToTarget(
 }
 
 /**
- * Calculates the total available quantity for a given ingredient name in the ingredient's unit.
- * Exact match first, then vector similarity fallback.
+ * Calculates available quantity using a pre-computed similarity map (sync).
+ * Used after findSimilarCargoBatch for batch fallback lookups.
  */
-async function getAvailableQuantity(
-	env: Env,
-	organizationId: string,
+function getAvailableQuantityWithMap(
 	ingredientName: string,
 	targetUnit: SupportedUnit,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
-): Promise<number> {
+	similarityMap: Map<string, SimilarCargoMatch[]>,
+): number {
 	const normalized = normalizeIngredientName(ingredientName);
 	const matches = cargoIndex.get(normalized);
 
 	if (!matches || matches.length === 0) {
-		const similar = await findSimilarCargo(
-			env,
-			organizationId,
-			ingredientName,
-			{
-				topK: 3,
-				threshold: SIMILARITY_THRESHOLDS.MEAL_MATCH,
-			},
-		);
+		const similar = similarityMap.get(ingredientName) ?? [];
 		if (similar.length === 0) return 0;
 		for (const match of similar) {
 			const bucket = cargoIndex.get(normalizeIngredientName(match.itemName));
@@ -148,22 +145,24 @@ async function getAvailableQuantity(
 	return sumConvertedToTarget(matches, targetUnit);
 }
 
+/** Similarity map from findSimilarCargoBatch: ingredientName -> cargo matches */
+type SimilarityMap = Map<string, SimilarCargoMatch[]>;
+
 /**
  * Performs strict matching: only returns meals where ALL non-optional
  * ingredients are available in sufficient quantity.
  * scaleFactor applies to required quantities (for serving-size scaling).
  */
-async function strictMatch(
-	env: Env,
-	organizationId: string,
+function strictMatch(
 	meals: Array<{
 		meal: typeof meal.$inferSelect;
 		ingredients: (typeof mealIngredient.$inferSelect)[];
 		tags: string[];
 	}>,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
+	similarityMap: SimilarityMap,
 	scaleFactor = 1,
-): Promise<MealMatchResult[]> {
+): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
@@ -172,12 +171,11 @@ async function strictMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = await getAvailableQuantity(
-				env,
-				organizationId,
+			const available = getAvailableQuantityWithMap(
 				ingredient.ingredientName,
 				targetUnit,
 				cargoIndex,
+				similarityMap,
 			);
 			const required = scaleQuantity(
 				ingredient.quantity,
@@ -225,18 +223,17 @@ async function strictMatch(
  * ingredient availability. Returns meals above minimum threshold.
  * scaleFactor applies to required quantities (for serving-size scaling).
  */
-async function deltaMatch(
-	env: Env,
-	organizationId: string,
+function deltaMatch(
 	meals: Array<{
 		meal: typeof meal.$inferSelect;
 		ingredients: (typeof mealIngredient.$inferSelect)[];
 		tags: string[];
 	}>,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
+	similarityMap: SimilarityMap,
 	minMatch = 50,
 	scaleFactor = 1,
-): Promise<MealMatchResult[]> {
+): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
@@ -259,12 +256,11 @@ async function deltaMatch(
 
 		for (const ingredient of ingredients) {
 			const targetUnit = toSupportedUnit(ingredient.unit);
-			const available = await getAvailableQuantity(
-				env,
-				organizationId,
+			const available = getAvailableQuantityWithMap(
 				ingredient.ingredientName,
 				targetUnit,
 				cargoIndex,
+				similarityMap,
 			);
 			const required = scaleQuantity(
 				ingredient.quantity,
@@ -324,19 +320,35 @@ export async function matchMeals(
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
 	const d1 = drizzle(env.DB);
-	const { mode, minMatch = 50, limit = 20, tag, servings } = query;
+	const { mode, minMatch = 50, limit = 20, preLimit, tag, servings } = query;
 
 	log.info("[matchMeals] Starting", {
 		organizationId: redactId(organizationId),
 		mode,
 		minMatch,
 		limit,
+		preLimit,
 		tag,
 		servings,
 	});
 
+	// 0. KV cache lookup (60s TTL; repeat Hub visits return immediately)
+	if (env.RATION_KV) {
+		const cacheKey = getMatchCacheKey(organizationId, query);
+		try {
+			const cached = await env.RATION_KV.get(cacheKey, "json");
+			if (Array.isArray(cached) && cached.length >= 0) {
+				log.info("[matchMeals] Cache hit", { key: cacheKey });
+				return cached as MealMatchResult[];
+			}
+		} catch {
+			// Cache read failed; proceed to compute
+		}
+	}
+
 	// 1. Fetch organization's meals (with optional tag filter)
-	const mealQuery = tag
+	// preLimit caps meals before matching — bounds work for large orgs
+	let mealQuery = tag
 		? d1
 				.select({
 					id: meal.id,
@@ -360,6 +372,10 @@ export async function matchMeals(
 					and(eq(meal.organizationId, organizationId), eq(mealTag.tag, tag)),
 				)
 		: d1.select().from(meal).where(eq(meal.organizationId, organizationId));
+
+	if (preLimit != null && preLimit > 0) {
+		mealQuery = mealQuery.limit(preLimit) as typeof mealQuery;
+	}
 
 	const meals = await mealQuery;
 	log.info("[matchMeals] Found meals", { count: meals.length });
@@ -423,70 +439,83 @@ export async function matchMeals(
 		tags: tagsByMeal.get(m.id) || [],
 	}));
 
-	// 6. Compute per-meal scale factors (servings override applies uniformly when given)
-	// Each meal carries its own base servings so scaling is independent per recipe.
+	// 6. Batch vector lookup: collect ingredient names that need fallback, call findSimilarCargoBatch once
+	const missNames = new Set<string>();
+	for (const { ingredients } of enrichedMeals) {
+		for (const ing of ingredients) {
+			const normalized = normalizeIngredientName(ing.ingredientName);
+			if (!cargoIndex.has(normalized)) {
+				missNames.add(ing.ingredientName);
+			}
+		}
+	}
+	const similarityMap =
+		missNames.size > 0
+			? await findSimilarCargoBatch(
+					env,
+					organizationId,
+					Array.from(missNames),
+					{
+						topK: 3,
+						threshold: SIMILARITY_THRESHOLDS.MEAL_MATCH,
+					},
+				)
+			: new Map<string, SimilarCargoMatch[]>();
+
+	// 7. Compute per-meal scale factors (servings override applies uniformly when given)
 	const getScaleForMeal = (mealRecord: typeof meal.$inferSelect) => {
 		if (!servings) return 1;
 		return getScaleFactor(mealRecord.servings ?? 1, servings);
 	};
 
-	// 7. Perform matching based on mode
-	// When a global servings override is supplied we scale per meal; otherwise scale=1.
+	// 8. Perform matching based on mode (sync — uses pre-fetched similarity map)
 	let results: MealMatchResult[];
 	if (mode === "strict") {
 		if (servings) {
-			// Scale each meal individually
 			const allResults: MealMatchResult[] = [];
 			for (const enriched of enrichedMeals) {
 				const sf = getScaleForMeal(enriched.meal);
 				allResults.push(
-					...(await strictMatch(
-						env,
-						organizationId,
-						[enriched],
-						cargoIndex,
-						sf,
-					)),
+					...strictMatch([enriched], cargoIndex, similarityMap, sf),
 				);
 			}
 			results = allResults;
 		} else {
-			results = await strictMatch(
-				env,
-				organizationId,
-				enrichedMeals,
-				cargoIndex,
-			);
+			results = strictMatch(enrichedMeals, cargoIndex, similarityMap);
 		}
 	} else if (servings) {
 		const allResults: MealMatchResult[] = [];
 		for (const enriched of enrichedMeals) {
 			const sf = getScaleForMeal(enriched.meal);
 			allResults.push(
-				...(await deltaMatch(
-					env,
-					organizationId,
-					[enriched],
-					cargoIndex,
-					minMatch,
-					sf,
-				)),
+				...deltaMatch([enriched], cargoIndex, similarityMap, minMatch, sf),
 			);
 		}
 		results = allResults.sort((a, b) => b.matchPercentage - a.matchPercentage);
 	} else {
-		results = await deltaMatch(
-			env,
-			organizationId,
-			enrichedMeals,
-			cargoIndex,
-			minMatch,
-		);
+		results = deltaMatch(enrichedMeals, cargoIndex, similarityMap, minMatch);
 	}
 
-	// 8. Apply limit
-	return results.slice(0, limit);
+	// 9. Apply limit
+	const limited = results.slice(0, limit);
+
+	// 10. Store in KV cache for repeat visits (60s TTL)
+	if (env.RATION_KV) {
+		const cacheKey = getMatchCacheKey(organizationId, query);
+		try {
+			await env.RATION_KV.put(cacheKey, JSON.stringify(limited), {
+				expirationTtl: MATCH_CACHE_TTL,
+			});
+		} catch {
+			// Cache write failed; non-fatal
+		}
+	}
+
+	return limited;
 }
+
+const MATCH_CACHE_PREFIX = "match:";
+const MATCH_CACHE_TTL = 60; // seconds
 
 /**
  * Generates a cache key for meal matching results
@@ -495,6 +524,6 @@ export function getMatchCacheKey(
 	organizationId: string,
 	query: MealMatchQuery,
 ): string {
-	const { mode, minMatch = 50, limit = 20, tag, servings } = query;
-	return `match:${organizationId}:${mode}:${minMatch}:${limit}:${tag || "all"}:${servings ?? "base"}`;
+	const { mode, minMatch = 50, limit = 20, preLimit, tag, servings } = query;
+	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tag || "all"}:${servings ?? "base"}`;
 }

@@ -128,6 +128,28 @@ export const AIResponseSchema = z.object({
 
 export type AIResponse = z.infer<typeof AIResponseSchema>;
 
+/** Query parameters for GET /api/meals/match */
+export const MealMatchQuerySchema = z.object({
+	mode: z.enum(["strict", "delta"]),
+	minMatch: z.coerce.number().int().min(0).max(100).default(50),
+	limit: z.coerce.number().int().min(1).max(100).default(20),
+	tag: z
+		.string()
+		.optional()
+		.transform((v) => (v === "" || !v ? undefined : v)),
+	servings: z.preprocess(
+		(v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+		z.number().int().min(1).optional(),
+	),
+	type: z.enum(["recipe", "provision"]).optional(),
+	domain: z
+		.string()
+		.optional()
+		.transform((v) => (v === "" || !v ? undefined : v)),
+});
+
+export type MealMatchQueryInput = z.infer<typeof MealMatchQuerySchema>;
+
 /**
  * Normalize AI output to match schema. Gemini often returns:
  * - ingredients with only inventoryName (no name)

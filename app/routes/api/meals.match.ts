@@ -1,8 +1,9 @@
-import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
+import { MealMatchQuerySchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.match";
 
 /**
@@ -13,79 +14,59 @@ import type { Route } from "./+types/meals.match";
  * Query Parameters:
  * - mode: 'strict' | 'delta' (required)
  * - minMatch: number (0-100) for delta mode, default 50
- * - limit: number, default 20
+ * - limit: number (1-100), default 20
  * - tag: string, optional meal tag filter
  * - servings: number, optional desired servings (scales required quantities)
+ * - type: 'recipe' | 'provision', optional meal type filter
+ * - domain: string, optional domain filter (e.g. 'food')
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 
-	// Parse query parameters
-	const mode = url.searchParams.get("mode") as "strict" | "delta";
-	const minMatch = Number.parseInt(
-		url.searchParams.get("minMatch") || "50",
-		10,
-	);
-	const limit = Number.parseInt(url.searchParams.get("limit") || "20", 10);
-	const tag = url.searchParams.get("tag") || undefined;
-	const rawServings = url.searchParams.get("servings");
-	const servings =
-		rawServings != null ? Number.parseInt(rawServings, 10) : undefined;
+	const raw = {
+		mode: url.searchParams.get("mode") ?? undefined,
+		minMatch: url.searchParams.get("minMatch") ?? undefined,
+		limit: url.searchParams.get("limit") ?? undefined,
+		tag: url.searchParams.get("tag") ?? undefined,
+		servings: url.searchParams.get("servings") ?? undefined,
+		type: url.searchParams.get("type") ?? undefined,
+		domain: url.searchParams.get("domain") ?? undefined,
+	};
 
-	// Validate mode parameter
-	if (mode !== "strict" && mode !== "delta") {
-		throw data(
-			{ error: "Invalid mode. Must be 'strict' or 'delta'" },
-			{ status: 400 },
-		);
-	}
-
-	// Validate minMatch range
-	if (minMatch < 0 || minMatch > 100) {
-		throw data(
-			{ error: "minMatch must be between 0 and 100" },
-			{ status: 400 },
-		);
-	}
-
-	// Validate servings if provided
-	if (servings !== undefined && (Number.isNaN(servings) || servings < 1)) {
-		throw data(
-			{ error: "servings must be a positive integer" },
-			{ status: 400 },
-		);
+	const parsed = MealMatchQuerySchema.safeParse(raw);
+	if (!parsed.success) {
+		throw handleApiError(parsed.error);
 	}
 
 	const query: MealMatchQuery = {
-		mode,
-		minMatch,
-		limit,
-		tag,
-		servings,
+		mode: parsed.data.mode,
+		minMatch: parsed.data.minMatch,
+		limit: parsed.data.limit,
+		tag: parsed.data.tag,
+		servings: parsed.data.servings,
+		...(parsed.data.type ? { type: parsed.data.type } : {}),
+		...(parsed.data.domain ? { domain: parsed.data.domain } : {}),
 	};
 
 	try {
 		log.info("[Match API] Starting match request", {
 			groupId: redactId(groupId),
-			mode,
-			minMatch,
-			limit,
-			tag,
-			servings,
+			mode: query.mode,
+			minMatch: query.minMatch,
+			limit: query.limit,
+			tag: query.tag,
+			servings: query.servings,
+			type: query.type,
+			domain: query.domain,
 		});
 
-		// Perform matching
 		const results = await matchMeals(context.cloudflare.env, groupId, query);
 
 		log.info("[Match API] Match complete", { resultsCount: results.length });
 
 		return { results };
 	} catch (error) {
-		log.error("[Match API] Match failed", error, {
-			detail: error instanceof Error ? error.message : "Unknown error",
-		});
-
-		throw data({ error: "Failed to match meals" }, { status: 500 });
+		throw handleApiError(error);
 	}
 }

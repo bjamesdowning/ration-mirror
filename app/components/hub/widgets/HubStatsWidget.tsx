@@ -70,12 +70,43 @@ function MealsReadyStat({ mealMatches }: { mealMatches: unknown }) {
 	return <StatCard label="Meals Ready" value={count} icon={<SuccessIcon />} />;
 }
 
+function SnacksReadyStat({ snackMatches }: { snackMatches: unknown }) {
+	if (isPromise(snackMatches)) {
+		return (
+			<Suspense
+				fallback={
+					<StatCard label="Snacks Ready" value="—" icon={<SuccessIcon />} />
+				}
+			>
+				<Await resolve={snackMatches}>
+					{(resolved) => {
+						const count = (Array.isArray(resolved) ? resolved : []).filter(
+							(m: { canMake?: boolean }) => m.canMake,
+						).length;
+						return (
+							<StatCard
+								label="Snacks Ready"
+								value={count}
+								icon={<SuccessIcon />}
+							/>
+						);
+					}}
+				</Await>
+			</Suspense>
+		);
+	}
+	const count = (Array.isArray(snackMatches) ? snackMatches : []).filter(
+		(m: { canMake?: boolean }) => m.canMake,
+	).length;
+	return <StatCard label="Snacks Ready" value={count} icon={<SuccessIcon />} />;
+}
+
 export function HubStatsWidget({ data }: HubWidgetProps) {
-	const { cargoStats, mealMatches, latestSupplyList } = data;
+	const { cargoStats, mealMatches, snackMatches, latestSupplyList } = data;
 	const supplyCount = latestSupplyList?.items.length ?? 0;
 
 	return (
-		<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+		<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
 			<StatCard
 				label="Cargo Items"
 				value={cargoStats.totalItems}
@@ -88,6 +119,7 @@ export function HubStatsWidget({ data }: HubWidgetProps) {
 				highlight={cargoStats.expiringCount > 0}
 			/>
 			<MealsReadyStat mealMatches={mealMatches} />
+			<SnacksReadyStat snackMatches={snackMatches} />
 			<StatCard
 				label="Supply Items"
 				value={supplyCount}

@@ -35,6 +35,7 @@ export type HubWidgetId =
 	| "hub-stats"
 	| "meals-ready"
 	| "meals-partial"
+	| "snacks-ready"
 	| "cargo-expiring"
 	| "supply-preview"
 	| "manifest-preview";
@@ -74,6 +75,8 @@ export interface HubLoaderData {
 	latestSupplyList: { items: unknown[] } | null;
 	/** Deferred: Promise when using deferred loader; resolves to meal match results */
 	mealMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
+	/** Deferred: Promise when using deferred loader; resolves to snack (provision) match results */
+	snackMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	expirationAlertDays: number;
 	manifestPreview: ManifestPreviewData | null;
 }

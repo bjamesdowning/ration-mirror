@@ -11,6 +11,7 @@ import { HubStatsWidget } from "./HubStatsWidget";
 import { ManifestWidget } from "./ManifestWidget";
 import { MealsPartialWidget } from "./MealsPartialWidget";
 import { MealsReadyWidget } from "./MealsReadyWidget";
+import { SnacksReadyWidget } from "./SnacksReadyWidget";
 import { SupplyPreviewWidget } from "./SupplyPreviewWidget";
 
 export type { HubWidgetId, HubProfile, HubWidgetLayout, HubWidgetProps };
@@ -32,8 +33,14 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 		{
 			id: "hub-stats",
 			title: "Quick Stats",
-			description: "Cargo count, expiring, meals ready, supply count",
-			dataKeys: ["cargoStats", "mealMatches", "latestSupplyList"],
+			description:
+				"Cargo count, expiring, meals ready, snacks ready, supply count",
+			dataKeys: [
+				"cargoStats",
+				"mealMatches",
+				"snackMatches",
+				"latestSupplyList",
+			],
 			component: HubStatsWidget,
 			defaultSize: "lg",
 		},
@@ -58,6 +65,18 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			description: "Meals with 50%+ match, missing some ingredients",
 			dataKeys: ["mealMatches"],
 			component: MealsPartialWidget,
+			defaultSize: "lg",
+			defer: true,
+		},
+	],
+	[
+		"snacks-ready",
+		{
+			id: "snacks-ready",
+			title: "Snacks Ready",
+			description: "Provisions you can have with current Cargo",
+			dataKeys: ["snackMatches"],
+			component: SnacksReadyWidget,
 			defaultSize: "lg",
 			defer: true,
 		},
@@ -101,16 +120,18 @@ const FULL_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
 	{ id: "meals-ready", order: 1, size: "lg", visible: true },
 	{ id: "meals-partial", order: 2, size: "lg", visible: true },
-	{ id: "cargo-expiring", order: 3, size: "md", visible: true },
-	{ id: "supply-preview", order: 4, size: "md", visible: true },
-	{ id: "manifest-preview", order: 5, size: "md", visible: true },
+	{ id: "snacks-ready", order: 3, size: "lg", visible: true },
+	{ id: "cargo-expiring", order: 4, size: "md", visible: true },
+	{ id: "supply-preview", order: 5, size: "md", visible: true },
+	{ id: "manifest-preview", order: 6, size: "md", visible: true },
 ];
 
 const COOK_LAYOUT: HubWidgetLayout[] = [
 	{ id: "hub-stats", order: 0, size: "lg", visible: true },
 	{ id: "meals-ready", order: 1, size: "lg", visible: true },
-	{ id: "cargo-expiring", order: 2, size: "md", visible: true },
-	{ id: "manifest-preview", order: 3, size: "sm", visible: true },
+	{ id: "snacks-ready", order: 2, size: "lg", visible: true },
+	{ id: "cargo-expiring", order: 3, size: "md", visible: true },
+	{ id: "manifest-preview", order: 4, size: "sm", visible: true },
 ];
 
 const SHOP_LAYOUT: HubWidgetLayout[] = [

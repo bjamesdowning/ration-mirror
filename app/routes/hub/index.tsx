@@ -41,13 +41,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			getManifestPreview(db, groupId, 7),
 		]);
 
-	// Deferred — raw promise; meal widgets show skeletons until resolved
+	// Deferred — raw promises; meal/snack widgets show skeletons until resolved
 	// preLimit: 12 caps meals matched; bounds vector work for large orgs
 	const mealMatches = matchMeals(context.cloudflare.env, groupId, {
 		mode: "delta",
 		minMatch: 50,
 		limit: 6,
 		preLimit: 12,
+		type: "recipe",
+		domain: "food",
+	});
+	const snackMatches = matchMeals(context.cloudflare.env, groupId, {
+		mode: "delta",
+		minMatch: 50,
+		limit: 6,
+		preLimit: 12,
+		type: "provision",
+		domain: "food",
 	});
 
 	return {
@@ -60,6 +70,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		hubLayout,
 		welcomeVoucherRedeemed: userData?.welcomeVoucherRedeemed ?? false,
 		mealMatches,
+		snackMatches,
 	};
 }
 
@@ -73,6 +84,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		hubLayout,
 		latestSupplyList,
 		mealMatches,
+		snackMatches,
 		manifestPreview,
 		welcomeVoucherRedeemed,
 	} = loaderData;
@@ -89,6 +101,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		expiringItems,
 		latestSupplyList,
 		mealMatches,
+		snackMatches,
 		manifestPreview,
 	};
 

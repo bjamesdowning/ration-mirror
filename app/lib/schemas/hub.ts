@@ -4,6 +4,7 @@ const HUB_WIDGET_IDS = [
 	"hub-stats",
 	"meals-ready",
 	"meals-partial",
+	"snacks-ready",
 	"cargo-expiring",
 	"supply-preview",
 	"manifest-preview",

@@ -56,6 +56,10 @@ export interface MealMatchQuery {
 	tag?: string;
 	/** Override servings for all meals. Scales required quantities before comparing to cargo. */
 	servings?: number;
+	/** Filter by meal type: recipe (meals) or provision (snacks) */
+	type?: "recipe" | "provision";
+	/** Filter by domain, e.g. 'food' */
+	domain?: string;
 }
 
 /**
@@ -336,7 +340,16 @@ export async function matchMeals(
 	query: MealMatchQuery,
 ): Promise<MealMatchResult[]> {
 	const d1 = drizzle(env.DB);
-	const { mode, minMatch = 50, limit = 20, preLimit, tag, servings } = query;
+	const {
+		mode,
+		minMatch = 50,
+		limit = 20,
+		preLimit,
+		tag,
+		servings,
+		type,
+		domain,
+	} = query;
 
 	log.info("[matchMeals] Starting", {
 		organizationId: redactId(organizationId),
@@ -346,6 +359,8 @@ export async function matchMeals(
 		preLimit,
 		tag,
 		servings,
+		type,
+		domain,
 	});
 
 	// 0. KV cache lookup (60s TTL; repeat Hub visits return immediately)
@@ -362,8 +377,15 @@ export async function matchMeals(
 		}
 	}
 
-	// 1. Fetch organization's meals (with optional tag filter)
+	// 1. Fetch organization's meals (with optional tag, type, domain filters)
 	// preLimit caps meals before matching — bounds work for large orgs
+	const baseConditions = [
+		eq(meal.organizationId, organizationId),
+		...(tag ? [eq(mealTag.tag, tag)] : []),
+		...(type ? [eq(meal.type, type)] : []),
+		...(domain ? [eq(meal.domain, domain)] : []),
+	];
+
 	let mealQuery = tag
 		? d1
 				.select({
@@ -384,10 +406,11 @@ export async function matchMeals(
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-				.where(
-					and(eq(meal.organizationId, organizationId), eq(mealTag.tag, tag)),
-				)
-		: d1.select().from(meal).where(eq(meal.organizationId, organizationId));
+				.where(and(...baseConditions))
+		: d1
+				.select()
+				.from(meal)
+				.where(and(...baseConditions));
 
 	if (preLimit != null && preLimit > 0) {
 		mealQuery = mealQuery.limit(preLimit) as typeof mealQuery;
@@ -540,6 +563,15 @@ export function getMatchCacheKey(
 	organizationId: string,
 	query: MealMatchQuery,
 ): string {
-	const { mode, minMatch = 50, limit = 20, preLimit, tag, servings } = query;
-	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tag || "all"}:${servings ?? "base"}`;
+	const {
+		mode,
+		minMatch = 50,
+		limit = 20,
+		preLimit,
+		tag,
+		servings,
+		type,
+		domain,
+	} = query;
+	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tag || "all"}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}`;
 }

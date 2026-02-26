@@ -1,15 +1,15 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { applyCargoImport, getCargo } from "~/lib/cargo.server";
-import type { ParsedCsvItem } from "~/lib/csv-parser";
+import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
+import type { SupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/cargo.batch";
 
 /**
  * Batch add multiple items to inventory from scan results.
- * Uses shared applyCargoImport: merge items update existing row quantity; new items create rows.
+ * Uses ingestCargoItems for centralized vector-assisted deduplication.
  */
 export async function action({ request, context }: Route.ActionArgs) {
 	const { groupId, session } = await requireActiveGroup(context, request);
@@ -47,71 +47,41 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const { items } = result.data;
-		const mergeItems = items.filter((item) => item.mergeTargetId);
-		const newItems = items.filter((item) => !item.mergeTargetId);
+		const ingestItems: IngestItem[] = items.map((it) => ({
+			name: it.name,
+			quantity: it.quantity,
+			unit: it.unit as SupportedUnit,
+			domain: it.domain,
+			tags: it.tags,
+			expiresAt: it.expiresAt,
+			mergeTargetId: it.mergeTargetId,
+		}));
 
-		const parsed: ParsedCsvItem[] = [];
-
-		if (mergeItems.length > 0) {
-			const existingCargo = await getCargo(context.cloudflare.env.DB, groupId);
-			const byId = new Map(existingCargo.map((c) => [c.id, c]));
-			for (const item of mergeItems) {
-				const targetId = item.mergeTargetId;
-				if (!targetId) continue;
-				const existing = byId.get(targetId);
-				if (!existing) {
-					parsed.push({
-						name: item.name,
-						quantity: item.quantity,
-						unit: item.unit,
-						domain: item.domain,
-						tags: item.tags,
-						expiresAt: item.expiresAt?.toISOString().slice(0, 10),
-					});
-					continue;
-				}
-				parsed.push({
-					id: targetId,
-					name: existing.name,
-					quantity: existing.quantity + item.quantity,
-					unit: existing.unit,
-					domain: existing.domain,
-					tags:
-						typeof existing.tags === "string"
-							? (JSON.parse(existing.tags || "[]") as string[])
-							: (existing.tags as string[]),
-					expiresAt: existing.expiresAt
-						? new Date(existing.expiresAt).toISOString().slice(0, 10)
-						: undefined,
-				});
-			}
-		}
-
-		for (const item of newItems) {
-			parsed.push({
-				name: item.name,
-				quantity: item.quantity,
-				unit: item.unit,
-				domain: item.domain,
-				tags: item.tags,
-				expiresAt: item.expiresAt?.toISOString().slice(0, 10),
-			});
-		}
-
-		const applyResult = await applyCargoImport(
+		const ingestResults = await ingestCargoItems(
 			context.cloudflare.env,
 			groupId,
-			parsed,
+			ingestItems,
+			{ strictMergeTarget: false },
 		);
 
-		const errors =
-			applyResult.errors.length > 0 ? applyResult.errors : undefined;
+		let added = 0;
+		let updated = 0;
+		const errors: Array<{ name: string; error: string }> = [];
+		for (let i = 0; i < ingestResults.length; i++) {
+			const r = ingestResults[i];
+			const it = items[i];
+			if (r.status === "created") added += 1;
+			else if (r.status === "merged") updated += 1;
+			else if (r.status === "capacity_exceeded" || r.status === "error")
+				errors.push({ name: it.name, error: r.error ?? r.status });
+		}
+
 		return {
 			success: true,
-			added: applyResult.imported,
-			updated: applyResult.updated,
+			added,
+			updated,
 			total: items.length,
-			errors,
+			errors: errors.length > 0 ? errors : undefined,
 		};
 	} catch (error) {
 		log.error("Batch add failed", error);

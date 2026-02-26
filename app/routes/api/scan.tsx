@@ -272,8 +272,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 						context.cloudflare.env.DB,
 						groupId,
 					);
-
-					return { success: true, ...validatedScan.data, existingCargo };
+					const existingInventory = existingCargo.map((c) => ({
+						id: c.id,
+						name: c.name,
+						quantity: c.quantity,
+						unit: c.unit,
+					}));
+					return { success: true, ...validatedScan.data, existingInventory };
 				} catch (innerError) {
 					// data() returns DataWithResponseInit, not Response — re-throw it for React Router
 					if (

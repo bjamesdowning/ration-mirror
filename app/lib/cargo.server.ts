@@ -18,11 +18,7 @@ import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
 import { normalizeForMatch } from "./matching";
-import {
-	chunkArray,
-	chunkedInsert,
-	D1_MAX_BOUND_PARAMS,
-} from "./query-utils.server";
+import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
 import {
 	convertQuantity,
@@ -33,7 +29,7 @@ import {
 } from "./units";
 import {
 	deleteCargoVectors,
-	findSimilarCargo,
+	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
 	upsertCargoVector,
 	upsertCargoVectors,
@@ -173,9 +169,356 @@ function isCompatibleUnit(a: string, b: string): boolean {
 	return getUnitMultiplier(a as SupportedUnit, b as SupportedUnit) !== null;
 }
 
+export interface IngestItem {
+	name: string;
+	quantity: number;
+	unit: SupportedUnit;
+	domain: (typeof ITEM_DOMAINS)[number];
+	tags: string[];
+	expiresAt?: Date;
+	mergeTargetId?: string;
+}
+
+export interface IngestItemResult {
+	status:
+		| "merged"
+		| "created"
+		| "capacity_exceeded"
+		| "merge_candidate"
+		| "invalid_merge_target"
+		| "error";
+	item?: typeof cargo.$inferSelect;
+	mergedInto?: { id: string; name: string };
+	mergeCandidate?: MergeCandidate;
+	error?: string;
+}
+
+export interface IngestCargoOptions {
+	skipVectorPhase?: boolean;
+	/** When true, vector matches return merge_candidate instead of auto-merging (for manual add UI) */
+	returnMergeCandidateOnFuzzy?: boolean;
+	/** When true, invalid mergeTargetId returns error. When false, fall through to exact/vector/create (batch) */
+	strictMergeTarget?: boolean;
+	/** When true, always create new rows (skip all merge resolution) */
+	forceCreateNew?: boolean;
+}
+
+/**
+ * Central ingestion: resolve duplicates (string + vector), then merge or create.
+ * All cargo entry points (manual add, scan batch, CSV import, supply dock) route here.
+ */
+export async function ingestCargoItems(
+	env: Env,
+	organizationId: string,
+	items: IngestItem[],
+	options?: IngestCargoOptions,
+): Promise<IngestItemResult[]> {
+	if (items.length === 0) return [];
+
+	const d1 = drizzle(env.DB);
+	const existingCargo = await d1
+		.select()
+		.from(cargo)
+		.where(eq(cargo.organizationId, organizationId));
+
+	const cargoById = new Map<string, typeof cargo.$inferSelect>();
+	const cargoByKey = new Map<string, (typeof cargo.$inferSelect)[]>();
+	for (const c of existingCargo) {
+		cargoById.set(c.id, c);
+		const key = `${normalizeForMatch(c.name)}__${c.domain}`;
+		const arr = cargoByKey.get(key) ?? [];
+		arr.push(c);
+		cargoByKey.set(key, arr);
+	}
+
+	const quantityByCargoId = new Map<string, number>();
+	for (const c of existingCargo) {
+		quantityByCargoId.set(c.id, c.quantity);
+	}
+
+	type Resolved =
+		| { action: "merge"; targetId: string; convertedQty: number }
+		| { action: "merge_candidate"; candidate: MergeCandidate }
+		| { action: "invalid_merge_target" }
+		| { action: "create" };
+
+	const resolved: (Resolved | undefined)[] = new Array(items.length);
+	const toVectorResolve: number[] = [];
+
+	for (let i = 0; i < items.length; i++) {
+		const it = items[i];
+		if (options?.forceCreateNew) {
+			resolved[i] = { action: "create" };
+			continue;
+		}
+		const unit = it.unit as SupportedUnit;
+		const key = `${normalizeForMatch(it.name)}__${it.domain}`;
+
+		if (it.mergeTargetId) {
+			const target = cargoById.get(it.mergeTargetId);
+			if (
+				target &&
+				target.domain === it.domain &&
+				isCompatibleUnit(target.unit, it.unit)
+			) {
+				const converted = convertQuantity(
+					it.quantity,
+					unit,
+					target.unit as SupportedUnit,
+				);
+				if (converted !== null) {
+					resolved[i] = {
+						action: "merge",
+						targetId: target.id,
+						convertedQty: converted,
+					};
+					const cur = quantityByCargoId.get(target.id) ?? target.quantity;
+					quantityByCargoId.set(target.id, cur + converted);
+					continue;
+				}
+			}
+			if (options?.strictMergeTarget) {
+				resolved[i] = { action: "invalid_merge_target" };
+				continue;
+			}
+		}
+
+		const exactBucket = cargoByKey.get(key) ?? [];
+		const exact = exactBucket.find((c) => isCompatibleUnit(c.unit, it.unit));
+		if (exact) {
+			const converted = convertQuantity(
+				it.quantity,
+				unit,
+				exact.unit as SupportedUnit,
+			);
+			if (converted !== null) {
+				resolved[i] = {
+					action: "merge",
+					targetId: exact.id,
+					convertedQty: converted,
+				};
+				const cur = quantityByCargoId.get(exact.id) ?? exact.quantity;
+				quantityByCargoId.set(exact.id, cur + converted);
+				continue;
+			}
+		}
+
+		if (options?.skipVectorPhase) {
+			resolved[i] = { action: "create" };
+			continue;
+		}
+		toVectorResolve.push(i);
+	}
+
+	if (toVectorResolve.length > 0 && env.VECTORIZE && env.AI) {
+		const uniqueNames = [...new Set(toVectorResolve.map((i) => items[i].name))];
+		const domainFilter = items[toVectorResolve[0]]?.domain;
+		const similarityMap = await findSimilarCargoBatch(
+			env,
+			organizationId,
+			uniqueNames,
+			{
+				topK: 1,
+				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
+				domain: domainFilter,
+			},
+		);
+
+		for (const idx of toVectorResolve) {
+			const it = items[idx];
+			const similar = similarityMap.get(it.name);
+			const best = similar?.[0];
+			let handled = false;
+			if (best) {
+				const target = cargoById.get(best.itemId);
+				if (
+					target &&
+					target.domain === it.domain &&
+					isCompatibleUnit(target.unit, it.unit)
+				) {
+					const converted = convertQuantity(
+						it.quantity,
+						it.unit as SupportedUnit,
+						target.unit as SupportedUnit,
+					);
+					if (converted !== null) {
+						if (options?.returnMergeCandidateOnFuzzy) {
+							resolved[idx] = {
+								action: "merge_candidate",
+								candidate: {
+									id: target.id,
+									name: target.name,
+									quantity: target.quantity,
+									unit: target.unit as SupportedUnit,
+									score: best.score,
+									convertedQuantity: converted,
+								},
+							};
+						} else {
+							resolved[idx] = {
+								action: "merge",
+								targetId: target.id,
+								convertedQty: converted,
+							};
+							const cur = quantityByCargoId.get(target.id) ?? target.quantity;
+							quantityByCargoId.set(target.id, cur + converted);
+						}
+						handled = true;
+					}
+				}
+			}
+			if (!handled) {
+				resolved[idx] = { action: "create" };
+			}
+		}
+	} else {
+		for (const idx of toVectorResolve) {
+			resolved[idx] = { action: "create" };
+		}
+	}
+
+	const mergeCandidateResult = resolved.find(
+		(r) => r?.action === "merge_candidate",
+	);
+	if (
+		mergeCandidateResult &&
+		mergeCandidateResult.action === "merge_candidate"
+	) {
+		return [
+			{
+				status: "merge_candidate" as const,
+				mergeCandidate: mergeCandidateResult.candidate,
+			},
+		];
+	}
+	const invalidMergeResult = resolved.find(
+		(r) => r?.action === "invalid_merge_target",
+	);
+	if (invalidMergeResult) {
+		return [{ status: "invalid_merge_target" as const }];
+	}
+
+	const createCount = resolved.filter((r) => r?.action === "create").length;
+	const capacity = await checkCapacity(
+		env,
+		organizationId,
+		"cargo",
+		createCount,
+	);
+	if (!capacity.allowed) {
+		return items.map(() => ({
+			status: "capacity_exceeded" as const,
+			error: "capacity_exceeded",
+		}));
+	}
+
+	const now = new Date();
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch requires tuple, we build dynamically
+	const batchOps: any[] = [];
+	const newCargoForVector: Array<{ id: string; name: string; domain: string }> =
+		[];
+	const results: IngestItemResult[] = [];
+	const mergedTargetIds = new Set<string>();
+
+	for (let i = 0; i < items.length; i++) {
+		const it = items[i];
+		const r = resolved[i] ?? { action: "create" as const };
+		if (r.action === "merge") {
+			const target = cargoById.get(r.targetId);
+			const newQty = quantityByCargoId.get(r.targetId);
+			if (!target || newQty === undefined) continue;
+			if (!mergedTargetIds.has(r.targetId)) {
+				mergedTargetIds.add(r.targetId);
+				batchOps.push(
+					d1
+						.update(cargo)
+						.set({ quantity: newQty, updatedAt: now })
+						.where(
+							and(
+								eq(cargo.id, r.targetId),
+								eq(cargo.organizationId, organizationId),
+							),
+						),
+				);
+			}
+			results.push({
+				status: "merged",
+				item: {
+					...target,
+					quantity: newQty,
+					updatedAt: now,
+				} as typeof cargo.$inferSelect,
+				mergedInto: { id: target.id, name: target.name },
+			});
+			continue;
+		}
+
+		const newId = crypto.randomUUID();
+		const tagsJson = Array.isArray(it.tags)
+			? JSON.stringify(it.tags)
+			: typeof it.tags === "string"
+				? it.tags
+				: "[]";
+		batchOps.push(
+			d1.insert(cargo).values({
+				id: newId,
+				organizationId,
+				name: it.name,
+				quantity: it.quantity,
+				unit: it.unit,
+				domain: it.domain,
+				tags: tagsJson,
+				status: calculateInventoryStatus(it.expiresAt),
+				expiresAt: it.expiresAt ?? null,
+				createdAt: now,
+				updatedAt: now,
+			}),
+		);
+		const newRow = {
+			id: newId,
+			organizationId,
+			name: it.name,
+			quantity: it.quantity,
+			unit: it.unit,
+			domain: it.domain,
+			tags: tagsJson,
+			status: calculateInventoryStatus(it.expiresAt),
+			expiresAt: it.expiresAt ?? null,
+			createdAt: now,
+			updatedAt: now,
+		} as typeof cargo.$inferSelect;
+		cargoById.set(newId, newRow);
+		quantityByCargoId.set(newId, it.quantity);
+		const key = `${normalizeForMatch(it.name)}__${it.domain}`;
+		const arr = cargoByKey.get(key) ?? [];
+		arr.push(newRow);
+		cargoByKey.set(key, arr);
+		newCargoForVector.push({
+			id: newId,
+			name: it.name,
+			domain: it.domain ?? "food",
+		});
+		results.push({ status: "created", item: newRow });
+	}
+
+	if (batchOps.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(batchOps as [any, ...any[]]);
+	}
+
+	if (newCargoForVector.length > 0) {
+		upsertCargoVectors(env, organizationId, newCargoForVector).catch((err) =>
+			log.error("[Vector] batch upsert failed for ingest:", err),
+		);
+	}
+
+	return results;
+}
+
 /**
  * Add a new item to the organization's inventory.
  * Supports merge-on-add to prevent duplicate inventory rows.
+ * Thin wrapper around ingestCargoItems.
  */
 export async function addOrMergeItem(
 	env: Env,
@@ -183,126 +526,42 @@ export async function addOrMergeItem(
 	data: CargoItemInput,
 	options: AddOrMergeItemOptions = {},
 ) {
-	const d1 = drizzle(env.DB);
-	const normalizedName = normalizeForMatch(data.name);
-	const requestedUnit = data.unit as SupportedUnit;
-	const existingItems = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
-
-	const mergeIntoExisting = async (targetId: string, score: number) => {
-		const target = existingItems.find((item) => item.id === targetId);
-		if (!target) return null;
-
-		const convertedQuantity = convertQuantity(
-			data.quantity,
-			requestedUnit,
-			target.unit as SupportedUnit,
-		);
-		if (convertedQuantity === null) return null;
-
-		const [updatedItem] = await d1
-			.update(cargo)
-			.set({
-				quantity: target.quantity + convertedQuantity,
-				updatedAt: new Date(),
-			})
-			.where(
-				and(eq(cargo.id, target.id), eq(cargo.organizationId, organizationId)),
-			)
-			.returning();
-
-		if (!updatedItem) return null;
-
-		return {
-			status: "merged" as const,
-			item: updatedItem,
-			candidate: {
-				id: target.id,
-				name: target.name,
-				quantity: target.quantity,
-				unit: target.unit as SupportedUnit,
-				score,
-				convertedQuantity,
-			},
-		};
-	};
-
-	if (!options.forceCreateNew && options.mergeTargetId) {
-		const explicitTarget = existingItems.find(
-			(item) =>
-				item.id === options.mergeTargetId &&
-				item.domain === data.domain &&
-				isCompatibleUnit(item.unit, data.unit),
-		);
-		if (!explicitTarget) {
-			return { status: "invalid_merge_target" as const };
-		}
-		const merged = await mergeIntoExisting(explicitTarget.id, 1);
-		if (!merged) {
-			return { status: "invalid_merge_target" as const };
-		}
-		return { status: "merged" as const, item: merged.item };
-	}
-
-	if (!options.forceCreateNew) {
-		const exactMatches = existingItems
-			.filter(
-				(item) =>
-					item.domain === data.domain &&
-					normalizeForMatch(item.name) === normalizedName &&
-					isCompatibleUnit(item.unit, data.unit),
-			)
-			.sort((a, b) =>
-				a.unit === data.unit ? -1 : b.unit === data.unit ? 1 : 0,
-			);
-
-		if (exactMatches.length > 0) {
-			const merged = await mergeIntoExisting(exactMatches[0].id, 1);
-			if (merged) {
-				return { status: "merged" as const, item: merged.item };
-			}
-		}
-
-		if (options.allowFuzzyCandidate) {
-			const similar = await findSimilarCargo(env, organizationId, data.name, {
-				topK: 1,
-				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
+	const [result] = await ingestCargoItems(
+		env,
+		organizationId,
+		[
+			{
+				name: data.name,
+				quantity: data.quantity,
+				unit: data.unit,
 				domain: data.domain,
-			});
-			if (similar.length > 0) {
-				const target = existingItems.find((i) => i.id === similar[0].itemId);
-				if (
-					target &&
-					target.domain === data.domain &&
-					isCompatibleUnit(target.unit, data.unit)
-				) {
-					const convertedQuantity = convertQuantity(
-						data.quantity,
-						requestedUnit,
-						target.unit as SupportedUnit,
-					);
-					if (convertedQuantity !== null) {
-						return {
-							status: "merge_candidate" as const,
-							candidate: {
-								id: target.id,
-								name: target.name,
-								quantity: target.quantity,
-								unit: target.unit as SupportedUnit,
-								score: similar[0].score,
-								convertedQuantity,
-							},
-						};
-					}
-				}
-			}
-		}
+				tags: data.tags,
+				expiresAt: data.expiresAt,
+				mergeTargetId: options.mergeTargetId,
+			},
+		],
+		{
+			forceCreateNew: options.forceCreateNew,
+			returnMergeCandidateOnFuzzy: options.allowFuzzyCandidate,
+			strictMergeTarget: true,
+		},
+	);
+
+	if (!result) {
+		throw new Error("ingestCargoItems returned no result");
 	}
 
-	const capacity = await checkCapacity(env, organizationId, "cargo", 1);
-	if (!capacity.allowed) {
+	if (result.status === "merge_candidate" && result.mergeCandidate) {
+		return {
+			status: "merge_candidate" as const,
+			candidate: result.mergeCandidate,
+		};
+	}
+	if (result.status === "invalid_merge_target") {
+		return { status: "invalid_merge_target" as const };
+	}
+	if (result.status === "capacity_exceeded") {
+		const capacity = await checkCapacity(env, organizationId, "cargo", 1);
 		throw new CapacityExceededError({
 			resource: "cargo",
 			current: capacity.current,
@@ -312,31 +571,14 @@ export async function addOrMergeItem(
 			canAdd: capacity.canAdd,
 		});
 	}
-
-	const [newItem] = await d1
-		.insert(cargo)
-		.values({
-			organizationId,
-			name: data.name,
-			quantity: data.quantity,
-			unit: data.unit,
-			domain: data.domain,
-			status: calculateInventoryStatus(data.expiresAt),
-			tags: data.tags,
-			expiresAt: data.expiresAt,
-			updatedAt: new Date(),
-		})
-		.returning();
-
-	if (newItem) {
-		upsertCargoVector(env, organizationId, {
-			id: newItem.id,
-			name: newItem.name,
-			domain: newItem.domain ?? "food",
-		}).catch((err) => log.error("[Vector] upsert failed for new item:", err));
+	if (result.status === "error") {
+		throw new Error(result.error ?? "Ingest failed");
 	}
 
-	return { status: "created" as const, item: newItem };
+	if (!result.item) {
+		throw new Error("Ingest succeeded but no item returned");
+	}
+	return { status: result.status as "merged" | "created", item: result.item };
 }
 
 /**
@@ -529,8 +771,6 @@ export async function getCargoStats(db: D1Database, organizationId: string) {
 }
 
 const APPLY_IMPORT_MAX_ROWS = 500;
-/** Cargo insert: id, organizationId, name, quantity, unit, tags, domain, status, expiresAt, createdAt, updatedAt = 11 params */
-const D1_MAX_CARGO_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 11);
 
 export interface ApplyCargoImportResult {
 	imported: number;
@@ -540,7 +780,7 @@ export interface ApplyCargoImportResult {
 
 /**
  * Shared import logic: apply parsed cargo rows (from CSV or batch JSON).
- * Upsert by id when present and existing in org; otherwise create.
+ * Upsert by id when present and existing in org; otherwise use ingestCargoItems.
  */
 export async function applyCargoImport(
 	env: Env,
@@ -571,7 +811,6 @@ export async function applyCargoImport(
 		}
 	}
 
-	const now = new Date();
 	for (const item of toUpdate) {
 		if (!item.id) continue;
 		try {
@@ -601,48 +840,32 @@ export async function applyCargoImport(
 	}
 
 	if (toCreate.length > 0) {
-		const capacity = await checkCapacity(
-			env,
-			organizationId,
-			"cargo",
-			toCreate.length,
-		);
-		if (!capacity.allowed) {
-			for (const item of toCreate) {
-				result.errors.push({ name: item.name, error: "capacity_exceeded" });
-			}
-			return result;
-		}
-		const insertRows = toCreate.map((p) => ({
-			id: crypto.randomUUID(),
-			organizationId,
+		const ingestItems: IngestItem[] = toCreate.map((p) => ({
 			name: p.name,
 			quantity: p.quantity,
-			unit: normalizeUnitAlias(p.unit),
+			unit: normalizeUnitAlias(p.unit) as SupportedUnit,
 			domain: (p.domain as (typeof ITEM_DOMAINS)[number]) ?? "food",
-			tags: p.tags ?? [],
-			status: calculateInventoryStatus(
-				p.expiresAt ? new Date(`${p.expiresAt}T00:00:00Z`) : undefined,
-			),
-			expiresAt: p.expiresAt ? new Date(`${p.expiresAt}T00:00:00Z`) : null,
-			createdAt: now,
-			updatedAt: now,
+			tags: Array.isArray(p.tags) ? p.tags : [],
+			expiresAt: p.expiresAt ? new Date(`${p.expiresAt}T00:00:00Z`) : undefined,
 		}));
-		await chunkedInsert(insertRows, D1_MAX_CARGO_ROWS_PER_STATEMENT, (chunk) =>
-			d1.insert(cargo).values(chunk),
-		);
-		result.imported = insertRows.length;
-		upsertCargoVectors(
+		const ingestResults = await ingestCargoItems(
 			env,
 			organizationId,
-			insertRows.map((r) => ({
-				id: r.id,
-				name: r.name,
-				domain: r.domain ?? "food",
-			})),
-		).catch((err) =>
-			log.error("[Vector] batch upsert failed for import:", err),
+			ingestItems,
+			{
+				strictMergeTarget: false,
+			},
 		);
+		for (let i = 0; i < ingestResults.length; i++) {
+			const r = ingestResults[i];
+			const p = toCreate[i];
+			if (r.status === "created" || r.status === "merged") {
+				if (r.status === "created") result.imported += 1;
+				else result.updated += 1;
+			} else if (r.status === "capacity_exceeded" || r.status === "error") {
+				result.errors.push({ name: p.name, error: r.error ?? r.status });
+			}
+		}
 	}
 
 	return result;
@@ -715,10 +938,8 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 
 /**
  * Docks purchased supply items into the cargo.
- * - Matches existing items by name and unit (case-insensitive).
- * - Increments quantity for matches.
- * - Creates new items for non-matches.
- * - Logs to ledger.
+ * Uses ingestCargoItems for vector-assisted deduplication.
+ * Logs to ledger for each docked item.
  */
 export async function dockSupplyItems(
 	env: Env,
@@ -726,174 +947,63 @@ export async function dockSupplyItems(
 	items: (typeof supplyItem.$inferSelect)[],
 ) {
 	const d1 = drizzle(env.DB);
-	const results = {
-		updated: 0,
-		created: 0,
-	};
+	const results = { updated: 0, created: 0 };
 
-	const currentCargoCount = await d1
-		.select({ count: sql<number>`count(*)` })
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
+	if (items.length === 0) return results;
 
-	const cargoMapCount = currentCargoCount[0]?.count ?? 0;
+	const ingestItems: IngestItem[] = items.map((it) => ({
+		name: it.name,
+		quantity: it.quantity,
+		unit: toSupportedUnit(it.unit) as SupportedUnit,
+		domain: it.domain as (typeof ITEM_DOMAINS)[number],
+		tags: [],
+	}));
 
-	// 1. Get current cargo for matching
-	const currentCargo = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
-
-	// Find unit-aware match: same normalized name + convertible units
-	function findMatchingCargo(
-		supplyName: string,
-		supplyUnit: string,
-		cargoList: (typeof cargo.$inferSelect)[],
-	): typeof cargo.$inferSelect | null {
-		const normalizedName = normalizeForMatch(supplyName);
-		const supplyUnitSafe = toSupportedUnit(supplyUnit);
-		for (const c of cargoList) {
-			if (normalizeForMatch(c.name) !== normalizedName) continue;
-			const cargoUnit = toSupportedUnit(c.unit);
-			if (getUnitMultiplier(supplyUnitSafe, cargoUnit) === null) continue;
-			return c;
-		}
-		return null;
-	}
-
-	// Track current quantities (updated as we process) for duplicate supply items
-	const quantityByCargoId = new Map<string, number>();
-	for (const c of currentCargo) {
-		quantityByCargoId.set(c.id, c.quantity);
-	}
-
-	// 2. Collect all operations for batching
-	const batchOps = [];
-	const now = new Date();
-	let newRowsCreated = 0;
-	const newCargoForVector: Array<{ id: string; name: string; domain: string }> =
-		[];
-
-	for (const item of items) {
-		const existing = findMatchingCargo(item.name, item.unit, currentCargo);
-
-		if (existing) {
-			const supplyUnit = toSupportedUnit(item.unit);
-			const cargoUnit = toSupportedUnit(existing.unit);
-			const addQtyInCargoUnit = convertQuantity(
-				item.quantity,
-				supplyUnit,
-				cargoUnit,
-			);
-			if (addQtyInCargoUnit === null) {
-				// Conversion failed (should not happen); fall through to create new
-			} else {
-				const newTotal =
-					(quantityByCargoId.get(existing.id) ?? existing.quantity) +
-					addQtyInCargoUnit;
-				quantityByCargoId.set(existing.id, newTotal);
-				batchOps.push(
-					d1
-						.update(cargo)
-						.set({
-							quantity: newTotal,
-							updatedAt: now,
-						})
-						.where(eq(cargo.id, existing.id)),
-				);
-				results.updated++;
-				batchOps.push(
-					d1.insert(ledger).values({
-						organizationId,
-						amount: 0,
-						reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
-					}),
-				);
-				continue;
-			}
-		}
-
-		// No match - create new item
+	const ingestResults = await ingestCargoItems(
+		env,
+		organizationId,
+		ingestItems,
 		{
-			const capacity = await checkCapacity(
-				env,
-				organizationId,
-				"cargo",
-				newRowsCreated + 1,
-			);
-			if (!capacity.allowed) {
-				throw new CapacityExceededError({
-					resource: "cargo",
-					current: cargoMapCount + newRowsCreated,
-					limit: capacity.limit,
-					tier: capacity.tier,
-					isExpired: capacity.isExpired,
-					canAdd: capacity.canAdd,
-				});
-			}
+			strictMergeTarget: false,
+		},
+	);
 
-			// Queue insert for new item
-			const newItemId = crypto.randomUUID();
-
-			batchOps.push(
-				d1.insert(cargo).values({
-					id: newItemId,
-					organizationId,
-					name: item.name,
-					quantity: item.quantity,
-					unit: item.unit,
-					domain: item.domain,
-					status: "stable",
-					tags: [], // No tags from grocery list currently
-					createdAt: now,
-					updatedAt: now,
-				}),
-			);
-
-			// Add to currentCargo so duplicate supply items in same batch can merge
-			currentCargo.push({
-				id: newItemId,
-				organizationId,
-				name: item.name,
-				quantity: item.quantity,
-				unit: item.unit,
-				domain: item.domain,
-				status: "stable",
-				tags: "[]",
-				expiresAt: null,
-				createdAt: now,
-				updatedAt: now,
-			} as typeof cargo.$inferSelect);
-			quantityByCargoId.set(newItemId, item.quantity);
-			results.created++;
-			newRowsCreated++;
-			newCargoForVector.push({
-				id: newItemId,
-				name: item.name,
-				domain: item.domain ?? "food",
-			});
-		}
-
-		// Queue ledger entry
-		batchOps.push(
-			d1.insert(ledger).values({
-				organizationId,
-				amount: 0, // No monetary tracking yet
-				reason: `dock: ${item.name} (+${item.quantity} ${item.unit})`,
-			}),
+	const hasCapacityError = ingestResults.some(
+		(r) => r.status === "capacity_exceeded",
+	);
+	if (hasCapacityError) {
+		const capacity = await checkCapacity(
+			env,
+			organizationId,
+			"cargo",
+			items.length,
 		);
+		throw new CapacityExceededError({
+			resource: "cargo",
+			current: capacity.current,
+			limit: capacity.limit,
+			tier: capacity.tier,
+			isExpired: capacity.isExpired,
+			canAdd: capacity.canAdd,
+		});
 	}
 
-	// 3. Execute all operations atomically in a single batch
-	if (batchOps.length > 0) {
+	const ledgerOps = items.map((it) =>
+		d1.insert(ledger).values({
+			organizationId,
+			amount: 0,
+			reason: `dock: ${it.name} (+${it.quantity} ${it.unit})`,
+		}),
+	);
+
+	for (const r of ingestResults) {
+		if (r.status === "merged") results.updated += 1;
+		else if (r.status === "created") results.created += 1;
+	}
+
+	if (ledgerOps.length > 0) {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(batchOps as [any, ...any[]]);
-	}
-
-	if (newCargoForVector.length > 0) {
-		upsertCargoVectors(env, organizationId, newCargoForVector).catch((err) =>
-			log.error("[Vector] batch upsert failed for dock:", err),
-		);
+		await d1.batch(ledgerOps as [any, ...any[]]);
 	}
 
 	return results;

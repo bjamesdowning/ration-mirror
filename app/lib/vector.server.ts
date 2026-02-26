@@ -87,6 +87,79 @@ export async function embedBatch(
 	}
 }
 
+/** Batch embed with KV cache: check cache for each, call AI only for misses */
+export async function embedBatchWithCache(
+	env: Env,
+	texts: string[],
+): Promise<(number[] | null)[]> {
+	if (texts.length === 0) return [];
+	const order: string[] = [];
+	const seen = new Set<string>();
+	for (const t of texts) {
+		const s = (t?.trim() || "").slice(0, 500);
+		if (!seen.has(s)) {
+			seen.add(s);
+			order.push(s);
+		}
+	}
+
+	const cacheResults = await Promise.all(
+		order.map(async (s) => {
+			const key = EMBED_CACHE_PREFIX + sha256(s);
+			try {
+				const cached = env.RATION_KV
+					? await env.RATION_KV.get(key, "json")
+					: null;
+				if (cached && Array.isArray(cached) && cached.length === 768) {
+					return { text: s, vec: cached as number[] };
+				}
+			} catch {
+				// Cache read failed
+			}
+			return { text: s, vec: null as number[] | null };
+		}),
+	);
+
+	const hits = new Map<string, number[]>();
+	const toEmbed: string[] = [];
+	for (const r of cacheResults) {
+		if (r.vec) {
+			hits.set(r.text, r.vec);
+		} else {
+			toEmbed.push(r.text);
+		}
+	}
+
+	let missVectors: (number[] | null)[] = [];
+	if (toEmbed.length > 0 && env.AI) {
+		missVectors = await embedBatch(env.AI, toEmbed);
+		if (env.RATION_KV) {
+			for (let i = 0; i < toEmbed.length; i++) {
+				const vec = missVectors[i];
+				if (vec && vec.length === 768) {
+					const key = EMBED_CACHE_PREFIX + sha256(toEmbed[i]);
+					env.RATION_KV.put(key, JSON.stringify(vec), {
+						expirationTtl: EMBED_CACHE_TTL,
+					}).catch(() => {});
+				}
+			}
+		}
+	}
+
+	const vecByText = new Map<string, number[] | null>();
+	for (const s of order) {
+		vecByText.set(s, hits.get(s) ?? null);
+	}
+	for (let i = 0; i < toEmbed.length; i++) {
+		vecByText.set(toEmbed[i], missVectors[i] ?? null);
+	}
+
+	return texts.map((t) => {
+		const s = (t?.trim() || "").slice(0, 500);
+		return vecByText.get(s) ?? null;
+	});
+}
+
 /** Embed with optional KV cache lookup */
 export async function embedWithCache(
 	env: Env,
@@ -239,7 +312,7 @@ export async function findSimilarCargo(
 	}
 }
 
-/** Batch query for multiple ingredient names */
+/** Batch query for multiple ingredient names (uses KV cache for embeddings) */
 export async function findSimilarCargoBatch(
 	env: Env,
 	organizationId: string,
@@ -249,7 +322,7 @@ export async function findSimilarCargoBatch(
 	const out = new Map<string, SimilarCargoMatch[]>();
 	if (ingredientNames.length === 0) return out;
 	const { topK = 3, threshold = 0.82, domain } = options ?? {};
-	const vectors = await embedBatch(env.AI, ingredientNames);
+	const vectors = await embedBatchWithCache(env, ingredientNames);
 	if (!env.VECTORIZE) return out;
 	const queryOpts = {
 		topK,

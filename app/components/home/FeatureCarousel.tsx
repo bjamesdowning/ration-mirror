@@ -41,7 +41,7 @@ const SLIDES: Slide[] = [
 		title: "Supply List",
 		description:
 			"Auto-generated from your Galley selections and Manifest schedule. Check off items, then Dock Cargo to refill your inventory.",
-		screenshotLight: "/static/ration-supply-dark.webp",
+		screenshotLight: "/static/ration-supply-shared-dark.webp",
 		badge: "Shopping",
 	},
 	{

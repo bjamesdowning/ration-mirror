@@ -352,7 +352,7 @@ export async function matchMeals(
 		domain,
 	});
 
-	// 0. KV cache lookup (60s TTL; repeat Hub visits return immediately)
+	// 0. KV cache lookup (10s TTL; repeat Hub visits return immediately)
 	if (env.RATION_KV) {
 		const cacheKey = getMatchCacheKey(organizationId, query);
 		try {
@@ -527,7 +527,7 @@ export async function matchMeals(
 	// 9. Apply limit
 	const limited = results.slice(0, limit);
 
-	// 10. Store in KV cache for repeat visits (60s TTL)
+	// 10. Store in KV cache for repeat visits (10s TTL)
 	if (env.RATION_KV) {
 		const cacheKey = getMatchCacheKey(organizationId, query);
 		try {
@@ -616,7 +616,7 @@ export async function resolveIngredientsToCargo(
 }
 
 const MATCH_CACHE_PREFIX = "match:";
-const MATCH_CACHE_TTL = 60; // seconds
+const MATCH_CACHE_TTL = 10; // seconds
 
 /**
  * Generates a cache key for meal matching results

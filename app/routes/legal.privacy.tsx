@@ -203,8 +203,8 @@ export default function PrivacyPolicy() {
 			<p>
 				If you have any questions about this Privacy Policy, or wish to exercise
 				your rights under applicable data protection law (including the right to
-				access, rectification, erasure, restriction, portability, or to object to
-				processing), please contact us:
+				access, rectification, erasure, restriction, portability, or to object
+				to processing), please contact us:
 			</p>
 			<ul>
 				<li>

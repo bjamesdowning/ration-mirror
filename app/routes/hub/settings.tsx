@@ -284,6 +284,57 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-onboarding") {
+		const onboardingStep = Number(formData.get("onboardingStep")) || 0;
+		const onboardingCompletedAt =
+			formData.get("onboardingCompletedAt") ?? undefined;
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				onboardingStep,
+				onboardingCompletedAt:
+					onboardingCompletedAt === undefined
+						? undefined
+						: onboardingCompletedAt === ""
+							? undefined
+							: String(onboardingCompletedAt),
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+		return { success: true };
+	}
+
+	if (intent === "restart-onboarding") {
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = {
+				...currentSettings,
+				onboardingCompletedAt: undefined,
+				onboardingStep: 0,
+			};
+
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+		return redirect("/hub");
+	}
+
 	return null;
 }
 
@@ -472,6 +523,38 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						</svg>
 						Customize Hub
 					</Link>
+				</section>
+
+				{/* Onboarding Tutorial */}
+				<section className="glass-panel rounded-xl p-6">
+					<h2 className="text-xl font-bold mb-2 text-carbon">Tutorial</h2>
+					<p className="text-sm text-muted mb-4">
+						Replay the onboarding tour to revisit the Ration workflow and
+						feature overview.
+					</p>
+					<Form method="post">
+						<input type="hidden" name="intent" value="restart-onboarding" />
+						<button
+							type="submit"
+							className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium hover:bg-hyper-green/20 transition-colors"
+						>
+							<svg
+								className="w-4 h-4"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+								/>
+							</svg>
+							Restart Tutorial
+						</button>
+					</Form>
 				</section>
 
 				{/* Default Group */}

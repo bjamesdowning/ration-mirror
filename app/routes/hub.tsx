@@ -1,8 +1,11 @@
+import { drizzle } from "drizzle-orm/d1";
 import { NavLink, Outlet, redirect } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
+import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
+import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	checkCapacityWithTier,
@@ -11,6 +14,7 @@ import {
 import { ConfirmProvider } from "~/lib/confirm-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
+import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/hub";
 
 export function shouldRevalidate({
@@ -28,7 +32,7 @@ export function shouldRevalidate({
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { groupId, session } = await requireActiveGroup(context, request);
 
 	// Run checkout fulfillment before tier/capacity fetch when on return URL.
 	// Layout runs before child loaders, so fulfillment would otherwise run too late.
@@ -56,8 +60,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		}
 	}
 
+	const db = drizzle(context.cloudflare.env.DB, { schema });
 	const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
-	const [balance, cargoCapacity, mealsCapacity, listCapacity] =
+	const [balance, cargoCapacity, mealsCapacity, listCapacity, userData] =
 		await Promise.all([
 			checkBalance(context.cloudflare.env, groupId),
 			checkCapacityWithTier(
@@ -81,7 +86,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				tierInfo,
 				0,
 			),
+			db.query.user.findFirst({
+				where: (u, { eq }) => eq(u.id, session.user.id),
+				columns: { settings: true },
+			}),
 		]);
+
+	const userSettings = (userData?.settings as UserSettings) ?? {};
 
 	return {
 		balance,
@@ -107,10 +118,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				limit: listCapacity.limit,
 			},
 		},
+		onboardingCompletedAt: userSettings.onboardingCompletedAt ?? null,
+		onboardingStep: userSettings.onboardingStep ?? 0,
 	};
 }
 
-export default function DashboardLayout() {
+export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
+	const { onboardingCompletedAt, onboardingStep } = loaderData;
+
 	return (
 		<ConfirmProvider>
 			<div className="flex min-h-screen bg-ceramic">
@@ -148,6 +163,10 @@ export default function DashboardLayout() {
 				<BottomNav />
 			</div>
 			<ConfirmDialog />
+			<OnboardingTour
+				initialStep={onboardingStep}
+				isCompleted={Boolean(onboardingCompletedAt)}
+			/>
 		</ConfirmProvider>
 	);
 }

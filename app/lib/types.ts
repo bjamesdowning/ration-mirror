@@ -27,6 +27,10 @@ export interface UserSettings {
 		defaultSlots?: string[]; // e.g. ["breakfast", "lunch", "dinner"]
 		showSnackSlot?: boolean;
 	};
+	/** ISO timestamp when the user completed onboarding. Null/absent = not yet completed. */
+	onboardingCompletedAt?: string;
+	/** Last step index the user reached (0–5), enables resume on re-open. */
+	onboardingStep?: number;
 	[key: string]: unknown; // Index signature for database compatibility
 }
 

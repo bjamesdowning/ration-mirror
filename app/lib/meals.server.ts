@@ -906,6 +906,135 @@ export async function cookMeal(
 }
 
 /**
+ * Creates a provision from an existing cargo item, linking via cargoId.
+ * Prevents duplicates: if a provision already has an ingredient pointing to
+ * this cargo item, returns the existing provision with alreadyExisted=true.
+ */
+export async function createProvisionFromCargo(
+	db: D1Database,
+	organizationId: string,
+	cargoId: string,
+	env?: Env,
+): Promise<{
+	provision: Awaited<ReturnType<typeof getMeal>>;
+	alreadyExisted: boolean;
+}> {
+	const d1 = drizzle(db);
+
+	// Load cargo with RLS
+	const [cargoItem] = await d1
+		.select()
+		.from(cargo)
+		.where(
+			and(eq(cargo.id, cargoId), eq(cargo.organizationId, organizationId)),
+		);
+
+	if (!cargoItem) {
+		throw new Error("Cargo item not found or unauthorized");
+	}
+
+	// Duplicate check: find an existing provision whose ingredient links to this cargo
+	const existingByCargoId = await d1
+		.select({ mealId: mealIngredient.mealId })
+		.from(mealIngredient)
+		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+		.where(
+			and(
+				eq(mealIngredient.cargoId, cargoId),
+				eq(meal.organizationId, organizationId),
+				eq(meal.type, "provision"),
+			),
+		)
+		.limit(1);
+
+	if (existingByCargoId.length > 0) {
+		const existing = await getMeal(
+			db,
+			organizationId,
+			existingByCargoId[0].mealId,
+		);
+		return { provision: existing, alreadyExisted: true };
+	}
+
+	// Capacity check
+	if (env) {
+		const capacity = await checkCapacity(env, organizationId, "meals", 1);
+		if (!capacity.allowed) {
+			throw new Error(
+				`capacity_exceeded:meals:${capacity.current}:${capacity.limit}`,
+			);
+		}
+	}
+
+	const mealId = crypto.randomUUID();
+	const ingredientId = crypto.randomUUID();
+	const tags = Array.isArray(cargoItem.tags)
+		? (cargoItem.tags as string[])
+		: [];
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
+	const batch: any[] = [
+		d1.insert(meal).values({
+			id: mealId,
+			organizationId,
+			name: cargoItem.name,
+			domain: cargoItem.domain,
+			type: "provision",
+			servings: 1,
+		}),
+		d1.insert(mealIngredient).values({
+			id: ingredientId,
+			mealId,
+			cargoId,
+			ingredientName: cargoItem.name,
+			quantity: cargoItem.quantity,
+			unit: cargoItem.unit,
+			orderIndex: 0,
+		}),
+	];
+
+	if (tags.length > 0) {
+		for (const tagChunk of chunk(tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(
+				d1.insert(mealTag).values(
+					tagChunk.map((tag) => ({
+						mealId,
+						tag,
+					})),
+				),
+			);
+		}
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(batch as [any, ...any[]]);
+
+	const provision = await getMeal(db, organizationId, mealId);
+	return { provision, alreadyExisted: false };
+}
+
+/**
+ * Returns cargo IDs that already have a linked provision in this org.
+ * Used to show "In Galley" indicator on cargo cards.
+ */
+export async function getPromotedCargoIds(
+	db: D1Database,
+	organizationId: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+
+	const rows = await d1
+		.select({ cargoId: mealIngredient.cargoId })
+		.from(mealIngredient)
+		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+		.where(
+			and(eq(meal.organizationId, organizationId), eq(meal.type, "provision")),
+		);
+
+	return rows.map((r) => r.cargoId).filter((id): id is string => id !== null);
+}
+
+/**
  * Retrieves all unique tags for an organization's meals.
  * Useful for populating tag filter dropdowns.
  */

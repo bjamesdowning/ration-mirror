@@ -44,6 +44,10 @@ import {
 	updateItem,
 } from "~/lib/cargo.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
+import {
+	createProvisionFromCargo,
+	getPromotedCargoIds,
+} from "~/lib/meals.server";
 import type { Route } from "./+types/cargo";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -70,16 +74,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const domain = url.searchParams.get("domain") || undefined;
 	const tag = url.searchParams.get("tag") || undefined;
 
-	const [cargo, availableTags] = await Promise.all([
+	const [cargo, availableTags, promotedCargoIds] = await Promise.all([
 		getCargo(
 			context.cloudflare.env.DB,
 			groupId,
 			domain as ItemDomain | undefined,
 		),
 		getCargoTags(context.cloudflare.env.DB, groupId),
+		getPromotedCargoIds(context.cloudflare.env.DB, groupId),
 	]);
 
-	return { cargo, currentDomain: domain, currentTag: tag, availableTags };
+	return {
+		cargo,
+		currentDomain: domain,
+		currentTag: tag,
+		availableTags,
+		promotedCargoIds,
+	};
 }
 
 // --- ACTION ---
@@ -248,12 +259,45 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "promote") {
+		const itemId = formData.get("itemId") as string;
+		if (!itemId) return { success: false, error: "Missing Item ID" };
+
+		try {
+			const result = await createProvisionFromCargo(
+				context.cloudflare.env.DB,
+				groupId,
+				itemId,
+				context.cloudflare.env,
+			);
+			return {
+				success: true,
+				provisionId: result.provision?.id,
+				alreadyExisted: result.alreadyExisted,
+			};
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				error.message.startsWith("capacity_exceeded")
+			) {
+				const parts = error.message.split(":");
+				return {
+					success: false,
+					error: "capacity_exceeded",
+					current: Number(parts[2]),
+					limit: Number(parts[3]),
+				};
+			}
+			throw error;
+		}
+	}
+
 	return { success: false, error: "Unknown Intent" };
 }
 
 // --- COMPONENT ---
 export default function CargoPage({ loaderData }: Route.ComponentProps) {
-	const { cargo: initialCargo, availableTags } = loaderData;
+	const { cargo: initialCargo, availableTags, promotedCargoIds } = loaderData;
 	const actionData = useActionData<{
 		error?: string;
 		current?: number;
@@ -561,7 +605,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				)}
 
 				{/* Inventory Grid */}
-				{filteredCargo.length > 0 && <ManifestGrid items={filteredCargo} />}
+				{filteredCargo.length > 0 && (
+					<ManifestGrid
+						items={filteredCargo}
+						promotedCargoIds={promotedCargoIds}
+						onUpgradeRequired={() => setShowUpgradePrompt(true)}
+					/>
+				)}
 			</div>
 			{/* Floating Action Bar (mobile only) */}
 			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />

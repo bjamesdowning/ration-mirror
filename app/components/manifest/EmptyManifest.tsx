@@ -1,15 +1,29 @@
-import { CalendarIcon } from "~/components/icons/PageIcons";
+import type { ComponentType } from "react";
+import {
+	CalendarIcon,
+	ChefHatIcon,
+	ClockIcon,
+	ConsumeIcon,
+} from "~/components/icons/PageIcons";
 import type { SlotType } from "~/lib/schemas/manifest";
+
+interface IconProps {
+	className?: string;
+}
 
 interface EmptyManifestProps {
 	onAdd?: (slot: SlotType, date: string) => void;
 	activeDate: string;
 }
 
-const QUICK_SLOTS: { slot: SlotType; label: string; emoji: string }[] = [
-	{ slot: "breakfast", label: "Breakfast", emoji: "🌅" },
-	{ slot: "lunch", label: "Lunch", emoji: "☀️" },
-	{ slot: "dinner", label: "Dinner", emoji: "🌙" },
+const QUICK_SLOTS: {
+	slot: SlotType;
+	label: string;
+	Icon: ComponentType<IconProps>;
+}[] = [
+	{ slot: "breakfast", label: "Breakfast", Icon: ClockIcon },
+	{ slot: "lunch", label: "Lunch", Icon: ChefHatIcon },
+	{ slot: "dinner", label: "Dinner", Icon: ConsumeIcon },
 ];
 
 export function EmptyManifest({ onAdd, activeDate }: EmptyManifestProps) {
@@ -42,14 +56,14 @@ export function EmptyManifest({ onAdd, activeDate }: EmptyManifestProps) {
 						Quick-start
 					</p>
 					<div className="grid grid-cols-3 gap-2">
-						{QUICK_SLOTS.map(({ slot, label, emoji }) => (
+						{QUICK_SLOTS.map(({ slot, label, Icon }) => (
 							<button
 								key={slot}
 								type="button"
 								onClick={() => onAdd(slot, activeDate)}
 								className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-dashed border-platinum hover:border-hyper-green/50 hover:bg-hyper-green/5 text-muted hover:text-hyper-green transition-all group"
 							>
-								<span className="text-lg leading-none">{emoji}</span>
+								<Icon className="w-5 h-5" />
 								<span className="text-xs font-medium font-mono">{label}</span>
 							</button>
 						))}

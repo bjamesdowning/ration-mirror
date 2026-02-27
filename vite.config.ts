@@ -25,6 +25,10 @@ export default defineConfig(({ isSsrBuild }) => ({
 		rollupOptions: isSsrBuild
 			? {
 					input: "./workers/app.ts",
+					// cloudflare:workers is a runtime-only virtual module provided by
+					// the Workers runtime. It cannot be bundled by Rollup and must be
+					// declared external so the SSR build leaves it as a bare import.
+					external: ["cloudflare:workers"],
 				}
 			: undefined,
 	},

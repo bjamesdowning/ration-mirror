@@ -42,8 +42,12 @@ export function Step4_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 				Your shopping list, auto-generated.
 			</h3>
 			<p className="text-sm text-carbon/80 dark:text-white/80">
-				Supply cross-references your Manifest plan against Cargo levels and
-				tells you exactly what to buy — and how much.
+				Supply reads from two sources: your{" "}
+				<span className="text-hyper-green font-medium">Manifest</span> meal plan
+				and any meals or provisions selected directly in{" "}
+				<span className="text-hyper-green font-medium">Galley</span>. Both are
+				cross-referenced against your Cargo levels to generate exactly what you
+				need to buy.
 			</p>
 
 			<TechInsight>

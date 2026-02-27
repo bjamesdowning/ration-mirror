@@ -44,7 +44,7 @@ const STAGES = [
 		short: "Shopping list. Auto-generated, shareable, dockable.",
 		detail:
 			"Supply lists are auto-populated from selected Galley meals and your Manifest schedule. Check items off as you shop, then Dock Cargo — purchased items flow back into your inventory. The loop closes. Export as text, markdown, or CSV. Share via public link with Crew.",
-		screenshot: "/static/ration-supply-light.webp",
+		screenshot: "/static/ration-supply-dark.webp",
 	},
 ] as const;
 

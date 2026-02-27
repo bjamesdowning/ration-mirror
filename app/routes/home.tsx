@@ -198,9 +198,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									Deduplication
 								</h3>
 								<p className="text-sm text-muted leading-relaxed">
-									Add "cherry tomatoes" and "grape tomatoes" separately. Ration
-									detects they're semantically related at a 0.78 similarity
-									threshold and offers to merge. No manual cleanup.
+									Add "tinned tomatoes" and "canned tomatoes" as separate
+									entries. Ration detects they're the same item at a 0.78
+									similarity threshold and offers to merge. No manual cleanup.
 								</p>
 								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
 									<span className="px-2 py-1 bg-carbon/5 rounded">
@@ -249,8 +249,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								<p className="text-sm text-muted leading-relaxed">
 									When you consume a meal from the Manifest, Ration deducts the
 									correct Cargo items using the strictest similarity threshold.
-									"Parmesan" in a recipe maps accurately to
-									"Parmigiano-Reggiano" in your Cargo.
+									"chicken breast" in a recipe maps accurately to "chicken
+									breast fillet" in your Cargo.
 								</p>
 								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
 									<span className="px-2 py-1 bg-carbon/5 rounded">

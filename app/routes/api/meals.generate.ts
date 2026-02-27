@@ -9,7 +9,7 @@ import {
 	withCreditGate,
 } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
-import { normalizeForMatch } from "~/lib/matching.server";
+import { normalizeForCargoDedup } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import {
 	type AIResponse,
@@ -264,7 +264,7 @@ ${customization}
 					context.cloudflare.env,
 					groupId,
 					allIngNames,
-					{ threshold: SIMILARITY_THRESHOLDS.GENERATION_VERIFY },
+					{ threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
 				);
 
 				const verifiedRecipes = recipes
@@ -281,8 +281,8 @@ ${customization}
 
 							const exactMatch = pantryItems.some(
 								(p) =>
-									normalizeForMatch(p.name) ===
-									normalizeForMatch(ingInventoryName),
+									normalizeForCargoDedup(p.name) ===
+									normalizeForCargoDedup(ingInventoryName),
 							);
 							const semanticMatches =
 								similarityBatch.get(ingInventoryName) ?? [];
@@ -297,8 +297,8 @@ ${customization}
 							const ingInventoryName = ing.inventoryName ?? ing.name ?? "";
 							const exactMatch = pantryItems.find(
 								(p) =>
-									normalizeForMatch(p.name) ===
-									normalizeForMatch(ingInventoryName),
+									normalizeForCargoDedup(p.name) ===
+									normalizeForCargoDedup(ingInventoryName),
 							);
 							const semanticMatches =
 								similarityBatch.get(ingInventoryName) ?? [];

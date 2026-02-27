@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
 import { lookupDensity } from "./ingredient-density";
 import { log, redactId } from "./logging.server";
-import { normalizeForMatch } from "./matching";
+import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import {
@@ -17,7 +17,7 @@ import {
 	SIMILARITY_THRESHOLDS,
 	type SimilarCargoMatch,
 } from "./vector.server";
-export { normalizeForMatch };
+export { normalizeForMatch, normalizeForCargoDedup };
 
 /**
  * Type definitions for meal matching
@@ -63,23 +63,12 @@ export interface MealMatchQuery {
 }
 
 /**
- * Normalizes ingredient names for fuzzy matching.
- * Converts to lowercase and removes punctuation, plurals.
- */
-function normalizeIngredientName(name: string): string {
-	return name
-		.toLowerCase()
-		.trim()
-		.replace(/[^\w\s]/g, "") // Remove punctuation
-		.replace(/s$/, "") // Remove trailing 's' for basic plural handling
-		.replace(/\s+/g, " "); // Normalize whitespace
-}
-
-/**
- * Builds an cargo lookup map for efficient matching.
+ * Builds a cargo lookup map for efficient matching.
  * Groups cargo by normalized name with total quantities.
+ * Uses normalizeForCargoDedup so regional synonyms (e.g. tinned/canned)
+ * resolve to the same index key.
  */
-function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
+export function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
 	const index = new Map<
 		string,
 		{
@@ -90,7 +79,7 @@ function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
 	>();
 
 	for (const item of items) {
-		const normalized = normalizeIngredientName(item.name);
+		const normalized = normalizeForCargoDedup(item.name);
 		const existing = index.get(normalized) || [];
 		existing.push({
 			original: item,
@@ -147,14 +136,14 @@ function getAvailableQuantityWithMap(
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	similarityMap: Map<string, SimilarCargoMatch[]>,
 ): number {
-	const normalized = normalizeIngredientName(ingredientName);
+	const normalized = normalizeForCargoDedup(ingredientName);
 	const matches = cargoIndex.get(normalized);
 
 	if (!matches || matches.length === 0) {
 		const similar = similarityMap.get(ingredientName) ?? [];
 		if (similar.length === 0) return 0;
 		for (const match of similar) {
-			const bucket = cargoIndex.get(normalizeIngredientName(match.itemName));
+			const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
 			if (bucket?.length) {
 				return sumConvertedToTarget(bucket, targetUnit, ingredientName);
 			}
@@ -482,7 +471,7 @@ export async function matchMeals(
 	const missNames = new Set<string>();
 	for (const { ingredients } of enrichedMeals) {
 		for (const ing of ingredients) {
-			const normalized = normalizeIngredientName(ing.ingredientName);
+			const normalized = normalizeForCargoDedup(ing.ingredientName);
 			if (!cargoIndex.has(normalized)) {
 				missNames.add(ing.ingredientName);
 			}
@@ -496,7 +485,7 @@ export async function matchMeals(
 					Array.from(missNames),
 					{
 						topK: 3,
-						threshold: SIMILARITY_THRESHOLDS.MEAL_MATCH,
+						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
 					},
 				)
 			: new Map<string, SimilarCargoMatch[]>();
@@ -551,6 +540,79 @@ export async function matchMeals(
 	}
 
 	return limited;
+}
+
+/**
+ * Canonical ingredient-to-cargo resolver used by all features (supply sync, cook
+ * deduction, AI generation verification).
+ *
+ * Phase 1: normalizeForCargoDedup exact key lookup against the provided cargoIndex.
+ * Phase 2: findSimilarCargoBatch for any misses (single batched embedding round-trip).
+ *
+ * Returns a Map keyed by the original ingredientName; value is the array of cargo
+ * index entries that matched (empty array = no match found).
+ */
+export async function resolveIngredientsToCargo(
+	env: Env,
+	organizationId: string,
+	ingredientNames: string[],
+	cargoIndex: ReturnType<typeof buildCargoIndex>,
+	options?: { threshold?: number },
+): Promise<
+	Map<
+		string,
+		{
+			original: typeof cargo.$inferSelect;
+			totalQuantity: number;
+			normalizedName: string;
+		}[]
+	>
+> {
+	const threshold =
+		options?.threshold ?? SIMILARITY_THRESHOLDS.INGREDIENT_MATCH;
+	const result = new Map<
+		string,
+		{
+			original: typeof cargo.$inferSelect;
+			totalQuantity: number;
+			normalizedName: string;
+		}[]
+	>();
+
+	const vectorMissNames: string[] = [];
+
+	for (const name of ingredientNames) {
+		const normalized = normalizeForCargoDedup(name);
+		const matches = cargoIndex.get(normalized);
+		if (matches && matches.length > 0) {
+			result.set(name, matches);
+		} else {
+			result.set(name, []);
+			vectorMissNames.push(name);
+		}
+	}
+
+	if (vectorMissNames.length > 0) {
+		const similarityMap = await findSimilarCargoBatch(
+			env,
+			organizationId,
+			vectorMissNames,
+			{ topK: 3, threshold },
+		);
+
+		for (const name of vectorMissNames) {
+			const similar = similarityMap.get(name) ?? [];
+			for (const match of similar) {
+				const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
+				if (bucket && bucket.length > 0) {
+					result.set(name, bucket);
+					break;
+				}
+			}
+		}
+	}
+
+	return result;
 }
 
 const MATCH_CACHE_PREFIX = "match:";

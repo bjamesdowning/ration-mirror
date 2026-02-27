@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { cargo } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { normalizeForCargoDedup } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/search";
 
@@ -47,22 +48,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	// 3. Database Search
+	// Normalize the query to expand synonyms (e.g. "tinned" → "canned") so a
+	// user searching a regional variant still finds canonically-stored items.
+	// We OR both patterns so we also match items stored under the variant form.
 	const db = drizzle(context.cloudflare.env.DB);
-	const searchPattern = `%${q.toLowerCase()}%`;
+	const rawPattern = `%${q.toLowerCase()}%`;
+	const normalizedTerm = normalizeForCargoDedup(q);
+	const normalizedPattern =
+		normalizedTerm !== q.toLowerCase() ? `%${normalizedTerm}%` : null;
+
+	const nameConditions = normalizedPattern
+		? or(like(cargo.name, rawPattern), like(cargo.name, normalizedPattern))
+		: like(cargo.name, rawPattern);
 
 	const items = await db
 		.select()
 		.from(cargo)
-		.where(
-			and(
-				eq(cargo.organizationId, groupId),
-				or(
-					like(cargo.name, searchPattern),
-					// Note: JSON array tags are harder to search with simple LIKE,
-					// so we prioritize name search for now.
-				),
-			),
-		)
+		.where(and(eq(cargo.organizationId, groupId), nameConditions))
 		.orderBy(desc(cargo.createdAt))
 		.limit(20);
 

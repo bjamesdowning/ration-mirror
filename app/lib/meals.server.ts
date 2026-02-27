@@ -8,7 +8,7 @@ import {
 	mealTag,
 } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
-import { normalizeForMatch } from "./matching";
+import { normalizeForCargoDedup } from "./matching";
 import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -28,7 +28,11 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
-import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
+import {
+	findSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS,
+	type SimilarCargoMatch,
+} from "./vector.server";
 
 function chunk<T>(arr: T[], size: number): T[][] {
 	const out: T[][] = [];
@@ -593,18 +597,19 @@ export async function deleteMeal(
 
 /**
  * Finds cargo rows to deduct from when ingredient has no cargoId.
- * Uses exact match first, then vector similarity fallback.
+ * Uses exact normalizeForCargoDedup match first, then the pre-fetched
+ * vector similarity map as fallback. Callers must pre-fetch
+ * `prefetchedVectors` via findSimilarCargoBatch before the deduction loop.
  * Returns allocations in cargo's native unit for SQL update.
  */
-async function findCargoForDeduction(
-	env: Env,
-	organizationId: string,
+function findCargoForDeduction(
 	orgCargo: (typeof cargo.$inferSelect)[],
 	ingredientName: string,
 	requiredQtyInTargetUnit: number,
 	targetUnit: SupportedUnit,
-): Promise<{ cargoId: string; quantityToDeduct: number }[]> {
-	const normalizedName = normalizeForMatch(ingredientName);
+	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
+): { cargoId: string; quantityToDeduct: number }[] {
+	const normalizedName = normalizeForCargoDedup(ingredientName);
 	type Candidate = {
 		cargo: typeof cargo.$inferSelect;
 		qtyInTargetUnit: number;
@@ -619,7 +624,7 @@ async function findCargoForDeduction(
 		if (multiplier === null) continue;
 
 		const qtyInTargetUnit = item.quantity * multiplier;
-		const normalizedItem = normalizeForMatch(item.name);
+		const normalizedItem = normalizeForCargoDedup(item.name);
 		const isExact = normalizedItem === normalizedName;
 
 		if (isExact) {
@@ -633,15 +638,7 @@ async function findCargoForDeduction(
 	}
 
 	if (candidates.length === 0) {
-		const similar = await findSimilarCargo(
-			env,
-			organizationId,
-			ingredientName,
-			{
-				topK: 3,
-				threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION,
-			},
-		);
+		const similar = prefetchedVectors.get(ingredientName) ?? [];
 		for (const match of similar) {
 			const item = orgCargo.find((c) => c.id === match.itemId);
 			if (!item) continue;
@@ -875,6 +872,16 @@ export async function cookMeal(
 			}));
 		}
 
+		// Pre-fetch vector similarity for all unlinked ingredient names in a single
+		// batched embedding request instead of N sequential Vectorize calls.
+		const unlinkedNames = unlinkedIngredients.map((i) => i.ingredientName);
+		const prefetchedVectors = await findSimilarCargoBatch(
+			env,
+			organizationId,
+			unlinkedNames,
+			{ topK: 3, threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION },
+		);
+
 		const insufficient: string[] = [];
 
 		for (const ing of unlinkedIngredients) {
@@ -882,13 +889,12 @@ export async function cookMeal(
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (scaledQty <= 0) continue;
 
-			const allocations = await findCargoForDeduction(
-				env,
-				organizationId,
+			const allocations = findCargoForDeduction(
 				orgCargo,
 				ing.ingredientName,
 				scaledQty,
 				targetUnit,
+				prefetchedVectors,
 			);
 
 			if (allocations.length === 0) {

@@ -5,17 +5,18 @@
 
 import { log } from "./logging.server";
 
-const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
+const EMBEDDING_MODEL = "@cf/google/embeddinggemma-300m";
 const EMBED_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
 const EMBED_CACHE_PREFIX = "vec:";
 
 /** Similarity thresholds per context */
 export const SIMILARITY_THRESHOLDS = {
-	MEAL_MATCH: 0.82,
-	SUPPLY_MATCH: 0.84,
-	GENERATION_VERIFY: 0.82,
-	CARGO_DEDUCTION: 0.85,
+	/** Universal threshold for ingredient → cargo resolution across all features */
+	INGREDIENT_MATCH: 0.78,
+	/** Cargo deduplication on ingest — kept aligned with universal threshold */
 	CARGO_MERGE: 0.78,
+	/** Cook deduction is intentionally slightly more conservative to avoid over-subtracting real stock */
+	CARGO_DEDUCTION: 0.8,
 } as const;
 
 function sha256(text: string): string {
@@ -160,29 +161,6 @@ export async function embedBatchWithCache(
 	});
 }
 
-/** Embed with optional KV cache lookup */
-export async function embedWithCache(
-	env: Env,
-	text: string,
-): Promise<number[] | null> {
-	const key = EMBED_CACHE_PREFIX + sha256(text);
-	try {
-		const cached = await env.RATION_KV.get(key, "json");
-		if (cached && Array.isArray(cached) && cached.length === 768) {
-			return cached as number[];
-		}
-	} catch {
-		// Cache read failed, proceed to embed
-	}
-	const vec = await embed(env.AI, text);
-	if (vec && env.RATION_KV) {
-		env.RATION_KV.put(key, JSON.stringify(vec), {
-			expirationTtl: EMBED_CACHE_TTL,
-		}).catch(() => {});
-	}
-	return vec;
-}
-
 /** Upsert a single cargo item's vector into Vectorize */
 export async function upsertCargoVector(
 	env: Env,
@@ -268,52 +246,6 @@ export interface SimilarCargoMatch {
 	itemId: string;
 	itemName: string;
 	score: number;
-}
-
-/** Query Vectorize for similar cargo items */
-export async function findSimilarCargo(
-	env: Env,
-	organizationId: string,
-	ingredientName: string,
-	options?: {
-		topK?: number;
-		threshold?: number;
-		domain?: string;
-	},
-): Promise<SimilarCargoMatch[]> {
-	if (!env.VECTORIZE || !env.AI) return [];
-	const { topK = 3, threshold = 0.82 } = options ?? {};
-	const vec = await embedWithCache(env, ingredientName);
-	if (!vec || vec.length !== 768) return [];
-	try {
-		const queryOpts = {
-			topK,
-			returnMetadata: "indexed" as const,
-			namespace: organizationId,
-		};
-		const result = await env.VECTORIZE.query(vec, queryOpts);
-		const matches =
-			(
-				result as {
-					matches?: Array<{
-						id?: string;
-						score?: number;
-						metadata?: Record<string, string>;
-					}>;
-				}
-			).matches ?? [];
-		return matches
-			.filter((m) => m.score != null && m.score >= threshold)
-			.map((m) => ({
-				itemId: m.id ?? "",
-				itemName: ((m.metadata?.name ?? "").trim() || m.id) ?? "",
-				score: m.score ?? 0,
-			}))
-			.filter((m) => m.itemId && m.itemName);
-	} catch (err) {
-		log.error("[Vector] findSimilarCargo failed:", err);
-		return [];
-	}
 }
 
 /** Batch query for multiple ingredient names (uses KV cache for embeddings) */

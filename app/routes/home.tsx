@@ -221,9 +221,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								</p>
 								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
 									<span className="px-2 py-1 bg-carbon/5 rounded">
-										MEAL_MATCH
+										INGREDIENT_MATCH
 									</span>
-									<span>threshold: 0.82</span>
+									<span>threshold: 0.78</span>
 								</div>
 							</div>
 							<div className="glass-panel rounded-2xl p-6 space-y-4">
@@ -232,14 +232,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								</h3>
 								<p className="text-sm text-muted leading-relaxed">
 									When building a Supply list, Ration compares meal ingredients
-									against your Cargo with tight precision. Items you already
-									have are excluded, so you only buy what's missing.
+									against your Cargo using the same matching engine as the
+									Galley. Items you already have are excluded, so you only buy
+									what's missing.
 								</p>
 								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
 									<span className="px-2 py-1 bg-carbon/5 rounded">
-										SUPPLY_MATCH
+										INGREDIENT_MATCH
 									</span>
-									<span>threshold: 0.84</span>
+									<span>threshold: 0.78</span>
 								</div>
 							</div>
 							<div className="glass-panel rounded-2xl p-6 space-y-4">
@@ -256,7 +257,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									<span className="px-2 py-1 bg-carbon/5 rounded">
 										CARGO_DEDUCTION
 									</span>
-									<span>threshold: 0.85</span>
+									<span>threshold: 0.80</span>
 								</div>
 							</div>
 						</div>

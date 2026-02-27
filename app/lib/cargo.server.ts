@@ -17,7 +17,7 @@ import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
-import { normalizeForMatch } from "./matching";
+import { normalizeForCargoDedup } from "./matching";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
@@ -37,13 +37,12 @@ import {
 } from "./vector.server";
 
 /**
- * Extends normalizeForMatch with plural stripping for Phase 1 dedup keys.
+ * Extends normalizeForCargoDedup with plural stripping for Phase 1 dedup keys.
  * Strips common English plural suffixes so singular/plural variants share the same key:
  *   "eggs" → "egg", "tomatoes" → "tomato", "potatoes" → "potato", "dishes" → "dish"
- * Mirrors normalizeIngredientName in matching.server.ts.
  */
 function normalizeForCargoKey(name: string): string {
-	const base = normalizeForMatch(name);
+	const base = normalizeForCargoDedup(name);
 	// Order matters: check longer suffixes first
 	if (base.endsWith("oes")) return base.slice(0, -2); // tomatoes→tomato, potatoes→potato
 	if (base.endsWith("shes")) return base.slice(0, -2); // dishes→dish
@@ -935,7 +934,7 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 
 	const groups = new Map<string, (typeof cargo.$inferSelect)[]>();
 	for (const item of items) {
-		const normalizedName = normalizeForMatch(item.name);
+		const normalizedName = normalizeForCargoDedup(item.name);
 		const key = `${normalizedName}__${item.domain}`;
 		const existing = groups.get(key) ?? [];
 		existing.push(item);

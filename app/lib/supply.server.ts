@@ -16,7 +16,7 @@ import { toExpiryDate } from "./date-utils";
 import { lookupDensity } from "./ingredient-density";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
-import { normalizeForMatch } from "./matching.server";
+import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
 	chunkedInsert,
@@ -40,7 +40,6 @@ import {
 	toSupportedUnit,
 } from "./units";
 import {
-	findSimilarCargo,
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
 	type SimilarCargoMatch,
@@ -143,26 +142,22 @@ function convertCargoToTarget(
 /**
  * Returns available quantity of `name` in `targetUnit` from `orgCargo`.
  *
- * First tries exact normalized-name match. If that yields nothing, falls back
- * to Vectorize semantic search. The `prefetchedVectors` map is an optional
- * pre-computed batch result (Map<ingredientName, SimilarCargoMatch[]>) that
- * avoids per-ingredient Vectorize API calls when processing a loop — pass it
- * from a `findSimilarCargoBatch()` call made before the loop. When absent the
- * function falls back to the individual `findSimilarCargo()` call.
+ * Phase 1: exact normalizeForCargoDedup key match (handles regional synonyms
+ * and prep words, e.g. "tinned tomatoes" === "canned tomatoes").
+ * Phase 2: uses the pre-fetched `prefetchedVectors` batch result for semantic
+ * fallback — callers must pre-fetch with findSimilarCargoBatch before the loop.
  */
-async function getAvailableCargoQuantity(
-	env: Env,
-	organizationId: string,
+function getAvailableCargoQuantity(
 	name: string,
 	targetUnit: SupportedUnit,
 	orgCargo: (typeof cargo.$inferSelect)[],
-	prefetchedVectors?: Map<string, SimilarCargoMatch[]>,
-): Promise<number> {
-	const normalizedName = normalizeForMatch(name);
+	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
+): number {
+	const normalizedName = normalizeForCargoDedup(name);
 	let exactTotal = 0;
 
 	for (const item of orgCargo) {
-		const normalizedItem = normalizeForMatch(item.name);
+		const normalizedItem = normalizeForCargoDedup(item.name);
 		if (normalizedItem !== normalizedName) continue;
 
 		const itemUnit = toSupportedUnit(item.unit);
@@ -177,20 +172,12 @@ async function getAvailableCargoQuantity(
 
 	if (exactTotal > 0) return exactTotal;
 
-	// Use pre-fetched batch result when available; otherwise fall back to a
-	// single Vectorize query (original behaviour, used by non-loop callers).
-	const similar = prefetchedVectors
-		? (prefetchedVectors.get(name) ?? [])
-		: await findSimilarCargo(env, organizationId, name, {
-				topK: 1,
-				threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH,
-			});
-
+	const similar = prefetchedVectors.get(name) ?? [];
 	if (similar.length === 0) return 0;
 
-	const matchedName = normalizeForMatch(similar[0].itemName);
+	const matchedName = normalizeForCargoDedup(similar[0].itemName);
 	for (const item of orgCargo) {
-		if (normalizeForMatch(item.name) !== matchedName) continue;
+		if (normalizeForCargoDedup(item.name) !== matchedName) continue;
 		const itemUnit = toSupportedUnit(item.unit);
 		const converted = convertCargoToTarget(
 			item.quantity,
@@ -215,7 +202,7 @@ function getExistingListQuantity(
 		if ((item.domain ?? "food") !== domain) continue;
 		// Defensive guard for legacy/corrupt rows so sync never crashes.
 		if (typeof item.name !== "string" || item.name.length === 0) continue;
-		if (normalizeForMatch(item.name) !== normalizedName) continue;
+		if (normalizeForCargoDedup(item.name) !== normalizedName) continue;
 
 		const itemUnit = toSupportedUnit(item.unit);
 		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
@@ -254,7 +241,7 @@ function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
 	for (const row of rows) {
 		const ingredient = row.meal_ingredient;
 		const domain = row.meal_domain ?? "food";
-		const normalizedName = normalizeForMatch(ingredient.ingredientName);
+		const normalizedName = normalizeForCargoDedup(ingredient.ingredientName);
 		const rawUnit = ingredient.unit ?? "";
 		const safeUnit = toSupportedUnit(rawUnit);
 		if (String(rawUnit).trim().toLowerCase() !== safeUnit) {
@@ -813,7 +800,7 @@ export async function snoozeSupplyItem(
 
 	if (!existing) throw new Error("Supply item not found");
 
-	const normalizedName = normalizeForMatch(existing.name);
+	const normalizedName = normalizeForCargoDedup(existing.name);
 	const domain = existing.domain ?? "food";
 
 	await d1
@@ -1100,7 +1087,7 @@ export async function addItemsFromMeal(
 		env,
 		organizationId,
 		ingredientNames,
-		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH },
+		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
 	);
 
 	const addedItems: (typeof supplyItem.$inferSelect)[] = [];
@@ -1109,15 +1096,13 @@ export async function addItemsFromMeal(
 	// Check each ingredient against inventory
 	for (const ingredient of ingredients) {
 		const targetUnit = ingredient.unit as SupportedUnit;
-		const normalizedName = normalizeForMatch(ingredient.ingredientName);
+		const normalizedName = normalizeForCargoDedup(ingredient.ingredientName);
 		const scaledRequired = scaleQuantity(
 			ingredient.quantity,
 			scaleFactor,
 			ingredient.unit,
 		);
-		const availableInCargo = await getAvailableCargoQuantity(
-			env,
-			organizationId,
+		const availableInCargo = getAvailableCargoQuantity(
 			ingredient.ingredientName,
 			targetUnit,
 			orgCargo,
@@ -1153,7 +1138,7 @@ export async function addItemsFromMeal(
 
 		const mergeTarget = existingListItems.find((item) => {
 			if ((item.domain ?? "food") !== mealDomain) return false;
-			if (normalizeForMatch(item.name) !== normalizedName) return false;
+			if (normalizeForCargoDedup(item.name) !== normalizedName) return false;
 			return getUnitMultiplier(targetUnit, item.unit as SupportedUnit) !== null;
 		});
 
@@ -1615,7 +1600,7 @@ async function syncSupplyFromIngredientRows(
 			env,
 			organizationId,
 			aggregatedNames,
-			{ topK: 1, threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH },
+			{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
 		);
 
 		let addedCount = 0;
@@ -1629,9 +1614,7 @@ async function syncSupplyFromIngredientRows(
 				continue;
 			}
 
-			const availableInCargo = await getAvailableCargoQuantity(
-				env,
-				organizationId,
+			const availableInCargo = getAvailableCargoQuantity(
 				aggregated.name,
 				aggregated.unit,
 				orgCargo,

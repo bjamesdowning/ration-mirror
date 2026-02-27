@@ -13,6 +13,7 @@ import {
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
+import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { API_RATE_LIMITS, V1_ENDPOINTS } from "~/lib/api-docs";
@@ -582,6 +583,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							settings={settings}
 							userOrganizations={userOrganizations}
 							userMemberships={userMemberships}
+							tier={loaderData.tier}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -778,6 +780,7 @@ function GroupSection({
 	settings,
 	userOrganizations,
 	userMemberships,
+	tier,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
@@ -789,11 +792,12 @@ function GroupSection({
 		role: string;
 		credits: number;
 	}[];
+	tier: string;
 }) {
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Group</SectionHeading>
-			<GroupManagement members={members} />
+			<GroupManagement members={members} tier={tier} />
 			<DefaultGroupCard
 				settings={settings}
 				userOrganizations={userOrganizations}
@@ -1617,14 +1621,26 @@ function TransferCreditsSection({
 // ─── Group Management ──────────────────────────────────────────────────────────
 
 // biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
-function GroupManagement({ members }: { members: any[] }) {
+function GroupManagement({ members, tier }: { members: any[]; tier: string }) {
 	const session = authClient.useSession();
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const [inviteLink, setInviteLink] = useState<string | null>(null);
-	const fetcher = useFetcher<{ success: boolean; invitationId: string }>();
+	const [showUpgrade, setShowUpgrade] = useState(false);
+	const fetcher = useFetcher<{
+		success?: boolean;
+		invitationId?: string;
+		error?: string;
+		upgradePath?: string;
+	}>();
 	const copyToast = useToast({ duration: 3000 });
 
+	const isFree = tier !== "crew_member";
+
 	const handleInvite = () => {
+		if (isFree) {
+			setShowUpgrade(true);
+			return;
+		}
 		fetcher.submit(
 			{},
 			{ method: "post", action: "/api/groups/invitations/create" },
@@ -1632,17 +1648,29 @@ function GroupManagement({ members }: { members: any[] }) {
 	};
 
 	useEffect(() => {
-		if (fetcher.data?.success && fetcher.data?.invitationId) {
+		if (fetcher.state !== "idle" || !fetcher.data) return;
+		if (fetcher.data.error === "feature_gated") {
+			setShowUpgrade(true);
+			return;
+		}
+		if (fetcher.data.success && fetcher.data.invitationId) {
 			setInviteLink(
 				`${window.location.origin}/invitations/accept?id=${fetcher.data.invitationId}`,
 			);
 		}
-	}, [fetcher.data]);
+	}, [fetcher.data, fetcher.state]);
 
 	if (!activeOrgId) return null;
 
 	return (
 		<div className="glass-panel rounded-xl p-6">
+			<UpgradePrompt
+				open={showUpgrade}
+				onClose={() => setShowUpgrade(false)}
+				title="Crew Member required"
+				description="Inviting members to your group is a Crew Member feature. Upgrade to collaborate with others."
+			/>
+
 			<div className="flex justify-between items-start mb-6">
 				<div>
 					<h3 className="text-xs text-label text-muted mb-1">Members</h3>
@@ -1654,9 +1682,20 @@ function GroupManagement({ members }: { members: any[] }) {
 					type="button"
 					onClick={handleInvite}
 					disabled={fetcher.state !== "idle"}
-					className="px-4 py-2 bg-platinum text-carbon font-medium rounded-lg hover:bg-platinum/80 transition-colors text-sm disabled:opacity-50"
+					className="px-4 py-2 bg-platinum text-carbon font-medium rounded-lg hover:bg-platinum/80 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
 				>
-					{fetcher.state === "submitting" ? "Creating..." : "Invite Member"}
+					{fetcher.state === "submitting" ? (
+						"Creating..."
+					) : (
+						<>
+							Invite Member
+							{isFree && (
+								<span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-hyper-green/20 text-hyper-green rounded">
+									Crew
+								</span>
+							)}
+						</>
+					)}
 				</button>
 			</div>
 

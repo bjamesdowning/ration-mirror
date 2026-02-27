@@ -72,7 +72,6 @@
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
-	 *   - ADMIN_EMAILS: Comma-separated admin emails
 	 */
 	/*
 	 * Static Assets
@@ -93,5 +92,76 @@
 			"binding": "VECTORIZE",
 			"index_name": "ration-cargo"
 		}
-	]
+	],
+
+	/**
+	 * Dev Environment — isolated Cloudflare resources for remote dev testing.
+	 * Connects AI and Vectorize (unavailable in local mode) while keeping prod data safe.
+	 *
+	 * Setup (run once):
+	 *   wrangler d1 create ration-db-dev
+	 *   wrangler d1 migrations apply ration-db-dev --remote --env dev
+	 *   wrangler r2 bucket create ration-storage-dev
+	 *   wrangler kv namespace create "RATION_KV_DEV"
+	 *   wrangler vectorize create ration-cargo-dev --dimensions=768 --metric=cosine
+	 *
+	 * Secrets (copy from prod or set new values):
+	 *   wrangler secret put BETTER_AUTH_SECRET --env dev
+	 *   wrangler secret put STRIPE_SECRET_KEY --env dev
+	 *   wrangler secret put STRIPE_PUBLISHABLE_KEY --env dev
+	 *   wrangler secret put STRIPE_WEBHOOK_SECRET --env dev
+	 *
+	 * Run remote dev:
+	 *   bun run dev:remote
+	 */
+	"env": {
+		"dev": {
+			"name": "ration-dev",
+			"vars": {
+				"BETTER_AUTH_URL": "http://localhost:8787",
+				"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+				"AI_GATEWAY_ID": "ration-gateway",
+				"STRIPE_PRICE_TASTE_TEST": "price_1T1qzDFX10NMafIYsLM60m7Z",
+				"STRIPE_PRICE_SUPPLY_RUN": "price_1T1r03FX10NMafIYUu3ZNrXU",
+				"STRIPE_PRICE_MISSION_CRATE": "price_1T1r12FX10NMafIYyOqMMUdr",
+				"STRIPE_PRICE_ORBITAL_STOCKPILE": "price_1T1r3EFX10NMafIYSU9MiQDV",
+				"STRIPE_PRICE_CREW_MEMBER_ANNUAL": "price_1T1r4zFX10NMafIY7ZFHe8xE",
+				"STRIPE_PROMO_WELCOME60": "promo_1T1r69FX10NMafIY6QRyJr02"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "ration-db-dev",
+					"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
+					"migrations_dir": "drizzle",
+					"remote": true
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "STORAGE",
+					"bucket_name": "ration-storage-dev",
+					"remote": true
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "RATION_KV",
+					"id": "9653e02f53844dcca292bf7c21013048",
+					"remote": true
+				}
+			],
+			"ai": {
+				"binding": "AI",
+				"remote": true
+			},
+			"vectorize": [
+				{
+					"binding": "VECTORIZE",
+					"index_name": "ration-cargo-dev",
+					"remote": true
+				}
+			]
+		}
+	}
 }

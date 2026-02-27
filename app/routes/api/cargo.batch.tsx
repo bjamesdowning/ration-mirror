@@ -61,7 +61,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context.cloudflare.env,
 			groupId,
 			ingestItems,
-			{ strictMergeTarget: false },
+			{
+				strictMergeTarget: false,
+				waitUntil: context.cloudflare.ctx.waitUntil.bind(
+					context.cloudflare.ctx,
+				),
+			},
 		);
 
 		let added = 0;

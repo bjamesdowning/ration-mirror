@@ -1,0 +1,62 @@
+/**
+ * Dev environment config for @cloudflare/vite-plugin.
+ * Used by `bun run dev:remote` via configPath in vite.config.ts.
+ * Points at isolated dev resources; AI and Vectorize use remote: true.
+ * Do NOT use for deployment.
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ration-dev",
+	"compatibility_date": "2026-01-17",
+	"main": "./workers/app.ts",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		"BETTER_AUTH_URL": "http://localhost:5173",
+		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+		"AI_GATEWAY_ID": "ration-gateway",
+		"STRIPE_PRICE_TASTE_TEST": "price_1T1qzDFX10NMafIYsLM60m7Z",
+		"STRIPE_PRICE_SUPPLY_RUN": "price_1T1r03FX10NMafIYUu3ZNrXU",
+		"STRIPE_PRICE_MISSION_CRATE": "price_1T1r12FX10NMafIYyOqMMUdr",
+		"STRIPE_PRICE_ORBITAL_STOCKPILE": "price_1T1r3EFX10NMafIYSU9MiQDV",
+		"STRIPE_PRICE_CREW_MEMBER_ANNUAL": "price_1T1r4zFX10NMafIY7ZFHe8xE",
+		"STRIPE_PROMO_WELCOME60": "promo_1T1r69FX10NMafIY6QRyJr02"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ration-db-dev",
+			"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
+			"migrations_dir": "drizzle",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage-dev",
+			"remote": true
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "9653e02f53844dcca292bf7c21013048",
+			"remote": true
+		}
+	],
+	"ai": {
+		"binding": "AI",
+		"remote": true
+	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo-dev",
+			"remote": true
+		}
+	],
+	"assets": {
+		"directory": "./build/client",
+		"binding": "ASSETS"
+	}
+}

@@ -15,7 +15,7 @@ export const SIMILARITY_THRESHOLDS = {
 	SUPPLY_MATCH: 0.84,
 	GENERATION_VERIFY: 0.82,
 	CARGO_DEDUCTION: 0.85,
-	CARGO_MERGE: 0.88,
+	CARGO_MERGE: 0.78,
 } as const;
 
 function sha256(text: string): string {
@@ -37,16 +37,14 @@ export async function embed(ai: Ai, text: string): Promise<number[] | null> {
 		const response = await ai.run(EMBEDDING_MODEL, {
 			text: [text.trim()],
 		});
+		// Workers AI returns { shape, data: number[][] } — one array per input text
 		const result = response as {
 			shape?: number[];
-			data?: Float32Array | number[];
+			data?: number[][];
 		};
-		if (!result?.data) return null;
-		const arr = result.data;
-		if (arr instanceof Float32Array) {
-			return Array.from(arr);
-		}
-		if (Array.isArray(arr)) return arr;
+		if (!result?.data || !Array.isArray(result.data)) return null;
+		const vec = result.data[0];
+		if (Array.isArray(vec) && vec.length === 768) return vec;
 		return null;
 	} catch (err) {
 		log.error("[Vector] embed failed:", err);
@@ -65,22 +63,17 @@ export async function embedBatch(
 		const response = await ai.run(EMBEDDING_MODEL, {
 			text: clean,
 		});
+		// Workers AI returns { shape, data: number[][] } — one array per input text
 		const result = response as {
 			shape?: number[];
-			data?: Float32Array | number[];
+			data?: number[][];
 		};
-		if (!result?.data) return texts.map(() => null);
-		const arr = result.data;
-		const flat = arr instanceof Float32Array ? Array.from(arr) : arr;
-		if (!Array.isArray(flat)) return texts.map(() => null);
-		const dim = 768;
-		const out: (number[] | null)[] = [];
-		for (let i = 0; i < texts.length; i++) {
-			const start = i * dim;
-			const chunk = flat.slice(start, start + dim);
-			out.push(chunk.length === dim ? chunk : null);
+		if (!result?.data || !Array.isArray(result.data)) {
+			return texts.map(() => null);
 		}
-		return out;
+		return result.data.map((vec) =>
+			Array.isArray(vec) && vec.length === 768 ? vec : null,
+		);
 	} catch (err) {
 		log.error("[Vector] embedBatch failed:", err);
 		return texts.map(() => null);
@@ -198,7 +191,11 @@ export async function upsertCargoVector(
 				id: item.id,
 				values: vec,
 				namespace: organizationId,
-				metadata: { name: item.name, domain: item.domain ?? "food" },
+				metadata: {
+					name: item.name,
+					domain: item.domain ?? "food",
+					organizationId,
+				},
 			},
 		]);
 	} catch (err) {
@@ -231,6 +228,7 @@ export async function upsertCargoVectors(
 				metadata: {
 					name: items[i].name,
 					domain: items[i].domain ?? "food",
+					organizationId,
 				},
 			});
 		}
@@ -277,7 +275,7 @@ export async function findSimilarCargo(
 	},
 ): Promise<SimilarCargoMatch[]> {
 	if (!env.VECTORIZE || !env.AI) return [];
-	const { topK = 3, threshold = 0.82, domain } = options ?? {};
+	const { topK = 3, threshold = 0.82 } = options ?? {};
 	const vec = await embedWithCache(env, ingredientName);
 	if (!vec || vec.length !== 768) return [];
 	try {
@@ -285,7 +283,6 @@ export async function findSimilarCargo(
 			topK,
 			returnMetadata: "indexed" as const,
 			namespace: organizationId,
-			...(domain && { filter: { domain } }),
 		};
 		const result = await env.VECTORIZE.query(vec, queryOpts);
 		const matches =
@@ -321,14 +318,13 @@ export async function findSimilarCargoBatch(
 ): Promise<Map<string, SimilarCargoMatch[]>> {
 	const out = new Map<string, SimilarCargoMatch[]>();
 	if (ingredientNames.length === 0) return out;
-	const { topK = 3, threshold = 0.82, domain } = options ?? {};
+	const { topK = 3, threshold = 0.82 } = options ?? {};
 	const vectors = await embedBatchWithCache(env, ingredientNames);
 	if (!env.VECTORIZE) return out;
 	const queryOpts = {
 		topK,
 		returnMetadata: "indexed" as const,
 		namespace: organizationId,
-		...(domain && { filter: { domain } }),
 	};
 	await Promise.all(
 		ingredientNames.map(async (name, i) => {

@@ -8,7 +8,7 @@
 		"cf-typegen": "wrangler types",
 		"deploy": "bun run build && wrangler deploy build/server/index.js",
 		"dev": "react-router dev",
-		"dev:wrangler": "wrangler dev",
+		"dev:remote": "CLOUDFLARE_ENV=dev react-router dev",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"postinstall": "bun run cf-typegen",
@@ -16,7 +16,8 @@
 		"test:unit": "vitest run",
 		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate:dev": "wrangler d1 migrations apply DB --local",
+		"db:migrate:local": "wrangler d1 migrations apply DB --local",
+		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
 		"db:migrate:prod": "wrangler d1 migrations apply DB --remote"
 	},
 	"dependencies": {

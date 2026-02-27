@@ -35,6 +35,26 @@ import {
 	upsertCargoVectors,
 } from "./vector.server";
 
+/**
+ * Extends normalizeForMatch with plural stripping for Phase 1 dedup keys.
+ * Strips common English plural suffixes so singular/plural variants share the same key:
+ *   "eggs" → "egg", "tomatoes" → "tomato", "potatoes" → "potato", "dishes" → "dish"
+ * Mirrors normalizeIngredientName in matching.server.ts.
+ */
+function normalizeForCargoKey(name: string): string {
+	const base = normalizeForMatch(name);
+	// Order matters: check longer suffixes first
+	if (base.endsWith("oes")) return base.slice(0, -2); // tomatoes→tomato, potatoes→potato
+	if (base.endsWith("shes")) return base.slice(0, -2); // dishes→dish
+	if (base.endsWith("ches")) return base.slice(0, -2); // peaches→peach
+	if (base.endsWith("xes")) return base.slice(0, -2); // boxes→box
+	if (base.endsWith("zes")) return base.slice(0, -2); // pizzas handled below
+	if (base.endsWith("ies")) return `${base.slice(0, -3)}y`; // berries→berry, cherries→cherry
+	if (base.endsWith("es") && base.length > 3) return base.slice(0, -1); // grapes→grape
+	if (base.endsWith("s") && base.length > 2) return base.slice(0, -1); // eggs→egg, carrots→carrot
+	return base;
+}
+
 // --- Validation Schemas ---
 
 export const CargoItemSchema = z.object({
@@ -163,6 +183,8 @@ export interface AddOrMergeItemOptions {
 	forceCreateNew?: boolean;
 	allowFuzzyCandidate?: boolean;
 	mergeTargetId?: string;
+	/** ctx.waitUntil from the Worker execution context — ensures vector upserts survive response completion */
+	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 function isCompatibleUnit(a: string, b: string): boolean {
@@ -197,6 +219,8 @@ export interface IngestCargoOptions {
 	skipVectorPhase?: boolean;
 	/** When true, vector matches return merge_candidate instead of auto-merging (for manual add UI) */
 	returnMergeCandidateOnFuzzy?: boolean;
+	/** ctx.waitUntil from the Worker execution context — ensures vector upserts survive response completion */
+	waitUntil?: (promise: Promise<unknown>) => void;
 	/** When true, invalid mergeTargetId returns error. When false, fall through to exact/vector/create (batch) */
 	strictMergeTarget?: boolean;
 	/** When true, always create new rows (skip all merge resolution) */
@@ -225,7 +249,7 @@ export async function ingestCargoItems(
 	const cargoByKey = new Map<string, (typeof cargo.$inferSelect)[]>();
 	for (const c of existingCargo) {
 		cargoById.set(c.id, c);
-		const key = `${normalizeForMatch(c.name)}__${c.domain}`;
+		const key = `${normalizeForCargoKey(c.name)}__${c.domain}`;
 		const arr = cargoByKey.get(key) ?? [];
 		arr.push(c);
 		cargoByKey.set(key, arr);
@@ -252,7 +276,7 @@ export async function ingestCargoItems(
 			continue;
 		}
 		const unit = it.unit as SupportedUnit;
-		const key = `${normalizeForMatch(it.name)}__${it.domain}`;
+		const key = `${normalizeForCargoKey(it.name)}__${it.domain}`;
 
 		if (it.mergeTargetId) {
 			const target = cargoById.get(it.mergeTargetId);
@@ -312,7 +336,6 @@ export async function ingestCargoItems(
 
 	if (toVectorResolve.length > 0 && env.VECTORIZE && env.AI) {
 		const uniqueNames = [...new Set(toVectorResolve.map((i) => items[i].name))];
-		const domainFilter = items[toVectorResolve[0]]?.domain;
 		const similarityMap = await findSimilarCargoBatch(
 			env,
 			organizationId,
@@ -320,7 +343,6 @@ export async function ingestCargoItems(
 			{
 				topK: 1,
 				threshold: SIMILARITY_THRESHOLDS.CARGO_MERGE,
-				domain: domainFilter,
 			},
 		);
 
@@ -489,7 +511,7 @@ export async function ingestCargoItems(
 		} as typeof cargo.$inferSelect;
 		cargoById.set(newId, newRow);
 		quantityByCargoId.set(newId, it.quantity);
-		const key = `${normalizeForMatch(it.name)}__${it.domain}`;
+		const key = `${normalizeForCargoKey(it.name)}__${it.domain}`;
 		const arr = cargoByKey.get(key) ?? [];
 		arr.push(newRow);
 		cargoByKey.set(key, arr);
@@ -507,9 +529,16 @@ export async function ingestCargoItems(
 	}
 
 	if (newCargoForVector.length > 0) {
-		upsertCargoVectors(env, organizationId, newCargoForVector).catch((err) =>
-			log.error("[Vector] batch upsert failed for ingest:", err),
-		);
+		const upsertPromise = upsertCargoVectors(
+			env,
+			organizationId,
+			newCargoForVector,
+		).catch((err) => {
+			log.error("[Vector] batch upsert failed for ingest:", err);
+		});
+		if (options?.waitUntil) {
+			options.waitUntil(upsertPromise);
+		}
 	}
 
 	return results;
@@ -544,6 +573,7 @@ export async function addOrMergeItem(
 			forceCreateNew: options.forceCreateNew,
 			returnMergeCandidateOnFuzzy: options.allowFuzzyCandidate,
 			strictMergeTarget: true,
+			waitUntil: options.waitUntil,
 		},
 	);
 

@@ -150,6 +150,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 						mergeChoice === "merge" && typeof mergeTargetId === "string"
 							? mergeTargetId
 							: undefined,
+					waitUntil: context.cloudflare.ctx.waitUntil.bind(
+						context.cloudflare.ctx,
+					),
 				},
 			);
 		} catch (error) {
@@ -283,23 +286,31 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const filteredCargo = useMemo(() => {
 		let items: typeof initialCargo = initialCargo;
 
+		const parseTags = (raw: unknown): string[] => {
+			if (Array.isArray(raw)) return raw.filter((t) => typeof t === "string");
+			if (typeof raw === "string") {
+				try {
+					const parsed = JSON.parse(raw);
+					if (Array.isArray(parsed))
+						return parsed.filter((t) => typeof t === "string");
+				} catch {}
+			}
+			return [];
+		};
+
 		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
 			items = items.filter(
 				(item) =>
 					item.name.toLowerCase().includes(query) ||
-					(item.tags as string[] | undefined)?.some((tag: string) =>
-						tag.toLowerCase().includes(query),
-					),
+					parseTags(item.tags).some((tag) => tag.toLowerCase().includes(query)),
 			);
 		}
 
 		// Filter by tag
 		if (currentTag) {
-			items = items.filter((item) =>
-				(item.tags as string[] | undefined)?.includes(currentTag),
-			);
+			items = items.filter((item) => parseTags(item.tags).includes(currentTag));
 		}
 
 		if (activeDomain !== "all") {

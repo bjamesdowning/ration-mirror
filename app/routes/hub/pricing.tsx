@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useMemo, useState } from "react";
 import { data, useFetcher, useNavigate } from "react-router";
+import { DiamondIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -129,7 +130,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 	return (
 		<div className="space-y-6">
 			<PageHeader
-				icon={<span className="text-hyper-green">◆</span>}
+				icon={<DiamondIcon className="w-5 h-5 text-hyper-green" />}
 				title="Pricing"
 			/>
 			<p className="text-sm text-muted">

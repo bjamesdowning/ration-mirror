@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import type { meal } from "~/db/schema";
 import type { MealCustomFields } from "~/lib/types";
 
@@ -111,7 +112,11 @@ export function MealCard({
 						localActive ? "Selected for Supply list" : "Add to Supply list"
 					}
 				>
-					{localActive ? "✓" : "+"}
+					{localActive ? (
+						<CheckIcon className="w-3.5 h-3.5" />
+					) : (
+						<PlusIcon className="w-3.5 h-3.5" />
+					)}
 				</button>
 
 				<StandardCard

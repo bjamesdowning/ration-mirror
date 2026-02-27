@@ -242,7 +242,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					}`}
 				>
 					<span>Match with Cargo items</span>
-					<span>{matchingEnabled ? "✓ On" : "Off"}</span>
+					<span>{matchingEnabled ? "On" : "Off"}</span>
 				</button>
 			</div>
 

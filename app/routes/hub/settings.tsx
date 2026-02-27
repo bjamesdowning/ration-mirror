@@ -11,7 +11,7 @@ import {
 	useNavigation,
 } from "react-router";
 import { CreditShop } from "~/components/hub/CreditShop";
-import { SettingsIcon } from "~/components/icons/PageIcons";
+import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import * as schema from "~/db/schema";
@@ -408,7 +408,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{/* Transaction Status Messages */}
 					{loaderData.transactionStatus === "success" && (
 						<div className="mb-6 p-4 bg-success/10 border border-success/20 rounded-lg flex items-center gap-4">
-							<div className="text-2xl text-success">✓</div>
+							<CheckIcon className="w-6 h-6 text-success" />
 							<div>
 								<div className="font-bold text-carbon">
 									Transaction Complete

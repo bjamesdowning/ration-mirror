@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
-import { LinkIcon } from "~/components/icons/PageIcons";
+import {
+	CheckIcon,
+	CloseIcon,
+	LinkIcon,
+	WarningIcon,
+} from "~/components/icons/PageIcons";
 import { useConfirm } from "~/lib/confirm-context";
 
 interface ShareModalProps {
@@ -128,13 +133,13 @@ export function ShareModal({
 					<p className="font-medium text-carbon">What recipients can do:</p>
 					<ul className="space-y-1 text-xs">
 						<li className="flex items-start gap-2">
-							<span className="text-hyper-green mt-0.5">✓</span>
+							<CheckIcon className="w-3.5 h-3.5 text-hyper-green mt-0.5 shrink-0" />
 							<span>
 								Check off items as they shop — changes sync back to your list
 							</span>
 						</li>
 						<li className="flex items-start gap-2">
-							<span className="text-muted mt-0.5">✕</span>
+							<CloseIcon className="w-3.5 h-3.5 text-muted mt-0.5 shrink-0" />
 							<span>
 								Cannot dock new items in cargo — only you can add items
 							</span>
@@ -167,8 +172,9 @@ export function ShareModal({
 						</div>
 
 						{/* Expiry Notice */}
-						<p className="text-xs text-muted">
-							⚠ This link expires in 7 days for security.
+						<p className="text-xs text-muted flex items-center gap-1">
+							<WarningIcon className="w-3.5 h-3.5 shrink-0" />
+							This link expires in 7 days for security.
 						</p>
 
 						{/* Revoke Button */}

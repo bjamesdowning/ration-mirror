@@ -104,7 +104,7 @@ export function exportGroceryListAsText(list: SupplyListWithItems): string {
 	const lines: string[] = [];
 
 	// Header
-	lines.push(`📋 ${list.name}`);
+	lines.push(`[ ${list.name} ]`);
 	lines.push(`${"─".repeat(30)}`);
 	lines.push("");
 

@@ -6,6 +6,7 @@ import {
 	useState,
 } from "react";
 import { useRevalidator } from "react-router";
+import { FileIcon } from "~/components/icons/PageIcons";
 import { GalleyManifestSchema } from "~/lib/schemas/galley-manifest";
 import { GalleyImportPreview } from "./GalleyImportPreview";
 
@@ -118,7 +119,7 @@ export const GalleyImportButton = forwardRef<
 					onClick={() => inputRef.current?.click()}
 					className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 				>
-					<span aria-hidden="true">📄</span>
+					<FileIcon className="w-4 h-4" aria-hidden="true" />
 					Import JSON
 				</button>
 			</div>

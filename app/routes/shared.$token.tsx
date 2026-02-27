@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
+import { ClipboardIcon } from "~/components/icons/PageIcons";
 import { PurchaseQuantityModal } from "~/components/supply/PurchaseQuantityModal";
 import { DOMAIN_LABELS } from "~/lib/domain";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -264,7 +265,9 @@ export default function SharedListPage() {
 			<main className="max-w-2xl mx-auto p-4 space-y-6">
 				{items.length === 0 ? (
 					<div className="text-center py-16 glass-panel rounded-2xl">
-						<div className="text-6xl mb-4">📋</div>
+						<div className="flex justify-center mb-4">
+							<ClipboardIcon className="w-12 h-12 text-muted/40" />
+						</div>
 						<p className="text-muted">No items in this list</p>
 					</div>
 				) : (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
-import { LinkIcon } from "~/components/icons/PageIcons";
+import { LinkIcon, WarningIcon } from "~/components/icons/PageIcons";
 import { useConfirm } from "~/lib/confirm-context";
 
 interface ShareManifestModalProps {
@@ -158,8 +158,9 @@ export function ShareManifestModal({
 								{copied ? "Copied!" : "Copy"}
 							</button>
 						</div>
-						<p className="text-xs text-muted">
-							⚠ This link expires in 7 days for security.
+						<p className="text-xs text-muted flex items-center gap-1">
+							<WarningIcon className="w-3.5 h-3.5 shrink-0" />
+							This link expires in 7 days for security.
 						</p>
 						<button
 							type="button"

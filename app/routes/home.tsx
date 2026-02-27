@@ -3,6 +3,11 @@ import "../../load-context"; // Ensure augmentation is loaded
 import { useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
+import {
+	CheckIcon,
+	CloseIcon,
+	LightningBoltIcon,
+} from "~/components/icons/PageIcons";
 import { createAuth } from "~/lib/auth.server";
 import { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } from "~/lib/stripe.server";
 import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
@@ -95,7 +100,8 @@ function FeatureRow({
 	crew?: boolean | string;
 }) {
 	const renderCell = (value: boolean | string) => {
-		if (value === true) return <span className="text-hyper-green">✓</span>;
+		if (value === true)
+			return <CheckIcon className="w-4 h-4 text-hyper-green mx-auto" />;
 		if (value === false) return <span className="text-carbon/20">—</span>;
 		return <span className="text-carbon">{value}</span>;
 	};
@@ -124,8 +130,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			{/* Early Access Banner */}
 			<div className="relative z-50 bg-hyper-green/10 border-b border-hyper-green/20 p-2 text-center">
 				<p className="text-xs uppercase tracking-wider font-bold text-carbon">
-					<span className="text-hyper-green">⚡</span> Early Access {" // "}v
-					{APP_VERSION}
+					<LightningBoltIcon className="w-3.5 h-3.5 text-hyper-green inline-block" />{" "}
+					Early Access {" // "}v{APP_VERSION}
 				</p>
 			</div>
 
@@ -268,7 +274,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-muted hover:text-carbon hover:bg-carbon/5 transition-colors"
 									aria-label="Dismiss"
 								>
-									✕
+									<CloseIcon className="w-3.5 h-3.5" />
 								</button>
 								<p className="text-sm text-carbon">
 									Welcome voucher: use code{" "}

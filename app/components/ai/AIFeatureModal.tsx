@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { CloseIcon } from "~/components/icons/PageIcons";
 
 const MODAL_MAX_WIDTH = {
 	sm: "md:max-w-md",
@@ -77,7 +78,7 @@ export function AIFeatureModal({
 						className="p-2 text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 rounded-full transition-colors"
 						aria-label="Close modal"
 					>
-						✕
+						<CloseIcon className="w-4 h-4" />
 					</button>
 				</div>
 

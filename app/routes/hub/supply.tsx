@@ -12,6 +12,7 @@ import {
 	CheckIcon,
 	CloseIcon,
 	PlusIcon,
+	RocketIcon,
 	SearchIcon,
 	ShareIcon,
 	ShoppingCartIcon,
@@ -564,7 +565,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				<Toast
 					variant="success"
 					position="bottom-right"
-					icon="🚀"
+					icon={<RocketIcon className="w-6 h-6 text-hyper-green" />}
 					title="Cargo Received!"
 					description={`${dockFetcher.data?.docked} items transferred to Cargo.`}
 					onDismiss={dockToast.hide}

@@ -3,6 +3,7 @@ import {
 	DocumentEditIcon,
 	DocumentTextIcon,
 	ExportIcon,
+	ShoppingCartIcon,
 } from "~/components/icons/PageIcons";
 import { ApiHint } from "~/components/shell/ApiHint";
 
@@ -87,7 +88,7 @@ export function ExportMenu({ listId }: ExportMenuProps) {
 							rel="noreferrer"
 							className="w-full px-4 py-2 rounded-lg text-left text-carbon hover:bg-platinum cursor-pointer transition-colors flex items-center gap-3"
 						>
-							<span className="w-5 h-5 text-muted shrink-0">🛒</span>
+							<ShoppingCartIcon className="w-5 h-5 text-muted shrink-0" />
 							<div>
 								<div className="text-sm text-carbon">Order Groceries</div>
 								<div className="text-xs text-muted">Open Walmart Grocery</div>

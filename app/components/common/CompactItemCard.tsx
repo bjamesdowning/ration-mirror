@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 
 type StatusColor = "green" | "yellow" | "red" | "gray";
 
@@ -76,7 +77,11 @@ export function CompactItemCard({
 						}
 					`}
 				>
-					{isSelected ? "✓" : "+"}
+					{isSelected ? (
+						<CheckIcon className="w-3.5 h-3.5" />
+					) : (
+						<PlusIcon className="w-3.5 h-3.5" />
+					)}
 				</button>
 			)}
 

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState } from "react";
 import { Link } from "react-router";
+import { LightningBoltIcon } from "~/components/icons/PageIcons";
 import { authClient } from "~/lib/auth-client";
 import { log } from "~/lib/logging.client";
 import { AuthButton } from "./AuthButton";
@@ -168,7 +169,13 @@ export function AuthWidget({
 								disabled={loading}
 								className="mt-4 w-full py-3 px-4 rounded-xl font-mono text-sm bg-carbon text-ceramic hover:bg-carbon/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-hyper-green/30"
 							>
-								{loading ? "..." : "⚡ Dev Login"}
+								{loading ? (
+									"..."
+								) : (
+									<span className="flex items-center justify-center gap-1.5">
+										<LightningBoltIcon className="w-4 h-4" /> Dev Login
+									</span>
+								)}
 							</button>
 							<p className="mt-2 text-xs text-muted text-center font-mono">
 								dev@ration.app

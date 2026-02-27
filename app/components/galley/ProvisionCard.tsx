@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import type { meal } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS } from "~/lib/domain";
 import { ProvisionEditModal } from "./ProvisionEditModal";
@@ -90,7 +91,11 @@ export function ProvisionCard({
 						localActive ? "Selected for Supply list" : "Add to Supply list"
 					}
 				>
-					{localActive ? "✓" : "+"}
+					{localActive ? (
+						<CheckIcon className="w-3.5 h-3.5" />
+					) : (
+						<PlusIcon className="w-3.5 h-3.5" />
+					)}
 				</button>
 
 				<StandardCard

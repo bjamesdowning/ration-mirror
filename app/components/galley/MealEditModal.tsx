@@ -1,5 +1,6 @@
 import type { useFetcher } from "react-router";
 import { MealBuilder } from "~/components/galley/MealBuilder";
+import { WarningIcon } from "~/components/icons/PageIcons";
 import type { meal } from "~/db/schema";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { toSupportedUnit } from "~/lib/units";
@@ -89,7 +90,7 @@ export function MealEditModal({
 
 				{(fetcher.data as { error?: string })?.error && (
 					<div className="bg-danger/10 text-danger px-4 py-3 rounded-xl mb-6 text-sm flex items-center gap-2">
-						<span className="text-lg">⚠️</span>
+						<WarningIcon className="w-4 h-4 shrink-0" />
 						{(fetcher.data as { error?: string }).error}
 					</div>
 				)}

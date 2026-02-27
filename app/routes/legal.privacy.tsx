@@ -79,7 +79,32 @@ export default function PrivacyPolicy() {
 				<li>To process payments via our third-party payment processor</li>
 			</ul>
 
-			<h2>4. Google User Data</h2>
+			<h2>4. Legal Basis for Processing (EU / UK Users)</h2>
+			<p>
+				Where the General Data Protection Regulation (GDPR) or UK GDPR applies,
+				we rely on the following lawful bases under Article 6 to process your
+				personal data:
+			</p>
+			<ul>
+				<li>
+					<strong>Performance of a contract (Art. 6(1)(b)):</strong> Account
+					creation, service delivery, inventory storage, meal planning, and
+					visual scanning — processing necessary to provide the Service you have
+					signed up for.
+				</li>
+				<li>
+					<strong>Legal obligation (Art. 6(1)(c)):</strong> Payment records and
+					transaction history retained to comply with applicable tax and
+					financial reporting laws.
+				</li>
+				<li>
+					<strong>Legitimate interests (Art. 6(1)(f)):</strong> Security
+					monitoring, fraud prevention, and service improvement — where our
+					interests do not override your rights and freedoms.
+				</li>
+			</ul>
+
+			<h2>5. Google User Data</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Google OAuth Disclosure</p>
 				<p className="mt-2">
@@ -102,7 +127,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>5. Data Processors & Third Parties</h2>
+			<h2>6. Data Processors & Third Parties</h2>
 			<p>
 				We may employ third party companies and individuals to facilitate our
 				Service ("Service Providers"), to provide the Service on our behalf, to
@@ -139,7 +164,7 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>6. Data Retention & Deletion</h2>
+			<h2>7. Data Retention & Deletion</h2>
 			<p>
 				We will retain your Personal Data only for as long as is necessary for
 				the purposes set out in this Privacy Policy. We will retain and use your
@@ -156,7 +181,7 @@ export default function PrivacyPolicy() {
 				Account" function in the User Profile settings.
 			</p>
 
-			<h2>7. Security of Data</h2>
+			<h2>8. Security of Data</h2>
 			<p>
 				The security of your data is important to us, but remember that no
 				method of transmission over the Internet, or method of electronic
@@ -165,7 +190,7 @@ export default function PrivacyPolicy() {
 				security.
 			</p>
 
-			<h2>8. Changes to This Privacy Policy</h2>
+			<h2>9. Changes to This Privacy Policy</h2>
 			<p>
 				We may update our Privacy Policy from time to time. We will notify you
 				of any changes by posting the new Privacy Policy on this page. You are
@@ -174,15 +199,24 @@ export default function PrivacyPolicy() {
 				this page.
 			</p>
 
-			<h2>9. Contact Us</h2>
+			<h2>10. Contact Us & Data Subject Rights</h2>
 			<p>
-				If you have any questions about this Privacy Policy, please contact us:
+				If you have any questions about this Privacy Policy, or wish to exercise
+				your rights under applicable data protection law (including the right to
+				access, rectification, erasure, restriction, portability, or to object to
+				processing), please contact us:
 			</p>
 			<ul>
 				<li>
 					By email: <a href="mailto:legal@mayutic.com">legal@mayutic.com</a>
 				</li>
 			</ul>
+			<p>
+				We will acknowledge and respond to all data subject rights requests
+				within <strong>30 days</strong> of receipt, in accordance with GDPR
+				Article 12. Account deletion can also be initiated directly via the
+				"Purge Account" function in your profile settings.
+			</p>
 		</>
 	);
 }

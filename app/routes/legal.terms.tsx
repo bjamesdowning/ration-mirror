@@ -96,7 +96,51 @@ export default function TermsOfService() {
 				account, you may simply discontinue using the Service.
 			</p>
 
-			<h2>7. Disclaimer</h2>
+			<h2>7. Payments, Subscriptions & Refunds</h2>
+			<p>
+				Certain features of the Service require the purchase of credits or an
+				active subscription, processed via Stripe. By completing a purchase you
+				agree to the following terms:
+			</p>
+			<ul>
+				<li>
+					<strong>Credits:</strong> Credit packs are non-refundable once
+					purchased. Credits that have already been consumed (e.g. used for
+					scanning or AI generation) cannot be restored or transferred.
+					Unconsumed credits remain in your account until used or until your
+					account is deleted.
+				</li>
+				<li>
+					<strong>Subscriptions:</strong> The Crew Member subscription is billed
+					annually at the rate displayed at checkout. Cancelling a subscription
+					stops automatic renewal at the end of the current billing period; no
+					pro-rata refund is issued for the unused portion of the period.
+					Subscription credits granted at the start of a billing cycle are
+					subject to the same non-refundable terms as purchased credits.
+				</li>
+				<li>
+					<strong>Exceptions:</strong> We will issue a full refund for any
+					charge that results from a technical error on our part (e.g. a
+					duplicate charge). Refund requests must be submitted to{" "}
+					<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> within 14
+					days of the charge.
+				</li>
+				<li>
+					<strong>Payment processor:</strong> All payment information is
+					collected and stored by Stripe, Inc. We do not store card details. See
+					Stripe's Privacy Policy at{" "}
+					<a
+						href="https://stripe.com/privacy"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						stripe.com/privacy
+					</a>
+					.
+				</li>
+			</ul>
+
+			<h2>8. Disclaimer</h2>
 			<p>
 				Your use of the Service is at your sole risk. The Service is provided on
 				an "AS IS" and "AS AVAILABLE" basis. The Service is provided without
@@ -110,7 +154,7 @@ export default function TermsOfService() {
 				of any AI-generated content or analysis.
 			</p>
 
-			<h2>8. Limitation of Liability</h2>
+			<h2>9. Limitation of Liability</h2>
 			<p>
 				In no event shall Ration Operating Company, nor its directors,
 				employees, partners, agents, suppliers, or affiliates, be liable for any
@@ -126,14 +170,14 @@ export default function TermsOfService() {
 				set forth herein is found to have failed of its essential purpose.
 			</p>
 
-			<h2>9. Governing Law</h2>
+			<h2>10. Governing Law</h2>
 			<p>
 				These Terms shall be governed and construed in accordance with the laws
 				of Delaware, United States, without regard to its conflict of law
 				provisions.
 			</p>
 
-			<h2>10. Changes</h2>
+			<h2>11. Changes</h2>
 			<p>
 				We reserve the right, at our sole discretion, to modify or replace these
 				Terms at any time. If a revision is material we will provide at least 30
@@ -141,7 +185,7 @@ export default function TermsOfService() {
 				material change will be determined at our sole discretion.
 			</p>
 
-			<h2>11. Contact Us</h2>
+			<h2>12. Contact Us</h2>
 			<p>
 				If you have any questions about these Terms, please contact us at:{" "}
 				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>

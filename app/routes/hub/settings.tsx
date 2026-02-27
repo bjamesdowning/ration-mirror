@@ -583,7 +583,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							settings={settings}
 							userOrganizations={userOrganizations}
 							userMemberships={userMemberships}
-							tier={loaderData.tier}
+							tier={loaderData.tier === "crew_member" ? "crew_member" : "free"}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -792,7 +792,7 @@ function GroupSection({
 		role: string;
 		credits: number;
 	}[];
-	tier: string;
+	tier: "free" | "crew_member";
 }) {
 	return (
 		<div className="space-y-4">
@@ -1620,8 +1620,14 @@ function TransferCreditsSection({
 
 // ─── Group Management ──────────────────────────────────────────────────────────
 
-// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
-function GroupManagement({ members, tier }: { members: any[]; tier: string }) {
+function GroupManagement({
+	members,
+	tier,
+}: {
+	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
+	members: any[];
+	tier: "free" | "crew_member";
+}) {
 	const session = authClient.useSession();
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -1630,7 +1636,6 @@ function GroupManagement({ members, tier }: { members: any[]; tier: string }) {
 		success?: boolean;
 		invitationId?: string;
 		error?: string;
-		upgradePath?: string;
 	}>();
 	const copyToast = useToast({ duration: 3000 });
 

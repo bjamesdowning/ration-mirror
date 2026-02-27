@@ -72,12 +72,60 @@ function getDayEntries(
 	return entries.filter((e) => e.date === date);
 }
 
+// Shared slot list used by Small and the Large mobile fallback
+function DaySlotList({
+	entries,
+	date,
+}: {
+	entries: ManifestPreviewEntry[];
+	date: string;
+}) {
+	const dayEntries = getDayEntries(entries, date);
+	const filledSlots = dayEntries.map((e) => e.slotType);
+	const emptySlots = SLOT_ORDER.filter((s) => !filledSlots.includes(s));
+
+	if (dayEntries.length === 0) {
+		return <p className="text-xs text-muted italic">No meals planned</p>;
+	}
+
+	return (
+		<>
+			<ul className="space-y-2">
+				{SLOT_ORDER.map((slot) => {
+					const slotEntries = dayEntries.filter((e) => e.slotType === slot);
+					if (slotEntries.length === 0) return null;
+					return (
+						<li key={slot} className="flex items-start gap-2">
+							<span className="text-[10px] font-mono text-muted w-12 pt-0.5 shrink-0">
+								{SLOT_SHORT[slot]}
+							</span>
+							<div className="flex flex-col gap-0.5">
+								{slotEntries.map((entry) => (
+									<Link
+										key={entry.mealId}
+										to={`/hub/galley/${entry.mealId}`}
+										className="text-xs text-hyper-green hover:underline font-medium leading-snug"
+									>
+										{formatEntryLabel(entry)}
+									</Link>
+								))}
+							</div>
+						</li>
+					);
+				})}
+			</ul>
+			{emptySlots.length > 0 && (
+				<p className="text-[11px] text-muted mt-3">
+					{emptySlots.length} empty {emptySlots.length === 1 ? "slot" : "slots"}
+				</p>
+			)}
+		</>
+	);
+}
+
 // ------ Small: Today full view with per-meal links ------
 function ManifestSmall({ data }: { data: ManifestPreviewData }) {
 	const today = getTodayISO();
-	const dayEntries = getDayEntries(data.entries, today);
-	const filledSlots = dayEntries.map((e) => e.slotType);
-	const emptySlots = SLOT_ORDER.filter((s) => !filledSlots.includes(s));
 
 	return (
 		<div className="glass-panel p-4 rounded-2xl hover:border-hyper-green/30 transition-all h-full">
@@ -100,45 +148,12 @@ function ManifestSmall({ data }: { data: ManifestPreviewData }) {
 				})()}
 			</p>
 
-			{dayEntries.length === 0 ? (
-				<p className="text-xs text-muted italic">No meals planned</p>
-			) : (
-				<ul className="space-y-2">
-					{SLOT_ORDER.map((slot) => {
-						const slotEntries = dayEntries.filter((e) => e.slotType === slot);
-						if (slotEntries.length === 0) return null;
-						return (
-							<li key={slot} className="flex items-start gap-2">
-								<span className="text-[10px] font-mono text-muted w-12 pt-0.5 shrink-0">
-									{SLOT_SHORT[slot]}
-								</span>
-								<div className="flex flex-col gap-0.5">
-									{slotEntries.map((entry) => (
-										<Link
-											key={entry.mealId}
-											to={`/hub/galley/${entry.mealId}`}
-											className="text-xs text-hyper-green hover:underline font-medium leading-snug"
-										>
-											{formatEntryLabel(entry)}
-										</Link>
-									))}
-								</div>
-							</li>
-						);
-					})}
-				</ul>
-			)}
-
-			{emptySlots.length > 0 && (
-				<p className="text-[11px] text-muted mt-3">
-					{emptySlots.length} empty {emptySlots.length === 1 ? "slot" : "slots"}
-				</p>
-			)}
+			<DaySlotList entries={data.entries} date={today} />
 		</div>
 	);
 }
 
-// ------ Medium: 3-day rolling ------
+// ------ Medium: 3-day rolling with per-meal links ------
 function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 	const today = getTodayISO();
 	const days = [today, addDays(today, 1), addDays(today, 2)];
@@ -174,7 +189,7 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 								{formatDayHeader(date)}
 							</div>
 							<div
-								className={`rounded-lg border p-1.5 space-y-1 min-h-[48px] ${
+								className={`rounded-lg border p-1.5 space-y-1.5 min-h-[48px] ${
 									isToday ? "border-hyper-green/20" : "border-platinum/50"
 								}`}
 							>
@@ -183,27 +198,28 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 										<span className="text-[10px] text-muted">—</span>
 									</div>
 								) : (
-									SLOT_ORDER.slice(0, 3).map((slot) => {
+									SLOT_ORDER.map((slot) => {
 										const slotEntries = dayEntries.filter(
 											(e) => e.slotType === slot,
 										);
 										if (slotEntries.length === 0) return null;
-										const label = formatEntryLabel(slotEntries[0]);
 										return (
-											<p
-												key={slot}
-												className="text-[11px] text-carbon font-medium line-clamp-1"
-												title={label}
-											>
-												{label}
-											</p>
+											<div key={slot} className="space-y-0.5">
+												<p className="text-[9px] font-mono text-muted uppercase">
+													{SLOT_SHORT[slot]}
+												</p>
+												{slotEntries.map((entry) => (
+													<Link
+														key={entry.mealId}
+														to={`/hub/galley/${entry.mealId}`}
+														className="block text-[11px] text-hyper-green hover:underline font-medium leading-snug"
+													>
+														{formatEntryLabel(entry)}
+													</Link>
+												))}
+											</div>
 										);
 									})
-								)}
-								{dayEntries.length > 3 && (
-									<p className="text-[10px] text-muted">
-										+{dayEntries.length - 3} more
-									</p>
 								)}
 							</div>
 						</div>
@@ -214,7 +230,7 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 	);
 }
 
-// ------ Large: Full 7-day week ------
+// ------ Large: Full 7-day week (desktop) / today only (mobile) ------
 function ManifestLarge({ data }: { data: ManifestPreviewData }) {
 	const today = getTodayISO();
 	const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
@@ -233,12 +249,23 @@ function ManifestLarge({ data }: { data: ManifestPreviewData }) {
 				</Link>
 			</div>
 
-			<div className="grid grid-cols-7 gap-1.5">
+			{/* Mobile: today only — 7 narrow columns are too small to be usable */}
+			<div className="md:hidden">
+				<p className="text-sm font-bold text-carbon mb-3">
+					{(() => {
+						const d = new Date(`${today}T00:00:00`);
+						return `${DAY_NAMES_SHORT[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+					})()}
+				</p>
+				<DaySlotList entries={data.entries} date={today} />
+			</div>
+
+			{/* Desktop: full 7-day grid with per-meal links */}
+			<div className="hidden md:grid grid-cols-7 gap-1.5">
 				{days.map((date) => {
 					const d = new Date(`${date}T00:00:00`);
 					const isToday = date === today;
 					const dayEntries = getDayEntries(data.entries, date);
-					const mains = dayEntries.slice(0, 3);
 
 					return (
 						<div key={date} className="flex flex-col gap-1">
@@ -255,32 +282,35 @@ function ManifestLarge({ data }: { data: ManifestPreviewData }) {
 								<p className="text-xs font-bold">{d.getDate()}</p>
 							</div>
 							<div
-								className={`rounded-lg border p-1 space-y-0.5 min-h-[36px] ${
+								className={`rounded-lg border p-1 space-y-1 min-h-[36px] ${
 									isToday
 										? "border-hyper-green/20 bg-hyper-green/5"
 										: "border-platinum/30"
 								}`}
 							>
-								{mains.length === 0 ? (
+								{dayEntries.length === 0 ? (
 									<p className="text-center text-muted text-[10px] mt-1">—</p>
 								) : (
-									mains.map((e, i) => {
-										const label = formatEntryLabel(e);
+									SLOT_ORDER.map((slot) => {
+										const slotEntries = dayEntries.filter(
+											(e) => e.slotType === slot,
+										);
+										if (slotEntries.length === 0) return null;
 										return (
-											<p
-												key={`${e.date}-${e.slotType}-${i}`}
-												className="text-[10px] text-carbon font-medium line-clamp-1"
-												title={label}
-											>
-												{label}
-											</p>
+											<div key={slot} className="space-y-0.5">
+												{slotEntries.map((entry) => (
+													<Link
+														key={entry.mealId}
+														to={`/hub/galley/${entry.mealId}`}
+														className="block text-[10px] text-hyper-green hover:underline font-medium line-clamp-2 leading-tight"
+														title={formatEntryLabel(entry)}
+													>
+														{formatEntryLabel(entry)}
+													</Link>
+												))}
+											</div>
 										);
 									})
-								)}
-								{dayEntries.length > 3 && (
-									<p className="text-[9px] text-muted">
-										+{dayEntries.length - 3}
-									</p>
 								)}
 							</div>
 						</div>

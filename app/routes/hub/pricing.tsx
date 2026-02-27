@@ -131,6 +131,11 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		}
 	};
 
+	const closeCheckout = () => {
+		setClientSecret(null);
+		setSessionId(null);
+	};
+
 	const startCreditCheckout = (pack: keyof typeof loaderData.creditPacks) => {
 		const formData = new FormData();
 		formData.append("type", "credits");
@@ -180,13 +185,14 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<div className="flex justify-end">
 						<button
 							type="button"
-							onClick={() => setClientSecret(null)}
-							className="text-xs text-muted hover:text-carbon px-2 py-1"
+							onClick={closeCheckout}
+							className="text-xs text-muted hover:text-carbon px-2 py-1 transition-colors"
 						>
 							Close checkout
 						</button>
 					</div>
 					<EmbeddedCheckoutProvider
+						key={clientSecret}
 						stripe={stripePromise}
 						options={{
 							clientSecret,
@@ -258,6 +264,42 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						</button>
 					)}
 				</div>
+			</div>
+
+			<div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+				{(
+					Object.entries(loaderData.creditPacks) as Array<
+						[
+							keyof typeof loaderData.creditPacks,
+							(typeof loaderData.creditPacks)[keyof typeof loaderData.creditPacks],
+						]
+					>
+				).map(([packKey, pack]) => (
+					<div key={packKey} className="glass-panel rounded-xl p-4">
+						<div className="text-sm font-semibold text-carbon">
+							{pack.displayName}
+						</div>
+						<div className="text-2xl font-bold text-carbon mt-1">
+							{pack.price}
+						</div>
+						<div className="text-xs text-muted mt-1">
+							{pack.credits} credits
+						</div>
+						<div className="text-xs text-muted mt-1">{pack.description}</div>
+						{pack.badge && (
+							<span className="inline-block mt-2 text-[10px] bg-hyper-green/10 text-hyper-green px-2 py-0.5 rounded-full">
+								{pack.badge}
+							</span>
+						)}
+						<button
+							type="button"
+							onClick={() => startCreditCheckout(packKey)}
+							className="mt-3 w-full px-3 py-2 bg-hyper-green text-carbon rounded-lg text-sm font-bold transition-all hover:opacity-90 active:scale-95"
+						>
+							Buy Credits
+						</button>
+					</div>
+				))}
 			</div>
 
 			{/* Feature matrix */}
@@ -377,42 +419,6 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						/>
 					</tbody>
 				</table>
-			</div>
-
-			<div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-				{(
-					Object.entries(loaderData.creditPacks) as Array<
-						[
-							keyof typeof loaderData.creditPacks,
-							(typeof loaderData.creditPacks)[keyof typeof loaderData.creditPacks],
-						]
-					>
-				).map(([packKey, pack]) => (
-					<div key={packKey} className="glass-panel rounded-xl p-4">
-						<div className="text-sm font-semibold text-carbon">
-							{pack.displayName}
-						</div>
-						<div className="text-2xl font-bold text-carbon mt-1">
-							{pack.price}
-						</div>
-						<div className="text-xs text-muted mt-1">
-							{pack.credits} credits
-						</div>
-						<div className="text-xs text-muted mt-1">{pack.description}</div>
-						{pack.badge && (
-							<span className="inline-block mt-2 text-[10px] bg-hyper-green/10 text-hyper-green px-2 py-0.5 rounded-full">
-								{pack.badge}
-							</span>
-						)}
-						<button
-							type="button"
-							onClick={() => startCreditCheckout(packKey)}
-							className="mt-3 w-full px-3 py-2 bg-platinum text-carbon rounded-lg text-sm font-medium"
-						>
-							Buy Credits
-						</button>
-					</div>
-				))}
 			</div>
 		</div>
 	);

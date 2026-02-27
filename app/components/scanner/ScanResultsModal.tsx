@@ -44,6 +44,12 @@ export function ScanResultsModal({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [bulkEditMode, setBulkEditMode] = useState(false);
 	const [bulkExpiryDate, setBulkExpiryDate] = useState("");
+	const [dismissedMerges, setDismissedMerges] = useState<Set<string>>(
+		new Set(),
+	);
+
+	const dismissMerge = (id: string) =>
+		setDismissedMerges((prev) => new Set(prev).add(id));
 
 	const selectedItems = items.filter((item) => item.selected);
 	const isSubmitting = fetcher.state !== "idle";
@@ -121,11 +127,12 @@ export function ScanResultsModal({
 	const mergeMatches = useMemo(() => {
 		const map = new Map<string, MergeMatch>();
 		for (const item of items) {
+			if (dismissedMerges.has(item.id)) continue;
 			const match = findMergeMatch(item);
 			if (match) map.set(item.id, match);
 		}
 		return map;
-	}, [items, findMergeMatch]);
+	}, [items, findMergeMatch, dismissedMerges]);
 
 	// Handle submit
 	const handleSubmit = () => {
@@ -252,6 +259,7 @@ export function ScanResultsModal({
 									updateItem(item.id, updates);
 									setEditingId(null);
 								}}
+								onDismissMerge={dismissMerge}
 							/>
 						);
 					})}
@@ -303,6 +311,7 @@ interface ScanResultItemRowProps {
 	onStartEdit: (id: string) => void;
 	onCancelEdit: () => void;
 	onUpdate: (updates: Partial<ScanResultItem>) => void;
+	onDismissMerge: (id: string) => void;
 }
 
 function ScanResultItemRow({
@@ -313,6 +322,7 @@ function ScanResultItemRow({
 	onStartEdit,
 	onCancelEdit,
 	onUpdate,
+	onDismissMerge,
 }: ScanResultItemRowProps) {
 	const [editedItem, setEditedItem] = useState(item);
 
@@ -505,10 +515,21 @@ function ScanResultItemRow({
 								)}
 							</p>
 							{mergeMatch && (
-								<p className="text-xs text-hyper-green/80 mt-1">
-									Will add to existing: {mergeMatch.target.name} (
-									{mergeMatch.target.quantity} {mergeMatch.target.unit})
-								</p>
+								<div className="flex items-center gap-1.5 mt-1">
+									<p className="text-xs text-hyper-green/80">
+										Will add to existing: {mergeMatch.target.name} (
+										{mergeMatch.target.quantity} {mergeMatch.target.unit})
+									</p>
+									<button
+										type="button"
+										onClick={() => onDismissMerge(item.id)}
+										className="text-hyper-green/50 hover:text-muted transition-colors flex-shrink-0"
+										aria-label="Add as new item instead"
+										title="Add as new item instead"
+									>
+										<X className="w-3 h-3" />
+									</button>
+								</div>
 							)}
 						</div>
 						<button

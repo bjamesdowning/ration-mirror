@@ -1,11 +1,14 @@
 import type { Route } from "./+types/home";
-import "../../load-context"; // Ensure augmentation is loaded
+import "../../load-context";
 import { useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
+import { FeatureCarousel } from "~/components/home/FeatureCarousel";
+import { LifecycleStepper } from "~/components/home/LifecycleStepper";
 import {
 	CheckIcon,
 	CloseIcon,
+	CodeIcon,
 	LightningBoltIcon,
 } from "~/components/icons/PageIcons";
 import { createAuth } from "~/lib/auth.server";
@@ -17,7 +20,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const auth = createAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 
-	// If user is logged in, redirect to dashboard
 	if (session?.user) {
 		throw redirect("/hub");
 	}
@@ -32,63 +34,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export function meta(_: Route.MetaArgs) {
 	return [
-		{ title: "Ration - Kitchen Lifecycle Platform" },
+		{ title: "Ration — Kitchen Lifecycle Management" },
 		{
 			name: "description",
 			content:
-				"Closed-loop kitchen management: track Cargo, plan meals with AI, auto-generate supply lists, and refill Cargo. Simple, self-sustaining.",
+				"Closed-loop kitchen management powered by vector intelligence. Track Cargo, plan meals in the Galley, schedule via Manifest, auto-generate Supply lists, and Dock it back.",
 		},
 	];
 }
-
-const LIFECYCLE_STAGES = [
-	{
-		id: "ingest",
-		title: "Ingest",
-		desc: "Scan receipts or Cargo, import CSV, paste recipe URLs, or add items manually.",
-	},
-	{
-		id: "cargo",
-		title: "Cargo",
-		desc: "Track Cargo with tags, quantities, units, and expiration alerts.",
-	},
-	{
-		id: "meals",
-		title: "Meals",
-		desc: "Plan what to cook. AI generates options from what you have, or import recipes by URL.",
-	},
-	{
-		id: "lists",
-		title: "Lists",
-		desc: "Supply lists auto-populate from selected meals. Share and export.",
-	},
-	{
-		id: "shop",
-		title: "Shop",
-		desc: "Complete your list and dock cargo — purchased items flow back into your Cargo.",
-	},
-] as const;
-
-const AI_FEATURES = [
-	{
-		id: "scan",
-		title: "Photo & Receipt Scanning",
-		desc: "Snap a photo of a receipt or your Cargo shelf. AI extracts items, quantities, and expiry dates automatically.",
-		img: "/static/ai-scan-illustration.webp",
-	},
-	{
-		id: "url",
-		title: "Meal Import via URL",
-		desc: "Paste a meal URL. AI reads the page and extracts ingredients, steps, and metadata into a structured meal.",
-		img: "/static/ai-url-import.webp",
-	},
-	{
-		id: "generate",
-		title: "AI Meal Generation",
-		desc: "Generate meal ideas from what you already have. AI builds options using your current Cargo and preferences.",
-		img: "/static/ai-meal-generation.webp",
-	},
-] as const;
 
 function FeatureRow({
 	label,
@@ -114,11 +67,49 @@ function FeatureRow({
 	);
 }
 
+function SectionHeader({
+	eyebrow,
+	title,
+	subtitle,
+	centered = false,
+}: {
+	eyebrow?: string;
+	title: string;
+	subtitle?: string;
+	centered?: boolean;
+}) {
+	return (
+		<div
+			className={`space-y-3 ${centered ? "text-center max-w-2xl mx-auto" : ""}`}
+		>
+			{eyebrow && (
+				<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
+					{eyebrow}
+				</span>
+			)}
+			<h2
+				className={`text-display text-2xl md:text-3xl text-carbon flex items-center gap-4 ${centered ? "justify-center" : ""}`}
+			>
+				{centered && (
+					<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
+				)}
+				{title}
+				{centered && (
+					<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
+				)}
+			</h2>
+			{subtitle && (
+				<p className="text-muted leading-relaxed max-w-xl">{subtitle}</p>
+			)}
+		</div>
+	);
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const [voucherDismissed, setVoucherDismissed] = useState(false);
+
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
-			{/* Subtle gradient background */}
 			<div
 				className="absolute inset-0 pointer-events-none opacity-30"
 				style={{
@@ -135,10 +126,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				</p>
 			</div>
 
-			{/* Main Content */}
 			<main className="flex-1 w-full relative z-20">
 				<div className="max-w-7xl mx-auto px-6 py-12 md:py-24 flex flex-col items-center gap-24 md:gap-32">
-					{/* Hero Section */}
+					{/* ── HERO ── */}
 					<div className="max-w-4xl w-full flex flex-col items-center gap-12 text-center">
 						<div className="relative group">
 							<div className="absolute -inset-4 bg-hyper-green/5 rounded-full blur-xl group-hover:bg-hyper-green/10 transition-all duration-500" />
@@ -153,12 +143,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Ration<span className="text-hyper-green">.app</span>
 							</h1>
 							<p className="text-muted text-lg md:text-xl max-w-2xl mx-auto">
-								Your kitchen, on autopilot. A closed-loop platform that tracks
+								Kitchen lifecycle management. A closed-loop platform that tracks
 								what you have, plans what to cook, and knows what to buy next.
 							</p>
-							<p className="text-muted text-sm max-w-lg mx-auto">
-								Built for people who want simplicity, not another app to manage.
-								Free-form enough to build how you like, designed as a lifecycle.
+							<p className="text-muted text-sm max-w-xl mx-auto font-mono">
+								Cargo → Galley → Manifest → Supply → Dock → Repeat.
 							</p>
 						</div>
 						<div className="w-full flex justify-center mt-4">
@@ -173,61 +162,294 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</a>
 					</div>
 
-					{/* Lifecycle Section */}
+					{/* ── INTERACTIVE LIFECYCLE ── */}
 					<section
 						id="lifecycle"
-						className="w-full max-w-5xl space-y-12 border-t border-carbon/10 pt-16 md:pt-24 scroll-mt-24"
+						className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24 scroll-mt-24"
 					>
-						<div className="space-y-4 text-center max-w-2xl mx-auto">
-							<h2 className="text-display text-2xl md:text-3xl text-carbon flex items-center justify-center gap-4">
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-								The Closed-Loop Lifecycle
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-							</h2>
-							<p className="text-muted leading-relaxed">
-								Built for people who want their kitchen to run itself. AI powers
-								ingestion and meal generation. Lists automate shopping. Shopping
-								refills Cargo. The loop closes on its own.
-							</p>
-						</div>
-						<div className="flex justify-center">
-							<img
-								src="/static/lifecycle-diagram.webp"
-								alt="Ingest → Cargo → Meals → Lists → Shop → Cargo"
-								className="max-w-full h-auto max-h-64 md:max-h-80"
-								loading="lazy"
-							/>
-						</div>
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-							{LIFECYCLE_STAGES.map((stage) => (
-								<div
-									key={stage.id}
-									className="glass-panel rounded-xl p-4 hover:border-hyper-green/30 transition-colors"
-								>
-									<h3 className="text-display text-sm font-semibold text-carbon mb-1">
-										{stage.title}
-									</h3>
-									<p className="text-xs text-muted leading-relaxed">
-										{stage.desc}
-									</p>
+						<SectionHeader
+							centered
+							title="The Closed-Loop Lifecycle"
+							subtitle="Five stages. One loop. Your kitchen runs itself. AI powers ingestion and meal generation. Supply lists automate shopping. Shopping refills Cargo. The loop closes on its own."
+						/>
+						<LifecycleStepper />
+					</section>
+
+					{/* ── FEATURE CAROUSEL ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							centered
+							title="Inside the Platform"
+							subtitle="Every screen built for speed and clarity. Browse the core views."
+						/>
+						<FeatureCarousel />
+					</section>
+
+					{/* ── VECTOR INTELLIGENCE ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							eyebrow="Under the Hood"
+							title="Semantic Intelligence"
+							subtitle="Every ingredient and cargo item is mapped to a 768-dimensional vector embedding. Ration doesn't match on strings — it matches on meaning."
+						/>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+							<div className="glass-panel rounded-2xl p-6 space-y-4">
+								<h3 className="text-display text-lg text-carbon">
+									Deduplication
+								</h3>
+								<p className="text-sm text-muted leading-relaxed">
+									Add "cherry tomatoes" and "grape tomatoes" separately. Ration
+									detects they're semantically related at a 0.78 similarity
+									threshold and offers to merge. No manual cleanup.
+								</p>
+								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
+									<span className="px-2 py-1 bg-carbon/5 rounded">
+										CARGO_MERGE
+									</span>
+									<span>threshold: 0.78</span>
 								</div>
-							))}
+							</div>
+							<div className="glass-panel rounded-2xl p-6 space-y-4">
+								<h3 className="text-display text-lg text-carbon">
+									Meal Matching
+								</h3>
+								<p className="text-sm text-muted leading-relaxed">
+									Select a meal in the Galley and Ration maps its ingredients to
+									your current Cargo using vector similarity. Match Mode
+									highlights what you can cook right now — no exact‑name
+									requirement.
+								</p>
+								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
+									<span className="px-2 py-1 bg-carbon/5 rounded">
+										MEAL_MATCH
+									</span>
+									<span>threshold: 0.82</span>
+								</div>
+							</div>
+							<div className="glass-panel rounded-2xl p-6 space-y-4">
+								<h3 className="text-display text-lg text-carbon">
+									Supply Generation
+								</h3>
+								<p className="text-sm text-muted leading-relaxed">
+									When building a Supply list, Ration compares meal ingredients
+									against your Cargo with tight precision. Items you already
+									have are excluded, so you only buy what's missing.
+								</p>
+								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
+									<span className="px-2 py-1 bg-carbon/5 rounded">
+										SUPPLY_MATCH
+									</span>
+									<span>threshold: 0.84</span>
+								</div>
+							</div>
+							<div className="glass-panel rounded-2xl p-6 space-y-4">
+								<h3 className="text-display text-lg text-carbon">
+									Consumption Deduction
+								</h3>
+								<p className="text-sm text-muted leading-relaxed">
+									When you consume a meal from the Manifest, Ration deducts the
+									correct Cargo items using the strictest similarity threshold.
+									"Parmesan" in a recipe maps accurately to
+									"Parmigiano-Reggiano" in your Cargo.
+								</p>
+								<div className="flex items-center gap-2 text-xs font-mono text-carbon/50">
+									<span className="px-2 py-1 bg-carbon/5 rounded">
+										CARGO_DEDUCTION
+									</span>
+									<span>threshold: 0.85</span>
+								</div>
+							</div>
 						</div>
 					</section>
 
-					{/* AI Features Section */}
-					<section className="w-full max-w-5xl space-y-12 border-t border-carbon/10 pt-16 md:pt-24">
-						<div className="space-y-4">
-							<h2 className="text-display text-2xl text-carbon flex items-center gap-4">
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-								AI-Powered Features
-							</h2>
-							<div className="text-label text-muted">
-								Let AI handle the tedious parts
+					{/* ── MANIFEST & MEAL PLANNING ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							eyebrow="Mission Control"
+							title="The Manifest"
+							subtitle="Your weekly meal plan. A calendar view with breakfast, lunch, dinner, and snack slots — structured for precision, flexible for real life."
+						/>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+							<div className="glass-panel rounded-2xl overflow-hidden aspect-video">
+								<img
+									src="/static/ration-manifest-light.webp"
+									alt="Manifest weekly calendar view"
+									className="w-full h-full object-cover object-top"
+									loading="lazy"
+								/>
+							</div>
+							<div className="space-y-5">
+								<div className="flex items-start gap-3">
+									<div className="w-8 h-8 rounded-lg bg-hyper-green/10 flex items-center justify-center shrink-0 mt-0.5">
+										<span className="text-hyper-green text-sm font-bold">
+											1
+										</span>
+									</div>
+									<div>
+										<h4 className="text-sm font-semibold text-carbon">
+											Schedule from Galley
+										</h4>
+										<p className="text-xs text-muted">
+											Pull meals from your Galley into specific days and meal
+											slots. Plan the whole week in one session.
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start gap-3">
+									<div className="w-8 h-8 rounded-lg bg-hyper-green/10 flex items-center justify-center shrink-0 mt-0.5">
+										<span className="text-hyper-green text-sm font-bold">
+											2
+										</span>
+									</div>
+									<div>
+										<h4 className="text-sm font-semibold text-carbon">
+											Consume & Deduct
+										</h4>
+										<p className="text-xs text-muted">
+											Mark a meal as consumed. Ration deducts the ingredients
+											from your Cargo automatically via vector matching.
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start gap-3">
+									<div className="w-8 h-8 rounded-lg bg-hyper-green/10 flex items-center justify-center shrink-0 mt-0.5">
+										<span className="text-hyper-green text-sm font-bold">
+											3
+										</span>
+									</div>
+									<div>
+										<h4 className="text-sm font-semibold text-carbon">
+											Feed the Supply List
+										</h4>
+										<p className="text-xs text-muted">
+											All scheduled meals auto-feed your Supply list. What's
+											missing from Cargo shows up as items to buy.
+										</p>
+									</div>
+								</div>
+								<div className="flex items-start gap-3">
+									<div className="w-8 h-8 rounded-lg bg-hyper-green/10 flex items-center justify-center shrink-0 mt-0.5">
+										<span className="text-hyper-green text-sm font-bold">
+											4
+										</span>
+									</div>
+									<div>
+										<h4 className="text-sm font-semibold text-carbon">
+											Share with Crew
+										</h4>
+										<p className="text-xs text-muted">
+											Generate a read-only shareable link for your household.
+											Crew Member feature.
+										</p>
+									</div>
+								</div>
 							</div>
 						</div>
+					</section>
+
+					{/* ── CREW & GROUPS ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							eyebrow="Collaboration"
+							title="Crew: Built for Households"
+							subtitle="One subscription. Everyone benefits. Crew Member turns Ration into a shared platform for families, roommates, or any group that shares a kitchen."
+						/>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+							<div className="space-y-6">
+								<div className="glass-panel rounded-2xl p-6 space-y-3">
+									<h3 className="text-display text-base text-carbon">
+										Groups as Family Plans
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										When you subscribe to Crew Member, you can create up to 5
+										groups. Invite family members or housemates via shareable
+										links. Everyone in the group inherits the owner's unlimited
+										capacity — Cargo, Galley, and Supply limits are lifted for
+										all members.
+									</p>
+								</div>
+								<div className="glass-panel rounded-2xl p-6 space-y-3">
+									<h3 className="text-display text-base text-carbon">
+										Credit Transfer
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Credits are scoped to each group. As an owner, you can
+										transfer credits between any groups you own or belong to.
+										Need to move 20 credits from your personal group to the
+										household group? One action in Settings.
+									</p>
+								</div>
+								<div className="glass-panel rounded-2xl p-6 space-y-3">
+									<h3 className="text-display text-base text-carbon">
+										Roles & Permissions
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Owner, Admin, and Member roles. Owners manage subscriptions
+										and credit transfers. Admins can invite new members. Members
+										get full read/write access to shared Cargo, Galley, and
+										Manifest data.
+									</p>
+								</div>
+							</div>
+							<div className="glass-panel rounded-2xl overflow-hidden">
+								<picture>
+									<source
+										srcSet="/static/ration-group-dark.webp"
+										media="(prefers-color-scheme: dark)"
+									/>
+									<img
+										src="/static/ration-group-light.webp"
+										alt="Group management with multiple members"
+										className="w-full h-auto"
+										loading="lazy"
+									/>
+								</picture>
+								<div className="p-5 space-y-3 border-t border-carbon/5">
+									<h4 className="text-sm font-semibold text-carbon">
+										How it works
+									</h4>
+									<ol className="text-xs text-muted space-y-1.5 list-decimal list-inside">
+										<li>Subscribe to Crew Member (€12/year)</li>
+										<li>Create a group and invite members via link</li>
+										<li>Members join — capacity unlocks automatically</li>
+										<li>Share Cargo, plan meals together, split shopping</li>
+									</ol>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					{/* ── AI FEATURES ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							eyebrow="Intelligence"
+							title="AI-Powered Features"
+							subtitle="Let AI handle the tedious parts. All AI operations run on credits — available on both tiers."
+						/>
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-							{AI_FEATURES.map((feature) => (
+							{[
+								{
+									id: "scan",
+									title: "Photo & Receipt Scanning",
+									desc: "Snap a photo of a receipt or your Cargo shelf. AI extracts items, quantities, and expiry dates into structured entries.",
+									cost: "2 CR",
+									img: "/static/ai-scan-illustration.webp",
+								},
+								{
+									id: "url",
+									title: "Meal Import via URL",
+									desc: "Paste any recipe URL. AI reads the page and extracts ingredients, steps, prep time, and metadata into a structured Galley meal.",
+									cost: "2 CR",
+									img: "/static/ai-url-import.webp",
+								},
+								{
+									id: "generate",
+									title: "AI Meal Generation",
+									desc: "Generate meal ideas from your current Cargo. AI builds recipes using what you already have, respecting your preferences and allergens.",
+									cost: "2 CR",
+									img: "/static/ai-meal-generation.webp",
+								},
+							].map((feature) => (
 								<div
 									key={feature.id}
 									className="group glass-panel rounded-2xl p-6 hover:shadow-lg transition-all overflow-hidden"
@@ -240,9 +462,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											loading="lazy"
 										/>
 									</div>
-									<h3 className="text-display text-lg text-carbon mb-2 group-hover:text-hyper-green transition-colors">
-										{feature.title}
-									</h3>
+									<div className="flex items-center gap-2 mb-2">
+										<h3 className="text-display text-lg text-carbon group-hover:text-hyper-green transition-colors">
+											{feature.title}
+										</h3>
+										<span className="text-[10px] font-bold bg-carbon/5 text-carbon/60 px-2 py-0.5 rounded-full">
+											{feature.cost}
+										</span>
+									</div>
 									<p className="text-sm text-muted leading-relaxed">
 										{feature.desc}
 									</p>
@@ -251,20 +478,36 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</div>
 					</section>
 
-					{/* Pricing Section */}
-					<section className="w-full max-w-5xl space-y-12 border-t border-carbon/10 pt-16 md:pt-24">
-						<div className="space-y-4 text-center">
-							<h2 className="text-display text-2xl text-carbon flex items-center justify-center gap-4">
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-								Pricing
-								<span className="w-8 h-[3px] bg-hyper-green rounded-full" />
-							</h2>
-							<p className="text-muted text-sm max-w-xl mx-auto">
-								Start free with full access to the lifecycle. AI features run on
-								credits — buy packs anytime, or get yearly credits with Crew
-								Member.
-							</p>
+					{/* ── PUBLIC API ── */}
+					<section className="w-full max-w-5xl border-t border-carbon/10 pt-16 md:pt-24">
+						<div className="glass-panel rounded-2xl p-8 md:p-10 flex flex-col md:flex-row gap-6 items-start">
+							<div className="w-12 h-12 rounded-xl bg-hyper-green/10 flex items-center justify-center shrink-0">
+								<CodeIcon className="w-6 h-6 text-hyper-green" />
+							</div>
+							<div className="space-y-3">
+								<h2 className="text-display text-xl text-carbon">
+									Open Integration
+								</h2>
+								<p className="text-sm text-muted leading-relaxed max-w-xl">
+									Ration exposes a public API for developers and power users.
+									Query your Cargo inventory, read meal plans, pull Supply
+									lists, and integrate Ration data into your own workflows and
+									automations. REST endpoints, JSON responses, token-based auth.
+								</p>
+								<p className="text-xs text-carbon/40 font-mono">
+									API documentation coming soon — stay tuned.
+								</p>
+							</div>
 						</div>
+					</section>
+
+					{/* ── PRICING ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							centered
+							title="Pricing"
+							subtitle="Start free with full access to the lifecycle. AI features run on credits — buy packs anytime, or get yearly credits with Crew Member."
+						/>
 
 						{loaderData.welcomeVoucher && !voucherDismissed && (
 							<div className="glass-panel rounded-xl p-4 border border-hyper-green/30 text-center max-w-xl mx-auto relative">
@@ -323,34 +566,52 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										free
 										crew
 									/>
-									<FeatureRow label="Search & smart filters" free crew />
+									<FeatureRow
+										label="Semantic search & smart filters"
+										free
+										crew
+									/>
 									<tr className="bg-carbon/[0.02]">
 										<td
 											colSpan={3}
 											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
 										>
-											Meals
+											Galley
 										</td>
 									</tr>
 									<FeatureRow
-										label="Meals"
+										label="Meals & provisions"
 										free={`${loaderData.tierLimits.free.maxMeals}`}
 										crew="Unlimited"
 									/>
-									<FeatureRow label="Meal planning & matching" free crew />
-									<FeatureRow label="Mark meals as cooked" free crew />
+									<FeatureRow label="Match Mode (vector matching)" free crew />
+									<FeatureRow label="Promote Cargo to provisions" free crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
 											colSpan={3}
 											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
 										>
-											Supply Lists
+											Manifest
 										</td>
 									</tr>
-									<FeatureRow label="Supply List" free crew />
-									<FeatureRow label="Auto-generate from meals" free crew />
-									<FeatureRow label="Export (text, markdown)" free crew />
-									<FeatureRow label="Dock Cargo (list → Cargo)" free crew />
+									<FeatureRow label="Weekly meal calendar" free crew />
+									<FeatureRow label="Consume & auto-deduct" free crew />
+									<FeatureRow label="Share manifest via link" crew />
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Supply
+										</td>
+									</tr>
+									<FeatureRow
+										label="Auto-generate from Galley & Manifest"
+										free
+										crew
+									/>
+									<FeatureRow label="Dock Cargo (list → inventory)" free crew />
+									<FeatureRow label="Export (text, markdown, CSV)" free crew />
 									<FeatureRow label="Share via public link" crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
@@ -377,7 +638,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										crew={`${loaderData.tierLimits.crew_member.maxOwnedGroups}`}
 									/>
 									<FeatureRow label="Member invites" crew />
-									<FeatureRow label="Shared Cargo & credits" crew />
+									<FeatureRow label="Shared Cargo & Galley" crew />
+									<FeatureRow label="Credit transfer between groups" crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
 											colSpan={3}
@@ -401,7 +663,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<div className="glass-panel rounded-2xl p-6 text-center">
 								<h3 className="text-display text-xl text-carbon mb-1">Free</h3>
 								<p className="text-sm text-muted mb-5">
-									Everything you need to run the cycle
+									Everything you need to run the lifecycle
 								</p>
 								<Link
 									to="/hub/pricing"
@@ -416,7 +678,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								</h3>
 								<p className="text-sm text-muted mb-5">
 									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} —
-									unlimited capacity, groups, and yearly credits
+									unlimited capacity, groups, credit transfers, and yearly
+									credits
 								</p>
 								<Link
 									to="/hub/pricing"
@@ -431,7 +694,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<h3 className="text-display text-lg text-carbon">Credit Packs</h3>
 							<p className="text-sm text-muted">
 								Available on both tiers. Power AI scans, meal generation, and
-								meal imports. One-time purchases.
+								recipe imports. One-time purchases.
 							</p>
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 								{(
@@ -473,7 +736,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					</section>
 				</div>
 
-				{/* Data & Privacy Section */}
+				{/* Data & Privacy */}
 				<section className="w-full max-w-2xl mx-auto glass-panel rounded-2xl p-8 mt-24 text-center">
 					<h2 className="text-display text-xl text-carbon mb-4">
 						Data & Privacy
@@ -482,7 +745,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					<p className="text-sm text-muted leading-relaxed max-w-lg mx-auto">
 						Ration uses Google OAuth for secure authentication. We access only
 						your basic profile (ID, email, name) to secure your account. Your
-						Cargo and meal data stay yours. We{" "}
+						Cargo, Galley, and Manifest data stay yours. We{" "}
 						<span className="text-carbon font-bold">never sell</span> or share
 						your personal information.
 					</p>

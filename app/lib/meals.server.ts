@@ -96,7 +96,22 @@ export async function getMeals(
 				.limit(options?.limit ?? Number.MAX_SAFE_INTEGER)
 				.offset(options?.offset ?? 0)
 		: await d1
-				.select()
+				.select({
+					id: meal.id,
+					organizationId: meal.organizationId,
+					name: meal.name,
+					domain: meal.domain,
+					type: meal.type,
+					description: meal.description,
+					directions: meal.directions,
+					equipment: meal.equipment,
+					servings: meal.servings,
+					prepTime: meal.prepTime,
+					cookTime: meal.cookTime,
+					customFields: meal.customFields,
+					createdAt: meal.createdAt,
+					updatedAt: meal.updatedAt,
+				})
 				.from(meal)
 				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt))

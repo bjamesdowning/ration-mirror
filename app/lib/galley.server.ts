@@ -10,6 +10,7 @@ import {
 	updateProvision,
 } from "./meals.server";
 import { chunkArray } from "./query-utils.server";
+import { normalizeDirections, serializeDirections } from "./schemas/directions";
 import type {
 	GalleyManifest,
 	ManifestProvision,
@@ -52,7 +53,7 @@ function mealsToManifest(meals: MealWithIngredients[]): GalleyManifest {
 			type: "recipe" as const,
 			domain: m.domain as "food" | "household" | "alcohol",
 			description: m.description ?? undefined,
-			directions: m.directions ?? undefined,
+			directions: m.directions ? serializeDirections(m.directions) : undefined,
 			equipment: Array.isArray(m.equipment) ? m.equipment : [],
 			servings: m.servings ?? 1,
 			prepTime: m.prepTime ?? undefined,
@@ -172,11 +173,17 @@ export async function applyGalleyImport(
 				}
 			} else {
 				const rec = m as ManifestRecipe;
+				const parsedDirections = rec.directions
+					? normalizeDirections(rec.directions)
+					: undefined;
 				const mealInput = {
 					name: rec.name,
 					domain: rec.domain,
 					description: rec.description,
-					directions: rec.directions,
+					directions:
+						parsedDirections && parsedDirections.length > 0
+							? parsedDirections
+							: undefined,
 					equipment: rec.equipment,
 					servings: rec.servings,
 					prepTime: rec.prepTime,

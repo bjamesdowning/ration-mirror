@@ -421,9 +421,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					name: result.title.toLowerCase(),
 					domain: "food" as const,
 					description: result.description ?? "",
-					directions: result.steps
-						.map((step, i) => `${i + 1}. ${step}`)
-						.join("\n"),
+					directions: result.steps,
 					equipment: result.equipment ?? [],
 					servings: result.servings ?? 1,
 					prepTime: result.prepTime ?? 0,

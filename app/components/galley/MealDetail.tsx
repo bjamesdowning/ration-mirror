@@ -6,7 +6,9 @@ import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import { scaleQuantity } from "~/lib/scale";
+import { parseDirections } from "~/lib/schemas/directions";
 import type { MealInput } from "~/lib/schemas/meal";
+import { DirectionsSteps } from "./DirectionsSteps";
 
 interface MealDetailProps {
 	meal: MealInput & { id: string };
@@ -478,17 +480,10 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 						<span className="w-2 h-2 rounded-full bg-hyper-green" />
 						Directions
 					</h3>
-					<div className="prose prose-sm max-w-none text-carbon">
-						{meal.directions ? (
-							<div className="whitespace-pre-wrap leading-relaxed bg-platinum/30 rounded-xl p-6">
-								{meal.directions}
-							</div>
-						) : (
-							<p className="text-muted italic bg-platinum/30 rounded-xl p-6">
-								No directions provided
-							</p>
-						)}
-					</div>
+					<DirectionsSteps
+						steps={parseDirections(meal.directions)}
+						mealName={meal.name}
+					/>
 				</div>
 			</div>
 		</div>

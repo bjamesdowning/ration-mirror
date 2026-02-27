@@ -249,7 +249,7 @@ export const GenerateMealButton = forwardRef<
 		const mealDataArray = toSave.map((recipe) => ({
 			name: recipe.name,
 			description: recipe.description,
-			directions: recipe.directions.join("\n"),
+			directions: recipe.directions,
 			prepTime: recipe.prepTime,
 			cookTime: recipe.cookTime,
 			ingredients: recipe.ingredients,

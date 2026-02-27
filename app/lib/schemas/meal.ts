@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 import { normalizeUnitAlias } from "../units";
+import { normalizeDirections, type RecipeStep } from "./directions";
 import { UnitSchema } from "./units";
 
 /** Rejects common prompt injection patterns before user customization reaches the LLM */
@@ -66,7 +67,14 @@ export const MealSchema = z.object({
 		.transform((v) => v.toLowerCase()),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	description: z.string().optional(),
-	directions: z.string().optional(),
+	directions: z
+		.union([z.string(), z.array(z.unknown())])
+		.optional()
+		.transform((v): RecipeStep[] | undefined => {
+			if (v == null) return undefined;
+			const steps = normalizeDirections(v);
+			return steps.length > 0 ? steps : undefined;
+		}),
 	equipment: z.array(z.string()).default([]),
 	servings: z.coerce.number().int().min(MIN_SERVINGS).default(DEFAULT_SERVINGS),
 	prepTime: z.coerce.number().int().nonnegative().optional(),

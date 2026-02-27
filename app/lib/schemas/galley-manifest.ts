@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 import { normalizeUnitAlias } from "../units";
+import { normalizeDirections, serializeDirections } from "./directions";
 import { UnitSchema } from "./units";
 
 const UUID_REGEX =
@@ -37,7 +38,16 @@ export const ManifestRecipeSchema = z.object({
 	type: z.literal("recipe"),
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	description: z.string().optional(),
-	directions: z.string().optional(),
+	directions: z
+		.union([z.string(), z.array(z.unknown())])
+		.optional()
+		.transform((v): string | undefined => {
+			if (v == null) return undefined;
+			if (typeof v === "string") return v || undefined;
+			// RecipeStep[] — serialize back to JSON string for manifest portability
+			const steps = normalizeDirections(v);
+			return steps.length > 0 ? serializeDirections(steps) : undefined;
+		}),
 	equipment: z.array(z.string()).default([]),
 	servings: z.coerce.number().int().min(1).default(1),
 	prepTime: z.coerce.number().int().nonnegative().optional(),

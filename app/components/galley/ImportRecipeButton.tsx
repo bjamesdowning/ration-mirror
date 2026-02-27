@@ -24,7 +24,7 @@ import {
 interface ImportedRecipe {
 	name: string;
 	description?: string;
-	directions?: string;
+	directions?: string[];
 	ingredients: Array<{
 		ingredientName: string;
 		quantity: number;
@@ -375,14 +375,16 @@ export const ImportRecipeButton = forwardRef<
 										</div>
 
 										{/* Directions accordion */}
-										{recipe.directions && (
+										{recipe.directions && recipe.directions.length > 0 && (
 											<div className="border-t border-platinum dark:border-white/10 pt-4">
 												<button
 													type="button"
 													onClick={() => setDirectionsOpen((o) => !o)}
 													className="flex items-center justify-between w-full text-xs font-bold text-carbon dark:text-white uppercase tracking-wider"
 												>
-													<span>Directions</span>
+													<span>
+														Directions ({recipe.directions.length} steps)
+													</span>
 													{directionsOpen ? (
 														<ChevronUp className="w-4 h-4 text-muted" />
 													) : (
@@ -391,25 +393,20 @@ export const ImportRecipeButton = forwardRef<
 												</button>
 												{directionsOpen && (
 													<ol className="mt-3 space-y-2">
-														{recipe.directions
-															.split("\n")
-															.filter(Boolean)
-															.map((step, idx) => {
-																const text = step.replace(/^\d+\.\s*/, "");
-																return (
-																	<li
-																		key={`step-${text.slice(0, 32)}`}
-																		className="flex gap-3 text-xs text-muted"
-																	>
-																		<span className="flex-shrink-0 w-5 h-5 rounded-full bg-hyper-green/20 text-hyper-green flex items-center justify-center font-bold text-[10px]">
-																			{idx + 1}
-																		</span>
-																		<span className="leading-relaxed">
-																			{text}
-																		</span>
-																	</li>
-																);
-															})}
+														{recipe.directions.map((step, idx) => (
+															<li
+																key={`step-${
+																	// biome-ignore lint/suspicious/noArrayIndexKey: stable ordered list
+																	idx
+																}`}
+																className="flex gap-3 text-xs text-muted"
+															>
+																<span className="flex-shrink-0 w-5 h-5 rounded-full bg-hyper-green/20 text-hyper-green flex items-center justify-center font-bold text-[10px]">
+																	{idx + 1}
+																</span>
+																<span className="leading-relaxed">{step}</span>
+															</li>
+														))}
 													</ol>
 												)}
 											</div>

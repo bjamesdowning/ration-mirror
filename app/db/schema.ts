@@ -7,6 +7,7 @@ import {
 	text,
 	unique,
 } from "drizzle-orm/sqlite-core";
+import type { RecipeStep } from "../lib/schemas/directions";
 import type {
 	MealCustomFields,
 	OrganizationMetadata,
@@ -257,7 +258,7 @@ export const meal = sqliteTable(
 		domain: text("domain").notNull().default("food"),
 		type: text("type").notNull().default("recipe"), // 'recipe' | 'provision'
 		description: text("description"),
-		directions: text("directions"),
+		directions: text("directions", { mode: "json" }).$type<RecipeStep[]>(),
 		equipment: text("equipment", { mode: "json" })
 			.$type<string[]>()
 			.default([]),

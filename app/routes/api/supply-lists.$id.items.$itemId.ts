@@ -16,10 +16,6 @@ import type { Route } from "./+types/supply-lists.$id.items.$itemId";
  * DELETE /api/supply-lists/:id/items/:itemId - Remove supply item
  */
 export async function action({ request, context, params }: Route.ActionArgs) {
-	const {
-		groupId,
-		session: { user },
-	} = await requireActiveGroup(context, request);
 	const listId = params.id;
 	const itemId = params.itemId;
 
@@ -27,10 +23,22 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "List and Item ID required" }, { status: 400 });
 	}
 
+	let groupId: string;
+	let userId: string;
+
+	try {
+		const result = await requireActiveGroup(context, request);
+		groupId = result.groupId;
+		userId = result.session.user.id;
+	} catch (e) {
+		if (e instanceof Response) throw e;
+		return handleApiError(e);
+	}
+
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"grocery_mutation",
-		user.id,
+		userId,
 	);
 	if (!rateLimitResult.allowed) {
 		throw data(

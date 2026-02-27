@@ -39,6 +39,18 @@ export function OnboardingTour({
 	const fetcher = useFetcher();
 	const hasPersisted = useRef(false);
 
+	// Re-open when the loader re-runs after "Restart Tutorial" clears isCompleted.
+	// useState initialises only once, so we need an effect to react to prop changes.
+	const prevIsCompleted = useRef(isCompleted);
+	useEffect(() => {
+		if (prevIsCompleted.current && !isCompleted) {
+			hasPersisted.current = false;
+			setStep(0);
+			setOpen(true);
+		}
+		prevIsCompleted.current = isCompleted;
+	}, [isCompleted]);
+
 	const persistStep = useCallback(
 		(nextStep: number, completed = false) => {
 			const formData = new FormData();

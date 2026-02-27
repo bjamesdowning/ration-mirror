@@ -75,13 +75,16 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			purchasedItems,
 		);
 
-		// 3. Remove them from the list (cleanup)
-		// We delete them one by one or by ID list to ensure we only delete what we processed
+		// 3. Remove them from the list in a single batch — reduces N sequential
+		//    D1 round-trips to one atomic call. The `purchasedItems.length > 0`
+		//    guard ensures the array is non-empty; we cast via `unknown` because
+		//    Drizzle's batch() tuple type cannot be inferred from a mapped array.
 		if (purchasedItems.length > 0) {
-			// Verify batch delete syntax for SQLite/Drizzle, simple loop is safest for D1 limits
-			for (const item of purchasedItems) {
-				await d1.delete(supplyItem).where(eq(supplyItem.id, item.id));
-			}
+			const deleteStatements = purchasedItems.map((item) =>
+				d1.delete(supplyItem).where(eq(supplyItem.id, item.id)),
+			);
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch requires a non-empty tuple which cannot be inferred from Array.map
+			await d1.batch(deleteStatements as unknown as any);
 		}
 
 		return {

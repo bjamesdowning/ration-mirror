@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { extractModelText } from "~/lib/ai.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getCargo } from "~/lib/cargo.server";
 import {
@@ -54,23 +55,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 	return btoa(binary);
 }
 
-function extractModelText(payload: unknown) {
-	if (!payload || typeof payload !== "object") return null;
-	const candidates = (payload as { candidates?: Array<unknown> }).candidates;
-	if (!Array.isArray(candidates) || candidates.length === 0) return null;
-	const first = candidates[0] as {
-		content?: { parts?: Array<{ text?: string }> };
-	};
-	const parts = first?.content?.parts;
-	if (!Array.isArray(parts)) return null;
-	for (const part of parts) {
-		if (typeof part.text === "string") {
-			return part.text;
-		}
-	}
-	return null;
-}
-
 export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
 	const {
@@ -114,8 +98,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	if (imageFile.size > 5 * 1024 * 1024) {
-		// Enforce a reasonable limit (e.g. 5MB)
 		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
+	}
+
+	const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+	type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
+	const mimeType = imageFile.type as AllowedMimeType;
+	if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+		throw data(
+			{ error: "Unsupported image format. Use JPEG, PNG, or WebP." },
+			{ status: 415 },
+		);
 	}
 
 	// 4. Prepare Image for AI + credit gate
@@ -162,7 +155,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 										parts: [
 											{
 												inlineData: {
-													mimeType: "image/jpeg",
+													mimeType,
 													data: base64Image,
 												},
 											},

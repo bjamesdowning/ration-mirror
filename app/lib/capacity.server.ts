@@ -54,6 +54,30 @@ function getEffectiveTier(
 	return { tier, isExpired: false };
 }
 
+const TIER_CACHE_TTL_SECONDS = 60;
+const tierCacheKey = (organizationId: string) => `tier:${organizationId}`;
+
+type CachedTierPayload = {
+	tier: TierSlug;
+	isExpired: boolean;
+	cachedAt: number;
+};
+
+/**
+ * Invalidate the tier cache for a given organization.
+ * Call this after any operation that changes the owner's tier (e.g. Stripe webhook).
+ */
+export async function invalidateTierCache(
+	env: Env,
+	organizationId: string,
+): Promise<void> {
+	try {
+		await env.RATION_KV.delete(tierCacheKey(organizationId));
+	} catch {
+		// Non-fatal: cache invalidation failure just means stale data for up to TTL
+	}
+}
+
 /**
  * Get tier limits for a group (organization). Tier is derived from the
  * **organization owner's** user.tier, not the current viewer.
@@ -68,12 +92,30 @@ function getEffectiveTier(
  * When purchaser ≠ owner (e.g. admin buys for group), only purchaser's user.tier
  * is updated; group limits stay based on owner's tier until owner upgrades.
  *
- * Read from D1 only (no KV cache). D1 free tier: 10M reads/day vs KV 1K writes/day.
+ * Tier data is cached in KV for 60s to eliminate 2 D1 reads per request for
+ * active users. Group switches are safe: a new groupId produces a new cache key,
+ * so the cache miss fetches fresh data. On tier change (Stripe webhook), call
+ * invalidateTierCache() to ensure the new tier is visible immediately.
  */
 export async function getGroupTierLimits(
 	env: Env,
 	organizationId: string,
 ): Promise<{ tier: TierSlug; limits: TierLimits; isExpired: boolean }> {
+	// Check KV cache first
+	try {
+		const cached = await env.RATION_KV.get(tierCacheKey(organizationId), {
+			type: "json",
+			cacheTtl: TIER_CACHE_TTL_SECONDS,
+		});
+		if (cached) {
+			const payload = cached as CachedTierPayload;
+			const tier = payload.tier ?? "free";
+			return { tier, limits: TIER_LIMITS[tier], isExpired: payload.isExpired };
+		}
+	} catch {
+		// Cache miss or error — fall through to D1
+	}
+
 	const db = drizzle(env.DB, { schema });
 	const now = new Date();
 
@@ -103,6 +145,22 @@ export async function getGroupTierLimits(
 		owner?.tier === "crew_member" ? "crew_member" : "free";
 	const tierExpiresAt = owner?.tierExpiresAt ?? null;
 	const { tier, isExpired } = getEffectiveTier(rawTier, tierExpiresAt, now);
+
+	// Write result to KV cache
+	try {
+		const payload: CachedTierPayload = {
+			tier,
+			isExpired,
+			cachedAt: Date.now(),
+		};
+		await env.RATION_KV.put(
+			tierCacheKey(organizationId),
+			JSON.stringify(payload),
+			{ expirationTtl: TIER_CACHE_TTL_SECONDS },
+		);
+	} catch {
+		// Non-fatal: operating without cache is acceptable
+	}
 
 	return { tier, limits: TIER_LIMITS[tier], isExpired };
 }

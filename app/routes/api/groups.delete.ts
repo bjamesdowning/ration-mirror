@@ -5,6 +5,7 @@ import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { deleteCargoVectors } from "~/lib/vector.server";
 import type { Route } from "./+types/groups.delete";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -50,8 +51,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 	});
 
 	try {
-		// Execute all deletions atomically via D1 batch API
-		// This ensures all-or-nothing semantics and reduces latency
+		// Fetch cargo IDs before deletion so Vectorize can be cleaned up.
+		// Must happen before the D1 batch since the batch removes the rows.
+		const cargoRows = await db
+			.select({ id: schema.cargo.id })
+			.from(schema.cargo)
+			.where(eq(schema.cargo.organizationId, organizationId));
+		const cargoIds = cargoRows.map((r) => r.id);
+
+		if (cargoIds.length > 0) {
+			await deleteCargoVectors(context.cloudflare.env, cargoIds);
+			log.info("[DeleteGroup] Cleaned up Vectorize vectors", {
+				count: cargoIds.length,
+				orgId: redactId(organizationId),
+			});
+		}
+
+		// Execute all D1 deletions atomically via D1 batch API
 		log.info("[DeleteGroup] Executing atomic deletion", {
 			orgId: redactId(organizationId),
 		});

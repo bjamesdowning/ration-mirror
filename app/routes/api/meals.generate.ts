@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { cargo } from "~/db/schema";
+import { extractModelText } from "~/lib/ai.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	AI_COSTS,
@@ -26,23 +27,6 @@ import type { Route } from "./+types/meals.generate";
 
 const GENERATE_MODEL = "gemini-3-flash-preview";
 
-function extractModelText(payload: unknown) {
-	if (!payload || typeof payload !== "object") return null;
-	const candidates = (payload as { candidates?: Array<unknown> }).candidates;
-	if (!Array.isArray(candidates) || candidates.length === 0) return null;
-	const first = candidates[0] as {
-		content?: { parts?: Array<{ text?: string }> };
-	};
-	const parts = first?.content?.parts;
-	if (!Array.isArray(parts)) return null;
-	for (const part of parts) {
-		if (typeof part.text === "string") {
-			return part.text;
-		}
-	}
-	return null;
-}
-
 export async function action({ request, context }: Route.ActionArgs) {
 	// 1. Auth & Group Context
 	const {
@@ -66,49 +50,61 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 3. Fetch Inventory
+	// 3. Fetch inventory and parse request body in parallel — they are independent.
 	const d1 = drizzle(context.cloudflare.env.DB);
-	const pantryItems = await d1
-		.select({
-			id: cargo.id,
-			name: cargo.name,
-			quantity: cargo.quantity,
-			unit: cargo.unit,
-		})
-		.from(cargo)
-		.where(eq(cargo.organizationId, groupId));
+
+	const parseBody = async (): Promise<string | undefined> => {
+		try {
+			const contentType = request.headers.get("Content-Type");
+			let body: unknown;
+			if (contentType?.includes("application/json")) {
+				body = await request.json();
+			} else {
+				const formData = await request.formData();
+				body = Object.fromEntries(formData.entries());
+			}
+			const parsed = MealGenerateRequestSchema.safeParse(body);
+			if (!parsed.success) {
+				throw data(
+					{ error: parsed.error.issues[0]?.message ?? "Invalid request" },
+					{ status: 400 },
+				);
+			}
+			return parsed.data.customization;
+		} catch (e) {
+			// Re-throw both Response and DataWithResponseInit (from data()) so
+			// validation errors reach the client rather than being silently swallowed.
+			if (
+				e instanceof Response ||
+				(e &&
+					typeof e === "object" &&
+					"type" in e &&
+					(e as { type: string }).type === "DataWithResponseInit")
+			) {
+				throw e;
+			}
+			return undefined;
+		}
+	};
+
+	const [pantryItems, customization] = await Promise.all([
+		d1
+			.select({
+				id: cargo.id,
+				name: cargo.name,
+				quantity: cargo.quantity,
+				unit: cargo.unit,
+			})
+			.from(cargo)
+			.where(eq(cargo.organizationId, groupId)),
+		parseBody(),
+	]);
 
 	if (pantryItems.length === 0) {
 		throw data(
 			{ error: "Pantry is empty. Add items before generating meals." },
 			{ status: 400 },
 		);
-	}
-
-	// 4. Parse request body and validate customization
-	let customization: string | undefined;
-	try {
-		const contentType = request.headers.get("Content-Type");
-		let body: unknown;
-		if (contentType?.includes("application/json")) {
-			body = await request.json();
-		} else {
-			const formData = await request.formData();
-			body = Object.fromEntries(formData.entries());
-		}
-		const parsed = MealGenerateRequestSchema.safeParse(body);
-		if (!parsed.success) {
-			throw data(
-				{
-					error: parsed.error.issues[0]?.message ?? "Invalid request",
-				},
-				{ status: 400 },
-			);
-		}
-		customization = parsed.data.customization;
-	} catch (e) {
-		if (e instanceof Response) throw e;
-		customization = undefined;
 	}
 
 	// 5. Construct Prompt

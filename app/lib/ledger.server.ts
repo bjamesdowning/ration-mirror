@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
+import { invalidateTierCache } from "./capacity.server";
 import { log, redactId } from "./logging.server";
 import { getStripe } from "./stripe.server";
 
@@ -404,6 +405,9 @@ export async function processSubscriptionCheckoutSession(
 		periodEnd: periodEnd.toISOString(),
 	});
 
+	// Invalidate the tier KV cache so the new tier is visible immediately
+	await invalidateTierCache(env, organizationId);
+
 	await addCredits(env, organizationId, userId, 60, "Crew Member Credits", {
 		sessionId,
 	});
@@ -443,6 +447,9 @@ export async function processSubscriptionInvoice(
 		})
 		.where(eq(schema.user.id, userId));
 
+	// Invalidate the tier KV cache so the renewed tier is visible immediately
+	await invalidateTierCache(env, organizationId);
+
 	await addCredits(
 		env,
 		organizationId,
@@ -462,6 +469,7 @@ export async function downgradeExpiredSubscription(
 	const stripe = getStripe(env);
 	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 	const userId = subscription.metadata?.userId;
+	const organizationId = subscription.metadata?.organizationId;
 
 	if (!userId) {
 		throw new Error(`Subscription ${subscriptionId} missing user metadata`);
@@ -475,6 +483,11 @@ export async function downgradeExpiredSubscription(
 			tierExpiresAt: null,
 		})
 		.where(eq(schema.user.id, userId));
+
+	// Invalidate the tier KV cache so the downgrade is visible immediately
+	if (organizationId) {
+		await invalidateTierCache(env, organizationId);
+	}
 
 	return { userId };
 }

@@ -16,93 +16,102 @@ export async function loader(args: Route.LoaderArgs) {
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 	const now = new Date();
-
-	// --- Overview ---
-	const userCount = await db.$count(schema.user);
-	const inventoryCount = await db.$count(schema.cargo);
-	const burnedResult = await db
-		.select({
-			burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
-		})
-		.from(schema.ledger)
-		.get();
-
-	// --- Maintenance: Active Users ---
-	const activeUsersResult = await db
-		.select({
-			count: sql<number>`count(distinct ${schema.session.userId})`,
-		})
-		.from(schema.session)
-		.where(gt(schema.session.expiresAt, now))
-		.get();
-
-	const activeSessionsResult = await db
-		.select({ count: count() })
-		.from(schema.session)
-		.where(gt(schema.session.expiresAt, now))
-		.get();
-
 	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 	const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-	const newSignups7dResult = await db
-		.select({ count: count() })
-		.from(schema.user)
-		.where(gt(schema.user.createdAt, sevenDaysAgo))
-		.get();
-	const newSignups30dResult = await db
-		.select({ count: count() })
-		.from(schema.user)
-		.where(gt(schema.user.createdAt, thirtyDaysAgo))
-		.get();
-
-	// --- Feature Usage ---
-	const groupCount = await db.$count(schema.organization);
-	const mealCount = await db.$count(schema.meal);
-	const activeMealCount = await db.$count(schema.activeMealSelection);
-	const groceryListCount = await db.$count(schema.supplyList);
-	const scanCountResult = await db
-		.select({ count: count() })
-		.from(schema.ledger)
-		.where(eq(schema.ledger.reason, "scan"))
-		.get();
-
-	// --- Platform Health ---
-	const totalCreditsResult = await db
-		.select({
-			total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
-		})
-		.from(schema.organization)
-		.get();
-
-	const pendingInvitesResult = await db
-		.select({ count: count() })
-		.from(schema.invitation)
-		.where(eq(schema.invitation.status, "pending"))
-		.get();
-
 	const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-	const expiringItemsResult = await db
-		.select({ count: count() })
-		.from(schema.cargo)
-		.where(
-			and(
-				gt(schema.cargo.expiresAt, now),
-				lt(schema.cargo.expiresAt, sevenDaysFromNow),
-			),
-		)
-		.get();
 
-	const verifiedUsersResult = await db
-		.select({ count: count() })
-		.from(schema.user)
-		.where(eq(schema.user.emailVerified, true))
-		.get();
-
-	const crewMemberCountResult = await db
-		.select({ count: count() })
-		.from(schema.user)
-		.where(eq(schema.user.tier, "crew_member"))
-		.get();
+	// All 13 queries are independent — run them in parallel to reduce wall-clock
+	// latency from ~13 sequential D1 round-trips down to ~1.
+	const [
+		userCount,
+		inventoryCount,
+		burnedResult,
+		activeUsersResult,
+		activeSessionsResult,
+		newSignups7dResult,
+		newSignups30dResult,
+		groupCount,
+		mealCount,
+		activeMealCount,
+		groceryListCount,
+		scanCountResult,
+		totalCreditsResult,
+		pendingInvitesResult,
+		expiringItemsResult,
+		verifiedUsersResult,
+		crewMemberCountResult,
+	] = await Promise.all([
+		db.$count(schema.user),
+		db.$count(schema.cargo),
+		db
+			.select({
+				burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
+			})
+			.from(schema.ledger)
+			.get(),
+		db
+			.select({
+				count: sql<number>`count(distinct ${schema.session.userId})`,
+			})
+			.from(schema.session)
+			.where(gt(schema.session.expiresAt, now))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.session)
+			.where(gt(schema.session.expiresAt, now))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(gt(schema.user.createdAt, sevenDaysAgo))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(gt(schema.user.createdAt, thirtyDaysAgo))
+			.get(),
+		db.$count(schema.organization),
+		db.$count(schema.meal),
+		db.$count(schema.activeMealSelection),
+		db.$count(schema.supplyList),
+		db
+			.select({ count: count() })
+			.from(schema.ledger)
+			.where(eq(schema.ledger.reason, "scan"))
+			.get(),
+		db
+			.select({
+				total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
+			})
+			.from(schema.organization)
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.invitation)
+			.where(eq(schema.invitation.status, "pending"))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.cargo)
+			.where(
+				and(
+					gt(schema.cargo.expiresAt, now),
+					lt(schema.cargo.expiresAt, sevenDaysFromNow),
+				),
+			)
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(eq(schema.user.emailVerified, true))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(eq(schema.user.tier, "crew_member"))
+			.get(),
+	]);
 
 	return {
 		currentUserId: adminUser.id,

@@ -48,8 +48,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
+	const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1 MB
+	const contentLength = Number(request.headers.get("Content-Length") ?? "0");
+	if (contentLength > MAX_BODY_BYTES) {
+		throw data({ error: "Request body too large (max 1 MB)" }, { status: 413 });
+	}
+
 	try {
 		const text = await request.text();
+		if (text.length > MAX_BODY_BYTES) {
+			throw data(
+				{ error: "Request body too large (max 1 MB)" },
+				{ status: 413 },
+			);
+		}
 		if (!text.trim()) {
 			throw data({ error: "Empty CSV body" }, { status: 400 });
 		}

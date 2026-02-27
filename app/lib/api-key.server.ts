@@ -1,3 +1,4 @@
+import { waitUntil } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
@@ -77,11 +78,16 @@ export async function verifyApiKey(
 	const hash = await hashApiKey(rawKey);
 	if (!secureCompare(hash, row.keyHash)) return null;
 
+	// Fire-and-forget: update lastUsedAt after the response is returned.
+	// This eliminates a blocking D1 write from every API request's critical path.
+	// waitUntil guarantees the write completes even after the response is sent.
 	const now = new Date();
-	await d1
-		.update(apiKeyTable)
-		.set({ lastUsedAt: now })
-		.where(eq(apiKeyTable.id, row.id));
+	waitUntil(
+		d1
+			.update(apiKeyTable)
+			.set({ lastUsedAt: now })
+			.where(eq(apiKeyTable.id, row.id)),
+	);
 
 	return {
 		id: row.id,

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { meal } from "~/db/schema";
@@ -58,7 +58,8 @@ function isBlockedUrl(rawUrl: string): boolean {
 		// Block bare private IPv4 ranges
 		const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
 		if (ipv4) {
-			const [, a, b] = ipv4.map(Number);
+			const a = Number(ipv4[1]);
+			const b = Number(ipv4[2]);
 			if (a === 10) return true;
 			if (a === 172 && b >= 16 && b <= 31) return true;
 			if (a === 192 && b === 168) return true;
@@ -184,7 +185,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			.select({ id: meal.id, name: meal.name })
 			.from(meal)
 			.where(
-				sql`${meal.organizationId} = ${groupId} AND json_extract(${meal.customFields}, '$.sourceUrl') = ${validatedUrl}`,
+				and(
+					eq(meal.organizationId, groupId),
+					sql`json_extract(${meal.customFields}, '$.sourceUrl') = ${validatedUrl}`,
+				),
 			)
 			.limit(1);
 

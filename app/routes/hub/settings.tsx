@@ -509,9 +509,38 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				title="System"
 			/>
 
-			{/* ── Two-column layout: sidebar nav + content ── */}
+			{/* ── Mobile: chip strip above content ── */}
+			<div className="md:hidden">
+				<div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+					{navItems.map((item) => {
+						const isDanger = item.id === "danger";
+						const isActive = activeSection === item.id;
+						return (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => handleNav(item.id)}
+								className={[
+									"flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all",
+									isActive && !isDanger
+										? "bg-hyper-green text-carbon shadow-glow-sm"
+										: isActive && isDanger
+											? "bg-danger text-white"
+											: isDanger
+												? "bg-platinum/50 text-muted hover:text-danger"
+												: "bg-platinum/50 text-muted hover:bg-platinum hover:text-carbon",
+								].join(" ")}
+							>
+								{item.icon}
+								{item.label}
+							</button>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* ── Desktop: sidebar nav + content side-by-side ── */}
 			<div className="flex gap-8 items-start">
-				{/* Sidebar nav — sticky on desktop, horizontal chips on mobile */}
 				<nav
 					className="hidden md:flex flex-col gap-1 w-44 shrink-0 sticky top-24"
 					aria-label="Settings navigation"
@@ -541,36 +570,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						);
 					})}
 				</nav>
-
-				{/* Mobile: horizontal scrollable chip strip */}
-				<div className="md:hidden w-full">
-					<div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
-						{navItems.map((item) => {
-							const isDanger = item.id === "danger";
-							const isActive = activeSection === item.id;
-							return (
-								<button
-									key={item.id}
-									type="button"
-									onClick={() => handleNav(item.id)}
-									className={[
-										"flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all",
-										isActive && !isDanger
-											? "bg-hyper-green text-carbon shadow-glow-sm"
-											: isActive && isDanger
-												? "bg-danger text-white"
-												: isDanger
-													? "bg-platinum/50 text-muted hover:text-danger"
-													: "bg-platinum/50 text-muted hover:bg-platinum hover:text-carbon",
-									].join(" ")}
-								>
-									{item.icon}
-									{item.label}
-								</button>
-							);
-						})}
-					</div>
-				</div>
 
 				{/* Content panel */}
 				<div className="flex-1 min-w-0 space-y-6">

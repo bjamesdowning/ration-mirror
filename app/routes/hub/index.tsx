@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
 import { HubEditMode } from "~/components/hub/HubEditMode";
 import { WelcomeBanner } from "~/components/hub/WelcomeBanner";
 import { LayoutEngine } from "~/components/hub/widgets/LayoutEngine";
@@ -74,6 +75,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	};
 }
 
+// --- ACTION ---
+export async function action({ request, context }: Route.ActionArgs) {
+	const {
+		session: { user },
+	} = await requireActiveGroup(context, request);
+
+	const formData = await request.formData();
+	const intent = formData.get("intent");
+
+	if (intent === "dismiss-welcome-banner") {
+		const db = drizzle(context.cloudflare.env.DB, { schema });
+		await db
+			.update(schema.user)
+			.set({ welcomeVoucherRedeemed: true })
+			.where(eq(schema.user.id, user.id));
+		return { success: true };
+	}
+
+	return null;
+}
+
 // --- COMPONENT ---
 export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	const {
@@ -93,6 +115,12 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	const [isEditing, setIsEditing] = useState(
 		() => searchParams.get("edit") === "1",
 	);
+	const dismissFetcher = useFetcher();
+	// Optimistic: hide the banner as soon as the user dismisses, before the server confirms
+	const bannerVisible =
+		!welcomeVoucherRedeemed &&
+		dismissFetcher.state === "idle" &&
+		!dismissFetcher.data;
 
 	const resolvedLayout = resolveLayout(hubProfile, hubLayout);
 	const widgetData = {
@@ -134,7 +162,17 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 			</header>
 
 			<div className="space-y-8">
-				{!welcomeVoucherRedeemed && <WelcomeBanner promoCode="WELCOME60" />}
+				{bannerVisible && (
+					<WelcomeBanner
+						promoCode="WELCOME60"
+						onDismiss={() =>
+							dismissFetcher.submit(
+								{ intent: "dismiss-welcome-banner" },
+								{ method: "post" },
+							)
+						}
+					/>
+				)}
 
 				{isEditing ? (
 					<HubEditMode

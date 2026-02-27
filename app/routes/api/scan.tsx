@@ -17,8 +17,7 @@ import type { Route } from "./+types/scan";
 
 // Gemini model via Cloudflare AI Gateway → Google AI Studio
 // See: https://developers.cloudflare.com/ai-gateway/providers/google-ai-studio/
-// Use the versioned alias for stability; update intentionally when upgrading.
-const SCAN_MODEL = "gemini-2.0-flash-001";
+const SCAN_MODEL = "gemini-3-flash-preview";
 
 function buildScanPrompt(todayIso: string): string {
 	return `You are an expert pantry inventory assistant.

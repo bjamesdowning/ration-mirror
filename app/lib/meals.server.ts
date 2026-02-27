@@ -8,6 +8,7 @@ import {
 	mealTag,
 } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
+import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { normalizeForCargoDedup } from "./matching";
 import {
 	chunkedQuery,
@@ -603,7 +604,7 @@ export async function deleteMeal(
  * Returns allocations in cargo's native unit for SQL update.
  */
 function findCargoForDeduction(
-	orgCargo: (typeof cargo.$inferSelect)[],
+	orgCargo: CargoIndexRow[],
 	ingredientName: string,
 	requiredQtyInTargetUnit: number,
 	targetUnit: SupportedUnit,
@@ -611,7 +612,7 @@ function findCargoForDeduction(
 ): { cargoId: string; quantityToDeduct: number }[] {
 	const normalizedName = normalizeForCargoDedup(ingredientName);
 	type Candidate = {
-		cargo: typeof cargo.$inferSelect;
+		cargo: CargoIndexRow;
 		qtyInTargetUnit: number;
 		isExact: boolean;
 		score: number;
@@ -654,7 +655,6 @@ function findCargoForDeduction(
 		}
 	}
 
-	// Sort: exact first, then by score desc, then by quantity desc
 	candidates.sort((a, b) => {
 		if (a.isExact !== b.isExact) return a.isExact ? -1 : 1;
 		if (a.score !== b.score) return b.score - a.score;
@@ -844,10 +844,10 @@ export async function cookMeal(
 
 	// 5. Name-based deduction for unlinked ingredients
 	if (unlinkedIngredients.length > 0) {
-		let orgCargo = await d1
-			.select()
-			.from(cargo)
-			.where(eq(cargo.organizationId, organizationId));
+		let orgCargo: CargoIndexRow[] = await fetchOrgCargoIndex(
+			env.DB,
+			organizationId,
+		);
 
 		// Adjust effective quantities for linked deductions (same cargo row may be used by both)
 		if (linkedIngredients.length > 0 && cargoById) {

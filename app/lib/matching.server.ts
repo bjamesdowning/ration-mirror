@@ -1,6 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { cargo, meal, mealIngredient, mealTag } from "../db/schema";
+import { meal, mealIngredient, mealTag } from "../db/schema";
+import type { CargoIndexRow } from "./cargo-index.server";
+import { fetchOrgCargoIndex } from "./cargo-index.server";
 import { lookupDensity } from "./ingredient-density";
 import { log, redactId } from "./logging.server";
 import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
@@ -68,11 +70,11 @@ export interface MealMatchQuery {
  * Uses normalizeForCargoDedup so regional synonyms (e.g. tinned/canned)
  * resolve to the same index key.
  */
-export function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
+export function buildCargoIndex(items: CargoIndexRow[]) {
 	const index = new Map<
 		string,
 		{
-			original: typeof cargo.$inferSelect;
+			original: CargoIndexRow;
 			totalQuantity: number;
 			normalizedName: string;
 		}[]
@@ -98,7 +100,7 @@ export function buildCargoIndex(items: (typeof cargo.$inferSelect)[]) {
  */
 function sumConvertedToTarget(
 	matches: {
-		original: typeof cargo.$inferSelect;
+		original: CargoIndexRow;
 		totalQuantity: number;
 		normalizedName: string;
 	}[],
@@ -451,11 +453,8 @@ export async function matchMeals(
 		tagsByMeal.set(tag.mealId, existing);
 	}
 
-	// 3. Fetch organization's current cargo
-	const orgCargo = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
+	// 3. Fetch lightweight cargo projection for matching
+	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 
 	// 4. Build cargo index for efficient lookups
 	const cargoIndex = buildCargoIndex(orgCargo);
@@ -562,7 +561,7 @@ export async function resolveIngredientsToCargo(
 	Map<
 		string,
 		{
-			original: typeof cargo.$inferSelect;
+			original: CargoIndexRow;
 			totalQuantity: number;
 			normalizedName: string;
 		}[]
@@ -573,7 +572,7 @@ export async function resolveIngredientsToCargo(
 	const result = new Map<
 		string,
 		{
-			original: typeof cargo.$inferSelect;
+			original: CargoIndexRow;
 			totalQuantity: number;
 			normalizedName: string;
 		}[]

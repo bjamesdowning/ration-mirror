@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { cargo, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
+import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
@@ -250,13 +251,10 @@ export async function ingestCargoItems(
 	if (items.length === 0) return [];
 
 	const d1 = drizzle(env.DB);
-	const existingCargo = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
+	const existingCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 
-	const cargoById = new Map<string, typeof cargo.$inferSelect>();
-	const cargoByKey = new Map<string, (typeof cargo.$inferSelect)[]>();
+	const cargoById = new Map<string, CargoIndexRow>();
+	const cargoByKey = new Map<string, CargoIndexRow[]>();
 	for (const c of existingCargo) {
 		cargoById.set(c.id, c);
 		const key = `${normalizeForCargoKey(c.name)}__${c.domain}`;

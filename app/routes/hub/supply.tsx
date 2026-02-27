@@ -68,7 +68,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	] = await Promise.all([
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
-		getCargo(context.cloudflare.env.DB, groupId),
+		getCargo(context.cloudflare.env.DB, groupId, undefined, { limit: 500 }),
 		getCargoTags(context.cloudflare.env.DB, groupId),
 		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),

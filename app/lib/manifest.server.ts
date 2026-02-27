@@ -233,11 +233,23 @@ export async function consumeManifestEntries(
 
 	if (uniqueEntries.length === 0) return { consumed: 0 };
 
-	// 3. Cook each meal (deducts ingredients); first failure throws
+	// 3. Cook each unique meal once with aggregated servings. Entries for the
+	//    same mealId are combined so we call cookMeal M times (unique meals)
+	//    instead of N times (entries). The deduction is linear in servings so
+	//    summing is equivalent to individual calls. Sequential execution is
+	//    required because each cookMeal reads current inventory quantities.
+	const servingsByMeal = new Map<string, number>();
 	for (const entry of uniqueEntries) {
 		const effectiveServings = entry.servingsOverride ?? entry.mealServings ?? 1;
-		await cookMeal(env, organizationId, entry.mealId, {
-			servings: effectiveServings,
+		servingsByMeal.set(
+			entry.mealId,
+			(servingsByMeal.get(entry.mealId) ?? 0) + effectiveServings,
+		);
+	}
+
+	for (const [mealId, totalServings] of servingsByMeal) {
+		await cookMeal(env, organizationId, mealId, {
+			servings: totalServings,
 		});
 	}
 

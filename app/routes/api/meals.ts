@@ -12,7 +12,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 
-	const meals = await getMeals(context.cloudflare.env.DB, groupId, tag);
+	const meals = await getMeals(
+		context.cloudflare.env.DB,
+		groupId,
+		tag,
+		undefined,
+		{
+			limit: 200,
+		},
+	);
 	return { meals };
 }
 

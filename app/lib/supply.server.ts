@@ -2,7 +2,6 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
-	cargo,
 	meal,
 	mealIngredient,
 	member,
@@ -12,6 +11,7 @@ import {
 	user,
 } from "../db/schema";
 import { dockSupplyItems } from "./cargo.server";
+import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { toExpiryDate } from "./date-utils";
 import { lookupDensity } from "./ingredient-density";
 import { log } from "./logging.server";
@@ -150,7 +150,7 @@ function convertCargoToTarget(
 function getAvailableCargoQuantity(
 	name: string,
 	targetUnit: SupportedUnit,
-	orgCargo: (typeof cargo.$inferSelect)[],
+	orgCargo: CargoIndexRow[],
 	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
 ): number {
 	const normalizedName = normalizeForCargoDedup(name);
@@ -1077,7 +1077,7 @@ export async function addItemsFromMeal(
 
 	// Get organization's current cargo and existing list items in parallel
 	const [orgCargo, existingListItems] = await Promise.all([
-		d1.select().from(cargo).where(eq(cargo.organizationId, organizationId)),
+		fetchOrgCargoIndex(env.DB, organizationId),
 		d1.select().from(supplyItem).where(eq(supplyItem.listId, listId)),
 	]);
 
@@ -1578,10 +1578,7 @@ async function syncSupplyFromIngredientRows(
 		if (!refreshedList) throw new Error("List retrieval failed");
 
 		const inventoryFetchStartedAtMs = Date.now();
-		const orgCargo = await d1
-			.select()
-			.from(cargo)
-			.where(eq(cargo.organizationId, organizationId));
+		const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 		const inventoryFetchDurationMs = Date.now() - inventoryFetchStartedAtMs;
 
 		const aggregateStartedAtMs = Date.now();

@@ -132,8 +132,12 @@ export function OnboardingTour({
 		onSkip: handleSkip,
 	};
 
+	// Steps 0 and 5 are intentional full-screen moments; steps 1–4 are spotlight
+	// steps where the user should see the page behind the card.
+	const isFullscreen = step === 0 || step === 5;
+
 	return (
-		<TourOverlay onSkip={handleSkip}>
+		<TourOverlay onSkip={handleSkip} fullscreen={isFullscreen}>
 			{step === 0 && (
 				<Step0_Welcome onBegin={() => goTo(1)} onSkip={handleSkip} />
 			)}

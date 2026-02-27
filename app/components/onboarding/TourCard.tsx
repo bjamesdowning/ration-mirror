@@ -31,7 +31,7 @@ export function TourCard({
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: modal card stops backdrop click-through; keyboard nav is handled globally in OnboardingTour
 		<div
-			className="relative z-10 w-full md:max-w-sm mx-4 md:mx-0 bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col"
+			className="pointer-events-auto fixed bottom-0 left-0 right-0 md:bottom-6 md:right-6 md:left-auto md:w-80 z-[101] bg-ceramic dark:bg-[#1A1A1A] border border-platinum dark:border-white/10 rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col"
 			onClick={(e) => e.stopPropagation()}
 			onKeyDown={(e) => e.stopPropagation()}
 		>

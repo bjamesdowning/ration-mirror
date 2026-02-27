@@ -48,17 +48,27 @@ import type { Route } from "./+types/galley";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
+const GALLEY_PAGE_SIZE = 100;
+const GALLEY_INVENTORY_PAGE_SIZE = 200;
+
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 	const domain = url.searchParams.get("domain") || undefined;
+	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
 
 	const [meals, availableTags, inventory, activeSelections] = await Promise.all(
 		[
-			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain),
+			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain, {
+				limit: GALLEY_PAGE_SIZE,
+				offset: page * GALLEY_PAGE_SIZE,
+			}),
 			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
-			getCargo(context.cloudflare.env.DB, groupId),
+			getCargo(context.cloudflare.env.DB, groupId, undefined, {
+				limit: GALLEY_INVENTORY_PAGE_SIZE,
+				offset: 0,
+			}),
 			getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		],
 	);
@@ -70,6 +80,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		currentDomain: domain,
 		inventory,
 		activeMealIds,
+		page,
+		pageSize: GALLEY_PAGE_SIZE,
 	};
 }
 

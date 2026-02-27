@@ -3,6 +3,27 @@ import { z } from "zod";
 import { log } from "./logging.server";
 
 /**
+ * Returns true for errors that indicate D1 write contention or transient
+ * infrastructure failures. Detected via error message patterns from D1 and
+ * Cloudflare Workers runtime.
+ */
+function isD1ContentionError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const msg = error.message.toLowerCase();
+	return (
+		msg.includes("d1_error") ||
+		msg.includes("sqlite_busy") ||
+		msg.includes("database is locked") ||
+		msg.includes("too many connections") ||
+		msg.includes("timeout") ||
+		msg.includes("worker exceeded") ||
+		// D1 HTTP error codes for timeouts
+		msg.includes("522") ||
+		msg.includes("524")
+	);
+}
+
+/**
  * Standardized error handler for API and Action routes.
  * Ensures consistent error responses and logging.
  * Re-throws DataWithResponseInit so React Router handles them correctly.
@@ -54,6 +75,25 @@ export function handleApiError(error: unknown) {
 		return data(
 			{ error: error.message, code: "insufficient_cargo" as const },
 			{ status: 422 },
+		);
+	}
+
+	// D1 contention / transient infrastructure error — return 503 with a
+	// user-friendly message and Retry-After hint instead of a generic 500.
+	if (isD1ContentionError(error)) {
+		log.warn("[API] D1 contention or timeout", {
+			errorMessage: error instanceof Error ? error.message : String(error),
+		});
+		return data(
+			{
+				error:
+					"The server is under heavy load. Please wait a moment and try again.",
+				code: "server_busy" as const,
+			},
+			{
+				status: 503,
+				headers: { "Retry-After": "5" },
+			},
 		);
 	}
 

@@ -93,6 +93,16 @@
 			"index_name": "ration-cargo"
 		}
 	],
+	/**
+	 * Scheduled Triggers (CRON)
+	 * https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/
+	 *
+	 * session-purge: runs daily at 03:00 UTC to delete expired sessions and
+	 * prevent the session table from growing unbounded at scale.
+	 */
+	"triggers": {
+		"crons": ["0 3 * * *"]
+	},
 
 	/**
 	 * Dev Environment — isolated Cloudflare resources for remote dev testing.

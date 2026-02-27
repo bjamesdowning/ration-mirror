@@ -39,7 +39,12 @@ import {
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
-import { findSimilarCargo, SIMILARITY_THRESHOLDS } from "./vector.server";
+import {
+	findSimilarCargo,
+	findSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS,
+	type SimilarCargoMatch,
+} from "./vector.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -135,12 +140,23 @@ function convertCargoToTarget(
 	return convertQuantityWithDensity(quantity, fromUnit, targetUnit, density);
 }
 
+/**
+ * Returns available quantity of `name` in `targetUnit` from `orgCargo`.
+ *
+ * First tries exact normalized-name match. If that yields nothing, falls back
+ * to Vectorize semantic search. The `prefetchedVectors` map is an optional
+ * pre-computed batch result (Map<ingredientName, SimilarCargoMatch[]>) that
+ * avoids per-ingredient Vectorize API calls when processing a loop — pass it
+ * from a `findSimilarCargoBatch()` call made before the loop. When absent the
+ * function falls back to the individual `findSimilarCargo()` call.
+ */
 async function getAvailableCargoQuantity(
 	env: Env,
 	organizationId: string,
 	name: string,
 	targetUnit: SupportedUnit,
 	orgCargo: (typeof cargo.$inferSelect)[],
+	prefetchedVectors?: Map<string, SimilarCargoMatch[]>,
 ): Promise<number> {
 	const normalizedName = normalizeForMatch(name);
 	let exactTotal = 0;
@@ -161,10 +177,15 @@ async function getAvailableCargoQuantity(
 
 	if (exactTotal > 0) return exactTotal;
 
-	const similar = await findSimilarCargo(env, organizationId, name, {
-		topK: 1,
-		threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH,
-	});
+	// Use pre-fetched batch result when available; otherwise fall back to a
+	// single Vectorize query (original behaviour, used by non-loop callers).
+	const similar = prefetchedVectors
+		? (prefetchedVectors.get(name) ?? [])
+		: await findSimilarCargo(env, organizationId, name, {
+				topK: 1,
+				threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH,
+			});
+
 	if (similar.length === 0) return 0;
 
 	const matchedName = normalizeForMatch(similar[0].itemName);
@@ -285,7 +306,26 @@ function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
 export async function ensureSupplyList(db: D1Database, organizationId: string) {
 	const d1 = drizzle(db);
 
-	// Get all lists, ordered by update time (most recent first)
+	// Fast path (99%+ of calls): a correctly-named list already exists.
+	// A single LIMIT 1 query avoids fetching all rows and never triggers writes.
+	const [existing] = await d1
+		.select()
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.organizationId, organizationId),
+				eq(supplyList.name, SUPPLY_LIST_NAME),
+			),
+		)
+		.orderBy(desc(supplyList.updatedAt))
+		.limit(1);
+
+	if (existing) {
+		return getSupplyListById(db, organizationId, existing.id);
+	}
+
+	// Slow path: either no list exists, or the primary list has the wrong name.
+	// Fetch all to find/rename/create and remove duplicates.
 	const lists = await d1
 		.select()
 		.from(supplyList)
@@ -293,13 +333,11 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 		.orderBy(desc(supplyList.updatedAt));
 
 	if (lists.length === 0) {
-		// No lists, create one
 		return createSupplyList(db, organizationId, { name: SUPPLY_LIST_NAME });
 	}
 
 	const [primaryList, ...listsToDelete] = lists;
 
-	// Update primary list name if needed
 	if (primaryList.name !== SUPPLY_LIST_NAME) {
 		await d1
 			.update(supplyList)
@@ -308,7 +346,6 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 		primaryList.name = SUPPLY_LIST_NAME;
 	}
 
-	// Delete extra lists if any
 	if (listsToDelete.length > 0) {
 		const idsToDelete = listsToDelete.map((l) => l.id);
 		for (const deleteChunk of chunkArray(idsToDelete, D1_MAX_BOUND_PARAMS)) {
@@ -316,7 +353,6 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 		}
 	}
 
-	// Return the full list with items
 	return getSupplyListById(db, organizationId, primaryList.id);
 }
 
@@ -1004,28 +1040,26 @@ export async function addItemsFromMeal(
 ) {
 	const d1 = drizzle(env.DB);
 
-	// Verify list ownership
-	const [list] = await d1
-		.select()
-		.from(supplyList)
-		.where(
-			and(
-				eq(supplyList.id, listId),
-				eq(supplyList.organizationId, organizationId),
+	// Fetch list, ingredients, and meal record in parallel to avoid 3 sequential round-trips.
+	const [[list], ingredients, [mealRecord]] = await Promise.all([
+		d1
+			.select()
+			.from(supplyList)
+			.where(
+				and(
+					eq(supplyList.id, listId),
+					eq(supplyList.organizationId, organizationId),
+				),
 			),
-		);
+		d1.select().from(mealIngredient).where(eq(mealIngredient.mealId, mealId)),
+		d1
+			.select({ domain: meal.domain, servings: meal.servings })
+			.from(meal)
+			.where(eq(meal.id, mealId)),
+	]);
 
 	if (!list) throw new Error("Supply list not found or unauthorized");
 
-	// Get meal ingredients and base servings
-	const ingredients = await d1
-		.select()
-		.from(mealIngredient)
-		.where(eq(mealIngredient.mealId, mealId));
-	const [mealRecord] = await d1
-		.select({ domain: meal.domain, servings: meal.servings })
-		.from(meal)
-		.where(eq(meal.id, mealId));
 	const mealDomain = mealRecord?.domain ?? "food";
 	const mealBaseServings = mealRecord?.servings ?? 1;
 
@@ -1054,15 +1088,20 @@ export async function addItemsFromMeal(
 		return { addedItems: [], skippedItems: [] };
 	}
 
-	// Get organization's current cargo
-	const orgCargo = await d1
-		.select()
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
-	const existingListItems = await d1
-		.select()
-		.from(supplyItem)
-		.where(eq(supplyItem.listId, listId));
+	// Get organization's current cargo and existing list items in parallel
+	const [orgCargo, existingListItems] = await Promise.all([
+		d1.select().from(cargo).where(eq(cargo.organizationId, organizationId)),
+		d1.select().from(supplyItem).where(eq(supplyItem.listId, listId)),
+	]);
+
+	// Pre-fetch all Vectorize results in one batch instead of one call per ingredient
+	const ingredientNames = ingredients.map((i) => i.ingredientName);
+	const prefetchedVectors = await findSimilarCargoBatch(
+		env,
+		organizationId,
+		ingredientNames,
+		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH },
+	);
 
 	const addedItems: (typeof supplyItem.$inferSelect)[] = [];
 	const skippedItems: { name: string; reason: string }[] = [];
@@ -1082,6 +1121,7 @@ export async function addItemsFromMeal(
 			ingredient.ingredientName,
 			targetUnit,
 			orgCargo,
+			prefetchedVectors,
 		);
 
 		if (availableInCargo >= scaledRequired) {
@@ -1566,6 +1606,18 @@ async function syncSupplyFromIngredientRows(
 
 		const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
 
+		// Pre-fetch all Vectorize similarity results in one batch call before
+		// entering the per-ingredient loop. This replaces N sequential
+		// Vectorize lookups (one per aggregated ingredient) with a single
+		// batched embedding request + parallel Vectorize queries.
+		const aggregatedNames = aggregatedIngredients.map((a) => a.name);
+		const prefetchedVectors = await findSimilarCargoBatch(
+			env,
+			organizationId,
+			aggregatedNames,
+			{ topK: 1, threshold: SIMILARITY_THRESHOLDS.SUPPLY_MATCH },
+		);
+
 		let addedCount = 0;
 		let skippedCount = 0;
 		const itemsToInsert: (typeof supplyItem.$inferInsert)[] = [];
@@ -1583,6 +1635,7 @@ async function syncSupplyFromIngredientRows(
 				aggregated.name,
 				aggregated.unit,
 				orgCargo,
+				prefetchedVectors,
 			);
 			const missingAfterCargo = Math.max(
 				0,

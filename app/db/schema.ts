@@ -43,24 +43,28 @@ export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
 }));
 
-export const session = sqliteTable("session", {
-	id: text("id").primaryKey(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	token: text("token").notNull().unique(),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-		.notNull()
-		.default(sql`(unixepoch())`),
-	ipAddress: text("ip_address"),
-	userAgent: text("user_agent"),
-	userId: text("user_id")
-		.notNull()
-		.references(() => user.id),
-	// Active organization for group switching
-	activeOrganizationId: text("active_organization_id").references(
-		() => organization.id,
-	),
-});
+export const session = sqliteTable(
+	"session",
+	{
+		id: text("id").primaryKey(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		token: text("token").notNull().unique(),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		ipAddress: text("ip_address"),
+		userAgent: text("user_agent"),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id),
+		// Active organization for group switching
+		activeOrganizationId: text("active_organization_id").references(
+			() => organization.id,
+		),
+	},
+	(table) => [index("session_user_id_idx").on(table.userId)],
+);
 
 export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, {
@@ -207,6 +211,7 @@ export const cargo = sqliteTable(
 	(table) => [
 		index("cargo_org_idx").on(table.organizationId),
 		index("cargo_domain_idx").on(table.organizationId, table.domain),
+		index("cargo_org_expires_idx").on(table.organizationId, table.expiresAt),
 	],
 );
 

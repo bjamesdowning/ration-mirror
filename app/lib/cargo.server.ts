@@ -20,6 +20,7 @@ import { log } from "./logging.server";
 import { normalizeForMatch } from "./matching";
 import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
+import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
 	convertQuantity,
 	getUnitMultiplier,
@@ -104,13 +105,17 @@ function normalizeTags(tags: unknown) {
 // --- Database Operations ---
 
 /**
- * Fetch all inventory items for a specific organization.
+ * Fetch inventory items for a specific organization.
  * Ordered by creation date descending (newest first).
+ *
+ * Pagination: pass `limit` and `offset` for page/cursor-based loading.
+ * Omit both to fetch all rows (needed by exports, scan dedup, and supply matching).
  */
 export async function getCargo(
 	db: D1Database,
 	organizationId: string,
 	domain?: (typeof ITEM_DOMAINS)[number],
+	options?: { limit?: number; offset?: number },
 ) {
 	const d1 = drizzle(db);
 	const conditions = [eq(cargo.organizationId, organizationId)];
@@ -119,16 +124,27 @@ export async function getCargo(
 		conditions.push(eq(cargo.domain, domain));
 	}
 
-	return await d1
+	let query = d1
 		.select()
 		.from(cargo)
 		.where(and(...conditions))
-		.orderBy(desc(cargo.createdAt));
+		.orderBy(desc(cargo.createdAt))
+		.$dynamic();
+
+	if (options?.limit !== undefined) {
+		query = query.limit(options.limit);
+	}
+	if (options?.offset !== undefined) {
+		query = query.offset(options.offset);
+	}
+
+	return await query;
 }
 
 /**
  * Retrieves all unique tags for an organization's inventory.
- * Useful for populating tag filter dropdowns.
+ * Uses SQLite json_each() to extract tags inline — only distinct tag strings
+ * cross the network instead of every cargo row's full payload.
  */
 export async function getCargoTags(
 	db: D1Database,
@@ -136,21 +152,16 @@ export async function getCargoTags(
 ): Promise<string[]> {
 	const d1 = drizzle(db);
 
-	const items = await d1
-		.select({ tags: cargo.tags })
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId));
+	const rows = await d1.all<{ tag: string }>(
+		sql`SELECT DISTINCT j.value AS tag
+		    FROM cargo c, json_each(c.tags) j
+		    WHERE c.organization_id = ${organizationId}
+		      AND j.value IS NOT NULL
+		      AND j.value != ''
+		    ORDER BY j.value`,
+	);
 
-	// Extract all tags from all items and deduplicate
-	const allTags = new Set<string>();
-	for (const item of items) {
-		const tags = normalizeTags(item.tags);
-		for (const tag of tags) {
-			allTags.add(tag);
-		}
-	}
-
-	return Array.from(allTags).sort();
+	return rows.map((r) => r.tag);
 }
 
 type MergeCandidate = {
@@ -524,8 +535,17 @@ export async function ingestCargoItems(
 	}
 
 	if (batchOps.length > 0) {
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(batchOps as [any, ...any[]]);
+		trackD1BatchSize("ingestCargoItems", batchOps.length, {
+			organizationRef: organizationId,
+		});
+		await trackWriteOperation(
+			"ingestCargoItems",
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			() => d1.batch(batchOps as [any, ...any[]]),
+			{
+				organizationRef: organizationId,
+			},
+		);
 	}
 
 	if (newCargoForVector.length > 0) {

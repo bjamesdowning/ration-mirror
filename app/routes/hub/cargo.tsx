@@ -67,18 +67,22 @@ const CreateMergeIntentSchema = z
 		}
 	});
 
+const CARGO_PAGE_SIZE = 200;
+
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const domain = url.searchParams.get("domain") || undefined;
 	const tag = url.searchParams.get("tag") || undefined;
+	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
 
 	const [cargo, availableTags, promotedCargoIds] = await Promise.all([
 		getCargo(
 			context.cloudflare.env.DB,
 			groupId,
 			domain as ItemDomain | undefined,
+			{ limit: CARGO_PAGE_SIZE, offset: page * CARGO_PAGE_SIZE },
 		),
 		getCargoTags(context.cloudflare.env.DB, groupId),
 		getPromotedCargoIds(context.cloudflare.env.DB, groupId),
@@ -90,6 +94,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		currentTag: tag,
 		availableTags,
 		promotedCargoIds,
+		page,
+		pageSize: CARGO_PAGE_SIZE,
 	};
 }
 

@@ -21,6 +21,7 @@ import type {
 	ProvisionInput,
 	ProvisionUpdateInput,
 } from "./schemas/meal";
+import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
 	convertQuantity,
 	getUnitMultiplier,
@@ -41,14 +42,18 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export const MAX_BATCH_MEALS = 10;
 
 /**
- * Retrieves all meals for an organization, optionally filtered by tag.
- * Returns meals with their associated tags for client-side filtering.
+ * Retrieves meals for an organization, optionally filtered by tag or domain.
+ * Returns meals with their associated tags and ingredients.
+ *
+ * Pagination: pass `limit` and `offset` for page/cursor-based loading.
+ * Omit both to fetch all rows (needed by exports, galley import, and AI generation).
  */
 export async function getMeals(
 	db: D1Database,
 	organizationId: string,
 	tag?: string,
 	domain?: (typeof meal.$inferSelect)["domain"],
+	options?: { limit?: number; offset?: number },
 ) {
 	const d1 = drizzle(db);
 	const conditions = [eq(meal.organizationId, organizationId)];
@@ -82,11 +87,17 @@ export async function getMeals(
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
 				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt))
+				.$dynamic()
+				.limit(options?.limit ?? Number.MAX_SAFE_INTEGER)
+				.offset(options?.offset ?? 0)
 		: await d1
 				.select()
 				.from(meal)
 				.where(and(...conditions))
-				.orderBy(desc(meal.createdAt));
+				.orderBy(desc(meal.createdAt))
+				.$dynamic()
+				.limit(options?.limit ?? Number.MAX_SAFE_INTEGER)
+				.offset(options?.offset ?? 0);
 
 	if (meals.length === 0) {
 		return [];
@@ -249,8 +260,18 @@ export async function createMeal(
 		}
 	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	await d1.batch(batch as [any, ...any[]]);
+	trackD1BatchSize("createMeal", batch.length, {
+		organizationRef: organizationId,
+	});
+
+	await trackWriteOperation(
+		"createMeal",
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		() => d1.batch(batch as [any, ...any[]]),
+		{
+			organizationRef: organizationId,
+		},
+	);
 
 	return await getMeal(db, organizationId, mealId);
 }
@@ -688,22 +709,19 @@ export async function cookMeal(
 ) {
 	const d1 = drizzle(env.DB);
 
-	// 1. Verify meal ownership and existence
-	const [mealRecord] = await d1
-		.select()
-		.from(meal)
-		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
-
-	if (!mealRecord) {
-		throw new Error("Meal not found or unauthorized for this organization.");
-	}
-
-	// 2. Resolve effective servings (request → selection override → base)
-	let effectiveServings = mealRecord.servings ?? 1;
-	if (options?.servings != null) {
-		effectiveServings = options.servings;
-	} else {
-		const [selection] = await d1
+	// 1+2+3 in a single D1 batch round-trip: meal record, ingredients, and
+	// active-selection override are all fetched simultaneously.
+	const [mealResults, ingredients, selectionResults] = await d1.batch([
+		d1
+			.select()
+			.from(meal)
+			.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId))),
+		d1
+			.select()
+			.from(mealIngredient)
+			.where(eq(mealIngredient.mealId, mealId))
+			.orderBy(mealIngredient.orderIndex),
+		d1
 			.select({ servingsOverride: activeMealSelection.servingsOverride })
 			.from(activeMealSelection)
 			.where(
@@ -711,7 +729,20 @@ export async function cookMeal(
 					eq(activeMealSelection.organizationId, organizationId),
 					eq(activeMealSelection.mealId, mealId),
 				),
-			);
+			),
+	]);
+
+	const mealRecord = mealResults[0];
+	if (!mealRecord) {
+		throw new Error("Meal not found or unauthorized for this organization.");
+	}
+
+	// Resolve effective servings: explicit option → selection override → base
+	let effectiveServings = mealRecord.servings ?? 1;
+	if (options?.servings != null) {
+		effectiveServings = options.servings;
+	} else {
+		const selection = selectionResults[0];
 		if (selection?.servingsOverride != null) {
 			effectiveServings = selection.servingsOverride;
 		}
@@ -721,12 +752,6 @@ export async function cookMeal(
 		mealRecord.servings ?? 1,
 		effectiveServings,
 	);
-
-	// 3. Get ingredients
-	const ingredients = await d1
-		.select()
-		.from(mealIngredient)
-		.where(eq(mealIngredient.mealId, mealId));
 
 	const linkedIngredients = ingredients.filter(
 		(ing) => ing.cargoId && typeof ing.cargoId === "string",
@@ -894,8 +919,17 @@ export async function cookMeal(
 	}
 
 	if (updates.length > 0) {
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(updates as [any, ...any[]]);
+		trackD1BatchSize("cookMeal", updates.length, {
+			organizationRef: organizationId,
+		});
+		await trackWriteOperation(
+			"cookMeal",
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			() => d1.batch(updates as [any, ...any[]]),
+			{
+				organizationRef: organizationId,
+			},
+		);
 	}
 
 	return {

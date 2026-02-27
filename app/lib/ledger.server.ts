@@ -56,11 +56,14 @@ export async function checkBalance(
 // ---------------------------------------------------------------------------
 // Atomic Deduction
 // ---------------------------------------------------------------------------
-// Uses D1 batch (transactional) to guarantee the balance UPDATE and ledger
-// INSERT either both commit or both roll back. The UPDATE uses a
-// `WHERE credits >= cost` guard to prevent overdraft, and RETURNING to
-// verify it actually matched. If no rows are returned, an orphaned ledger
-// entry may exist within the same transaction; it is cleaned up immediately.
+// Two-phase atomic deduction:
+//   Phase 1 — Attempt to decrement credits with a `WHERE credits >= cost` guard.
+//             RETURNING id confirms whether the row was matched.
+//   Phase 2 — Only insert the ledger entry if Phase 1 matched a row.
+//
+// This eliminates the orphaned-ledger-then-cleanup pattern from the original
+// single-batch approach where both INSERT and UPDATE ran unconditionally.
+// A failed UPDATE now results in zero ledger rows (no cleanup needed).
 export async function deductCredits(
 	env: Env,
 	organizationId: string,
@@ -72,33 +75,31 @@ export async function deductCredits(
 		throw new Error("Cost must be positive");
 	}
 
-	const ledgerId = crypto.randomUUID();
 	const now = Math.floor(Date.now() / 1000);
 
-	// D1 batch executes all statements in a single transaction.
-	const batchResults = await env.DB.batch([
-		env.DB.prepare(
-			`UPDATE organization
-			SET credits = credits - ?1
-			WHERE id = ?2 AND credits >= ?1
-			RETURNING id;`,
-		).bind(cost, organizationId),
-		env.DB.prepare(
-			`INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
-		).bind(ledgerId, organizationId, userId, -cost, reason, now),
-	]);
+	// Phase 1: attempt balance decrement — only succeeds when credits >= cost.
+	const updateResult = await env.DB.prepare(
+		`UPDATE organization
+		SET credits = credits - ?1
+		WHERE id = ?2 AND credits >= ?1
+		RETURNING id;`,
+	)
+		.bind(cost, organizationId)
+		.run();
 
-	// Verify the UPDATE matched at least one row (sufficient credits).
-	const updateResult = batchResults[0];
 	if (!updateResult.results || updateResult.results.length === 0) {
-		// Race condition: balance was insufficient despite a possible pre-flight
-		// check passing. The INSERT committed an orphaned ledger entry; remove it.
-		await env.DB.prepare("DELETE FROM ledger WHERE id = ?1;")
-			.bind(ledgerId)
-			.run();
+		// UPDATE matched no rows — insufficient credits. No ledger row was written.
 		throw new InsufficientCreditsError(cost);
 	}
+
+	// Phase 2: record the deduction. Runs only when balance was sufficient.
+	const ledgerId = crypto.randomUUID();
+	await env.DB.prepare(
+		`INSERT INTO ledger (id, organization_id, user_id, amount, reason, created_at)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
+	)
+		.bind(ledgerId, organizationId, userId, -cost, reason, now)
+		.run();
 }
 
 // ---------------------------------------------------------------------------

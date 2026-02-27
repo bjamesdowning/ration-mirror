@@ -11,7 +11,6 @@ import { CheckIcon, DiamondIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getGroupTierLimits } from "~/lib/capacity.server";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
 
@@ -25,30 +24,28 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	} = await requireActiveGroup(context, request);
 	const db = drizzle(context.cloudflare.env.DB, { schema });
 
-	const [userRow, inventoryCount, mealCount, listCount, tierLimits] =
-		await Promise.all([
-			db.query.user.findFirst({
-				where: eq(schema.user.id, user.id),
-				columns: {
-					tier: true,
-					welcomeVoucherRedeemed: true,
-					tierExpiresAt: true,
-				},
-			}),
-			db
-				.select({ count: sql<number>`count(*)` })
-				.from(schema.cargo)
-				.where(eq(schema.cargo.organizationId, groupId)),
-			db
-				.select({ count: sql<number>`count(*)` })
-				.from(schema.meal)
-				.where(eq(schema.meal.organizationId, groupId)),
-			db
-				.select({ count: sql<number>`count(*)` })
-				.from(schema.supplyList)
-				.where(eq(schema.supplyList.organizationId, groupId)),
-			getGroupTierLimits(context.cloudflare.env, groupId),
-		]);
+	const [userRow, inventoryCount, mealCount, listCount] = await Promise.all([
+		db.query.user.findFirst({
+			where: eq(schema.user.id, user.id),
+			columns: {
+				tier: true,
+				welcomeVoucherRedeemed: true,
+				tierExpiresAt: true,
+			},
+		}),
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(schema.cargo)
+			.where(eq(schema.cargo.organizationId, groupId)),
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(schema.meal)
+			.where(eq(schema.meal.organizationId, groupId)),
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(schema.supplyList)
+			.where(eq(schema.supplyList.organizationId, groupId)),
+	]);
 
 	if (!context.cloudflare.env.STRIPE_PUBLISHABLE_KEY) {
 		throw data({ error: "Stripe publishable key missing" }, { status: 500 });
@@ -65,7 +62,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			meals: mealCount[0]?.count ?? 0,
 			groceryLists: listCount[0]?.count ?? 0,
 		},
-		limits: tierLimits.limits,
 		tierLimits: TIER_LIMITS,
 		creditPacks: CREDIT_PACKS,
 		subscriptionProducts: SUBSCRIPTION_PRODUCTS,
@@ -258,7 +254,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<button
 							type="button"
 							onClick={startCrewCheckout}
-							className="mt-5 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg"
+							className="mt-5 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
 						>
 							Start Crew Member
 						</button>

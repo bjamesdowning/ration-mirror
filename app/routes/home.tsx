@@ -440,7 +440,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									id: "url",
 									title: "Meal Import via URL",
 									desc: "Paste any recipe URL. AI reads the page and extracts ingredients, steps, prep time, and metadata into a structured Galley meal.",
-									cost: "2 CR",
+									cost: "1 CR",
 									img: "/static/ai-url-import.webp",
 								},
 								{

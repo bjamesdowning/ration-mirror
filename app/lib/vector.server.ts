@@ -52,32 +52,39 @@ export async function embed(ai: Ai, text: string): Promise<number[] | null> {
 	}
 }
 
-/** Generate embeddings for multiple texts in a single batch call */
+// bge-base-en-v1.5 supports up to 100 inputs per request
+const EMBED_BATCH_SIZE = 100;
+
+/** Generate embeddings for multiple texts, chunked to stay within the API limit */
 export async function embedBatch(
 	ai: Ai,
 	texts: string[],
 ): Promise<(number[] | null)[]> {
 	if (texts.length === 0) return [];
-	try {
-		const clean = texts.map((t) => (t?.trim() || "").slice(0, 500));
-		const response = await ai.run(EMBEDDING_MODEL, {
-			text: clean,
-		});
-		// Workers AI returns { shape, data: number[][] } — one array per input text
-		const result = response as {
-			shape?: number[];
-			data?: number[][];
-		};
-		if (!result?.data || !Array.isArray(result.data)) {
-			return texts.map(() => null);
+	const clean = texts.map((t) => (t?.trim() || "").slice(0, 500));
+	const results: (number[] | null)[] = new Array(texts.length).fill(null);
+
+	for (let offset = 0; offset < clean.length; offset += EMBED_BATCH_SIZE) {
+		const chunk = clean.slice(offset, offset + EMBED_BATCH_SIZE);
+		try {
+			const response = await ai.run(EMBEDDING_MODEL, { text: chunk });
+			// Workers AI returns { shape, data: number[][] } — one array per input text
+			const result = response as {
+				shape?: number[];
+				data?: number[][];
+			};
+			if (result?.data && Array.isArray(result.data)) {
+				for (let i = 0; i < chunk.length; i++) {
+					const vec = result.data[i];
+					results[offset + i] =
+						Array.isArray(vec) && vec.length === 768 ? vec : null;
+				}
+			}
+		} catch (err) {
+			log.error("[Vector] embedBatch chunk failed:", err);
 		}
-		return result.data.map((vec) =>
-			Array.isArray(vec) && vec.length === 768 ? vec : null,
-		);
-	} catch (err) {
-		log.error("[Vector] embedBatch failed:", err);
-		return texts.map(() => null);
 	}
+	return results;
 }
 
 /** Batch embed with KV cache: check cache for each, call AI only for misses */

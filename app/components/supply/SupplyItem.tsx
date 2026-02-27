@@ -14,6 +14,7 @@ interface SupplyItemProps {
 		| (typeof supplyItem.$inferSelect & {
 				sourceMealName?: string | null;
 				sourceMealNames?: string[] | null;
+				sourceMealSources?: { id: string; name: string }[];
 		  });
 	listId: string;
 	onDelete?: () => void;
@@ -284,6 +285,9 @@ export function SupplyItem({
 				<SupplyItemSourceLine
 					sourceMealName={item.sourceMealName}
 					sourceMealNames={item.sourceMealNames}
+					sourceMealSources={
+						"sourceMealSources" in item ? item.sourceMealSources : undefined
+					}
 				/>
 			</div>
 

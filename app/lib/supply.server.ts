@@ -91,6 +91,7 @@ export interface SupplyListInput {
 export type SupplyItemWithSource = typeof supplyItem.$inferSelect & {
 	sourceMealName: string | null;
 	sourceMealNames: string[];
+	sourceMealSources: { id: string; name: string }[];
 };
 
 export interface GenerationSummary {
@@ -385,14 +386,18 @@ export async function getSupplyListById(
 				: item.sourceMealId
 					? [item.sourceMealId]
 					: [];
-		const sourceMealNames = sourceIds
-			.map((id) => mealNameById.get(id))
-			.filter((name): name is string => typeof name === "string");
+		const sourceMealSources = sourceIds
+			.map((id) => ({ id, name: mealNameById.get(id) }))
+			.filter(
+				(x): x is { id: string; name: string } => typeof x.name === "string",
+			);
+		const sourceMealNames = sourceMealSources.map((x) => x.name);
 		return {
 			...item,
 			sourceMealIds: sourceIds,
 			sourceMealName: sourceMealNames[0] ?? null,
 			sourceMealNames,
+			sourceMealSources,
 		};
 	});
 

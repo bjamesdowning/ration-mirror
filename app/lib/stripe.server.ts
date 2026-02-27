@@ -32,14 +32,14 @@ export const CREDIT_PACKS = {
 		displayName: "Supply Run",
 		description: "~30 scans or generations",
 		price: "€4.99",
-		badge: "Most Popular",
+		badge: null,
 	},
 	MISSION_CRATE: {
 		credits: 150,
 		displayName: "Mission Crate",
 		description: "~75 scans or generations",
 		price: "€9.99",
-		badge: "Best Value",
+		badge: null,
 	},
 	ORBITAL_STOCKPILE: {
 		credits: 500,

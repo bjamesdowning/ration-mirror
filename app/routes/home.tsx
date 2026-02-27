@@ -719,11 +719,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										<div className="text-xs text-muted mt-1">
 											{pack.description}
 										</div>
-										{pack.badge && (
-											<span className="inline-block mt-2 text-[10px] bg-hyper-green/10 text-hyper-green px-2 py-0.5 rounded-full">
-												{pack.badge}
-											</span>
-										)}
 										<Link
 											to="/hub/pricing"
 											className="block mt-3 w-full py-2 px-3 bg-platinum text-carbon rounded-lg text-sm font-medium text-center hover:bg-platinum/80 transition-colors"

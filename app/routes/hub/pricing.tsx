@@ -282,11 +282,6 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							{pack.credits} credits
 						</div>
 						<div className="text-xs text-muted mt-1">{pack.description}</div>
-						{pack.badge && (
-							<span className="inline-block mt-2 text-[10px] bg-hyper-green/10 text-hyper-green px-2 py-0.5 rounded-full">
-								{pack.badge}
-							</span>
-						)}
 						<button
 							type="button"
 							onClick={() => startCreditCheckout(packKey)}

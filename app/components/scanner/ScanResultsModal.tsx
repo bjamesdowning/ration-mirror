@@ -515,15 +515,15 @@ function ScanResultItemRow({
 								)}
 							</p>
 							{mergeMatch && (
-								<div className="flex items-center gap-1.5 mt-1">
-									<p className="text-xs text-hyper-green/80">
+								<div className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-hyper-green/15 border border-hyper-green/30">
+									<p className="text-xs font-medium text-[#007a4d] dark:text-hyper-green">
 										Will add to existing: {mergeMatch.target.name} (
 										{mergeMatch.target.quantity} {mergeMatch.target.unit})
 									</p>
 									<button
 										type="button"
 										onClick={() => onDismissMerge(item.id)}
-										className="text-hyper-green/50 hover:text-muted transition-colors flex-shrink-0"
+										className="text-[#007a4d]/60 hover:text-[#007a4d] dark:text-hyper-green/60 dark:hover:text-hyper-green transition-colors flex-shrink-0"
 										aria-label="Add as new item instead"
 										title="Add as new item instead"
 									>

@@ -1,4 +1,13 @@
-import { AlertCircle, Check, ChefHat, Sparkles, Timer } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	ChefHat,
+	ChevronDown,
+	ChevronUp,
+	ClipboardList,
+	Sparkles,
+	Timer,
+} from "lucide-react";
 import {
 	forwardRef,
 	useEffect,
@@ -40,6 +49,153 @@ interface GenerateMealButtonProps {
 }
 
 const MAX_CUSTOMIZATION = 200;
+
+function RecipeCard({
+	recipe,
+	idx,
+	selected,
+	onToggle,
+}: {
+	recipe: GeneratedRecipe;
+	idx: number;
+	selected: boolean;
+	onToggle: (idx: number) => void;
+}) {
+	const [directionsOpen, setDirectionsOpen] = useState(false);
+
+	return (
+		<div className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group">
+			<div className="p-5 flex-1 flex flex-col gap-4">
+				{/* Header row */}
+				<div className="flex items-start gap-3">
+					<input
+						type="checkbox"
+						id={`recipe-select-${idx}`}
+						checked={selected}
+						onChange={() => onToggle(idx)}
+						className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
+						aria-label={`Select ${recipe.name}`}
+					/>
+					<div className="flex-1 min-w-0">
+						<h4 className="font-bold text-lg text-carbon dark:text-white group-hover:text-hyper-green transition-colors leading-snug">
+							{recipe.name}
+						</h4>
+						<p className="text-sm text-muted line-clamp-3 mt-1">
+							{recipe.description}
+						</p>
+					</div>
+				</div>
+
+				{/* Meta row */}
+				<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60">
+					<div className="flex items-center gap-1">
+						<Timer className="w-3 h-3" />
+						{recipe.prepTime + recipe.cookTime}m total
+					</div>
+					<div className="flex items-center gap-1">
+						<Timer className="w-3 h-3 opacity-0" />
+						Prep {recipe.prepTime}m · Cook {recipe.cookTime}m
+					</div>
+					<div className="flex items-center gap-1 ml-auto">
+						<ChefHat className="w-3 h-3" />
+						{recipe.ingredients.length} ingr.
+					</div>
+				</div>
+
+				{/* Missing ingredients warning */}
+				{recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
+					<div className="p-2 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded text-xs text-yellow-800 dark:text-yellow-300">
+						<strong>Missing:</strong> {recipe.missingIngredients.join(", ")}
+					</div>
+				)}
+
+				{/* Ingredients list */}
+				<div className="space-y-1">
+					<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
+						Ingredients
+					</h5>
+					{recipe.ingredients.slice(0, 5).map((ing) => (
+						<div
+							key={ing.ingredientName}
+							className="flex justify-between text-xs text-muted"
+						>
+							<span>{ing.ingredientName}</span>
+							<span className="font-medium tabular-nums">
+								{ing.quantity} {ing.unit}
+							</span>
+						</div>
+					))}
+					{recipe.ingredients.length > 5 && (
+						<div className="text-xs text-muted italic pt-1">
+							+ {recipe.ingredients.length - 5} more
+						</div>
+					)}
+				</div>
+
+				{/* Directions accordion */}
+				{recipe.directions && recipe.directions.length > 0 && (
+					<div className="border-t border-platinum dark:border-white/10 pt-3 mt-1">
+						<button
+							type="button"
+							onClick={() => setDirectionsOpen((o) => !o)}
+							className="flex items-center justify-between w-full text-left group/dir"
+							aria-expanded={directionsOpen}
+						>
+							<span className="flex items-center gap-1.5 text-xs font-bold text-carbon dark:text-white uppercase tracking-wider group-hover/dir:text-hyper-green transition-colors">
+								<ClipboardList className="w-3.5 h-3.5" />
+								Directions ({recipe.directions.length} steps)
+							</span>
+							{directionsOpen ? (
+								<ChevronUp className="w-3.5 h-3.5 text-muted" />
+							) : (
+								<ChevronDown className="w-3.5 h-3.5 text-muted" />
+							)}
+						</button>
+						{directionsOpen && (
+							<ol className="mt-3 space-y-2 list-none">
+								{recipe.directions.map((step, i) => (
+									<li
+										key={step}
+										className="flex gap-2.5 text-xs text-carbon/80 dark:text-white/80 leading-relaxed"
+									>
+										<span className="flex-shrink-0 w-5 h-5 rounded-full bg-hyper-green/15 text-hyper-green font-bold flex items-center justify-center text-[10px]">
+											{i + 1}
+										</span>
+										<span>{step}</span>
+									</li>
+								))}
+							</ol>
+						)}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function RecipeResultsGrid({
+	recipes,
+	selectedRecipes,
+	onToggle,
+}: {
+	recipes: GeneratedRecipe[];
+	selectedRecipes: Set<number>;
+	onToggle: (idx: number) => void;
+}) {
+	return (
+		<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+			{recipes.map((recipe, idx) => (
+				<RecipeCard
+					key={`${recipe.name}-${idx}`}
+					recipe={recipe}
+					idx={idx}
+					selected={selectedRecipes.has(idx)}
+					onToggle={onToggle}
+				/>
+			))}
+		</div>
+	);
+}
 
 export const GenerateMealButton = forwardRef<
 	GenerateMealButtonHandle,
@@ -271,79 +427,11 @@ export const GenerateMealButton = forwardRef<
 							{/* Results Grid */}
 							{recipes && (
 								<div className="space-y-6">
-									<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-										{recipes.map((recipe, idx) => (
-											<div
-												key={`${recipe.name}-${idx}`}
-												className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group"
-											>
-												<div className="p-5 flex-1 cursor-default flex flex-col">
-													<div className="flex items-start gap-3 mb-2">
-														<input
-															type="checkbox"
-															id={`recipe-select-${idx}`}
-															checked={selectedRecipes.has(idx)}
-															onChange={() => toggleRecipe(idx)}
-															className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
-															aria-label={`Select ${recipe.name}`}
-														/>
-														<div className="flex-1 min-w-0">
-															<h4 className="font-bold text-lg text-carbon dark:text-white group-hover:text-hyper-green transition-colors">
-																{recipe.name}
-															</h4>
-															<p className="text-sm text-muted line-clamp-3 mb-4">
-																{recipe.description}
-															</p>
-
-															<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60 mb-4">
-																<div className="flex items-center gap-1">
-																	<Timer className="w-3 h-3" />
-																	{recipe.prepTime + recipe.cookTime}m
-																</div>
-																<div className="flex items-center gap-1">
-																	<ChefHat className="w-3 h-3" />
-																	{recipe.ingredients.length} ingr.
-																</div>
-															</div>
-
-															{/* Missing Ingredients Warning */}
-															{recipe.missingIngredients &&
-																recipe.missingIngredients.length > 0 && (
-																	<div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded text-xs text-yellow-800 dark:text-yellow-300">
-																		<strong>Missing:</strong>{" "}
-																		{recipe.missingIngredients.join(", ")}
-																	</div>
-																)}
-
-															<div className="space-y-1">
-																<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
-																	Key Ingredients
-																</h5>
-																{recipe.ingredients
-																	.slice(0, 4)
-																	.map((ing, _i) => (
-																		<div
-																			key={ing.ingredientName}
-																			className="flex justify-between text-xs text-muted"
-																		>
-																			<span>{ing.ingredientName}</span>
-																			<span>
-																				{ing.quantity} {ing.unit}
-																			</span>
-																		</div>
-																	))}
-																{recipe.ingredients.length > 4 && (
-																	<div className="text-xs text-muted italic pt-1">
-																		+ {recipe.ingredients.length - 4} more
-																	</div>
-																)}
-															</div>
-														</div>
-													</div>
-												</div>
-											</div>
-										))}
-									</div>
+									<RecipeResultsGrid
+										recipes={recipes}
+										selectedRecipes={selectedRecipes}
+										onToggle={toggleRecipe}
+									/>
 
 									{/* Batch Save Footer */}
 									<div className="sticky bottom-0 p-4 bg-ceramic/95 dark:bg-[#1A1A1A]/95 border-t border-platinum dark:border-white/10 rounded-b-2xl flex flex-col gap-3">

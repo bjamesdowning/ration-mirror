@@ -42,6 +42,15 @@ function applySecurityHeaders(response: Response): Response {
 
 export default {
 	async fetch(request, env, ctx) {
+		const url = new URL(request.url);
+
+		// Browser and tooling probes for well-known paths (e.g. Chrome DevTools,
+		// iOS browser detection) are not routed through React Router to avoid
+		// "No route matches URL" errors surfacing as visible error pages.
+		if (url.pathname.startsWith("/.well-known/")) {
+			return new Response(null, { status: 404 });
+		}
+
 		const context = {
 			request,
 			env,

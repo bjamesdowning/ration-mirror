@@ -105,6 +105,8 @@ export type ProvisionUpdateInput = z.infer<typeof ProvisionUpdateSchema>;
 /**
  * AI-generated recipe schema (e.g. from meal generation endpoint).
  * Used to parse and validate LLM output.
+ * directions must have at least 4 steps, each at least 10 chars — enforces
+ * the prompt contract and rejects empty/placeholder direction arrays.
  */
 export const AIRecipeSchema = z.object({
 	name: z.string().min(1),
@@ -117,7 +119,11 @@ export const AIRecipeSchema = z.object({
 			inventoryName: z.string().min(1),
 		}),
 	),
-	directions: z.array(z.string().min(1)),
+	directions: z
+		.array(
+			z.string().min(10, "Each direction step must be at least 10 characters"),
+		)
+		.min(4, "Recipe must include at least 4 direction steps"),
 	prepTime: z.number(),
 	cookTime: z.number(),
 });
@@ -151,9 +157,15 @@ export const MealMatchQuerySchema = z.object({
 export type MealMatchQueryInput = z.infer<typeof MealMatchQuerySchema>;
 
 /**
- * Normalize AI output to match schema. Gemini often returns:
+ * Normalize AI output to match schema. Gemini sometimes returns:
  * - ingredients with only inventoryName (no name)
- * - recipes without directions, prepTime, cookTime
+ * - directions as a flat string instead of an array
+ * - numeric fields as strings
+ *
+ * Does NOT silently default directions to []. If directions are missing or
+ * empty after normalization the recipe will fail AIRecipeSchema validation,
+ * which is the desired behaviour — we want to surface bad LLM output rather
+ * than store empty-direction recipes.
  */
 export function normalizeAIResponse(parsed: unknown): unknown {
 	if (!parsed || typeof parsed !== "object") return parsed;
@@ -174,6 +186,27 @@ export function normalizeAIResponse(parsed: unknown): unknown {
 					}),
 				)
 			: [];
+
+		// Directions can arrive as an array of strings, a single newline-delimited
+		// string, or be missing entirely. Normalise to string[] in all cases.
+		let directions: string[];
+		if (Array.isArray(recipe.directions)) {
+			directions = (recipe.directions as unknown[])
+				.map((d) => String(d).trim())
+				.filter((d) => d.length > 0);
+		} else if (
+			typeof recipe.directions === "string" &&
+			recipe.directions.trim()
+		) {
+			directions = recipe.directions
+				.split(/\n+/)
+				.map((d) => d.replace(/^\d+\.\s*/, "").trim())
+				.filter((d) => d.length > 0);
+		} else {
+			// Intentionally leave empty — Zod min(4) will reject this recipe.
+			directions = [];
+		}
+
 		return {
 			name: recipe.name ?? "Unnamed Recipe",
 			description:
@@ -181,7 +214,7 @@ export function normalizeAIResponse(parsed: unknown): unknown {
 					? String(recipe.description)
 					: "No description",
 			ingredients: ing,
-			directions: Array.isArray(recipe.directions) ? recipe.directions : [],
+			directions,
 			prepTime:
 				typeof recipe.prepTime === "number"
 					? recipe.prepTime

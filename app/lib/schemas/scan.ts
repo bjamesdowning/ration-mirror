@@ -62,6 +62,7 @@ export const SCAN_UNITS = SUPPORTED_UNITS;
 /**
  * Schema for a single item in AI scan response (image/receipt parsing).
  * Unit accepts aliases (e.g. "cups", "grams") and normalizes to canonical form.
+ * confidence (0–1) reflects the model's certainty about item identification.
  */
 export const ScanAIItemSchema = z.object({
 	name: z.string().min(1),
@@ -72,6 +73,7 @@ export const ScanAIItemSchema = z.object({
 		.transform((v) => (v ? normalizeUnitAlias(v) : "unit")),
 	tags: z.array(z.string()).optional(),
 	expiresAt: z.union([z.string(), z.null()]).optional(),
+	confidence: z.number().min(0).max(1).optional(),
 });
 
 /**

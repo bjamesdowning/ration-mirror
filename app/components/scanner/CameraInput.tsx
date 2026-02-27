@@ -1,6 +1,7 @@
-import { Camera, RefreshCw } from "lucide-react";
+import { AlertCircle, Camera, RefreshCw, X } from "lucide-react";
 import {
 	forwardRef,
+	useCallback,
 	useEffect,
 	useImperativeHandle,
 	useRef,
@@ -38,6 +39,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 		const [existingInventory, setExistingInventory] =
 			useState<ScanApiResponse["existingInventory"]>(undefined);
+		const [scanError, setScanError] = useState<string | null>(null);
 
 		// Expose openCamera method via ref
 		useImperativeHandle(ref, () => ({
@@ -50,10 +52,17 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		const MAX_DIMENSION = 1024; // Max width or height - reduced to prevent AI timeouts
 		const COMPRESSION_QUALITY = 0.8;
 
+		const showError = useCallback((message: string) => {
+			setScanError(message);
+			setIsAnalyzing(false);
+			if (inputRef.current) inputRef.current.value = "";
+		}, []);
+
 		const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 			const file = e.target.files?.[0];
 			if (!file) return;
 
+			setScanError(null);
 			setIsAnalyzing(true);
 
 			try {
@@ -76,9 +85,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				});
 			} catch (error) {
 				log.error("Image processing failed", error);
-				alert("Failed to process image. Please try again.");
-				setIsAnalyzing(false);
-				if (inputRef.current) inputRef.current.value = "";
+				showError("Failed to process image. Please try again.");
 			}
 		};
 
@@ -158,8 +165,9 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				if (fetcher.data) {
 					log.debug("Scan fetcher success", { hasData: !!fetcher.data });
 					if ("error" in fetcher.data) {
-						alert(`Scan failed: ${fetcher.data.error}`);
-						if (inputRef.current) inputRef.current.value = "";
+						showError(
+							`Scan failed: ${(fetcher.data as { error: string }).error}`,
+						);
 					} else {
 						// Success - transform raw items to include required properties
 						// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
@@ -194,16 +202,16 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					log.error("Scan fetcher completed with no data", undefined, {
 						state: fetcher.state,
 					});
-					alert("Scan failed. Please try again.");
-					if (inputRef.current) inputRef.current.value = "";
+					showError("Scan failed. Please try again.");
 				}
 			}
 			lastState.current = fetcher.state;
-		}, [fetcher.state, fetcher.data, isAnalyzing]);
+		}, [fetcher.state, fetcher.data, isAnalyzing, showError]);
 
 		const handleModalClose = () => {
 			setScanResult(null);
 			setExistingInventory(undefined);
+			setScanError(null);
 			if (inputRef.current) inputRef.current.value = "";
 		};
 
@@ -259,6 +267,25 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						<div className="absolute inset-0 border-2 border-hyper-green/50 rounded-lg animate-ping opacity-20 pointer-events-none" />
 					)}
 				</div>
+
+				{/* Inline scan error banner */}
+				{scanError && (
+					<div
+						role="alert"
+						className="flex items-start gap-3 mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm max-w-xs"
+					>
+						<AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+						<span className="flex-1">{scanError}</span>
+						<button
+							type="button"
+							onClick={() => setScanError(null)}
+							aria-label="Dismiss error"
+							className="shrink-0 hover:opacity-70 transition-opacity"
+						>
+							<X className="w-4 h-4" />
+						</button>
+					</div>
+				)}
 
 				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
 				{isAnalyzing && (

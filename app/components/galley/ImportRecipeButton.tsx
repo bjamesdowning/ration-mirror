@@ -1,4 +1,13 @@
-import { AlertCircle, Check, ChefHat, Link2, Timer } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	ChefHat,
+	ChevronDown,
+	ChevronUp,
+	ExternalLink,
+	Link2,
+	Timer,
+} from "lucide-react";
 import {
 	forwardRef,
 	useEffect,
@@ -51,8 +60,9 @@ export const ImportRecipeButton = forwardRef<
 	const [url, setUrl] = useState("");
 	const [importedUrl, setImportedUrl] = useState<string | null>(null);
 	const [view, setView] = useState<
-		"intro" | "url" | "loading" | "result" | "error"
+		"intro" | "url" | "loading" | "result" | "error" | "duplicate"
 	>("intro");
+	const [directionsOpen, setDirectionsOpen] = useState(false);
 	const saveInFlight = useRef(false);
 	const importFetcher = useFetcher<{
 		success: boolean;
@@ -60,6 +70,8 @@ export const ImportRecipeButton = forwardRef<
 		error?: string;
 		code?: string;
 		message?: string;
+		existingMealId?: string;
+		existingMealName?: string;
 	}>();
 	const saveFetcher = useFetcher();
 	const navigate = useNavigate();
@@ -79,7 +91,10 @@ export const ImportRecipeButton = forwardRef<
 	useEffect(() => {
 		if (importFetcher.state === "idle" && importFetcher.data !== undefined) {
 			if (importFetcher.data?.recipe) {
+				setDirectionsOpen(false);
 				setView("result");
+			} else if (importFetcher.data?.code === "DUPLICATE_URL") {
+				setView("duplicate");
 			} else if (importFetcher.data?.error || importFetcher.data?.message) {
 				setView("error");
 			}
@@ -101,6 +116,7 @@ export const ImportRecipeButton = forwardRef<
 	const resetState = () => {
 		setUrl("");
 		setImportedUrl(null);
+		setDirectionsOpen(false);
 		setView("url");
 	};
 
@@ -109,6 +125,7 @@ export const ImportRecipeButton = forwardRef<
 		setView("intro");
 		setUrl("");
 		setImportedUrl(null);
+		setDirectionsOpen(false);
 	};
 
 	const handleSave = () => {
@@ -148,6 +165,7 @@ export const ImportRecipeButton = forwardRef<
 	const showUrlInput = view === "url";
 	const showProcessing = view === "loading";
 	const showError = view === "error";
+	const showDuplicate = view === "duplicate";
 	const showApproval = view === "result" && recipe;
 
 	return (
@@ -256,18 +274,73 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 
+							{/* Duplicate URL State */}
+							{showDuplicate && (
+								<div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+									<div className="w-14 h-14 rounded-full bg-hyper-green/10 flex items-center justify-center">
+										<Check className="w-7 h-7 text-hyper-green" />
+									</div>
+									<h4 className="text-lg font-bold text-carbon dark:text-white">
+										Already in Your Galley
+									</h4>
+									<p className="text-sm text-muted max-w-xs">
+										{importFetcher.data?.existingMealName
+											? `"${importFetcher.data.existingMealName}" was imported from this URL before.`
+											: "This URL has already been imported."}
+									</p>
+									<div className="flex gap-3 pt-2">
+										{importFetcher.data?.existingMealId && (
+											<button
+												type="button"
+												onClick={() => {
+													handleClose();
+													navigate(
+														`/hub/galley/${importFetcher.data?.existingMealId}`,
+													);
+												}}
+												className="px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+											>
+												View Existing Meal
+											</button>
+										)}
+										<button
+											type="button"
+											onClick={resetState}
+											className="px-5 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 transition-colors text-sm"
+										>
+											Import Different URL
+										</button>
+									</div>
+								</div>
+							)}
+
 							{/* Phase 3: Single recipe approval */}
 							{showApproval && recipe && (
-								<div className="space-y-6">
-									<div className="bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl p-6">
-										<h4 className="font-bold text-lg text-carbon dark:text-white mb-2">
+								<div className="space-y-4">
+									<div className="bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl p-6 space-y-4">
+										{/* Source URL — prominent header link */}
+										{importedUrl && (
+											<a
+												href={importedUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="flex items-center gap-1.5 text-xs text-hyper-green hover:underline truncate"
+											>
+												<ExternalLink className="w-3 h-3 shrink-0" />
+												{importedUrl}
+											</a>
+										)}
+
+										<h4 className="font-bold text-lg text-carbon dark:text-white capitalize">
 											{recipe.name}
 										</h4>
-										<p className="text-sm text-muted line-clamp-3 mb-4">
-											{recipe.description ?? ""}
-										</p>
+										{recipe.description && (
+											<p className="text-sm text-muted line-clamp-3">
+												{recipe.description}
+											</p>
+										)}
 
-										<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60 mb-4">
+										<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60">
 											<div className="flex items-center gap-1">
 												<Timer className="w-3 h-3" />
 												{(recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)}m
@@ -278,7 +351,8 @@ export const ImportRecipeButton = forwardRef<
 											</div>
 										</div>
 
-										<div className="space-y-1 mb-4">
+										{/* Key Ingredients */}
+										<div className="space-y-1">
 											<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
 												Key Ingredients
 											</h5>
@@ -300,22 +374,44 @@ export const ImportRecipeButton = forwardRef<
 											)}
 										</div>
 
-										{importedUrl && (
-											<div className="mt-4 pt-3 border-t border-platinum dark:border-white/10">
-												<a
-													href={importedUrl}
-													target="_blank"
-													rel="noopener noreferrer"
-													className="text-xs text-hyper-green hover:underline truncate block"
+										{/* Directions accordion */}
+										{recipe.directions && (
+											<div className="border-t border-platinum dark:border-white/10 pt-4">
+												<button
+													type="button"
+													onClick={() => setDirectionsOpen((o) => !o)}
+													className="flex items-center justify-between w-full text-xs font-bold text-carbon dark:text-white uppercase tracking-wider"
 												>
-													Source: {(() => {
-														try {
-															return new URL(importedUrl).hostname;
-														} catch {
-															return importedUrl;
-														}
-													})()}
-												</a>
+													<span>Directions</span>
+													{directionsOpen ? (
+														<ChevronUp className="w-4 h-4 text-muted" />
+													) : (
+														<ChevronDown className="w-4 h-4 text-muted" />
+													)}
+												</button>
+												{directionsOpen && (
+													<ol className="mt-3 space-y-2">
+														{recipe.directions
+															.split("\n")
+															.filter(Boolean)
+															.map((step, idx) => {
+																const text = step.replace(/^\d+\.\s*/, "");
+																return (
+																	<li
+																		key={`step-${text.slice(0, 32)}`}
+																		className="flex gap-3 text-xs text-muted"
+																	>
+																		<span className="flex-shrink-0 w-5 h-5 rounded-full bg-hyper-green/20 text-hyper-green flex items-center justify-center font-bold text-[10px]">
+																			{idx + 1}
+																		</span>
+																		<span className="leading-relaxed">
+																			{text}
+																		</span>
+																	</li>
+																);
+															})}
+													</ol>
+												)}
 											</div>
 										)}
 									</div>

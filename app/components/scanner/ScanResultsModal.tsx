@@ -1,4 +1,4 @@
-import { Calendar, Check, Edit2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
@@ -459,8 +459,15 @@ function ScanResultItemRow({
 		);
 	}
 
+	const isLowConfidence =
+		typeof item.confidence === "number" && item.confidence < 0.7;
+
 	return (
-		<div className="bg-carbon/20 border border-platinum/10 rounded-lg p-4 hover:border-hyper-green/30 transition-colors">
+		<div
+			className={`bg-carbon/20 border rounded-lg p-4 hover:border-hyper-green/30 transition-colors ${
+				isLowConfidence ? "border-amber-500/30" : "border-platinum/10"
+			}`}
+		>
 			<div className="flex items-start gap-3">
 				<input
 					type="checkbox"
@@ -471,9 +478,20 @@ function ScanResultItemRow({
 				<div className="flex-1 min-w-0">
 					<div className="flex items-start justify-between gap-3">
 						<div className="flex-1">
-							<h3 className="text-lg font-semibold text-carbon capitalize">
-								{item.name}
-							</h3>
+							<div className="flex items-center gap-2">
+								<h3 className="text-lg font-semibold text-carbon capitalize">
+									{item.name}
+								</h3>
+								{isLowConfidence && (
+									<span
+										title="Low confidence — verify this item"
+										className="flex items-center gap-1 text-xs text-amber-500"
+									>
+										<AlertTriangle className="w-3.5 h-3.5" />
+										Verify
+									</span>
+								)}
+							</div>
 							<p className="text-sm text-muted">
 								{mergeMatch
 									? mergeMatch.displayDelta

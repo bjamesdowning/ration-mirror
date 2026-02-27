@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { extractModelText } from "~/lib/ai.server";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getCargo } from "~/lib/cargo.server";
+import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -15,13 +15,16 @@ import {
 } from "~/lib/schemas/scan";
 import type { Route } from "./+types/scan";
 
-const SCAN_MODEL = "gemini-3-flash-preview";
+// Gemini model via Cloudflare AI Gateway → Google AI Studio
+// See: https://developers.cloudflare.com/ai-gateway/providers/google-ai-studio/
+const SCAN_MODEL = "gemini-2.0-flash";
 
-const SCAN_PROMPT = `You are an expert pantry inventory assistant.
+function buildScanPrompt(todayIso: string): string {
+	return `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.
 You MUST respond with ONLY a valid JSON object matching this exact schema — no markdown, no explanation, no extra text:
 
-{"items":[{"name":"string","quantity":number,"unit":"string","tags":["string"],"expiresAt":"string or null"}]}
+{"items":[{"name":"string","quantity":number,"unit":"string","tags":["string"],"expiresAt":"string or null","confidence":number}]}
 
 Rules:
 - Use lowercase item names
@@ -33,13 +36,41 @@ Rules:
 - quantity defaults to 1 if unknown
 - unit must be one of: ${SCAN_UNITS.join(", ")}
 - tags are descriptive strings in an array (e.g. ["produce","fruit"])
-- expiresAt must be YYYY-MM-DD or null
+- confidence is a number 0.0–1.0 reflecting how certain you are about the item identification
 - Respond with ONLY the JSON object, nothing else.
 
+Expiry date rules (today is ${todayIso}):
+- expiresAt must be YYYY-MM-DD or null
+- ONLY infer an expiry date when you have HIGH CONFIDENCE (0.85+) about the item type based on clear visual identification
+- Use these USDA FoodKeeper reference shelf-life estimates from the date of purchase:
+  * Fresh whole/skimmed/semi-skimmed milk, cream: +14 days
+  * Fresh eggs (whole, in shell): +28 days
+  * Sliced deli meat, cooked ham, luncheon meat: +5 days
+  * Fresh bread, rolls, bakery items: +7 days
+  * Fresh raw chicken, poultry: +2 days
+  * Fresh raw beef, pork, lamb: +3 days
+  * Fresh raw fish, seafood: +2 days
+  * Butter (refrigerated, unopened): +90 days
+  * Soft cheese (ricotta, cottage, cream cheese): +14 days
+  * Hard cheese block (cheddar, parmesan): +180 days
+  * Fresh yoghurt: +21 days
+  * Fresh juice (refrigerated, unopened): +14 days
+  * Dried pasta, rice, grains: +730 days
+  * Canned goods (unopened): +1095 days
+- Return null for: non-food items, ambiguous items, shelf-stable pantry goods not in the list above, or any item where a printed expiry date is already clearly visible on the label (the label date is more accurate)
+
 Examples:
-- "Tesco Finest Irish Whole Milk 1L" -> name: "whole milk", quantity: 1, unit: "l"
-- "Lidl Deluxe Free Range Eggs 12pk" -> name: "free range eggs", quantity: 12, unit: "unit"
-- "SuperValu Own Brand Cheddar 200g" -> name: "cheddar cheese", quantity: 200, unit: "g"`;
+- "Tesco Finest Irish Whole Milk 1L" -> name: "whole milk", quantity: 1, unit: "l", expiresAt: "${addDays(todayIso, 14)}", confidence: 0.95
+- "Lidl Deluxe Free Range Eggs 12pk" -> name: "free range eggs", quantity: 12, unit: "unit", expiresAt: "${addDays(todayIso, 28)}", confidence: 0.92
+- "SuperValu Own Brand Cheddar 200g" -> name: "cheddar cheese", quantity: 200, unit: "g", expiresAt: "${addDays(todayIso, 180)}", confidence: 0.90
+- "Morton Sea Salt 737g" -> name: "sea salt", quantity: 737, unit: "g", expiresAt: null, confidence: 0.97`;
+}
+
+function addDays(isoDate: string, days: number): string {
+	const d = new Date(isoDate);
+	d.setUTCDate(d.getUTCDate() + days);
+	return d.toISOString().slice(0, 10);
+}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -140,6 +171,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					}
 
 					const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
+					const todayIso = new Date().toISOString().slice(0, 10);
+					const scanPrompt = buildScanPrompt(todayIso);
 
 					const response = await fetch(
 						`${gatewayUrl}/v1beta/models/${SCAN_MODEL}:generateContent`,
@@ -159,7 +192,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 													data: base64Image,
 												},
 											},
-											{ text: SCAN_PROMPT },
+											{ text: scanPrompt },
 										],
 									},
 								],
@@ -226,6 +259,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 								item.expiresAt && DATE_PATTERN.test(item.expiresAt)
 									? item.expiresAt
 									: undefined;
+							const confidence =
+								typeof item.confidence === "number"
+									? item.confidence
+									: undefined;
 
 							return {
 								name,
@@ -234,6 +271,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 								expiresAt,
 								tags,
 								domain: "food",
+								confidence,
 							};
 						})
 						.filter((item): item is NonNullable<typeof item> => item !== null);
@@ -248,6 +286,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 							tags: item.tags,
 							expiresAt: item.expiresAt,
 							selected: true,
+							confidence: item.confidence,
 						})),
 						metadata: {
 							source: "image",
@@ -261,16 +300,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 						throw data({ error: "Scan processing failed" }, { status: 500 });
 					}
 
-					const existingCargo = await getCargo(
+					// Use the narrow cargo index (id, name, domain, quantity, unit only)
+					// to avoid unbounded SELECT * per d1-query-safety rules.
+					const existingInventory = await fetchOrgCargoIndex(
 						context.cloudflare.env.DB,
 						groupId,
 					);
-					const existingInventory = existingCargo.map((c) => ({
-						id: c.id,
-						name: c.name,
-						quantity: c.quantity,
-						unit: c.unit,
-					}));
 					return { success: true, ...validatedScan.data, existingInventory };
 				} catch (innerError) {
 					// data() returns DataWithResponseInit, not Response — re-throw it for React Router

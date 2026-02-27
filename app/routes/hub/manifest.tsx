@@ -12,6 +12,7 @@ import { EmptyManifest } from "~/components/manifest/EmptyManifest";
 import { MealPicker } from "~/components/manifest/MealPicker";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import { WeekNavigator } from "~/components/manifest/WeekNavigator";
+import { WeekSummary } from "~/components/manifest/WeekSummary";
 import { WeekView } from "~/components/manifest/WeekView";
 import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
 import { Toast } from "~/components/shell/Toast";
@@ -165,6 +166,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		[entries, today],
 	);
 
+	// Set of dates that have at least one planned meal (for DayTab dot indicator)
+	const plannedDates = useMemo(
+		() => new Set(entries.map((e) => e.date)),
+		[entries],
+	);
+
 	useEffect(() => {
 		if (consumeFetcher.state !== "idle" || !consumeFetcher.data) return;
 		const data = consumeFetcher.data;
@@ -219,14 +226,27 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		<>
 			{/* Page header */}
 			<header className="mb-5">
-				<div className="flex items-center justify-between gap-3 flex-wrap">
-					<div className="flex items-center gap-2">
-						<CalendarIcon className="w-6 h-6 text-hyper-green" />
-						<h1 className="text-2xl font-bold text-carbon">Manifest</h1>
-						<span className="text-sm font-medium text-muted bg-platinum px-2 py-0.5 rounded-full">
-							{entries.length}
-						</span>
+				<div className="flex items-start justify-between gap-3 flex-wrap">
+					{/* Title + week navigator stacked */}
+					<div className="flex flex-col gap-1">
+						<div className="flex items-center gap-2">
+							<CalendarIcon className="w-6 h-6 text-hyper-green" />
+							<h1 className="text-2xl font-bold text-carbon">Manifest</h1>
+							{hasEntries && (
+								<span className="text-sm font-medium text-muted bg-platinum px-2 py-0.5 rounded-full">
+									{entries.length}
+								</span>
+							)}
+						</div>
+						<div className="ml-8">
+							<WeekNavigator
+								currentWeekStart={currentWeekStart}
+								weekStart={weekStartPref}
+							/>
+						</div>
 					</div>
+
+					{/* Actions */}
 					<div className="flex items-center gap-2">
 						{unconsumedForToday > 0 && (
 							<button
@@ -240,14 +260,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								<ConsumeIcon className="w-5 h-5" />
 							</button>
 						)}
-						<WeekNavigator
-							currentWeekStart={currentWeekStart}
-							weekStart={weekStartPref}
-						/>
 						<button
 							type="button"
 							onClick={() => setShareOpen(true)}
-							className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+							className="flex items-center gap-2 px-4 py-2.5 bg-platinum text-carbon font-semibold rounded-lg hover:bg-platinum/80 transition-all text-sm"
 						>
 							<ShareIcon className="w-4 h-4" />
 							Share
@@ -256,6 +272,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				</div>
 			</header>
 
+			{/* Week summary bar */}
+			<WeekSummary entries={entries} />
+
 			{/* Mobile: Day tabs + single-day view */}
 			<div className="md:hidden">
 				<DayTab
@@ -263,10 +282,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					activeDate={activeDay}
 					today={today}
 					onSelect={setActiveDay}
+					plannedDates={plannedDates}
 				/>
 				<div className="mt-4">
 					{!hasEntries ? (
-						<EmptyManifest onAddFirst={() => handleAdd("dinner", activeDay)} />
+						<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
 					) : (
 						<DayView
 							date={activeDay}
@@ -281,7 +301,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				</div>
 			</div>
 
-			{/* Desktop: Full week grid (always show so date/slot context is clear) */}
+			{/* Desktop: Full week grid */}
 			<div className="hidden md:block">
 				{!hasEntries && (
 					<p className="text-sm text-muted mb-4">
@@ -324,7 +344,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Mobile FAB: Consume all for active day (icon only per spec) */}
+			{/* Mobile FAB: Consume all for active day */}
 			{hasEntries && unconsumedForActiveDay > 0 && (
 				<FloatingActionBar
 					actions={[
@@ -351,7 +371,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Consume error toast (e.g. insufficient Cargo) */}
+			{/* Consume error toast */}
 			{consumeErrorToast.isOpen && consumeFetcher.data?.error && (
 				<Toast
 					variant="info"
@@ -365,7 +385,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Upgrade prompt when free-tier user tries to share manifest */}
+			{/* Upgrade prompt */}
 			<UpgradePrompt
 				open={showUpgradePrompt}
 				onClose={() => setShowUpgradePrompt(false)}

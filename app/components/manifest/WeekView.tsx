@@ -42,6 +42,9 @@ export function WeekView({
 				const isPast = date < today;
 
 				const dayEntries = entries.filter((e) => e.date === date);
+				const totalCount = dayEntries.length;
+				const consumedCount = dayEntries.filter((e) => !!e.consumedAt).length;
+				const allConsumed = totalCount > 0 && consumedCount === totalCount;
 
 				return (
 					<div
@@ -53,13 +56,21 @@ export function WeekView({
 							className={`text-center py-2 rounded-xl transition-colors ${
 								isToday
 									? "bg-hyper-green text-carbon"
-									: "bg-platinum/50 text-muted"
+									: allConsumed
+										? "bg-hyper-green/15 text-hyper-green"
+										: "bg-platinum/50 text-muted"
 							}`}
 						>
 							<p className="text-[10px] font-semibold uppercase tracking-wide">
 								{dayName}
 							</p>
 							<p className="text-sm font-bold">{dayNum}</p>
+							{/* Meal count / completion indicator */}
+							{totalCount > 0 && (
+								<p className="text-[9px] font-mono mt-0.5 leading-none">
+									{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
+								</p>
+							)}
 						</div>
 
 						{/* Slots */}
@@ -67,7 +78,9 @@ export function WeekView({
 							className={`flex-1 rounded-xl border p-2 space-y-2 ${
 								isToday
 									? "border-hyper-green/20 bg-hyper-green/5"
-									: "border-platinum bg-white/30"
+									: allConsumed
+										? "border-hyper-green/15 bg-hyper-green/5"
+										: "border-platinum bg-white/30"
 							}`}
 						>
 							{slots.map((slot) => (

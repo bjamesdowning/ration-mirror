@@ -128,6 +128,8 @@ export interface MealPlanEntryWithMeal {
 	mealName: string;
 	mealServings: number;
 	mealType: string;
+	mealPrepTime: number | null;
+	mealCookTime: number | null;
 }
 
 export interface ConsumeManifestEntriesResult {
@@ -157,6 +159,8 @@ export async function getWeekEntries(
 			mealName: meal.name,
 			mealServings: meal.servings,
 			mealType: meal.type,
+			mealPrepTime: meal.prepTime,
+			mealCookTime: meal.cookTime,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -178,6 +182,8 @@ export async function getWeekEntries(
 		consumedAt: r.consumedAt ?? null,
 		mealServings: r.mealServings ?? 1,
 		mealType: r.mealType ?? "recipe",
+		mealPrepTime: r.mealPrepTime ?? null,
+		mealCookTime: r.mealCookTime ?? null,
 	})) as MealPlanEntryWithMeal[];
 }
 

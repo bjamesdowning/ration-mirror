@@ -5,9 +5,16 @@ interface DayTabProps {
 	activeDate: string;
 	today: string;
 	onSelect: (date: string) => void;
+	plannedDates?: Set<string>;
 }
 
-export function DayTab({ dates, activeDate, today, onSelect }: DayTabProps) {
+export function DayTab({
+	dates,
+	activeDate,
+	today,
+	onSelect,
+	plannedDates,
+}: DayTabProps) {
 	return (
 		<div className="flex overflow-x-auto gap-1 py-1 scrollbar-none -mx-1 px-1">
 			{dates.map((date) => {
@@ -17,6 +24,7 @@ export function DayTab({ dates, activeDate, today, onSelect }: DayTabProps) {
 				const isToday = date === today;
 				const isActive = date === activeDate;
 				const isPast = date < today;
+				const hasPlannedMeals = plannedDates?.has(date) ?? false;
 
 				return (
 					<button
@@ -41,6 +49,16 @@ export function DayTab({ dates, activeDate, today, onSelect }: DayTabProps) {
 						>
 							{dayNum}
 						</span>
+						{/* Planned-meals dot indicator */}
+						<span
+							className={`w-1 h-1 rounded-full mt-0.5 transition-colors ${
+								hasPlannedMeals
+									? isActive
+										? "bg-carbon/50"
+										: "bg-hyper-green"
+									: "bg-transparent"
+							}`}
+						/>
 					</button>
 				);
 			})}

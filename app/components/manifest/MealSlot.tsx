@@ -31,6 +31,10 @@ export function MealSlot({
 		.filter((e) => e.slotType === slot)
 		.sort((a, b) => a.orderIndex - b.orderIndex);
 
+	const consumedCount = slotEntries.filter((e) => !!e.consumedAt).length;
+	const totalCount = slotEntries.length;
+	const allConsumed = totalCount > 0 && consumedCount === totalCount;
+
 	if (compact) {
 		return (
 			<div className="space-y-1">
@@ -74,10 +78,23 @@ export function MealSlot({
 
 	return (
 		<div className="space-y-2">
-			{/* Slot header */}
-			<h3 className="text-xs font-semibold text-muted uppercase tracking-widest font-mono">
-				{SLOT_LABELS[slot]}
-			</h3>
+			{/* Slot header with consumed progress pill */}
+			<div className="flex items-center justify-between">
+				<h3 className="text-xs font-semibold text-muted uppercase tracking-widest font-mono">
+					{SLOT_LABELS[slot]}
+				</h3>
+				{totalCount > 0 && (
+					<span
+						className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
+							allConsumed
+								? "bg-hyper-green/15 text-hyper-green"
+								: "bg-platinum text-muted"
+						}`}
+					>
+						{consumedCount}/{totalCount}
+					</span>
+				)}
+			</div>
 
 			{/* Assigned meals */}
 			<div className="space-y-2">

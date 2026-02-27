@@ -52,8 +52,9 @@ export function DayView({
 	const dayName = DAY_NAMES[d.getDay()];
 	const formattedDate = `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
 
-	// Only show entries for this day (mobile shows one day at a time)
 	const dayEntries = entries.filter((e) => e.date === date);
+	const totalCount = dayEntries.length;
+	const consumedCount = dayEntries.filter((e) => !!e.consumedAt).length;
 
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -61,10 +62,30 @@ export function DayView({
 
 	return (
 		<div className="space-y-5">
-			{/* Day heading (accessible, visible on read-only shared view) */}
-			<p className="text-xs text-muted font-mono">
-				{dayName}, {formattedDate}
-			</p>
+			{/* Day heading with summary stats */}
+			<div className="flex items-baseline gap-2 flex-wrap">
+				<p className="text-xs text-muted font-mono">
+					{dayName}, {formattedDate}
+				</p>
+				{totalCount > 0 && (
+					<>
+						<span className="text-xs text-muted/40 font-mono">·</span>
+						<p className="text-xs text-muted font-mono">
+							{totalCount} {totalCount === 1 ? "meal" : "meals"}
+						</p>
+						<span className="text-xs text-muted/40 font-mono">·</span>
+						<p
+							className={`text-xs font-mono ${
+								consumedCount === totalCount && totalCount > 0
+									? "text-hyper-green"
+									: "text-muted"
+							}`}
+						>
+							{consumedCount} consumed
+						</p>
+					</>
+				)}
+			</div>
 
 			{slots.map((slot) => (
 				<MealSlot

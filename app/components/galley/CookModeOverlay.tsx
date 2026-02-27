@@ -51,17 +51,6 @@ export function CookModeOverlay({
 		};
 	}, []);
 
-	// Keyboard navigation
-	useEffect(() => {
-		const handleKey = (e: KeyboardEvent) => {
-			if (e.key === "ArrowRight" || e.key === "ArrowDown") advance();
-			if (e.key === "ArrowLeft" || e.key === "ArrowUp") back();
-			if (e.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", handleKey);
-		return () => window.removeEventListener("keydown", handleKey);
-	});
-
 	const advance = () => {
 		setCurrentIndex((i) => Math.min(i + 1, total - 1));
 	};
@@ -69,6 +58,19 @@ export function CookModeOverlay({
 	const back = () => {
 		setCurrentIndex((i) => Math.max(i - 1, 0));
 	};
+
+	// Keyboard navigation — deps include stable setters + onClose + total
+	useEffect(() => {
+		const handleKey = (e: KeyboardEvent) => {
+			if (e.key === "ArrowRight" || e.key === "ArrowDown")
+				setCurrentIndex((i) => Math.min(i + 1, total - 1));
+			if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+				setCurrentIndex((i) => Math.max(i - 1, 0));
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", handleKey);
+		return () => window.removeEventListener("keydown", handleKey);
+	}, [total, onClose]);
 
 	// Swipe detection
 	const handleTouchStart = (e: React.TouchEvent) => {
@@ -96,7 +98,7 @@ export function CookModeOverlay({
 			onTouchEnd={handleTouchEnd}
 		>
 			{/* Header */}
-			<div className="flex items-center justify-between px-5 pt-safe-top pt-4 pb-2 border-b border-platinum/60">
+			<div className="flex items-center justify-between px-5 safe-area-pt pt-4 pb-2 border-b border-platinum/60">
 				<button
 					type="button"
 					onClick={onClose}
@@ -148,13 +150,13 @@ export function CookModeOverlay({
 			</div>
 
 			{/* Navigation controls */}
-			<div className="flex items-center justify-between px-4 pb-safe-bottom pb-6 pt-4 border-t border-platinum/60 gap-4">
+			<div className="flex items-center justify-between px-4 safe-area-pb pb-6 pt-4 border-t border-platinum/60 gap-4">
 				<button
 					type="button"
 					onClick={back}
 					disabled={currentIndex === 0}
 					aria-label="Previous step"
-					className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-platinum/60 text-carbon font-semibold text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-platinum transition-colors active:scale-95 transition-transform"
+					className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-platinum/60 text-carbon font-semibold text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-platinum active:scale-95 transition-all"
 				>
 					<ChevronLeft size={22} />
 					Prev

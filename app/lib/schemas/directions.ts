@@ -12,8 +12,6 @@ export type RecipeStep = {
 	section?: string;
 };
 
-export type RecipeDirections = RecipeStep[];
-
 /**
  * Accepts any shape directions might arrive in and returns a normalized
  * RecipeStep[]. Covers all ingestion paths:

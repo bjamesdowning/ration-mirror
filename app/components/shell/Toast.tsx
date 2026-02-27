@@ -21,7 +21,7 @@ const positionClasses: Record<ToastPosition, string> = {
 const variantClasses: Record<ToastVariant, string> = {
 	info: "glass-panel rounded-xl p-4 shadow-xl border-l-4 border-hyper-green animate-slide-in-right",
 	success:
-		"glass-panel bg-carbon/90 border border-hyper-green text-hyper-green px-6 py-4 rounded-xl shadow-2xl animate-slide-up",
+		"bg-carbon/90 border border-hyper-green text-hyper-green px-6 py-4 rounded-xl shadow-2xl animate-slide-up",
 };
 
 export function Toast({

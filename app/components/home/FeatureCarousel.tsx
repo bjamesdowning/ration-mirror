@@ -33,7 +33,7 @@ const SLIDES: Slide[] = [
 		title: "Manifest",
 		description:
 			"Weekly meal calendar. Schedule breakfast, lunch, dinner, and snacks. Consume meals to auto-deduct ingredients from Cargo.",
-		screenshotLight: "/static/ration-manifest-light.webp",
+		screenshotLight: "/static/ration-manifest-dark.webp",
 		badge: "Meal Plan",
 	},
 	{

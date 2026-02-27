@@ -272,7 +272,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
 							<div className="glass-panel rounded-2xl overflow-hidden aspect-video">
 								<img
-									src="/static/ration-manifest-light.webp"
+									src="/static/ration-manifest-dark.webp"
 									alt="Manifest weekly calendar view"
 									className="w-full h-full object-cover object-top"
 									loading="lazy"

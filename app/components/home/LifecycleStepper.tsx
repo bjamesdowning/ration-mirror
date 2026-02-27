@@ -35,7 +35,7 @@ const STAGES = [
 		short: "Your weekly meal plan. Drag, schedule, consume.",
 		detail:
 			"The Manifest is a weekly calendar with breakfast, lunch, dinner, and snack slots. Pull meals from the Galley into specific days. When you cook, hit Consume — ingredients are automatically deducted from Cargo. Scheduled meals feed directly into your Supply list.",
-		screenshot: "/static/ration-manifest-light.webp",
+		screenshot: "/static/ration-manifest-dark.webp",
 	},
 	{
 		id: "supply",

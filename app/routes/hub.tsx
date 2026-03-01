@@ -135,12 +135,12 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 				{/* Main Content Area */}
 				<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
 					{/* Global Top Bar (Group Context) */}
-					<header className="px-4 md:px-8 py-3 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-16">
+					<header className="px-4 md:px-8 py-0 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-12">
 						<GroupSwitcher />
 						<NavLink
 							to="/hub/settings"
 							className={({ isActive }) =>
-								`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+								`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
 									isActive
 										? "text-hyper-green bg-hyper-green/10"
 										: "text-muted hover:text-carbon hover:bg-platinum/60"
@@ -149,7 +149,6 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							aria-label="System settings"
 						>
 							<SettingsIcon className="w-4 h-4" />
-							<span className="hidden sm:inline">System</span>
 						</NavLink>
 					</header>
 

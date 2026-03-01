@@ -65,32 +65,24 @@ export function GroupSwitcher() {
 				onClick={() => setIsOpen(!isOpen)}
 				aria-expanded={isOpen}
 				aria-haspopup="true"
-				className="flex items-center gap-3 px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10"
+				className="flex items-center gap-2 px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10"
 			>
-				<div className="flex flex-col items-start text-left">
-					<span className="text-sm font-bold text-carbon leading-tight">
-						{displayName}
+				<span className="text-sm font-bold text-carbon leading-none max-w-[160px] truncate">
+					{displayName}
+				</span>
+				{activeOrg && (
+					<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium leading-none">
+						{credits}⚡
 					</span>
-					{activeOrg && (
-						<div className="flex items-center gap-2">
-							<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium">
-								{credits} Credits
-							</span>
-							<span
-								className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
-									tierLabel === "CREW"
-										? "bg-hyper-green/10 text-hyper-green"
-										: "bg-platinum text-muted"
-								}`}
-							>
-								{tierLabel}
-							</span>
-						</div>
-					)}
-				</div>
+				)}
+				{activeOrg && tierLabel === "CREW" && (
+					<span className="text-[10px] uppercase tracking-wide px-1 rounded-full bg-hyper-green/10 text-hyper-green leading-none">
+						{tierLabel}
+					</span>
+				)}
 				<svg
 					aria-hidden="true"
-					className={`w-4 h-4 text-muted transition-all ${
+					className={`w-3.5 h-3.5 text-muted transition-all shrink-0 ${
 						isOpen ? "text-carbon rotate-180" : ""
 					}`}
 					fill="none"

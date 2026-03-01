@@ -140,7 +140,7 @@ export function IngredientPicker({
 			{ingredients.map((ing, idx) => (
 				<div
 					key={ing.localId}
-					className={`grid grid-cols-12 gap-2 items-center border-b border-platinum pb-3 relative ${
+					className={`border-b border-platinum pb-3 relative ${
 						activeIndex === idx ? "z-20" : "z-0"
 					}`}
 				>
@@ -156,104 +156,140 @@ export function IngredientPicker({
 						value={ing.cargoId || ""}
 					/>
 
-					<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
-						{idx + 1}
-					</div>
+					{/* Main row: badge + name + qty + unit */}
+					<div className="grid grid-cols-12 gap-2 items-center">
+						<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+							{idx + 1}
+						</div>
 
-					<div className="col-span-5 relative">
-						<input
-							ref={(el) => {
-								inputRefs.current[idx] = el;
-							}}
-							type="text"
-							name={`ingredients[${idx}].ingredientName`}
-							value={ing.ingredientName}
-							onChange={(e) =>
-								updateIngredient(idx, "ingredientName", e.target.value)
-							}
-							onFocus={() => handleInputFocus(idx)}
-							placeholder="Component name"
-							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-							autoComplete="off"
-						/>
-						{/* Dropdown */}
-						{activeIndex === idx && (
-							<div
-								id="ingredient-dropdown"
-								className="absolute z-[100] left-0 right-0 mt-1 bg-ceramic dark:bg-white/10 border border-platinum dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-							>
-								{filteredOptions.length > 0 ? (
-									filteredOptions.map((option) => (
-										<button
-											key={option.id}
-											type="button"
-											onClick={() => selectOption(idx, option)}
-											className="w-full text-left px-3 py-2 text-sm text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors flex justify-between items-center"
-										>
-											<span>{option.name}</span>
-											<span className="text-xs text-muted font-mono bg-platinum/50 dark:bg-white/10 px-1.5 py-0.5 rounded">
-												{option.unit}
-											</span>
-										</button>
-									))
-								) : (
-									<div className="px-3 py-2 text-xs text-muted dark:text-white/70 italic">
-										{availableIngredients.length === 0 ? (
-											<>
-												Your Cargo is empty.
-												<br />
-												<span className="opacity-75">
-													Add items in Supply first.
+						<div className="col-span-6 sm:col-span-5 relative">
+							<input
+								ref={(el) => {
+									inputRefs.current[idx] = el;
+								}}
+								type="text"
+								name={`ingredients[${idx}].ingredientName`}
+								value={ing.ingredientName}
+								onChange={(e) =>
+									updateIngredient(idx, "ingredientName", e.target.value)
+								}
+								onFocus={() => handleInputFocus(idx)}
+								placeholder="Component name"
+								className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								autoComplete="off"
+							/>
+							{/* Dropdown */}
+							{activeIndex === idx && (
+								<div
+									id="ingredient-dropdown"
+									className="absolute z-[100] left-0 right-0 mt-1 bg-ceramic dark:bg-white/10 border border-platinum dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+								>
+									{filteredOptions.length > 0 ? (
+										filteredOptions.map((option) => (
+											<button
+												key={option.id}
+												type="button"
+												onClick={() => selectOption(idx, option)}
+												className="w-full text-left px-3 py-2 text-sm text-carbon dark:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors flex justify-between items-center"
+											>
+												<span>{option.name}</span>
+												<span className="text-xs text-muted font-mono bg-platinum/50 dark:bg-white/10 px-1.5 py-0.5 rounded">
+													{option.unit}
 												</span>
-											</>
-										) : (
-											<>
-												No matching Cargo items.
-												<br />
-												Type to add custom.
-											</>
-										)}
-									</div>
-								)}
-							</div>
-						)}
+											</button>
+										))
+									) : (
+										<div className="px-3 py-2 text-xs text-muted dark:text-white/70 italic">
+											{availableIngredients.length === 0 ? (
+												<>
+													Your Cargo is empty.
+													<br />
+													<span className="opacity-75">
+														Add items in Supply first.
+													</span>
+												</>
+											) : (
+												<>
+													No matching Cargo items.
+													<br />
+													Type to add custom.
+												</>
+											)}
+										</div>
+									)}
+								</div>
+							)}
+						</div>
+
+						<div className="col-span-2">
+							<input
+								type="number"
+								step="any"
+								name={`ingredients[${idx}].quantity`}
+								value={ing.quantity}
+								onChange={(e) =>
+									updateIngredient(
+										idx,
+										"quantity",
+										Number.parseFloat(e.target.value) || 0,
+									)
+								}
+								placeholder="Qty"
+								className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm text-right placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							/>
+						</div>
+
+						<div className="col-span-3 sm:col-span-2">
+							<select
+								name={`ingredients[${idx}].unit`}
+								value={toSupportedUnit(ing.unit)}
+								onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
+								className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-xs focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							>
+								{SUPPORTED_UNITS.map((u) => (
+									<option key={u} value={u}>
+										{u}
+									</option>
+								))}
+							</select>
+						</div>
+
+						{/* Desktop-only: optional toggle + remove inline */}
+						<div className="hidden sm:flex col-span-1 items-center justify-end gap-2">
+							<label
+								className="flex items-center gap-1 cursor-pointer"
+								title="Optional ingredient"
+							>
+								<input
+									type="checkbox"
+									name={`ingredients[${idx}].isOptional`}
+									value="true"
+									checked={ing.isOptional ?? false}
+									onChange={(e) =>
+										updateIngredient(idx, "isOptional", e.target.checked)
+									}
+									className="rounded border-platinum accent-hyper-green text-hyper-green focus:ring-2 focus:ring-hyper-green/50 focus:ring-offset-0"
+								/>
+								<span className="text-xs text-muted whitespace-nowrap">
+									Optional
+								</span>
+							</label>
+						</div>
+
+						<div className="hidden sm:flex col-span-1 items-center justify-end">
+							<button
+								type="button"
+								onClick={() => removeIngredient(idx)}
+								className="text-danger hover:text-danger/80 text-xs font-medium transition-colors"
+							>
+								Remove
+							</button>
+						</div>
 					</div>
 
-					<div className="col-span-2">
-						<input
-							type="number"
-							step="any"
-							name={`ingredients[${idx}].quantity`}
-							value={ing.quantity}
-							onChange={(e) =>
-								updateIngredient(
-									idx,
-									"quantity",
-									Number.parseFloat(e.target.value) || 0,
-								)
-							}
-							placeholder="Qty"
-							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-sm text-right placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						/>
-					</div>
-
-					<div className="col-span-2">
-						<select
-							name={`ingredients[${idx}].unit`}
-							value={toSupportedUnit(ing.unit)}
-							onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
-							className="w-full bg-platinum rounded-lg px-3 py-2 text-carbon text-xs focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						>
-							{SUPPORTED_UNITS.map((u) => (
-								<option key={u} value={u}>
-									{u}
-								</option>
-							))}
-						</select>
-					</div>
-
-					<div className="col-span-1 flex items-center">
-						<label className="flex items-center gap-1 cursor-pointer">
+					{/* Mobile-only: action bar below the main row */}
+					<div className="flex sm:hidden items-center justify-between mt-2 pl-8">
+						<label className="flex items-center gap-1.5 cursor-pointer select-none">
 							<input
 								type="checkbox"
 								name={`ingredients[${idx}].isOptional`}
@@ -264,19 +300,35 @@ export function IngredientPicker({
 								}
 								className="rounded border-platinum accent-hyper-green text-hyper-green focus:ring-2 focus:ring-hyper-green/50 focus:ring-offset-0"
 							/>
-							<span className="text-xs text-muted whitespace-nowrap">
-								Optional
-							</span>
+							<span className="text-xs text-muted">Optional</span>
 						</label>
-					</div>
 
-					<div className="col-span-1 text-right">
 						<button
 							type="button"
 							onClick={() => removeIngredient(idx)}
-							className="text-danger hover:text-danger/80 text-xs font-medium transition-colors"
+							aria-label="Remove ingredient"
+							className="flex items-center gap-1 text-danger hover:text-danger/80 transition-colors p-1 -mr-1"
 						>
-							Remove
+							{/* Trash icon */}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								aria-hidden="true"
+							>
+								<polyline points="3 6 5 6 21 6" />
+								<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+								<path d="M10 11v6" />
+								<path d="M14 11v6" />
+								<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+							</svg>
+							<span className="text-xs font-medium">Remove</span>
 						</button>
 					</div>
 				</div>

@@ -121,6 +121,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:group_invite",
 	},
+	mcp_search: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20, // AI embedding calls — matches scan limit
+		keyPrefix: "rate:mcp_search",
+	},
 	credits_transfer: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

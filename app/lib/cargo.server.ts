@@ -146,6 +146,26 @@ export async function getCargo(
  * Uses SQLite json_each() to extract tags inline — only distinct tag strings
  * cross the network instead of every cargo row's full payload.
  */
+/**
+ * Fetch a specific set of cargo rows by their IDs, scoped to the organization.
+ * Used by MCP search to resolve Vectorize matches without a full-table scan.
+ */
+export async function getCargoByIds(
+	db: D1Database,
+	organizationId: string,
+	ids: string[],
+) {
+	if (ids.length === 0) return [];
+	const d1 = drizzle(db);
+	return d1
+		.select()
+		.from(cargo)
+		.where(
+			and(eq(cargo.organizationId, organizationId), inArray(cargo.id, ids)),
+		)
+		.limit(ids.length);
+}
+
 export async function getCargoTags(
 	db: D1Database,
 	organizationId: string,

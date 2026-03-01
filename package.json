@@ -18,14 +18,18 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate:local": "wrangler d1 migrations apply DB --local",
 		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
-		"db:migrate:prod": "wrangler d1 migrations apply DB --remote"
+		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",
+		"dev:mcp": "wrangler dev --config wrangler.mcp.jsonc --env dev",
+		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc"
 	},
 	"dependencies": {
 		"@better-auth/cli": "^1.4.15",
 		"@fontsource/space-mono": "^5.2.9",
+		"@modelcontextprotocol/sdk": "^1.27.1",
 		"@react-router/cloudflare": "^7.12.0",
 		"@stripe/react-stripe-js": "^5.4.1",
 		"@stripe/stripe-js": "^8.6.3",
+		"agents": "^0.6.0",
 		"better-auth": "^1.4.15",
 		"drizzle-orm": "^0.45.1",
 		"isbot": "^5.1.31",

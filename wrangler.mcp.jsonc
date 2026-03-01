@@ -1,0 +1,86 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ration-mcp",
+	"main": "workers/mcp.ts",
+	"compatibility_date": "2026-03-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"routes": [
+		{
+			"pattern": "mcp.ration.mayutic.com",
+			"custom_domain": true
+		}
+	],
+	"placement": {
+		"mode": "smart"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ration-db",
+			"database_id": "4b6f70ba-2bdf-4876-b3de-082cecdbd8b7"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "e44d5ab03a6c4b2cac72750e6ccfc4cd"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo"
+		}
+	],
+	"env": {
+		"dev": {
+			// All bindings use "remote: true" so local worker code calls the real
+			// dev-tier resources on Cloudflare's network (Remote Bindings, GA Sep 2025).
+			// This replaces the deprecated "wrangler dev --remote" approach which
+			// required the custom domain to already be deployed.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "ration-db-dev",
+					"database_id": "aa3fe1d8-0678-430c-ab22-019aa53a6cae",
+					"remote": true
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "STORAGE",
+					"bucket_name": "ration-storage-dev",
+					"remote": true
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "RATION_KV",
+					"id": "060a0f82bdff4a95a89ded794f877ad7",
+					"remote": true
+				}
+			],
+			// Vectorize and AI are not inherited by environments — must be repeated
+			"vectorize": [
+				{
+					"binding": "VECTORIZE",
+					"index_name": "ration-cargo",
+					"remote": true
+				}
+			],
+			"ai": {
+				"binding": "AI",
+				"remote": true
+			}
+		}
+	}
+}

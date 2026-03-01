@@ -20,31 +20,6 @@ export default {
 		env: Cloudflare.Env,
 		ctx: ExecutionContext,
 	): Promise<Response> {
-		const url = new URL(request.url);
-
-		// mcp-remote performs OAuth discovery before sending auth headers.
-		// It probes /.well-known/oauth-authorization-server and
-		// /.well-known/oauth-protected-resource. Return a minimal metadata
-		// document on both paths so it understands this server uses Bearer
-		// tokens directly and skips the full OAuth flow.
-		if (
-			url.pathname === "/.well-known/oauth-authorization-server" ||
-			url.pathname === "/.well-known/oauth-protected-resource"
-		) {
-			return Response.json(
-				{
-					resource: `${url.origin}/`,
-					bearer_methods_supported: ["header"],
-				},
-				{
-					headers: {
-						"Access-Control-Allow-Origin": "*",
-						"Cache-Control": "no-store",
-					},
-				},
-			);
-		}
-
 		try {
 			// Extract orgId from API key
 			const orgId = await authenticateMcp(env, request);

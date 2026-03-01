@@ -408,6 +408,20 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							free={false}
 							crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
 						/>
+						<tr className="bg-carbon/[0.02]">
+							<td
+								colSpan={3}
+								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+							>
+								Integrations
+							</td>
+						</tr>
+						<FeatureRow
+							label="REST API (inventory, galley, supply)"
+							free
+							crew
+						/>
+						<FeatureRow label="MCP Server (AI agent access)" free crew />
 					</tbody>
 				</table>
 			</div>

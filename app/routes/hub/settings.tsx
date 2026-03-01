@@ -1203,6 +1203,7 @@ function ApiKeysSection({
 	origin: string;
 }) {
 	const [apiRefExpanded, setApiRefExpanded] = useState(false);
+	const [mcpRefExpanded, setMcpRefExpanded] = useState(false);
 	const apiRefRef = useRef<HTMLDivElement>(null);
 	const copyToast = useToast({ duration: 3000 });
 
@@ -1522,7 +1523,221 @@ function ApiKeysSection({
 					</div>
 				)}
 			</div>
+
+			<McpReferencePanel
+				expanded={mcpRefExpanded}
+				onToggle={() => setMcpRefExpanded((v) => !v)}
+				onClose={() => setMcpRefExpanded(false)}
+			/>
 		</section>
+	);
+}
+
+// ─── MCP Reference Panel ───────────────────────────────────────────────────────
+
+const MCP_TOOLS = [
+	{
+		name: "search_ingredients",
+		description: "Semantic vector search for pantry items",
+		params: "query (string), topK (1–20, optional)",
+	},
+	{
+		name: "list_inventory",
+		description: "Full pantry listing",
+		params: "domain (food/household/alcohol, optional)",
+	},
+	{
+		name: "get_supply_list",
+		description: "Active shopping list with source meals",
+		params: "none",
+	},
+	{
+		name: "list_meals",
+		description: "All recipes with ingredients",
+		params: "tag (string, optional)",
+	},
+] as const;
+
+const MCP_CONFIG_SNIPPET = `{
+  "mcpServers": {
+    "ration": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.ration.mayutic.com/mcp",
+        "--header",
+        "Authorization:\${RATION_AUTH_HEADER}"
+      ],
+      "env": {
+        "RATION_AUTH_HEADER": "Bearer <your-mcp-scoped-key>"
+      }
+    }
+  }
+}`;
+
+function McpReferencePanel({
+	expanded,
+	onToggle,
+	onClose,
+}: {
+	expanded: boolean;
+	onToggle: () => void;
+	onClose: () => void;
+}) {
+	const copyToast = useToast({ duration: 3000 });
+	return (
+		<div className="mt-6 pt-6 border-t border-platinum">
+			<button
+				type="button"
+				onClick={onToggle}
+				className="flex items-center gap-2 text-sm font-medium text-carbon hover:text-hyper-green transition-colors"
+			>
+				<svg
+					className={`w-4 h-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					aria-hidden
+				>
+					<title>Expand</title>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M9 5l7 7-7 7"
+					/>
+				</svg>
+				<span
+					className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-hyper-green/20 text-hyper-green border border-hyper-green/30 mr-1"
+					aria-hidden
+				>
+					MCP
+				</span>
+				{expanded ? "Hide MCP reference" : "View MCP reference"}
+			</button>
+
+			{expanded && (
+				<div className="mt-4 space-y-5 text-sm">
+					<p className="text-muted">
+						Connect any MCP-compatible AI client to your Ration data in real
+						time. Query your inventory, meals, and shopping list from Claude,
+						Cursor, or any agent that supports the Model Context Protocol.
+					</p>
+
+					<div>
+						<h4 className="font-semibold text-carbon mb-2">Endpoint</h4>
+						<code className="block text-xs bg-platinum/50 px-3 py-2 rounded-lg font-mono text-carbon break-all">
+							https://mcp.ration.mayutic.com/mcp
+						</code>
+					</div>
+
+					<div>
+						<h4 className="font-semibold text-carbon mb-2">Authentication</h4>
+						<p className="text-muted mb-1">
+							Generate a key with the{" "}
+							<span className="font-medium text-hyper-green">MCP</span> scope
+							above, then pass it as a Bearer token.
+						</p>
+					</div>
+
+					<div>
+						<h4 className="font-semibold text-carbon mb-2">
+							Claude Desktop / Cursor config
+						</h4>
+						<div className="relative group">
+							<pre className="text-xs bg-carbon text-platinum p-4 rounded-lg overflow-x-auto font-mono leading-relaxed">
+								{MCP_CONFIG_SNIPPET}
+							</pre>
+							<button
+								type="button"
+								onClick={() => {
+									navigator.clipboard.writeText(MCP_CONFIG_SNIPPET);
+									copyToast.show();
+								}}
+								className="absolute top-2 right-2 px-2 py-1 bg-platinum/10 text-platinum text-[10px] font-semibold rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-platinum/20"
+							>
+								Copy
+							</button>
+						</div>
+						<p className="text-xs text-muted mt-2">
+							Replace{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								&lt;your-mcp-scoped-key&gt;
+							</code>{" "}
+							with the key you generated above. The{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								RATION_AUTH_HEADER
+							</code>{" "}
+							env var is read by{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								mcp-remote
+							</code>{" "}
+							at runtime — your key is never hardcoded.
+						</p>
+					</div>
+
+					<div>
+						<h4 className="font-semibold text-carbon mb-2">Available tools</h4>
+						<div className="overflow-x-auto rounded-lg border border-platinum">
+							<table className="w-full text-left text-xs">
+								<thead>
+									<tr className="bg-platinum/50">
+										<th className="px-3 py-2 font-semibold text-carbon">
+											Tool
+										</th>
+										<th className="px-3 py-2 font-semibold text-carbon">
+											Description
+										</th>
+										<th className="px-3 py-2 font-semibold text-carbon">
+											Parameters
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{MCP_TOOLS.map((tool) => (
+										<tr key={tool.name} className="border-t border-platinum/50">
+											<td className="px-3 py-2 font-mono text-hyper-green">
+												{tool.name}
+											</td>
+											<td className="px-3 py-2 text-muted">
+												{tool.description}
+											</td>
+											<td className="px-3 py-2 text-muted font-mono">
+												{tool.params}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<div className="text-xs text-muted p-3 bg-platinum/30 rounded-lg">
+						<span className="font-semibold text-carbon">Rate limits:</span>{" "}
+						<code className="font-mono">search_ingredients</code> is subject to
+						the MCP search bucket limit. All other tools are read-only with no
+						additional credit cost.
+					</div>
+
+					<button
+						type="button"
+						onClick={onClose}
+						className="text-xs font-medium text-hyper-green hover:underline"
+					>
+						Close
+					</button>
+				</div>
+			)}
+
+			{copyToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Copied"
+					description="Config snippet copied to clipboard"
+					onDismiss={copyToast.hide}
+				/>
+			)}
+		</div>
 	);
 }
 

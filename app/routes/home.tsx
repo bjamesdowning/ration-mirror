@@ -479,25 +479,133 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</div>
 					</section>
 
-					{/* ── PUBLIC API ── */}
-					<section className="w-full max-w-5xl border-t border-carbon/10 pt-16 md:pt-24">
-						<div className="glass-panel rounded-2xl p-8 md:p-10 flex flex-col md:flex-row gap-6 items-start">
-							<div className="w-12 h-12 rounded-xl bg-hyper-green/10 flex items-center justify-center shrink-0">
-								<CodeIcon className="w-6 h-6 text-hyper-green" />
+					{/* ── OPEN PLATFORM ── */}
+					<section className="w-full max-w-5xl border-t border-carbon/10 pt-16 md:pt-24 space-y-8">
+						<SectionHeader
+							eyebrow="OPEN PLATFORM"
+							title="Built to Connect"
+							subtitle="Ration speaks REST and MCP — plug your data into any workflow, automation, or AI agent."
+						/>
+
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+							{/* REST API panel */}
+							<div className="glass-panel rounded-2xl p-8 flex flex-col gap-4">
+								<div className="w-10 h-10 rounded-xl bg-carbon/5 flex items-center justify-center shrink-0">
+									<CodeIcon className="w-5 h-5 text-carbon/60" />
+								</div>
+								<div className="space-y-2">
+									<h3 className="text-display text-lg text-carbon">REST API</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Query Cargo inventory, read meal plans, and pull Supply
+										lists programmatically. REST endpoints, JSON responses,
+										token-based auth. Build automations, sync with external
+										tools, or export your data on demand.
+									</p>
+									<ul className="text-xs text-muted space-y-1 pt-1">
+										<li className="flex items-center gap-2">
+											<span className="w-1 h-1 rounded-full bg-carbon/30 shrink-0" />
+											Inventory export &amp; import
+										</li>
+										<li className="flex items-center gap-2">
+											<span className="w-1 h-1 rounded-full bg-carbon/30 shrink-0" />
+											Galley (meals) export &amp; import
+										</li>
+										<li className="flex items-center gap-2">
+											<span className="w-1 h-1 rounded-full bg-carbon/30 shrink-0" />
+											Supply list export
+										</li>
+									</ul>
+								</div>
+								<Link
+									to="/hub/settings#api"
+									className="mt-auto text-xs font-semibold text-carbon/50 hover:text-carbon transition-colors"
+								>
+									View API reference →
+								</Link>
 							</div>
-							<div className="space-y-3">
-								<h2 className="text-display text-xl text-carbon">
-									Open Integration
-								</h2>
-								<p className="text-sm text-muted leading-relaxed max-w-xl">
-									Ration exposes a public API for developers and power users.
-									Query your Cargo inventory, read meal plans, pull Supply
-									lists, and integrate Ration data into your own workflows and
-									automations. REST endpoints, JSON responses, token-based auth.
-								</p>
-								<p className="text-xs text-carbon/40 font-mono">
-									API documentation coming soon — stay tuned.
-								</p>
+
+							{/* MCP Server panel */}
+							<div className="glass-panel rounded-2xl p-8 flex flex-col gap-5 border border-hyper-green/20">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 rounded-xl bg-hyper-green/10 flex items-center justify-center shrink-0">
+										<svg
+											className="w-5 h-5 text-hyper-green"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden
+										>
+											<title>MCP</title>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={1.5}
+												d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5"
+											/>
+										</svg>
+									</div>
+									<span className="text-[10px] font-bold tracking-wider text-hyper-green bg-hyper-green/10 border border-hyper-green/30 px-2 py-1 rounded-full font-mono">
+										MODEL CONTEXT PROTOCOL
+									</span>
+								</div>
+
+								<div className="space-y-3">
+									<h3 className="text-display text-lg text-carbon">
+										Your pantry, inside your AI
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Connect Claude, Cursor, or any MCP-compatible assistant to
+										your live Ration data. Your AI can query what's in stock,
+										check your meal plan, and read your shopping list — no
+										copy-paste, no manual updates. Just ask.
+									</p>
+									<ul className="text-xs text-muted space-y-1.5 pt-1">
+										<li className="flex items-start gap-2">
+											<span className="w-1 h-1 rounded-full bg-hyper-green/60 shrink-0 mt-1.5" />
+											"What meals can I make with what's in my pantry tonight?"
+										</li>
+										<li className="flex items-start gap-2">
+											<span className="w-1 h-1 rounded-full bg-hyper-green/60 shrink-0 mt-1.5" />
+											"Generate a grocery list based on my meal plan this week"
+										</li>
+										<li className="flex items-start gap-2">
+											<span className="w-1 h-1 rounded-full bg-hyper-green/60 shrink-0 mt-1.5" />
+											"Do I have everything for this recipe?"
+										</li>
+									</ul>
+								</div>
+
+								{/* Screenshot */}
+								<div className="rounded-xl overflow-hidden border border-carbon/10 bg-platinum/30">
+									<img
+										src="/static/mcp-server-chat.webp"
+										alt="MCP server in action — AI assistant querying Ration inventory"
+										className="w-full h-auto"
+										loading="lazy"
+									/>
+								</div>
+
+								<Link
+									to="/hub/settings#developer"
+									className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-hyper-green hover:text-hyper-green/80 transition-colors"
+								>
+									Connect your AI client
+									<svg
+										className="w-3.5 h-3.5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										aria-hidden
+									>
+										<title>Arrow</title>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M13 7l5 5m0 0l-5 5m5-5H6"
+										/>
+									</svg>
+								</Link>
 							</div>
 						</div>
 					</section>
@@ -655,6 +763,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										free={false}
 										crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
 									/>
+									<tr className="bg-carbon/[0.02]">
+										<td
+											colSpan={3}
+											className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+										>
+											Integrations
+										</td>
+									</tr>
+									<FeatureRow
+										label="REST API (inventory, galley, supply)"
+										free
+										crew
+									/>
+									<FeatureRow label="MCP Server (AI agent access)" free crew />
 								</tbody>
 							</table>
 						</div>

@@ -626,6 +626,46 @@ export function MoreVerticalIcon({ className = "w-5 h-5" }: IconProps) {
 	);
 }
 
+export function ChevronLeftIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<title>Previous</title>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M15 19l-7-7 7-7"
+			/>
+		</svg>
+	);
+}
+
+export function ChevronRightIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<title>Next</title>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M9 5l7 7-7 7"
+			/>
+		</svg>
+	);
+}
+
 export const NAV_ICONS: Record<string, ComponentType<IconProps>> = {
 	home: HomeIcon,
 	package: PackageIcon,

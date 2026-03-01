@@ -1,4 +1,8 @@
 import { useNavigate } from "react-router";
+import {
+	ChevronLeftIcon,
+	ChevronRightIcon,
+} from "~/components/icons/PageIcons";
 import { getTodayISO, getWeekEnd, getWeekStart } from "~/lib/manifest-dates";
 
 interface WeekNavigatorProps {
@@ -63,21 +67,7 @@ export function WeekNavigator({
 				aria-label="Previous week"
 				className="p-2 rounded-lg text-muted hover:text-carbon hover:bg-platinum transition-colors"
 			>
-				<svg
-					className="w-4 h-4"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-					aria-hidden="true"
-				>
-					<title>Previous week</title>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-						d="M15 19l-7-7 7-7"
-					/>
-				</svg>
+				<ChevronLeftIcon className="w-4 h-4" />
 			</button>
 
 			<span className="text-sm font-medium text-carbon min-w-[180px] text-center">
@@ -90,21 +80,7 @@ export function WeekNavigator({
 				aria-label="Next week"
 				className="p-2 rounded-lg text-muted hover:text-carbon hover:bg-platinum transition-colors"
 			>
-				<svg
-					className="w-4 h-4"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-					aria-hidden="true"
-				>
-					<title>Next week</title>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-						d="M9 5l7 7-7 7"
-					/>
-				</svg>
+				<ChevronRightIcon className="w-4 h-4" />
 			</button>
 
 			{!isCurrentWeek && (

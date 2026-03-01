@@ -9,6 +9,8 @@ import {
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	CalendarIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
 	ConsumeIcon,
 	MoreVerticalIcon,
 	ShareIcon,
@@ -98,6 +100,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		showSnackSlot,
 	};
 }
+
+const DAY_NAMES = [
+	"Sunday",
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+];
 
 export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const {
@@ -318,15 +330,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		);
 	};
 
-	const DAY_NAMES = [
-		"Sunday",
-		"Monday",
-		"Tuesday",
-		"Wednesday",
-		"Thursday",
-		"Friday",
-		"Saturday",
-	];
 	const activeDayLabel = DAY_NAMES[new Date(`${activeDay}T00:00:00`).getDay()];
 	const selectedDayLabel =
 		DAY_NAMES[new Date(`${selectedDay}T00:00:00`).getDay()];
@@ -376,21 +379,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							aria-label="Previous week"
 							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
 						>
-							<svg
-								className="w-4 h-4"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								aria-hidden="true"
-							>
-								<title>Previous week</title>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M15 19l-7-7 7-7"
-								/>
-							</svg>
+							<ChevronLeftIcon className="w-4 h-4" />
 						</button>
 						<button
 							type="button"
@@ -398,21 +387,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							aria-label="Next week"
 							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
 						>
-							<svg
-								className="w-4 h-4"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								aria-hidden="true"
-							>
-								<title>Next week</title>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M9 5l7 7-7 7"
-								/>
-							</svg>
+							<ChevronRightIcon className="w-4 h-4" />
 						</button>
 					</div>
 				}

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { API_SCOPES, createApiKey } from "~/lib/api-key.server";
+import { createApiKey } from "~/lib/api-key.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { CreateApiKeySchema } from "~/lib/schemas/api-keys";
@@ -41,7 +41,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 /**
  * POST /api/api-keys - Create a new API key (session auth).
- * Body: { name: string }. Key is scoped to current organization.
+ * Body: { name: string, scopes: string[] }. Key is scoped to current organization.
  */
 export async function action({ request, context }: Route.ActionArgs) {
 	const { groupId, session } = await requireActiveGroup(context, request);
@@ -51,25 +51,36 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	let rawName: string;
+	let rawScopes: string[];
 	const contentType = request.headers.get("Content-Type") ?? "";
 	if (contentType.includes("application/json")) {
 		try {
-			const body = (await request.json()) as { name?: unknown };
+			const body = (await request.json()) as {
+				name?: unknown;
+				scopes?: unknown;
+			};
 			rawName = typeof body?.name === "string" ? body.name : "";
+			rawScopes = Array.isArray(body?.scopes)
+				? body.scopes.filter((s): s is string => typeof s === "string")
+				: [];
 		} catch {
 			throw data({ error: "Invalid JSON" }, { status: 400 });
 		}
 	} else {
 		const formData = await request.formData();
 		rawName = (formData.get("name") ?? "").toString().trim();
+		rawScopes = formData.getAll("scopes").map(String);
 	}
 
-	const parsed = CreateApiKeySchema.safeParse({ name: rawName });
+	const parsed = CreateApiKeySchema.safeParse({
+		name: rawName,
+		scopes: rawScopes,
+	});
 	if (!parsed.success) {
 		return handleApiError(parsed.error);
 	}
 
-	const name = parsed.data.name;
+	const { name, scopes } = parsed.data;
 
 	try {
 		const { key, prefix, record } = await createApiKey(
@@ -77,7 +88,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			groupId,
 			session.user.id,
 			name,
-			[API_SCOPES.inventory, API_SCOPES.galley, API_SCOPES.supply],
+			scopes,
 		);
 
 		return {
@@ -85,6 +96,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			prefix,
 			id: record.id,
 			name: record.name,
+			scopes: record.scopes,
 			createdAt: record.createdAt,
 		};
 	} catch (e) {

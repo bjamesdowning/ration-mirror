@@ -22,6 +22,7 @@ import { authClient } from "~/lib/auth-client";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { log } from "~/lib/logging.server";
+import { type ApiScope, VALID_API_SCOPES } from "~/lib/schemas/api-keys";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/settings";
@@ -1155,6 +1156,34 @@ function DefaultGroupCard({
 
 // ─── API Keys ──────────────────────────────────────────────────────────────────
 
+const SCOPE_META: Record<
+	ApiScope,
+	{ label: string; description: string; color: string }
+> = {
+	inventory: {
+		label: "Inventory",
+		description: "Read & write pantry items",
+		color: "bg-platinum text-carbon",
+	},
+	galley: {
+		label: "Galley",
+		description: "Read & write meals & recipes",
+		color: "bg-platinum text-carbon",
+	},
+	supply: {
+		label: "Supply",
+		description: "Read & write shopping lists",
+		color: "bg-platinum text-carbon",
+	},
+	mcp: {
+		label: "MCP",
+		description: "Agent access via Model Context Protocol",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+};
+
+const DEFAULT_SCOPES: ApiScope[] = ["inventory", "galley", "supply"];
+
 type ApiKeyRow = {
 	id: string;
 	keyPrefix: string;
@@ -1191,21 +1220,36 @@ function ApiKeysSection({
 		prefix?: string;
 		id?: string;
 		name?: string;
+		scopes?: string;
 		createdAt?: string;
 		error?: string;
 	}>();
 	const [newKeyDisplay, setNewKeyDisplay] = useState<string | null>(null);
 	const [createName, setCreateName] = useState("");
+	const [selectedScopes, setSelectedScopes] =
+		useState<ApiScope[]>(DEFAULT_SCOPES);
 
 	useEffect(() => {
 		if (createFetcher.data?.key && createFetcher.state === "idle") {
 			setNewKeyDisplay(createFetcher.data.key);
 			setCreateName("");
+			setSelectedScopes(DEFAULT_SCOPES);
 		}
 	}, [createFetcher.data?.key, createFetcher.state]);
 
+	const toggleScope = (scope: ApiScope) => {
+		setSelectedScopes((prev) =>
+			prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+		);
+	};
+
+	const canSubmit =
+		createFetcher.state === "idle" &&
+		createName.trim().length > 0 &&
+		selectedScopes.length > 0;
+
 	const handleCreate = (e: React.FormEvent) => {
-		if (!createName.trim()) e.preventDefault();
+		if (!canSubmit) e.preventDefault();
 		else setNewKeyDisplay(null);
 	};
 
@@ -1213,8 +1257,7 @@ function ApiKeysSection({
 		<section className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">API Keys</h3>
 			<p className="text-sm text-muted mb-4">
-				Create keys to access Inventory, Galley, and Supply import/export via
-				REST API. Keys are scoped to{" "}
+				Create keys with configurable access scopes for{" "}
 				<span className="font-medium text-carbon">{organizationName}</span>. Use
 				the key in the{" "}
 				<code className="text-xs bg-platinum/50 px-1 rounded">
@@ -1262,24 +1305,85 @@ function ApiKeysSection({
 				method="post"
 				action="/api/api-keys"
 				onSubmit={handleCreate}
-				className="flex gap-2 mb-6"
+				className="mb-6 space-y-3"
 			>
-				<input
-					type="text"
-					name="name"
-					value={createName}
-					onChange={(e) => setCreateName(e.target.value)}
-					placeholder="Key name (e.g. My Script)"
-					className="flex-1 max-w-xs px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
-					maxLength={100}
-				/>
-				<button
-					type="submit"
-					disabled={createFetcher.state !== "idle" || !createName.trim()}
-					className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-50"
-				>
-					{createFetcher.state === "submitting" ? "Creating..." : "Create key"}
-				</button>
+				<div className="flex gap-2">
+					<input
+						type="text"
+						name="name"
+						value={createName}
+						onChange={(e) => setCreateName(e.target.value)}
+						placeholder="Key name (e.g. cursor_mcp)"
+						className="flex-1 max-w-xs px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+						maxLength={100}
+					/>
+					<button
+						type="submit"
+						disabled={!canSubmit}
+						className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-50"
+					>
+						{createFetcher.state === "submitting"
+							? "Creating..."
+							: "Create key"}
+					</button>
+				</div>
+
+				{/* Scope selector */}
+				<div>
+					<p className="text-xs text-muted mb-2 font-medium uppercase tracking-wide">
+						Scopes
+					</p>
+					<div className="flex flex-wrap gap-2">
+						{VALID_API_SCOPES.map((scope) => {
+							const meta = SCOPE_META[scope];
+							const active = selectedScopes.includes(scope);
+							return (
+								<button
+									key={scope}
+									type="button"
+									onClick={() => toggleScope(scope)}
+									title={meta.description}
+									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+										active
+											? scope === "mcp"
+												? "bg-hyper-green/20 text-hyper-green border-hyper-green/40"
+												: "bg-carbon text-ceramic border-carbon"
+											: "bg-platinum/30 text-muted border-carbon/10 hover:border-carbon/30"
+									}`}
+								>
+									{active && (
+										<svg
+											className="w-3 h-3 shrink-0"
+											viewBox="0 0 12 12"
+											fill="currentColor"
+											role="presentation"
+										>
+											<path
+												d="M10 3L5 8.5 2 5.5"
+												stroke="currentColor"
+												strokeWidth="1.5"
+												fill="none"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+											/>
+										</svg>
+									)}
+									{meta.label}
+								</button>
+							);
+						})}
+					</div>
+					{selectedScopes.length === 0 && (
+						<p className="text-xs text-danger mt-1">
+							Select at least one scope.
+						</p>
+					)}
+				</div>
+
+				{/* Hidden inputs — one per selected scope (multi-value form pattern) */}
+				{selectedScopes.map((scope) => (
+					<input key={scope} type="hidden" name="scopes" value={scope} />
+				))}
 			</createFetcher.Form>
 
 			{createFetcher.data?.error && (
@@ -1442,10 +1546,36 @@ function ApiKeyRowItem({ keyRecord }: { keyRecord: ApiKeyRow }) {
 		});
 	};
 
+	let parsedScopes: ApiScope[] = [];
+	try {
+		const raw = JSON.parse(keyRecord.scopes);
+		if (Array.isArray(raw)) {
+			parsedScopes = raw.filter(
+				(s): s is ApiScope =>
+					typeof s === "string" &&
+					(VALID_API_SCOPES as readonly string[]).includes(s),
+			);
+		}
+	} catch {
+		// malformed scopes — render nothing
+	}
+
 	return (
 		<div className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg">
 			<div>
-				<p className="font-medium text-carbon text-sm">{keyRecord.name}</p>
+				<div className="flex items-center gap-2 mb-0.5">
+					<p className="font-medium text-carbon text-sm">{keyRecord.name}</p>
+					<div className="flex gap-1">
+						{parsedScopes.map((scope) => (
+							<span
+								key={scope}
+								className={`px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none ${SCOPE_META[scope].color}`}
+							>
+								{SCOPE_META[scope].label}
+							</span>
+						))}
+					</div>
+				</div>
 				<p className="text-xs font-mono text-muted">{keyRecord.keyPrefix}...</p>
 				<p className="text-xs text-muted mt-1">
 					Last used:{" "}

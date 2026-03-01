@@ -343,7 +343,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			{/* Page header — standardized with other hub pages */}
+			{/* Page header — on mobile the WeekNavigator is inlined into the title row */}
 			<PageHeader
 				icon={<CalendarIcon className="w-6 h-6 text-hyper-green" />}
 				title="Manifest"
@@ -353,45 +353,50 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				actionLabel="More options"
 				sheetTitle="Options"
 				mobileOnly
+				titleRowExtra={
+					<div className="md:hidden">
+						<WeekNavigator
+							currentWeekStart={currentWeekStart}
+							weekStart={weekStartPref}
+						/>
+					</div>
+				}
 			/>
 
-			{/* Week navigator + desktop action toolbar */}
-			<div className="mb-5">
+			{/* Desktop: week navigator + action toolbar */}
+			<div className="hidden md:block mb-5">
 				<div className="flex items-center gap-3 mb-3">
 					<WeekNavigator
 						currentWeekStart={currentWeekStart}
 						weekStart={weekStartPref}
 					/>
 				</div>
-				{/* Desktop action buttons — mirrors Supply page PanelToolbar pattern */}
-				<div className="hidden md:block">
-					<PanelToolbar
-						secondaryAction={
-							<div className="flex gap-2">
-								{unconsumedForSelectedDay > 0 && (
-									<button
-										type="button"
-										onClick={() => handleConsumeAll(selectedDay)}
-										disabled={consumeFetcher.state !== "idle"}
-										className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg hover:shadow-glow-sm transition-all text-sm disabled:opacity-50"
-										title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
-									>
-										<ConsumeIcon className="w-4 h-4" />
-										Consume {selectedDayLabel}
-									</button>
-								)}
+				<PanelToolbar
+					secondaryAction={
+						<div className="flex gap-2">
+							{unconsumedForSelectedDay > 0 && (
 								<button
 									type="button"
-									onClick={() => setShareOpen(true)}
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+									onClick={() => handleConsumeAll(selectedDay)}
+									disabled={consumeFetcher.state !== "idle"}
+									className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg hover:shadow-glow-sm transition-all text-sm disabled:opacity-50"
+									title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
 								>
-									<ShareIcon className="w-4 h-4" />
-									Share
+									<ConsumeIcon className="w-4 h-4" />
+									Consume {selectedDayLabel}
 								</button>
-							</div>
-						}
-					/>
-				</div>
+							)}
+							<button
+								type="button"
+								onClick={() => setShareOpen(true)}
+								className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+							>
+								<ShareIcon className="w-4 h-4" />
+								Share
+							</button>
+						</div>
+					}
+				/>
 			</div>
 
 			{/* Week summary bar */}

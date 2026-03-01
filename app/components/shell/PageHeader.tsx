@@ -28,6 +28,8 @@ interface PageHeaderProps {
 	sheetTitle?: string;
 	/** When true, the filterContent only shows in the mobile sheet (never expands inline on desktop) */
 	mobileOnly?: boolean;
+	/** Extra content rendered between the title and the action button in the title row */
+	titleRowExtra?: React.ReactNode;
 }
 
 /**
@@ -51,6 +53,7 @@ export function PageHeader({
 	actionLabel,
 	sheetTitle = "Filters",
 	mobileOnly = false,
+	titleRowExtra,
 }: PageHeaderProps) {
 	const [isFilterOpen, setIsFilterOpen] = useState(false);
 	const [isDesktop, setIsDesktop] = useState(false);
@@ -81,15 +84,21 @@ export function PageHeader({
 			<header className="mb-4">
 				{/* Title row */}
 				<div className="flex items-center justify-between mb-3">
-					<div className="flex items-center gap-2">
-						<span className="text-2xl">{icon}</span>
-						<h1 className="text-2xl font-bold text-carbon dark:text-white">
+					<div className="flex items-center gap-2 flex-1 min-w-0">
+						<span className="text-2xl shrink-0">{icon}</span>
+						<h1 className="text-2xl font-bold text-carbon dark:text-white shrink-0">
 							{title}
 						</h1>
 						{itemCount !== undefined && (
-							<span className="text-sm font-medium text-muted bg-platinum dark:bg-white/10 px-2 py-0.5 rounded-full">
+							<span className="text-sm font-medium text-muted bg-platinum dark:bg-white/10 px-2 py-0.5 rounded-full shrink-0">
 								{itemCount}
 							</span>
+						)}
+						{/* Optional extra content inline with title (e.g. week navigator on mobile) */}
+						{titleRowExtra && (
+							<div className="flex-1 min-w-0 flex justify-end">
+								{titleRowExtra}
+							</div>
 						)}
 					</div>
 
@@ -103,13 +112,13 @@ export function PageHeader({
 								(hasActiveFilters ? "Filters active" : "More options")
 							}
 							className={`
-							flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
-							${
-								hasActiveFilters
-									? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
-									: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80"
-							}
-						`}
+						ml-2 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all shrink-0
+						${
+							hasActiveFilters
+								? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
+								: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80"
+						}
+					`}
 						>
 							{actionIcon ?? <FilterIcon />}
 							{hasActiveFilters && (

@@ -134,7 +134,7 @@ export function MealSlotCard({
 								type="button"
 								onClick={() => onCopy(entry)}
 								aria-label={`Copy ${entry.mealName} to other days`}
-								className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all"
+								className="p-1 rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
 							>
 								<svg
 									className="w-3.5 h-3.5"
@@ -159,7 +159,7 @@ export function MealSlotCard({
 								onClick={handleRemove}
 								disabled={isRemoving}
 								aria-label={`Remove ${entry.mealName}`}
-								className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-lg text-muted hover:text-danger hover:bg-danger/10 transition-all"
+								className="p-1 rounded-lg text-muted hover:text-red-500 hover:bg-red-500/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
 							>
 								<svg
 									className="w-3.5 h-3.5"

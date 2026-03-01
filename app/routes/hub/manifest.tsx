@@ -1,6 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useMemo, useState } from "react";
-import { useFetcher, useRevalidator, useSearchParams } from "react-router";
+import {
+	useFetcher,
+	useNavigate,
+	useRevalidator,
+	useSearchParams,
+} from "react-router";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	CalendarIcon,
@@ -15,7 +20,11 @@ import { DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
 import { MealPicker } from "~/components/manifest/MealPicker";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
-import { WeekNavigator } from "~/components/manifest/WeekNavigator";
+import {
+	addDays,
+	formatWeekRange,
+	WeekNavigator,
+} from "~/components/manifest/WeekNavigator";
 import { WeekSummary } from "~/components/manifest/WeekSummary";
 import { WeekView } from "~/components/manifest/WeekView";
 import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
@@ -325,6 +334,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const hasEntries = entries.length > 0;
 	const isCopying = bulkFetcher.state !== "idle";
 
+	// Mobile week rocker helpers (compact chevrons only — no date label in title row)
+	const navigate = useNavigate();
+	const weekEnd = getWeekEnd(currentWeekStart);
+	const weekRangeLabel = formatWeekRange(currentWeekStart, weekEnd);
+
 	// Mobile "more options" sheet content — Share button only (Consume is in FAB)
 	const moreOptionsContent = (
 		<div className="space-y-3 pt-2">
@@ -343,7 +357,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			{/* Page header — on mobile the WeekNavigator is inlined into the title row */}
+			{/* Page header — compact chevron rocker in title row on mobile; date as subtitle */}
 			<PageHeader
 				icon={<CalendarIcon className="w-6 h-6 text-hyper-green" />}
 				title="Manifest"
@@ -354,11 +368,59 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				sheetTitle="Options"
 				mobileOnly
 				titleRowExtra={
-					<div className="md:hidden">
-						<WeekNavigator
-							currentWeekStart={currentWeekStart}
-							weekStart={weekStartPref}
-						/>
+					/* Compact prev/next chevrons — no date label, no "Today" pill */
+					<div className="md:hidden flex items-center gap-0.5">
+						<button
+							type="button"
+							onClick={() => navigate(`?week=${addDays(currentWeekStart, -7)}`)}
+							aria-label="Previous week"
+							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
+						>
+							<svg
+								className="w-4 h-4"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<title>Previous week</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M15 19l-7-7 7-7"
+								/>
+							</svg>
+						</button>
+						<button
+							type="button"
+							onClick={() => navigate(`?week=${addDays(currentWeekStart, 7)}`)}
+							aria-label="Next week"
+							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
+						>
+							<svg
+								className="w-4 h-4"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<title>Next week</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M9 5l7 7-7 7"
+								/>
+							</svg>
+						</button>
+					</div>
+				}
+				subtitle={
+					<div className="md:hidden flex items-center gap-2">
+						<span className="text-xs font-mono text-muted">
+							{weekRangeLabel}
+						</span>
 					</div>
 				}
 			/>

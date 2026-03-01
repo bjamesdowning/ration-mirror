@@ -6,7 +6,7 @@ interface WeekNavigatorProps {
 	weekStart?: "sunday" | "monday";
 }
 
-function formatWeekRange(start: string, end: string): string {
+export function formatWeekRange(start: string, end: string): string {
 	const s = new Date(`${start}T00:00:00`);
 	const e = new Date(`${end}T00:00:00`);
 	const monthNames = [
@@ -32,7 +32,7 @@ function formatWeekRange(start: string, end: string): string {
 	return `${monthNames[s.getMonth()]} ${s.getDate()}, ${s.getFullYear()} – ${monthNames[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
 }
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
 	const d = new Date(`${date}T00:00:00`);
 	d.setDate(d.getDate() + days);
 	const y = d.getFullYear();

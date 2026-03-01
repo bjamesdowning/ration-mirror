@@ -30,6 +30,8 @@ interface PageHeaderProps {
 	mobileOnly?: boolean;
 	/** Extra content rendered between the title and the action button in the title row */
 	titleRowExtra?: React.ReactNode;
+	/** Small subtitle rendered below the title row (e.g. week date range on mobile) */
+	subtitle?: React.ReactNode;
 }
 
 /**
@@ -54,6 +56,7 @@ export function PageHeader({
 	sheetTitle = "Filters",
 	mobileOnly = false,
 	titleRowExtra,
+	subtitle,
 }: PageHeaderProps) {
 	const [isFilterOpen, setIsFilterOpen] = useState(false);
 	const [isDesktop, setIsDesktop] = useState(false);
@@ -127,6 +130,9 @@ export function PageHeader({
 						</button>
 					)}
 				</div>
+
+				{/* Subtitle row (e.g. compact date range on mobile) */}
+				{subtitle && <div className="mb-2 -mt-1">{subtitle}</div>}
 
 				{/* Search row */}
 				{showSearch && (

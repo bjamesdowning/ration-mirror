@@ -185,8 +185,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			mealId: copyEntry.mealId,
 			date,
 			slotType,
-			servingsOverride: copyEntry.servingsOverride ?? null,
-			notes: copyEntry.notes ?? null,
+			...(copyEntry.servingsOverride != null && {
+				servingsOverride: copyEntry.servingsOverride,
+			}),
+			...(copyEntry.notes != null && { notes: copyEntry.notes }),
 		}));
 		bulkFetcher.submit(JSON.stringify({ entries: newEntries }), {
 			method: "POST",
@@ -209,8 +211,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				date,
 				slotType: e.slotType as SlotType,
 				orderIndex: e.orderIndex,
-				servingsOverride: e.servingsOverride ?? null,
-				notes: e.notes ?? null,
+				...(e.servingsOverride != null && {
+					servingsOverride: e.servingsOverride,
+				}),
+				...(e.notes != null && { notes: e.notes }),
 			})),
 		);
 		bulkFetcher.submit(JSON.stringify({ entries: newEntries }), {

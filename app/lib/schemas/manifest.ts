@@ -32,7 +32,7 @@ export const MealPlanEntryCreateSchema = z.object({
 	servingsOverride: z
 		.union([z.coerce.number().int().min(1), z.literal(null)])
 		.optional(),
-	notes: z.string().max(500).optional(),
+	notes: z.string().max(500).nullable().optional(),
 });
 
 export const MealPlanEntryUpdateSchema = z.object({

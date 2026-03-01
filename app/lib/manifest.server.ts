@@ -287,7 +287,7 @@ export async function addEntry(
 		slotType: string;
 		orderIndex?: number;
 		servingsOverride?: number | null;
-		notes?: string;
+		notes?: string | null;
 	},
 ): Promise<MealPlanEntryWithMeal> {
 	const d1 = drizzle(db);

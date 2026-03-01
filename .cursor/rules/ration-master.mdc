@@ -40,12 +40,22 @@ See `package.json` for current versions.
 - **Economy:** Credit-based ledger system. Scans cost credits; credits are purchasable via Stripe
 - **Admin:** "God Mode" dashboard for MRR and telemetry
 
+## Infrastructure & Billing Posture
+
+Ration operates on **Cloudflare's paid Workers plan**. Free-tier limits are not a design constraint. Decisions should prioritize application stability and scalability over minimizing Cloudflare spend.
+
+- **Workers:** Paid plan — no daily request cap concerns
+- **D1:** Paid plan — optimize for query correctness and performance, not row-read budgets
+- **KV:** Paid plan — use caching aggressively where it improves latency or reduces AI calls
+- **Vectorize:** Paid plan — index size and query volume are not blocking concerns at current scale
+- **Workers AI:** Metered per use — rate limiting on AI endpoints exists to prevent abuse/billing attacks, not to stay within a free quota
+
 ## Non-Functional Directives
 
 - **Latency:** < 100ms interaction time. Edge-native logic
 - **Reliability:** Offline-first PWA. Read capabilities must function without network
-- **Cost:** Zero idle cost. No provisioned instances
-- **Security:** Strict Rate Limiting on AI endpoints to prevent billing drain
+- **Scalability:** Design for growth. Prefer patterns that hold at 10K+ users over ones optimized for the free tier
+- **Security:** Strict Rate Limiting on AI endpoints to prevent billing drain from abuse
 
 ## Coding Standards
 

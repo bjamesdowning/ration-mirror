@@ -17,7 +17,7 @@
 		{
 			"binding": "DB",
 			"database_name": "ration-db",
-			"database_id": "4b6f70ba-2bdf-4876-b3de-082cecdbd8b7"
+			"database_id": "41e98836-d752-4bbe-a14f-68e802c72c10"
 		}
 	],
 	"r2_buckets": [
@@ -29,7 +29,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "RATION_KV",
-			"id": "e44d5ab03a6c4b2cac72750e6ccfc4cd"
+			"id": "afafb8640ed44b6e9cfe5df204eb6a74"
 		}
 	],
 	"ai": {
@@ -51,7 +51,7 @@
 				{
 					"binding": "DB",
 					"database_name": "ration-db-dev",
-					"database_id": "aa3fe1d8-0678-430c-ab22-019aa53a6cae",
+					"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
 					"remote": true
 				}
 			],

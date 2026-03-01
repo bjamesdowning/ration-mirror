@@ -20,7 +20,7 @@
 		"db:migrate:dev": "wrangler d1 migrations apply ration-db-dev --remote --env dev",
 		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",
 		"dev:mcp": "wrangler dev --config wrangler.mcp.jsonc --env dev",
-		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc"
+		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc --env=''"
 	},
 	"dependencies": {
 		"@better-auth/cli": "^1.4.15",

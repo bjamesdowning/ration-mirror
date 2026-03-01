@@ -1,9 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
+import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
 	CalendarIcon,
 	ConsumeIcon,
+	MoreVerticalIcon,
 	ShareIcon,
 } from "~/components/icons/PageIcons";
 import { CopyDayModal } from "~/components/manifest/CopyDayModal";
@@ -17,6 +19,7 @@ import { WeekNavigator } from "~/components/manifest/WeekNavigator";
 import { WeekSummary } from "~/components/manifest/WeekSummary";
 import { WeekView } from "~/components/manifest/WeekView";
 import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
+import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
@@ -105,6 +108,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const todayInWeek = weekDates.includes(today);
 	const defaultActiveDay = todayInWeek ? today : weekDates[0];
 	const [activeDay, setActiveDay] = useState(
+		searchParams.get("day") ?? defaultActiveDay,
+	);
+	// selectedDay drives the Consume All / deduct action on both mobile and desktop
+	const [selectedDay, setSelectedDay] = useState(
 		searchParams.get("day") ?? defaultActiveDay,
 	);
 
@@ -224,13 +231,17 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		});
 	};
 
+	const activeDayEntryCount = useMemo(
+		() => entries.filter((e) => e.date === activeDay).length,
+		[entries, activeDay],
+	);
 	const unconsumedForActiveDay = useMemo(
 		() => entries.filter((e) => e.date === activeDay && !e.consumedAt).length,
 		[entries, activeDay],
 	);
-	const unconsumedForToday = useMemo(
-		() => entries.filter((e) => e.date === today && !e.consumedAt).length,
-		[entries, today],
+	const unconsumedForSelectedDay = useMemo(
+		() => entries.filter((e) => e.date === selectedDay && !e.consumedAt).length,
+		[entries, selectedDay],
 	);
 
 	// Set of dates that have at least one planned meal (for DayTab dot indicator)
@@ -298,72 +309,90 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		);
 	};
 
-	const activeDayLabel = (() => {
-		const d = new Date(`${activeDay}T00:00:00`);
-		const days = [
-			"Sunday",
-			"Monday",
-			"Tuesday",
-			"Wednesday",
-			"Thursday",
-			"Friday",
-			"Saturday",
-		];
-		return days[d.getDay()];
-	})();
+	const DAY_NAMES = [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday",
+	];
+	const activeDayLabel = DAY_NAMES[new Date(`${activeDay}T00:00:00`).getDay()];
+	const selectedDayLabel =
+		DAY_NAMES[new Date(`${selectedDay}T00:00:00`).getDay()];
 
 	const hasEntries = entries.length > 0;
 	const isCopying = bulkFetcher.state !== "idle";
 
+	// Mobile "more options" sheet content — Share button only (Consume is in FAB)
+	const moreOptionsContent = (
+		<div className="space-y-3 pt-2">
+			<button
+				type="button"
+				onClick={() => {
+					setShareOpen(true);
+				}}
+				className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-hyper-green/10 text-hyper-green font-semibold rounded-xl hover:bg-hyper-green/20 transition-colors"
+			>
+				<ShareIcon className="w-5 h-5" />
+				Share Manifest
+			</button>
+		</div>
+	);
+
 	return (
 		<>
-			{/* Page header */}
-			<header className="mb-5">
-				<div className="flex items-start justify-between gap-3 flex-wrap">
-					{/* Title + week navigator stacked */}
-					<div className="flex flex-col gap-1">
-						<div className="flex items-center gap-2">
-							<CalendarIcon className="w-6 h-6 text-hyper-green" />
-							<h1 className="text-2xl font-bold text-carbon">Manifest</h1>
-							{hasEntries && (
-								<span className="text-sm font-medium text-muted bg-platinum px-2 py-0.5 rounded-full">
-									{entries.length}
-								</span>
-							)}
-						</div>
-						<div className="ml-8">
-							<WeekNavigator
-								currentWeekStart={currentWeekStart}
-								weekStart={weekStartPref}
-							/>
-						</div>
-					</div>
+			{/* Page header — standardized with other hub pages */}
+			<PageHeader
+				icon={<CalendarIcon className="w-6 h-6 text-hyper-green" />}
+				title="Manifest"
+				itemCount={hasEntries ? entries.length : undefined}
+				filterContent={moreOptionsContent}
+				actionIcon={<MoreVerticalIcon className="w-4 h-4" />}
+				actionLabel="More options"
+				sheetTitle="Options"
+				mobileOnly
+			/>
 
-					{/* Actions */}
-					<div className="flex items-center gap-2">
-						{unconsumedForToday > 0 && (
-							<button
-								type="button"
-								onClick={() => handleConsumeAll(today)}
-								disabled={consumeFetcher.state !== "idle"}
-								className="flex items-center justify-center w-10 h-10 bg-hyper-green text-carbon rounded-lg hover:shadow-glow-sm transition-all font-medium disabled:opacity-50"
-								title="Consume all meals for today (deduct from Cargo)"
-								aria-label="Consume all meals for today"
-							>
-								<ConsumeIcon className="w-5 h-5" />
-							</button>
-						)}
-						<button
-							type="button"
-							onClick={() => setShareOpen(true)}
-							className="flex items-center gap-2 px-4 py-2.5 bg-platinum text-carbon font-semibold rounded-lg hover:bg-platinum/80 transition-all text-sm"
-						>
-							<ShareIcon className="w-4 h-4" />
-							Share
-						</button>
-					</div>
+			{/* Week navigator + desktop action toolbar */}
+			<div className="mb-5">
+				<div className="flex items-center gap-3 mb-3">
+					<WeekNavigator
+						currentWeekStart={currentWeekStart}
+						weekStart={weekStartPref}
+					/>
 				</div>
-			</header>
+				{/* Desktop action buttons — mirrors Supply page PanelToolbar pattern */}
+				<div className="hidden md:block">
+					<PanelToolbar
+						secondaryAction={
+							<div className="flex gap-2">
+								{unconsumedForSelectedDay > 0 && (
+									<button
+										type="button"
+										onClick={() => handleConsumeAll(selectedDay)}
+										disabled={consumeFetcher.state !== "idle"}
+										className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg hover:shadow-glow-sm transition-all text-sm disabled:opacity-50"
+										title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
+									>
+										<ConsumeIcon className="w-4 h-4" />
+										Consume {selectedDayLabel}
+									</button>
+								)}
+								<button
+									type="button"
+									onClick={() => setShareOpen(true)}
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								>
+									<ShareIcon className="w-4 h-4" />
+									Share
+								</button>
+							</div>
+						}
+					/>
+				</div>
+			</div>
 
 			{/* Week summary bar */}
 			<WeekSummary entries={entries} />
@@ -374,7 +403,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					dates={weekDates}
 					activeDate={activeDay}
 					today={today}
-					onSelect={setActiveDay}
+					onSelect={(date) => {
+						setActiveDay(date);
+						setSelectedDay(date);
+					}}
 					plannedDates={plannedDates}
 				/>
 				<div className="mt-4">
@@ -388,7 +420,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							onAdd={handleAdd}
 							onConsume={handleConsumeSingle}
 							onCopy={setCopyEntry}
-							onCopyDay={setCopyDayDate}
 							isConsuming={consumeFetcher.state !== "idle"}
 							showSnackSlot={showSnackSlot}
 						/>
@@ -414,6 +445,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					isConsuming={consumeFetcher.state !== "idle"}
 					today={today}
 					showSnackSlot={showSnackSlot}
+					selectedDate={selectedDay}
+					onSelectDate={setSelectedDay}
 				/>
 			</div>
 
@@ -466,21 +499,52 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Mobile FAB: Consume all for active day */}
-			{hasEntries && unconsumedForActiveDay > 0 && (
-				<FloatingActionBar
-					actions={[
-						{
-							id: "consume-all",
-							icon: <ConsumeIcon className="w-5 h-5" />,
-							label: "Consume all meals",
-							primary: true,
-							onClick: () => handleConsumeAll(activeDay),
-							disabled: consumeFetcher.state !== "idle",
-						},
-					]}
-				/>
-			)}
+			{/* Mobile FAB: Copy Day + Consume All for selected (active) day */}
+			{hasEntries &&
+				(unconsumedForActiveDay > 0 || activeDayEntryCount > 0) && (
+					<FloatingActionBar
+						actions={[
+							...(activeDayEntryCount > 0
+								? [
+										{
+											id: "copy-day",
+											icon: (
+												<svg
+													className="w-5 h-5"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+													aria-hidden="true"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+													/>
+												</svg>
+											),
+											label: "Copy day",
+											onClick: () => setCopyDayDate(activeDay),
+											disabled: isCopying,
+										},
+									]
+								: []),
+							...(unconsumedForActiveDay > 0
+								? [
+										{
+											id: "consume-all",
+											icon: <ConsumeIcon className="w-5 h-5" />,
+											label: "Consume all",
+											primary: true,
+											onClick: () => handleConsumeAll(selectedDay),
+											disabled: consumeFetcher.state !== "idle",
+										},
+									]
+								: []),
+						]}
+					/>
+				)}
 
 			{/* Consume success toast */}
 			{consumeToast.isOpen && (

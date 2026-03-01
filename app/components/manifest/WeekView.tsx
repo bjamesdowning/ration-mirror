@@ -16,6 +16,10 @@ interface WeekViewProps {
 	today: string;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
+	/** The currently selected day (used to highlight the active deduct target) */
+	selectedDate?: string;
+	/** Callback to set the selected day */
+	onSelectDate?: (date: string) => void;
 }
 
 export function WeekView({
@@ -30,6 +34,8 @@ export function WeekView({
 	today,
 	showSnackSlot = true,
 	readOnly = false,
+	selectedDate,
+	onSelectDate,
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -49,44 +55,56 @@ export function WeekView({
 				const consumedCount = dayEntries.filter((e) => !!e.consumedAt).length;
 				const allConsumed = totalCount > 0 && consumedCount === totalCount;
 
+				const isSelected = selectedDate === date;
+
 				return (
 					<div
 						key={date}
-						className={`flex flex-col gap-2 min-w-0 ${isPast ? "opacity-60" : ""}`}
+						className={`flex flex-col gap-2 min-w-0 ${isPast ? "opacity-60" : ""} ${
+							isSelected && !isToday ? "ring-2 ring-hyper-green rounded-xl" : ""
+						}`}
 					>
-						{/* Day header */}
-						<div
-							className={`group/dayheader relative text-center py-2 rounded-xl transition-colors ${
-								isToday
-									? "bg-hyper-green text-carbon"
-									: allConsumed
-										? "bg-hyper-green/15 text-hyper-green"
-										: "bg-platinum/50 text-muted"
-							}`}
-						>
-							<p className="text-[10px] font-semibold uppercase tracking-wide">
-								{dayName}
-							</p>
-							<p className="text-sm font-bold">{dayNum}</p>
-							{/* Meal count / completion indicator */}
-							{totalCount > 0 && (
-								<p className="text-[9px] font-mono mt-0.5 leading-none">
-									{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
+						{/* Day header wrapper — relative container for select button + copy button overlay */}
+						<div className="relative">
+							<button
+								type="button"
+								onClick={() => onSelectDate?.(date)}
+								className={`text-center py-2 rounded-xl transition-colors w-full ${
+									isToday
+										? "bg-hyper-green text-carbon"
+										: allConsumed
+											? "bg-hyper-green/15 text-hyper-green"
+											: isSelected
+												? "bg-hyper-green/20 text-hyper-green"
+												: "bg-platinum/50 text-muted hover:bg-platinum/80"
+								}`}
+								title={`Select ${dayName} for consume action`}
+							>
+								<p className="text-[10px] font-semibold uppercase tracking-wide">
+									{dayName}
 								</p>
-							)}
-							{/* Copy day — appears on hover when day has entries */}
+								<p className="text-sm font-bold">{dayNum}</p>
+								{/* Meal count / completion indicator */}
+								{totalCount > 0 && (
+									<p className="text-[9px] font-mono mt-0.5 leading-none">
+										{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
+									</p>
+								)}
+							</button>
+							{/* Copy day button — overlaid top-right, always visible when day has entries */}
 							{!readOnly && onCopyDay && totalCount > 0 && (
 								<button
 									type="button"
-									onClick={(e) => {
-										e.stopPropagation();
-										onCopyDay(date);
-									}}
+									onClick={() => onCopyDay(date)}
 									aria-label={`Copy ${dayName} meals to other days`}
-									className="absolute top-1 right-1 opacity-0 group-hover/dayheader:opacity-100 focus:opacity-100 p-0.5 rounded text-current/70 hover:text-current transition-all"
+									className={`absolute top-1 right-1 p-0.5 rounded transition-colors z-10 ${
+										isToday
+											? "text-carbon/60 hover:text-carbon"
+											: "text-current/60 hover:text-current"
+									}`}
 								>
 									<svg
-										className="w-2.5 h-2.5"
+										className="w-3.5 h-3.5"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"

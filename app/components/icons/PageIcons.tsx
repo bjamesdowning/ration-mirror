@@ -609,6 +609,23 @@ export function ClockIcon({ className = "w-5 h-5" }: IconProps) {
 	);
 }
 
+export function MoreVerticalIcon({ className = "w-5 h-5" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+		>
+			<title>More options</title>
+			<circle cx="12" cy="5" r="1" strokeWidth={2} />
+			<circle cx="12" cy="12" r="1" strokeWidth={2} />
+			<circle cx="12" cy="19" r="1" strokeWidth={2} />
+		</svg>
+	);
+}
+
 export const NAV_ICONS: Record<string, ComponentType<IconProps>> = {
 	home: HomeIcon,
 	package: PackageIcon,

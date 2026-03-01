@@ -11,7 +11,6 @@ interface DayViewProps {
 	onAdd: (slot: SlotType, date: string) => void;
 	onConsume?: (entryId: string) => void;
 	onCopy?: (entry: MealPlanEntryWithMeal) => void;
-	onCopyDay?: (date: string) => void;
 	isConsuming?: boolean;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
@@ -39,7 +38,6 @@ export function DayView({
 	onAdd,
 	onConsume,
 	onCopy,
-	onCopyDay,
 	isConsuming = false,
 	showSnackSlot = true,
 	readOnly = false,
@@ -80,31 +78,6 @@ export function DayView({
 							{consumedCount} consumed
 						</p>
 					</>
-				)}
-				{!readOnly && onCopyDay && totalCount > 0 && (
-					<button
-						type="button"
-						onClick={() => onCopyDay(date)}
-						aria-label="Copy this entire day to other days"
-						className="ml-auto flex items-center gap-1 text-[10px] font-mono font-semibold text-muted hover:text-hyper-green transition-colors px-2 py-0.5 rounded-lg hover:bg-hyper-green/10"
-					>
-						<svg
-							className="w-3 h-3"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-							aria-hidden="true"
-						>
-							<title>Copy day</title>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-							/>
-						</svg>
-						Copy day
-					</button>
 				)}
 			</div>
 

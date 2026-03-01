@@ -20,6 +20,14 @@ interface PageHeaderProps {
 	hasActiveFilters?: boolean;
 	/** Callback when filter sheet is opened/closed */
 	onFilterOpenChange?: (isOpen: boolean) => void;
+	/** Override the default filter/action button icon */
+	actionIcon?: React.ReactNode;
+	/** Label for the action button (screen reader) */
+	actionLabel?: string;
+	/** Title shown in the mobile bottom sheet */
+	sheetTitle?: string;
+	/** When true, the filterContent only shows in the mobile sheet (never expands inline on desktop) */
+	mobileOnly?: boolean;
 }
 
 /**
@@ -39,6 +47,10 @@ export function PageHeader({
 	filterContent,
 	hasActiveFilters = false,
 	onFilterOpenChange,
+	actionIcon,
+	actionLabel,
+	sheetTitle = "Filters",
+	mobileOnly = false,
 }: PageHeaderProps) {
 	const [isFilterOpen, setIsFilterOpen] = useState(false);
 	const [isDesktop, setIsDesktop] = useState(false);
@@ -81,21 +93,25 @@ export function PageHeader({
 						)}
 					</div>
 
-					{/* Filter button (if filterContent provided) */}
+					{/* Action/filter button (if filterContent provided) */}
 					{filterContent && (
 						<button
 							type="button"
 							onClick={() => handleFilterOpenChange(!isFilterOpen)}
+							aria-label={
+								actionLabel ??
+								(hasActiveFilters ? "Filters active" : "More options")
+							}
 							className={`
-								flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
-								${
-									hasActiveFilters
-										? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
-										: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80"
-								}
-							`}
+							flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
+							${
+								hasActiveFilters
+									? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
+									: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80"
+							}
+						`}
 						>
-							<FilterIcon />
+							{actionIcon ?? <FilterIcon />}
 							{hasActiveFilters && (
 								<span className="sr-only">Filters active</span>
 							)}
@@ -117,25 +133,25 @@ export function PageHeader({
 					</div>
 				)}
 
-				{/* Desktop filters inline */}
-				{filterContent && (
+				{/* Desktop filters inline (suppressed when mobileOnly) */}
+				{filterContent && !mobileOnly && (
 					<div
 						className={`
-							hidden md:block mt-4 overflow-hidden transition-[max-height,opacity] duration-200 ease-out
-							${isFilterOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"}
-						`}
+						hidden md:block mt-4 overflow-hidden transition-[max-height,opacity] duration-200 ease-out
+						${isFilterOpen ? "max-h-[800px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"}
+					`}
 					>
 						{filterContent}
 					</div>
 				)}
 			</header>
 
-			{/* Mobile filter sheet */}
+			{/* Mobile filter/options sheet */}
 			{filterContent && (
 				<FilterSheet
 					isOpen={isFilterOpen && !isDesktop}
 					onClose={() => handleFilterOpenChange(false)}
-					title="Filters"
+					title={sheetTitle}
 				>
 					{filterContent}
 				</FilterSheet>

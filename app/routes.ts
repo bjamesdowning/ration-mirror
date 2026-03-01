@@ -86,6 +86,10 @@ export default [
 		"routes/api/meal-plans.$id.entries.consume.ts",
 	),
 	route(
+		"api/meal-plans/:id/entries/bulk",
+		"routes/api/meal-plans.$id.entries.bulk.ts",
+	),
+	route(
 		"api/meal-plans/:id/entries/:entryId",
 		"routes/api/meal-plans.$id.entries.$entryId.ts",
 	),

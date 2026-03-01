@@ -55,3 +55,12 @@ export const EntryIdParamSchema = z.object({
 export const ConsumeEntriesRequestSchema = z.object({
 	entryIds: z.array(z.string().uuid()).min(1).max(50),
 });
+
+/**
+ * Used by the bulk-add endpoint for both the "Copy Entry / Day" features
+ * and the future AI meal planner. The AI planner will POST an identical
+ * payload — only the source of `entries[]` differs (client copy vs. LLM).
+ */
+export const BulkEntryCreateSchema = z.object({
+	entries: z.array(MealPlanEntryCreateSchema).min(1).max(50),
+});

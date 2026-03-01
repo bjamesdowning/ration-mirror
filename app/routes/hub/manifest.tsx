@@ -6,6 +6,8 @@ import {
 	ConsumeIcon,
 	ShareIcon,
 } from "~/components/icons/PageIcons";
+import { CopyDayModal } from "~/components/manifest/CopyDayModal";
+import { CopyEntryModal } from "~/components/manifest/CopyEntryModal";
 import { DayTab } from "~/components/manifest/DayTab";
 import { DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
@@ -21,7 +23,10 @@ import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
-import type { MealForPicker } from "~/lib/manifest.server";
+import type {
+	MealForPicker,
+	MealPlanEntryWithMeal,
+} from "~/lib/manifest.server";
 import {
 	ensureMealPlan,
 	getMealsForPicker,
@@ -112,6 +117,14 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [shareOpen, setShareOpen] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
+	// -------------------------------------------------------------------------
+	// Copy state
+	// -------------------------------------------------------------------------
+	const [copyEntry, setCopyEntry] = useState<MealPlanEntryWithMeal | null>(
+		null,
+	);
+	const [copyDayDate, setCopyDayDate] = useState<string | null>(null);
+
 	const handleAdd = (slot: SlotType, date: string) => {
 		setPickerSlot(slot);
 		setPickerDate(date);
@@ -119,6 +132,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	};
 
 	const addFetcher = useFetcher();
+	const bulkFetcher = useFetcher<{ inserted?: number; error?: string }>();
 	const consumeFetcher = useFetcher<{
 		consumed?: number;
 		error?: string;
@@ -127,6 +141,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const { confirm } = useConfirm();
 	const consumeToast = useToast({ duration: 4000 });
 	const consumeErrorToast = useToast({ duration: 6000 });
+	const copyToast = useToast({ duration: 3000 });
+	const copyErrorToast = useToast({ duration: 6000 });
 
 	const handleConsume = (entryIds: string[]) => {
 		if (entryIds.length === 0) return;
@@ -157,6 +173,53 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		handleConsume(ids);
 	};
 
+	// -------------------------------------------------------------------------
+	// Copy entry handler — submits entries[] to the bulk endpoint
+	// -------------------------------------------------------------------------
+	const handleCopyEntrySubmit = (
+		targetSlots: { date: string; slotType: SlotType }[],
+	) => {
+		if (!copyEntry || targetSlots.length === 0) return;
+		setCopyEntry(null);
+		const newEntries = targetSlots.map(({ date, slotType }) => ({
+			mealId: copyEntry.mealId,
+			date,
+			slotType,
+			servingsOverride: copyEntry.servingsOverride ?? null,
+			notes: copyEntry.notes ?? null,
+		}));
+		bulkFetcher.submit(JSON.stringify({ entries: newEntries }), {
+			method: "POST",
+			action: `/api/meal-plans/${plan.id}/entries/bulk`,
+			encType: "application/json",
+		});
+	};
+
+	// -------------------------------------------------------------------------
+	// Copy day handler — copies all entries from a source day to target dates
+	// -------------------------------------------------------------------------
+	const handleCopyDaySubmit = (targetDates: string[]) => {
+		if (!copyDayDate || targetDates.length === 0) return;
+		const sourceDayEntries = entries.filter((e) => e.date === copyDayDate);
+		if (sourceDayEntries.length === 0) return;
+		setCopyDayDate(null);
+		const newEntries = targetDates.flatMap((date) =>
+			sourceDayEntries.map((e) => ({
+				mealId: e.mealId,
+				date,
+				slotType: e.slotType as SlotType,
+				orderIndex: e.orderIndex,
+				servingsOverride: e.servingsOverride ?? null,
+				notes: e.notes ?? null,
+			})),
+		);
+		bulkFetcher.submit(JSON.stringify({ entries: newEntries }), {
+			method: "POST",
+			action: `/api/meal-plans/${plan.id}/entries/bulk`,
+			encType: "application/json",
+		});
+	};
+
 	const unconsumedForActiveDay = useMemo(
 		() => entries.filter((e) => e.date === activeDay && !e.consumedAt).length,
 		[entries, activeDay],
@@ -170,6 +233,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const plannedDates = useMemo(
 		() => new Set(entries.map((e) => e.date)),
 		[entries],
+	);
+
+	// Meal count for the day being copied (used by CopyDayModal)
+	const copyDayMealCount = useMemo(
+		() =>
+			copyDayDate ? entries.filter((e) => e.date === copyDayDate).length : 0,
+		[entries, copyDayDate],
 	);
 
 	useEffect(() => {
@@ -187,6 +257,24 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		revalidator.revalidate,
 		consumeToast.show,
 		consumeErrorToast.show,
+	]);
+
+	// Revalidate and show toasts after bulk copy
+	useEffect(() => {
+		if (bulkFetcher.state !== "idle" || !bulkFetcher.data) return;
+		const data = bulkFetcher.data;
+		if (typeof data.inserted === "number") {
+			revalidator.revalidate();
+			copyToast.show();
+		} else if (data.error) {
+			copyErrorToast.show();
+		}
+	}, [
+		bulkFetcher.state,
+		bulkFetcher.data,
+		revalidator.revalidate,
+		copyToast.show,
+		copyErrorToast.show,
 	]);
 
 	const handleMealSelect = (meal: MealForPicker, servingsOverride?: number) => {
@@ -221,6 +309,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	})();
 
 	const hasEntries = entries.length > 0;
+	const isCopying = bulkFetcher.state !== "idle";
 
 	return (
 		<>
@@ -294,6 +383,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							planId={plan.id}
 							onAdd={handleAdd}
 							onConsume={handleConsumeSingle}
+							onCopy={setCopyEntry}
+							onCopyDay={setCopyDayDate}
 							isConsuming={consumeFetcher.state !== "idle"}
 							showSnackSlot={showSnackSlot}
 						/>
@@ -314,6 +405,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					planId={plan.id}
 					onAdd={handleAdd}
 					onConsume={handleConsumeSingle}
+					onCopy={setCopyEntry}
+					onCopyDay={setCopyDayDate}
 					isConsuming={consumeFetcher.state !== "idle"}
 					today={today}
 					showSnackSlot={showSnackSlot}
@@ -328,6 +421,31 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					meals={meals}
 					onSelect={handleMealSelect}
 					onClose={() => setPickerOpen(false)}
+				/>
+			)}
+
+			{/* Copy Entry Modal */}
+			{copyEntry && (
+				<CopyEntryModal
+					entry={copyEntry}
+					weekDates={weekDates}
+					today={today}
+					onSubmit={handleCopyEntrySubmit}
+					onClose={() => setCopyEntry(null)}
+					isSubmitting={isCopying}
+				/>
+			)}
+
+			{/* Copy Day Modal */}
+			{copyDayDate && (
+				<CopyDayModal
+					sourceDate={copyDayDate}
+					weekDates={weekDates}
+					today={today}
+					mealCount={copyDayMealCount}
+					onSubmit={handleCopyDaySubmit}
+					onClose={() => setCopyDayDate(null)}
+					isSubmitting={isCopying}
 				/>
 			)}
 
@@ -382,6 +500,28 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						"You don't have enough: ",
 					)}
 					onDismiss={consumeErrorToast.hide}
+				/>
+			)}
+
+			{/* Copy success toast */}
+			{copyToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Meals copied"
+					description="Days updated successfully."
+					onDismiss={copyToast.hide}
+				/>
+			)}
+
+			{/* Copy error toast */}
+			{copyErrorToast.isOpen && bulkFetcher.data?.error && (
+				<Toast
+					variant="info"
+					position="bottom-right"
+					title="Copy failed"
+					description={bulkFetcher.data.error}
+					onDismiss={copyErrorToast.hide}
 				/>
 			)}
 

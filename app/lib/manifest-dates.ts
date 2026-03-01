@@ -38,6 +38,39 @@ export function toISODateString(d: Date): string {
 	return `${y}-${m}-${day}`;
 }
 
+// ---------------------------------------------------------------------------
+// Day name helpers
+// ---------------------------------------------------------------------------
+
+const DAY_NAMES_LONG = [
+	"Sunday",
+	"Monday",
+	"Tuesday",
+	"Wednesday",
+	"Thursday",
+	"Friday",
+	"Saturday",
+] as const;
+
+const DAY_NAMES_SHORT = [
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
+] as const;
+
+/**
+ * Returns the name of the day for a YYYY-MM-DD date string.
+ * Uses local midnight parsing to avoid UTC offset shifts.
+ */
+export function getDayName(dateStr: string, short = false): string {
+	const d = new Date(`${dateStr}T00:00:00`);
+	return short ? DAY_NAMES_SHORT[d.getDay()] : DAY_NAMES_LONG[d.getDay()];
+}
+
 /** Returns an array of 7 YYYY-MM-DD strings for the week starting at startDate. */
 export function getWeekDates(startDate: string): string[] {
 	const dates: string[] = [];

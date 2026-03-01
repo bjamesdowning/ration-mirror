@@ -1,4 +1,5 @@
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
+import { getDayName } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
 import { MealSlot } from "./MealSlot";
@@ -9,13 +10,13 @@ interface WeekViewProps {
 	planId: string;
 	onAdd: (slot: SlotType, date: string) => void;
 	onConsume?: (entryId: string) => void;
+	onCopy?: (entry: MealPlanEntryWithMeal) => void;
+	onCopyDay?: (date: string) => void;
 	isConsuming?: boolean;
 	today: string;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
 }
-
-const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function WeekView({
 	dates,
@@ -23,6 +24,8 @@ export function WeekView({
 	planId,
 	onAdd,
 	onConsume,
+	onCopy,
+	onCopyDay,
 	isConsuming = false,
 	today,
 	showSnackSlot = true,
@@ -36,7 +39,7 @@ export function WeekView({
 		<div className="grid grid-cols-7 gap-2 min-w-0">
 			{dates.map((date) => {
 				const d = new Date(`${date}T00:00:00`);
-				const dayName = DAY_NAMES_SHORT[d.getDay()];
+				const dayName = getDayName(date, true);
 				const dayNum = d.getDate();
 				const isToday = date === today;
 				const isPast = date < today;
@@ -53,7 +56,7 @@ export function WeekView({
 					>
 						{/* Day header */}
 						<div
-							className={`text-center py-2 rounded-xl transition-colors ${
+							className={`group/dayheader relative text-center py-2 rounded-xl transition-colors ${
 								isToday
 									? "bg-hyper-green text-carbon"
 									: allConsumed
@@ -70,6 +73,34 @@ export function WeekView({
 								<p className="text-[9px] font-mono mt-0.5 leading-none">
 									{allConsumed ? "✓ done" : `${consumedCount}/${totalCount}`}
 								</p>
+							)}
+							{/* Copy day — appears on hover when day has entries */}
+							{!readOnly && onCopyDay && totalCount > 0 && (
+								<button
+									type="button"
+									onClick={(e) => {
+										e.stopPropagation();
+										onCopyDay(date);
+									}}
+									aria-label={`Copy ${dayName} meals to other days`}
+									className="absolute top-1 right-1 opacity-0 group-hover/dayheader:opacity-100 focus:opacity-100 p-0.5 rounded text-current/70 hover:text-current transition-all"
+								>
+									<svg
+										className="w-2.5 h-2.5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										aria-hidden="true"
+									>
+										<title>Copy day</title>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+										/>
+									</svg>
+								</button>
 							)}
 						</div>
 
@@ -92,6 +123,7 @@ export function WeekView({
 									planId={planId}
 									onAdd={onAdd}
 									onConsume={onConsume}
+									onCopy={onCopy}
 									isConsuming={isConsuming}
 									readOnly={readOnly}
 									compact

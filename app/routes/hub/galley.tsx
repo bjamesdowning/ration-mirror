@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useFetcher, useRouteLoaderData } from "react-router";
+import { ViewToggle } from "~/components/common/ViewToggle";
 import { AddTypeChoice } from "~/components/galley/AddTypeChoice";
 import {
 	GalleyImportButton,
@@ -52,11 +53,22 @@ const GALLEY_PAGE_SIZE = 100;
 const GALLEY_INVENTORY_PAGE_SIZE = 200;
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { session, groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const tag = url.searchParams.get("tag") || undefined;
 	const domain = url.searchParams.get("domain") || undefined;
 	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
+
+	// Parse user settings to get view mode preference
+	const rawSettings = session.user.settings;
+	let defaultViewMode: "card" | "list" = "card";
+	if (rawSettings) {
+		try {
+			const parsed =
+				typeof rawSettings === "string" ? JSON.parse(rawSettings) : rawSettings;
+			if (parsed?.viewMode?.galley === "list") defaultViewMode = "list";
+		} catch {}
+	}
 
 	const [meals, availableTags, inventory, activeSelections] = await Promise.all(
 		[
@@ -82,6 +94,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		activeMealIds,
 		page,
 		pageSize: GALLEY_PAGE_SIZE,
+		defaultViewMode,
 	};
 }
 
@@ -128,7 +141,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const { meals, availableTags, inventory, activeMealIds } = loaderData;
+	const { meals, availableTags, inventory, activeMealIds, defaultViewMode } =
+		loaderData;
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance?: number;
 		aiCosts?: { MEAL_GENERATE: number; IMPORT_URL: number };
@@ -142,6 +156,9 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+	const [viewMode, setViewMode] = useState<"card" | "list">(
+		defaultViewMode ?? "card",
+	);
 	const [selectedMealIds, setSelectedMealIds] = useState(
 		() => new Set(activeMealIds),
 	);
@@ -326,6 +343,13 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				filterContent={filterContent}
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
+				titleRowExtra={
+					<ViewToggle
+						page="galley"
+						currentMode={viewMode}
+						onToggle={setViewMode}
+					/>
+				}
 			/>
 			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
 			{dashboardData?.capacity?.meals &&
@@ -509,7 +533,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					/>
 				)}
 
-				{/* Meal Grid */}
+				{/* Meal Grid / List */}
 				{filteredMeals.length > 0 && (
 					<MealGrid
 						meals={filteredMeals}
@@ -517,6 +541,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						inventory={inventory}
 						activeMealIds={selectedMealIds}
 						onToggleMealActive={handleToggleActive}
+						viewMode={viewMode}
 					/>
 				)}
 			</div>

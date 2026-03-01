@@ -7,6 +7,7 @@ import {
 } from "~/components/cargo/CsvImportButton";
 import { IngestForm } from "~/components/cargo/IngestForm";
 import { ManifestGrid } from "~/components/cargo/ManifestGrid";
+import { ViewToggle } from "~/components/common/ViewToggle";
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
@@ -71,11 +72,22 @@ const CARGO_PAGE_SIZE = 200;
 
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { session, groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const domain = url.searchParams.get("domain") || undefined;
 	const tag = url.searchParams.get("tag") || undefined;
 	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
+
+	// Parse user settings to get view mode preference
+	const rawSettings = session.user.settings;
+	let defaultViewMode: "card" | "list" = "card";
+	if (rawSettings) {
+		try {
+			const parsed =
+				typeof rawSettings === "string" ? JSON.parse(rawSettings) : rawSettings;
+			if (parsed?.viewMode?.cargo === "list") defaultViewMode = "list";
+		} catch {}
+	}
 
 	const [cargo, availableTags, promotedCargoIds] = await Promise.all([
 		getCargo(
@@ -96,6 +108,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		promotedCargoIds,
 		page,
 		pageSize: CARGO_PAGE_SIZE,
+		defaultViewMode,
 	};
 }
 
@@ -303,7 +316,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 // --- COMPONENT ---
 export default function CargoPage({ loaderData }: Route.ComponentProps) {
-	const { cargo: initialCargo, availableTags, promotedCargoIds } = loaderData;
+	const {
+		cargo: initialCargo,
+		availableTags,
+		promotedCargoIds,
+		defaultViewMode,
+	} = loaderData;
 	const actionData = useActionData<{
 		error?: string;
 		current?: number;
@@ -313,6 +331,9 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	const [viewMode, setViewMode] = useState<"card" | "list">(
+		defaultViewMode ?? "card",
+	);
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance?: number;
 		aiCosts?: { SCAN: number };
@@ -497,6 +518,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				filterContent={filterContent}
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
+				titleRowExtra={
+					<ViewToggle
+						page="cargo"
+						currentMode={viewMode}
+						onToggle={setViewMode}
+					/>
+				}
 			/>
 			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
 			{dashboardData?.capacity?.cargo &&
@@ -610,12 +638,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 					/>
 				)}
 
-				{/* Inventory Grid */}
+				{/* Inventory Grid / List */}
 				{filteredCargo.length > 0 && (
 					<ManifestGrid
 						items={filteredCargo}
 						promotedCargoIds={promotedCargoIds}
 						onUpgradeRequired={() => setShowUpgradePrompt(true)}
+						viewMode={viewMode}
 					/>
 				)}
 			</div>

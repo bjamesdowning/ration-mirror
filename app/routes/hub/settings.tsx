@@ -432,6 +432,37 @@ export async function action(args: Route.ActionArgs) {
 		return redirect("/hub");
 	}
 
+	if (intent === "update-view-mode") {
+		const page = formData.get("page") as string;
+		const mode = formData.get("mode") as string;
+
+		if (
+			(page === "cargo" || page === "galley") &&
+			(mode === "card" || mode === "list")
+		) {
+			const user = await db.query.user.findFirst({
+				where: (user, { eq }) => eq(user.id, userId),
+			});
+
+			if (user) {
+				const currentSettings = (user.settings as UserSettings) || {};
+				const newSettings: UserSettings = {
+					...currentSettings,
+					viewMode: {
+						...((currentSettings.viewMode as UserSettings["viewMode"]) ?? {}),
+						[page]: mode,
+					},
+				};
+				await db
+					.update(schema.user)
+					.set({ settings: newSettings })
+					.where(eq(schema.user.id, userId));
+			}
+		}
+
+		return { success: true };
+	}
+
 	return null;
 }
 
@@ -901,6 +932,9 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 				</Form>
 			</div>
 
+			{/* Default View */}
+			<ViewModeSection settings={settings} />
+
 			{/* Hub Layout */}
 			<div className="glass-panel rounded-xl p-6">
 				<h3 className="text-xs text-label text-muted mb-1">Hub Layout</h3>
@@ -959,6 +993,84 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 						Restart Tutorial
 					</button>
 				</Form>
+			</div>
+		</div>
+	);
+}
+
+// ─── View Mode Section ─────────────────────────────────────────────────────────
+
+function ViewModeSection({ settings }: { settings: UserSettings }) {
+	const fetcher = useFetcher();
+
+	const cargoMode =
+		(settings.viewMode as { cargo?: string; galley?: string } | undefined)
+			?.cargo === "list"
+			? "list"
+			: "card";
+	const galleyMode =
+		(settings.viewMode as { cargo?: string; galley?: string } | undefined)
+			?.galley === "list"
+			? "list"
+			: "card";
+
+	const handleChange = (page: "cargo" | "galley", mode: "card" | "list") => {
+		fetcher.submit(
+			{ intent: "update-view-mode", page, mode },
+			{ method: "post" },
+		);
+	};
+
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Default View</h3>
+			<p className="text-sm text-muted mb-4">
+				Set the default display mode for Cargo and Galley. You can always toggle
+				this on the page itself.
+			</p>
+			<div className="space-y-4">
+				{(
+					[
+						{ page: "cargo", label: "Cargo", mode: cargoMode },
+						{ page: "galley", label: "Galley", mode: galleyMode },
+					] as const
+				).map(({ page, label, mode }) => (
+					<div key={page} className="flex items-center justify-between">
+						<span className="text-sm text-carbon">{label}</span>
+						<fieldset className="flex items-center rounded-lg overflow-hidden border border-platinum m-0 p-0">
+							<legend className="sr-only">Default {label} view</legend>
+							<button
+								type="button"
+								onClick={() => handleChange(page, "card")}
+								aria-pressed={mode === "card"}
+								className={`px-4 py-2 text-sm font-medium transition-colors ${
+									mode === "card"
+										? "bg-hyper-green text-carbon"
+										: "text-muted hover:bg-platinum/50"
+								}`}
+							>
+								Card
+							</button>
+							<button
+								type="button"
+								onClick={() => handleChange(page, "list")}
+								aria-pressed={mode === "list"}
+								className={`px-4 py-2 text-sm font-medium transition-colors ${
+									mode === "list"
+										? "bg-hyper-green text-carbon"
+										: "text-muted hover:bg-platinum/50"
+								}`}
+							>
+								List
+							</button>
+						</fieldset>
+					</div>
+				))}
+				{fetcher.state !== "idle" && (
+					<span className="text-hyper-green animate-pulse text-sm">
+						Saving...
+					</span>
+				)}
 			</div>
 		</div>
 	);

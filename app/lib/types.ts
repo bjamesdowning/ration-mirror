@@ -31,6 +31,11 @@ export interface UserSettings {
 	onboardingCompletedAt?: string;
 	/** Last step index the user reached (0–5), enables resume on re-open. */
 	onboardingStep?: number;
+	/** Default view mode for Cargo and Galley pages. */
+	viewMode?: {
+		cargo?: "card" | "list";
+		galley?: "card" | "list";
+	};
 	[key: string]: unknown; // Index signature for database compatibility
 }
 

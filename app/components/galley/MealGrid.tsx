@@ -4,8 +4,11 @@ import { log } from "~/lib/logging.client";
 import type { MealMatchResult } from "~/lib/matching.server";
 import type { MealCustomFields } from "~/lib/types";
 import { MealCard } from "./MealCard";
+import { MealListRow } from "./MealListRow";
 import { MealMatchBadge } from "./MealMatchBadge";
 import { ProvisionCard } from "./ProvisionCard";
+
+type ViewMode = "card" | "list";
 
 interface MealGridProps {
 	meals: (typeof meal.$inferSelect & {
@@ -31,6 +34,7 @@ interface MealGridProps {
 	}[];
 	activeMealIds?: Set<string>;
 	onToggleMealActive?: (mealId: string, nextActive: boolean) => void;
+	viewMode?: ViewMode;
 }
 
 export function MealGrid({
@@ -39,6 +43,7 @@ export function MealGrid({
 	inventory = [],
 	activeMealIds,
 	onToggleMealActive,
+	viewMode = "card",
 }: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
 	const [minMatch, setMinMatch] = useState(50);
@@ -172,39 +177,61 @@ export function MealGrid({
 					</div>
 				)}
 
-				{/* Match Results Grid */}
+				{/* Match Results */}
 				{!isLoading && matchResults && (
 					<>
 						<div className="text-sm text-muted">
 							Found {matchResults.length} matching meals
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-							{matchResults.map((result) => (
-								<div key={result.meal.id} className="relative">
-									{result.meal.type === "provision" ? (
-										<ProvisionCard
-											meal={result.meal}
-											isActive={activeMealIds?.has(result.meal.id)}
-											onToggleActive={onToggleMealActive}
-										/>
-									) : (
-										<MealCard
+						{viewMode === "list" ? (
+							<div className="bg-platinum/30 rounded-2xl px-4 py-2 pb-36 md:pb-2 divide-y divide-platinum/50">
+								{matchResults.map((result) => (
+									<div key={result.meal.id} className="relative">
+										<MealListRow
 											meal={result.meal}
 											availableIngredients={inventory}
 											isActive={activeMealIds?.has(result.meal.id)}
 											onToggleActive={onToggleMealActive}
 										/>
-									)}
-									<div className="absolute top-2 right-2">
-										<MealMatchBadge
-											percentage={result.matchPercentage}
-											canMake={result.canMake}
-											size="sm"
-										/>
+										<div className="absolute top-3 right-12">
+											<MealMatchBadge
+												percentage={result.matchPercentage}
+												canMake={result.canMake}
+												size="sm"
+											/>
+										</div>
 									</div>
-								</div>
-							))}
-						</div>
+								))}
+							</div>
+						) : (
+							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+								{matchResults.map((result) => (
+									<div key={result.meal.id} className="relative">
+										{result.meal.type === "provision" ? (
+											<ProvisionCard
+												meal={result.meal}
+												isActive={activeMealIds?.has(result.meal.id)}
+												onToggleActive={onToggleMealActive}
+											/>
+										) : (
+											<MealCard
+												meal={result.meal}
+												availableIngredients={inventory}
+												isActive={activeMealIds?.has(result.meal.id)}
+												onToggleActive={onToggleMealActive}
+											/>
+										)}
+										<div className="absolute top-2 right-2">
+											<MealMatchBadge
+												percentage={result.matchPercentage}
+												canMake={result.canMake}
+												size="sm"
+											/>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
 					</>
 				)}
 
@@ -224,23 +251,40 @@ export function MealGrid({
 		);
 	}
 
-	// Regular grid without matching
+	// Regular list view
+	if (viewMode === "list") {
+		return (
+			<div className="bg-platinum/30 rounded-2xl px-4 py-2 pb-36 md:pb-2 divide-y divide-platinum/50">
+				{meals.map((mealItem) => (
+					<MealListRow
+						key={mealItem.id}
+						meal={mealItem}
+						availableIngredients={inventory}
+						isActive={activeMealIds?.has(mealItem.id)}
+						onToggleActive={onToggleMealActive}
+					/>
+				))}
+			</div>
+		);
+	}
+
+	// Regular card grid
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-			{meals.map((meal) =>
-				meal.type === "provision" ? (
+			{meals.map((mealItem) =>
+				mealItem.type === "provision" ? (
 					<ProvisionCard
-						key={meal.id}
-						meal={meal}
-						isActive={activeMealIds?.has(meal.id)}
+						key={mealItem.id}
+						meal={mealItem}
+						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
 					/>
 				) : (
 					<MealCard
-						key={meal.id}
-						meal={meal}
+						key={mealItem.id}
+						meal={mealItem}
 						availableIngredients={inventory}
-						isActive={activeMealIds?.has(meal.id)}
+						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
 					/>
 				),

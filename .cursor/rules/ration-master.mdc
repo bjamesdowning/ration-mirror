@@ -64,6 +64,38 @@ Ration operates on **Cloudflare's paid Workers plan**. Free-tier limits are not 
 - **Linting:** Biome v1.9 (Rust-based). See `biome.json`
 - **Error Handling:** Graceful degradation. If AI fails, fallback to manual keyword search
 
+## Testing Requirements
+
+Every new feature or significant change **must** ship with meaningful tests using the established Vitest framework.
+
+### What Requires a Test
+
+- **New pure functions** in `app/lib/` — unit test in `app/lib/__tests__/`
+- **New Zod schemas** in `app/lib/schemas/` — validation test in `app/lib/schemas/__tests__/`
+- **Extracted or refactored business logic** — test the extracted module, not just the original call site
+- **Bug fixes** — a regression test that would have caught the bug
+
+### What Does Not Require a Test
+
+- React components (UI layer — separate initiative)
+- Route loaders/actions with full D1/KV/Vectorize dependencies (integration tier — deferred)
+- Config files, constants with no logic, type-only files
+
+### Test Conventions
+
+- **Framework:** Vitest — `bun run test:unit`
+- **Location:** Co-located `__tests__/` directory next to the module being tested
+  - Pure lib modules: `app/lib/__tests__/<module>.test.ts`
+  - Zod schemas: `app/lib/schemas/__tests__/<schema>.test.ts`
+- **Fixtures:** Use factories from `app/test/helpers/fixtures.ts` for shared data shapes
+- **Time-dependent logic:** Inject `now` as a parameter; use `vi.useFakeTimers()` + `vi.setSystemTime()` in tests — never `Date.now()` without an injectable seam
+- **Mocking:** Use `vi.fn()` stubs from `app/test/helpers/mock-env.ts` for Cloudflare bindings; never import real D1/KV/R2/Vectorize in unit tests
+- **Assertions:** Prefer specific `.toBe()` / `.toEqual()` over `.toBeTruthy()`. Test boundary conditions, not just happy paths
+
+### Definition of Done
+
+A change is not complete until `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors.
+
 ## File Organization
 
 ```

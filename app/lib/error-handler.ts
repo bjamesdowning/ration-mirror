@@ -7,7 +7,7 @@ import { log } from "./logging.server";
  * infrastructure failures. Detected via error message patterns from D1 and
  * Cloudflare Workers runtime.
  */
-function isD1ContentionError(error: unknown): boolean {
+export function isD1ContentionError(error: unknown): boolean {
 	if (!(error instanceof Error)) return false;
 	const msg = error.message.toLowerCase();
 	return (

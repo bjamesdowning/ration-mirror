@@ -18,8 +18,10 @@ export function toTitleCase(s: string): string {
  * Formats time remaining until snooze expiry for display.
  * Returns relative phrases: "2 days left", "6h left", "Expires soon" (< 1h), "Expired"
  */
-export function formatSnoozeTimeLeft(snoozedUntil: Date): string {
-	const now = new Date();
+export function formatSnoozeTimeLeft(
+	snoozedUntil: Date,
+	now = new Date(),
+): string {
 	const ms = snoozedUntil.getTime() - now.getTime();
 
 	if (ms <= 0) return "Expired";

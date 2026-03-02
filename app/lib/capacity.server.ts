@@ -37,7 +37,7 @@ export class CapacityExceededError extends Error {
 	}
 }
 
-function getEffectiveTier(
+export function getEffectiveTier(
 	tier: TierSlug,
 	tierExpiresAt: Date | number | string | null | undefined,
 	now = new Date(),

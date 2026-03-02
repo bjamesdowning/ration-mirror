@@ -98,7 +98,7 @@ export function buildCargoIndex(items: CargoIndexRow[]) {
  * Converts cargo quantity to target unit and sums. Returns 0 if no convertible matches.
  * Falls back to density-based conversion (mass ↔ volume) when same-family conversion fails.
  */
-function sumConvertedToTarget(
+export function sumConvertedToTarget(
 	matches: {
 		original: CargoIndexRow;
 		totalQuantity: number;
@@ -132,7 +132,7 @@ function sumConvertedToTarget(
  * Calculates available quantity using a pre-computed similarity map (sync).
  * Used after findSimilarCargoBatch for batch fallback lookups.
  */
-function getAvailableQuantityWithMap(
+export function getAvailableQuantityWithMap(
 	ingredientName: string,
 	targetUnit: SupportedUnit,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
@@ -164,7 +164,7 @@ type SimilarityMap = Map<string, SimilarCargoMatch[]>;
  * ingredients are available in sufficient quantity.
  * scaleFactor applies to required quantities (for serving-size scaling).
  */
-function strictMatch(
+export function strictMatch(
 	meals: Array<{
 		meal: typeof meal.$inferSelect;
 		ingredients: (typeof mealIngredient.$inferSelect)[];

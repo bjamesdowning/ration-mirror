@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useConfirm } from "~/lib/confirm-context";
+import { useEffect, useRef, useState } from "react";
+import { isTypedConfirmMatch, useConfirm } from "~/lib/confirm-context";
 
 const variantButtonClasses = {
 	danger: "bg-danger text-white hover:bg-danger/90 shadow-glow-sm",
@@ -10,12 +10,14 @@ const variantButtonClasses = {
 export function ConfirmDialog() {
 	const { pending, close } = useConfirm();
 	const dialogRef = useRef<HTMLDialogElement>(null);
+	const [typedValue, setTypedValue] = useState("");
 
 	useEffect(() => {
 		const dialog = dialogRef.current;
 		if (!dialog) return;
 
 		if (pending) {
+			setTypedValue("");
 			dialog.showModal();
 		} else {
 			dialog.close();
@@ -43,8 +45,18 @@ export function ConfirmDialog() {
 
 	if (!pending) return null;
 
-	const { title, message, confirmLabel, cancelLabel, variant } = pending;
+	const {
+		title,
+		message,
+		confirmLabel,
+		cancelLabel,
+		variant,
+		consequences,
+		requireTyped,
+	} = pending;
 	const buttonClass = variantButtonClasses[variant ?? "default"];
+	const isTypedGated = !!requireTyped;
+	const isTypedMatch = isTypedConfirmMatch(requireTyped, typedValue);
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: Escape is handled by onCancel; backdrop click has no keyboard equivalent
@@ -56,7 +68,7 @@ export function ConfirmDialog() {
 			aria-labelledby="confirm-dialog-title"
 			aria-describedby="confirm-dialog-description"
 		>
-			<div className="fixed inset-x-0 bottom-0 w-full max-w-md p-0 rounded-t-2xl border border-platinum dark:border-white/10 bg-ceramic dark:bg-[#1A1A1A] shadow-xl md:fixed md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl">
+			<div className="fixed inset-x-0 bottom-0 w-full max-w-md p-0 rounded-t-2xl border border-platinum dark:border-white/10 bg-ceramic dark:bg-[#1A1A1A] shadow-xl overflow-y-auto max-h-[85vh] md:fixed md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl">
 				<div className="p-6 space-y-4">
 					<h2
 						id="confirm-dialog-title"
@@ -67,6 +79,52 @@ export function ConfirmDialog() {
 					<p id="confirm-dialog-description" className="text-sm text-muted">
 						{message}
 					</p>
+
+					{consequences && consequences.length > 0 && (
+						<div className="bg-danger/5 border border-danger/20 rounded-lg p-4 space-y-2">
+							<p className="text-xs font-semibold text-danger uppercase tracking-wider">
+								What will be permanently deleted
+							</p>
+							<ul className="space-y-1.5">
+								{consequences.map((item) => (
+									<li
+										key={item}
+										className="flex items-start gap-2 text-sm text-carbon dark:text-white/80"
+									>
+										<span className="mt-0.5 shrink-0 text-danger">—</span>
+										<span>{item}</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+
+					{isTypedGated && (
+						<div className="space-y-1.5">
+							<label
+								htmlFor="confirm-typed-input"
+								className="text-xs font-medium text-muted"
+							>
+								Type{" "}
+								<span className="font-mono font-semibold text-carbon dark:text-white">
+									{requireTyped}
+								</span>{" "}
+								to confirm
+							</label>
+							<input
+								id="confirm-typed-input"
+								type="text"
+								value={typedValue}
+								onChange={(e) => setTypedValue(e.target.value)}
+								autoComplete="off"
+								autoCorrect="off"
+								autoCapitalize="off"
+								spellCheck={false}
+								className="w-full px-3 py-2.5 text-sm bg-transparent border border-platinum dark:border-white/20 rounded-lg text-carbon dark:text-white placeholder:text-muted focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger transition-colors font-mono"
+								placeholder={requireTyped}
+							/>
+						</div>
+					)}
 				</div>
 
 				<div className="flex gap-3 justify-end px-6 pb-6">
@@ -80,7 +138,8 @@ export function ConfirmDialog() {
 					<button
 						type="button"
 						onClick={handleConfirm}
-						className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all ${buttonClass}`}
+						disabled={!isTypedMatch}
+						className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${buttonClass}`}
 					>
 						{confirmLabel}
 					</button>

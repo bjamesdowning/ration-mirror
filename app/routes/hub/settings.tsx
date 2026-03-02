@@ -1154,10 +1154,19 @@ function DangerSection({
 						onClick={async () => {
 							if (
 								!(await confirm({
-									title: "Are you sure you want to delete your account?",
+									title: "Delete your account permanently?",
 									message:
-										"This cannot be undone. All data will be permanently removed.",
-									confirmLabel: "Delete Account",
+										"There is no recovery path. This cannot be reversed by support.",
+									consequences: [
+										"All inventory items and their history",
+										"Your remaining credit balance (non-refundable)",
+										"Active subscription — no pro-rated refund",
+										"All meal plans and recipes",
+										"All group memberships and shared data you own",
+										"API keys — all integrations will stop working immediately",
+									],
+									requireTyped: "delete",
+									confirmLabel: "Delete My Account",
 									variant: "danger",
 								}))
 							)
@@ -1187,9 +1196,16 @@ function DangerSection({
 							onClick={async () => {
 								if (
 									!(await confirm({
-										title: "Are you sure you want to delete this group?",
+										title: "Delete this group permanently?",
 										message:
-											"All shared data will be lost forever. This cannot be undone.",
+											"All members will lose access immediately. This cannot be undone.",
+										consequences: [
+											"All shared inventory items",
+											"All meal plans and recipes",
+											"All supply lists",
+											"All member invitations and access",
+										],
+										requireTyped: "delete",
 										confirmLabel: "Delete Group",
 										variant: "danger",
 									}))

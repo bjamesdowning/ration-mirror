@@ -14,6 +14,8 @@ export interface ConfirmOptions {
 	confirmLabel?: string;
 	cancelLabel?: string;
 	variant?: ConfirmVariant;
+	consequences?: string[];
+	requireTyped?: string;
 }
 
 interface ConfirmState extends ConfirmOptions {
@@ -24,6 +26,19 @@ interface ConfirmContextValue {
 	confirm: (options: ConfirmOptions) => Promise<boolean>;
 	pending: ConfirmState | null;
 	close: (result: boolean) => void;
+}
+
+/**
+ * Returns true if the typed value satisfies the requireTyped gate.
+ * When no gate is set (requireTyped is undefined) it always returns true.
+ * Comparison is case-insensitive.
+ */
+export function isTypedConfirmMatch(
+	requireTyped: string | undefined,
+	typedValue: string,
+): boolean {
+	if (!requireTyped) return true;
+	return typedValue.toLowerCase() === requireTyped.toLowerCase();
 }
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);

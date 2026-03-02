@@ -14,6 +14,7 @@ import {
 	MoreVerticalIcon,
 	ShareIcon,
 } from "~/components/icons/PageIcons";
+import { CalendarSpanSelector } from "~/components/manifest/CalendarSpanSelector";
 import { CopyDayModal } from "~/components/manifest/CopyDayModal";
 import { CopyEntryModal } from "~/components/manifest/CopyEntryModal";
 import { DayTab } from "~/components/manifest/DayTab";
@@ -23,7 +24,6 @@ import { MealPicker } from "~/components/manifest/MealPicker";
 import { PlanWeekButton } from "~/components/manifest/PlanWeekButton";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import {
-	addDays,
 	formatWeekRange,
 	WeekNavigator,
 } from "~/components/manifest/WeekNavigator";
@@ -50,7 +50,7 @@ import {
 	getWeekEntries,
 	getWeekStart,
 } from "~/lib/manifest.server";
-import { getWeekDates, getWeekEnd } from "~/lib/manifest-dates";
+import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/manifest";
 
@@ -65,14 +65,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const weekStartPref: "sunday" | "monday" =
 		settings.manifestSettings?.weekStart ?? "sunday";
 	const showSnackSlot = settings.manifestSettings?.showSnackSlot ?? true;
+	const calendarSpan = (settings.manifestSettings?.calendarSpan ?? 5) as
+		| 3
+		| 5
+		| 7;
 
 	const url = new URL(request.url);
 	const weekParam = url.searchParams.get("week");
 	const today = getTodayISO();
-	const currentWeekStart = weekParam
-		? getWeekStart(weekParam, weekStartPref)
-		: getWeekStart(today, weekStartPref);
-	const currentWeekEnd = getWeekEnd(currentWeekStart);
+
+	// For 7-day: ?week= is week start; for 3/5-day: ?week= is first visible day
+	let anchor: string;
+	if (weekParam) {
+		anchor =
+			calendarSpan === 7 ? getWeekStart(weekParam, weekStartPref) : weekParam;
+	} else {
+		anchor = calendarSpan === 7 ? getWeekStart(today, weekStartPref) : today;
+	}
+
+	const weekDates = getCalendarDates(calendarSpan, anchor, weekStartPref);
+	const currentRangeStart = weekDates[0];
+	const currentRangeEnd = weekDates[weekDates.length - 1];
 
 	const userAllergens = parseAllergens(settings.allergens);
 
@@ -85,8 +98,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const entries = await getWeekEntries(
 		db,
 		plan.id,
-		currentWeekStart,
-		currentWeekEnd,
+		currentRangeStart,
+		currentRangeEnd,
 	);
 
 	// Build a per-meal allergen map for the scheduled entries so slot cards
@@ -103,7 +116,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		entries,
 		meals,
 		today,
-		currentWeekStart,
+		currentRangeStart,
+		currentRangeEnd,
+		weekDates,
+		calendarSpan,
 		weekStartPref,
 		showSnackSlot,
 		credits,
@@ -128,7 +144,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		entries,
 		meals,
 		today,
-		currentWeekStart,
+		currentRangeStart,
+		currentRangeEnd,
+		weekDates,
+		calendarSpan,
 		weekStartPref,
 		showSnackSlot,
 		credits,
@@ -137,12 +156,12 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
-	const weekDates = getWeekDates(currentWeekStart);
 
 	// Planning always starts from today (or the week's first day if it's in the
 	// future), so users never accidentally schedule meals in the past.
 	const planStartDate =
-		weekDates.find((d) => d >= today) ?? weekDates[weekDates.length - 1];
+		weekDates.find((d: string) => d >= today) ??
+		weekDates[weekDates.length - 1];
 
 	// Active day for mobile day view (default: today if in week, else first day)
 	const todayInWeek = weekDates.includes(today);
@@ -407,8 +426,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 	// Mobile week rocker helpers (compact chevrons only — no date label in title row)
 	const navigate = useNavigate();
-	const weekEnd = getWeekEnd(currentWeekStart);
-	const weekRangeLabel = formatWeekRange(currentWeekStart, weekEnd);
+	const weekRangeLabel = formatWeekRange(currentRangeStart, currentRangeEnd);
 
 	// Mobile "more options" sheet content — Share only (Plan Week is in FAB, Consume is in FAB)
 	const moreOptionsContent = (
@@ -443,16 +461,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					<div className="md:hidden flex items-center gap-0.5">
 						<button
 							type="button"
-							onClick={() => navigate(`?week=${addDays(currentWeekStart, -7)}`)}
-							aria-label="Previous week"
+							onClick={() =>
+								navigate(`?week=${addDays(currentRangeStart, -calendarSpan)}`)
+							}
+							aria-label="Previous"
 							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
 						>
 							<ChevronLeftIcon className="w-4 h-4" />
 						</button>
 						<button
 							type="button"
-							onClick={() => navigate(`?week=${addDays(currentWeekStart, 7)}`)}
-							aria-label="Next week"
+							onClick={() =>
+								navigate(`?week=${addDays(currentRangeStart, calendarSpan)}`)
+							}
+							aria-label="Next"
 							className="p-1.5 rounded-lg text-muted hover:text-carbon dark:hover:text-white hover:bg-platinum dark:hover:bg-white/10 transition-colors"
 						>
 							<ChevronRightIcon className="w-4 h-4" />
@@ -468,13 +490,16 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				}
 			/>
 
-			{/* Desktop: week navigator + action toolbar */}
+			{/* Desktop: week navigator + calendar span selector + action toolbar */}
 			<div className="hidden md:block mb-5">
-				<div className="flex items-center gap-3 mb-3">
+				<div className="flex items-center gap-4 mb-3">
 					<WeekNavigator
-						currentWeekStart={currentWeekStart}
-						weekStart={weekStartPref}
+						calendarSpan={calendarSpan}
+						currentRangeStart={currentRangeStart}
+						today={today}
+						weekStartPref={weekStartPref}
 					/>
+					<CalendarSpanSelector currentSpan={calendarSpan} />
 				</div>
 				<PanelToolbar
 					secondaryAction={

@@ -27,6 +27,8 @@ export interface UserSettings {
 		weekStart?: "sunday" | "monday";
 		defaultSlots?: string[]; // e.g. ["breakfast", "lunch", "dinner"]
 		showSnackSlot?: boolean;
+		/** Number of days shown in Manifest on desktop: 3, 5, or 7. Default 5. */
+		calendarSpan?: 3 | 5 | 7;
 	};
 	/** ISO timestamp when the user completed onboarding. Null/absent = not yet completed. */
 	onboardingCompletedAt?: string;

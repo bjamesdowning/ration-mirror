@@ -383,6 +383,25 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "update-manifest-calendar-span") {
+		const spanRaw = formData.get("span") as string;
+		const span =
+			spanRaw === "3" || spanRaw === "5" || spanRaw === "7"
+				? (+spanRaw as 3 | 5 | 7)
+				: null;
+		if (span !== null) {
+			const currentSettings = await getUserSettings(env.DB, userId);
+			await writeUserSettings(env.DB, userId, {
+				...currentSettings,
+				manifestSettings: {
+					...currentSettings.manifestSettings,
+					calendarSpan: span,
+				},
+			});
+		}
+		return { success: true };
+	}
+
 	return null;
 }
 
@@ -898,6 +917,9 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 			{/* Default View */}
 			<ViewModeSection settings={settings} />
 
+			{/* Manifest Calendar */}
+			<ManifestCalendarSection settings={settings} />
+
 			{/* Hub Layout */}
 			<div className="glass-panel rounded-xl p-6">
 				<h3 className="text-xs text-label text-muted mb-1">Hub Layout</h3>
@@ -1029,6 +1051,62 @@ function ViewModeSection({ settings }: { settings: UserSettings }) {
 						</fieldset>
 					</div>
 				))}
+				{fetcher.state !== "idle" && (
+					<span className="text-hyper-green animate-pulse text-sm">
+						Saving...
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
+
+// ─── Manifest Calendar Section ─────────────────────────────────────────────────
+
+function ManifestCalendarSection({ settings }: { settings: UserSettings }) {
+	const fetcher = useFetcher();
+
+	const calendarSpan =
+		(settings.manifestSettings as { calendarSpan?: 3 | 5 | 7 } | undefined)
+			?.calendarSpan ?? 5;
+
+	const handleChange = (span: 3 | 5 | 7) => {
+		fetcher.submit(
+			{ intent: "update-manifest-calendar-span", span: String(span) },
+			{ method: "post" },
+		);
+	};
+
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Manifest Calendar</h3>
+			<p className="text-sm text-muted mb-4">
+				Default number of days shown in the Manifest on desktop. Mobile always
+				shows one day at a time.
+			</p>
+			<div className="flex items-center gap-2">
+				<fieldset
+					className="flex items-center rounded-lg overflow-hidden border border-platinum m-0 p-0"
+					aria-label="Manifest calendar span"
+				>
+					<legend className="sr-only">Number of days shown in Manifest</legend>
+					{([3, 5, 7] as const).map((span) => (
+						<button
+							key={span}
+							type="button"
+							onClick={() => handleChange(span)}
+							aria-pressed={calendarSpan === span}
+							aria-label={`${span} days`}
+							className={`px-4 py-2 text-sm font-medium transition-colors ${
+								calendarSpan === span
+									? "bg-hyper-green text-carbon"
+									: "text-muted hover:bg-platinum/50"
+							}`}
+						>
+							{span} days
+						</button>
+					))}
+				</fieldset>
 				{fetcher.state !== "idle" && (
 					<span className="text-hyper-green animate-pulse text-sm">
 						Saving...

@@ -44,8 +44,15 @@ export function WeekView({
 		? SLOT_TYPES
 		: SLOT_TYPES.filter((s) => s !== "snack");
 
+	const gridCols =
+		dates.length === 3
+			? "grid-cols-3"
+			: dates.length === 5
+				? "grid-cols-5"
+				: "grid-cols-7";
+
 	return (
-		<div className="grid grid-cols-7 gap-2 min-w-0">
+		<div className={`grid ${gridCols} gap-2 min-w-0`}>
 			{dates.map((date) => {
 				const d = new Date(`${date}T00:00:00`);
 				const dayName = getDayName(date, true);

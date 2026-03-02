@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	addDays,
+	getCalendarDates,
 	getDayName,
 	getWeekDates,
 	getWeekEnd,
@@ -97,5 +99,59 @@ describe("getDayName", () => {
 		expect(getDayName("2025-01-05", true)).toBe("Sun");
 		expect(getDayName("2025-01-06", true)).toBe("Mon");
 		expect(getDayName("2025-01-11", true)).toBe("Sat");
+	});
+});
+
+describe("addDays", () => {
+	it("adds positive days", () => {
+		expect(addDays("2025-01-05", 1)).toBe("2025-01-06");
+		expect(addDays("2025-01-05", 5)).toBe("2025-01-10");
+	});
+
+	it("subtracts with negative days", () => {
+		expect(addDays("2025-01-05", -1)).toBe("2025-01-04");
+		expect(addDays("2025-01-05", -7)).toBe("2024-12-29");
+	});
+
+	it("wraps across month and year boundaries", () => {
+		expect(addDays("2025-01-29", 5)).toBe("2025-02-03");
+		expect(addDays("2025-01-01", -1)).toBe("2024-12-31");
+	});
+});
+
+describe("getCalendarDates", () => {
+	describe("3-day span", () => {
+		it("returns 3 consecutive days from anchor", () => {
+			const dates = getCalendarDates(3, "2025-01-08", "sunday");
+			expect(dates).toHaveLength(3);
+			expect(dates[0]).toBe("2025-01-08");
+			expect(dates[1]).toBe("2025-01-09");
+			expect(dates[2]).toBe("2025-01-10");
+		});
+	});
+
+	describe("5-day span", () => {
+		it("returns 5 consecutive days from anchor (today + 4)", () => {
+			const dates = getCalendarDates(5, "2025-01-06", "sunday"); // Monday
+			expect(dates).toHaveLength(5);
+			expect(dates[0]).toBe("2025-01-06"); // Mon
+			expect(dates[4]).toBe("2025-01-10"); // Fri
+		});
+	});
+
+	describe("7-day span", () => {
+		it("returns full week Sunday-Saturday when weekStart is sunday", () => {
+			const dates = getCalendarDates(7, "2025-01-08", "sunday"); // Wed
+			expect(dates).toHaveLength(7);
+			expect(dates[0]).toBe("2025-01-05"); // Sun
+			expect(dates[6]).toBe("2025-01-11"); // Sat
+		});
+
+		it("returns full week Monday-Sunday when weekStart is monday", () => {
+			const dates = getCalendarDates(7, "2025-01-08", "monday"); // Wed
+			expect(dates).toHaveLength(7);
+			expect(dates[0]).toBe("2025-01-06"); // Mon
+			expect(dates[6]).toBe("2025-01-12"); // Sun
+		});
 	});
 });

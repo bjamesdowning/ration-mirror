@@ -3,11 +3,13 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 } from "~/components/icons/PageIcons";
-import { getTodayISO, getWeekEnd, getWeekStart } from "~/lib/manifest-dates";
+import { addDays, getWeekEnd, getWeekStart } from "~/lib/manifest-dates";
 
 interface WeekNavigatorProps {
-	currentWeekStart: string;
-	weekStart?: "sunday" | "monday";
+	calendarSpan: 3 | 5 | 7;
+	currentRangeStart: string;
+	today: string;
+	weekStartPref: "sunday" | "monday";
 }
 
 export function formatWeekRange(start: string, end: string): string {
@@ -36,57 +38,54 @@ export function formatWeekRange(start: string, end: string): string {
 	return `${monthNames[s.getMonth()]} ${s.getDate()}, ${s.getFullYear()} – ${monthNames[e.getMonth()]} ${e.getDate()}, ${e.getFullYear()}`;
 }
 
-export function addDays(date: string, days: number): string {
-	const d = new Date(`${date}T00:00:00`);
-	d.setDate(d.getDate() + days);
-	const y = d.getFullYear();
-	const m = String(d.getMonth() + 1).padStart(2, "0");
-	const day = String(d.getDate()).padStart(2, "0");
-	return `${y}-${m}-${day}`;
-}
-
 export function WeekNavigator({
-	currentWeekStart,
-	weekStart = "sunday",
+	calendarSpan,
+	currentRangeStart,
+	today,
+	weekStartPref,
 }: WeekNavigatorProps) {
 	const navigate = useNavigate();
-	const weekEnd = getWeekEnd(currentWeekStart);
-	const today = getTodayISO();
-	const currentStart = getWeekStart(today, weekStart);
-	const isCurrentWeek = currentWeekStart === currentStart;
+	const weekEnd =
+		calendarSpan === 7
+			? getWeekEnd(currentRangeStart)
+			: addDays(currentRangeStart, calendarSpan - 1);
 
-	const goTo = (weekStartDate: string) => {
-		navigate(`?week=${weekStartDate}`);
+	const todayAnchor =
+		calendarSpan === 7 ? getWeekStart(today, weekStartPref) : today;
+	const isCurrentRange = currentRangeStart === todayAnchor;
+
+	const goTo = (date: string) => {
+		navigate(`?week=${date}`);
 	};
 
 	return (
 		<div className="flex items-center gap-2">
 			<button
 				type="button"
-				onClick={() => goTo(addDays(currentWeekStart, -7))}
-				aria-label="Previous week"
+				onClick={() => goTo(addDays(currentRangeStart, -calendarSpan))}
+				aria-label="Previous"
 				className="p-2 rounded-lg text-muted hover:text-carbon hover:bg-platinum transition-colors"
 			>
 				<ChevronLeftIcon className="w-4 h-4" />
 			</button>
 
 			<span className="text-sm font-medium text-carbon min-w-[180px] text-center">
-				{formatWeekRange(currentWeekStart, weekEnd)}
+				{formatWeekRange(currentRangeStart, weekEnd)}
 			</span>
 
 			<button
 				type="button"
-				onClick={() => goTo(addDays(currentWeekStart, 7))}
-				aria-label="Next week"
+				onClick={() => goTo(addDays(currentRangeStart, calendarSpan))}
+				aria-label="Next"
 				className="p-2 rounded-lg text-muted hover:text-carbon hover:bg-platinum transition-colors"
 			>
 				<ChevronRightIcon className="w-4 h-4" />
 			</button>
 
-			{!isCurrentWeek && (
+			{!isCurrentRange && (
 				<button
 					type="button"
-					onClick={() => goTo(currentStart)}
+					onClick={() => goTo(todayAnchor)}
 					className="ml-1 px-3 py-1.5 text-xs font-medium text-carbon bg-platinum rounded-lg hover:bg-platinum/70 transition-colors"
 				>
 					Today

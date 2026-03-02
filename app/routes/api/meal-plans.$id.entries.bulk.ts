@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import {
-	chunkedInsert,
+	chunkArray,
 	D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT,
 } from "~/lib/query-utils.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -97,9 +97,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		}
 
 		// D1 enforces a 100-parameter limit per statement. mealPlanEntry has
-		// 8 bound columns per row (id + 7 fields), giving a safe batch of 12.
-		// chunkedInsert splits the work into sequential D1 round-trips so any
-		// number of entries up to the schema max (50) succeeds reliably.
+		// 8 bound columns per row (id + 7 fields), giving a safe chunk size of 12.
+		// We build one Drizzle INSERT per chunk and send them all in a single
+		// db.batch() call — one HTTP round-trip to D1 regardless of entry count.
 		const rows = inputEntries.map((e) => ({
 			planId: planRows[0].id,
 			mealId: e.mealId,
@@ -110,9 +110,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			notes: e.notes ?? null,
 		}));
 
-		await chunkedInsert(rows, D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT, (chunk) =>
-			db.insert(schema.mealPlanEntry).values(chunk),
-		);
+		const insertStatements = chunkArray(
+			rows,
+			D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT,
+		).map((chunk) => db.insert(schema.mealPlanEntry).values(chunk));
+
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await db.batch(insertStatements as [any, ...any[]]);
 
 		return { inserted: rows.length };
 	} catch (e) {

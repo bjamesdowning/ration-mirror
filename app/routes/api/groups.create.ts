@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { data, redirect } from "react-router";
+import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
@@ -46,12 +46,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const slug = formData.get("slug")?.toString();
 
 	if (!name || !slug) {
-		throw data({ error: "Name and Slug are required" }, { status: 400 });
+		return data({ error: "Name and Slug are required" }, { status: 400 });
 	}
 
 	// Validate slug format (alphanumeric, hyphens)
 	if (!/^[a-z0-9-]+$/.test(slug)) {
-		throw data(
+		return data(
 			{
 				error:
 					"Unique ID must contain only lowercase letters, numbers, and hyphens",
@@ -87,7 +87,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	});
 
 	if (existing) {
-		throw data(
+		return data(
 			{ error: "Unique ID is already taken. Please choose another." },
 			{ status: 400 },
 		);
@@ -121,11 +121,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		]);
 	} catch (e) {
 		log.error("Group creation failed", e);
-		throw data(
+		return data(
 			{ error: "Failed to create group. Please try again." },
 			{ status: 500 },
 		);
 	}
 
-	return redirect("/hub");
+	return data({ success: true }, { status: 200 });
 }

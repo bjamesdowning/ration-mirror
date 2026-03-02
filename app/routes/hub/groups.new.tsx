@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { HubHeader } from "~/components/hub/HubHeader";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { requireAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/groups.new";
 
 type CreateGroupResponse = {
+	success?: boolean;
 	error?: string;
 	upgradePath?: string;
 	resource?: string;
 	tier?: string;
+	current?: number;
+	limit?: number;
 };
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -21,12 +24,22 @@ export default function CreateGroupPage() {
 	const fetcher = useFetcher<CreateGroupResponse>({ key: "create-group" });
 	const [dismissedUpgrade, setDismissedUpgrade] = useState(false);
 	const isSubmitting = fetcher.state === "submitting";
-	const showUpgradePrompt =
-		!dismissedUpgrade &&
-		fetcher.data?.error === "capacity_exceeded" &&
-		fetcher.data?.upgradePath === "crew_member";
 
-	// Reset dismissed when user submits again so a new 403 shows the prompt
+	const isCapacityExceeded = fetcher.data?.error === "capacity_exceeded";
+	const isCrewAtLimit =
+		isCapacityExceeded && fetcher.data?.tier === "crew_member";
+	const showUpgradePrompt =
+		!dismissedUpgrade && isCapacityExceeded && !isCrewAtLimit;
+
+	// Navigate via full reload on success so Better Auth's useListOrganizations
+	// cache is re-fetched from the server before the hub renders.
+	useEffect(() => {
+		if (fetcher.data?.success) {
+			window.location.href = "/hub";
+		}
+	}, [fetcher.data?.success]);
+
+	// Reset dismissed state on each new submission
 	useEffect(() => {
 		if (fetcher.state === "submitting") setDismissedUpgrade(false);
 	}, [fetcher.state]);
@@ -45,12 +58,28 @@ export default function CreateGroupPage() {
 					action="/api/groups/create"
 					className="space-y-6"
 				>
-					{fetcher.data?.error &&
-						fetcher.data.error !== "capacity_exceeded" && (
-							<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
-								{fetcher.data.error}
-							</div>
-						)}
+					{fetcher.data?.error && !isCapacityExceeded && (
+						<div className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm font-medium">
+							{fetcher.data.error}
+						</div>
+					)}
+
+					{isCrewAtLimit && (
+						<div className="p-4 bg-carbon/5 border border-carbon/10 rounded-lg text-sm">
+							<p className="font-medium text-carbon">5-group limit reached</p>
+							<p className="text-muted mt-1">
+								Your Crew plan supports up to {fetcher.data?.limit ?? 5} groups.
+								Visit{" "}
+								<Link
+									to="/hub/pricing"
+									className="text-hyper-green font-medium underline underline-offset-2"
+								>
+									pricing
+								</Link>{" "}
+								for details on available plans.
+							</p>
+						</div>
+					)}
 
 					<div>
 						<label

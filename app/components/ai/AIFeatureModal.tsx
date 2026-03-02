@@ -131,6 +131,17 @@ export function AIFeatureIntroView({
 				<p className="text-xs text-muted">
 					You have {credits} credit{credits !== 1 ? "s" : ""}.
 				</p>
+				<p className="text-xs text-muted">
+					AI-generated results are suggestions only. Always review before
+					saving.{" "}
+					<a
+						href="/legal/terms"
+						className="underline hover:text-carbon dark:hover:text-white transition-colors"
+					>
+						Learn more
+					</a>
+					.
+				</p>
 			</div>
 
 			<div className="p-6 pt-0 flex flex-wrap gap-3 justify-end">

@@ -229,7 +229,8 @@ export const ImportRecipeButton = forwardRef<
 											aria-describedby="import-url-hint"
 										/>
 										<p id="import-url-hint" className="text-xs text-muted mt-1">
-											HTTPS only. Works with most recipe sites.
+											HTTPS only. Tested with allrecipes.com and most major
+											recipe sites.
 										</p>
 									</div>
 									<button

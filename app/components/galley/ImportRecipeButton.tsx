@@ -20,6 +20,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { Toast } from "~/components/shell/Toast";
 
 interface ImportedRecipe {
 	name: string;
@@ -62,8 +63,11 @@ export const ImportRecipeButton = forwardRef<
 	const [view, setView] = useState<
 		"intro" | "url" | "loading" | "result" | "error" | "duplicate"
 	>("intro");
+	const [showErrorToast, setShowErrorToast] = useState(false);
+	const [errorToastMessage, setErrorToastMessage] = useState("");
 	const [directionsOpen, setDirectionsOpen] = useState(false);
 	const saveInFlight = useRef(false);
+	const importInFlight = useRef(false);
 	const importFetcher = useFetcher<{
 		success: boolean;
 		recipe?: ImportedRecipe;
@@ -86,18 +90,39 @@ export const ImportRecipeButton = forwardRef<
 	}));
 
 	const recipe = importFetcher.data?.recipe;
-	const importError = importFetcher.data?.error ?? importFetcher.data?.message;
+	const importError =
+		importFetcher.data?.error ??
+		importFetcher.data?.message ??
+		"Something went wrong. Check the URL and try again.";
 
 	useEffect(() => {
 		if (importFetcher.state === "idle" && importFetcher.data !== undefined) {
+			importInFlight.current = false;
 			if (importFetcher.data?.recipe) {
 				setDirectionsOpen(false);
 				setView("result");
 			} else if (importFetcher.data?.code === "DUPLICATE_URL") {
 				setView("duplicate");
 			} else if (importFetcher.data?.error || importFetcher.data?.message) {
+				const msg =
+					importFetcher.data.error ??
+					importFetcher.data.message ??
+					"Import failed. Check the URL and try again.";
+				setErrorToastMessage(msg);
+				setShowErrorToast(true);
 				setView("error");
 			}
+		} else if (
+			importFetcher.state === "idle" &&
+			importFetcher.data === undefined &&
+			importInFlight.current
+		) {
+			importInFlight.current = false;
+			setErrorToastMessage(
+				"Something went wrong. Check the URL and try again.",
+			);
+			setShowErrorToast(true);
+			setView("error");
 		}
 	}, [importFetcher.state, importFetcher.data]);
 
@@ -106,6 +131,7 @@ export const ImportRecipeButton = forwardRef<
 		if (!trimmed) return;
 		setImportedUrl(trimmed);
 		setView("loading");
+		importInFlight.current = true;
 		importFetcher.submit(JSON.stringify({ url: trimmed }), {
 			method: "post",
 			action: "/api/meals/import",
@@ -170,6 +196,15 @@ export const ImportRecipeButton = forwardRef<
 
 	return (
 		<>
+			{showErrorToast && (
+				<Toast
+					variant="error"
+					position="top-right"
+					title="Import Failed"
+					description={errorToastMessage}
+					onDismiss={() => setShowErrorToast(false)}
+				/>
+			)}
 			<button
 				type="button"
 				onClick={() => setShowModal(true)}

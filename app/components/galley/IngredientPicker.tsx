@@ -255,10 +255,10 @@ export function IngredientPicker({
 						</div>
 
 						{/* Desktop-only: optional toggle + remove inline */}
-						<div className="hidden sm:flex col-span-1 items-center justify-end gap-2">
+						<div className="hidden sm:flex col-span-1 items-center justify-end">
 							<label
-								className="flex items-center gap-1 cursor-pointer"
-								title="Optional ingredient"
+								className="flex items-center cursor-pointer"
+								title="Optional"
 							>
 								<input
 									type="checkbox"
@@ -270,9 +270,6 @@ export function IngredientPicker({
 									}
 									className="rounded border-platinum accent-hyper-green text-hyper-green focus:ring-2 focus:ring-hyper-green/50 focus:ring-offset-0"
 								/>
-								<span className="text-xs text-muted whitespace-nowrap">
-									Optional
-								</span>
 							</label>
 						</div>
 
@@ -280,9 +277,24 @@ export function IngredientPicker({
 							<button
 								type="button"
 								onClick={() => removeIngredient(idx)}
-								className="text-danger hover:text-danger/80 text-xs font-medium transition-colors"
+								aria-label="Remove ingredient"
+								className="flex items-center justify-center w-6 h-6 text-danger hover:text-danger/80 transition-colors"
 							>
-								Remove
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									aria-hidden="true"
+								>
+									<line x1="18" y1="6" x2="6" y2="18" />
+									<line x1="6" y1="6" x2="18" y2="18" />
+								</svg>
 							</button>
 						</div>
 					</div>

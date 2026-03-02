@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type ToastVariant = "info" | "success";
+type ToastVariant = "info" | "success" | "error";
 type ToastPosition = "top-right" | "bottom-right";
 
 interface ToastProps {
@@ -22,6 +22,8 @@ const variantClasses: Record<ToastVariant, string> = {
 	info: "glass-panel rounded-xl p-4 shadow-xl border-l-4 border-hyper-green animate-slide-in-right",
 	success:
 		"bg-[#111111]/90 border border-hyper-green text-hyper-green px-6 py-4 rounded-xl shadow-2xl animate-slide-up",
+	error:
+		"glass-panel rounded-xl p-4 shadow-xl border-l-4 border-red-500 animate-slide-in-right",
 };
 
 export function Toast({
@@ -33,13 +35,23 @@ export function Toast({
 	onDismiss,
 }: ToastProps) {
 	const titleClass =
-		variant === "success" ? "font-bold text-white" : "font-bold text-carbon";
+		variant === "success"
+			? "font-bold text-white"
+			: variant === "error"
+				? "font-bold text-red-600 dark:text-red-400"
+				: "font-bold text-carbon dark:text-white";
 	const descriptionClass =
-		variant === "success" ? "text-sm text-gray-300" : "text-sm text-muted";
+		variant === "success"
+			? "text-sm text-gray-300"
+			: variant === "error"
+				? "text-sm text-red-500/80 dark:text-red-400/80"
+				: "text-sm text-muted";
 	const closeClass =
 		variant === "success"
 			? "text-white/70 hover:text-white"
-			: "text-muted hover:text-carbon";
+			: variant === "error"
+				? "text-red-400/70 hover:text-red-500"
+				: "text-muted hover:text-carbon";
 
 	return (
 		<div className={`${positionClasses[position]} ${variantClasses[variant]}`}>

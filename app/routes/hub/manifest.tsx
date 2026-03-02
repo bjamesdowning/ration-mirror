@@ -21,6 +21,7 @@ import { DayTab } from "~/components/manifest/DayTab";
 import { DayView } from "~/components/manifest/DayView";
 import { EmptyManifest } from "~/components/manifest/EmptyManifest";
 import { MealPicker } from "~/components/manifest/MealPicker";
+import { PlanWeekButton } from "~/components/manifest/PlanWeekButton";
 import { ShareManifestModal } from "~/components/manifest/ShareManifestModal";
 import {
 	addDays,
@@ -37,6 +38,7 @@ import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
+import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
 	MealForPicker,
 	MealPlanEntryWithMeal,
@@ -77,9 +79,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		: getWeekStart(today, weekStartPref);
 	const currentWeekEnd = getWeekEnd(currentWeekStart);
 
-	const [plan, meals] = await Promise.all([
+	const [plan, meals, credits] = await Promise.all([
 		ensureMealPlan(db, groupId),
 		getMealsForPicker(db, groupId),
+		checkBalance(context.cloudflare.env, groupId),
 	]);
 
 	const entries = await getWeekEntries(
@@ -97,6 +100,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		currentWeekStart,
 		weekStartPref,
 		showSnackSlot,
+		credits,
+		planWeekCost: AI_COSTS.MEAL_PLAN_WEEKLY,
 	};
 }
 
@@ -119,6 +124,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		currentWeekStart,
 		weekStartPref,
 		showSnackSlot,
+		credits,
+		planWeekCost,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -158,6 +165,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		setPickerOpen(true);
 	};
 
+	const [lastBulkSource, setLastBulkSource] = useState<"copy" | "plan-week">(
+		"copy",
+	);
+
 	const addFetcher = useFetcher();
 	const bulkFetcher = useFetcher<{ inserted?: number; error?: string }>();
 	const consumeFetcher = useFetcher<{
@@ -170,6 +181,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const consumeErrorToast = useToast({ duration: 6000 });
 	const copyToast = useToast({ duration: 3000 });
 	const copyErrorToast = useToast({ duration: 6000 });
+	const planWeekToast = useToast({ duration: 4000 });
+	const planWeekErrorToast = useToast({ duration: 6000 });
 
 	const handleConsume = (entryIds: string[]) => {
 		if (entryIds.length === 0) return;
@@ -208,6 +221,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	) => {
 		if (!copyEntry || targetSlots.length === 0) return;
 		setCopyEntry(null);
+		setLastBulkSource("copy");
 		const newEntries = targetSlots.map(({ date, slotType }) => ({
 			mealId: copyEntry.mealId,
 			date,
@@ -227,11 +241,40 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	// -------------------------------------------------------------------------
 	// Copy day handler — copies all entries from a source day to target dates
 	// -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// Plan Week handler — submits AI-generated schedule to bulk endpoint
+	// -------------------------------------------------------------------------
+	const handleScheduleConfirmed = (
+		schedule: Array<{
+			date: string;
+			slotType: string;
+			mealId: string;
+			mealName: string;
+			notes?: string | null;
+		}>,
+	) => {
+		if (schedule.length === 0) return;
+		setLastBulkSource("plan-week");
+		const newEntries = schedule.map((e, i) => ({
+			mealId: e.mealId,
+			date: e.date,
+			slotType: e.slotType as SlotType,
+			orderIndex: i,
+			...(e.notes != null && { notes: e.notes }),
+		}));
+		bulkFetcher.submit(JSON.stringify({ entries: newEntries }), {
+			method: "POST",
+			action: `/api/meal-plans/${plan.id}/entries/bulk`,
+			encType: "application/json",
+		});
+	};
+
 	const handleCopyDaySubmit = (targetDates: string[]) => {
 		if (!copyDayDate || targetDates.length === 0) return;
 		const sourceDayEntries = entries.filter((e) => e.date === copyDayDate);
 		if (sourceDayEntries.length === 0) return;
 		setCopyDayDate(null);
+		setLastBulkSource("copy");
 		const newEntries = targetDates.flatMap((date) =>
 			sourceDayEntries.map((e) => ({
 				mealId: e.mealId,
@@ -294,20 +337,31 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		consumeErrorToast.show,
 	]);
 
-	// Revalidate and show toasts after bulk copy
+	// Revalidate and show toasts after bulk copy / plan-week confirm
 	useEffect(() => {
 		if (bulkFetcher.state !== "idle" || !bulkFetcher.data) return;
-		const data = bulkFetcher.data;
-		if (typeof data.inserted === "number") {
+		const d = bulkFetcher.data;
+		if (typeof d.inserted === "number") {
 			revalidator.revalidate();
-			copyToast.show();
-		} else if (data.error) {
-			copyErrorToast.show();
+			if (lastBulkSource === "plan-week") {
+				planWeekToast.show();
+			} else {
+				copyToast.show();
+			}
+		} else if (d.error) {
+			if (lastBulkSource === "plan-week") {
+				planWeekErrorToast.show();
+			} else {
+				copyErrorToast.show();
+			}
 		}
 	}, [
 		bulkFetcher.state,
 		bulkFetcher.data,
+		lastBulkSource,
 		revalidator.revalidate,
+		planWeekToast.show,
+		planWeekErrorToast.show,
 		copyToast.show,
 		copyErrorToast.show,
 	]);
@@ -341,9 +395,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const weekEnd = getWeekEnd(currentWeekStart);
 	const weekRangeLabel = formatWeekRange(currentWeekStart, weekEnd);
 
-	// Mobile "more options" sheet content — Share button only (Consume is in FAB)
+	// Mobile "more options" sheet content — Plan Week + Share (Consume is in FAB)
 	const moreOptionsContent = (
 		<div className="space-y-3 pt-2">
+			<PlanWeekButton
+				planId={plan.id}
+				credits={credits}
+				cost={planWeekCost}
+				weekDates={weekDates}
+				currentWeekStart={currentWeekStart}
+				showSnackSlot={showSnackSlot}
+				meals={meals}
+				onScheduleConfirmed={handleScheduleConfirmed}
+				isSubmitting={bulkFetcher.state !== "idle"}
+			/>
 			<button
 				type="button"
 				onClick={() => {
@@ -409,7 +474,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				</div>
 				<PanelToolbar
 					secondaryAction={
-						<div className="flex gap-2">
+						<div className="flex gap-2 flex-wrap">
 							{unconsumedForSelectedDay > 0 && (
 								<button
 									type="button"
@@ -422,6 +487,17 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									Consume {selectedDayLabel}
 								</button>
 							)}
+							<PlanWeekButton
+								planId={plan.id}
+								credits={credits}
+								cost={planWeekCost}
+								weekDates={weekDates}
+								currentWeekStart={currentWeekStart}
+								showSnackSlot={showSnackSlot}
+								meals={meals}
+								onScheduleConfirmed={handleScheduleConfirmed}
+								isSubmitting={bulkFetcher.state !== "idle"}
+							/>
 							<button
 								type="button"
 								onClick={() => setShareOpen(true)}
@@ -631,6 +707,28 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					title="Copy failed"
 					description={bulkFetcher.data.error}
 					onDismiss={copyErrorToast.hide}
+				/>
+			)}
+
+			{/* Plan Week success toast */}
+			{planWeekToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Week planned!"
+					description="Your meals have been added to the Manifest."
+					onDismiss={planWeekToast.hide}
+				/>
+			)}
+
+			{/* Plan Week error toast */}
+			{planWeekErrorToast.isOpen && (
+				<Toast
+					variant="info"
+					position="bottom-right"
+					title="Planning failed"
+					description="Could not save the week plan. Please try again."
+					onDismiss={planWeekErrorToast.hide}
 				/>
 			)}
 

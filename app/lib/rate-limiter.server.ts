@@ -186,6 +186,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 20,
 		keyPrefix: "rate:api_import",
 	},
+	plan_week: {
+		windowMs: 60_000, // 1 minute — expensive AI call, keep tight
+		maxRequests: 5,
+		keyPrefix: "rate:plan_week",
+	},
 };
 
 // ─── Edge Cache TTL ───────────────────────────────────────────────────────────

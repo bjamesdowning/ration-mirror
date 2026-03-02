@@ -1,6 +1,13 @@
 import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { meal, mealPlan, mealPlanEntry, member, user } from "../db/schema";
+import {
+	meal,
+	mealPlan,
+	mealPlanEntry,
+	mealTag,
+	member,
+	user,
+} from "../db/schema";
 import { log } from "./logging.server";
 import { cookMeal } from "./meals.server";
 import type { ManifestPreviewData } from "./types";
@@ -771,10 +778,35 @@ export async function getMealsForPicker(
 		.where(eq(meal.organizationId, organizationId))
 		.orderBy(meal.name);
 
+	if (rows.length === 0) {
+		return [];
+	}
+
+	// Batch-load tags to avoid N+1 queries. D1 SQLite limit is 100 params
+	// per query, so we chunk the IDs.
+	const mealIds = rows.map((r) => r.id);
+	const CHUNK_SIZE = 90;
+	const tagRows: { mealId: string; tag: string }[] = [];
+	for (let i = 0; i < mealIds.length; i += CHUNK_SIZE) {
+		const chunk = mealIds.slice(i, i + CHUNK_SIZE);
+		const chunkTags = await d1
+			.select({ mealId: mealTag.mealId, tag: mealTag.tag })
+			.from(mealTag)
+			.where(inArray(mealTag.mealId, chunk));
+		tagRows.push(...chunkTags);
+	}
+
+	const tagsByMealId = new Map<string, string[]>();
+	for (const { mealId, tag } of tagRows) {
+		const existing = tagsByMealId.get(mealId) ?? [];
+		existing.push(tag);
+		tagsByMealId.set(mealId, existing);
+	}
+
 	return rows.map((r) => ({
 		...r,
 		servings: r.servings ?? 1,
-		tags: [],
+		tags: tagsByMealId.get(r.id) ?? [],
 		type: r.type ?? "recipe",
 	}));
 }

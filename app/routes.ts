@@ -94,6 +94,10 @@ export default [
 		"routes/api/meal-plans.$id.entries.$entryId.ts",
 	),
 	route("api/meal-plans/:id/share", "routes/api/meal-plans.$id.share.ts"),
+	route(
+		"api/meal-plans/:id/plan-week",
+		"routes/api/meal-plans.$id.plan-week.ts",
+	),
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),

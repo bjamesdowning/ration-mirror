@@ -1,5 +1,6 @@
 import { MoreVertical } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Link } from "react-router";
 
@@ -18,101 +19,143 @@ interface ActionMenuProps {
 
 export function ActionMenu({ actions }: ActionMenuProps) {
 	const [isOpen, setIsOpen] = useState(false);
+	const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
+		null,
+	);
+	const buttonRef = useRef<HTMLButtonElement>(null);
+
+	const handleOpen = (e: React.MouseEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!isOpen && buttonRef.current) {
+			const rect = buttonRef.current.getBoundingClientRect();
+			setMenuPos({
+				top: rect.bottom + 4,
+				right: window.innerWidth - rect.right,
+			});
+		}
+		setIsOpen((prev) => !prev);
+	};
+
+	const handleClose = useCallback(() => {
+		setIsOpen(false);
+		setMenuPos(null);
+	}, []);
+
+	// Close on scroll or resize to avoid stale positioning
+	useEffect(() => {
+		if (!isOpen) return;
+		window.addEventListener("scroll", handleClose, {
+			capture: true,
+			passive: true,
+		});
+		window.addEventListener("resize", handleClose, { passive: true });
+		return () => {
+			window.removeEventListener("scroll", handleClose, { capture: true });
+			window.removeEventListener("resize", handleClose);
+		};
+	}, [isOpen, handleClose]);
 
 	const handleAction = (action: ActionMenuItem) => {
 		if (action.onClick) {
 			action.onClick();
 		}
-		setIsOpen(false);
+		handleClose();
 	};
 
-	return (
-		<div className="relative">
-			<button
-				type="button"
-				onClick={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					setIsOpen(!isOpen);
-				}}
-				className="flex items-center justify-center w-8 h-8 rounded-lg bg-ceramic/90 backdrop-blur-sm hover:bg-platinum transition-colors shadow-sm"
-				aria-label="More actions"
-			>
-				<MoreVertical className="w-4 h-4 text-carbon" />
-			</button>
+	const dropdownContent =
+		isOpen && menuPos
+			? createPortal(
+					<>
+						{/* Backdrop */}
+						<button
+							type="button"
+							className="fixed inset-0 z-[9998] w-full h-full cursor-default focus:outline-none"
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								handleClose();
+							}}
+							aria-label="Close menu"
+						/>
 
-			{isOpen && (
-				<>
-					{/* Backdrop */}
-					<button
-						type="button"
-						className="fixed inset-0 z-30 w-full h-full cursor-default focus:outline-none"
-						onClick={(e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							setIsOpen(false);
-						}}
-						aria-label="Close menu"
-					/>
+						{/* Dropdown — rendered outside overflow ancestors via portal */}
+						<div
+							className="fixed z-[9999] glass-panel rounded-xl shadow-lg p-2 min-w-[160px]"
+							style={{ top: menuPos.top, right: menuPos.right }}
+						>
+							{actions.map((action, index) => {
+								const Content = () => (
+									<>
+										{action.icon && (
+											<span
+												className={
+													action.destructive ? "text-danger" : "text-muted"
+												}
+											>
+												{action.icon}
+											</span>
+										)}
+										<div className="text-sm font-medium">{action.label}</div>
+									</>
+								);
 
-					{/* Dropdown */}
-					<div className="absolute right-0 top-full mt-1 z-40 glass-panel rounded-xl shadow-lg p-2 min-w-[160px]">
-						{actions.map((action, index) => {
-							const Content = () => (
-								<>
-									{action.icon && (
-										<span
-											className={
-												action.destructive ? "text-danger" : "text-muted"
-											}
+								if (action.to) {
+									return (
+										<Link
+											key={`${action.label}-${index}`}
+											to={action.to}
+											reloadDocument={action.reloadDocument}
+											onClick={handleClose}
+											className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
+												action.destructive
+													? "text-danger hover:bg-danger/10"
+													: "text-carbon hover:bg-platinum"
+											}`}
 										>
-											{action.icon}
-										</span>
-									)}
-									<div className="text-sm font-medium">{action.label}</div>
-								</>
-							);
+											<Content />
+										</Link>
+									);
+								}
 
-							if (action.to) {
 								return (
-									<Link
+									<button
 										key={`${action.label}-${index}`}
-										to={action.to}
-										reloadDocument={action.reloadDocument}
-										onClick={() => setIsOpen(false)}
-										className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
+										type="button"
+										onClick={(e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											handleAction(action);
+										}}
+										className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
 											action.destructive
 												? "text-danger hover:bg-danger/10"
 												: "text-carbon hover:bg-platinum"
 										}`}
 									>
 										<Content />
-									</Link>
+									</button>
 								);
-							}
+							})}
+						</div>
+					</>,
+					document.body,
+				)
+			: null;
 
-							return (
-								<button
-									key={`${action.label}-${index}`}
-									type="button"
-									onClick={(e) => {
-										e.preventDefault();
-										e.stopPropagation();
-										handleAction(action);
-									}}
-									className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
-										action.destructive
-											? "text-danger hover:bg-danger/10"
-											: "text-carbon hover:bg-platinum"
-									}`}
-								>
-									<Content />
-								</button>
-							);
-						})}
-					</div>
-				</>
-			)}
+	return (
+		<div className="relative">
+			<button
+				ref={buttonRef}
+				type="button"
+				onClick={handleOpen}
+				className="flex items-center justify-center w-8 h-8 rounded-lg bg-ceramic/90 backdrop-blur-sm hover:bg-platinum transition-colors shadow-sm"
+				aria-label="More actions"
+			>
+				<MoreVertical className="w-4 h-4 text-carbon" />
+			</button>
+
+			{dropdownContent}
 		</div>
 	);
 }

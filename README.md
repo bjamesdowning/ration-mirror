@@ -2,7 +2,7 @@
 
 > **Architecture:** React Router v7 (SSR) + Drizzle ORM + Better Auth | **Platform:** Cloudflare Workers | **Domain:** `ration.mayutic.com`
 
-A pantry management and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, meal generation, tiered subscriptions, and multi-tenant group sharing.
+A pantry management and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, semantic ingredient matching, meal generation, weekly meal planning, tiered subscriptions, and multi-tenant group sharing. Built for the Cloudflare paid plan — design decisions prioritise correctness, latency, and scale over free-tier frugality.
 
 ---
 
@@ -14,147 +14,148 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
   - [3.1 Receipt Scan (AI Gateway + D1 + KV)](#31-receipt-scan-ai-gateway--d1--kv)
   - [3.2 Credit Purchase (Stripe + D1 + KV)](#32-credit-purchase-stripe--d1--kv)
   - [3.3 Inventory Search (D1 + KV)](#33-inventory-search-d1--kv)
-- [4. Database Schema](#4-database-schema)
-  - [4.1 Entity-Relationship Diagram](#41-entity-relationship-diagram)
-  - [4.2 Table Reference](#42-table-reference)
-- [5. Security Architecture](#5-security-architecture)
-  - [5.1 Authentication Flow](#51-authentication-flow)
-  - [5.2 Multi-Tenant Isolation (Organizations)](#52-multi-tenant-isolation-organizations)
-  - [5.3 Route Access Control](#53-route-access-control)
-  - [5.4 Defence in Depth Layers](#54-defence-in-depth-layers)
-- [6. Behaviour Under Load & At Scale](#6-behaviour-under-load--at-scale)
-  - [6.1 Scalability Architecture](#61-scalability-architecture)
-  - [6.2 Rate Limiting Matrix](#62-rate-limiting-matrix)
-- [7. Tier & Capacity System](#7-tier--capacity-system)
+  - [3.4 Meal Generation (AI Gateway + Vectorize)](#34-meal-generation-ai-gateway--vectorize)
+  - [3.5 Supply Sync (D1 + Vectorize)](#35-supply-sync-d1--vectorize)
+  - [3.6 Meal Plan Consume Flow (D1 + Vectorize)](#36-meal-plan-consume-flow-d1--vectorize)
+- [4. Feature Reference](#4-feature-reference)
+  - [4.1 Cargo (Inventory)](#41-cargo-inventory)
+  - [4.2 Galley (Recipes & Provisions)](#42-galley-recipes--provisions)
+  - [4.3 Manifest (Meal Plan Calendar)](#43-manifest-meal-plan-calendar)
+  - [4.4 Supply List](#44-supply-list)
+  - [4.5 Hub Dashboard](#45-hub-dashboard)
+- [5. AI & Vector Systems](#5-ai--vector-systems)
+  - [5.1 Embedding Pipeline](#51-embedding-pipeline)
+  - [5.2 Meal Matching Engine](#52-meal-matching-engine)
+  - [5.3 AI Operations & Credit Costs](#53-ai-operations--credit-costs)
+- [6. Database Schema](#6-database-schema)
+  - [6.1 Entity-Relationship Diagram](#61-entity-relationship-diagram)
+  - [6.2 Table Reference](#62-table-reference)
+- [7. Security Architecture](#7-security-architecture)
+  - [7.1 Authentication Flow](#71-authentication-flow)
+  - [7.2 Multi-Tenant Isolation (Organizations)](#72-multi-tenant-isolation-organizations)
+  - [7.3 Route Access Control](#73-route-access-control)
+  - [7.4 Defence in Depth Layers](#74-defence-in-depth-layers)
+- [8. Tier & Capacity System](#8-tier--capacity-system)
+- [9. Behaviour Under Load & At Scale](#9-behaviour-under-load--at-scale)
+  - [9.1 Scalability Architecture](#91-scalability-architecture)
+  - [9.2 Rate Limiting Matrix](#92-rate-limiting-matrix)
+- [10. MCP Server](#10-mcp-server)
+- [11. Public REST API (v1)](#11-public-rest-api-v1)
+- [12. Testing](#12-testing)
 
 ---
 
 ## 1. Infrastructure Overview
 
-The entire application runs on Cloudflare's edge network as a single Worker with bindings to D1, R2, KV, and AI Gateway.
+The entire application runs on Cloudflare's edge network as a single Worker (`ration`) with bindings to D1, R2, KV, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol. Both Workers share the same D1/KV/R2/AI/Vectorize bindings in production.
 
 ```mermaid
 flowchart TB
-    subgraph Internet["🌐 Internet"]
-        User["👤 User<br/>Browser/PWA"]
+    subgraph Internet["Internet"]
+        User["User — Browser"]
+        AIAgent["AI Agent — MCP Client"]
     end
 
-    subgraph CloudflareDNS["☁️ Cloudflare DNS (mayutic.com)"]
-        DNS["DNS Zone<br/>mayutic.com"]
-        CustomDomain["CNAME Record<br/>ration.mayutic.com"]
+    subgraph CloudflareDNS["Cloudflare DNS (mayutic.com)"]
+        CustomDomain["ration.mayutic.com"]
+        McpDomain["mcp.ration.mayutic.com"]
     end
 
-    subgraph CloudflareEdge["⚡ Cloudflare Edge Network"]
-        CDN["Global CDN<br/>SSL/TLS Termination"]
-        SmartPlacement["Smart Placement<br/>Auto-routing"]
+    subgraph CloudflareEdge["Cloudflare Edge Network"]
+        CDN["Global CDN — SSL/TLS Termination"]
+        SmartPlacement["Smart Placement — Auto-routing to D1 region"]
     end
 
-    subgraph CloudflareWorker["🔧 Cloudflare Worker: ration"]
+    subgraph MainWorker["Cloudflare Worker: ration"]
         direction TB
-        Worker["workers/app.ts<br/>ExportedHandler&lt;Env&gt;"]
-        ReactRouter["React Router v7<br/>SSR + Client Hydration"]
-        BetterAuth["Better Auth<br/>Session Management"]
-        DrizzleORM["Drizzle ORM<br/>Type-safe Queries"]
-        
+        Worker["workers/app.ts"]
+        ReactRouter["React Router v7 — SSR + Client Hydration"]
+        BetterAuth["Better Auth — Session Management"]
+        DrizzleORM["Drizzle ORM — Type-safe D1 Queries"]
         Worker --> ReactRouter
         ReactRouter --> BetterAuth
         ReactRouter --> DrizzleORM
     end
 
-    subgraph CloudflareStorage["💾 Cloudflare Storage Services"]
-        D1[("D1 Database<br/>ration-db<br/>binding: DB<br/>SQLite")]
-        R2[("R2 Bucket<br/>ration-storage<br/>binding: STORAGE")]
-        KV[("KV Namespace<br/>RATION_KV<br/>Session/Cache")]
-        Assets["Static Assets<br/>./build/client<br/>binding: ASSETS"]
+    subgraph McpWorker["Cloudflare Worker: ration-mcp"]
+        McpHandler["workers/mcp.ts"]
+        McpAuth["API Key Auth — mcp scope"]
+        McpTools["MCP Tools — search, list, supply"]
+        McpHandler --> McpAuth
+        McpHandler --> McpTools
     end
 
-    subgraph CloudflareAI["🤖 Cloudflare AI"]
-        AIGateway["AI Gateway<br/>ration-gateway<br/>Proxy → Google AI Studio"]
+    subgraph CloudflareStorage["Cloudflare Storage"]
+        D1[("D1 — ration-db — binding: DB")]
+        R2[("R2 — ration-storage — binding: STORAGE")]
+        KV[("KV — RATION_KV — Rate Limits / Cache / Idempotency")]
+        Assets["Static Assets — binding: ASSETS"]
     end
 
-    subgraph CloudflareObservability["📊 Observability"]
-        Logs["Worker Logs<br/>Real-time Traces"]
+    subgraph CloudflareAI["Cloudflare AI Services"]
+        AIBinding["Workers AI — binding: AI — Embedding Model"]
+        Vectorize[("Vectorize — ration-cargo — 768-dim cosine")]
+        AIGateway["AI Gateway — Proxy to Google AI Studio"]
     end
 
-    subgraph ExternalAuth["🔐 OAuth Providers"]
-        Google["Google OAuth 2.0<br/>GOOGLE_CLIENT_ID<br/>GOOGLE_CLIENT_SECRET"]
+    subgraph ExternalServices["External Services"]
+        Google["Google OAuth 2.0"]
+        Stripe["Stripe API + Webhooks"]
     end
 
-    subgraph ExternalPayments["💳 Payment Processing"]
-        Stripe["Stripe API<br/>STRIPE_SECRET_KEY"]
-        StripeWebhook["Stripe Webhooks<br/>STRIPE_WEBHOOK_SECRET<br/>/api/webhook"]
-    end
-
-    subgraph Secrets["🔑 Secrets (wrangler secret)"]
-        direction LR
-        S1["BETTER_AUTH_SECRET"]
-        S2["STRIPE_SECRET_KEY"]
-        S3["STRIPE_WEBHOOK_SECRET"]
-        S4["GOOGLE_CLIENT_ID"]
-        S5["GOOGLE_CLIENT_SECRET"]
-        S6["ADMIN_EMAILS"]
-    end
-
-    %% Connection flows
-    User -->|"HTTPS Request"| DNS
-    DNS --> CustomDomain
-    CustomDomain -->|"custom_domain: true"| CDN
-    CDN --> SmartPlacement
-    SmartPlacement -->|"mode: smart"| Worker
+    User -->|"HTTPS"| CustomDomain
+    AIAgent -->|"HTTPS + X-Api-Key"| McpDomain
+    CustomDomain --> CDN --> SmartPlacement --> Worker
+    McpDomain --> McpHandler
 
     Worker -->|"binding: DB"| D1
     Worker -->|"binding: STORAGE"| R2
     Worker -->|"binding: RATION_KV"| KV
     Worker -->|"binding: ASSETS"| Assets
+    Worker -->|"binding: AI"| AIBinding
+    Worker -->|"binding: VECTORIZE"| Vectorize
     Worker -->|"fetch() via AI Gateway"| AIGateway
-    Worker -->|"observability: enabled"| Logs
+
+    McpHandler -->|"binding: DB"| D1
+    McpHandler -->|"binding: RATION_KV"| KV
+    McpHandler -->|"binding: AI"| AIBinding
+    McpHandler -->|"binding: VECTORIZE"| Vectorize
 
     BetterAuth -->|"OAuth Flow"| Google
-    ReactRouter -->|"Checkout Session"| Stripe
-    Stripe -->|"POST /api/webhook"| StripeWebhook
-    StripeWebhook -->|"Verify & Process"| Worker
-
-    Secrets -.->|"Runtime Injection"| Worker
-
-    %% Styling
-    classDef cloudflare fill:#f6821f,stroke:#333,stroke-width:2px,color:#fff
-    classDef storage fill:#1e88e5,stroke:#333,stroke-width:2px,color:#fff
-    classDef external fill:#4caf50,stroke:#333,stroke-width:2px,color:#fff
-    classDef secrets fill:#9c27b0,stroke:#333,stroke-width:2px,color:#fff
-    classDef user fill:#607d8b,stroke:#333,stroke-width:2px,color:#fff
-
-    class Worker,ReactRouter,BetterAuth,DrizzleORM,CDN,SmartPlacement cloudflare
-    class D1,R2,KV,Assets,AIGateway storage
-    class Google,Stripe,StripeWebhook external
-    class S1,S2,S3,S4,S5,S6 secrets
-    class User user
+    ReactRouter -->|"Checkout / Portal"| Stripe
+    Stripe -->|"POST /api/webhook"| Worker
 ```
 
-### Key Bindings Summary
+### Bindings Reference
 
 | Binding | Service | Purpose |
 |---------|---------|---------|
-| `DB` | D1 (SQLite) | All persistent data: users, organizations, inventory, meals, plans, ledger |
-| `RATION_KV` | KV Namespace | Distributed rate limiting, webhook idempotency, session caching |
-| `STORAGE` | R2 Bucket | Object storage for uploads (images, exports) |
-| `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) |
-| `AI` | Workers AI | AI model inference binding (reserved, currently unused) |
-| AI Gateway | External fetch | Proxied AI calls via `gateway.ai.cloudflare.com` → Google AI Studio |
+| `DB` | D1 (SQLite) | All persistent data: users, orgs, inventory, meals, plans, ledger, API keys |
+| `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
+| `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
+| `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
+| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) |
+| `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
+| AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3-flash-preview` for scan, generate, plan |
+
+**Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, and configurable retry/fallback — all from the Cloudflare dashboard with zero code changes. It also means the Google API key never needs to be rotated into application secrets; only the gateway ID is referenced.
+
+**Why Smart Placement?** Without it, a Worker isolate spun up at a PoP near the user (e.g. Tokyo) would make every D1 read across the Atlantic to the D1 primary (~100ms per query). Smart Placement relocates the isolate to the PoP closest to D1, reducing per-query latency to ~5ms at the cost of slightly higher initial connection time.
 
 ---
 
 ## 2. User Request Lifecycle
 
-Every request follows this exact path from browser to response. The diagram shows how each Cloudflare service participates.
+Every request follows this path from browser to response.
 
 ```mermaid
 sequenceDiagram
-    participant Browser as 👤 Browser
-    participant Edge as ⚡ Cloudflare Edge
-    participant Worker as 🔧 Worker (SSR)
-    participant Auth as 🔐 Better Auth
-    participant D1 as 💾 D1 Database
-    participant KV as 📦 KV Store
+    participant Browser as Browser
+    participant Edge as Cloudflare Edge
+    participant Worker as Worker (SSR)
+    participant Auth as Better Auth
+    participant D1 as D1 Database
+    participant KV as KV Store
 
     Browser->>Edge: HTTPS GET /hub
     Edge->>Edge: SSL termination + Smart Placement
@@ -178,14 +179,15 @@ sequenceDiagram
     Worker-->>Edge: HTML + hydration payload
     Edge-->>Browser: Streamed response
 
-    Note over Browser,Edge: Client hydrates React<br/>Subsequent navigations use<br/>loader/action JSON calls
+    Note over Browser,Edge: Client hydrates React. Subsequent navigations use loader/action JSON calls.
 ```
 
 **Key design decisions:**
 
-- **Smart Placement** (`mode: "smart"` in [`wrangler.jsonc`](wrangler.jsonc:29)) routes the Worker isolate to the Cloudflare PoP closest to D1, not the user. This reduces D1 latency from ~100ms (cross-region) to ~5ms (co-located).
-- **Auth instance caching** — The Better Auth instance is cached at the module level (keyed on `BETTER_AUTH_SECRET`) inside [`auth.server.ts`](app/lib/auth.server.ts:196) to avoid re-constructing the Drizzle adapter on every request within the same isolate lifetime.
-- **Bot-aware SSR** — The [`entry.server.tsx`](app/entry.server.tsx:36) waits for `allReady` on bot user-agents, ensuring search crawlers receive fully rendered HTML.
+- **Auth instance caching** — The Better Auth instance is cached at module level in [`app/lib/auth.server.ts`](app/lib/auth.server.ts) (keyed on `BETTER_AUTH_SECRET`) to avoid re-constructing the Drizzle adapter and plugin chain on every request within the same isolate lifetime.
+- **`ensureActiveOrganization()`** — Runs on every authenticated request. If no active org is set on the session, it falls back to the user's `defaultGroupId` preference, then to their personal group. This is transparent to the user and prevents a class of "missing group context" bugs on fresh sessions.
+- **Bot-aware SSR** — The `entry.server.tsx` waits for `allReady` on bot user-agents, ensuring crawlers receive fully rendered HTML. For real users, streaming begins immediately.
+- **`shouldRevalidate` on hub layout** — The `/hub` layout route forces revalidation when `?transaction=success` is in the URL so that tier and credit balance reflect a just-completed Stripe checkout without requiring a hard reload.
 
 ---
 
@@ -193,72 +195,68 @@ sequenceDiagram
 
 ### 3.1 Receipt Scan (AI Gateway + D1 + KV)
 
-The scan workflow is the most complex user-facing operation, touching KV (rate limit), D1 (credits + inventory), and AI Gateway (vision model).
+The scan workflow touches every major service: KV (rate limit), D1 (credits + inventory), Workers AI (embeddings), Vectorize (dedup), and AI Gateway (vision model). It is the most expensive single operation in the system.
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 User
-    participant Worker as 🔧 Worker
-    participant KV as 📦 KV (Rate Limit)
-    participant D1 as 💾 D1 Database
-    participant AIGateway as 🤖 AI Gateway
-    participant GoogleAI as 🧠 Google AI Studio
+    participant User as User
+    participant Worker as Worker
+    participant KV as KV (Rate Limit)
+    participant D1 as D1 Database
+    participant AIGateway as AI Gateway
+    participant GoogleAI as Google AI Studio
 
     User->>Worker: POST /api/scan (image file)
 
     rect rgb(255, 243, 224)
-        Note over Worker,KV: Step 1: Authentication + Rate Limiting
+        Note over Worker,KV: Step 1: Auth + Rate Limit
         Worker->>Worker: requireActiveGroup(session)
-        Worker->>KV: checkRateLimit("scan", userId)
+        Worker->>KV: checkRateLimit("scan", userId) — 20/min
         KV-->>Worker: { allowed: true, remaining: 19 }
     end
 
     rect rgb(232, 245, 233)
-        Note over Worker,D1: Step 2: Credit Gate (Pre-flight)
+        Note over Worker,D1: Step 2: Credit Pre-flight
         Worker->>D1: SELECT credits FROM organization WHERE id = ?
-        D1-->>Worker: credits: 12
-        Worker->>Worker: balance (12) ≥ cost (2) ✓
+        D1-->>Worker: credits: 12 — balance ≥ cost (2) ✓
     end
 
     rect rgb(227, 242, 253)
         Note over Worker,D1: Step 3: Atomic Credit Deduction
-        Worker->>D1: BEGIN BATCH
-        Worker->>D1: UPDATE org SET credits = credits - 2 WHERE credits >= 2
+        Worker->>D1: UPDATE org SET credits = credits - 2 WHERE credits >= 2 RETURNING id
         Worker->>D1: INSERT INTO ledger (amount: -2, reason: "Visual Scan")
-        D1-->>Worker: RETURNING id (deduction confirmed)
+        D1-->>Worker: deduction confirmed
     end
 
     rect rgb(243, 229, 245)
         Note over Worker,GoogleAI: Step 4: AI Vision Inference
-        Worker->>AIGateway: POST /v1/models/gemini-3-flash-preview
-        AIGateway->>GoogleAI: Proxied request (with auth token)
+        Worker->>AIGateway: POST gemini-3-flash-preview:generateContent
+        AIGateway->>GoogleAI: Proxied request
         GoogleAI-->>AIGateway: { items: [...] }
         AIGateway-->>Worker: JSON response
     end
 
     rect rgb(255, 235, 238)
-        Note over Worker,D1: Step 5: Parse + Return (or Refund)
+        Note over Worker,D1: Step 5: Validate or Refund
         alt AI success
             Worker->>Worker: Zod validate + normalize items
             Worker-->>User: { success: true, items: [...] }
         else AI failure
             Worker->>D1: addCredits(orgId, 2, "Refund: Visual Scan")
-            D1-->>Worker: credits restored
             Worker-->>User: { error: "Scan processing failed" }
         end
     end
 ```
 
-**Refund policy** (defined in [`ledger.server.ts`](app/lib/ledger.server.ts:236)): Every thrown error inside [`withCreditGate()`](app/lib/ledger.server.ts:247) triggers an automatic refund. The user never pays for a failed operation.
+**Refund policy** (in [`app/lib/ledger.server.ts`](app/lib/ledger.server.ts)): Every thrown error inside `withCreditGate()` triggers an automatic `addCredits` refund. If the refund itself fails, a `log.critical` fires with the org ID and amount for manual reconciliation. Users never pay for failed AI operations.
 
-**AI Gateway routing** (in [`scan.tsx`](app/routes/api/scan.tsx:149)):
+**Image pre-processing** (in the `CameraInput` component): Before the image is sent to the worker, the browser resizes it to a maximum of 1024px on either side at 0.8 JPEG quality on a canvas with a white background. This reduces payload size and normalises the input for the vision model without any server-side image processing dependency.
 
+**AI Gateway routing:**
 ```
 https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/google-ai-studio
   → /v1beta/models/gemini-3-flash-preview:generateContent
 ```
-
-The AI Gateway provides: logging, rate limiting, caching, cost analytics, and fallback configuration — all managed in the Cloudflare dashboard without code changes.
 
 ---
 
@@ -268,34 +266,30 @@ The payment flow uses Stripe Embedded Checkout with webhook fulfillment. KV prov
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 User
-    participant Worker as 🔧 Worker
-    participant KV as 📦 KV
-    participant Stripe as 💳 Stripe API
-    participant D1 as 💾 D1 Database
+    participant User as User
+    participant Worker as Worker
+    participant KV as KV
+    participant Stripe as Stripe API
+    participant D1 as D1 Database
 
     rect rgb(255, 243, 224)
-        Note over User,Stripe: Phase 1: Checkout Creation
+        Note over User,Stripe: Phase 1: Checkout Session
         User->>Worker: POST /api/checkout { pack: "SUPPLY_RUN" }
-        Worker->>KV: checkRateLimit("checkout", userId)
-        KV-->>Worker: allowed
+        Worker->>KV: checkRateLimit("checkout", userId) — 10/min
         Worker->>Stripe: checkout.sessions.create({ mode: "payment", metadata: { orgId, credits: 60 } })
         Stripe-->>Worker: { client_secret }
-        Worker-->>User: { clientSecret } → Stripe.js renders embedded form
+        Worker-->>User: { clientSecret } — Stripe.js renders embedded form
     end
 
     rect rgb(232, 245, 233)
         Note over Stripe,D1: Phase 2: Webhook Fulfillment (async)
         User->>Stripe: Completes payment
-        Stripe->>Worker: POST /api/webhook (signed event)
-        Worker->>Worker: Verify signature + timestamp (< 5 min)
-        Worker->>KV: checkStripeWebhookProcessed(eventId)
+        Stripe->>Worker: POST /api/webhook (Stripe-Signature header)
+        Worker->>Worker: Verify signature + timestamp (reject if > 5 min old)
+        Worker->>KV: checkStripeWebhookProcessed(eventId) — 24h TTL
         KV-->>Worker: { alreadyProcessed: false }
-
         Worker->>Stripe: sessions.retrieve(sessionId)
         Stripe-->>Worker: { payment_status: "paid", metadata }
-        
-        Worker->>D1: BEGIN BATCH
         Worker->>D1: UPDATE org SET credits = credits + 60
         Worker->>D1: INSERT INTO ledger (amount: +60, reason: "Stripe Purchase:{sessionId}")
         D1-->>Worker: committed
@@ -303,17 +297,21 @@ sequenceDiagram
     end
 ```
 
-**Idempotency** (in [`idempotency.server.ts`](app/lib/idempotency.server.ts:34)): Each Stripe event ID is stored as a KV key with a 24-hour TTL. If the same event arrives again (Stripe retries), it is acknowledged with `200 OK` without re-processing. The ledger also uses `reason:${sessionId}` as a secondary idempotency guard in [`addCredits()`](app/lib/ledger.server.ts:122).
+**Why webhook fulfillment instead of redirect-based confirmation?** Stripe can fire webhooks multiple times for the same event (network retries, timeouts). The KV idempotency key (event ID, 24h TTL) ensures credits are added exactly once regardless of how many times the webhook fires. The ledger's `reason:${sessionId}` provides a secondary guard inside `addCredits()`.
 
-**Credit packs** (from [`stripe.server.ts`](app/lib/stripe.server.ts:22)):
+**Why reject events older than 5 minutes?** Stale replayed webhooks (e.g. from Stripe test mode or infrastructure issues) should not be processed. Signature verification alone does not protect against this.
+
+**Credit packs** (from [`app/lib/stripe.server.ts`](app/lib/stripe.server.ts)):
 
 | Pack | Credits | Price | Notes |
 |------|---------|-------|-------|
 | Taste Test | 15 | €0.99 | ~7 scans |
-| Supply Run | 60 | €4.99 | Most Popular |
+| Supply Run | 60 | €4.99 | Most Popular — `WELCOME60` promo applies |
 | Mission Crate | 150 | €9.99 | Best Value |
 | Orbital Stockpile | 500 | €24.99 | Bulk |
-| Crew Member (Annual) | 60/yr | €12/yr | Unlimited capacity + renewal credits |
+| Crew Member (Annual) | 60/year | €12/year | Subscription — unlimited capacity + renewal credits |
+
+**Welcome voucher** (`WELCOME60`): New users are offered a 100% discount on the Supply Run (60 credits) via a Stripe Promotion Code. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
 
 ---
 
@@ -323,29 +321,315 @@ Search demonstrates the simpler read-path pattern: auth → rate limit → scope
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 User
-    participant Worker as 🔧 Worker
-    participant KV as 📦 KV
-    participant D1 as 💾 D1 Database
+    participant User as User
+    participant Worker as Worker
+    participant KV as KV
+    participant D1 as D1 Database
 
     User->>Worker: GET /api/search?q=milk
     Worker->>Worker: requireActiveGroup(session) → { userId, groupId }
-    Worker->>KV: checkRateLimit("search", userId)
+    Worker->>KV: checkRateLimit("search", userId) — 30 per 10s
     KV-->>Worker: { allowed: true }
     Worker->>D1: SELECT * FROM cargo WHERE organization_id = ? AND name LIKE '%milk%' LIMIT 20
     D1-->>Worker: rows[]
     Worker-->>User: { results: [...] }
 ```
 
-**Organization scoping**: Every D1 query includes `WHERE organization_id = ?` sourced from the session's [`activeOrganizationId`](app/db/schema.ts:60). This is the fundamental tenant isolation mechanism — there is no way for a user to query another organization's data without being a verified member.
+**Organization scoping:** Every D1 query includes `WHERE organization_id = ?` sourced from the session's `activeOrganizationId`. This is the fundamental tenant isolation mechanism — there is no way for a user to query another organization's data without being a verified member. The `groupId` is always sourced from `requireActiveGroup()`, never from client input.
 
 ---
 
-## 4. Database Schema
+### 3.4 Meal Generation (AI Gateway + Vectorize)
 
-### 4.1 Entity-Relationship Diagram
+Meal generation is a two-phase operation: the LLM generates recipe candidates, then Vectorize validates that the proposed ingredients actually exist in the org's pantry before the recipes are returned. This prevents the model from hallucinating exotic ingredients the user cannot source.
 
-The schema centres on the [`organization`](app/db/schema.ts:109) table. All domain data (cargo, meals, plans, supply lists) is owned by an organization, not a user directly.
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Worker as Worker
+    participant D1 as D1 Database
+    participant AIGateway as AI Gateway
+    participant AI as Workers AI
+    participant Vectorize as Vectorize
+
+    User->>Worker: POST /api/meals/generate { preferences, servings }
+    Worker->>Worker: requireActiveGroup + checkRateLimit (10/min)
+    Worker->>Worker: withCreditGate(cost=2)
+    Worker->>D1: Fetch current cargo names + user allergens
+    Worker->>AIGateway: POST gemini-3-flash-preview (pantry context + allergen prompt)
+    AIGateway-->>Worker: { recipes: [3 AI-generated meals] }
+    Worker->>Worker: Zod validate + INJECTION_PATTERNS check
+
+    loop For each recipe
+        Worker->>AI: embedBatch(ingredientNames)
+        AI-->>Worker: 768-dim vectors[]
+        Worker->>Vectorize: query(vectors, namespace=orgId, threshold=0.78)
+        Vectorize-->>Worker: matched cargo IDs
+        Worker->>Worker: Filter out meals where core ingredients are unresolvable
+    end
+
+    Worker-->>User: { meals: [verified recipes] }
+```
+
+**Why verify against Vectorize after generation?** LLMs hallucinate. Without post-generation validation, the model might suggest "saffron" or "truffle oil" when the pantry contains only rice and chicken. The Vectorize check is a semantic guard — it catches both exact misses and conceptual mismatches above the similarity threshold (0.78).
+
+**Prompt injection defence** (in [`app/lib/schemas/meal.ts`](app/lib/schemas/meal.ts)): All user-supplied text fields passed to the LLM (preferences, meal names) are checked against `INJECTION_PATTERNS` — a set of regexes targeting common prompt injection vectors — before being included in the AI prompt.
+
+---
+
+### 3.5 Supply Sync (D1 + Vectorize)
+
+The supply list is generated by diffing what selected meals need against what cargo the org already has. Vectorize handles the gap between how an ingredient is named in a recipe vs. how it's labelled in the pantry.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Worker as Worker
+    participant D1 as D1 Database
+    participant Vectorize as Vectorize
+
+    User->>Worker: POST /hub/supply (intent: update-list)
+    Worker->>D1: Fetch active meal selections + servings overrides
+    Worker->>D1: Fetch ingredients for selected meals
+    Worker->>D1: fetchOrgCargoIndex() — narrow projection (id, name, qty, unit)
+
+    loop Phase 1: Exact match
+        Worker->>Worker: normalizeForCargoDedup(ingredientName) → cargo index key lookup
+    end
+
+    loop Phase 2: Semantic match for unresolved names
+        Worker->>Vectorize: findSimilarCargoBatch(unresolved names, threshold=0.78)
+        Vectorize-->>Worker: Map<name, SimilarCargoMatch[]>
+    end
+
+    Worker->>Worker: sumConvertedToTarget() — unit conversion (density-based cross-family fallback)
+    Worker->>Worker: Compute delta: ingredient needed - cargo available
+    Worker->>D1: Upsert supply items for gaps, skip snoozed items
+    Worker-->>User: Updated supply list
+```
+
+**Why a two-phase exact + semantic match?** Exact matching is free and handles well-structured data (e.g. cargo named identically to the recipe ingredient). Vectorize is only called for the unresolved remainder, minimising AI token cost and latency. The same `resolveIngredientsToCargo()` function is reused by supply sync, cook deduction, and AI generation verification — ensuring consistent resolution logic across all features.
+
+**Supply snooze:** If a user has previously snoozed an ingredient (e.g. "soy sauce" — already have it somewhere), a `supply_snooze` row suppresses it from appearing in newly synced supply lists until the snooze expires.
+
+---
+
+### 3.6 Meal Plan Consume Flow (D1 + Vectorize)
+
+When a user marks meal plan entries as "consumed", the system deducts those meals' ingredients from cargo — using the same Vectorize-backed resolution pipeline, but with a higher similarity threshold (0.80) to avoid over-subtracting real stock.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Worker as Worker
+    participant D1 as D1 Database
+    participant Vectorize as Vectorize
+
+    User->>Worker: POST /api/meal-plans/:id/entries/consume { entryIds: [...] }
+    Worker->>D1: Fetch meal plan entries + their meals + ingredients
+    Worker->>D1: fetchOrgCargoIndex()
+    Worker->>Vectorize: findSimilarCargoBatch(ingredientNames, threshold=0.80)
+    Vectorize-->>Worker: resolved cargo IDs + scores
+
+    loop For each resolved ingredient
+        Worker->>Worker: sumConvertedToTarget() — quantity to deduct
+    end
+
+    Worker->>D1: db.batch([UPDATE cargo SET quantity -= ? WHERE id = ?, ...])
+    Worker->>D1: UPDATE meal_plan_entry SET consumed_at = NOW() WHERE id IN (...)
+    D1-->>Worker: committed
+    Worker-->>User: { success: true, deducted: [...] }
+```
+
+**Why a higher deduction threshold (0.80) vs. general matching (0.78)?** Subtracting from cargo is irreversible in normal flow. A false positive at 0.79 similarity might deduct "chicken thighs" from a cargo item named "chicken wings". The tighter threshold accepts a few missed deductions in exchange for correctness of the ones it does make.
+
+---
+
+## 4. Feature Reference
+
+### 4.1 Cargo (Inventory)
+
+Cargo is the core inventory primitive. Each item belongs to an organization and carries: `name`, `quantity`, `unit`, `domain` (food / household / alcohol), `tags` (JSON array), `status`, and optional `expiresAt`.
+
+**Key workflows:**
+- **Add / Merge** — When a new cargo item is submitted, the system checks Vectorize for a similar existing item (`CARGO_MERGE` threshold: 0.78). If a match is found, the user is offered a "merge" (increment quantity) or "add new" choice. This prevents duplicate pantry entries from OCR variations (e.g. "whole milk 2%" vs. "2% milk").
+- **Bulk ingest (scan)** — After a receipt scan, `POST /api/cargo/batch` runs `ingestCargoItems` which applies the same dedup logic for each item in the scan result.
+- **Promote to Galley** — A cargo item can be promoted to a single-ingredient Provision (see §4.2) for use in meal planning.
+- **CSV import/export** — Via `POST /api/v1/inventory/import` and `GET /api/cargo/export`. Validated against `CargoCsvRowSchema` (max 500 rows per import).
+- **Vectorize write-through** — Every cargo create/update triggers `upsertCargoVector`, keeping the Vectorize index in sync with D1. Deletes call `deleteCargoVectors`.
+
+**Why `fetchOrgCargoIndex()`?** Matching and dedup only need 5 columns (`id`, `name`, `domain`, `quantity`, `unit`). The full cargo row has ~15 columns including JSON tags and timestamps. Using the narrow index cuts serialisation cost roughly in half and is enforced as a workspace rule.
+
+---
+
+### 4.2 Galley (Recipes & Provisions)
+
+The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Provisions** (single-ingredient items, e.g. "a banana"). Both are stored in the `meal` table discriminated by `type`.
+
+**Key workflows:**
+- **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
+- **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
+- **URL import** — `POST /api/meals/import` (1 credit) fetches a recipe URL, extracts JSON-LD structured data or sanitised HTML, then sends it to Llama 3.3 70B (Workers AI, JSON Schema mode) for structured extraction. HTTPS-only URLs are enforced (SSRF guard in `RecipeImportRequestSchema`).
+- **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
+- **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
+- **Tags** — Stored in a separate `meal_tag` join table (unique per meal+tag). Used for filtering in the Galley view and the MCP `list_meals` tool.
+- **Export/import** — JSON manifest format (`GalleyManifestSchema`) via `/api/galley/export` and `/api/galley/import`. Import is validated against a discriminated union of recipe and provision schemas.
+
+---
+
+### 4.3 Manifest (Meal Plan Calendar)
+
+The Manifest is a calendar-style meal plan. Each organization has a single active `meal_plan`. Days are divided into four slots: breakfast, lunch, dinner, snack.
+
+**Key workflows:**
+- **Add entry** — `POST /api/meal-plans/:id/entries` places a meal in a specific date+slot. Entries support `servingsOverride` and `notes`.
+- **Bulk add** — `POST /api/meal-plans/:id/entries/bulk` inserts up to 50 entries atomically via `db.batch()`. Used for "copy day" (duplicating an entire day's meals to other days) and AI plan-week.
+- **AI plan-week** — `POST /api/meal-plans/:id/plan-week` (3 credits) sends the org's meal library and allergen profile to Gemini. The AI returns a week of slot assignments. All returned `mealId` values are validated against the org's actual meal whitelist (RLS guard — prevents a malicious AI response from referencing another org's meals).
+- **Consume** — Marks selected entries as consumed and deducts ingredients from cargo (see §3.6).
+- **Share** — Crew Member only. Generates a `shareToken` (URL-safe, unique). Public read-only at `/shared/manifest/:token`.
+- **Week navigation** — The `?week=` query param shifts the 7-day window. The UI computes ISO week offsets on the client; the loader fetches entries for `startDate`–`endDate`.
+
+---
+
+### 4.4 Supply List
+
+The supply list bridges the Galley and Cargo — it holds ingredients needed to cook the selected meals that aren't already in the pantry.
+
+**Key workflows:**
+- **Sync** — `POST /hub/supply` (intent `update-list`) re-computes the entire list from the current active meal selections + manifest week meals. Vectorize resolves fuzzy name matches. Snoozed items are excluded.
+- **From meal** — `POST /api/supply-lists/:id/from-meal` adds missing ingredients for a single specific meal.
+- **Dock cargo** — `POST /api/supply-lists/:id/complete` moves all purchased items into cargo inventory. Uses the same vector dedup pipeline as direct cargo adds. Purchased items are removed from the list in a single `db.batch()`.
+- **Snooze** — An item can be snoozed for a duration (via `supply_snooze` table, keyed on `normalizedName + domain`). Snoozed items are silently excluded from all future syncs until the snooze expires or is manually dismissed. Useful for items that are always on hand.
+- **Share** — Crew Member only. Public URL at `/shared/:token`. Any visitor can toggle purchased state on items via `PATCH /api/shared/:token/items/:itemId` (rate-limited by IP, no session required). This supports shared household shopping.
+- **Export** — `GET /api/supply-lists/:id/export?format=text|markdown` for clipboard/note-app sharing.
+
+---
+
+### 4.5 Hub Dashboard
+
+The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view of the pantry's state.
+
+**Widgets:**
+
+| Widget | Data Source | Notes |
+|--------|-------------|-------|
+| `hub-stats` | D1 cargo/meal/list counts | Summary numbers |
+| `meals-ready` | Vectorize meal match (strict) | Meals cookable right now |
+| `meals-partial` | Vectorize meal match (delta) | Meals with most ingredients available |
+| `snacks-ready` | Vectorize provision match (strict) | Quick snacks available |
+| `cargo-expiring` | D1 `WHERE expires_at < NOW() + 7 days` | Items to use soon |
+| `supply-preview` | D1 supply list | Shopping summary |
+| `manifest-preview` | D1 meal plan entries | Next 7 days |
+
+**Why deferred loaders on the Hub?** Meal matching involves an AI embedding call (or KV cache lookup) plus a Vectorize query. These are deferred via React Router's `defer()` so the page skeleton loads instantly and the matching widget fills in asynchronously, keeping the hub under 100ms for the initial paint.
+
+**Layout customisation:** Users can customise the widget grid by choosing a profile preset (`full`, `cook`, `shop`, `minimal`) or dragging widgets. The layout is persisted in `user.settings.hubLayout` (JSON). The `LayoutEngine` component renders a 12-column CSS grid where widgets map to `sm` (4 cols), `md` (6 cols), or `lg` (12 cols) widths.
+
+**Onboarding:** New users trigger a 6-step guided tour (`OnboardingTour`) that spotlights each major feature area in sequence. Progress is persisted to `user.settings.onboarding`. The tour respects keyboard navigation (Esc = skip, arrow keys = next/back) and fires a confetti animation on completion.
+
+---
+
+## 5. AI & Vector Systems
+
+### 5.1 Embedding Pipeline
+
+All semantic search and matching is built on Cloudflare's native AI stack — no external embedding API calls.
+
+**Model:** `@cf/google/embeddinggemma-300m` via the `AI` Workers AI binding.
+**Dimensions:** 768
+**Vectorize index:** `ration-cargo`, cosine similarity metric, namespaced per organization.
+
+```mermaid
+flowchart LR
+    subgraph Ingestion["Cargo Ingestion"]
+        NewItem["New cargo item name"]
+        Embed1["embed() — AI binding"]
+        Upsert["VECTORIZE.upsert(id, vec, namespace=orgId)"]
+        NewItem --> Embed1 --> Upsert
+    end
+
+    subgraph Query["Ingredient Resolution"]
+        Names["Ingredient names[]"]
+        CacheCheck["KV cache check — vec:{hash} — 7 day TTL"]
+        AIMiss["embedBatch() — AI binding — 100 texts/request max"]
+        CacheWrite["KV.put(vec:{hash}) — async, fire-and-forget"]
+        VectorQuery["VECTORIZE.query(vec, topK, namespace=orgId, threshold)"]
+        Results["SimilarCargoMatch[]"]
+
+        Names --> CacheCheck
+        CacheCheck -->|"hit"| VectorQuery
+        CacheCheck -->|"miss"| AIMiss
+        AIMiss --> CacheWrite
+        AIMiss --> VectorQuery
+        VectorQuery --> Results
+    end
+```
+
+**Why cache embeddings in KV?** Ingredient names are highly stable — "chicken breast" will always embed to the same 768-dim vector. Without caching, every supply sync or meal match would re-embed the same names. The KV cache with a 7-day TTL eliminates redundant AI calls for repeat queries, which is the common case.
+
+**Why namespaced Vectorize vectors?** The Vectorize index is shared across all organizations. Using `namespace = organizationId` ensures that a query for org A never returns results from org B, providing the same tenant isolation at the vector layer as the `WHERE organization_id = ?` clause at the SQL layer.
+
+**Similarity thresholds** (in [`app/lib/vector.server.ts`](app/lib/vector.server.ts)):
+
+| Context | Threshold | Reasoning |
+|---------|-----------|-----------|
+| `INGREDIENT_MATCH` | 0.78 | Universal threshold for supply sync and AI generation verification. Balanced for breadth. |
+| `CARGO_MERGE` | 0.78 | Dedup on ingest — same threshold for consistency with matching. |
+| `CARGO_DEDUCTION` | 0.80 | Cook deduction is irreversible — a tighter threshold prevents false positive subtractions. |
+| MCP search | 0.60 | Agents benefit from wider recall when exploring the pantry. |
+
+---
+
+### 5.2 Meal Matching Engine
+
+The matching engine (in [`app/lib/matching.server.ts`](app/lib/matching.server.ts)) determines which meals can be cooked with the current pantry contents.
+
+**Two modes:**
+
+- **Strict match** (`strictMatch`) — Returns only meals where every non-optional ingredient is fully covered by the pantry. `matchPercentage = 100`. Used for the "Meals Ready" hub widget.
+- **Delta match** (`deltaMatch`) — Returns meals above a configurable `minMatch` percentage, sorted descending. Used for the "Meals Partial" widget and the Galley match view.
+
+**Resolution pipeline inside `matchMeals()`:**
+
+1. KV cache check (10s TTL, key `match:<orgId>:mode:...`) — absorbs repeated calls during page load.
+2. Fetch meals with optional tag/type/domain filters + `preLimit` pre-filter.
+3. Batch-fetch ingredients and tags in parallel.
+4. `fetchOrgCargoIndex()` — narrow 5-column projection.
+5. Phase 1: exact key lookup against normalised cargo names.
+6. Phase 2: one `findSimilarCargoBatch()` call for all unresolved names.
+7. Unit conversion via `sumConvertedToTarget()` — handles cross-family conversions using `lookupDensity()` (e.g. grams to cups for flour).
+8. Apply scale factor if servings override given.
+9. Write result to KV cache, return capped to `limit`.
+
+---
+
+### 5.3 AI Operations & Credit Costs
+
+Credits belong to the **organization**, not the user. All members of a group draw from the same pool. Credits are deducted atomically via a SQL-level overdraft check (`UPDATE ... WHERE credits >= cost RETURNING id`) — a deduction only succeeds if the balance is sufficient. There is no race condition.
+
+| Operation | Cost | Route | AI Service |
+|-----------|------|-------|------------|
+| Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3 Flash |
+| Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3 Flash |
+| URL Recipe Import | 1 cr | `POST /api/meals/import` | Workers AI → Llama 3.3 70B |
+| Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3 Flash |
+| Organize Cargo | 2 cr | *(reserved — not yet implemented)* | — |
+
+**`withCreditGate()` pattern:** All credit-gated routes use this wrapper from `ledger.server.ts`:
+1. Pre-flight `checkBalance` (cheap SELECT).
+2. `deductCredits` (atomic UPDATE + ledger INSERT).
+3. Execute the AI operation.
+4. On any error: `addCredits` refund with matching ledger entry.
+
+The pre-flight read is an optimistic guard — it won't stop a race condition, but it surfaces an early, friendly error for users with zero balance without burning a round-trip for the deduction. The actual deduction is atomic at the SQL level.
+
+---
+
+## 6. Database Schema
+
+### 6.1 Entity-Relationship Diagram
+
+The schema centres on the `organization` table. All domain data (cargo, meals, plans, supply lists) is owned by an organization, not a user directly. This is intentional — it enables group-shared pantries where any member can add/consume without each member having a personal silo.
 
 ```mermaid
 erDiagram
@@ -517,7 +801,6 @@ erDiagram
         text scopes
     }
 
-    %% Relationships
     user ||--o{ session : "has sessions"
     user ||--o{ account : "has OAuth accounts"
     user ||--o{ member : "joins groups"
@@ -551,45 +834,55 @@ erDiagram
     api_key }o--|| user : "created by"
 ```
 
-### 4.2 Table Reference
+### 6.2 Table Reference
 
 | Table | Owner | Purpose | Key Indexes |
 |-------|-------|---------|-------------|
-| [`user`](app/db/schema.ts:16) | — | Authenticated users, tier info, settings | `email` (unique) |
-| [`session`](app/db/schema.ts:46) | user | Active auth sessions with org context | `token` (unique) |
-| [`account`](app/db/schema.ts:72) | user | OAuth provider links (Google, email/pass) | — |
-| [`verification`](app/db/schema.ts:94) | — | Auth verification tokens | `identifier` |
-| [`organization`](app/db/schema.ts:109) | — | Groups/teams with credit pools | `slug` (unique) |
-| [`member`](app/db/schema.ts:129) | org + user | Membership join table with roles | `(org_id, user_id)` unique |
-| [`invitation`](app/db/schema.ts:160) | org | Shareable group invitation links | `token` (unique), `org_id` |
-| [`cargo`](app/db/schema.ts:184) | org | Pantry/inventory items | `(org_id, domain)` |
-| [`ledger`](app/db/schema.ts:220) | org | Immutable credit transaction log | `org_id`, `user_id` |
-| [`meal`](app/db/schema.ts:242) | org | Recipes and provisions | `(org_id, domain)`, `(org_id, type)` |
-| [`meal_ingredient`](app/db/schema.ts:294) | meal | Ingredient list with optional cargo link | `meal_id`, `ingredient_name` |
-| [`meal_tag`](app/db/schema.ts:329) | meal | Categorization tags | `(meal_id, tag)` unique |
-| [`active_meal_selection`](app/db/schema.ts:354) | org + meal | Currently "selected" meals for supply list generation | `(org_id, meal_id)` unique |
-| [`supply_list`](app/db/schema.ts:392) | org | Shopping/supply lists with sharing | `org_id`, `share_token` |
-| [`supply_item`](app/db/schema.ts:425) | supply_list | Individual items on a list | `list_id`, `(list_id, domain)` |
-| [`supply_snooze`](app/db/schema.ts:465) | org | Items snoozed from auto-generation | `(org_id, name, domain)` unique |
-| [`meal_plan`](app/db/schema.ts:498) | org | Weekly/custom meal plans with sharing | `org_id`, `share_token` |
-| [`meal_plan_entry`](app/db/schema.ts:534) | meal_plan | Individual date+slot+meal assignments | `(plan_id, date)`, `(plan_id, date, slot_type)` |
-| [`api_key`](app/db/schema.ts:579) | org + user | Programmatic API keys (SHA-256 hashed) | `key_prefix`, `org_id` |
+| `user` | — | Authenticated users, tier info, allergen settings | `email` (unique) |
+| `session` | user | Active auth sessions with org context | `token` (unique) |
+| `account` | user | OAuth provider links (Google, email/password) | — |
+| `verification` | — | Auth verification tokens (email confirm) | `identifier` |
+| `organization` | — | Groups/teams with pooled credit balance | `slug` (unique) |
+| `member` | org + user | Membership join table with roles (owner/admin/member) | `(org_id, user_id)` unique |
+| `invitation` | org | Shareable group invitation tokens (7-day expiry) | `token` (unique), `org_id` |
+| `cargo` | org | Pantry/inventory items with quantity, unit, domain, tags | `(org_id, domain)` |
+| `ledger` | org | Immutable credit transaction log (debits + credits) | `org_id`, `user_id` |
+| `meal` | org | Recipes and provisions; `type` discriminates them | `(org_id, domain)`, `(org_id, type)` |
+| `meal_ingredient` | meal | Ingredient list with optional soft FK to cargo | `meal_id`, `ingredient_name` |
+| `meal_tag` | meal | Categorisation tags, unique per meal+tag | `(meal_id, tag)` unique |
+| `active_meal_selection` | org + meal | Currently "selected" meals for supply list generation | `(org_id, meal_id)` unique |
+| `supply_list` | org | Shopping/supply lists with optional share token | `org_id`, `share_token` |
+| `supply_item` | supply_list | Individual items; `source_meal_ids` (JSON) tracks multiple sources | `list_id`, `(list_id, domain)` |
+| `supply_snooze` | org | Items suppressed from auto-generation; keyed on `normalizedName + domain` | `(org_id, name, domain)` unique |
+| `meal_plan` | org | Singleton active meal plan per org with optional share | `org_id`, `share_token` |
+| `meal_plan_entry` | meal_plan | Single date+slot+meal assignment with `consumed_at` tracking | `(plan_id, date)`, `(plan_id, date, slot_type)` |
+| `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
+
+**D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
+
+| Constant | Value | Columns | Table |
+|----------|-------|---------|-------|
+| `D1_MAX_INGREDIENT_ROWS_PER_STATEMENT` | 12 | 8 | `meal_ingredient` |
+| `D1_MAX_TAG_ROWS_PER_STATEMENT` | 33 | 3 | `meal_tag` |
+| `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
+
+**Why `db.batch()` for multi-statement writes?** D1 is accessed over HTTP (not a local socket). Each `await db.insert(...)` is a separate HTTP round-trip. `db.batch([stmt1, stmt2, ...])` is a single round-trip regardless of statement count, and executes the statements atomically server-side. Sequential `await` loops are explicitly forbidden in the codebase for independent writes.
 
 ---
 
-## 5. Security Architecture
+## 7. Security Architecture
 
-### 5.1 Authentication Flow
+### 7.1 Authentication Flow
 
-Authentication is handled by Better Auth with the organization plugin. The system supports Google OAuth (production) and email/password (development fallback).
+Authentication is handled by Better Auth with the `organization` plugin. Production uses Google OAuth 2.0. When `GOOGLE_CLIENT_ID` is absent (local dev), Better Auth falls back to email/password auth automatically — no code change required.
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 User
-    participant App as 🔧 Worker
-    participant Auth as 🔐 Better Auth
-    participant Google as 🌐 Google OAuth
-    participant D1 as 💾 D1
+    participant User as User
+    participant App as Worker
+    participant Auth as Better Auth
+    participant Google as Google OAuth
+    participant D1 as D1
 
     User->>App: Click "Sign in with Google"
     App->>Auth: Redirect to /api/auth/signin/google
@@ -610,36 +903,34 @@ sequenceDiagram
     end
 
     Auth-->>User: Set-Cookie: better-auth.session_token
-
-    Note over User,D1: All subsequent requests carry the session cookie.<br/>getSession() reads session + user from D1.
 ```
 
-**Post-signup provisioning** (in [`auth.server.ts`](app/lib/auth.server.ts:136)): Every new user automatically receives a personal organization with `owner` role. This ensures the user always has at least one group context for queries.
+**Post-signup provisioning** (in [`app/lib/auth.server.ts`](app/lib/auth.server.ts)): Every new user automatically receives a personal organization with `owner` role. Failures in this hook are non-fatal — the user can manually create a group. This ensures every user always has a valid group context for queries without requiring a separate onboarding step.
 
 ---
 
-### 5.2 Multi-Tenant Isolation (Organizations)
+### 7.2 Multi-Tenant Isolation (Organizations)
 
 Ration uses an **organization-based multi-tenancy** model. Every piece of domain data is owned by an organization, and access is mediated through the `member` join table.
 
 ```mermaid
 flowchart TB
-    subgraph UserLayer["👤 Users"]
-        Alice["Alice<br/>(tier: crew_member)"]
-        Bob["Bob<br/>(tier: free)"]
-        Carol["Carol<br/>(tier: free)"]
+    subgraph UserLayer["Users"]
+        Alice["Alice — tier: crew_member"]
+        Bob["Bob — tier: free"]
+        Carol["Carol — tier: free"]
     end
 
-    subgraph OrgLayer["🏢 Organizations"]
-        PersonalAlice["Alice's Personal Group<br/>(owner: Alice)"]
-        SharedHome["Shared Home<br/>(owner: Alice)"]
-        PersonalBob["Bob's Personal Group<br/>(owner: Bob)"]
+    subgraph OrgLayer["Organizations"]
+        PersonalAlice["Alice Personal Group — owner: Alice"]
+        SharedHome["Shared Home — owner: Alice"]
+        PersonalBob["Bob Personal Group — owner: Bob"]
     end
 
-    subgraph DataLayer["💾 Data Isolation"]
-        DataPA["cargo, meals, plans, credits<br/>(org: Alice Personal)"]
-        DataSH["cargo, meals, plans, credits<br/>(org: Shared Home)"]
-        DataPB["cargo, meals, plans, credits<br/>(org: Bob Personal)"]
+    subgraph DataLayer["Data Isolation"]
+        DataPA["cargo, meals, plans, credits — Alice Personal"]
+        DataSH["cargo, meals, plans, credits — Shared Home"]
+        DataPB["cargo, meals, plans, credits — Bob Personal"]
     end
 
     Alice -->|"owner"| PersonalAlice
@@ -651,48 +942,46 @@ flowchart TB
     PersonalAlice --- DataPA
     SharedHome --- DataSH
     PersonalBob --- DataPB
-
-    style DataPA fill:#e3f2fd,stroke:#1565c0
-    style DataSH fill:#e8f5e9,stroke:#2e7d32
-    style DataPB fill:#fff3e0,stroke:#e65100
 ```
 
 **Isolation guarantees:**
 
 | Layer | Mechanism | Implementation |
 |-------|-----------|----------------|
-| **Session context** | `session.active_organization_id` | Set on login, switchable via [`GroupSwitcher`](app/components/shell/GroupSwitcher.tsx:1) UI. Only organizations the user is a verified `member` of can be activated. |
-| **Query scoping** | `WHERE organization_id = ?` | Every query in [`cargo.server.ts`](app/lib/cargo.server.ts:1), [`meals.server.ts`](app/lib/meals.server.ts:1), [`supply.server.ts`](app/lib/supply.server.ts:1) etc. uses the `groupId` from [`requireActiveGroup()`](app/lib/auth.server.ts:381). |
-| **Role-based access** | `member.role` (owner / admin / member) | Invitation creation requires `owner` or `admin` role. Credit transfers require `owner` on source org. Defined via Better Auth's access control in [`auth.server.ts`](app/lib/auth.server.ts:18). |
-| **Tier-based gating** | Owner's `user.tier` determines group limits | Capacity checks in [`capacity.server.ts`](app/lib/capacity.server.ts:73) look up the **organization owner's** tier, not the current user's. |
-| **Credit isolation** | `organization.credits` counter | Credits belong to the organization, not the user. A user purchasing credits adds them to their active org's pool. All members consume from the same pool. |
-| **API key isolation** | `api_key.organization_id` | Programmatic API keys (prefix `rtn_live_`) are scoped to a single organization. Key verification in [`api-key.server.ts`](app/lib/api-key.server.ts:59) returns the `organizationId` for RLS. |
+| **Session context** | `session.active_organization_id` | Only organizations the user is a verified `member` of can be activated. Switchable via the `GroupSwitcher` UI. |
+| **Query scoping** | `WHERE organization_id = ?` | Every query in `cargo.server.ts`, `meals.server.ts`, `supply.server.ts`, etc. uses `groupId` from `requireActiveGroup()` — never from client input. |
+| **Role-based access** | `member.role` (owner / admin / member) | Invitation creation requires `owner` or `admin`. Credit transfers require `owner` on the source org. |
+| **Tier-based gating** | Owner's `user.tier` determines group limits | Capacity checks in `capacity.server.ts` look up the **organization owner's** tier, not the current user's. This prevents a free-tier member joining a crew member's group from being subject to free-tier limits — the group's capacity is determined by who owns and subscribes to it. |
+| **Credit isolation** | `organization.credits` counter | Credits belong to the org. A user purchasing credits adds to their active org's pool; all members draw from it. |
+| **Vectorize namespacing** | `namespace = organizationId` | Vector queries are scoped to the org's namespace, matching the D1 tenant isolation at the semantic layer. |
+| **API key isolation** | `api_key.organization_id` | Programmatic keys are scoped to a single org. `verifyApiKey()` returns the `organizationId` which is used as the RLS anchor for all subsequent queries. |
 
 ---
 
-### 5.3 Route Access Control
+### 7.3 Route Access Control
 
 ```mermaid
 flowchart TB
     Request["Incoming Request"] --> RouteMatch{"Route Match"}
 
-    RouteMatch --> Public["🌐 Public Routes<br/>(no auth required)"]
-    RouteMatch --> AuthRequired["🔐 Auth Required<br/>(session cookie)"]
-    RouteMatch --> GroupRequired["🏢 Group Required<br/>(session + active org)"]
-    RouteMatch --> AdminRequired["👑 Admin Required<br/>(user.is_admin)"]
-    RouteMatch --> ApiKeyRequired["🔑 API Key Required<br/>(Bearer / X-Api-Key)"]
+    RouteMatch --> Public["Public Routes — no auth"]
+    RouteMatch --> AuthRequired["Auth Required — session cookie"]
+    RouteMatch --> GroupRequired["Group Required — session + active org"]
+    RouteMatch --> AdminRequired["Admin Required — user.is_admin"]
+    RouteMatch --> ApiKeyRequired["API Key Required — Bearer or X-Api-Key"]
 
     Public --> P1["/ (landing)"]
     Public --> P2["/api/auth/* (login/signup)"]
-    Public --> P3["/api/webhook (Stripe)"]
-    Public --> P4["/shared/:token"]
-    Public --> P5["/legal/*"]
+    Public --> P3["/api/webhook (Stripe — signature verified)"]
+    Public --> P4["/shared/:token (supply list)"]
+    Public --> P5["/shared/manifest/:token (meal plan)"]
+    Public --> P6["/legal/*"]
 
     AuthRequired --> A1["/select-group"]
     AuthRequired --> A2["/api/groups/create"]
     AuthRequired --> A3["/api/user/purge"]
 
-    GroupRequired --> G1["/hub/* (dashboard)"]
+    GroupRequired --> G1["/hub/* (all dashboard pages)"]
     GroupRequired --> G2["/api/meals/*"]
     GroupRequired --> G3["/api/cargo/*"]
     GroupRequired --> G4["/api/supply-lists/*"]
@@ -702,116 +991,169 @@ flowchart TB
     GroupRequired --> G8["/api/meal-plans/*"]
 
     AdminRequired --> AD1["/admin"]
-    AdminRequired --> AD2["/api/admin/users"]
+    AdminRequired --> AD2["/api/admin/*"]
 
     ApiKeyRequired --> K1["/api/v1/inventory/export"]
     ApiKeyRequired --> K2["/api/v1/inventory/import"]
     ApiKeyRequired --> K3["/api/v1/galley/export"]
     ApiKeyRequired --> K4["/api/v1/galley/import"]
     ApiKeyRequired --> K5["/api/v1/supply/export"]
-
-    style Public fill:#c8e6c9,stroke:#2e7d32
-    style AuthRequired fill:#fff9c4,stroke:#f9a825
-    style GroupRequired fill:#bbdefb,stroke:#1565c0
-    style AdminRequired fill:#ffcdd2,stroke:#c62828
-    style ApiKeyRequired fill:#e1bee7,stroke:#7b1fa2
 ```
 
-**Guard functions** (all in [`auth.server.ts`](app/lib/auth.server.ts)):
+**Guard functions** (all in `app/lib/auth.server.ts` / `app/lib/api-key.server.ts`):
 
-| Function | Returns | Redirects on fail |
-|----------|---------|-------------------|
-| [`requireAuth()`](app/lib/auth.server.ts:337) | `session` (with user) | `→ /` (home) |
-| [`requireActiveGroup()`](app/lib/auth.server.ts:381) | `{ session, groupId }` | `→ /select-group` |
-| [`requireAdmin()`](app/lib/auth.server.ts:355) | `user` (with isAdmin) | `→ /` (home) |
-| [`requireApiKey()`](app/lib/api-key.server.ts:113) | `{ organizationId, scopes }` | 401 / 403 JSON |
+| Function | Returns | Redirects/throws on fail |
+|----------|---------|--------------------------|
+| `requireAuth()` | `session` (with user) | Redirect `→ /` |
+| `requireActiveGroup()` | `{ session, groupId }` | Redirect `→ /select-group` |
+| `requireAdmin()` | `user` (with isAdmin) | Redirect `→ /` |
+| `requireApiKey()` | `{ organizationId, scopes }` | 401 / 403 JSON response |
 
 ---
 
-### 5.4 Defence in Depth Layers
+### 7.4 Defence in Depth Layers
 
 ```mermaid
 flowchart LR
-    subgraph L1["Layer 1: Edge"]
+    subgraph L1["Layer 1 — Edge"]
         SSL["SSL/TLS Termination"]
         CSP["Content Security Policy"]
-        HSTS["Strict-Transport-Security"]
+        HSTS["Strict-Transport-Security — 1 year"]
         XFO["X-Frame-Options: DENY"]
+        XCTO["X-Content-Type-Options: nosniff"]
     end
 
-    subgraph L2["Layer 2: Authentication"]
+    subgraph L2["Layer 2 — Authentication"]
         SessionAuth["Session Cookie Verification"]
         OAuthFlow["Google OAuth 2.0"]
         ApiKeyAuth["SHA-256 Hashed API Keys"]
         TimingAttack["Constant-time Comparison"]
     end
 
-    subgraph L3["Layer 3: Authorization"]
+    subgraph L3["Layer 3 — Authorization"]
         OrgMembership["Organization Membership Check"]
-        RoleCheck["Role-based Gate (owner/admin/member)"]
+        RoleCheck["Role-based Gate — owner/admin/member"]
         TierGate["Tier-based Feature Gating"]
+        VectorNS["Vectorize Namespace Scoping"]
     end
 
-    subgraph L4["Layer 4: Rate Limiting"]
-        DistributedRL["KV-backed Sliding Window"]
-        PerUserLimits["Per-user Rate Limits"]
-        PerIPLimits["Per-IP for Public Endpoints"]
+    subgraph L4["Layer 4 — Rate Limiting"]
+        DistributedRL["KV-backed Sliding Window — global"]
+        PerUserLimits["Per-user limits on authenticated endpoints"]
+        PerIPLimits["Per-IP limits on public endpoints"]
+        TwoTierRL["L1 in-memory + L2 KV — fail-open on KV error"]
     end
 
-    subgraph L5["Layer 5: Data Integrity"]
-        AtomicTx["D1 Batch Transactions"]
-        IdempotencyKV["KV Idempotency Guards"]
-        ZodValidation["Zod Schema Validation"]
-        CreditGuard["SQL-level Overdraft Prevention"]
+    subgraph L5["Layer 5 — Data Integrity"]
+        AtomicTx["db.batch() — atomic multi-statement writes"]
+        IdempotencyKV["KV idempotency keys — Stripe webhooks"]
+        ZodValidation["Zod schema validation at API boundary"]
+        CreditGuard["SQL-level overdraft prevention — RETURNING id guard"]
+        InjectionFilter["INJECTION_PATTERNS — prompt injection defence"]
+        SSRFGuard["HTTPS-only URL validation — recipe import"]
     end
 
     L1 --> L2 --> L3 --> L4 --> L5
 ```
 
-**HTTP security headers** (set in [`root.tsx`](app/root.tsx:56)):
-- `Content-Security-Policy` — Restrictive CSP allowing only self, Stripe JS, Google Fonts
-- `Strict-Transport-Security` — HSTS with 1-year max-age
+**HTTP security headers** (set in [`app/root.tsx`](app/root.tsx)):
+- `Content-Security-Policy` — Restrictive policy allowing only self, Stripe JS (`js.stripe.com`), and Google Fonts
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
 - `X-Frame-Options: DENY` — Prevents clickjacking
-- `X-Content-Type-Options: nosniff` — Prevents MIME type sniffing
+- `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 
-**API key security** (in [`api-key.server.ts`](app/lib/api-key.server.ts)):
-- Keys use `rtn_live_` prefix format with 32 hex chars
-- Only the SHA-256 hash is stored; raw key is shown once at creation
-- Lookups use a prefix-based index, then [`secureCompare()`](app/lib/api-key.server.ts:34) (constant-time) to prevent timing attacks
-- Each key has explicit JSON-encoded `scopes` (e.g. `["inventory", "galley"]`)
+**API key security** (in [`app/lib/api-key.server.ts`](app/lib/api-key.server.ts)):
+- Format: `rtn_live_<32 hex chars>`. First 17 chars used as the lookup prefix (avoids full-table scans on lookup).
+- Only the SHA-256 hash is stored in D1; the raw key is shown to the user exactly once.
+- Lookups use `secureCompare()` — constant-time XOR comparison — to prevent timing attacks that could leak key validity via response latency differences.
+
+**Rate limiter architecture** (in [`app/lib/rate-limiter.server.ts`](app/lib/rate-limiter.server.ts)):
+- **L1 (in-memory `LOCAL_CACHE`):** Per-isolate, 5s TTL. Absorbs burst traffic within the same isolate with zero KV reads.
+- **L2 (Cloudflare KV):** Global, eventually consistent. `cacheTtl: 60` at the PoP reduces read latency.
+- On KV failure: **fails open** with a `log.warn`. A KV outage will not cause a service outage — it will temporarily disable rate limiting.
 
 ---
 
-## 6. Behaviour Under Load & At Scale
+## 8. Tier & Capacity System
 
-### 6.1 Scalability Architecture
-
-Ration runs entirely on Cloudflare's serverless edge. There are no fixed servers, no auto-scaling groups, and no cold-start containers.
+The tier system controls resource limits per organization. Limits are determined by the **organization owner's** tier — not the current viewer's. This design is deliberate: if a free-tier user joins a crew member's household group, that group's capacity should reflect the crew member's subscription, not the joining member's tier.
 
 ```mermaid
 flowchart TB
-    subgraph Users["🌐 Concurrent Users"]
-        U1["User A<br/>Dublin"]
-        U2["User B<br/>London"]
-        U3["User C<br/>New York"]
-        U4["User N<br/>Tokyo"]
+    subgraph FreeTier["Free Tier"]
+        F1["50 Inventory Items"]
+        F2["20 Meals"]
+        F3["3 Supply Lists"]
+        F4["1 Owned Group"]
+        F5["No Invitations"]
+        F6["No List or Plan Sharing"]
     end
 
-    subgraph Edge["⚡ Cloudflare Edge (330+ PoPs)"]
+    subgraph CrewTier["Crew Member — 12/year"]
+        C1["Unlimited Inventory"]
+        C2["Unlimited Meals"]
+        C3["Unlimited Supply Lists"]
+        C4["5 Owned Groups"]
+        C5["Invite Members"]
+        C6["Share Lists and Plans publicly"]
+        C7["60 Credits on Signup and Annual Renewal"]
+    end
+
+    CheckRequest["API Write Request"] --> GetTier["getGroupTierLimits() — KV cached 60s"]
+    GetTier --> FindOwner["SELECT owner via member table"]
+    FindOwner --> CheckExpiry["getEffectiveTier(tier, tierExpiresAt, now)"]
+
+    CheckExpiry -->|"crew_member — not expired"| CrewTier
+    CheckExpiry -->|"free — OR — crew_member expired"| FreeTier
+
+    FreeTier --> Enforce["checkCapacity() — allow or throw CapacityExceededError"]
+    CrewTier --> Enforce
+```
+
+**Tier enforcement mechanics** (in [`app/lib/capacity.server.ts`](app/lib/capacity.server.ts)):
+
+1. `getGroupTierLimits()` checks KV for a cached tier result (key `tier:<orgId>`, 60s TTL). Cache miss → DB query for the org owner's `user.tier` + `tierExpiresAt`.
+2. `getEffectiveTier()` checks expiry: a `crew_member` with an expired `tierExpiresAt` is treated as `free`.
+3. `checkCapacity()` compares the current count against the tier limit. Throws `CapacityExceededError` with `resource`, `current`, `limit`, `tier`, `isExpired`, and `canAdd` fields — all surfaced in the `UpgradePrompt` component.
+4. After a Stripe webhook processes a subscription, `invalidateTierCache()` deletes the KV key so the next request picks up the new tier immediately.
+
+**Tier-gated features beyond capacity limits:**
+- `canInviteMembers` — creating group invitations requires Crew Member
+- `canShareGroceryLists` — supply list and meal plan share tokens require Crew Member
+
+---
+
+## 9. Behaviour Under Load & At Scale
+
+### 9.1 Scalability Architecture
+
+Ration runs entirely on Cloudflare's serverless edge. There are no fixed servers, no auto-scaling groups, and no cold-start containers. Each request is handled by a V8 isolate that is reused across requests (warm) within the same PoP.
+
+```mermaid
+flowchart TB
+    subgraph Users["Concurrent Users — Global"]
+        U1["User A — Dublin"]
+        U2["User B — London"]
+        U3["User C — New York"]
+        U4["User N — Tokyo"]
+    end
+
+    subgraph Edge["Cloudflare Edge — 330+ PoPs"]
         PoP1["Dublin PoP"]
         PoP2["London PoP"]
         PoP3["New York PoP"]
         PoP4["Tokyo PoP"]
     end
 
-    subgraph SmartPlace["🧠 Smart Placement"]
-        SP["Isolate relocated<br/>to D1 region"]
+    subgraph SmartPlace["Smart Placement"]
+        SP["Isolate relocated to D1 region — ~5ms to D1"]
     end
 
-    subgraph Storage["💾 Central Storage"]
-        D1Main[("D1 Primary<br/>(single region)")]
-        KVGlobal[("KV<br/>(globally replicated<br/>eventual consistency)")]
+    subgraph Storage["Central Storage"]
+        D1Main[("D1 Primary — single region writer")]
+        KVGlobal[("KV — globally replicated — eventual consistency")]
+        VectorizeIdx[("Vectorize — distributed query layer")]
     end
 
     U1 --> PoP1
@@ -826,93 +1168,141 @@ flowchart TB
 
     SP -->|"~5ms"| D1Main
     SP -->|"~10-50ms"| KVGlobal
+    SP -->|"~20-50ms"| VectorizeIdx
 ```
 
 **How each service behaves under load:**
 
 | Service | Scaling Model | Bottleneck | Mitigation |
 |---------|--------------|------------|------------|
-| **Worker** | Auto-scales to thousands of isolates. No cold starts (V8 isolate reuse). Each isolate handles one request. | CPU time limit (30s paid / 10ms free tier) | Heavy work offloaded to AI Gateway. Module-level auth caching. |
-| **D1 (SQLite)** | Single-region writer with read replicas. Batch transactions for atomicity. | Write throughput to single leader (~10K writes/sec) | Compound indexes on hot paths. `WHERE org_id = ?` narrows scan windows. Smart Placement co-locates Worker with D1. |
-| **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec/namespace. Eventual consistency (60s propagation). | Rate limit windows use TTL-expiring keys (self-cleaning). Fail-open on KV write errors to avoid cascading 500s. |
-| **AI Gateway** | Managed proxy with queuing, retry, caching. | Upstream model rate limits (Google AI Studio). Token throughput. | Credit system prevents unbounded usage. 20 req/min per-user rate limit on scan. Automatic refunds on failure. |
-| **R2** | S3-compatible, globally distributed. | Rarely a bottleneck for this use case. | Used for static exports, not hot path. |
-| **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency (~seconds). | KV idempotency ensures exactly-once processing. Event timestamp validation rejects stale replays. |
-
-**KV failure resilience** (in [`rate-limiter.server.ts`](app/lib/rate-limiter.server.ts:181)): Rate limiting **fails open** — if KV is unreachable (e.g. 429 from KV itself), the request is allowed through with a `log.warn`. This prevents a KV outage from causing a complete service outage.
-
----
-
-### 6.2 Rate Limiting Matrix
-
-All rate limits use the **sliding window counter** algorithm implemented in [`rate-limiter.server.ts`](app/lib/rate-limiter.server.ts:152). Limits are enforced globally via KV (not per-isolate).
-
-| Endpoint | Key | Window | Max Requests | Purpose |
-|----------|-----|--------|-------------|---------|
-| `/api/scan` | `rate:scan:{userId}` | 60s | 20 | AI cost control |
-| `/api/meals/generate` | `rate:generate_meal:{userId}` | 60s | 10 | AI cost control |
-| `/api/meals/import` | `rate:recipe_import:{userId}` | 60s | 10 | AI cost control |
-| `/api/search` | `rate:search:{userId}` | 10s | 30 | Prevent DB abuse |
-| `/api/checkout` | `rate:checkout:{userId}` | 60s | 10 | Payment spam prevention |
-| `/api/groups/create` | `rate:group_create:{userId}` | 60s | 5 | Spam prevention |
-| `/api/groups/invitations/create` | `rate:group_invite:{userId}` | 60s | 10 | Invitation spam |
-| `/api/groups/credits/transfer` | `rate:credits_transfer:{userId}` | 60s | 10 | Transfer abuse |
-| `/api/cargo/batch` | `rate:inventory_batch:{userId}` | 60s | 20 | Bulk write protection |
-| `/api/user/purge` | `rate:user_purge:{userId}` | 300s | 1 | Destructive action guard |
-| `/api/auth/*` | `rate:auth_public:{ip}` | 60s | 20 | Brute force protection |
-| `/shared/:token` | `rate:shared_public:{ip}` | 60s | 60 | Public page abuse |
-| `/api/v1/*/export` | `rate:api_export:{orgId}` | 60s | 30 | API export throttle |
-| `/api/v1/*/import` | `rate:api_import:{orgId}` | 60s | 20 | API import throttle |
-| Inventory mutations | `rate:inventory_mut:{userId}` | 60s | 60 | Write storm protection |
-| Meal mutations | `rate:meal_mut:{userId}` | 60s | 30 | Write storm protection |
-| Grocery mutations | `rate:grocery_mut:{userId}` | 60s | 60 | Write storm protection |
+| **Worker** | Auto-scales to thousands of isolates. V8 isolate reuse — no cold starts within a PoP. | CPU time per request. | Heavy work offloaded to AI Gateway. Module-level auth instance caching. |
+| **D1 (SQLite)** | Single-region writer with read replicas. Drizzle batch for atomicity. | Write throughput to single leader. | Compound indexes on hot paths. `WHERE org_id = ?` narrows scan windows. Smart Placement co-locates Worker with D1. |
+| **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec per namespace; 60s eventual consistency on reads. | Rate limit windows use TTL-expiring keys (self-cleaning). Fails open on KV errors. |
+| **Workers AI** | Metered per token, Workers-native. | Embedding throughput (100 texts per batch). | KV embedding cache eliminates repeat calls. Batch embedding for all ingredients in a single AI call. |
+| **Vectorize** | Distributed ANN index. Namespaced per org. | Parallel query concurrency limits. | All ingredient names for a single resolution are batched into one `findSimilarCargoBatch` call with `Promise.all` per name. |
+| **AI Gateway** | Managed proxy with queuing, retry, caching. | Upstream Google AI Studio rate limits. | Credit system prevents unbounded usage. Per-user rate limits on all AI endpoints. Automatic refunds on failure. |
+| **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
+| **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
 
 ---
 
-## 7. Tier & Capacity System
+### 9.2 Rate Limiting Matrix
 
-The tier system controls resource limits per organization. Limits are determined by the **organization owner's** tier — not the viewer's.
+All rate limits use a **sliding window counter** algorithm implemented in [`app/lib/rate-limiter.server.ts`](app/lib/rate-limiter.server.ts). Limits are enforced globally via KV (not per-isolate). The L1 in-memory layer absorbs burst traffic within the same isolate within the same 5s window before touching KV.
 
-```mermaid
-flowchart TB
-    subgraph FreeTier["🆓 Free Tier"]
-        F1["50 Inventory Items"]
-        F2["20 Meals"]
-        F3["3 Supply Lists"]
-        F4["1 Owned Group"]
-        F5["❌ No Invitations"]
-        F6["❌ No List Sharing"]
-    end
+| Endpoint | Identifier | Window | Max | Purpose |
+|----------|------------|--------|-----|---------|
+| `POST /api/scan` | userId | 60s | 20 | AI cost control |
+| `POST /api/meals/generate` | userId | 60s | 10 | AI cost control |
+| `POST /api/meals/import` | userId | 60s | 10 | AI cost control |
+| `POST /api/meal-plans/:id/plan-week` | userId | 60s | 5 | AI cost control (most expensive op) |
+| `GET /api/search` | userId | 10s | 30 | Prevent D1 abuse |
+| `POST /api/checkout` | userId | 60s | 10 | Payment spam prevention |
+| `POST /api/groups/create` | userId | 60s | 5 | Spam prevention |
+| `POST /api/groups/invitations/create` | userId | 60s | 10 | Invitation spam |
+| `POST /api/groups/credits/transfer` | userId | 60s | 10 | Transfer abuse |
+| `POST /api/cargo/batch` | userId | 60s | 20 | Bulk write protection |
+| `POST /api/user/purge` | userId | 300s | 1 | Destructive action guard |
+| `POST /api/auth/*` | IP | 60s | 20 | Brute force protection |
+| `GET /shared/:token` | IP | 60s | 60 | Public page abuse |
+| `PATCH /api/shared/:token/items/:itemId` | IP | 60s | 30 | Public toggle abuse |
+| `GET /api/v1/*/export` | orgId | 60s | 30 | API export throttle |
+| `POST /api/v1/*/import` | orgId | 60s | 20 | API import throttle |
+| Inventory mutations | userId | 60s | 60 | Write storm protection |
+| Meal mutations | userId | 60s | 30 | Write storm protection |
+| Supply list mutations | userId | 60s | 60 | Write storm protection |
+| MCP `search_ingredients` | orgId | 60s | 20 | AI cost control |
+| `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
-    subgraph CrewTier["⭐ Crew Member (€12/year)"]
-        C1["♾️ Unlimited Inventory"]
-        C2["♾️ Unlimited Meals"]
-        C3["♾️ Unlimited Supply Lists"]
-        C4["5 Owned Groups"]
-        C5["✅ Invite Members"]
-        C6["✅ Share Lists & Plans"]
-        C7["60 Credits on Signup/Renewal"]
-    end
+---
 
-    CheckRequest["API Request"] --> GetTier["getGroupTierLimits()"]
-    GetTier --> FindOwner["Find org owner via member table"]
-    FindOwner --> CheckExpiry["Check user.tier + tierExpiresAt"]
+## 10. MCP Server
 
-    CheckExpiry -->|"tier=crew_member<br/>not expired"| CrewTier
-    CheckExpiry -->|"tier=free<br/>OR expired"| FreeTier
+A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agents via the **Model Context Protocol (MCP)**. It runs at `mcp.ration.mayutic.com` and shares all storage bindings with the main Worker.
 
-    FreeTier --> Enforce["checkCapacity() → allow or CapacityExceededError"]
-    CrewTier --> Enforce
+**Authentication:** The MCP Worker accepts requests authenticated with a Ration API key (scope: `mcp`). The `authenticateMcp()` function in `app/lib/mcp/auth.ts` verifies the key via `requireApiKey()` and injects `__orgId` into the environment for all tool handlers. Internal errors are masked as `500 Internal Server Error`; auth errors surface their message to the caller.
+
+**Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
+
+**Available tools:**
+
+| Tool | Description | Rate Limited |
+|------|-------------|-------------|
+| `search_ingredients` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60 for agent-friendly recall) | Yes — 20/min per org |
+| `list_inventory` | Full cargo listing, optionally filtered by `domain` (food/household/alcohol) | No |
+| `get_supply_list` | Returns the active supply list with item names, quantities, units, and source meal names | No |
+| `list_meals` | Returns all meals/recipes with ingredients and servings, optionally filtered by `tag` | No |
+
+**Why is `search_ingredients` rate limited but `list_inventory` is not?** `search_ingredients` calls Workers AI for embedding generation on every cache miss. `list_inventory` is a pure D1 read — more expensive in bytes returned but free in AI cost. The rate limit on search protects AI billing; the intentional full-table scan in `list_inventory` is documented as an acceptable tradeoff since agents legitimately need the complete inventory to plan meals.
+
+**Integration example:**
+
+```bash
+# Connect with any MCP-compatible client using an API key with "mcp" scope
+Host: mcp.ration.mayutic.com
+Authorization: Bearer rtn_live_<your-api-key>
 ```
 
-**Capacity enforcement** (in [`capacity.server.ts`](app/lib/capacity.server.ts:149)): Before any write operation (adding cargo, creating a meal, etc.), the route calls [`checkCapacity()`](app/lib/capacity.server.ts:182) or [`checkCapacityWithTier()`](app/lib/capacity.server.ts:149) which compares the current count against the tier limit. If exceeded, a `CapacityExceededError` is thrown with upgrade path information.
+---
 
-**AI operation costs** (from [`ledger.server.ts`](app/lib/ledger.server.ts:14)):
+## 11. Public REST API (v1)
 
-| Operation | Credit Cost | Route |
-|-----------|-------------|-------|
-| Receipt Scan | 2 | `/api/scan` |
-| Meal Generate | 2 | `/api/meals/generate` |
-| URL Recipe Import | 1 | `/api/meals/import` |
-| Organize Cargo | 2 | *Not yet implemented* |
-| Weekly Meal Plan | 3 | *Not yet implemented* |
+Ration exposes a programmatic REST API for external integrations, authenticated with API keys. Keys are created and managed at `/hub/settings` and are scoped to specific capabilities.
+
+**Authentication:** Include the key as either `Authorization: Bearer rtn_live_...` or `X-Api-Key: rtn_live_...`. All v1 endpoints enforce scope requirements and per-org rate limits.
+
+**Key scopes:**
+
+| Scope | Grants access to |
+|-------|-----------------|
+| `inventory` | `GET /api/v1/inventory/export`, `POST /api/v1/inventory/import` |
+| `galley` | `GET /api/v1/galley/export`, `POST /api/v1/galley/import` |
+| `supply` | `GET /api/v1/supply/export` |
+| `mcp` | MCP Worker tools |
+
+**Endpoints:**
+
+| Method | Path | Scope | Description |
+|--------|------|-------|-------------|
+| `GET` | `/api/v1/inventory/export` | `inventory` | Export all cargo as CSV |
+| `POST` | `/api/v1/inventory/import` | `inventory` | Bulk import cargo from CSV body (max 500 rows, ≤1MB) |
+| `GET` | `/api/v1/galley/export` | `galley` | Export full recipe library as JSON (`GalleyManifestSchema`) |
+| `POST` | `/api/v1/galley/import` | `galley` | Import recipes from JSON manifest (≤1MB) |
+| `GET` | `/api/v1/supply/export` | `supply` | Export active supply list as CSV |
+
+**Key security model:** Keys use the format `rtn_live_<32 hex chars>`. Only the SHA-256 hash is stored in D1. The raw key is shown exactly once at creation. Lookups use a prefix index (first 17 chars) then constant-time comparison. On successful use, `lastUsedAt` is updated via `ctx.waitUntil` (non-blocking — does not add latency to the response).
+
+---
+
+## 12. Testing
+
+The test suite uses **Vitest** with co-located `__tests__/` directories. The `AI` binding, `DB`, `KV`, `VECTORIZE`, and `R2` are all stubbed via `app/test/helpers/mock-env.ts` — no real Cloudflare bindings are required to run unit tests.
+
+**Run tests:**
+
+```bash
+bun run test:unit     # Vitest unit tests
+bun run typecheck     # cf-typegen + react-router typegen + tsc -b
+bun run lint          # Biome v2 lint check
+bun run lint:fix      # Biome v2 auto-fix
+```
+
+**What is tested:**
+
+| Category | Location | Examples |
+|----------|----------|---------|
+| Core lib utilities | `app/lib/__tests__/` | `rate-limiter`, `ledger`, `capacity`, `vector`, `matching`, `query-utils`, `error-handler`, `api-key`, `idempotency` |
+| Zod schemas | `app/lib/schemas/__tests__/` | `scan`, `meal`, `supply`, `week-plan`, `manifest`, `units`, `recipe-import`, `api-import` |
+
+**What is not tested (by design):**
+- React components — UI layer, deferred to a separate initiative
+- Route loaders/actions with full D1/KV/Vectorize dependencies — integration tier, deferred
+- Config files, constants, type-only files
+
+**Test conventions:**
+- Time-dependent logic injects `now` as a parameter; tests use `vi.useFakeTimers()` + `vi.setSystemTime()`
+- Mock bindings from `app/test/helpers/mock-env.ts` replace all Cloudflare runtime APIs (`vi.fn()` stubs)
+- Shared data shapes use factories from `app/test/helpers/fixtures.ts`
+- Prefer `toBe()` / `toEqual()` over `toBeTruthy()`. Test boundary conditions, not just happy paths
+
+**Definition of done:** A change is not complete until `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors.

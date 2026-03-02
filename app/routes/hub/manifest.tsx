@@ -195,6 +195,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	// Share modal
 	const [shareOpen, setShareOpen] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	// Plan Week modal — controlled from FAB on mobile
+	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
 
 	// -------------------------------------------------------------------------
 	// Copy state
@@ -440,20 +442,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const weekEnd = getWeekEnd(currentWeekStart);
 	const weekRangeLabel = formatWeekRange(currentWeekStart, weekEnd);
 
-	// Mobile "more options" sheet content — Plan Week + Share (Consume is in FAB)
+	// Mobile "more options" sheet content — Share only (Plan Week is in FAB, Consume is in FAB)
 	const moreOptionsContent = (
 		<div className="space-y-3 pt-2">
-			<PlanWeekButton
-				planId={plan.id}
-				credits={credits}
-				cost={planWeekCost}
-				weekDates={weekDates}
-				planStartDate={planStartDate}
-				showSnackSlot={showSnackSlot}
-				meals={meals}
-				onScheduleConfirmed={handleScheduleConfirmed}
-				isSubmitting={bulkFetcher.state !== "idle"}
-			/>
 			<button
 				type="button"
 				onClick={() => {
@@ -663,52 +654,88 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Mobile FAB: Copy Day + Consume All for selected (active) day */}
-			{hasEntries &&
-				(unconsumedForActiveDay > 0 || activeDayEntryCount > 0) && (
-					<FloatingActionBar
-						actions={[
-							...(activeDayEntryCount > 0
-								? [
-										{
-											id: "copy-day",
-											icon: (
-												<svg
-													className="w-5 h-5"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-													/>
-												</svg>
-											),
-											label: "Copy day",
-											onClick: () => setCopyDayDate(activeDay),
-											disabled: isCopying,
-										},
-									]
-								: []),
-							...(unconsumedForActiveDay > 0
-								? [
-										{
-											id: "consume-all",
-											icon: <ConsumeIcon className="w-5 h-5" />,
-											label: "Consume all",
-											primary: true,
-											onClick: () => handleConsumeAll(selectedDay),
-											disabled: consumeFetcher.state !== "idle",
-										},
-									]
-								: []),
-						]}
-					/>
-				)}
+			{/* Mobile FAB: Plan Week (always) + Copy Day + Consume All (contextual) */}
+			<FloatingActionBar
+				actions={[
+					{
+						id: "plan-week",
+						icon: (
+							<svg
+								className="w-5 h-5"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M5 3l1.5 3.5L10 8l-3.5 1.5L5 13l-1.5-3.5L0 8l3.5-1.5L5 3zM19 12l1 2.5L22.5 16 20 17l-1 2.5-1-2.5L15.5 16l2.5-1L19 12zM12 1l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8L12 1z"
+								/>
+							</svg>
+						),
+						label: "Plan week",
+						onClick: () => {
+							setShowPlanWeekModal(true);
+						},
+						disabled: bulkFetcher.state !== "idle",
+					},
+					...(hasEntries && activeDayEntryCount > 0
+						? [
+								{
+									id: "copy-day",
+									icon: (
+										<svg
+											className="w-5 h-5"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+											/>
+										</svg>
+									),
+									label: "Copy day",
+									onClick: () => setCopyDayDate(activeDay),
+									disabled: isCopying,
+								},
+							]
+						: []),
+					...(hasEntries && unconsumedForActiveDay > 0
+						? [
+								{
+									id: "consume-all",
+									icon: <ConsumeIcon className="w-5 h-5" />,
+									label: "Consume all",
+									primary: true,
+									onClick: () => handleConsumeAll(selectedDay),
+									disabled: consumeFetcher.state !== "idle",
+								},
+							]
+						: []),
+				]}
+			/>
+
+			{/* Controlled Plan Week modal — opened by FAB on mobile */}
+			<PlanWeekButton
+				planId={plan.id}
+				credits={credits}
+				cost={planWeekCost}
+				weekDates={weekDates}
+				planStartDate={planStartDate}
+				showSnackSlot={showSnackSlot}
+				meals={meals}
+				onScheduleConfirmed={handleScheduleConfirmed}
+				isSubmitting={bulkFetcher.state !== "idle"}
+				open={showPlanWeekModal}
+				onOpenChange={setShowPlanWeekModal}
+			/>
 
 			{/* Consume success toast */}
 			{consumeToast.isOpen && (

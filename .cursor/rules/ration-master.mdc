@@ -118,6 +118,50 @@ app/
 - `bun run db:migrate:dev` - Apply migrations locally
 - `bun run db:migrate:prod` - Apply migrations remotely
 
+## D1 Query & Write Patterns
+
+### Hard Limits (always enforce)
+
+- **100 bound parameters per statement.** D1 enforces this strictly — standard SQLite allows 999, D1 does not. Every `?` placeholder in a prepared statement counts. Exceeding this triggers a `SQLITE_RANGE` error that surfaces as a silent `server_busy` 503.
+- **Column count determines safe batch size.** `floor(100 / columns_per_row)` = max rows per INSERT statement. The constants live in `app/lib/query-utils.server.ts`:
+  - `D1_MAX_INGREDIENT_ROWS_PER_STATEMENT` = 12 (8 columns)
+  - `D1_MAX_TAG_ROWS_PER_STATEMENT` = 33 (3 columns)
+  - `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` = 12 (8 columns)
+  - When adding a new table with bulk inserts, add its constant here.
+
+### Multi-Statement Write Pattern (use `db.batch()`)
+
+**Always** use `db.batch([stmt1, stmt2, ...])` for multi-statement writes. This is a single HTTP round-trip to D1 regardless of statement count. **Never** use sequential `await` loops for independent writes — each `await` is a separate round-trip.
+
+```typescript
+// CORRECT — one round-trip, all statements execute atomically server-side
+const stmts = chunkArray(rows, D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT)
+  .map((chunk) => db.insert(schema.mealPlanEntry).values(chunk));
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+await db.batch(stmts as [any, ...any[]]);
+
+// WRONG — N round-trips, slow, not atomic
+for (const chunk of chunkArray(rows, 12)) {
+  await db.insert(schema.mealPlanEntry).values(chunk); // ❌ sequential
+}
+```
+
+`chunkArray`, `chunkedQuery`, and the `D1_MAX_*` constants are all exported from `app/lib/query-utils.server.ts`. Use them; do not inline the chunking logic.
+
+### Read Pattern (use `inArray` with `chunkedQuery`)
+
+For `SELECT ... WHERE id IN (?)` queries, use `chunkedQuery` from `query-utils.server.ts` when the ID list may exceed 100 items:
+
+```typescript
+const results = await chunkedQuery(ids, (chunk) =>
+  db.select().from(schema.meal).where(inArray(schema.meal.id, chunk))
+);
+```
+
+### Error Handling
+
+`isD1ContentionError()` in `app/lib/error-handler.ts` catches `SQLITE_BUSY`, `SQLITE_RANGE`, `too many bound parameters`, `database is locked`, timeouts, and D1 HTTP 522/524 codes — returning a 503 with `Retry-After: 5`. Always call `handleApiError(e)` in route catch blocks so these are handled consistently.
+
 ## Database Migration Rules
 
 **Always use Drizzle to generate migrations. Never write migration SQL files by hand.**

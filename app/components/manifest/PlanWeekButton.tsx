@@ -52,6 +52,15 @@ interface PlanWeekButtonProps {
 	onScheduleConfirmed: (entries: ScheduleEntry[]) => void;
 	/** Whether the bulk submission is in flight. */
 	isSubmitting?: boolean;
+	/**
+	 * Externally controlled open state. When provided the component operates
+	 * in controlled mode and the trigger button is hidden — the parent is
+	 * responsible for opening the modal (e.g. via a FAB action).
+	 * Omit to use the built-in trigger button (uncontrolled mode).
+	 */
+	open?: boolean;
+	/** Called when the modal requests to close (controlled mode only). */
+	onOpenChange?: (open: boolean) => void;
 }
 
 const MAX_DIETARY_NOTE = 200;
@@ -398,14 +407,20 @@ export function PlanWeekButton({
 	meals,
 	onScheduleConfirmed,
 	isSubmitting = false,
+	open: controlledOpen,
+	onOpenChange,
 }: PlanWeekButtonProps) {
 	// Only offer dates from today (or week start if in the future) onwards —
 	// never schedule meals in the past.
 	const futureDates = weekDates.filter((d) => d >= planStartDate);
+	const isControlled = controlledOpen !== undefined;
+
 	type View = "intro" | "form" | "preview" | "error";
-	const [showModal, setShowModal] = useState(false);
+	const [internalOpen, setInternalOpen] = useState(false);
 	const [view, setView] = useState<View>("intro");
 	const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+
+	const showModal = isControlled ? controlledOpen : internalOpen;
 
 	const planFetcher = useFetcher<{
 		success?: boolean;
@@ -419,7 +434,11 @@ export function PlanWeekButton({
 		planFetcher.state === "submitting" || planFetcher.state === "loading";
 
 	const handleClose = () => {
-		setShowModal(false);
+		if (isControlled) {
+			onOpenChange?.(false);
+		} else {
+			setInternalOpen(false);
+		}
 		setView("intro");
 		setSchedule([]);
 	};
@@ -492,17 +511,20 @@ export function PlanWeekButton({
 
 	return (
 		<>
-			<button
-				type="button"
-				onClick={() => {
-					setView("intro");
-					setShowModal(true);
-				}}
-				className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green/10 text-hyper-green border border-hyper-green/30 font-semibold rounded-lg hover:bg-hyper-green/20 hover:shadow-glow-sm transition-all text-sm"
-			>
-				<Sparkles className="w-4 h-4" />
-				Plan My Week
-			</button>
+			{/* Trigger button — hidden in controlled mode (parent e.g. FAB opens the modal) */}
+			{!isControlled && (
+				<button
+					type="button"
+					onClick={() => {
+						setView("intro");
+						setInternalOpen(true);
+					}}
+					className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green/10 text-hyper-green border border-hyper-green/30 font-semibold rounded-lg hover:bg-hyper-green/20 hover:shadow-glow-sm transition-all text-sm"
+				>
+					<Sparkles className="w-4 h-4" />
+					Plan My Week
+				</button>
+			)}
 
 			<AIFeatureModal
 				open={showModal}

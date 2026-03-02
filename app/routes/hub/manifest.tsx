@@ -484,7 +484,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									type="button"
 									onClick={() => handleConsumeAll(selectedDay)}
 									disabled={consumeFetcher.state !== "idle"}
-									className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg hover:shadow-glow-sm transition-all text-sm disabled:opacity-50"
+									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 									title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
 								>
 									<ConsumeIcon className="w-4 h-4" />
@@ -627,6 +627,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				actions={[
 					{
 						id: "plan-week",
+						primary: true,
 						icon: (
 							<svg
 								className="w-5 h-5"
@@ -681,7 +682,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									id: "consume-all",
 									icon: <ConsumeIcon className="w-5 h-5" />,
 									label: "Consume all",
-									primary: true,
 									onClick: () => handleConsumeAll(selectedDay),
 									disabled: consumeFetcher.state !== "idle",
 								},

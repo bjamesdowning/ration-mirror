@@ -519,7 +519,7 @@ export function PlanWeekButton({
 						setView("intro");
 						setInternalOpen(true);
 					}}
-					className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green/10 text-hyper-green border border-hyper-green/30 font-semibold rounded-lg hover:bg-hyper-green/20 hover:shadow-glow-sm transition-all text-sm"
+					className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 				>
 					<Sparkles className="w-4 h-4" />
 					Plan My Week

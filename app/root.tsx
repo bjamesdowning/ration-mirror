@@ -44,7 +44,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 
 export const headers: Route.HeadersFunction = () => ({
 	"Content-Security-Policy":
-		"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com",
+		"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com; connect-src 'self' https://api.stripe.com https://cloudflareinsights.com; frame-src https://js.stripe.com https://hooks.stripe.com",
 	"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 	"X-Frame-Options": "DENY",
 	"X-Content-Type-Options": "nosniff",
@@ -67,6 +67,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				{children}
 				<ScrollRestoration />
 				<Scripts />
+				<script
+					defer
+					src="https://static.cloudflareinsights.com/beacon.min.js"
+					data-cf-beacon='{"token": "7b90ccb44b2f4948895901eda6124107"}'
+				/>
 			</body>
 		</html>
 	);

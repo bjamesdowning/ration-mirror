@@ -1,4 +1,4 @@
-import { and, count, eq, gt, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useCallback, useEffect, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
@@ -10,37 +10,53 @@ import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
-	// Verify Admin Access (this handles auth check too)
 	const adminUser = await requireAdmin(args.context, args.request);
 
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
 	const now = new Date();
+	const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 	const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 	const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-	// All 13 queries are independent — run them in parallel to reduce wall-clock
-	// latency from ~13 sequential D1 round-trips down to ~1.
 	const [
+		// Overview totals
 		userCount,
 		inventoryCount,
 		burnedResult,
+		crewMemberCountResult,
+		totalCreditsResult,
+		// Activity / sessions
 		activeUsersResult,
 		activeSessionsResult,
 		newSignups7dResult,
 		newSignups30dResult,
+		// 24h deltas
+		newSignups24hResult,
+		newCargo24hResult,
+		newMeals24hResult,
+		creditsAdded24hResult,
+		creditsConsumed24hResult,
+		aiCalls24hResult,
+		crewConversions24hResult,
+		// Feature usage totals
 		groupCount,
 		mealCount,
 		activeMealCount,
 		groceryListCount,
 		scanCountResult,
-		totalCreditsResult,
+		mealPlanCount,
+		// Platform health
 		pendingInvitesResult,
 		expiringItemsResult,
 		verifiedUsersResult,
-		crewMemberCountResult,
+		// Heavy hitters: top 5 orgs by cargo count
+		topOrgsByCargoResult,
+		// Heavy hitters: top 5 orgs by meal count
+		topOrgsByMealResult,
 	] = await Promise.all([
+		// ── Overview totals ──────────────────────────────────────────────────
 		db.$count(schema.user),
 		db.$count(schema.cargo),
 		db
@@ -49,6 +65,19 @@ export async function loader(args: Route.LoaderArgs) {
 			})
 			.from(schema.ledger)
 			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(eq(schema.user.tier, "crew_member"))
+			.get(),
+		db
+			.select({
+				total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
+			})
+			.from(schema.organization)
+			.get(),
+
+		// ── Activity / sessions ──────────────────────────────────────────────
 		db
 			.select({
 				count: sql<number>`count(distinct ${schema.session.userId})`,
@@ -71,6 +100,71 @@ export async function loader(args: Route.LoaderArgs) {
 			.from(schema.user)
 			.where(gt(schema.user.createdAt, thirtyDaysAgo))
 			.get(),
+
+		// ── 24h deltas ───────────────────────────────────────────────────────
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(gt(schema.user.createdAt, oneDayAgo))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.cargo)
+			.where(gt(schema.cargo.createdAt, oneDayAgo))
+			.get(),
+		db
+			.select({ count: count() })
+			.from(schema.meal)
+			.where(gt(schema.meal.createdAt, oneDayAgo))
+			.get(),
+		db
+			.select({
+				total: sql<number>`coalesce(sum(${schema.ledger.amount}), 0)`,
+			})
+			.from(schema.ledger)
+			.where(
+				and(
+					gt(schema.ledger.amount, 0),
+					gt(schema.ledger.createdAt, oneDayAgo),
+				),
+			)
+			.get(),
+		db
+			.select({
+				total: sql<number>`coalesce(sum(abs(${schema.ledger.amount})), 0)`,
+			})
+			.from(schema.ledger)
+			.where(
+				and(
+					lt(schema.ledger.amount, 0),
+					gt(schema.ledger.createdAt, oneDayAgo),
+				),
+			)
+			.get(),
+		// AI calls last 24h: any ledger debit that isn't a refund
+		db
+			.select({ count: count() })
+			.from(schema.ledger)
+			.where(
+				and(
+					lt(schema.ledger.amount, 0),
+					gt(schema.ledger.createdAt, oneDayAgo),
+				),
+			)
+			.get(),
+		// Crew conversions 24h: users who became crew_member with tierExpiresAt set in the last 24h
+		db
+			.select({ count: count() })
+			.from(schema.user)
+			.where(
+				and(
+					eq(schema.user.tier, "crew_member"),
+					gt(schema.user.tierExpiresAt, oneDayAgo),
+				),
+			)
+			.get(),
+
+		// ── Feature usage totals ─────────────────────────────────────────────
 		db.$count(schema.organization),
 		db.$count(schema.meal),
 		db.$count(schema.activeMealSelection),
@@ -80,12 +174,9 @@ export async function loader(args: Route.LoaderArgs) {
 			.from(schema.ledger)
 			.where(eq(schema.ledger.reason, "scan"))
 			.get(),
-		db
-			.select({
-				total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
-			})
-			.from(schema.organization)
-			.get(),
+		db.$count(schema.mealPlan),
+
+		// ── Platform health ──────────────────────────────────────────────────
 		db
 			.select({ count: count() })
 			.from(schema.invitation)
@@ -106,33 +197,94 @@ export async function loader(args: Route.LoaderArgs) {
 			.from(schema.user)
 			.where(eq(schema.user.emailVerified, true))
 			.get(),
+
+		// ── Heavy hitters: top 5 orgs by cargo ──────────────────────────────
 		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(eq(schema.user.tier, "crew_member"))
-			.get(),
+			.select({
+				organizationId: schema.cargo.organizationId,
+				itemCount: count(),
+			})
+			.from(schema.cargo)
+			.groupBy(schema.cargo.organizationId)
+			.orderBy(desc(count()))
+			.limit(5),
+
+		// ── Heavy hitters: top 5 orgs by meals ──────────────────────────────
+		db
+			.select({
+				organizationId: schema.meal.organizationId,
+				mealCount: count(),
+			})
+			.from(schema.meal)
+			.groupBy(schema.meal.organizationId)
+			.orderBy(desc(count()))
+			.limit(5),
 	]);
+
+	// Resolve org names for heavy hitters
+	const heavyHitterOrgIds = Array.from(
+		new Set([
+			...topOrgsByCargoResult.map((r) => r.organizationId),
+			...topOrgsByMealResult.map((r) => r.organizationId),
+		]),
+	);
+
+	const orgNames: Record<string, string> = {};
+	if (heavyHitterOrgIds.length > 0) {
+		const orgs = await db
+			.select({ id: schema.organization.id, name: schema.organization.name })
+			.from(schema.organization)
+			.where(inArray(schema.organization.id, heavyHitterOrgIds))
+			.limit(10);
+		for (const org of orgs) {
+			orgNames[org.id] = org.name;
+		}
+	}
 
 	return {
 		currentUserId: adminUser.id,
+		// Overview
 		userCount,
 		inventoryCount,
 		burnedCredits: burnedResult?.burned || 0,
+		crewMemberCount: crewMemberCountResult?.count ?? 0,
+		totalCredits: totalCreditsResult?.total ?? 0,
+		// Activity
 		activeUsers: activeUsersResult?.count ?? 0,
 		activeSessions: activeSessionsResult?.count ?? 0,
 		newSignups7d: newSignups7dResult?.count ?? 0,
 		newSignups30d: newSignups30dResult?.count ?? 0,
+		// 24h deltas
+		newSignups24h: newSignups24hResult?.count ?? 0,
+		newCargo24h: newCargo24hResult?.count ?? 0,
+		newMeals24h: newMeals24hResult?.count ?? 0,
+		creditsAdded24h: creditsAdded24hResult?.total ?? 0,
+		creditsConsumed24h: creditsConsumed24hResult?.total ?? 0,
+		aiCalls24h: aiCalls24hResult?.count ?? 0,
+		crewConversions24h: crewConversions24hResult?.count ?? 0,
+		// Feature usage
 		groupCount,
 		mealCount,
 		activeMealCount,
 		groceryListCount,
 		scanCount: scanCountResult?.count ?? 0,
-		totalCredits: totalCreditsResult?.total ?? 0,
+		mealPlanCount,
+		// Platform health
 		pendingInvites: pendingInvitesResult?.count ?? 0,
 		expiringItems: expiringItemsResult?.count ?? 0,
 		verifiedEmailRate:
 			userCount > 0 ? ((verifiedUsersResult?.count ?? 0) / userCount) * 100 : 0,
-		crewMemberCount: crewMemberCountResult?.count ?? 0,
+		// Heavy hitters
+		topOrgsByCargo: topOrgsByCargoResult.map((r) => ({
+			orgId: r.organizationId,
+			orgName: orgNames[r.organizationId] ?? r.organizationId,
+			count: r.itemCount,
+		})),
+		topOrgsByMeal: topOrgsByMealResult.map((r) => ({
+			orgId: r.organizationId,
+			orgName: orgNames[r.organizationId] ?? r.organizationId,
+			count: r.mealCount,
+		})),
 	};
 }
 
@@ -179,16 +331,20 @@ export async function action(args: Route.ActionArgs) {
 	}
 }
 
+// ── Components ────────────────────────────────────────────────────────────────
+
 function MetricCard({
 	title,
 	value,
 	subtitle,
 	iconPath,
+	delta,
 }: {
 	title: string;
 	value: string | number;
 	subtitle: string;
 	iconPath: string;
+	delta?: number;
 }) {
 	return (
 		<div className="glass-panel rounded-2xl p-6 relative group">
@@ -213,7 +369,74 @@ function MetricCard({
 			<div className="text-display text-5xl text-carbon tabular-nums">
 				{typeof value === "number" ? value.toLocaleString() : value}
 			</div>
-			<div className="mt-4 text-xs text-muted">{subtitle}</div>
+			<div className="mt-3 flex items-center gap-3">
+				<span className="text-xs text-muted">{subtitle}</span>
+				{delta !== undefined && (
+					<span
+						className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums ${
+							delta > 0
+								? "bg-hyper-green/15 text-hyper-green"
+								: "bg-platinum/60 text-muted"
+						}`}
+					>
+						+{delta.toLocaleString()} today
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+	return (
+		<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
+			{children}
+		</h2>
+	);
+}
+
+type OrgRow = { orgId: string; orgName: string; count: number };
+
+function HeavyHittersTable({
+	title,
+	rows,
+	countLabel,
+}: {
+	title: string;
+	rows: OrgRow[];
+	countLabel: string;
+}) {
+	if (rows.length === 0) return null;
+	return (
+		<div className="glass-panel rounded-2xl p-6">
+			<h3 className="text-sm font-medium text-carbon mb-4">{title}</h3>
+			<table className="w-full text-left">
+				<thead>
+					<tr className="border-b border-carbon/10">
+						<th className="text-label text-muted py-2 pr-4 text-xs">Org</th>
+						<th className="text-label text-muted py-2 pr-4 text-xs text-right">
+							{countLabel}
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((row, i) => (
+						<tr key={row.orgId} className="border-b border-carbon/5">
+							<td className="py-2.5 pr-4">
+								<span className="font-medium text-sm text-carbon">
+									{row.orgName}
+								</span>
+								<span className="ml-2 text-xs text-muted font-mono">
+									#{i + 1}
+								</span>
+							</td>
+							<td className="py-2.5 text-right tabular-nums text-sm font-medium text-carbon">
+								{row.count.toLocaleString()}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
 		</div>
 	);
 }
@@ -232,20 +455,30 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		userCount,
 		inventoryCount,
 		burnedCredits,
+		crewMemberCount,
+		totalCredits,
 		activeUsers,
 		activeSessions,
 		newSignups7d,
 		newSignups30d,
+		newSignups24h,
+		newCargo24h,
+		newMeals24h,
+		creditsAdded24h,
+		creditsConsumed24h,
+		aiCalls24h,
+		crewConversions24h,
 		groupCount,
 		mealCount,
 		activeMealCount,
 		groceryListCount,
 		scanCount,
-		totalCredits,
+		mealPlanCount,
 		pendingInvites,
 		expiringItems,
 		verifiedEmailRate,
-		crewMemberCount,
+		topOrgsByCargo,
+		topOrgsByMeal,
 	} = loaderData;
 
 	const searchFetcher = useFetcher<{ users: SearchUser[] }>();
@@ -333,36 +566,115 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 			<main className="space-y-12 max-w-6xl">
 				{/* Overview */}
 				<section>
-					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
-						Overview
-					</h2>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+					<SectionHeading>Overview</SectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<MetricCard
 							title="Total Users"
 							value={userCount}
 							subtitle="Registered accounts"
 							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+							delta={newSignups24h}
 						/>
 						<MetricCard
 							title="Items Tracked"
 							value={inventoryCount}
-							subtitle="Total Cargo entries"
+							subtitle="Total cargo entries"
+							iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+							delta={newCargo24h}
+						/>
+						<MetricCard
+							title="Crew Members"
+							value={crewMemberCount}
+							subtitle="Paid tier subscriptions"
+							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+							delta={crewConversions24h}
+						/>
+						<MetricCard
+							title="Credits in Circulation"
+							value={totalCredits}
+							subtitle="Across all organizations"
+							iconPath="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</div>
+				</section>
+
+				{/* Growth — 24h pulse */}
+				<section>
+					<SectionHeading>Growth — Last 24 Hours</SectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+						<MetricCard
+							title="New Signups"
+							value={newSignups24h}
+							subtitle="Users joined today"
+							iconPath="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
+						/>
+						<MetricCard
+							title="Cargo Added"
+							value={newCargo24h}
+							subtitle="New pantry items"
 							iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 						/>
 						<MetricCard
-							title="Credits Used"
+							title="Meals Created"
+							value={newMeals24h}
+							subtitle="New recipes in galley"
+							iconPath="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+						/>
+						<MetricCard
+							title="AI Operations"
+							value={aiCalls24h}
+							subtitle="Credit-bearing operations today"
+							iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+						/>
+						<MetricCard
+							title="Credits Added"
+							value={creditsAdded24h}
+							subtitle="Top-ups and grants"
+							iconPath="M12 4v16m8-8H4"
+						/>
+						<MetricCard
+							title="Credits Consumed"
+							value={creditsConsumed24h}
+							subtitle="Burned by AI features"
+							iconPath="M13 10V3L4 14h7v7l9-11h-7z"
+						/>
+						<MetricCard
+							title="Crew Conversions"
+							value={crewConversions24h}
+							subtitle="Free → Crew upgrades"
+							iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</div>
+				</section>
+
+				{/* Economy */}
+				<section>
+					<SectionHeading>Economy</SectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+						<MetricCard
+							title="Credits Burned (All Time)"
 							value={burnedCredits}
 							subtitle="Total credits consumed"
-							iconPath="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+							iconPath="M13 10V3L4 14h7v7l9-11h-7z"
+						/>
+						<MetricCard
+							title="Credits Added (24h)"
+							value={creditsAdded24h}
+							subtitle="Top-ups and grants today"
+							iconPath="M12 4v16m8-8H4"
+						/>
+						<MetricCard
+							title="Credits Burned (24h)"
+							value={creditsConsumed24h}
+							subtitle="Consumed by AI today"
+							iconPath="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
 						/>
 					</div>
 				</section>
 
 				{/* Maintenance */}
 				<section>
-					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
-						Maintenance
-					</h2>
+					<SectionHeading>Maintenance</SectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 						<MetricCard
 							title="Active Users"
@@ -387,21 +699,20 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 				{/* Feature Usage */}
 				<section>
-					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
-						Feature Usage
-					</h2>
-					<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+					<SectionHeading>Feature Usage</SectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
 						<MetricCard
-							title="Total Groups"
+							title="Groups"
 							value={groupCount}
 							subtitle="Organizations created"
 							iconPath="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
 						/>
 						<MetricCard
-							title="Meals Created"
+							title="Meals"
 							value={mealCount}
 							subtitle="Recipes in galley"
 							iconPath="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+							delta={newMeals24h}
 						/>
 						<MetricCard
 							title="Active Selections"
@@ -416,6 +727,12 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							iconPath="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
 						/>
 						<MetricCard
+							title="Meal Plans"
+							value={mealPlanCount}
+							subtitle="Weekly plans created"
+							iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+						/>
+						<MetricCard
 							title="Items Scanned"
 							value={scanCount}
 							subtitle="Visual scan AI usage"
@@ -426,22 +743,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 				{/* Platform Health */}
 				<section>
-					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
-						Platform Health
-					</h2>
+					<SectionHeading>Platform Health</SectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-						<MetricCard
-							title="Crew Members"
-							value={crewMemberCount}
-							subtitle="Paid tier subscriptions"
-							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-						/>
-						<MetricCard
-							title="Credit Balance"
-							value={totalCredits}
-							subtitle="Credits in circulation"
-							iconPath="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
 						<MetricCard
 							title="Pending Invites"
 							value={pendingInvites}
@@ -460,14 +763,42 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							subtitle="Users with verified email"
 							iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
 						/>
+						<MetricCard
+							title="Crew Rate"
+							value={
+								userCount > 0
+									? `${((crewMemberCount / userCount) * 100).toFixed(1)}%`
+									: "0%"
+							}
+							subtitle="Paid conversion rate"
+							iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+						/>
+					</div>
+				</section>
+
+				{/* Heavy Hitters */}
+				<section>
+					<SectionHeading>Heavy Hitters</SectionHeading>
+					<p className="text-sm text-muted mb-4">
+						Top organizations by data volume. Flag any org that looks anomalous.
+					</p>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<HeavyHittersTable
+							title="Top Orgs by Cargo Count"
+							rows={topOrgsByCargo}
+							countLabel="Items"
+						/>
+						<HeavyHittersTable
+							title="Top Orgs by Meal Count"
+							rows={topOrgsByMeal}
+							countLabel="Meals"
+						/>
 					</div>
 				</section>
 
 				{/* User Management */}
 				<section>
-					<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
-						User Management
-					</h2>
+					<SectionHeading>User Management</SectionHeading>
 					<p className="text-sm text-muted mb-4">
 						Search by name or email to find users and grant or revoke admin
 						privileges.

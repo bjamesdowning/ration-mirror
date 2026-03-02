@@ -427,7 +427,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							title="AI-Powered Features"
 							subtitle="Let AI handle the tedious parts. All AI operations run on credits — available on both tiers."
 						/>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
 							{[
 								{
 									id: "scan",
@@ -449,6 +449,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									desc: "Generate meal ideas from your current Cargo. AI builds recipes using what you already have, respecting your preferences and allergens.",
 									cost: "2 CR",
 									img: "/static/ai-meal-generation.webp",
+								},
+								{
+									id: "weekly",
+									title: "AI Weekly Planning",
+									desc: "Tell Ration your week. AI reads your Cargo, cross-references your Galley, and drafts a 7-day Manifest — balanced meals, zero redundancy, allergen-aware.",
+									cost: "3 CR",
+									img: "/static/ai-weekly-planning.webp",
 								},
 								{
 									id: "vectors",
@@ -740,6 +747,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									<FeatureRow label="Photo & receipt scanning" free crew />
 									<FeatureRow label="Meal import via URL" free crew />
 									<FeatureRow label="AI meal generation" free crew />
+									<FeatureRow label="AI weekly meal planning" free crew />
 									<tr className="bg-carbon/[0.02]">
 										<td
 											colSpan={3}

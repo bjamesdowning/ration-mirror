@@ -378,6 +378,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<FeatureRow label="Photo & receipt scanning" free crew />
 						<FeatureRow label="Meal import via URL" free crew />
 						<FeatureRow label="AI meal generation" free crew />
+						<FeatureRow label="AI weekly meal planning" free crew />
 						<tr className="bg-carbon/[0.02]">
 							<td
 								colSpan={3}

@@ -4,6 +4,10 @@ import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import {
+	chunkedInsert,
+	D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT,
+} from "~/lib/query-utils.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BulkEntryCreateSchema } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/meal-plans.$id.entries.bulk";
@@ -92,7 +96,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			);
 		}
 
-		// Single bulk INSERT — O(1) round-trips regardless of entry count
+		// D1 enforces a 100-parameter limit per statement. mealPlanEntry has
+		// 8 bound columns per row (id + 7 fields), giving a safe batch of 12.
+		// chunkedInsert splits the work into sequential D1 round-trips so any
+		// number of entries up to the schema max (50) succeeds reliably.
 		const rows = inputEntries.map((e) => ({
 			planId: planRows[0].id,
 			mealId: e.mealId,
@@ -103,7 +110,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			notes: e.notes ?? null,
 		}));
 
-		await db.insert(schema.mealPlanEntry).values(rows);
+		await chunkedInsert(rows, D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT, (chunk) =>
+			db.insert(schema.mealPlanEntry).values(chunk),
+		);
 
 		return { inserted: rows.length };
 	} catch (e) {

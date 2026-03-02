@@ -24,6 +24,15 @@ export const D1_MAX_TAG_ROWS_PER_STATEMENT = Math.floor(
 	D1_MAX_BOUND_PARAMS / 3,
 );
 
+/**
+ * Max meal_plan_entry rows per INSERT.
+ * Columns bound: id, planId, mealId, date, slotType, orderIndex,
+ * servingsOverride, notes = 8 params per row.
+ */
+export const D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT = Math.floor(
+	D1_MAX_BOUND_PARAMS / 8,
+);
+
 export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
 	if (chunkSize <= 0) {
 		throw new Error("chunkSize must be greater than 0");

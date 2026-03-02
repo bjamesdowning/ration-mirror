@@ -13,6 +13,8 @@ export function isD1ContentionError(error: unknown): boolean {
 	return (
 		msg.includes("d1_error") ||
 		msg.includes("sqlite_busy") ||
+		msg.includes("sqlite_range") ||
+		msg.includes("too many bound parameters") ||
 		msg.includes("database is locked") ||
 		msg.includes("too many connections") ||
 		msg.includes("timeout") ||

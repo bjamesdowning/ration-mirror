@@ -60,6 +60,20 @@ describe("isD1ContentionError", () => {
 		expect(isD1ContentionError(new Error("524 a timeout occurred"))).toBe(true);
 	});
 
+	it("returns true for SQLITE_RANGE (too many bound parameters)", () => {
+		expect(
+			isD1ContentionError(
+				new Error("SQLITE_RANGE: bind or column index out of range"),
+			),
+		).toBe(true);
+	});
+
+	it("returns true for 'too many bound parameters' phrase", () => {
+		expect(
+			isD1ContentionError(new Error("too many bound parameters: 168 > 100")),
+		).toBe(true);
+	});
+
 	it("is case-insensitive", () => {
 		expect(isD1ContentionError(new Error("DATABASE IS LOCKED"))).toBe(true);
 		expect(isD1ContentionError(new Error("SQLITE_BUSY"))).toBe(true);

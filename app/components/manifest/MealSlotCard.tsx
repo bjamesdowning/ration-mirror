@@ -4,6 +4,8 @@ import {
 	ClockIcon,
 	ConsumeIcon,
 } from "~/components/icons/PageIcons";
+import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
+import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 
 interface MealSlotCardProps {
@@ -13,6 +15,8 @@ interface MealSlotCardProps {
 	onConsume?: (entryId: string) => void;
 	onCopy?: (entry: MealPlanEntryWithMeal) => void;
 	isConsuming?: boolean;
+	/** Allergens triggered by this meal's ingredients (pre-computed in loader). */
+	triggeredAllergens?: AllergenSlug[];
 }
 
 export function MealSlotCard({
@@ -22,6 +26,7 @@ export function MealSlotCard({
 	onConsume,
 	onCopy,
 	isConsuming = false,
+	triggeredAllergens = [],
 }: MealSlotCardProps) {
 	const fetcher = useFetcher();
 	const isRemoving = fetcher.state !== "idle";
@@ -98,6 +103,12 @@ export function MealSlotCard({
 						</span>
 					)}
 				</div>
+
+				{triggeredAllergens.length > 0 && (
+					<div className="mt-1.5">
+						<AllergenWarningBadge triggered={triggeredAllergens} compact />
+					</div>
+				)}
 
 				{entry.notes && (
 					<p className="text-xs text-muted mt-1 italic truncate">

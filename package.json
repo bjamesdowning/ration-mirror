@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "0.9.4-ALPHA",
+	"version": "0.1.0-BETA",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",

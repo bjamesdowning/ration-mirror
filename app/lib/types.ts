@@ -3,6 +3,7 @@
  */
 
 import type { Session, User } from "better-auth";
+import type { AllergenSlug } from "./allergens";
 
 export type TierSlug = "free" | "crew_member";
 
@@ -11,7 +12,7 @@ export interface UserSettings {
 	expirationAlertDays?: number;
 	defaultGroupId?: string;
 	theme?: "light" | "dark";
-	allergens?: string[];
+	allergens?: AllergenSlug[];
 	listGeneration?: {
 		lastGeneratedAt?: string;
 		enabled?: boolean;

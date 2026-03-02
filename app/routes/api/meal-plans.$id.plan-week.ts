@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { extractModelText } from "~/lib/ai.server";
+import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	AI_COSTS,
@@ -101,8 +102,20 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "Meal plan not found" }, { status: 404 });
 	}
 
-	// Fetch org meals (already RLS-scoped to groupId by getMealsForPicker)
-	const allMeals = await getMealsForPicker(context.cloudflare.env.DB, groupId);
+	// Fetch org meals and user allergens in parallel
+	const [allMeals, userRow] = await Promise.all([
+		getMealsForPicker(context.cloudflare.env.DB, groupId),
+		db
+			.select({ settings: schema.user.settings })
+			.from(schema.user)
+			.where(eq(schema.user.id, user.id))
+			.limit(1)
+			.then((rows) => rows[0] ?? null),
+	]);
+
+	const userAllergens = parseAllergens(
+		(userRow?.settings as { allergens?: unknown } | null)?.allergens,
+	);
 
 	if (allMeals.length === 0) {
 		throw data(
@@ -160,6 +173,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 					meals: mealsForPrompt.map(toPromptMeal),
 					config,
 					weekDates,
+					userAllergens,
 				});
 
 				const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;

@@ -1,3 +1,4 @@
+import { and, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -36,6 +37,11 @@ import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
+import {
+	type AllergenSlug,
+	detectAllergens,
+	parseAllergens,
+} from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
@@ -79,6 +85,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		: getWeekStart(today, weekStartPref);
 	const currentWeekEnd = getWeekEnd(currentWeekStart);
 
+	const userAllergens = parseAllergens(settings.allergens);
+
 	const [plan, meals, credits] = await Promise.all([
 		ensureMealPlan(db, groupId),
 		getMealsForPicker(db, groupId),
@@ -92,6 +100,36 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		currentWeekEnd,
 	);
 
+	// Build a per-meal allergen map for the scheduled entries so slot cards
+	// can display warnings without a per-card API call.
+	const triggeredAllergensByMealId: Record<string, AllergenSlug[]> = {};
+	if (userAllergens.length > 0 && entries.length > 0) {
+		const scheduledMealIds = [...new Set(entries.map((e) => e.mealId))];
+		const ingredientRows = await drizzleDb
+			.select({
+				mealId: schema.mealIngredient.mealId,
+				name: schema.mealIngredient.ingredientName,
+			})
+			.from(schema.mealIngredient)
+			.where(and(inArray(schema.mealIngredient.mealId, scheduledMealIds)))
+			.limit(scheduledMealIds.length * 30);
+
+		const ingredientsByMealId = new Map<string, string[]>();
+		for (const row of ingredientRows) {
+			const existing = ingredientsByMealId.get(row.mealId) ?? [];
+			existing.push(row.name);
+			ingredientsByMealId.set(row.mealId, existing);
+		}
+
+		for (const mealId of scheduledMealIds) {
+			const names = ingredientsByMealId.get(mealId) ?? [];
+			const triggered = detectAllergens(names, userAllergens);
+			if (triggered.length > 0) {
+				triggeredAllergensByMealId[mealId] = triggered;
+			}
+		}
+	}
+
 	return {
 		plan,
 		entries,
@@ -102,6 +140,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		showSnackSlot,
 		credits,
 		planWeekCost: AI_COSTS.MEAL_PLAN_WEEKLY,
+		triggeredAllergensByMealId,
 	};
 }
 
@@ -126,6 +165,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		showSnackSlot,
 		credits,
 		planWeekCost,
+		triggeredAllergensByMealId,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -539,6 +579,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							onCopy={setCopyEntry}
 							isConsuming={consumeFetcher.state !== "idle"}
 							showSnackSlot={showSnackSlot}
+							triggeredAllergensByMealId={triggeredAllergensByMealId}
 						/>
 					)}
 				</div>
@@ -564,6 +605,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					showSnackSlot={showSnackSlot}
 					selectedDate={selectedDay}
 					onSelectDate={setSelectedDay}
+					triggeredAllergensByMealId={triggeredAllergensByMealId}
 				/>
 			</div>
 

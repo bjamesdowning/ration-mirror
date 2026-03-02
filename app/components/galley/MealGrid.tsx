@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { meal } from "~/db/schema";
+import type { AllergenSlug } from "~/lib/allergens";
 import { log } from "~/lib/logging.client";
 import type { MealMatchResult } from "~/lib/matching.server";
 import type { MealCustomFields } from "~/lib/types";
@@ -35,6 +36,8 @@ interface MealGridProps {
 	activeMealIds?: Set<string>;
 	onToggleMealActive?: (mealId: string, nextActive: boolean) => void;
 	viewMode?: ViewMode;
+	/** User's declared allergen slugs — propagated to MealCard for warning badges. */
+	userAllergens?: AllergenSlug[];
 }
 
 export function MealGrid({
@@ -44,6 +47,7 @@ export function MealGrid({
 	activeMealIds,
 	onToggleMealActive,
 	viewMode = "card",
+	userAllergens = [],
 }: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
 	const [minMatch, setMinMatch] = useState(50);
@@ -219,6 +223,7 @@ export function MealGrid({
 												availableIngredients={inventory}
 												isActive={activeMealIds?.has(result.meal.id)}
 												onToggleActive={onToggleMealActive}
+												userAllergens={userAllergens}
 											/>
 										)}
 										<div className="absolute top-2 right-2">
@@ -286,6 +291,7 @@ export function MealGrid({
 						availableIngredients={inventory}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						userAllergens={userAllergens}
 					/>
 				),
 			)}

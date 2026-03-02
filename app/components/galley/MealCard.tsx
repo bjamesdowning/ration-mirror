@@ -3,7 +3,9 @@ import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import type { meal } from "~/db/schema";
+import { type AllergenSlug, detectAllergens } from "~/lib/allergens";
 import type { MealCustomFields } from "~/lib/types";
 
 // Helper type for inventory item from DB
@@ -31,6 +33,8 @@ interface MealCardProps {
 	availableIngredients?: InventoryItem[];
 	isActive?: boolean;
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
+	/** User's declared allergen slugs — used to display warning badges. */
+	userAllergens?: AllergenSlug[];
 }
 
 export function MealCard({
@@ -38,6 +42,7 @@ export function MealCard({
 	availableIngredients = [],
 	isActive = false,
 	onToggleActive,
+	userAllergens = [],
 }: MealCardProps) {
 	const fetcher = useFetcher();
 	const toggleFetcher = useFetcher<{
@@ -79,6 +84,9 @@ export function MealCard({
 	}, [toggleFetcher.data, meal.id]);
 
 	if (isDeleting) return null;
+
+	const ingredientNames = (meal.ingredients ?? []).map((i) => i.ingredientName);
+	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
 
 	const handleDelete = () => {
 		fetcher.submit({ intent: "delete", mealId: meal.id }, { method: "post" });
@@ -155,7 +163,7 @@ export function MealCard({
 						</div>
 					</div>
 
-					<div className="flex flex-wrap gap-2 mb-4">
+					<div className="flex flex-wrap gap-2 mb-3">
 						{(meal.tags || []).map((tag) => (
 							<span
 								key={tag}
@@ -165,6 +173,12 @@ export function MealCard({
 							</span>
 						))}
 					</div>
+
+					{triggeredAllergens.length > 0 && (
+						<div className="mb-3">
+							<AllergenWarningBadge triggered={triggeredAllergens} />
+						</div>
+					)}
 
 					{(() => {
 						let cf: Record<string, unknown> | null = null;

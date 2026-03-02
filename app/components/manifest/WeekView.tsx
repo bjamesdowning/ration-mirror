@@ -1,3 +1,4 @@
+import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -20,6 +21,7 @@ interface WeekViewProps {
 	selectedDate?: string;
 	/** Callback to set the selected day */
 	onSelectDate?: (date: string) => void;
+	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 }
 
 export function WeekView({
@@ -36,6 +38,7 @@ export function WeekView({
 	readOnly = false,
 	selectedDate,
 	onSelectDate,
+	triggeredAllergensByMealId = {},
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -145,6 +148,7 @@ export function WeekView({
 									isConsuming={isConsuming}
 									readOnly={readOnly}
 									compact
+									triggeredAllergensByMealId={triggeredAllergensByMealId}
 								/>
 							))}
 						</div>

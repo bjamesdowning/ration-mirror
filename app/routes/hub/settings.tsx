@@ -11,11 +11,13 @@ import {
 	useNavigation,
 } from "react-router";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
+import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
+import { type AllergenSlug, parseAllergens } from "~/lib/allergens";
 import { API_RATE_LIMITS, V1_ENDPOINTS } from "~/lib/api-docs";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
@@ -248,6 +250,28 @@ export async function action(args: Route.ActionArgs) {
 
 	const env = args.context.cloudflare.env;
 	const db = drizzle(env.DB, { schema });
+
+	if (intent === "update-allergens") {
+		const raw = formData.get("allergens");
+		const allergens = parseAllergens(
+			typeof raw === "string" ? (JSON.parse(raw) as unknown) : [],
+		);
+
+		const user = await db.query.user.findFirst({
+			where: (user, { eq }) => eq(user.id, userId),
+		});
+
+		if (user) {
+			const currentSettings = (user.settings as UserSettings) || {};
+			const newSettings: UserSettings = { ...currentSettings, allergens };
+			await db
+				.update(schema.user)
+				.set({ settings: newSettings })
+				.where(eq(schema.user.id, userId));
+		}
+
+		return { success: true };
+	}
 
 	if (intent === "update-theme") {
 		const theme = formData.get("theme") as "light" | "dark";
@@ -840,6 +864,46 @@ function GroupSection({
 
 // ─── Preferences Section ───────────────────────────────────────────────────────
 
+function AllergenSection({ settings }: { settings: UserSettings }) {
+	const fetcher = useFetcher();
+
+	const currentAllergens = parseAllergens(settings.allergens ?? []);
+	const isSaving = fetcher.state !== "idle";
+
+	const handleChange = (next: AllergenSlug[]) => {
+		fetcher.submit(
+			{ intent: "update-allergens", allergens: JSON.stringify(next) },
+			{ method: "post" },
+		);
+	};
+
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">
+				Dietary Restrictions
+			</h3>
+			<p className="text-sm text-muted mb-4">
+				Select any ingredients you need to avoid. Meals containing these will be
+				flagged with a warning everywhere they appear.
+			</p>
+			<AllergenSelector
+				selected={currentAllergens}
+				onChange={handleChange}
+				disabled={isSaving}
+			/>
+			{isSaving && (
+				<p className="text-xs text-hyper-green animate-pulse mt-3">Saving...</p>
+			)}
+			{currentAllergens.length > 0 && !isSaving && (
+				<p className="text-xs text-muted mt-3">
+					{currentAllergens.length} restriction
+					{currentAllergens.length !== 1 ? "s" : ""} active
+				</p>
+			)}
+		</div>
+	);
+}
+
 function PreferencesSection({ settings }: { settings: UserSettings }) {
 	const navigation = useNavigation();
 	const isUpdatingTheme =
@@ -852,6 +916,9 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Preferences</SectionHeading>
+
+			{/* Dietary Restrictions */}
+			<AllergenSection settings={settings} />
 
 			{/* Appearance */}
 			<div className="glass-panel rounded-xl p-6">

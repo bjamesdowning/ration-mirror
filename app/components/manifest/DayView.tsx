@@ -1,3 +1,4 @@
+import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
@@ -14,6 +15,7 @@ interface DayViewProps {
 	isConsuming?: boolean;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
+	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 }
 
 const MONTH_NAMES = [
@@ -41,6 +43,7 @@ export function DayView({
 	isConsuming = false,
 	showSnackSlot = true,
 	readOnly = false,
+	triggeredAllergensByMealId = {},
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
@@ -93,6 +96,7 @@ export function DayView({
 					onCopy={onCopy}
 					isConsuming={isConsuming}
 					readOnly={readOnly}
+					triggeredAllergensByMealId={triggeredAllergensByMealId}
 				/>
 			))}
 		</div>

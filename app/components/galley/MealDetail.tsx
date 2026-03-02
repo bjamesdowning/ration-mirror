@@ -1,6 +1,9 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
+import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
+import type { AllergenSlug } from "~/lib/allergens";
+import { detectAllergens } from "~/lib/allergens";
 import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
@@ -13,6 +16,8 @@ import { DirectionsSteps } from "./DirectionsSteps";
 interface MealDetailProps {
 	meal: MealInput & { id: string };
 	isOwner: boolean;
+	/** User's declared allergen slugs — used to display warning banner. */
+	userAllergens?: AllergenSlug[];
 }
 
 interface IngredientAvailability {
@@ -26,7 +31,11 @@ interface IngredientAvailability {
 const MIN_SERVINGS = 1;
 const MAX_SERVINGS = 99;
 
-export function MealDetail({ meal, isOwner }: MealDetailProps) {
+export function MealDetail({
+	meal,
+	isOwner,
+	userAllergens = [],
+}: MealDetailProps) {
 	const baseServings = meal.servings ?? 1;
 	const [desiredServings, setDesiredServings] = useState(baseServings);
 	const [inputValue, setInputValue] = useState(String(baseServings));
@@ -216,8 +225,16 @@ export function MealDetail({ meal, isOwner }: MealDetailProps) {
 		});
 	};
 
+	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);
+	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
+
 	return (
 		<div className="max-w-4xl mx-auto space-y-8">
+			{/* Allergen warning banner */}
+			{triggeredAllergens.length > 0 && (
+				<AllergenWarningBadge triggered={triggeredAllergens} />
+			)}
+
 			{/* Header */}
 			<div className="border-b border-platinum pb-6 flex justify-between items-start">
 				<div>

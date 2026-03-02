@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 import { MealDetail } from "~/components/galley/MealDetail";
 import { HubHeader } from "~/components/hub/HubHeader";
+import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { deleteMeal, getMeal } from "~/lib/meals.server";
@@ -8,9 +9,19 @@ import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/galley.$id";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { session, groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/hub/galley");
+
+	const rawSettings = session.user.settings;
+	let userAllergens: ReturnType<typeof parseAllergens> = [];
+	if (rawSettings) {
+		try {
+			const parsed =
+				typeof rawSettings === "string" ? JSON.parse(rawSettings) : rawSettings;
+			userAllergens = parseAllergens(parsed?.allergens);
+		} catch {}
+	}
 
 	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw redirect("/hub/galley");
@@ -42,7 +53,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		})),
 	};
 
-	return { meal: sanitizedMeal };
+	return { meal: sanitizedMeal, userAllergens };
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -60,7 +71,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
-	const { meal } = loaderData;
+	const { meal, userAllergens } = loaderData;
 
 	return (
 		<>
@@ -69,7 +80,7 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 				subtitle={`ID: ${meal.id.split("-")[0]}`}
 			/>
 
-			<MealDetail meal={meal} isOwner={true} />
+			<MealDetail meal={meal} isOwner={true} userAllergens={userAllergens} />
 		</>
 	);
 }

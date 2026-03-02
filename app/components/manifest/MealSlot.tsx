@@ -1,4 +1,5 @@
 import { PlusIcon } from "~/components/icons/PageIcons";
+import type { AllergenSlug } from "~/lib/allergens";
 import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_LABELS } from "~/lib/schemas/manifest";
@@ -15,6 +16,8 @@ interface MealSlotProps {
 	isConsuming?: boolean;
 	readOnly?: boolean;
 	compact?: boolean;
+	/** Pre-computed map of mealId → triggered allergen slugs. */
+	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 }
 
 export function MealSlot({
@@ -28,6 +31,7 @@ export function MealSlot({
 	isConsuming = false,
 	readOnly = false,
 	compact = false,
+	triggeredAllergensByMealId = {},
 }: MealSlotProps) {
 	const slotEntries = entries
 		.filter((e) => e.slotType === slot)
@@ -62,6 +66,7 @@ export function MealSlot({
 								onConsume={onConsume}
 								onCopy={onCopy}
 								isConsuming={isConsuming}
+								triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 							/>
 						))}
 						{!readOnly && (
@@ -110,6 +115,7 @@ export function MealSlot({
 						onConsume={onConsume}
 						onCopy={onCopy}
 						isConsuming={isConsuming}
+						triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 					/>
 				))}
 			</div>

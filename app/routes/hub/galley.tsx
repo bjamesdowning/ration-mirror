@@ -39,6 +39,7 @@ import { PageHeader } from "~/components/shell/PageHeader";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
+import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getCargo } from "~/lib/cargo.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
@@ -59,14 +60,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const domain = url.searchParams.get("domain") || undefined;
 	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
 
-	// Parse user settings to get view mode preference
+	// Parse user settings for view mode and allergens
 	const rawSettings = session.user.settings;
 	let defaultViewMode: "card" | "list" = "card";
+	let userAllergens: ReturnType<typeof parseAllergens> = [];
 	if (rawSettings) {
 		try {
 			const parsed =
 				typeof rawSettings === "string" ? JSON.parse(rawSettings) : rawSettings;
 			if (parsed?.viewMode?.galley === "list") defaultViewMode = "list";
+			userAllergens = parseAllergens(parsed?.allergens);
 		} catch {}
 	}
 
@@ -95,6 +98,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		page,
 		pageSize: GALLEY_PAGE_SIZE,
 		defaultViewMode,
+		userAllergens,
 	};
 }
 
@@ -141,8 +145,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
-	const { meals, availableTags, inventory, activeMealIds, defaultViewMode } =
-		loaderData;
+	const {
+		meals,
+		availableTags,
+		inventory,
+		activeMealIds,
+		defaultViewMode,
+		userAllergens,
+	} = loaderData;
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance?: number;
 		aiCosts?: { MEAL_GENERATE: number; IMPORT_URL: number };
@@ -542,6 +552,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						activeMealIds={selectedMealIds}
 						onToggleMealActive={handleToggleActive}
 						viewMode={viewMode}
+						userAllergens={userAllergens}
 					/>
 				)}
 			</div>

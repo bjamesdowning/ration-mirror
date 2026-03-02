@@ -39,8 +39,11 @@ interface PlanWeekButtonProps {
 	cost?: number;
 	/** ISO dates for the current visible week (7 strings). */
 	weekDates: string[];
-	/** First date of the current week (default start). */
-	currentWeekStart: string;
+	/**
+	 * The earliest date planning should start from — the later of today and
+	 * the week's first day. Planning never schedules meals in the past.
+	 */
+	planStartDate: string;
 	/** Whether the snack slot is enabled in user settings. */
 	showSnackSlot?: boolean;
 	/** Available meals (already loaded by manifest loader). */
@@ -161,8 +164,8 @@ function SchedulePreview({
 // ---------------------------------------------------------------------------
 
 interface PlanWeekFormProps {
-	weekDates: string[];
-	currentWeekStart: string;
+	/** Only the dates from planStartDate onwards (never past dates). */
+	futureDates: string[];
 	showSnackSlot: boolean;
 	meals: MealForPicker[];
 	onSubmit: (values: {
@@ -176,14 +179,14 @@ interface PlanWeekFormProps {
 }
 
 function PlanWeekForm({
-	weekDates,
-	currentWeekStart,
+	futureDates,
 	showSnackSlot,
 	meals,
 	onSubmit,
 	isLoading,
 }: PlanWeekFormProps) {
-	const [days, setDays] = useState(7);
+	const maxDays = futureDates.length;
+	const [days, setDays] = useState(maxDays);
 	const defaultSlots: SlotType[] = ["breakfast", "lunch", "dinner"];
 	const [slots, setSlots] = useState<Set<SlotType>>(new Set(defaultSlots));
 	const [tag, setTag] = useState("");
@@ -221,8 +224,8 @@ function PlanWeekForm({
 		});
 	};
 
-	const startLabel = formatDayLabel(currentWeekStart);
-	const endDate = weekDates[days - 1] ?? weekDates[weekDates.length - 1];
+	const startLabel = futureDates[0] ? formatDayLabel(futureDates[0]) : "";
+	const endDate = futureDates[days - 1] ?? futureDates[futureDates.length - 1];
 
 	return (
 		<div className="p-6 space-y-6">
@@ -239,7 +242,7 @@ function PlanWeekForm({
 				<input
 					type="range"
 					min={1}
-					max={7}
+					max={maxDays}
 					value={days}
 					onChange={(e) => setDays(Number(e.target.value))}
 					className="w-full h-2 rounded-full appearance-none bg-platinum dark:bg-white/20 accent-hyper-green cursor-pointer"
@@ -390,12 +393,15 @@ export function PlanWeekButton({
 	credits,
 	cost = 3,
 	weekDates,
-	currentWeekStart,
+	planStartDate,
 	showSnackSlot = true,
 	meals,
 	onScheduleConfirmed,
 	isSubmitting = false,
 }: PlanWeekButtonProps) {
+	// Only offer dates from today (or week start if in the future) onwards —
+	// never schedule meals in the past.
+	const futureDates = weekDates.filter((d) => d >= planStartDate);
 	type View = "intro" | "form" | "preview" | "error";
 	const [showModal, setShowModal] = useState(false);
 	const [view, setView] = useState<View>("intro");
@@ -427,7 +433,7 @@ export function PlanWeekButton({
 	}) => {
 		const payload: Record<string, unknown> = {
 			days: values.days,
-			startDate: currentWeekStart,
+			startDate: planStartDate,
 			slots: values.slots,
 			variety: values.variety,
 		};
@@ -522,8 +528,7 @@ export function PlanWeekButton({
 				{/* ── Config form + loading ── */}
 				{view === "form" && (
 					<PlanWeekForm
-						weekDates={weekDates}
-						currentWeekStart={currentWeekStart}
+						futureDates={futureDates}
 						showSnackSlot={showSnackSlot}
 						meals={meals}
 						onSubmit={handleFormSubmit}

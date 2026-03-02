@@ -171,6 +171,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [searchParams] = useSearchParams();
 	const weekDates = getWeekDates(currentWeekStart);
 
+	// Planning always starts from today (or the week's first day if it's in the
+	// future), so users never accidentally schedule meals in the past.
+	const planStartDate =
+		weekDates.find((d) => d >= today) ?? weekDates[weekDates.length - 1];
+
 	// Active day for mobile day view (default: today if in week, else first day)
 	const todayInWeek = weekDates.includes(today);
 	const defaultActiveDay = todayInWeek ? today : weekDates[0];
@@ -443,7 +448,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				credits={credits}
 				cost={planWeekCost}
 				weekDates={weekDates}
-				currentWeekStart={currentWeekStart}
+				planStartDate={planStartDate}
 				showSnackSlot={showSnackSlot}
 				meals={meals}
 				onScheduleConfirmed={handleScheduleConfirmed}
@@ -532,7 +537,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								credits={credits}
 								cost={planWeekCost}
 								weekDates={weekDates}
-								currentWeekStart={currentWeekStart}
+								planStartDate={planStartDate}
 								showSnackSlot={showSnackSlot}
 								meals={meals}
 								onScheduleConfirmed={handleScheduleConfirmed}

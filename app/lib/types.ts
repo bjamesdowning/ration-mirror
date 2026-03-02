@@ -52,11 +52,34 @@ export type HubWidgetId =
 
 export type HubProfile = "cook" | "shop" | "minimal" | "full" | "custom";
 
+/** Slot types available for meal plan entries */
+export type SlotType = "breakfast" | "lunch" | "dinner" | "snack";
+
+/** Cargo domains available for filtering */
+export type CargoDomain = "food" | "household" | "alcohol";
+
+/**
+ * Per-widget filter configuration stored alongside layout in user.settings.
+ * Fields are scoped to the capabilities of each widget type.
+ */
+export interface HubWidgetFilters {
+	/** Meal tag slugs to include (OR logic). Applies to meals-ready, meals-partial, snacks-ready, manifest-preview. */
+	tags?: string[];
+	/** Restrict manifest-preview to a single slot type. */
+	slotType?: SlotType;
+	/** Restrict cargo-expiring widget to a single cargo domain. */
+	domain?: CargoDomain;
+	/** Override the default result count limit for this widget (1–20). */
+	limit?: number;
+}
+
 export interface HubWidgetLayout {
 	id: string;
 	order: number;
 	size?: "sm" | "md" | "lg";
 	visible: boolean;
+	/** Optional per-widget filter configuration. Absent = use widget defaults. */
+	filters?: HubWidgetFilters;
 }
 
 export interface ManifestPreviewEntry {
@@ -83,8 +106,13 @@ export interface HubLoaderData {
 	expiringItems: unknown[];
 	cargoStats: { totalItems: number; expiringCount: number };
 	latestSupplyList: { items: unknown[] } | null;
-	/** Deferred: Promise when using deferred loader; resolves to meal match results */
+	/** Deferred: Promise when using deferred loader; resolves to meal (recipe) match results */
 	mealMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
+	/**
+	 * Deferred: Separate promise for meals-partial widget so its tag/limit filters
+	 * are independent from the meals-ready widget even when they share the same type.
+	 */
+	partialMealMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	/** Deferred: Promise when using deferred loader; resolves to snack (provision) match results */
 	snackMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	expirationAlertDays: number;

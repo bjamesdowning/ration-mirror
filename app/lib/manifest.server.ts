@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	meal,
@@ -692,11 +692,14 @@ export async function getManifestWeekMealsForSupply(
 /**
  * Lightweight query for the Hub ManifestWidget.
  * Returns at most 28 rows (4 slots × 7 days) via a single indexed scan.
+ * @param slotType Optional slot filter (breakfast/lunch/dinner/snack). When provided,
+ *   only entries for that slot are returned. Stored in the widget's filter config.
  */
 export async function getManifestPreview(
 	db: D1Database,
 	organizationId: string,
 	days = 7,
+	slotType?: string,
 ): Promise<ManifestPreviewData> {
 	const d1 = drizzle(db);
 
@@ -736,6 +739,7 @@ export async function getManifestPreview(
 				eq(mealPlanEntry.planId, plan.id),
 				gte(mealPlanEntry.date, today),
 				lte(mealPlanEntry.date, endDate),
+				...(slotType ? [eq(mealPlanEntry.slotType, slotType)] : []),
 			),
 		)
 		.orderBy(
@@ -745,6 +749,29 @@ export async function getManifestPreview(
 		);
 
 	return { planId: plan.id, entries: rows };
+}
+
+/**
+ * Returns the distinct set of meal tag slugs for an organisation.
+ * Used to populate the tag chip selector in Hub widget filter panels.
+ * Scoped to the org so users only see their own tags.
+ * Capped at 200 distinct tags — well above any practical limit.
+ */
+export async function getDistinctMealTags(
+	db: D1Database,
+	organizationId: string,
+): Promise<string[]> {
+	const d1 = drizzle(db);
+
+	const rows = await d1
+		.selectDistinct({ tag: mealTag.tag })
+		.from(mealTag)
+		.innerJoin(meal, eq(mealTag.mealId, meal.id))
+		.where(eq(meal.organizationId, organizationId))
+		.orderBy(asc(mealTag.tag))
+		.limit(200);
+
+	return rows.map((r) => r.tag);
 }
 
 // ---------------------------------------------------------------------------

@@ -10,12 +10,12 @@ function isPromise<T>(v: T | Promise<T>): v is Promise<T> {
 }
 
 export function MealsPartialWidget({ data }: HubWidgetProps) {
-	const mealMatches = data.mealMatches;
+	const partialMealMatches = data.partialMealMatches;
 
-	if (isPromise(mealMatches)) {
+	if (isPromise(partialMealMatches)) {
 		return (
 			<Suspense fallback={<MealWidgetSkeleton />}>
-				<Await resolve={mealMatches}>
+				<Await resolve={partialMealMatches}>
 					{(resolved) => {
 						const partialMeals = (resolved ?? []).filter(
 							(m) => !m.canMake && m.matchPercentage >= 50,
@@ -27,7 +27,7 @@ export function MealsPartialWidget({ data }: HubWidgetProps) {
 		);
 	}
 
-	const partialMeals = mealMatches.filter(
+	const partialMeals = partialMealMatches.filter(
 		(m) => !m.canMake && m.matchPercentage >= 50,
 	) as unknown as MealMatchResult[];
 	return <MealSuggestionsCard meals={partialMeals} />;

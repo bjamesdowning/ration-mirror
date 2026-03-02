@@ -147,6 +147,11 @@ export const MealMatchQuerySchema = z.object({
 	mode: z.enum(["strict", "delta"]),
 	minMatch: z.coerce.number().int().min(0).max(100).default(50),
 	limit: z.coerce.number().int().min(1).max(100).default(20),
+	/**
+	 * Single tag string from URL query params. Mapped to `tags` array when
+	 * building the MealMatchQuery for matchMeals(). Kept as `tag` for the public
+	 * API surface to preserve backward compatibility with existing consumers.
+	 */
 	tag: z
 		.string()
 		.optional()

@@ -63,7 +63,7 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			id: "meals-partial",
 			title: "Partial Meals",
 			description: "Meals with 50%+ match, missing some ingredients",
-			dataKeys: ["mealMatches"],
+			dataKeys: ["partialMealMatches"],
 			component: MealsPartialWidget,
 			defaultSize: "lg",
 			defer: true,

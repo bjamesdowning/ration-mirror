@@ -453,6 +453,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 				{ status: 402 },
 			);
 		}
+		if (
+			error &&
+			typeof error === "object" &&
+			"type" in error &&
+			(error as { type: string }).type === "DataWithResponseInit"
+		) {
+			return error as ReturnType<typeof data>;
+		}
 		throw error;
 	}
 }

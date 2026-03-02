@@ -708,6 +708,7 @@ export async function getExpiringCargo(
 	organizationId: string,
 	daysUntilExpiry = 7,
 	limit = 10,
+	domain?: string,
 ) {
 	const d1 = drizzle(db);
 
@@ -725,6 +726,7 @@ export async function getExpiringCargo(
 				isNotNull(cargo.expiresAt),
 				lte(cargo.expiresAt, futureDate),
 				gte(cargo.expiresAt, now), // Only items not yet expired
+				...(domain ? [eq(cargo.domain, domain)] : []),
 			),
 		)
 		.orderBy(asc(cargo.expiresAt))

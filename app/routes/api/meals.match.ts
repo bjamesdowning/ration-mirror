@@ -39,11 +39,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		throw handleApiError(parsed.error);
 	}
 
+	// Map single `tag` query param to the `tags` array field used by matchMeals
 	const query: MealMatchQuery = {
 		mode: parsed.data.mode,
 		minMatch: parsed.data.minMatch,
 		limit: parsed.data.limit,
-		tag: parsed.data.tag,
+		tags: parsed.data.tag ? [parsed.data.tag] : undefined,
 		servings: parsed.data.servings,
 		...(parsed.data.type ? { type: parsed.data.type } : {}),
 		...(parsed.data.domain ? { domain: parsed.data.domain } : {}),
@@ -55,7 +56,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			mode: query.mode,
 			minMatch: query.minMatch,
 			limit: query.limit,
-			tag: query.tag,
+			tags: query.tags,
 			servings: query.servings,
 			type: query.type,
 			domain: query.domain,

@@ -55,7 +55,11 @@ export interface MealMatchQuery {
 	limit?: number;
 	/** Cap meals fetched before matching; bounds work for large orgs. Applied to SQL. */
 	preLimit?: number;
-	tag?: string;
+	/**
+	 * Filter by one or more meal tag slugs (OR logic — a meal matching any tag is included).
+	 * Accepts a single string for backward compatibility or an array for multi-select widget filters.
+	 */
+	tags?: string | string[];
 	/** Override servings for all meals. Scales required quantities before comparing to cargo. */
 	servings?: number;
 	/** Filter by meal type: recipe (meals) or provision (snacks) */
@@ -336,11 +340,15 @@ export async function matchMeals(
 		minMatch = 50,
 		limit = 20,
 		preLimit,
-		tag,
+		tags,
 		servings,
 		type,
 		domain,
 	} = query;
+
+	// Normalise tags to a string array (or empty) for consistent handling
+	const tagFilter: string[] =
+		tags === undefined ? [] : Array.isArray(tags) ? tags : [tags];
 
 	log.info("[matchMeals] Starting", {
 		organizationId: redactId(organizationId),
@@ -348,7 +356,7 @@ export async function matchMeals(
 		minMatch,
 		limit,
 		preLimit,
-		tag,
+		tags: tagFilter,
 		servings,
 		type,
 		domain,
@@ -369,17 +377,20 @@ export async function matchMeals(
 	}
 
 	// 1. Fetch organization's meals (with optional tag, type, domain filters)
-	// preLimit caps meals before matching — bounds work for large orgs
+	// preLimit caps meals before matching — bounds work for large orgs.
+	// When tags are provided we JOIN against meal_tag with an inArray condition
+	// (OR logic: a meal matching *any* of the specified tags is included).
+	const needsTagJoin = tagFilter.length > 0;
 	const baseConditions = [
 		eq(meal.organizationId, organizationId),
-		...(tag ? [eq(mealTag.tag, tag)] : []),
+		...(needsTagJoin ? [inArray(mealTag.tag, tagFilter)] : []),
 		...(type ? [eq(meal.type, type)] : []),
 		...(domain ? [eq(meal.domain, domain)] : []),
 	];
 
-	let mealQuery = tag
+	let mealQuery = needsTagJoin
 		? d1
-				.select({
+				.selectDistinct({
 					id: meal.id,
 					organizationId: meal.organizationId,
 					name: meal.name,
@@ -629,10 +640,15 @@ export function getMatchCacheKey(
 		minMatch = 50,
 		limit = 20,
 		preLimit,
-		tag,
+		tags,
 		servings,
 		type,
 		domain,
 	} = query;
-	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tag || "all"}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}`;
+	// Normalise tags to a sorted, stable string so equivalent queries share the same key
+	const tagsKey =
+		tags === undefined
+			? "all"
+			: (Array.isArray(tags) ? [...tags].sort() : [tags]).join("+") || "all";
+	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}`;
 }

@@ -10,7 +10,7 @@ import { HomeIcon } from "~/components/icons/PageIcons";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
-import { getManifestPreview } from "~/lib/manifest.server";
+import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
 import { getSupplyList } from "~/lib/supply.server";
 import type { Route } from "./+types/index";
@@ -28,32 +28,65 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
 
+	// Resolve layout so we can read per-widget filter configs
+	const resolvedWidgets = resolveLayout(hubProfile, hubLayout);
+	const findWidget = (id: string) => resolvedWidgets.find((w) => w.id === id);
+
+	const mealsReadyConfig = findWidget("meals-ready");
+	const mealsPartialConfig = findWidget("meals-partial");
+	const snacksReadyConfig = findWidget("snacks-ready");
+	const cargoExpiringConfig = findWidget("cargo-expiring");
+	const manifestPreviewConfig = findWidget("manifest-preview");
+
+	// Derive per-widget filter values with safe defaults
+	const cargoLimit = cargoExpiringConfig?.filters?.limit ?? 10;
+	const cargoDomain = cargoExpiringConfig?.filters?.domain;
+	const manifestSlotType = manifestPreviewConfig?.filters?.slotType;
+
 	// Fast data — awaited immediately; page shell renders right away
-	const [expiringItems, cargoStats, latestSupplyList, manifestPreview] =
-		await Promise.all([
-			getExpiringCargo(db, groupId, expirationAlertDays, 10),
-			getCargoStats(db, groupId),
-			getSupplyList(db, groupId),
-			getManifestPreview(db, groupId, 7),
-		]);
+	const [
+		expiringItems,
+		cargoStats,
+		latestSupplyList,
+		manifestPreview,
+		availableMealTags,
+	] = await Promise.all([
+		getExpiringCargo(db, groupId, expirationAlertDays, cargoLimit, cargoDomain),
+		getCargoStats(db, groupId),
+		getSupplyList(db, groupId),
+		getManifestPreview(db, groupId, 7, manifestSlotType),
+		getDistinctMealTags(db, groupId),
+	]);
 
 	// Deferred — raw promises; meal/snack widgets show skeletons until resolved
 	// preLimit: 12 caps meals matched; bounds vector work for large orgs
 	const mealMatches = matchMeals(context.cloudflare.env, groupId, {
 		mode: "delta",
 		minMatch: 50,
-		limit: 6,
+		limit: mealsReadyConfig?.filters?.limit ?? 6,
 		preLimit: 12,
 		type: "recipe",
 		domain: "food",
+		tags: mealsReadyConfig?.filters?.tags,
 	});
 	const snackMatches = matchMeals(context.cloudflare.env, groupId, {
 		mode: "delta",
 		minMatch: 50,
-		limit: 6,
+		limit: snacksReadyConfig?.filters?.limit ?? 6,
 		preLimit: 12,
 		type: "provision",
 		domain: "food",
+		tags: snacksReadyConfig?.filters?.tags,
+	});
+	// meals-partial shares the meal dataset but applies its own tag/limit filters
+	const partialMealMatches = matchMeals(context.cloudflare.env, groupId, {
+		mode: "delta",
+		minMatch: 50,
+		limit: mealsPartialConfig?.filters?.limit ?? 6,
+		preLimit: 12,
+		type: "recipe",
+		domain: "food",
+		tags: mealsPartialConfig?.filters?.tags,
 	});
 
 	return {
@@ -64,8 +97,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		expirationAlertDays,
 		hubProfile,
 		hubLayout,
+		availableMealTags,
 		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		mealMatches,
+		partialMealMatches,
 		snackMatches,
 	};
 }
@@ -101,9 +136,11 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		hubLayout,
 		latestSupplyList,
 		mealMatches,
+		partialMealMatches,
 		snackMatches,
 		manifestPreview,
 		welcomeVoucherRedeemed,
+		availableMealTags,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -124,6 +161,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		expiringItems,
 		latestSupplyList,
 		mealMatches,
+		partialMealMatches,
 		snackMatches,
 		manifestPreview,
 	};
@@ -174,6 +212,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 						hubProfile={hubProfile}
 						hubLayout={hubLayout}
 						data={widgetData}
+						availableMealTags={availableMealTags}
 						onExit={() => setIsEditing(false)}
 					/>
 				) : (

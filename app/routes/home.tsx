@@ -427,7 +427,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							title="AI-Powered Features"
 							subtitle="Let AI handle the tedious parts. All AI operations run on credits — available on both tiers."
 						/>
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 							{[
 								{
 									id: "scan",
@@ -449,6 +449,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									desc: "Generate meal ideas from your current Cargo. AI builds recipes using what you already have, respecting your preferences and allergens.",
 									cost: "2 CR",
 									img: "/static/ai-meal-generation.webp",
+								},
+								{
+									id: "vectors",
+									title: "Semantic Ingredient Search",
+									desc: "Every item you add is converted into a vector embedding. AI understands semantic similarity between ingredients — preventing duplicates and powering smart meal matching.",
+									cost: "Automatic",
+									img: "/static/ai-vector-search.webp",
 								},
 							].map((feature) => (
 								<div

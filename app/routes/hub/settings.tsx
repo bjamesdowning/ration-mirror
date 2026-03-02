@@ -264,7 +264,9 @@ export async function action(args: Route.ActionArgs) {
 	}
 
 	if (intent === "update-theme") {
-		const theme = formData.get("theme") as "light" | "dark";
+		const themeRaw = formData.get("theme");
+		const theme =
+			themeRaw === "light" || themeRaw === "dark" ? themeRaw : "dark";
 		await patchUserSettings(env.DB, userId, { theme });
 		return data(
 			{ success: true },

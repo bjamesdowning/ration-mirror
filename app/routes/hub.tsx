@@ -4,6 +4,7 @@ import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
+import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
 	checkCapacityWithTier,
@@ -128,19 +129,22 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					{/* Global Top Bar (Group Context) */}
 					<header className="px-4 md:px-8 py-0 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-12">
 						<GroupSwitcher />
-						<NavLink
-							to="/hub/settings"
-							className={({ isActive }) =>
-								`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
-									isActive
-										? "text-hyper-green bg-hyper-green/10"
-										: "text-muted hover:text-carbon hover:bg-platinum/60"
-								}`
-							}
-							aria-label="System settings"
-						>
-							<SettingsIcon className="w-4 h-4" />
-						</NavLink>
+						<div className="flex items-center gap-1">
+							<ThemeToggle />
+							<NavLink
+								to="/hub/settings"
+								className={({ isActive }) =>
+									`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+										isActive
+											? "text-hyper-green bg-hyper-green/10"
+											: "text-muted hover:text-carbon hover:bg-platinum/60"
+									}`
+								}
+								aria-label="System settings"
+							>
+								<SettingsIcon className="w-4 h-4" />
+							</NavLink>
+						</div>
 					</header>
 
 					{/* Content */}

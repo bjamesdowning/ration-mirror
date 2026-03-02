@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useRouteLoaderData } from "react-router";
+import { DiamondIcon } from "~/components/icons/PageIcons";
 import { authClient } from "~/lib/auth-client";
 import type { OrganizationWithCredits } from "~/lib/types";
 
@@ -71,8 +72,9 @@ export function GroupSwitcher() {
 					{displayName}
 				</span>
 				{activeOrg && (
-					<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium leading-none">
-						{credits}⚡
+					<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium leading-none flex items-center gap-0.5">
+						{credits}
+						<DiamondIcon className="w-3 h-3 text-hyper-green shrink-0" />
 					</span>
 				)}
 				{activeOrg && tierLabel === "CREW" && (

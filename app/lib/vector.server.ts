@@ -1,6 +1,6 @@
 /**
  * Vectorize service for semantic cargo-to-galley ingredient matching.
- * Uses Cloudflare Workers AI (bge-base-en-v1.5) for embeddings and Vectorize for storage.
+ * Uses Cloudflare Workers AI (@cf/google/embeddinggemma-300m) for embeddings and Vectorize for storage.
  */
 
 import { log } from "./logging.server";
@@ -20,8 +20,6 @@ export const SIMILARITY_THRESHOLDS = {
 } as const;
 
 function sha256(text: string): string {
-	// Simple hash for cache key - Cloudflare Workers support crypto.subtle
-	// We use a deterministic string hash for cache keys (non-crypto use)
 	let h = 0;
 	for (let i = 0; i < text.length; i++) {
 		const c = text.charCodeAt(i);
@@ -53,7 +51,7 @@ export async function embed(ai: Ai, text: string): Promise<number[] | null> {
 	}
 }
 
-// bge-base-en-v1.5 supports up to 100 inputs per request
+// @cf/google/embeddinggemma-300m supports up to 100 inputs per request
 const EMBED_BATCH_SIZE = 100;
 
 /** Generate embeddings for multiple texts, chunked to stay within the API limit */
@@ -69,7 +67,6 @@ export async function embedBatch(
 		const chunk = clean.slice(offset, offset + EMBED_BATCH_SIZE);
 		try {
 			const response = await ai.run(EMBEDDING_MODEL, { text: chunk });
-			// Workers AI returns { shape, data: number[][] } — one array per input text
 			const result = response as {
 				shape?: number[];
 				data?: number[][];
@@ -115,7 +112,7 @@ export async function embedBatchWithCache(
 					return { text: s, vec: cached as number[] };
 				}
 			} catch {
-				// Cache read failed
+				// ignore
 			}
 			return { text: s, vec: null as number[] | null };
 		}),

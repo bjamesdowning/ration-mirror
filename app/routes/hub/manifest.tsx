@@ -1,5 +1,3 @@
-import { and, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useMemo, useState } from "react";
 import {
 	useFetcher,
@@ -35,14 +33,9 @@ import { FloatingActionBar } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
-import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
-import {
-	type AllergenSlug,
-	detectAllergens,
-	parseAllergens,
-} from "~/lib/allergens";
-import { requireActiveGroup } from "~/lib/auth.server";
+import { parseAllergens } from "~/lib/allergens";
+import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
@@ -53,12 +46,12 @@ import {
 	ensureMealPlan,
 	getMealsForPicker,
 	getTodayISO,
+	getTriggeredAllergens,
 	getWeekEntries,
 	getWeekStart,
 } from "~/lib/manifest.server";
 import { getWeekDates, getWeekEnd } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
-import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/manifest";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -68,11 +61,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	} = await requireActiveGroup(context, request);
 	const db = context.cloudflare.env.DB;
 
-	const drizzleDb = drizzle(db, { schema });
-	const userData = await drizzleDb.query.user.findFirst({
-		where: (u, { eq }) => eq(u.id, user.id),
-	});
-	const settings = (userData?.settings as UserSettings) || {};
+	const settings = await getUserSettings(db, user.id);
 	const weekStartPref: "sunday" | "monday" =
 		settings.manifestSettings?.weekStart ?? "sunday";
 	const showSnackSlot = settings.manifestSettings?.showSnackSlot ?? true;
@@ -102,33 +91,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	// Build a per-meal allergen map for the scheduled entries so slot cards
 	// can display warnings without a per-card API call.
-	const triggeredAllergensByMealId: Record<string, AllergenSlug[]> = {};
-	if (userAllergens.length > 0 && entries.length > 0) {
-		const scheduledMealIds = [...new Set(entries.map((e) => e.mealId))];
-		const ingredientRows = await drizzleDb
-			.select({
-				mealId: schema.mealIngredient.mealId,
-				name: schema.mealIngredient.ingredientName,
-			})
-			.from(schema.mealIngredient)
-			.where(and(inArray(schema.mealIngredient.mealId, scheduledMealIds)))
-			.limit(scheduledMealIds.length * 30);
-
-		const ingredientsByMealId = new Map<string, string[]>();
-		for (const row of ingredientRows) {
-			const existing = ingredientsByMealId.get(row.mealId) ?? [];
-			existing.push(row.name);
-			ingredientsByMealId.set(row.mealId, existing);
-		}
-
-		for (const mealId of scheduledMealIds) {
-			const names = ingredientsByMealId.get(mealId) ?? [];
-			const triggered = detectAllergens(names, userAllergens);
-			if (triggered.length > 0) {
-				triggeredAllergensByMealId[mealId] = triggered;
-			}
-		}
-	}
+	const scheduledMealIds = [...new Set(entries.map((e) => e.mealId))];
+	const triggeredAllergensByMealId = await getTriggeredAllergens(
+		db,
+		scheduledMealIds,
+		userAllergens,
+	);
 
 	return {
 		plan,

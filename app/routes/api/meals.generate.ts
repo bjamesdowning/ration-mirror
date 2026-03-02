@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
-import { cargo, user as userTable } from "~/db/schema";
+import { cargo } from "~/db/schema";
 import { extractModelText } from "~/lib/ai.server";
 import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
-import { requireActiveGroup } from "~/lib/auth.server";
+import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -52,7 +52,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	// 3. Fetch inventory and parse request body in parallel — they are independent.
-	const d1 = drizzle(context.cloudflare.env.DB);
+	const db = drizzle(context.cloudflare.env.DB);
 
 	const parseBody = async (): Promise<string | undefined> => {
 		try {
@@ -88,8 +88,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 	};
 
-	const [pantryItems, userRow, customization] = await Promise.all([
-		d1
+	const [pantryItems, userSettings, customization] = await Promise.all([
+		// Full scan intentional — all pantry items are needed to build the AI prompt
+		db
 			.select({
 				id: cargo.id,
 				name: cargo.name,
@@ -98,18 +99,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			})
 			.from(cargo)
 			.where(eq(cargo.organizationId, groupId)),
-		d1
-			.select({ settings: userTable.settings })
-			.from(userTable)
-			.where(eq(userTable.id, user.id))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
+		getUserSettings(context.cloudflare.env.DB, user.id),
 		parseBody(),
 	]);
 
-	const userAllergens = parseAllergens(
-		(userRow?.settings as { allergens?: unknown } | null)?.allergens,
-	);
+	const userAllergens = parseAllergens(userSettings.allergens);
 
 	if (pantryItems.length === 0) {
 		throw data(

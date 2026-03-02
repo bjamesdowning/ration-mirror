@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -19,7 +18,12 @@ import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { type AllergenSlug, parseAllergens } from "~/lib/allergens";
 import { API_RATE_LIMITS, V1_ENDPOINTS } from "~/lib/api-docs";
-import { requireActiveGroup } from "~/lib/auth.server";
+import {
+	getUserSettings,
+	patchUserSettings,
+	requireActiveGroup,
+	writeUserSettings,
+} from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
@@ -249,46 +253,19 @@ export async function action(args: Route.ActionArgs) {
 	const intent = formData.get("intent");
 
 	const env = args.context.cloudflare.env;
-	const db = drizzle(env.DB, { schema });
 
 	if (intent === "update-allergens") {
 		const raw = formData.get("allergens");
 		const allergens = parseAllergens(
 			typeof raw === "string" ? (JSON.parse(raw) as unknown) : [],
 		);
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = { ...currentSettings, allergens };
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
-
+		await patchUserSettings(env.DB, userId, { allergens });
 		return { success: true };
 	}
 
 	if (intent === "update-theme") {
 		const theme = formData.get("theme") as "light" | "dark";
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = { ...currentSettings, theme };
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
-
+		await patchUserSettings(env.DB, userId, { theme });
 		return data(
 			{ success: true },
 			{
@@ -302,44 +279,17 @@ export async function action(args: Route.ActionArgs) {
 	if (intent === "update-expiration-alert") {
 		const days = Number(formData.get("expirationAlertDays")) || 7;
 		const clampedDays = Math.min(Math.max(days, 1), 30);
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
+		await patchUserSettings(env.DB, userId, {
+			expirationAlertDays: clampedDays,
 		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				expirationAlertDays: clampedDays,
-			};
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
-
 		return { success: true };
 	}
 
 	if (intent === "update-default-group") {
 		const defaultGroupId = formData.get("defaultGroupId") as string;
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
+		await patchUserSettings(env.DB, userId, {
+			defaultGroupId: defaultGroupId || undefined,
 		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				defaultGroupId: defaultGroupId || undefined,
-			};
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
 		return { success: true };
 	}
 
@@ -358,47 +308,26 @@ export async function action(args: Route.ActionArgs) {
 				? (hubProfileRaw as UserSettings["hubProfile"])
 				: null;
 
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user && hubProfile) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
+		if (hubProfile) {
+			await patchUserSettings(env.DB, userId, {
 				hubProfile,
 				...(hubProfile !== "custom" ? { hubLayout: undefined } : {}),
-			};
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
+			});
 		}
 		return { success: true };
 	}
 
 	if (intent === "update-hub-layout") {
 		const hubLayoutRaw = formData.get("hubLayout");
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user && typeof hubLayoutRaw === "string") {
+		if (typeof hubLayoutRaw === "string") {
 			try {
 				const parsed = JSON.parse(hubLayoutRaw) as unknown;
 				const result = HubLayoutSchema.safeParse(parsed);
 				if (result.success) {
-					const currentSettings = (user.settings as UserSettings) || {};
-					const newSettings: UserSettings = {
-						...currentSettings,
+					await patchUserSettings(env.DB, userId, {
 						hubProfile: "custom",
 						hubLayout: result.data,
-					};
-					await db
-						.update(schema.user)
-						.set({ settings: newSettings })
-						.where(eq(schema.user.id, userId));
+					});
 				}
 			} catch {
 				// Invalid JSON or schema — ignore
@@ -411,48 +340,23 @@ export async function action(args: Route.ActionArgs) {
 		const onboardingStep = Number(formData.get("onboardingStep")) || 0;
 		const onboardingCompletedAt =
 			formData.get("onboardingCompletedAt") ?? undefined;
-
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
-		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				onboardingStep,
-				onboardingCompletedAt:
-					onboardingCompletedAt === undefined
+		await patchUserSettings(env.DB, userId, {
+			onboardingStep,
+			onboardingCompletedAt:
+				onboardingCompletedAt === undefined
+					? undefined
+					: onboardingCompletedAt === ""
 						? undefined
-						: onboardingCompletedAt === ""
-							? undefined
-							: String(onboardingCompletedAt),
-			};
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
+						: String(onboardingCompletedAt),
+		});
 		return { success: true };
 	}
 
 	if (intent === "restart-onboarding") {
-		const user = await db.query.user.findFirst({
-			where: (user, { eq }) => eq(user.id, userId),
+		await patchUserSettings(env.DB, userId, {
+			onboardingCompletedAt: undefined,
+			onboardingStep: 0,
 		});
-
-		if (user) {
-			const currentSettings = (user.settings as UserSettings) || {};
-			const newSettings: UserSettings = {
-				...currentSettings,
-				onboardingCompletedAt: undefined,
-				onboardingStep: 0,
-			};
-			await db
-				.update(schema.user)
-				.set({ settings: newSettings })
-				.where(eq(schema.user.id, userId));
-		}
 		return redirect("/hub");
 	}
 
@@ -464,24 +368,16 @@ export async function action(args: Route.ActionArgs) {
 			(page === "cargo" || page === "galley") &&
 			(mode === "card" || mode === "list")
 		) {
-			const user = await db.query.user.findFirst({
-				where: (user, { eq }) => eq(user.id, userId),
+			// Single read + single write: fetch current settings once, merge the
+			// nested viewMode entry, then write the fully-composed object directly.
+			const currentSettings = await getUserSettings(env.DB, userId);
+			await writeUserSettings(env.DB, userId, {
+				...currentSettings,
+				viewMode: {
+					...((currentSettings.viewMode as UserSettings["viewMode"]) ?? {}),
+					[page]: mode,
+				},
 			});
-
-			if (user) {
-				const currentSettings = (user.settings as UserSettings) || {};
-				const newSettings: UserSettings = {
-					...currentSettings,
-					viewMode: {
-						...((currentSettings.viewMode as UserSettings["viewMode"]) ?? {}),
-						[page]: mode,
-					},
-				};
-				await db
-					.update(schema.user)
-					.set({ settings: newSettings })
-					.where(eq(schema.user.id, userId));
-			}
 		}
 
 		return { success: true };

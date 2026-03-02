@@ -8,12 +8,11 @@ import { LayoutEngine } from "~/components/hub/widgets/LayoutEngine";
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { HomeIcon } from "~/components/icons/PageIcons";
 import * as schema from "~/db/schema";
-import { requireActiveGroup } from "~/lib/auth.server";
+import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
 import { getSupplyList } from "~/lib/supply.server";
-import type { UserSettings } from "~/lib/types";
 import type { Route } from "./+types/index";
 
 // --- LOADER ---
@@ -24,11 +23,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	} = await requireActiveGroup(context, request);
 	const db = context.cloudflare.env.DB;
 
-	const drizzleDb = drizzle(db, { schema });
-	const userData = await drizzleDb.query.user.findFirst({
-		where: (u, { eq }) => eq(u.id, user.id),
-	});
-	const settings = (userData?.settings as UserSettings) || {};
+	const settings = await getUserSettings(db, user.id);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
@@ -69,7 +64,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		expirationAlertDays,
 		hubProfile,
 		hubLayout,
-		welcomeVoucherRedeemed: userData?.welcomeVoucherRedeemed ?? false,
+		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		mealMatches,
 		snackMatches,
 	};

@@ -14,8 +14,8 @@ import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
 import { log, redactId } from "./logging.server";
+import type { UserSettings } from "./types";
 
-// Define access control for group management
 const statement = {
 	...defaultStatements,
 	data: ["read", "write"],
@@ -24,21 +24,20 @@ const statement = {
 
 const ac = createAccessControl(statement);
 
-// Define roles with permissions
 const owner = ac.newRole({
-	...ownerAc.statements, // Includes default owner permissions
+	...ownerAc.statements,
 	data: ["read", "write"],
 	credits: ["purchase"],
 });
 
 const admin = ac.newRole({
-	...adminAc.statements, // Includes default admin permissions
+	...adminAc.statements,
 	data: ["read", "write"],
 	credits: ["purchase"],
 });
 
 const member = ac.newRole({
-	...memberAc.statements, // Includes default member permissions
+	...memberAc.statements,
 	data: ["read", "write"],
 });
 
@@ -137,7 +136,6 @@ export function createAuth(env: Cloudflare.Env) {
 						try {
 							const db = drizzle(env.DB, { schema });
 
-							// Create personal organization directly
 							const personalOrgId = crypto.randomUUID();
 							await db.insert(schema.organization).values({
 								id: personalOrgId,
@@ -148,7 +146,6 @@ export function createAuth(env: Cloudflare.Env) {
 								createdAt: new Date(),
 							});
 
-							// Add user as owner
 							await db.insert(schema.member).values({
 								id: crypto.randomUUID(),
 								organizationId: personalOrgId,
@@ -248,11 +245,10 @@ export async function ensureActiveOrganization(
 	}
 
 	if (session.session.activeOrganizationId) {
-		return { session, headers: syncHeaders }; // Already has active org
+		return { session, headers: syncHeaders };
 	}
 
 	try {
-		// Check if user has a default group preference
 		const user = await db.query.user.findFirst({
 			where: eq(schema.user.id, session.user.id),
 		});
@@ -260,7 +256,6 @@ export async function ensureActiveOrganization(
 		const userSettings = (user?.settings as { defaultGroupId?: string }) || {};
 		const defaultGroupId = userSettings.defaultGroupId;
 
-		// If user has a default group preference, verify they're still a member
 		if (defaultGroupId) {
 			const membership = await db.query.member.findFirst({
 				where: (member, { and, eq }) =>
@@ -271,7 +266,6 @@ export async function ensureActiveOrganization(
 			});
 
 			if (membership) {
-				// User is still a member, use their default group
 				await db
 					.update(schema.session)
 					.set({ activeOrganizationId: defaultGroupId })
@@ -304,7 +298,6 @@ export async function ensureActiveOrganization(
 		});
 
 		if (personalGroup) {
-			// Set as active organization
 			await db
 				.update(schema.session)
 				.set({ activeOrganizationId: personalGroup.id })
@@ -315,7 +308,6 @@ export async function ensureActiveOrganization(
 				sessionId: redactId(session.session.id),
 			});
 
-			// Return updated session
 			return {
 				session: {
 					...session,
@@ -342,7 +334,6 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 		throw redirect("/");
 	}
 
-	// Auto-activate personal organization if needed and sync theme cookie
 	const { session: updatedSession } = await ensureActiveOrganization(
 		context.cloudflare.env,
 		session,
@@ -390,4 +381,58 @@ export async function requireActiveGroup(
 	}
 
 	return { session, groupId };
+}
+
+/**
+ * Read the UserSettings JSON blob for a single user.
+ * Returns an empty object when the user has no settings saved yet.
+ */
+export async function getUserSettings(
+	db: D1Database,
+	userId: string,
+): Promise<UserSettings> {
+	const drizzleDb = drizzle(db, { schema });
+	const row = await drizzleDb.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { settings: true },
+	});
+	return (row?.settings as UserSettings) ?? {};
+}
+
+/**
+ * Merge a partial settings patch into the user's existing settings and persist.
+ * Uses a read-then-write pattern; keys not present in `patch` are preserved.
+ */
+export async function patchUserSettings(
+	db: D1Database,
+	userId: string,
+	patch: Partial<UserSettings>,
+): Promise<void> {
+	const drizzleDb = drizzle(db, { schema });
+	const row = await drizzleDb.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { settings: true },
+	});
+	const current = (row?.settings as UserSettings) ?? {};
+	await drizzleDb
+		.update(schema.user)
+		.set({ settings: { ...current, ...patch } })
+		.where(eq(schema.user.id, userId));
+}
+
+/**
+ * Persist a fully-composed UserSettings object without a prior read.
+ * Use when the caller has already fetched and merged the settings (avoids
+ * the redundant read that `patchUserSettings` would perform).
+ */
+export async function writeUserSettings(
+	db: D1Database,
+	userId: string,
+	settings: UserSettings,
+): Promise<void> {
+	const drizzleDb = drizzle(db, { schema });
+	await drizzleDb
+		.update(schema.user)
+		.set({ settings })
+		.where(eq(schema.user.id, userId));
 }

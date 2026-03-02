@@ -1,9 +1,3 @@
-export const CARGO_STATUSES = [
-	"stable",
-	"decay_imminent",
-	"biohazard",
-] as const;
-
 export const CARGO_STATUS_LABELS: Record<string, string> = {
 	stable: "STABLE",
 	decay_imminent: "DECAY IMMINENT",

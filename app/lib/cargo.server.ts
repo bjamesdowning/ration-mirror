@@ -49,8 +49,6 @@ import {
 	normalizeTags,
 } from "./cargo-utils";
 
-// --- Validation Schemas ---
-
 export const CargoItemSchema = z.object({
 	name: z
 		.string()
@@ -60,13 +58,11 @@ export const CargoItemSchema = z.object({
 	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
-	expiresAt: z.coerce.date().optional(), // Optional date string coercion
+	expiresAt: z.coerce.date().optional(),
 });
 
 export type CargoItemInput = z.infer<typeof CargoItemSchema>;
 export type CargoItemUpdateInput = Partial<CargoItemInput>;
-
-// --- Database Operations ---
 
 /**
  * Fetch inventory items for a specific organization.
@@ -106,11 +102,6 @@ export async function getCargo(
 }
 
 /**
- * Retrieves all unique tags for an organization's inventory.
- * Uses SQLite json_each() to extract tags inline — only distinct tag strings
- * cross the network instead of every cargo row's full payload.
- */
-/**
  * Fetch a specific set of cargo rows by their IDs, scoped to the organization.
  * Used by MCP search to resolve Vectorize matches without a full-table scan.
  */
@@ -130,6 +121,11 @@ export async function getCargoByIds(
 		.limit(ids.length);
 }
 
+/**
+ * Retrieves all unique tags for an organization's inventory.
+ * Uses SQLite json_each() to extract tags inline — only distinct tag strings
+ * cross the network instead of every cargo row's full payload.
+ */
 export async function getCargoTags(
 	db: D1Database,
 	organizationId: string,
@@ -610,22 +606,6 @@ export async function addOrMergeItem(
 		throw new Error("Ingest succeeded but no item returned");
 	}
 	return { status: result.status as "merged" | "created", item: result.item };
-}
-
-/**
- * Legacy wrapper that always creates a new row.
- * Kept for backwards compatibility with existing call sites.
- */
-export async function addItem(
-	env: Env,
-	organizationId: string,
-	data: CargoItemInput,
-) {
-	const result = await addOrMergeItem(env, organizationId, data, {
-		forceCreateNew: true,
-	});
-
-	return [result.item];
 }
 
 /**

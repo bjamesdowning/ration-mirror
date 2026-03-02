@@ -41,7 +41,6 @@ export default [
 
 	// API - Admin
 	route("api/admin/users", "routes/api/admin.users.ts"),
-	route("api/admin/backfill-vectors", "routes/api/admin.backfill-vectors.ts"),
 	route(
 		"api/shared/:token/items/:itemId",
 		"routes/api/shared.$token.items.$itemId.ts",

@@ -2,12 +2,14 @@ import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	meal,
+	mealIngredient,
 	mealPlan,
 	mealPlanEntry,
 	mealTag,
 	member,
 	user,
 } from "../db/schema";
+import { type AllergenSlug, detectAllergens } from "./allergens";
 import { log } from "./logging.server";
 import { cookMeal } from "./meals.server";
 import type { ManifestPreviewData } from "./types";
@@ -839,4 +841,49 @@ export async function canShareMealPlan(
 		ownerRow.tier === "crew_member" && expiresAt && expiresAt.getTime() <= now;
 
 	return ownerRow.tier === "crew_member" && !isExpired;
+}
+
+// ---------------------------------------------------------------------------
+// Allergen detection
+// ---------------------------------------------------------------------------
+
+/**
+ * For each meal ID, return the subset of `userAllergens` that are triggered by
+ * the meal's ingredients. Only queries D1 when both `mealIds` and `userAllergens`
+ * are non-empty. The limit cap (30 ingredients per meal) keeps response size
+ * bounded for large meals.
+ */
+export async function getTriggeredAllergens(
+	db: D1Database,
+	mealIds: string[],
+	userAllergens: AllergenSlug[],
+): Promise<Record<string, AllergenSlug[]>> {
+	if (mealIds.length === 0 || userAllergens.length === 0) return {};
+
+	const drizzleDb = drizzle(db);
+	const ingredientRows = await drizzleDb
+		.select({
+			mealId: mealIngredient.mealId,
+			name: mealIngredient.ingredientName,
+		})
+		.from(mealIngredient)
+		.where(inArray(mealIngredient.mealId, mealIds))
+		.limit(mealIds.length * 30);
+
+	const ingredientsByMealId = new Map<string, string[]>();
+	for (const row of ingredientRows) {
+		const existing = ingredientsByMealId.get(row.mealId) ?? [];
+		existing.push(row.name);
+		ingredientsByMealId.set(row.mealId, existing);
+	}
+
+	const result: Record<string, AllergenSlug[]> = {};
+	for (const mealId of mealIds) {
+		const names = ingredientsByMealId.get(mealId) ?? [];
+		const triggered = detectAllergens(names, userAllergens);
+		if (triggered.length > 0) {
+			result[mealId] = triggered;
+		}
+	}
+	return result;
 }

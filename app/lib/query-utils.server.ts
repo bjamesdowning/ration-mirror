@@ -5,7 +5,6 @@
  */
 export const D1_MAX_BOUND_PARAMS = 100;
 
-/** Safe chunk size for inArray() and other D1 queries (stays under 100 params). */
 const SQLITE_SAFE_VARIABLE_LIMIT = D1_MAX_BOUND_PARAMS;
 
 /**

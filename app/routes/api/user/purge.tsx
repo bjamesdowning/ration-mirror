@@ -94,28 +94,27 @@ export async function action({ request, context }: Route.ActionArgs) {
 				if (orgCargoIds.length > 0) {
 					await deleteCargoVectors(env, orgCargoIds);
 				}
-				await db
-					.delete(schema.cargo)
-					.where(eq(schema.cargo.organizationId, orgId));
-				await db
-					.delete(schema.meal)
-					.where(eq(schema.meal.organizationId, orgId));
-				await db
-					.delete(schema.supplyList)
-					.where(eq(schema.supplyList.organizationId, orgId));
-				await db
-					.delete(schema.ledger)
-					.where(eq(schema.ledger.organizationId, orgId));
-				await db
-					.delete(schema.invitation)
-					.where(eq(schema.invitation.organizationId, orgId));
-				await db
-					.delete(schema.member)
-					.where(eq(schema.member.organizationId, orgId));
 
-				await db
-					.delete(schema.organization)
-					.where(eq(schema.organization.id, orgId));
+				await db.batch([
+					db.delete(schema.cargo).where(eq(schema.cargo.organizationId, orgId)),
+					db.delete(schema.meal).where(eq(schema.meal.organizationId, orgId)),
+					db
+						.delete(schema.supplyList)
+						.where(eq(schema.supplyList.organizationId, orgId)),
+					db
+						.delete(schema.ledger)
+						.where(eq(schema.ledger.organizationId, orgId)),
+					db
+						.delete(schema.invitation)
+						.where(eq(schema.invitation.organizationId, orgId)),
+					db
+						.delete(schema.member)
+						.where(eq(schema.member.organizationId, orgId)),
+					db
+						.delete(schema.organization)
+						.where(eq(schema.organization.id, orgId)),
+					// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+				] as [any, ...any[]]);
 				log.info("[Purge] Deleted owned organization", {
 					orgId: redactId(orgId),
 				});
@@ -143,27 +142,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 		}
 
-		// 3. Delete all remaining memberships
-		log.info("[Purge] 3. Deleting all memberships...");
-		await db.delete(schema.member).where(eq(schema.member.userId, userId));
-
-		// 4. Delete Invitations sent by user
-		log.info("[Purge] 4. Deleting invitations...");
-		await db
-			.delete(schema.invitation)
-			.where(eq(schema.invitation.inviterId, userId));
-
-		// 5. Anonymize Ledger
-		log.info("[Purge] 5. Anonymizing ledger entries...");
-		await db
-			.update(schema.ledger)
-			.set({ userId: null })
-			.where(eq(schema.ledger.userId, userId));
-
-		// 6. Delete Session and Account (Better Auth tables)
-		log.info("[Purge] 6. Deleting sessions and accounts...");
-		await db.delete(schema.session).where(eq(schema.session.userId, userId));
-		await db.delete(schema.account).where(eq(schema.account.userId, userId));
+		// 3–6. Delete memberships, invitations, sessions, accounts; anonymize ledger
+		log.info(
+			"[Purge] 3-6. Deleting user memberships, invitations, sessions, accounts...",
+		);
+		await db.batch([
+			db.delete(schema.member).where(eq(schema.member.userId, userId)),
+			db
+				.delete(schema.invitation)
+				.where(eq(schema.invitation.inviterId, userId)),
+			db
+				.update(schema.ledger)
+				.set({ userId: null })
+				.where(eq(schema.ledger.userId, userId)),
+			db.delete(schema.session).where(eq(schema.session.userId, userId)),
+			db
+				.delete(schema.account)
+				.where(eq(schema.account.userId, userId)),
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		] as [any, ...any[]]);
 
 		// 7. Finally delete the User
 		log.info("[Purge] 7. Deleting user record...");

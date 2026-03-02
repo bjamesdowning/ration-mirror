@@ -20,9 +20,6 @@ export const AI_COSTS = {
 	MEAL_PLAN_WEEKLY: 3,
 } as const;
 
-// ---------------------------------------------------------------------------
-// Error Types
-// ---------------------------------------------------------------------------
 export class InsufficientCreditsError extends Error {
 	override name = "InsufficientCreditsError" as const;
 	required: number;
@@ -35,9 +32,6 @@ export class InsufficientCreditsError extends Error {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Balance Read
-// ---------------------------------------------------------------------------
 export async function checkBalance(
 	env: Env,
 	organizationId: string,
@@ -103,9 +97,6 @@ export async function deductCredits(
 		.run();
 }
 
-// ---------------------------------------------------------------------------
-// Credit Addition (Purchases & Refunds)
-// ---------------------------------------------------------------------------
 export async function addCredits(
 	env: Env,
 	organizationId: string,
@@ -138,7 +129,6 @@ export async function addCredits(
 		}
 	}
 
-	// 2. Ledger reason (include sessionId for idempotency when present)
 	const ledgerReason = metadata?.sessionId
 		? `${reason}:${metadata.sessionId}`
 		: reason;
@@ -267,7 +257,6 @@ export async function withCreditGate<T>(
 	// 2. Atomic deduction (may still throw InsufficientCreditsError on race)
 	await deductCredits(env, organizationId, userId, cost, reason);
 
-	// 3. Execute the billable operation
 	try {
 		return await operation();
 	} catch (error) {
@@ -287,13 +276,8 @@ export async function withCreditGate<T>(
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Stripe Checkout Fulfillment
-// ---------------------------------------------------------------------------
 export async function processCheckoutSession(env: Env, sessionId: string) {
 	const stripe = getStripe(env);
-
-	// 1. Fetch session from Stripe to verify status
 	const session = await stripe.checkout.sessions.retrieve(sessionId);
 
 	if (session.payment_status !== "paid") {
@@ -310,7 +294,6 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 		};
 	}
 
-	// 2. Extract metadata
 	const userId = session.metadata?.userId; // Who made the purchase
 	const organizationId = session.metadata?.organizationId; // Who gets the credits
 	const creditsStr = session.metadata?.credits;
@@ -329,7 +312,6 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 			.where(eq(schema.user.id, userId));
 	}
 
-	// 3. Fulfill credits (Idempotent)
 	await addCredits(
 		env,
 		organizationId,

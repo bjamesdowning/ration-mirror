@@ -28,7 +28,7 @@ export function ManifestGrid({
 
 	if (viewMode === "list") {
 		return (
-			<div className="bg-platinum/30 rounded-2xl px-4 py-2 pb-36 md:pb-2 divide-y divide-platinum/50">
+			<div className="bg-platinum/30 rounded-2xl px-4 py-2 pb-36 md:pb-2 divide-y divide-platinum/50 overflow-hidden">
 				{items.map((item) => (
 					<CargoListRow
 						key={item.id}
@@ -42,7 +42,7 @@ export function ManifestGrid({
 	}
 
 	return (
-		<div className="p-4 bg-platinum/30 rounded-2xl">
+		<div className="p-4 bg-platinum/30 rounded-2xl overflow-hidden">
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 				{items.map((item) => (
 					<CargoCard

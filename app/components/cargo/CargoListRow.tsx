@@ -162,7 +162,7 @@ export function CargoListRow({
 				/>
 			)}
 
-			<div className="flex items-center gap-3 py-3 px-1 min-h-[48px] group">
+			<div className="flex items-center gap-2 py-3 min-h-[48px] group overflow-hidden">
 				{/* Status dot */}
 				<span
 					className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`}
@@ -200,7 +200,7 @@ export function CargoListRow({
 
 				{/* Expiry */}
 				<span
-					className={`text-xs font-medium shrink-0 w-14 text-right ${
+					className={`hidden sm:inline text-xs font-medium shrink-0 w-12 text-right ${
 						parsedExpiry &&
 						(
 							inferStatus(parsedExpiry) === "biohazard" ||
@@ -214,7 +214,7 @@ export function CargoListRow({
 				</span>
 
 				{/* Qty + Unit */}
-				<span className="text-sm font-bold text-carbon dark:text-white shrink-0 w-20 text-right">
+				<span className="text-sm font-bold text-carbon dark:text-white shrink-0 w-16 text-right">
 					{item.quantity}
 					<span className="text-xs font-normal text-muted ml-1">
 						{item.unit}

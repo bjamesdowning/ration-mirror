@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 import { normalizeUnitAlias } from "../units";
-import { normalizeDirections, serializeDirections } from "./directions";
+import { parseDirections, serializeDirections } from "./directions";
 import { UnitSchema } from "./units";
 
 /** Rejects common prompt injection patterns before user customization reaches the LLM */
@@ -72,7 +72,7 @@ export const MealSchema = z.object({
 		.optional()
 		.transform((v): string | undefined => {
 			if (v == null) return undefined;
-			const steps = normalizeDirections(v);
+			const steps = parseDirections(v as string | null);
 			return steps.length > 0 ? serializeDirections(steps) : undefined;
 		}),
 	equipment: z.array(z.string()).default([]),

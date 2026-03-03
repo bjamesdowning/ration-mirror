@@ -33,7 +33,7 @@ export const ImportRecipeButton = forwardRef<
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
 	const [view, setView] = useState<
-		"intro" | "url" | "loading" | "error" | "duplicate"
+		"intro" | "url" | "loading" | "verification" | "error" | "duplicate"
 	>("intro");
 	const [showErrorToast, setShowErrorToast] = useState(false);
 	const [errorToastMessage, setErrorToastMessage] = useState("");
@@ -42,6 +42,11 @@ export const ImportRecipeButton = forwardRef<
 	const [duplicateData, setDuplicateData] = useState<{
 		existingMealId?: string;
 		existingMealName?: string;
+	} | null>(null);
+	const [verificationData, setVerificationData] = useState<{
+		requestId: string;
+		mealName: string;
+		ingredientCount: number;
 	} | null>(null);
 	const importInFlight = useRef(false);
 	const importFetcher = useFetcher<
@@ -54,6 +59,9 @@ export const ImportRecipeButton = forwardRef<
 		  }
 		| { error: string; required?: number; current?: number }
 	>();
+	const confirmFetcher = useFetcher<
+		{ meal: { id: string; name: string } } | { error: string }
+	>();
 	const navigate = useNavigate();
 
 	useImperativeHandle(ref, () => ({
@@ -63,6 +71,7 @@ export const ImportRecipeButton = forwardRef<
 			setView("intro");
 			setPollRequestId(null);
 			setDuplicateData(null);
+			setVerificationData(null);
 		},
 	}));
 
@@ -131,21 +140,33 @@ export const ImportRecipeButton = forwardRef<
 					status: "pending" | "completed" | "failed";
 					success?: boolean;
 					meal?: { id: string; name: string };
+					extractedRecipe?: { name?: string; ingredients?: unknown[] };
+					sourceUrl?: string;
 					code?: string;
 					error?: string;
 					existingMealId?: string;
 					existingMealName?: string;
 				};
 				if (data.status === "pending") return;
-				if (data.status === "completed" && data.success && data.meal) {
+				if (
+					data.status === "completed" &&
+					data.success &&
+					data.extractedRecipe &&
+					pollRequestId
+				) {
 					setPollRequestId(null);
 					importInFlight.current = false;
-					setShowModal(false);
-					setView("intro");
-					setUrl("");
-					setDuplicateData(null);
-					navigate(`/hub/galley/${data.meal.id}`);
-					setShowSuccessToast(true);
+					setVerificationData({
+						requestId: pollRequestId,
+						mealName:
+							typeof data.extractedRecipe.name === "string"
+								? data.extractedRecipe.name
+								: "Imported meal",
+						ingredientCount: Array.isArray(data.extractedRecipe.ingredients)
+							? data.extractedRecipe.ingredients.length
+							: 0,
+					});
+					setView("verification");
 				} else if (
 					data.status === "completed" &&
 					data.code === "DUPLICATE_URL"
@@ -177,7 +198,58 @@ export const ImportRecipeButton = forwardRef<
 		const id = setInterval(poll, POLL_INTERVAL_MS);
 		poll();
 		return () => clearInterval(id);
-	}, [pollRequestId, navigate]);
+	}, [pollRequestId]);
+
+	// Handle confirm success: navigate to meal, close modal, show toast
+	useEffect(() => {
+		if (
+			confirmFetcher.state !== "idle" ||
+			!confirmFetcher.data ||
+			typeof confirmFetcher.data !== "object"
+		)
+			return;
+		const d = confirmFetcher.data as Record<string, unknown>;
+		if ("meal" in d && d.meal && typeof d.meal === "object") {
+			const meal = d.meal as { id?: string; name?: string };
+			if (meal.id) {
+				setShowModal(false);
+				setView("intro");
+				setUrl("");
+				setVerificationData(null);
+				setDuplicateData(null);
+				navigate(`/hub/galley/${meal.id}`);
+				setShowSuccessToast(true);
+			}
+		} else if (typeof d.error === "string") {
+			setErrorToastMessage(d.error);
+			setShowErrorToast(true);
+			// Reset verification view so user can try a new import (e.g. after session expiry)
+			if (d.error.includes("session expired")) {
+				setView("url");
+				setVerificationData(null);
+			}
+		}
+	}, [confirmFetcher.state, confirmFetcher.data, navigate]);
+
+	const handleAddToGalley = () => {
+		if (!verificationData) return;
+		confirmFetcher.submit(
+			JSON.stringify({ requestId: verificationData.requestId }),
+			{
+				method: "post",
+				action: "/api/meals/import/confirm",
+				encType: "application/json",
+			},
+		);
+	};
+
+	const handleDismissVerification = () => {
+		setShowModal(false);
+		setView("intro");
+		setUrl("");
+		setVerificationData(null);
+		setDuplicateData(null);
+	};
 
 	const handleImport = () => {
 		const trimmed = url.trim();
@@ -204,11 +276,13 @@ export const ImportRecipeButton = forwardRef<
 		setUrl("");
 		setPollRequestId(null);
 		setDuplicateData(null);
+		setVerificationData(null);
 	};
 
 	const showIntro = view === "intro";
 	const showUrlInput = view === "url";
 	const showProcessing = view === "loading";
+	const showVerification = view === "verification" && verificationData;
 	const showError = view === "error";
 	const showDuplicate = view === "duplicate";
 
@@ -316,6 +390,44 @@ export const ImportRecipeButton = forwardRef<
 									<p className="text-muted text-sm">
 										Reading and analyzing the page.
 									</p>
+								</div>
+							)}
+
+							{showVerification && verificationData && (
+								<div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+									<div className="w-14 h-14 rounded-full bg-hyper-green/10 flex items-center justify-center">
+										<Check className="w-7 h-7 text-hyper-green" />
+									</div>
+									<h4 className="text-lg font-bold text-carbon dark:text-white capitalize">
+										{verificationData.mealName}
+									</h4>
+									<p className="text-sm text-muted">
+										{verificationData.ingredientCount}{" "}
+										{verificationData.ingredientCount === 1
+											? "ingredient"
+											: "ingredients"}{" "}
+										extracted. Add to your Galley?
+									</p>
+									<div className="flex gap-3 pt-2">
+										<button
+											type="button"
+											onClick={handleAddToGalley}
+											disabled={confirmFetcher.state !== "idle"}
+											className="px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+										>
+											{confirmFetcher.state !== "idle"
+												? "Adding..."
+												: "Add to Galley"}
+										</button>
+										<button
+											type="button"
+											onClick={handleDismissVerification}
+											disabled={confirmFetcher.state !== "idle"}
+											className="px-5 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+										>
+											Dismiss
+										</button>
+									</div>
 								</div>
 							)}
 

@@ -24,6 +24,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 		status: "completed" | "failed";
 		success?: boolean;
 		meal?: { id: string; name: string };
+		extractedRecipe?: unknown;
+		sourceUrl?: string;
 		code?: string;
 		error?: string;
 		existingMealId?: string;
@@ -35,6 +37,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			status: result.status,
 			success: result.success,
 			meal: result.meal,
+			extractedRecipe: result.extractedRecipe,
+			sourceUrl: result.sourceUrl,
 			code: result.code,
 			error: result.error,
 			existingMealId: result.existingMealId,

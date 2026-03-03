@@ -1,7 +1,8 @@
 /**
  * Import-URL queue consumer logic.
  * Fetches page content (plain or Browser Rendering), runs Llama 3.3 for recipe
- * extraction, creates the meal in D1, and stores status for polling.
+ * extraction, and stores the extracted recipe for user verification. The meal
+ * is created only when the user confirms via POST /api/meals/import/confirm.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -11,8 +12,8 @@ import {
 	MIN_CONTENT_LENGTH,
 } from "~/lib/browser-rendering.server";
 import { log } from "~/lib/logging.server";
-import { createMeal } from "~/lib/meals.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
+import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { RecipeImportAIResponse } from "~/lib/schemas/recipe-import";
 import {
@@ -58,6 +59,8 @@ export interface ImportUrlJobResult {
 	status: "completed" | "failed";
 	success?: boolean;
 	meal?: { id: string; name: string };
+	extractedRecipe?: MealInput;
+	sourceUrl?: string;
 	code?: string;
 	error?: string;
 	existingMealId?: string;
@@ -438,26 +441,18 @@ export async function runImportUrlConsumerJob(
 			})),
 			tags: [...(result.tags ?? []), "url-import"],
 		};
-		const recipe = MealSchema.parse(rawRecipe);
+		const extractedRecipe = MealSchema.parse(rawRecipe) as MealInput;
 
-		const created = await createMeal(env.DB, organizationId, recipe, env);
-		if (!created) {
-			await writeResult({
-				status: "failed",
-				success: false,
-				error: "Import failed",
-			});
-			return;
-		}
-
-		log.info("recipe_import_success", {
+		log.info("recipe_import_extracted", {
 			url: new URL(url).hostname,
+			title: extractedRecipe.name,
 		});
 
 		await writeResult({
 			status: "completed",
 			success: true,
-			meal: { id: created.id, name: created.name },
+			extractedRecipe,
+			sourceUrl: url,
 		});
 	} catch (err) {
 		log.error("Import URL consumer job failed", err);

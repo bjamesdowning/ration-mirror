@@ -59,6 +59,7 @@ export default [
 	route("api/meals/clear-selections", "routes/api/meals.clear-selections.ts"),
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
 	route("api/meals/import", "routes/api/meals.import.ts"),
+	route("api/meals/import/confirm", "routes/api/meals.import.confirm.ts"),
 	route(
 		"api/meals/import/status/:requestId",
 		"routes/api/meals.import.status.$requestId.ts",

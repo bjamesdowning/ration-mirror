@@ -95,3 +95,10 @@ export type RecipeImportAIError = z.infer<typeof RecipeImportAIErrorSchema>;
 export type RecipeImportAIResponse = z.infer<
 	typeof RecipeImportAIResponseSchema
 >;
+
+/** Request body schema for import confirm API (persist extracted recipe to Galley). */
+export const ImportConfirmRequestSchema = z.object({
+	requestId: z.string().uuid("Request ID must be a valid UUID"),
+});
+
+export type ImportConfirmRequest = z.infer<typeof ImportConfirmRequestSchema>;

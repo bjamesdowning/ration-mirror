@@ -4,6 +4,11 @@
 
 This document provides a comprehensive gap analysis, architectural design, and phased implementation roadmap for expanding the Ration meal planning application from its current partial inventory management state to a fully-featured meal planning platform.
 
+### Recently Implemented
+
+- **Queues for Scan and Meal Generate** — `ration-scan` and `ration-meal-generate` queues offload long-lived AI operations; producer returns immediately, client polls status endpoints; consumer runs in separate invocation.
+- **Browser Rendering for Recipe Import** — URL import uses Cloudflare Browser Rendering Markdown API as fallback for JS-heavy recipe sites; plain fetch first, BR when content is insufficient or blocked.
+
 ---
 
 ## Part 1: Gap Analysis

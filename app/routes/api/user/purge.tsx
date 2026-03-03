@@ -178,9 +178,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		log.error("[Purge] FATAL Error during user purge", error, {
 			userId: redactId(userId),
 		});
-		const message = error instanceof Error ? error.message : String(error);
 		throw data(
-			{ error: `Account deletion failed: ${message}` },
+			{
+				error:
+					"Account deletion failed. Please try again later or contact support.",
+			},
 			{ status: 500 },
 		);
 	}

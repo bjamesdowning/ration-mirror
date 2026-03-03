@@ -101,6 +101,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:search",
 	},
+	meal_match: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20,
+		keyPrefix: "rate:meal_match",
+	},
 	generate_meal: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

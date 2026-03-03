@@ -122,9 +122,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		log.error("[DeleteGroup] FATAL: Failed to delete group", error, {
 			orgId: redactId(organizationId),
 		});
-		const message = error instanceof Error ? error.message : String(error);
 		throw data(
-			{ error: `Failed to delete group: ${message}` },
+			{
+				error:
+					"Failed to delete group. Please try again later or contact support.",
+			},
 			{ status: 500 },
 		);
 	}

@@ -3,24 +3,30 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { cargo } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { SearchQuerySchema } from "~/lib/schemas/search";
 import type { Route } from "./+types/search";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	// 1. Auth & Group Context
-	// Ideally search should be group-scoped.
 	const {
 		session: { user },
 		groupId,
 	} = await requireActiveGroup(context, request);
 
 	const url = new URL(request.url);
-	const q = url.searchParams.get("q");
+	const rawQ = url.searchParams.get("q");
 
-	if (!q || q.length < 2) {
-		return { results: [] };
+	const parsed = SearchQuerySchema.safeParse(rawQ ?? "");
+	if (!parsed.success) {
+		if (!rawQ || rawQ.trim().length < 2) {
+			return { results: [] };
+		}
+		throw handleApiError(parsed.error);
 	}
+	const q = parsed.data;
 
 	// 2. Rate Limiting
 	const rateLimitResult = await checkRateLimit(

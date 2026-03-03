@@ -99,9 +99,11 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
-	const message =
-		error instanceof Error ? error.message : "Internal Server Error";
 	log.error("[API] Unhandled error", error);
 
-	return data({ error: message }, { status: 500 });
+	// Never expose raw error details to clients — prevents information disclosure
+	return data(
+		{ error: "An unexpected error occurred. Please try again later." },
+		{ status: 500 },
+	);
 }

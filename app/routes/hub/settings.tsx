@@ -288,7 +288,25 @@ export async function action(args: Route.ActionArgs) {
 	}
 
 	if (intent === "update-default-group") {
-		const defaultGroupId = formData.get("defaultGroupId") as string;
+		const defaultGroupId = (formData.get("defaultGroupId") as string)?.trim();
+		if (defaultGroupId) {
+			// Verify user is a member of the org before persisting (prevents org enumeration)
+			const db = drizzle(env.DB, { schema });
+			const membership = await db.query.member.findFirst({
+				where: (m, { and, eq }) =>
+					and(eq(m.organizationId, defaultGroupId), eq(m.userId, userId)),
+				columns: { id: true },
+			});
+			if (!membership) {
+				throw data(
+					{
+						error:
+							"You must be a member of that group to set it as your default.",
+					},
+					{ status: 403 },
+				);
+			}
+		}
 		await patchUserSettings(env.DB, userId, {
 			defaultGroupId: defaultGroupId || undefined,
 		});

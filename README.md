@@ -11,10 +11,10 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
 - [1. Infrastructure Overview](#1-infrastructure-overview)
 - [2. User Request Lifecycle](#2-user-request-lifecycle)
 - [3. Core User Workflows](#3-core-user-workflows)
-  - [3.1 Receipt Scan (AI Gateway + D1 + KV)](#31-receipt-scan-ai-gateway--d1--kv)
+  - [3.1 Receipt Scan (Queue + AI Gateway + D1 + R2 + Vectorize)](#31-receipt-scan-queue--ai-gateway--d1--r2--vectorize)
   - [3.2 Credit Purchase (Stripe + D1 + KV)](#32-credit-purchase-stripe--d1--kv)
   - [3.3 Inventory Search (D1 + KV)](#33-inventory-search-d1--kv)
-  - [3.4 Meal Generation (AI Gateway + Vectorize)](#34-meal-generation-ai-gateway--vectorize)
+  - [3.4 Meal Generation (Queue + AI Gateway + Vectorize)](#34-meal-generation-queue--ai-gateway--vectorize)
   - [3.5 Supply Sync (D1 + Vectorize)](#35-supply-sync-d1--vectorize)
   - [3.6 Meal Plan Consume Flow (D1 + Vectorize)](#36-meal-plan-consume-flow-d1--vectorize)
 - [4. Feature Reference](#4-feature-reference)
@@ -47,7 +47,7 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
 
 ## 1. Infrastructure Overview
 
-The entire application runs on Cloudflare's edge network as a single Worker (`ration`) with bindings to D1, R2, KV, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol. Both Workers share the same D1/KV/R2/AI/Vectorize bindings in production.
+The entire application runs on Cloudflare's edge network as a single Worker (`ration`) with bindings to D1, R2, KV, Queues, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol. Both Workers share the same D1/KV/R2/AI/Vectorize bindings in production.
 
 ```mermaid
 flowchart TB
@@ -90,6 +90,7 @@ flowchart TB
         R2[("R2 — ration-storage — binding: STORAGE")]
         KV[("KV — RATION_KV — Rate Limits / Cache / Idempotency")]
         Assets["Static Assets — binding: ASSETS"]
+        Queues[("Queues — ration-scan, ration-meal-generate")]
     end
 
     subgraph CloudflareAI["Cloudflare AI Services"]
@@ -101,6 +102,7 @@ flowchart TB
     subgraph ExternalServices["External Services"]
         Google["Google OAuth 2.0"]
         Stripe["Stripe API + Webhooks"]
+        BrowserRendering["Browser Rendering REST API — Recipe import"]
     end
 
     User -->|"HTTPS"| CustomDomain
@@ -112,9 +114,11 @@ flowchart TB
     Worker -->|"binding: STORAGE"| R2
     Worker -->|"binding: RATION_KV"| KV
     Worker -->|"binding: ASSETS"| Assets
+    Worker -->|"binding: SCAN_QUEUE, MEAL_GENERATE_QUEUE"| Queues
     Worker -->|"binding: AI"| AIBinding
     Worker -->|"binding: VECTORIZE"| Vectorize
     Worker -->|"fetch() via AI Gateway"| AIGateway
+    Worker -->|"fetch() — Recipe import"| BrowserRendering
 
     McpHandler -->|"binding: DB"| D1
     McpHandler -->|"binding: RATION_KV"| KV
@@ -137,6 +141,10 @@ flowchart TB
 | `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3-flash-preview` for scan, generate, plan |
+| `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
+| `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
+
+**Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
 
 **Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, and configurable retry/fallback — all from the Cloudflare dashboard with zero code changes. It also means the Google API key never needs to be rotated into application secrets; only the gateway ID is referenced.
 
@@ -193,18 +201,20 @@ sequenceDiagram
 
 ## 3. Core User Workflows
 
-### 3.1 Receipt Scan (AI Gateway + D1 + KV)
+### 3.1 Receipt Scan (Queue + AI Gateway + D1 + R2 + Vectorize)
 
-The scan workflow touches every major service: KV (rate limit), D1 (credits + inventory), Workers AI (embeddings), Vectorize (dedup), and AI Gateway (vision model). It is the most expensive single operation in the system.
+The scan workflow uses a queue to offload AI vision processing, avoiding Worker timeouts. It touches KV (rate limit), D1 (credits + queue job status), R2 (temporary image storage), Workers AI (embeddings), Vectorize (dedup), and AI Gateway (vision model).
 
 ```mermaid
 sequenceDiagram
     participant User as User
-    participant Worker as Worker
+    participant Worker as Worker (Producer)
     participant KV as KV (Rate Limit)
     participant D1 as D1 Database
+    participant R2 as R2 Storage
+    participant Queue as SCAN_QUEUE
+    participant Consumer as Queue Consumer
     participant AIGateway as AI Gateway
-    participant GoogleAI as Google AI Studio
 
     User->>Worker: POST /api/scan (image file)
 
@@ -216,39 +226,33 @@ sequenceDiagram
     end
 
     rect rgb(232, 245, 233)
-        Note over Worker,D1: Step 2: Credit Pre-flight
-        Worker->>D1: SELECT credits FROM organization WHERE id = ?
-        D1-->>Worker: credits: 12 — balance ≥ cost (2) ✓
+        Note over Worker,D1: Step 2: Credit Gate + Enqueue
+        Worker->>D1: withCreditGate — deduct 2 credits
+        Worker->>R2: put(scan-pending/{requestId}.jpg)
+        Worker->>Queue: send({ requestId, organizationId, userId, imageKey, mimeType, cost })
+        Worker->>D1: insertQueueJobPending(requestId, "scan", orgId)
+        Worker-->>User: { status: "processing", requestId }
+    end
+
+    loop Poll until done
+        User->>Worker: GET /api/scan/status/:requestId
+        Worker->>D1: getQueueJob(requestId)
+        D1-->>Worker: { status: "pending" | "completed" | "failed" }
+        Worker-->>User: { status, items? | error? }
     end
 
     rect rgb(227, 242, 253)
-        Note over Worker,D1: Step 3: Atomic Credit Deduction
-        Worker->>D1: UPDATE org SET credits = credits - 2 WHERE credits >= 2 RETURNING id
-        Worker->>D1: INSERT INTO ledger (amount: -2, reason: "Visual Scan")
-        D1-->>Worker: deduction confirmed
-    end
-
-    rect rgb(243, 229, 245)
-        Note over Worker,GoogleAI: Step 4: AI Vision Inference
-        Worker->>AIGateway: POST gemini-3-flash-preview:generateContent
-        AIGateway->>GoogleAI: Proxied request
-        GoogleAI-->>AIGateway: { items: [...] }
-        AIGateway-->>Worker: JSON response
-    end
-
-    rect rgb(255, 235, 238)
-        Note over Worker,D1: Step 5: Validate or Refund
-        alt AI success
-            Worker->>Worker: Zod validate + normalize items
-            Worker-->>User: { success: true, items: [...] }
-        else AI failure
-            Worker->>D1: addCredits(orgId, 2, "Refund: Visual Scan")
-            Worker-->>User: { error: "Scan processing failed" }
-        end
+        Note over Consumer,AIGateway: Consumer (async)
+        Consumer->>R2: get(imageKey)
+        Consumer->>AIGateway: POST gemini-3-flash-preview (vision)
+        AIGateway-->>Consumer: { items: [...] }
+        Consumer->>Consumer: Zod validate + ingest to D1 + Vectorize
+        Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
+        Consumer->>R2: delete(imageKey)
     end
 ```
 
-**Refund policy** (in [`app/lib/ledger.server.ts`](app/lib/ledger.server.ts)): Every thrown error inside `withCreditGate()` triggers an automatic `addCredits` refund. If the refund itself fails, a `log.critical` fires with the org ID and amount for manual reconciliation. Users never pay for failed AI operations.
+**Refund policy** (in [`app/lib/ledger.server.ts`](app/lib/ledger.server.ts)): Every thrown error inside `withCreditGate()` triggers an automatic `addCredits` refund. The consumer calls `updateQueueJobResult` with status `failed` and the error is returned to the user on the next poll. Users never pay for failed AI operations.
 
 **Image pre-processing** (in the `CameraInput` component): Before the image is sent to the worker, the browser resizes it to a maximum of 1024px on either side at 0.8 JPEG quality on a canvas with a white background. This reduces payload size and normalises the input for the vision model without any server-side image processing dependency.
 
@@ -340,15 +344,17 @@ sequenceDiagram
 
 ---
 
-### 3.4 Meal Generation (AI Gateway + Vectorize)
+### 3.4 Meal Generation (Queue + AI Gateway + Vectorize)
 
-Meal generation is a two-phase operation: the LLM generates recipe candidates, then Vectorize validates that the proposed ingredients actually exist in the org's pantry before the recipes are returned. This prevents the model from hallucinating exotic ingredients the user cannot source.
+Meal generation uses a queue to offload the LLM and Vectorize verification (10–30s). The flow is two-phase: the consumer fetches pantry context, calls the LLM for recipe candidates, then Vectorize validates that proposed ingredients exist in the org's pantry before returning results.
 
 ```mermaid
 sequenceDiagram
     participant User as User
-    participant Worker as Worker
+    participant Worker as Worker (Producer)
     participant D1 as D1 Database
+    participant Queue as MEAL_GENERATE_QUEUE
+    participant Consumer as Queue Consumer
     participant AIGateway as AI Gateway
     participant AI as Workers AI
     participant Vectorize as Vectorize
@@ -356,20 +362,32 @@ sequenceDiagram
     User->>Worker: POST /api/meals/generate { preferences, servings }
     Worker->>Worker: requireActiveGroup + checkRateLimit (10/min)
     Worker->>Worker: withCreditGate(cost=2)
-    Worker->>D1: Fetch current cargo names + user allergens
-    Worker->>AIGateway: POST gemini-3-flash-preview (pantry context + allergen prompt)
-    AIGateway-->>Worker: { recipes: [3 AI-generated meals] }
-    Worker->>Worker: Zod validate + INJECTION_PATTERNS check
+    Worker->>Queue: send({ requestId, organizationId, userId, customization, cost })
+    Worker->>D1: insertQueueJobPending(requestId, "meal_generate", orgId)
+    Worker-->>User: { status: "queued", requestId }
 
-    loop For each recipe
-        Worker->>AI: embedBatch(ingredientNames)
-        AI-->>Worker: 768-dim vectors[]
-        Worker->>Vectorize: query(vectors, namespace=orgId, threshold=0.78)
-        Vectorize-->>Worker: matched cargo IDs
-        Worker->>Worker: Filter out meals where core ingredients are unresolvable
+    loop Poll until done
+        User->>Worker: GET /api/meals/generate/status/:requestId
+        Worker->>D1: getQueueJob(requestId)
+        D1-->>Worker: { status, resultJson? }
+        Worker-->>User: { status, meals? | error? }
     end
 
-    Worker-->>User: { meals: [verified recipes] }
+    rect rgb(232, 245, 233)
+        Note over Consumer,Vectorize: Consumer (async)
+        Consumer->>D1: Fetch cargo names + user allergens
+        Consumer->>AIGateway: POST gemini-3-flash-preview (pantry + allergen prompt)
+        AIGateway-->>Consumer: { recipes: [3 AI-generated meals] }
+        Consumer->>Consumer: Zod validate + INJECTION_PATTERNS check
+        loop For each recipe
+            Consumer->>AI: embedBatch(ingredientNames)
+            AI-->>Consumer: 768-dim vectors[]
+            Consumer->>Vectorize: query(vectors, namespace=orgId, threshold=0.78)
+            Vectorize-->>Consumer: matched cargo IDs
+            Consumer->>Consumer: Filter out unresolvable meals
+        end
+        Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
+    end
 ```
 
 **Why verify against Vectorize after generation?** LLMs hallucinate. Without post-generation validation, the model might suggest "saffron" or "truffle oil" when the pantry contains only rice and chicken. The Vectorize check is a semantic guard — it catches both exact misses and conceptual mismatches above the similarity threshold (0.78).
@@ -470,7 +488,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (1 credit) fetches a recipe URL, extracts JSON-LD structured data or sanitised HTML, then sends it to Llama 3.3 70B (Workers AI, JSON Schema mode) for structured extraction. HTTPS-only URLs are enforced (SSRF guard in `RecipeImportRequestSchema`).
+- **URL import** — `POST /api/meals/import` (1 credit) fetches a recipe URL, extracts JSON-LD structured data or sanitised HTML, then sends it to Llama 3.3 70B (Workers AI, JSON Schema mode) for structured extraction. HTTPS-only URLs are enforced (SSRF guard in `RecipeImportRequestSchema`). **Browser Rendering**: When plain fetch yields insufficient content (JS-heavy SPAs), returns 429/403, or content is too large, the system falls back to Cloudflare Browser Rendering Markdown API; when AI returns `NOT_A_RECIPE`, it retries with Browser Rendering for better content. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only. 45s BR timeout; `X-Browser-Ms-Used` logged for cost monitoring.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Stored in a separate `meal_tag` join table (unique per meal+tag). Used for filtering in the Galley view and the MCP `list_meals` tool.
@@ -802,6 +820,16 @@ erDiagram
         text scopes
     }
 
+    queue_job {
+        text request_id PK
+        text job_type
+        text organization_id FK
+        text status
+        text result_json
+        timestamp created_at
+        timestamp expires_at
+    }
+
     user ||--o{ session : "has sessions"
     user ||--o{ account : "has OAuth accounts"
     user ||--o{ member : "joins groups"
@@ -817,6 +845,7 @@ erDiagram
     organization ||--o{ meal_plan : "owns meal plans"
     organization ||--o{ ledger : "has ledger entries"
     organization ||--o{ api_key : "has API keys"
+    organization ||--o{ queue_job : "scan/generate job status"
 
     session }o--|| organization : "active org context"
 
@@ -858,6 +887,7 @@ erDiagram
 | `meal_plan` | org | Singleton active meal plan per org with optional share | `org_id`, `share_token` |
 | `meal_plan_entry` | meal_plan | Single date+slot+meal assignment with `consumed_at` tracking | `(plan_id, date)`, `(plan_id, date, slot_type)` |
 | `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
+| `queue_job` | — | Scan and meal-generate job status for polling; D1-backed for strong consistency | `expires_at`, `(organization_id, status)` |
 
 **D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
 
@@ -1176,7 +1206,8 @@ flowchart TB
 
 | Service | Scaling Model | Bottleneck | Mitigation |
 |---------|--------------|------------|------------|
-| **Worker** | Auto-scales to thousands of isolates. V8 isolate reuse — no cold starts within a PoP. | CPU time per request. | Heavy work offloaded to AI Gateway. Module-level auth instance caching. |
+| **Worker** | Auto-scales to thousands of isolates. V8 isolate reuse — no cold starts within a PoP. | CPU time per request. | Heavy AI work offloaded to Queues. Module-level auth instance caching. |
+| **Queues** | Batch processing; consumer invokes per message. | AI vision/LLM latency (5–30s). | Scan and meal-generate offloaded; no Worker timeout. `queue_job` TTL cleanup via CRON. |
 | **D1 (SQLite)** | Single-region writer with read replicas. Drizzle batch for atomicity. | Write throughput to single leader. | Compound indexes on hot paths. `WHERE org_id = ?` narrows scan windows. Smart Placement co-locates Worker with D1. |
 | **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec per namespace; 60s eventual consistency on reads. | Rate limit windows use TTL-expiring keys (self-cleaning). Fails open on KV errors. |
 | **Workers AI** | Metered per token, Workers-native. | Embedding throughput (100 texts per batch). | KV embedding cache eliminates repeat calls. Batch embedding for all ingredients in a single AI call. |

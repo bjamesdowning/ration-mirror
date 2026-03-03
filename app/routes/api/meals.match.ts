@@ -1,8 +1,10 @@
+import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MealMatchQuerySchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.match";
 
@@ -21,9 +23,34 @@ import type { Route } from "./+types/meals.match";
  * - domain: string, optional domain filter (e.g. 'food')
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
-	const url = new URL(request.url);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"meal_match",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error:
+					"Too many meal match requests. Please wait a moment and try again.",
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
+			},
+		);
+	}
+
+	const url = new URL(request.url);
 	const raw = {
 		mode: url.searchParams.get("mode") ?? undefined,
 		minMatch: url.searchParams.get("minMatch") ?? undefined,

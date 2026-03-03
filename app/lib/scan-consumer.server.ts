@@ -1,10 +1,11 @@
 /**
  * Scan queue consumer logic.
- * Runs AI vision on an image from R2, parses results, and stores status in KV for polling.
+ * Runs AI vision on an image from R2, parses results, stores status in D1 for polling.
  */
 import { extractModelText } from "~/lib/ai.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { log } from "~/lib/logging.server";
+import { updateQueueJobResult } from "~/lib/queue-job.server";
 import {
 	SCAN_UNITS,
 	ScanAIResponseSchema,
@@ -13,8 +14,6 @@ import {
 
 const SCAN_MODEL = "gemini-3-flash-preview";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const JOB_TTL_SECONDS = 3600; // 1 hour
-
 function addDays(isoDate: string, days: number): string {
 	const d = new Date(isoDate);
 	d.setUTCDate(d.getUTCDate() + days);
@@ -91,12 +90,9 @@ export async function runScanConsumerJob(
 	message: ScanQueueMessage,
 ): Promise<void> {
 	const { requestId, organizationId, imageKey, mimeType, filename } = message;
-	const kvKey = `scan-job:${requestId}`;
 
 	const writeStatus = async (result: ScanJobResult) => {
-		await env.RATION_KV.put(kvKey, JSON.stringify(result), {
-			expirationTtl: JOB_TTL_SECONDS,
-		});
+		await updateQueueJobResult(env.DB, requestId, result.status, result);
 	};
 
 	try {

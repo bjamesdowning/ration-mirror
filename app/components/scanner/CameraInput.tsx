@@ -33,7 +33,7 @@ type ScanApiResponse =
 	| { status: "processing"; requestId: string };
 
 const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_ATTEMPTS = 60; // ~90 seconds
+const MAX_POLL_ATTEMPTS = 80; // ~120 seconds max wait for AI processing
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	({ onScanComplete, className }, ref) => {
@@ -209,7 +209,9 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				}
 
 				try {
-					const res = await fetch(`/api/scan/status/${pollRequestId}`);
+					const res = await fetch(`/api/scan/status/${pollRequestId}`, {
+						credentials: "include",
+					});
 					if (res.status === 404) {
 						showError("Job not found or expired. Please try again.");
 						setIsAnalyzing(false);

@@ -6,6 +6,7 @@ import {
 	InsufficientCreditsError,
 	withCreditGate,
 } from "~/lib/ledger.server";
+import { insertQueueJobPending } from "~/lib/queue-job.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/scan";
 
@@ -109,13 +110,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					cost: AI_COSTS.SCAN,
 				});
 
-				// Write pending placeholder so status endpoint returns 200 (not 404) while job is queued
-				const JOB_TTL_SECONDS = 3600;
-				await env.RATION_KV.put(
-					`scan-job:${requestId}`,
-					JSON.stringify({ status: "pending", organizationId: groupId }),
-					{ expirationTtl: JOB_TTL_SECONDS },
-				);
+				// D1-backed pending (strong consistency for status polling)
+				await insertQueueJobPending(env.DB, requestId, "scan", groupId);
 
 				return { status: "processing", requestId };
 			},

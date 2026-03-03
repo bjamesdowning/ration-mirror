@@ -265,7 +265,7 @@ export const GenerateMealButton = forwardRef<
 
 	// Poll meal generation status when requestId is set
 	const POLL_INTERVAL_MS = 1500;
-	const MAX_POLL_ATTEMPTS = 60;
+	const MAX_POLL_ATTEMPTS = 80; // ~120s (KV eventual consistency can delay completed status)
 	useEffect(() => {
 		if (!pollRequestId) return;
 
@@ -278,7 +278,9 @@ export const GenerateMealButton = forwardRef<
 				return;
 			}
 			try {
-				const res = await fetch(`/api/meals/generate/status/${pollRequestId}`);
+				const res = await fetch(`/api/meals/generate/status/${pollRequestId}`, {
+					credentials: "include",
+				});
 				if (res.status === 404) {
 					setError("Job not found or expired. Please try again.");
 					setPollRequestId(null);
@@ -316,9 +318,11 @@ export const GenerateMealButton = forwardRef<
 						})),
 					}));
 					setRecipes(mapped);
+					// Default to all selected; user can deselect before saving
+					setSelectedRecipes(new Set(mapped.map((_, i) => i)));
 					setError(null);
 					setPollRequestId(null);
-					setMealsAlreadySaved(true); // consumer already created meals
+					setMealsAlreadySaved(false);
 				} else if (data.status === "failed") {
 					setError(data.error ?? "Generation failed. Please try again.");
 					setPollRequestId(null);

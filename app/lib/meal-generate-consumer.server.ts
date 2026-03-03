@@ -1,6 +1,6 @@
 /**
  * Meal generation queue consumer logic.
- * Runs AI meal generation, verifies ingredients, creates meals in D1, stores status in KV.
+ * Runs AI meal generation, verifies ingredients, returns recipes. Stores status in D1.
  */
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -10,12 +10,7 @@ import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
 import { getUserSettings } from "~/lib/auth.server";
 import { log } from "~/lib/logging.server";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
-import { createMeals } from "~/lib/meals.server";
-import {
-	normalizeDirections,
-	serializeDirections,
-} from "~/lib/schemas/directions";
-import type { MealInput } from "~/lib/schemas/meal";
+import { updateQueueJobResult } from "~/lib/queue-job.server";
 import {
 	type AIResponse,
 	AIResponseSchema,
@@ -28,7 +23,6 @@ import {
 } from "~/lib/vector.server";
 
 const GENERATE_MODEL = "gemini-3-flash-preview";
-const JOB_TTL_SECONDS = 3600; // 1 hour
 
 export interface MealGenerateQueueMessage {
 	requestId: string;
@@ -41,7 +35,6 @@ export interface MealGenerateQueueMessage {
 export interface MealGenerateJobResult {
 	status: "completed" | "failed";
 	organizationId: string;
-	mealIds?: string[];
 	recipes?: AIResponse["recipes"];
 	error?: string;
 }
@@ -51,12 +44,9 @@ export async function runMealGenerateConsumerJob(
 	message: MealGenerateQueueMessage,
 ): Promise<void> {
 	const { requestId, organizationId, userId, customization } = message;
-	const kvKey = `meal-generate:${requestId}`;
 
 	const writeStatus = async (result: MealGenerateJobResult) => {
-		await env.RATION_KV.put(kvKey, JSON.stringify(result), {
-			expirationTtl: JOB_TTL_SECONDS,
-		});
+		await updateQueueJobResult(env.DB, requestId, result.status, result);
 	};
 
 	try {
@@ -316,36 +306,7 @@ ${customization}
 			return;
 		}
 
-		const mealInputs: MealInput[] = verifiedRecipes.map((r) => {
-			const directions =
-				r.directions && r.directions.length > 0
-					? serializeDirections(normalizeDirections(r.directions))
-					: undefined;
-			return {
-				name: r.name ?? "Unnamed Recipe",
-				domain: "food" as const,
-				description: r.description ?? "",
-				directions,
-				equipment: [],
-				servings: 1,
-				prepTime: r.prepTime ?? 0,
-				cookTime: r.cookTime ?? 0,
-				customFields: {},
-				ingredients: (r.ingredients ?? []).map((ing, idx) => ({
-					ingredientName: ing.ingredientName,
-					quantity: ing.quantity,
-					unit: ing.unit,
-					cargoId: ing.cargoId ?? null,
-					isOptional: false,
-					orderIndex: idx,
-				})),
-				tags: [],
-			};
-		});
-
-		const meals = await createMeals(env.DB, organizationId, mealInputs, env);
-		const mealIds = meals.map((m) => m.id);
-
+		// Return recipes only; user selects which to save to Galley via client
 		const recipesForStatus: AIResponse["recipes"] = verifiedRecipes.map(
 			(r) => ({
 				name: r.name ?? "Unnamed Recipe",
@@ -365,7 +326,6 @@ ${customization}
 		await writeStatus({
 			status: "completed",
 			organizationId,
-			mealIds,
 			recipes: recipesForStatus,
 		});
 	} catch (err) {

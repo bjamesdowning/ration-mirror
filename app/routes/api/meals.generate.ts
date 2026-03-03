@@ -6,6 +6,7 @@ import {
 	InsufficientCreditsError,
 	withCreditGate,
 } from "~/lib/ledger.server";
+import { insertQueueJobPending } from "~/lib/queue-job.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MealGenerateRequestSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.generate";
@@ -98,12 +99,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 					cost: AI_COSTS.MEAL_GENERATE,
 				});
 
-				// Write pending placeholder so status endpoint returns 200 (not 404) while job is queued
-				const JOB_TTL_SECONDS = 3600;
-				await env.RATION_KV.put(
-					`meal-generate:${requestId}`,
-					JSON.stringify({ status: "pending", organizationId: groupId }),
-					{ expirationTtl: JOB_TTL_SECONDS },
+				// D1-backed pending (strong consistency for status polling)
+				await insertQueueJobPending(
+					env.DB,
+					requestId,
+					"meal_generate",
+					groupId,
 				);
 
 				return { status: "queued", requestId };

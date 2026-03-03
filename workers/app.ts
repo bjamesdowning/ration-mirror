@@ -118,6 +118,7 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		ctx.waitUntil(purgeExpiredSessions(env));
+		ctx.waitUntil(purgeExpiredQueueJobs(env));
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -135,5 +136,22 @@ async function purgeExpiredSessions(env: Env): Promise<void> {
 		}
 	} catch (err) {
 		log.error("[CRON] Session purge failed", err);
+	}
+}
+
+async function purgeExpiredQueueJobs(env: Env): Promise<void> {
+	const nowUnix = Math.floor(Date.now() / 1000);
+	try {
+		const result = await env.DB.prepare(
+			"DELETE FROM queue_job WHERE expires_at < ?1;",
+		)
+			.bind(nowUnix)
+			.run();
+		const deleted = result.meta?.changes ?? 0;
+		if (deleted > 0) {
+			log.info("[CRON] Purged expired queue jobs", { deleted });
+		}
+	} catch (err) {
+		log.error("[CRON] Queue job purge failed", err);
 	}
 }

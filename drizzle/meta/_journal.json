@@ -183,6 +183,13 @@
       "when": 1772500114809,
       "tag": "0025_volatile_hedge_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1772545262084,
+      "tag": "0026_brave_joshua_kane",
+      "breakpoints": true
     }
   ]
 }

@@ -619,6 +619,33 @@ export const apiKeyRelations = relations(apiKey, ({ one }) => ({
 	}),
 }));
 
+/**
+ * Queue job status. D1-backed for strong read-after-write consistency.
+ * Replaces KV for scan and meal-generate polling (KV is eventually consistent).
+ */
+export const queueJob = sqliteTable(
+	"queue_job",
+	{
+		requestId: text("request_id").primaryKey(),
+		jobType: text("job_type", {
+			enum: ["scan", "meal_generate"],
+		}).notNull(),
+		organizationId: text("organization_id").notNull(),
+		status: text("status", {
+			enum: ["pending", "completed", "failed"],
+		}).notNull(),
+		resultJson: text("result_json"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	},
+	(table) => [
+		index("queue_job_expires_idx").on(table.expiresAt),
+		index("queue_job_org_status_idx").on(table.organizationId, table.status),
+	],
+);
+
 // Pre-launch interest signup (temporary — remove when no longer needed)
 export const interestSignup = sqliteTable(
 	"interest_signup",

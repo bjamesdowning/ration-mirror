@@ -8,7 +8,11 @@ import * as schema from "../db/schema";
 
 const JOB_TTL_SECONDS = 3600; // 1 hour
 
-export type QueueJobType = "scan" | "meal_generate";
+export type QueueJobType =
+	| "scan"
+	| "meal_generate"
+	| "plan_week"
+	| "import_url";
 export type QueueJobStatus = "pending" | "completed" | "failed";
 
 /** Insert pending job. Call from producer after enqueue. */

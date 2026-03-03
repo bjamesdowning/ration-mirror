@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { log } from "~/lib/logging.client";
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
 import type { ScanResult } from "~/lib/schemas/scan";
 import { ScanResultsModal } from "./ScanResultsModal";
 
@@ -31,9 +32,6 @@ type ScanApiResponse =
 			}>;
 	  })
 	| { status: "processing"; requestId: string };
-
-const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_ATTEMPTS = 80; // ~120 seconds max wait for AI processing
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	({ onScanComplete, className }, ref) => {

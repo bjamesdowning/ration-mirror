@@ -1,13 +1,4 @@
-import {
-	AlertCircle,
-	Check,
-	ChefHat,
-	ChevronDown,
-	ChevronUp,
-	ExternalLink,
-	Link2,
-	Timer,
-} from "lucide-react";
+import { AlertCircle, Check, Link2 } from "lucide-react";
 import {
 	forwardRef,
 	useEffect,
@@ -21,25 +12,7 @@ import {
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import { Toast } from "~/components/shell/Toast";
-
-interface ImportedRecipe {
-	name: string;
-	description?: string;
-	directions?: string[];
-	ingredients: Array<{
-		ingredientName: string;
-		quantity: number;
-		unit: string;
-		isOptional?: boolean;
-		orderIndex?: number;
-	}>;
-	prepTime?: number;
-	cookTime?: number;
-	servings?: number;
-	tags?: string[];
-	equipment?: string[];
-	customFields?: Record<string, string>;
-}
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
 
 export interface ImportRecipeButtonHandle {
 	open: () => void;
@@ -59,79 +32,159 @@ export const ImportRecipeButton = forwardRef<
 >(({ className, credits, costPerImport = 1 }, ref) => {
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
-	const [importedUrl, setImportedUrl] = useState<string | null>(null);
 	const [view, setView] = useState<
-		"intro" | "url" | "loading" | "result" | "error" | "duplicate"
+		"intro" | "url" | "loading" | "error" | "duplicate"
 	>("intro");
 	const [showErrorToast, setShowErrorToast] = useState(false);
 	const [errorToastMessage, setErrorToastMessage] = useState("");
-	const [directionsOpen, setDirectionsOpen] = useState(false);
-	const saveInFlight = useRef(false);
-	const importInFlight = useRef(false);
-	const importFetcher = useFetcher<{
-		success: boolean;
-		recipe?: ImportedRecipe;
-		error?: string;
-		code?: string;
-		message?: string;
+	const [showSuccessToast, setShowSuccessToast] = useState(false);
+	const [pollRequestId, setPollRequestId] = useState<string | null>(null);
+	const [duplicateData, setDuplicateData] = useState<{
 		existingMealId?: string;
 		existingMealName?: string;
-	}>();
-	const saveFetcher = useFetcher();
+	} | null>(null);
+	const importInFlight = useRef(false);
+	const importFetcher = useFetcher<
+		| { status: "processing"; requestId: string }
+		| {
+				success: false;
+				code: "DUPLICATE_URL";
+				existingMealId?: string;
+				existingMealName?: string;
+		  }
+		| { error: string; required?: number; current?: number }
+	>();
 	const navigate = useNavigate();
 
 	useImperativeHandle(ref, () => ({
 		open: () => {
 			setShowModal(true);
 			setUrl("");
-			setImportedUrl(null);
 			setView("intro");
+			setPollRequestId(null);
+			setDuplicateData(null);
 		},
 	}));
 
-	const recipe = importFetcher.data?.recipe;
 	const importError =
-		importFetcher.data?.error ??
-		importFetcher.data?.message ??
-		"Something went wrong. Check the URL and try again.";
+		typeof importFetcher.data === "object" &&
+		importFetcher.data !== null &&
+		"error" in importFetcher.data
+			? (importFetcher.data as { error?: string }).error
+			: "Something went wrong. Check the URL and try again.";
 
+	// Handle initial POST: processing -> start poll; DUPLICATE (409) -> duplicate; error -> error
 	useEffect(() => {
-		if (importFetcher.state === "idle" && importFetcher.data !== undefined) {
+		if (importFetcher.state !== "idle" || importFetcher.data === undefined)
+			return;
+		const d = importFetcher.data as Record<string, unknown>;
+		if (d.status === "processing" && typeof d.requestId === "string") {
+			setPollRequestId(d.requestId);
+			setDuplicateData(null);
+		} else if (d.code === "DUPLICATE_URL") {
+			setDuplicateData({
+				existingMealId: d.existingMealId as string | undefined,
+				existingMealName: d.existingMealName as string | undefined,
+			});
+			setView("duplicate");
 			importInFlight.current = false;
-			if (importFetcher.data?.recipe) {
-				setDirectionsOpen(false);
-				setView("result");
-			} else if (importFetcher.data?.code === "DUPLICATE_URL") {
-				setView("duplicate");
-			} else if (importFetcher.data?.error || importFetcher.data?.message) {
-				const msg =
-					importFetcher.data.error ??
-					importFetcher.data.message ??
-					"Import failed. Check the URL and try again.";
-				setErrorToastMessage(msg);
-				setShowErrorToast(true);
-				setView("error");
-			}
-		} else if (
-			importFetcher.state === "idle" &&
-			importFetcher.data === undefined &&
-			importInFlight.current
-		) {
-			importInFlight.current = false;
+		} else if (typeof d.error === "string") {
 			setErrorToastMessage(
-				"Something went wrong. Check the URL and try again.",
+				d.required != null && d.current != null
+					? `Not enough credits. You need ${d.required} but have ${d.current}.`
+					: d.error,
 			);
 			setShowErrorToast(true);
 			setView("error");
+			importInFlight.current = false;
 		}
 	}, [importFetcher.state, importFetcher.data]);
+
+	// Poll import status when requestId is set
+	useEffect(() => {
+		if (!pollRequestId) return;
+
+		let attempts = 0;
+		const poll = async () => {
+			attempts++;
+			if (attempts > MAX_POLL_ATTEMPTS) {
+				setErrorToastMessage("Import timed out. Please try again.");
+				setShowErrorToast(true);
+				setView("error");
+				setPollRequestId(null);
+				importInFlight.current = false;
+				return;
+			}
+			try {
+				const res = await fetch(`/api/meals/import/status/${pollRequestId}`, {
+					credentials: "include",
+				});
+				if (res.status === 404) {
+					setErrorToastMessage("Job not found or expired. Please try again.");
+					setShowErrorToast(true);
+					setView("error");
+					setPollRequestId(null);
+					importInFlight.current = false;
+					return;
+				}
+				const data = (await res.json()) as {
+					status: "pending" | "completed" | "failed";
+					success?: boolean;
+					meal?: { id: string; name: string };
+					code?: string;
+					error?: string;
+					existingMealId?: string;
+					existingMealName?: string;
+				};
+				if (data.status === "pending") return;
+				if (data.status === "completed" && data.success && data.meal) {
+					setPollRequestId(null);
+					importInFlight.current = false;
+					setShowModal(false);
+					setView("intro");
+					setUrl("");
+					setDuplicateData(null);
+					navigate(`/hub/galley/${data.meal.id}`);
+					setShowSuccessToast(true);
+				} else if (
+					data.status === "completed" &&
+					data.code === "DUPLICATE_URL"
+				) {
+					setDuplicateData({
+						existingMealId: data.existingMealId,
+						existingMealName: data.existingMealName,
+					});
+					setView("duplicate");
+					setPollRequestId(null);
+					importInFlight.current = false;
+				} else if (
+					data.status === "failed" ||
+					(data.status === "completed" && !data.success)
+				) {
+					setErrorToastMessage(
+						data.error ?? "Import failed. Please try again.",
+					);
+					setShowErrorToast(true);
+					setView("error");
+					setPollRequestId(null);
+					importInFlight.current = false;
+				}
+			} catch {
+				// Network error, keep polling
+			}
+		};
+
+		const id = setInterval(poll, POLL_INTERVAL_MS);
+		poll();
+		return () => clearInterval(id);
+	}, [pollRequestId, navigate]);
 
 	const handleImport = () => {
 		const trimmed = url.trim();
 		if (!trimmed) return;
-		setImportedUrl(trimmed);
 		setView("loading");
 		importInFlight.current = true;
+		setDuplicateData(null);
 		importFetcher.submit(JSON.stringify({ url: trimmed }), {
 			method: "post",
 			action: "/api/meals/import",
@@ -141,58 +194,23 @@ export const ImportRecipeButton = forwardRef<
 
 	const resetState = () => {
 		setUrl("");
-		setImportedUrl(null);
-		setDirectionsOpen(false);
 		setView("url");
+		setDuplicateData(null);
 	};
 
 	const handleClose = () => {
 		setShowModal(false);
 		setView("intro");
 		setUrl("");
-		setImportedUrl(null);
-		setDirectionsOpen(false);
+		setPollRequestId(null);
+		setDuplicateData(null);
 	};
-
-	const handleSave = () => {
-		if (!recipe) return;
-		saveInFlight.current = true;
-		const mealData = [
-			{
-				...recipe,
-				tags: [...(recipe.tags ?? []), "url-import"],
-			},
-		];
-		saveFetcher.submit(JSON.stringify(mealData), {
-			method: "post",
-			action: "/hub/galley/new",
-			encType: "application/json",
-		});
-	};
-
-	useEffect(() => {
-		if (saveFetcher.state === "idle" && saveInFlight.current) {
-			saveInFlight.current = false;
-			const hasError =
-				saveFetcher.data &&
-				typeof saveFetcher.data === "object" &&
-				"error" in saveFetcher.data;
-			if (!hasError) {
-				setShowModal(false);
-				setView("intro");
-				setUrl("");
-				setImportedUrl(null);
-				navigate("/hub/galley");
-			}
-		}
-	}, [saveFetcher.state, saveFetcher.data, navigate]);
 
 	const showIntro = view === "intro";
 	const showUrlInput = view === "url";
 	const showProcessing = view === "loading";
 	const showError = view === "error";
 	const showDuplicate = view === "duplicate";
-	const showApproval = view === "result" && recipe;
 
 	return (
 		<>
@@ -203,6 +221,15 @@ export const ImportRecipeButton = forwardRef<
 					title="Import Failed"
 					description={errorToastMessage}
 					onDismiss={() => setShowErrorToast(false)}
+				/>
+			)}
+			{showSuccessToast && (
+				<Toast
+					variant="success"
+					position="top-right"
+					title="Meal imported"
+					description="The recipe has been added to your Galley."
+					onDismiss={() => setShowSuccessToast(false)}
 				/>
 			)}
 			<button
@@ -241,7 +268,6 @@ export const ImportRecipeButton = forwardRef<
 						/>
 					) : (
 						<div className="p-8">
-							{/* Phase 1: URL Input */}
 							{showUrlInput && (
 								<div className="space-y-6 text-center py-12">
 									<p className="text-carbon/80 dark:text-white/80 max-w-md mx-auto">
@@ -279,7 +305,6 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 
-							{/* Phase 2: Processing */}
 							{showProcessing && (
 								<div className="animate-pulse space-y-4 text-center py-12">
 									<div className="w-16 h-16 mx-auto rounded-full bg-hyper-green/20 flex items-center justify-center animate-spin-slow">
@@ -294,7 +319,6 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 
-							{/* Error State */}
 							{showError && (
 								<div className="flex flex-col items-center justify-center py-12 text-center text-red-500">
 									<AlertCircle className="w-12 h-12 mb-4" />
@@ -310,7 +334,6 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 
-							{/* Duplicate URL State */}
 							{showDuplicate && (
 								<div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
 									<div className="w-14 h-14 rounded-full bg-hyper-green/10 flex items-center justify-center">
@@ -320,18 +343,18 @@ export const ImportRecipeButton = forwardRef<
 										Already in Your Galley
 									</h4>
 									<p className="text-sm text-muted max-w-xs">
-										{importFetcher.data?.existingMealName
-											? `"${importFetcher.data.existingMealName}" was imported from this URL before.`
+										{duplicateData?.existingMealName
+											? `"${duplicateData.existingMealName}" was imported from this URL before.`
 											: "This URL has already been imported."}
 									</p>
 									<div className="flex gap-3 pt-2">
-										{importFetcher.data?.existingMealId && (
+										{duplicateData?.existingMealId && (
 											<button
 												type="button"
 												onClick={() => {
 													handleClose();
 													navigate(
-														`/hub/galley/${importFetcher.data?.existingMealId}`,
+														`/hub/galley/${duplicateData.existingMealId}`,
 													);
 												}}
 												className="px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
@@ -345,147 +368,6 @@ export const ImportRecipeButton = forwardRef<
 											className="px-5 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 transition-colors text-sm"
 										>
 											Import Different URL
-										</button>
-									</div>
-								</div>
-							)}
-
-							{/* Phase 3: Single recipe approval */}
-							{showApproval && recipe && (
-								<div className="space-y-4">
-									<div className="bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl p-6 space-y-4">
-										{/* Source URL — prominent header link */}
-										{importedUrl && (
-											<a
-												href={importedUrl}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="flex items-center gap-1.5 text-xs text-hyper-green hover:underline truncate"
-											>
-												<ExternalLink className="w-3 h-3 shrink-0" />
-												{importedUrl}
-											</a>
-										)}
-
-										<h4 className="font-bold text-lg text-carbon dark:text-white capitalize">
-											{recipe.name}
-										</h4>
-										{recipe.description && (
-											<p className="text-sm text-muted line-clamp-3">
-												{recipe.description}
-											</p>
-										)}
-
-										<div className="flex gap-4 text-xs text-carbon/60 dark:text-white/60">
-											<div className="flex items-center gap-1">
-												<Timer className="w-3 h-3" />
-												{(recipe.prepTime ?? 0) + (recipe.cookTime ?? 0)}m
-											</div>
-											<div className="flex items-center gap-1">
-												<ChefHat className="w-3 h-3" />
-												{recipe.ingredients.length} ingr.
-											</div>
-										</div>
-
-										{/* Key Ingredients */}
-										<div className="space-y-1">
-											<h5 className="text-xs font-bold text-carbon dark:text-white uppercase tracking-wider mb-2">
-												Key Ingredients
-											</h5>
-											{recipe.ingredients.slice(0, 6).map((ing) => (
-												<div
-													key={ing.ingredientName}
-													className="flex justify-between text-xs text-muted"
-												>
-													<span>{ing.ingredientName}</span>
-													<span>
-														{ing.quantity} {ing.unit}
-													</span>
-												</div>
-											))}
-											{recipe.ingredients.length > 6 && (
-												<div className="text-xs text-muted italic pt-1">
-													+ {recipe.ingredients.length - 6} more
-												</div>
-											)}
-										</div>
-
-										{/* Directions accordion */}
-										{recipe.directions && recipe.directions.length > 0 && (
-											<div className="border-t border-platinum dark:border-white/10 pt-4">
-												<button
-													type="button"
-													onClick={() => setDirectionsOpen((o) => !o)}
-													className="flex items-center justify-between w-full text-xs font-bold text-carbon dark:text-white uppercase tracking-wider"
-												>
-													<span>
-														Directions ({recipe.directions.length} steps)
-													</span>
-													{directionsOpen ? (
-														<ChevronUp className="w-4 h-4 text-muted" />
-													) : (
-														<ChevronDown className="w-4 h-4 text-muted" />
-													)}
-												</button>
-												{directionsOpen && (
-													<ol className="mt-3 space-y-2">
-														{recipe.directions.map((step, idx) => (
-															<li
-																key={`step-${
-																	// biome-ignore lint/suspicious/noArrayIndexKey: stable ordered list
-																	idx
-																}`}
-																className="flex gap-3 text-xs text-muted"
-															>
-																<span className="flex-shrink-0 w-5 h-5 rounded-full bg-hyper-green/20 text-hyper-green flex items-center justify-center font-bold text-[10px]">
-																	{idx + 1}
-																</span>
-																<span className="leading-relaxed">{step}</span>
-															</li>
-														))}
-													</ol>
-												)}
-											</div>
-										)}
-									</div>
-
-									{saveFetcher.data &&
-										typeof saveFetcher.data === "object" &&
-										"error" in saveFetcher.data && (
-											<div
-												className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm"
-												role="alert"
-											>
-												<AlertCircle className="w-4 h-4 shrink-0" />
-												<span>
-													{(saveFetcher.data as { error?: string }).error ??
-														"Save failed"}
-												</span>
-											</div>
-										)}
-
-									<div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-										<button
-											type="button"
-											onClick={resetState}
-											className="text-sm text-muted hover:text-hyper-green transition-colors"
-										>
-											Try Another URL
-										</button>
-										<button
-											type="button"
-											onClick={handleSave}
-											disabled={saveFetcher.state !== "idle"}
-											className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
-										>
-											{saveFetcher.state !== "idle" ? (
-												<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
-											) : (
-												<>
-													<Check className="w-4 h-4" />
-													Save to Galley
-												</>
-											)}
 										</button>
 									</div>
 								</div>

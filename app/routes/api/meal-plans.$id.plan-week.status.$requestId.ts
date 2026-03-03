@@ -1,6 +1,6 @@
 /**
- * GET /api/meals/generate/status/:requestId
- * Poll endpoint for meal generation job status. D1-backed for strong consistency.
+ * GET /api/meal-plans/:id/plan-week/status/:requestId
+ * Poll endpoint for plan-week job status. D1-backed for strong consistency.
  */
 import { data } from "react-router";
 import {
@@ -8,7 +8,7 @@ import {
 	parseJobResultJson,
 	requireQueueJobForStatus,
 } from "~/lib/queue-status-loader.server";
-import type { Route } from "./+types/meals.generate.status.$requestId";
+import type { Route } from "./+types/meal-plans.$id.plan-week.status.$requestId";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
 	const { job } = await requireQueueJobForStatus({ params, request, context });
@@ -23,24 +23,18 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 	const result = parseJobResultJson<{
 		status: "pending" | "completed" | "failed";
 		organizationId?: string;
-		recipes?: Array<{
-			name: string;
-			description: string;
-			ingredients: Array<{
-				name: string;
-				quantity: number;
-				unit: string;
-				inventoryName: string;
-			}>;
-			directions: string[];
-			prepTime: number;
-			cookTime: number;
+		schedule?: Array<{
+			date: string;
+			slotType: string;
+			mealId: string;
+			mealName: string;
+			notes?: string | null;
 		}>;
 		error?: string;
 	}>(job.resultJson);
 
 	return data(
-		{ status: result.status, recipes: result.recipes, error: result.error },
+		{ status: result.status, schedule: result.schedule, error: result.error },
 		{ headers: NO_STORE },
 	);
 }

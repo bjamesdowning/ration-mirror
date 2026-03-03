@@ -17,6 +17,8 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
   - [3.4 Meal Generation (Queue + AI Gateway + Vectorize)](#34-meal-generation-queue--ai-gateway--vectorize)
   - [3.5 Supply Sync (D1 + Vectorize)](#35-supply-sync-d1--vectorize)
   - [3.6 Meal Plan Consume Flow (D1 + Vectorize)](#36-meal-plan-consume-flow-d1--vectorize)
+  - [3.7 Plan Week (Queue + AI Gateway)](#37-plan-week-queue--ai-gateway)
+  - [3.8 Import URL (Queue + Workers AI + Browser Rendering)](#38-import-url-queue--workers-ai--browser-rendering)
 - [4. Feature Reference](#4-feature-reference)
   - [4.1 Cargo (Inventory)](#41-cargo-inventory)
   - [4.2 Galley (Recipes & Provisions)](#42-galley-recipes--provisions)
@@ -27,6 +29,7 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
   - [5.1 Embedding Pipeline](#51-embedding-pipeline)
   - [5.2 Meal Matching Engine](#52-meal-matching-engine)
   - [5.3 AI Operations & Credit Costs](#53-ai-operations--credit-costs)
+  - [5.4 Queue Architecture](#54-queue-architecture)
 - [6. Database Schema](#6-database-schema)
   - [6.1 Entity-Relationship Diagram](#61-entity-relationship-diagram)
   - [6.2 Table Reference](#62-table-reference)
@@ -90,7 +93,7 @@ flowchart TB
         R2[("R2 — ration-storage — binding: STORAGE")]
         KV[("KV — RATION_KV — Rate Limits / Cache / Idempotency")]
         Assets["Static Assets — binding: ASSETS"]
-        Queues[("Queues — ration-scan, ration-meal-generate")]
+        Queues[("Queues — ration-scan, ration-meal-generate, ration-plan-week, ration-import-url")]
     end
 
     subgraph CloudflareAI["Cloudflare AI Services"]
@@ -114,7 +117,7 @@ flowchart TB
     Worker -->|"binding: STORAGE"| R2
     Worker -->|"binding: RATION_KV"| KV
     Worker -->|"binding: ASSETS"| Assets
-    Worker -->|"binding: SCAN_QUEUE, MEAL_GENERATE_QUEUE"| Queues
+    Worker -->|"binding: SCAN_QUEUE, MEAL_GENERATE_QUEUE, PLAN_WEEK_QUEUE, IMPORT_URL_QUEUE"| Queues
     Worker -->|"binding: AI"| AIBinding
     Worker -->|"binding: VECTORIZE"| Vectorize
     Worker -->|"fetch() via AI Gateway"| AIGateway
@@ -143,6 +146,8 @@ flowchart TB
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3-flash-preview` for scan, generate, plan |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
+| `PLAN_WEEK_QUEUE` | Queue producer | Enqueue plan-week jobs; consumer runs Gemini for weekly meal schedule |
+| `IMPORT_URL_QUEUE` | Queue producer | Enqueue URL import jobs; consumer fetches page, runs Llama 3.3 extraction, creates meal |
 
 **Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
 
@@ -464,6 +469,90 @@ sequenceDiagram
 
 ---
 
+### 3.7 Plan Week (Queue + AI Gateway)
+
+Plan Week uses a queue to offload Gemini-based weekly meal scheduling. The flow mirrors scan and meal-generate: producer enqueues, returns `requestId`; client polls D1-backed status; consumer runs the AI and writes the result.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Worker as Worker (Producer)
+    participant D1 as D1 Database
+    participant Queue as PLAN_WEEK_QUEUE
+    participant Consumer as Queue Consumer
+    participant AIGateway as AI Gateway
+
+    User->>Worker: POST /api/meal-plans/:id/plan-week { config }
+    Worker->>Worker: requireActiveGroup + withCreditGate(cost=3)
+    Worker->>Queue: send({ requestId, planId, organizationId, userId, config, cost })
+    Worker->>D1: insertQueueJobPending(requestId, "plan_week", orgId)
+    Worker-->>User: { status: "processing", requestId }
+
+    loop Poll until done
+        User->>Worker: GET /api/meal-plans/:id/plan-week/status/:requestId
+        Worker->>D1: getQueueJob(requestId)
+        D1-->>Worker: { status, schedule? | error? }
+        Worker-->>User: { status, schedule? | error? }
+    end
+
+    rect rgb(232, 245, 233)
+        Note over Consumer,AIGateway: Consumer (async)
+        Consumer->>D1: Fetch meals, user allergens
+        Consumer->>AIGateway: POST gemini-3-flash (week plan prompt)
+        AIGateway-->>Consumer: { schedule: [...] }
+        Consumer->>Consumer: Validate mealIds against org whitelist
+        Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
+    end
+```
+
+User confirms the preview → bulk add via `POST /api/meal-plans/:id/entries/bulk`. Credits are deducted at enqueue; refund on failure.
+
+---
+
+### 3.8 Import URL (Queue + Workers AI + Browser Rendering)
+
+URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Llama 3.3, creates the meal in D1.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Worker as Worker (Producer)
+    participant D1 as D1 Database
+    participant Queue as IMPORT_URL_QUEUE
+    participant Consumer as Queue Consumer
+    participant Fetch as Plain Fetch / BR
+    participant AI as Workers AI
+
+    User->>Worker: POST /api/meals/import { url }
+    Worker->>Worker: requireActiveGroup + SSRF check + duplicate check
+    Worker->>Worker: withCreditGate(cost=1)
+    Worker->>Queue: send({ requestId, organizationId, userId, url, cost })
+    Worker->>D1: insertQueueJobPending(requestId, "import_url", orgId)
+    Worker-->>User: { status: "processing", requestId }
+
+    loop Poll until done
+        User->>Worker: GET /api/meals/import/status/:requestId
+        Worker->>D1: getQueueJob(requestId)
+        D1-->>Worker: { status, meal? | error? }
+        Worker-->>User: { status, success?, meal? | error? }
+    end
+
+    rect rgb(232, 245, 233)
+        Note over Consumer,AI: Consumer (async)
+        Consumer->>Fetch: fetch(url) or fetchPageAsMarkdown (BR fallback)
+        Fetch-->>Consumer: page content
+        Consumer->>AI: Llama 3.3 70B — JSON extraction
+        AI-->>Consumer: { title, ingredients, steps, ... }
+        Consumer->>Consumer: NOT_A_RECIPE? Retry with BR
+        Consumer->>D1: createMeal() — insert meal + ingredients
+        Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
+    end
+```
+
+On success the client redirects to the new meal. Duplicate URLs return `DUPLICATE_URL` (sync or from poll). Browser Rendering is used when plain fetch yields 429/403, too little content, or `NOT_A_RECIPE`.
+
+---
+
 ## 4. Feature Reference
 
 ### 4.1 Cargo (Inventory)
@@ -488,7 +577,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (1 credit) fetches a recipe URL, extracts JSON-LD structured data or sanitised HTML, then sends it to Llama 3.3 70B (Workers AI, JSON Schema mode) for structured extraction. HTTPS-only URLs are enforced (SSRF guard in `RecipeImportRequestSchema`). **Browser Rendering**: When plain fetch yields insufficient content (JS-heavy SPAs), returns 429/403, or content is too large, the system falls back to Cloudflare Browser Rendering Markdown API; when AI returns `NOT_A_RECIPE`, it retries with Browser Rendering for better content. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only. 45s BR timeout; `X-Browser-Ms-Used` logged for cost monitoring.
+- **URL import** — `POST /api/meals/import` (1 credit) returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch or Browser Rendering fallback), runs Llama 3.3 70B for extraction, creates the meal in D1. On success the client redirects to the meal. Duplicate URLs return `DUPLICATE_URL` synchronously (409) or from the poll. HTTPS-only URLs are enforced (SSRF guard). Browser Rendering is used when plain fetch yields 429/403, insufficient content, or AI returns `NOT_A_RECIPE`. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Stored in a separate `meal_tag` join table (unique per meal+tag). Used for filtering in the Galley view and the MCP `list_meals` tool.
@@ -503,7 +592,7 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 **Key workflows:**
 - **Add entry** — `POST /api/meal-plans/:id/entries` places a meal in a specific date+slot. Entries support `servingsOverride` and `notes`.
 - **Bulk add** — `POST /api/meal-plans/:id/entries/bulk` inserts up to 50 entries atomically via `db.batch()`. Used for "copy day" (duplicating an entire day's meals to other days) and AI plan-week.
-- **AI plan-week** — `POST /api/meal-plans/:id/plan-week` (3 credits) sends the org's meal library and allergen profile to Gemini. The AI returns a week of slot assignments. All returned `mealId` values are validated against the org's actual meal whitelist (RLS guard — prevents a malicious AI response from referencing another org's meals).
+- **AI plan-week** — `POST /api/meal-plans/:id/plan-week` (3 credits) returns `{ status: "processing", requestId }`; client polls `GET /api/meal-plans/:id/plan-week/status/:requestId`. Consumer runs Gemini with the org's meal library and allergen profile, returns a schedule for preview. User confirms → bulk add via `POST /api/meal-plans/:id/entries/bulk`. All `mealId` values are validated against the org's meal whitelist (RLS guard).
 - **Consume** — Marks selected entries as consumed and deducts ingredients from cargo (see §3.6).
 - **Share** — Crew Member only. Generates a `shareToken` (URL-safe, unique). Public read-only at `/shared/manifest/:token`.
 - **Week navigation** — The `?week=` query param shifts the 7-day window. The UI computes ISO week offsets on the client; the loader fetches entries for `startDate`–`endDate`.
@@ -634,6 +723,8 @@ Credits belong to the **organization**, not the user. All members of a group dra
 | Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3 Flash |
 | Organize Cargo | 2 cr | *(reserved — not yet implemented)* | — |
 
+**Queue pattern (Scan, Meal Generate, Plan Week, Import URL):** All four AI features use the same queue + D1 status pattern. Producer: `withCreditGate` → enqueue → `insertQueueJobPending` → return `requestId`. Client polls `getQueueJob` until `completed` or `failed`. Consumer runs the AI and calls `updateQueueJobResult`. Credit costs unchanged; timeouts avoided.
+
 **`withCreditGate()` pattern:** All credit-gated routes use this wrapper from `ledger.server.ts`:
 1. Pre-flight `checkBalance` (cheap SELECT).
 2. `deductCredits` (atomic UPDATE + ledger INSERT).
@@ -641,6 +732,21 @@ Credits belong to the **organization**, not the user. All members of a group dra
 4. On any error: `addCredits` refund with matching ledger entry.
 
 The pre-flight read is an optimistic guard — it won't stop a race condition, but it surfaces an early, friendly error for users with zero balance without burning a round-trip for the deduction. The actual deduction is atomic at the SQL level.
+
+---
+
+### 5.4 Queue Architecture
+
+All AI-heavy operations use Cloudflare Queues with a central **registry** in `app/lib/ai-queue-registry.server.ts`. Adding a new queue requires: (1) create a consumer module, (2) register it in `AI_QUEUE_HANDLERS`. The worker's queue handler dispatches by queue name — no manual switch logic.
+
+| Queue | Job Type | Consumer | AI Service |
+|-------|----------|----------|------------|
+| `ration-scan` | `scan` | `runScanConsumerJob` | AI Gateway → Gemini 3 Flash |
+| `ration-meal-generate` | `meal_generate` | `runMealGenerateConsumerJob` | AI Gateway → Gemini 3 Flash |
+| `ration-plan-week` | `plan_week` | `runPlanWeekConsumerJob` | AI Gateway → Gemini 3 Flash |
+| `ration-import-url` | `import_url` | `runImportUrlConsumerJob` | Workers AI → Llama 3.3 70B |
+
+**Flow:** Producer → enqueue + `insertQueueJobPending(DB, requestId, jobType, orgId)` → return `requestId`. Client polls `GET /api/.../status/:requestId` which calls `getQueueJob(DB, requestId)`. Consumer runs the AI, writes `updateQueueJobResult(DB, requestId, status, result)`. D1 provides strong read-after-write consistency for status; no KV eventual consistency.
 
 ---
 

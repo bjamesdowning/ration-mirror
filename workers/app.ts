@@ -1,14 +1,7 @@
 import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
+import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
-import {
-	type MealGenerateQueueMessage,
-	runMealGenerateConsumerJob,
-} from "../app/lib/meal-generate-consumer.server";
-import {
-	runScanConsumerJob,
-	type ScanQueueMessage,
-} from "../app/lib/scan-consumer.server";
 
 // biome-ignore lint/suspicious/noExplicitAny: Build types are handled by framework
 const handleRequest = createRequestHandler({ build: build as any });
@@ -79,25 +72,22 @@ export default {
 	},
 
 	/**
-	 * Queue handler — processes messages from ration-scan and ration-meal-generate.
-	 * Dispatches to the appropriate consumer based on batch.queue.
+	 * Queue handler — dispatches to consumers via AI_QUEUE_HANDLERS.
+	 * Unknown queues are logged and acked to avoid infinite retries.
 	 */
 	async queue(batch: MessageBatch, env: Env, _ctx: ExecutionContext) {
 		const queueName = batch.queue;
+		const handler = AI_QUEUE_HANDLERS[queueName];
+
 		for (const msg of batch.messages) {
 			try {
-				const body = msg.body as ScanQueueMessage | MealGenerateQueueMessage;
-				if (queueName === "ration-scan") {
-					await runScanConsumerJob(env, body as ScanQueueMessage);
-				} else if (queueName === "ration-meal-generate") {
-					await runMealGenerateConsumerJob(
-						env,
-						body as MealGenerateQueueMessage,
-					);
+				if (handler) {
+					await handler(env, msg.body);
+					msg.ack();
 				} else {
 					log.warn("Unknown queue", { queue: queueName });
+					msg.ack(); // ack to avoid infinite retries
 				}
-				msg.ack();
 			} catch (err) {
 				log.error("Queue consumer error", { queue: queueName, err });
 				msg.retry();

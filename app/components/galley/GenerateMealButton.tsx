@@ -20,6 +20,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
 
 interface GeneratedRecipe {
 	name: string;
@@ -264,8 +265,6 @@ export const GenerateMealButton = forwardRef<
 	}, [generateFetcher.state, generateFetcher.data]);
 
 	// Poll meal generation status when requestId is set
-	const POLL_INTERVAL_MS = 1500;
-	const MAX_POLL_ATTEMPTS = 80; // ~120s (KV eventual consistency can delay completed status)
 	useEffect(() => {
 		if (!pollRequestId) return;
 

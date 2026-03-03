@@ -1,39 +1,29 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { extractModelText } from "~/lib/ai.server";
-import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
 	withCreditGate,
 } from "~/lib/ledger.server";
-import { log } from "~/lib/logging.server";
 import { getMealsForPicker } from "~/lib/manifest.server";
+import { insertQueueJobPending } from "~/lib/queue-job.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import {
-	WeekPlanAIResponseSchema,
-	WeekPlanRequestSchema,
-} from "~/lib/schemas/week-plan";
-import { buildWeekPlanPrompt, toPromptMeal } from "~/lib/week-plan-prompt";
+import { WeekPlanRequestSchema } from "~/lib/schemas/week-plan";
 import type { Route } from "./+types/meal-plans.$id.plan-week";
-
-const PLAN_WEEK_MODEL = "gemini-3-flash-preview";
 
 /**
  * POST /api/meal-plans/:id/plan-week
  *
- * AI-powered weekly meal scheduler. Uses the org's existing meal library to
- * generate a schedule for the requested days and slots via Gemini.
+ * AI-powered weekly meal scheduler. Enqueues job; client polls status endpoint.
+ * Producer: validates input, enqueues, returns requestId.
  *
  * Security:
  *   - requireActiveGroup enforces auth + RLS
  *   - plan_week rate limit: 5 req/min per user
  *   - 3-credit gate via withCreditGate (auto-refunds on error)
- *   - All mealIds in AI response are validated against the org whitelist
- *   - Plan ownership verified before returning data
  */
 export async function action({ request, context, params }: Route.ActionArgs) {
 	if (request.method !== "POST") {
@@ -50,7 +40,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "Plan ID required" }, { status: 400 });
 	}
 
-	// Rate limiting — tight budget for expensive AI call
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"plan_week",
@@ -66,7 +55,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		);
 	}
 
-	// Parse and validate request body
 	let requestBody: unknown;
 	try {
 		requestBody = await request.json();
@@ -85,7 +73,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 	const db = drizzle(context.cloudflare.env.DB, { schema });
 
-	// Verify plan belongs to this org
 	const [planRow] = await db
 		.select({ id: schema.mealPlan.id })
 		.from(schema.mealPlan)
@@ -102,21 +89,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "Meal plan not found" }, { status: 404 });
 	}
 
-	// Fetch org meals and user allergens in parallel
-	const [allMeals, userRow] = await Promise.all([
-		getMealsForPicker(context.cloudflare.env.DB, groupId),
-		db
-			.select({ settings: schema.user.settings })
-			.from(schema.user)
-			.where(eq(schema.user.id, user.id))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
-	]);
-
-	const userAllergens = parseAllergens(
-		(userRow?.settings as { allergens?: unknown } | null)?.allergens,
-	);
-
+	const allMeals = await getMealsForPicker(context.cloudflare.env.DB, groupId);
 	if (allMeals.length === 0) {
 		throw data(
 			{
@@ -127,27 +100,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		);
 	}
 
-	// Apply tag filter if requested
-	const filteredMeals = config.tag
-		? allMeals.filter((m) => m.tags.includes(config.tag as string))
-		: allMeals;
-
-	// If tag filter empties the list, fall back to all meals (better than an error)
-	const mealsForPrompt = filteredMeals.length > 0 ? filteredMeals : allMeals;
-
-	// Build week date array for the requested number of days
-	const weekDates: string[] = [];
-	const startMs = new Date(`${config.startDate}T00:00:00`).getTime();
-	for (let i = 0; i < config.days; i++) {
-		const d = new Date(startMs + i * 86_400_000);
-		const yyyy = d.getFullYear();
-		const mm = String(d.getMonth() + 1).padStart(2, "0");
-		const dd = String(d.getDate()).padStart(2, "0");
-		weekDates.push(`${yyyy}-${mm}-${dd}`);
+	const PLAN_WEEK_QUEUE = context.cloudflare.env.PLAN_WEEK_QUEUE;
+	if (!PLAN_WEEK_QUEUE) {
+		throw data(
+			{ error: "Meal planning service unavailable. Please try again later." },
+			{ status: 503 },
+		);
 	}
-
-	// Build a Set of valid mealIds for post-generation RLS check
-	const validMealIds = new Set(mealsForPrompt.map((m) => m.id));
 
 	try {
 		return await withCreditGate(
@@ -159,137 +118,25 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				reason: "Weekly Meal Plan",
 			},
 			async () => {
-				const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } =
-					context.cloudflare.env;
+				const requestId = crypto.randomUUID();
 
-				if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-					throw data(
-						{ error: "Meal planning configuration missing" },
-						{ status: 500 },
-					);
-				}
-
-				const { systemPrompt, userPrompt } = buildWeekPlanPrompt({
-					meals: mealsForPrompt.map(toPromptMeal),
+				await PLAN_WEEK_QUEUE.send({
+					requestId,
+					planId,
+					organizationId: groupId,
+					userId: user.id,
 					config,
-					weekDates,
-					userAllergens,
+					cost: AI_COSTS.MEAL_PLAN_WEEKLY,
 				});
 
-				const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
-
-				const response = await fetch(
-					`${gatewayUrl}/v1beta/models/${PLAN_WEEK_MODEL}:generateContent`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
-						},
-						body: JSON.stringify({
-							contents: [
-								{
-									parts: [{ text: systemPrompt }, { text: userPrompt }],
-								},
-							],
-						}),
-					},
+				await insertQueueJobPending(
+					context.cloudflare.env.DB,
+					requestId,
+					"plan_week",
+					groupId,
 				);
 
-				if (!response.ok) {
-					await response.text();
-					const isTimeout =
-						response.status === 408 ||
-						response.status === 504 ||
-						response.status === 524;
-					throw data(
-						{
-							error: isTimeout
-								? "Meal planning took too long. Try again."
-								: "Meal planning failed",
-						},
-						{ status: isTimeout ? 422 : 500 },
-					);
-				}
-
-				const payload = (await response.json()) as unknown;
-				const modelText = extractModelText(payload);
-				if (!modelText) {
-					throw data({ error: "Meal planning failed" }, { status: 500 });
-				}
-
-				// Parse and validate AI response
-				let aiResponse: {
-					schedule: Array<{
-						date: string;
-						slotType: string;
-						mealId: string;
-						notes?: string | null;
-					}>;
-				};
-				try {
-					const cleanedText = modelText
-						.replace(/^```(?:json)?\s*\n?/i, "")
-						.replace(/\n?```\s*$/i, "")
-						.trim();
-					const parsed = JSON.parse(cleanedText);
-					const parseResult = WeekPlanAIResponseSchema.safeParse(parsed);
-					if (!parseResult.success) {
-						throw new Error("Invalid AI response structure");
-					}
-					aiResponse = parseResult.data;
-				} catch (e) {
-					log.error("Failed to parse AI week plan response", e);
-					throw data(
-						{
-							error: "AI planning failed due to a formatting error. Try again.",
-						},
-						{ status: 500 },
-					);
-				}
-
-				// RLS guard: reject any mealId the AI hallucinated outside our whitelist
-				const schedule = aiResponse.schedule.filter((entry) => {
-					const valid = validMealIds.has(entry.mealId);
-					if (!valid) {
-						log.warn("AI returned unknown mealId — filtered out", {
-							mealId: entry.mealId,
-						});
-					}
-					return valid;
-				});
-
-				if (schedule.length === 0) {
-					throw data(
-						{
-							error:
-								"Could not generate a valid schedule from your meal library. Try adjusting your preferences.",
-						},
-						{ status: 422 },
-					);
-				}
-
-				// Fetch meal names for the preview (client needs names, not just IDs)
-				const scheduledMealIds = [...new Set(schedule.map((e) => e.mealId))];
-				const mealRows = await db
-					.select({ id: schema.meal.id, name: schema.meal.name })
-					.from(schema.meal)
-					.where(
-						and(
-							eq(schema.meal.organizationId, groupId),
-							inArray(schema.meal.id, scheduledMealIds),
-						),
-					)
-					.limit(50);
-
-				const mealNameById = new Map(mealRows.map((m) => [m.id, m.name]));
-
-				const enrichedSchedule = schedule.map((entry) => ({
-					...entry,
-					mealName: mealNameById.get(entry.mealId) ?? "Unknown Meal",
-				}));
-
-				return { success: true, schedule: enrichedSchedule };
+				return { status: "processing" as const, requestId };
 			},
 		);
 	} catch (error) {
@@ -309,8 +156,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		if (error instanceof Response) {
 			throw error;
 		}
-
-		log.error("Weekly meal planning failed", error);
 
 		if (
 			error &&

@@ -59,6 +59,10 @@ export default [
 	route("api/meals/clear-selections", "routes/api/meals.clear-selections.ts"),
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
 	route("api/meals/import", "routes/api/meals.import.ts"),
+	route(
+		"api/meals/import/status/:requestId",
+		"routes/api/meals.import.status.$requestId.ts",
+	),
 
 	// API - Provisions (single-item meals)
 	route("api/provisions", "routes/api/provisions.ts"),
@@ -100,6 +104,10 @@ export default [
 	route(
 		"api/meal-plans/:id/plan-week",
 		"routes/api/meal-plans.$id.plan-week.ts",
+	),
+	route(
+		"api/meal-plans/:id/plan-week/status/:requestId",
+		"routes/api/meal-plans.$id.plan-week.status.$requestId.ts",
 	),
 
 	// API - Supply Lists

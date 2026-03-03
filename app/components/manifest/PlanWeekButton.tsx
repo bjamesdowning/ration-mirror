@@ -13,6 +13,7 @@ import {
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import type { MealForPicker } from "~/lib/manifest.server";
+import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
 import { SLOT_LABELS, SLOT_TYPES, type SlotType } from "~/lib/schemas/manifest";
 import {
 	VARIETY_DESCRIPTIONS,
@@ -422,16 +423,19 @@ export function PlanWeekButton({
 
 	const showModal = isControlled ? controlledOpen : internalOpen;
 
-	const planFetcher = useFetcher<{
-		success?: boolean;
-		schedule?: ScheduleEntry[];
-		error?: string;
-		required?: number;
-		current?: number;
-	}>();
+	const planFetcher = useFetcher<
+		| { status: "processing"; requestId: string }
+		| { success?: boolean; schedule?: ScheduleEntry[]; error?: string }
+		| { error: string; required?: number; current?: number }
+	>();
+	const [pollRequestId, setPollRequestId] = useState<string | null>(null);
+	/** Error from poll (e.g. failed, timeout) — takes precedence over planFetcher.data.error */
+	const [pollError, setPollError] = useState<string | null>(null);
 
 	const isGenerating =
-		planFetcher.state === "submitting" || planFetcher.state === "loading";
+		planFetcher.state === "submitting" ||
+		planFetcher.state === "loading" ||
+		pollRequestId !== null;
 
 	const handleClose = () => {
 		if (isControlled) {
@@ -441,6 +445,8 @@ export function PlanWeekButton({
 		}
 		setView("intro");
 		setSchedule([]);
+		setPollRequestId(null);
+		setPollError(null);
 	};
 
 	const handleFormSubmit = (values: {
@@ -450,6 +456,7 @@ export function PlanWeekButton({
 		dietaryNote: string;
 		variety: VarietyLevel;
 	}) => {
+		setPollError(null);
 		const payload: Record<string, unknown> = {
 			days: values.days,
 			startDate: planStartDate,
@@ -476,14 +483,15 @@ export function PlanWeekButton({
 		handleClose();
 	};
 
-	// Transition to preview/error when the fetch settles
+	// Handle initial POST: processing -> start poll; 402/error -> show error
 	useEffect(() => {
 		if (planFetcher.state !== "idle" || !planFetcher.data) return;
-		const d = planFetcher.data;
-		if (d.success && d.schedule && d.schedule.length > 0) {
-			setSchedule(d.schedule);
-			setView("preview");
-		} else {
+		const d = planFetcher.data as Record<string, unknown>;
+		if (d.status === "processing" && typeof d.requestId === "string") {
+			setPollRequestId(d.requestId);
+			setPollError(null);
+		} else if (typeof d.error === "string") {
+			setPollError(null);
 			setView("error");
 		}
 	}, [planFetcher.state, planFetcher.data]);
@@ -491,12 +499,64 @@ export function PlanWeekButton({
 	// Move to loading state when fetch starts
 	useEffect(() => {
 		if (planFetcher.state === "submitting") {
-			setView("form"); // stays on form, the form shows the loading spinner
+			setView("form");
 		}
 	}, [planFetcher.state]);
 
+	// Poll plan-week status when requestId is set
+	useEffect(() => {
+		if (!pollRequestId || !planId) return;
+
+		let attempts = 0;
+		const poll = async () => {
+			attempts++;
+			if (attempts > MAX_POLL_ATTEMPTS) {
+				setPollError("Planning timed out. Please try again.");
+				setView("error");
+				setPollRequestId(null);
+				return;
+			}
+			try {
+				const res = await fetch(
+					`/api/meal-plans/${planId}/plan-week/status/${pollRequestId}`,
+					{ credentials: "include" },
+				);
+				if (res.status === 404) {
+					setPollError("Job not found or expired. Please try again.");
+					setView("error");
+					setPollRequestId(null);
+					return;
+				}
+				const data = (await res.json()) as {
+					status: "pending" | "completed" | "failed";
+					schedule?: ScheduleEntry[];
+					error?: string;
+				};
+				if (data.status === "pending") return;
+				if (data.status === "completed" && data.schedule?.length) {
+					setSchedule(data.schedule);
+					setView("preview");
+					setPollRequestId(null);
+				} else if (data.status === "failed") {
+					setPollError(data.error ?? "Planning failed. Please try again.");
+					setView("error");
+					setPollRequestId(null);
+				}
+			} catch {
+				// Network error, keep polling
+			}
+		};
+
+		const id = setInterval(poll, POLL_INTERVAL_MS);
+		poll();
+		return () => clearInterval(id);
+	}, [pollRequestId, planId]);
+
 	const errorMessage = (() => {
-		const d = planFetcher.data;
+		if (pollError) return pollError;
+		const d = planFetcher.data as
+			| { error?: string; required?: number; current?: number }
+			| undefined;
 		if (!d?.error) return "Something went wrong. Please try again.";
 		if (d.required != null && d.current != null) {
 			return `Not enough credits. You need ${d.required} but have ${d.current}.`;

@@ -628,7 +628,7 @@ export const queueJob = sqliteTable(
 	{
 		requestId: text("request_id").primaryKey(),
 		jobType: text("job_type", {
-			enum: ["scan", "meal_generate"],
+			enum: ["scan", "meal_generate", "plan_week", "import_url"],
 		}).notNull(),
 		organizationId: text("organization_id").notNull(),
 		status: text("status", {

@@ -15,19 +15,19 @@ alwaysApply: true
 
 ## Technology Stack
 
-Always search and confirm the latest stable versions for each tool. Never use legacy tools.
+Always search and confirm the latest stable versions for each tool. Never use legacy tools. Use latest or stable releases only.
 
-- **Framework:** React Router v7.latest (Framework Mode / `routes.ts`)
+- **Framework:** React Router (latest stable, Framework Mode / `routes.ts`)
 - **Runtime:** Cloudflare Workers (V8 Isolates). **NO Node.js APIs (fs, net)**
 - **Database:** Cloudflare D1 (SQLite) + Drizzle ORM
 - **Object Store:** Cloudflare R2 (S3 Compatible)
 - **Domain/DNS:** Cloudflare Domains
 - **Vector Search:** Cloudflare Vectorize (Semantic Search)
 - **Auth:** Better Auth - Edge compatible
-- **Styling:** Tailwind CSS v4.1
+- **Styling:** Tailwind CSS (latest stable)
 - **Language:** TypeScript (Strict Mode)
 - **Package Manager:** bun
-- **Linting:** biome
+- **Linting:** Biome (latest stable, Rust-based)
 - **Payment Processing:** Stripe SDK
 
 See `package.json` for current versions.
@@ -61,7 +61,7 @@ Ration operates on **Cloudflare's paid Workers plan**. Free-tier limits are not 
 
 - **Architecture:** Feature-based folder structure (see `app/components/`, `app/routes/`)
 - **Typing:** Strict Zod validation at the API boundary (see `app/lib/schemas/`)
-- **Linting:** Biome v1.9 (Rust-based). See `biome.json`
+- **Linting:** Biome (latest stable). See `biome.json`
 - **Error Handling:** Graceful degradation. If AI fails, fallback to manual keyword search
 
 ## Testing Requirements

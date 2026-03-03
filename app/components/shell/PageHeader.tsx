@@ -105,8 +105,8 @@ export function PageHeader({
 						)}
 					</div>
 
-					{/* Action/filter button (if filterContent provided) */}
-					{filterContent && (
+					{/* Action/filter button (if filterContent provided; hidden on desktop when mobileOnly) */}
+					{filterContent && !(mobileOnly && isDesktop) && (
 						<button
 							type="button"
 							onClick={() => handleFilterOpenChange(!isFilterOpen)}

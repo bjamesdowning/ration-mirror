@@ -156,9 +156,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				.set({ userId: null })
 				.where(eq(schema.ledger.userId, userId)),
 			db.delete(schema.session).where(eq(schema.session.userId, userId)),
-			db
-				.delete(schema.account)
-				.where(eq(schema.account.userId, userId)),
+			db.delete(schema.account).where(eq(schema.account.userId, userId)),
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		] as [any, ...any[]]);
 

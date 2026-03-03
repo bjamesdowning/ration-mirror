@@ -26,7 +26,7 @@ export function StandardCard({ children, actions }: StandardCardProps) {
 					if (action.to) {
 						return (
 							<Link
-								key={`${action.label}-${index}`}
+								key={action.to}
 								to={action.to}
 								reloadDocument={action.reloadDocument}
 								className={`font-bold px-4 py-2 rounded-lg transition-all shadow-lg text-sm ${

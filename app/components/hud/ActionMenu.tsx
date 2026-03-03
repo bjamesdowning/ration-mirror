@@ -84,7 +84,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 							className="fixed z-[9999] glass-panel rounded-xl shadow-lg p-2 min-w-[160px]"
 							style={{ top: menuPos.top, right: menuPos.right }}
 						>
-							{actions.map((action, index) => {
+							{actions.map((action) => {
 								const Content = () => (
 									<>
 										{action.icon && (
@@ -103,7 +103,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 								if (action.to) {
 									return (
 										<Link
-											key={`${action.label}-${index}`}
+											key={action.to}
 											to={action.to}
 											reloadDocument={action.reloadDocument}
 											onClick={handleClose}
@@ -120,7 +120,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 
 								return (
 									<button
-										key={`${action.label}-${index}`}
+										key={`${action.label}-${action.destructive ?? ""}`}
 										type="button"
 										onClick={(e) => {
 											e.preventDefault();

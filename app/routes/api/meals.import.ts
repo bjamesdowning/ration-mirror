@@ -127,31 +127,27 @@ function sanitizeHtml(raw: string): string {
 
 type PageContentSource = "browser_rendering" | "plain_fetch";
 
+/** Throw data() for user-facing errors; used to exit early from fetchPageContent. */
+function throwContentTooShort(): never {
+	throw data(
+		{
+			error: "Page has too little text to extract a recipe.",
+			success: false,
+			code: "CONTENT_TOO_SHORT",
+			message: "Page has too little text to extract a recipe.",
+		},
+		{ status: 422 },
+	);
+}
+
 async function fetchPageContent(
 	url: string,
 	env: Env,
 ): Promise<{ content: string; source: PageContentSource }> {
-	// Try Browser Rendering first if token is configured
-	if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
-		try {
-			const markdown = await fetchPageAsMarkdown(url, env);
-			if (markdown.length >= MIN_CONTENT_LENGTH) {
-				return {
-					content: `<page_content>\n${markdown}\n</page_content>`,
-					source: "browser_rendering",
-				};
-			}
-		} catch (err) {
-			log.info("recipe_import_browser_rendering_fallback", {
-				url: new URL(url).hostname,
-				reason: err instanceof Error ? err.message : "unknown",
-			});
-		}
-	}
-
-	// Fallback: plain fetch
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+	// 1. Plain fetch first — works for allrecipes and most recipe sites (JSON-LD in initial HTML)
 	try {
 		const response = await fetch(url, {
 			signal: controller.signal,
@@ -189,7 +185,6 @@ async function fetchPageContent(
 		}
 		const html = raw;
 
-		// Prefer structured JSON-LD Recipe data if available
 		const jsonLdRecipe = extractJsonLdRecipe(html);
 		if (jsonLdRecipe) {
 			return {
@@ -199,21 +194,37 @@ async function fetchPageContent(
 		}
 
 		const sanitized = sanitizeHtml(html);
-		if (sanitized.length < MIN_CONTENT_LENGTH) {
-			throw data(
-				{
-					error: "Page has too little text to extract a recipe.",
-					success: false,
-					code: "CONTENT_TOO_SHORT",
-					message: "Page has too little text to extract a recipe.",
-				},
-				{ status: 422 },
-			);
+		if (sanitized.length >= MIN_CONTENT_LENGTH) {
+			return {
+				content: `<page_content>\n${sanitized}\n</page_content>`,
+				source: "plain_fetch",
+			};
 		}
-		return {
-			content: `<page_content>\n${sanitized}\n</page_content>`,
-			source: "plain_fetch",
-		};
+
+		// Plain fetch gave insufficient content — try Browser Rendering for JS-heavy SPAs
+		log.info("recipe_import_plain_fetch_insufficient", {
+			url: new URL(url).hostname,
+			sanitizedLength: sanitized.length,
+		});
+
+		if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
+			try {
+				const markdown = await fetchPageAsMarkdown(url, env);
+				if (markdown.length >= MIN_CONTENT_LENGTH) {
+					return {
+						content: `<page_content>\n${markdown}\n</page_content>`,
+						source: "browser_rendering",
+					};
+				}
+			} catch (brErr) {
+				log.info("recipe_import_browser_rendering_fallback", {
+					url: new URL(url).hostname,
+					reason: brErr instanceof Error ? brErr.message : "unknown",
+				});
+			}
+		}
+
+		return throwContentTooShort();
 	} catch (err) {
 		clearTimeout(timeoutId);
 		if (

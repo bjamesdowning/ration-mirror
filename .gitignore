@@ -24,3 +24,10 @@ worker-configuration.d.ts
 
 # Cursor debug / session artifacts
 .cursor/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/e2e/.auth/

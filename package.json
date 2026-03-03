@@ -15,6 +15,10 @@
 		"postinstall": "bun run cf-typegen",
 		"preview": "bun run build && vite preview",
 		"test:unit": "vitest run",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:headed": "playwright test --headed",
+		"test:e2e:report": "playwright show-report",
 		"typecheck": "bun run cf-typegen && react-router typegen && tsc -b",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate:local": "wrangler d1 migrations apply DB --local",
@@ -44,6 +48,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.11",
 		"@cloudflare/vite-plugin": "^1.13.5",
+		"@playwright/test": "^1.58.2",
 		"@react-router/dev": "7.12.0",
 		"@tailwindcss/vite": "^4.1.13",
 		"@types/node": "^22",

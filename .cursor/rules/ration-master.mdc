@@ -81,6 +81,10 @@ Every new feature or significant change **must** ship with meaningful tests usin
 - Route loaders/actions with full D1/KV/Vectorize dependencies (integration tier — deferred)
 - Config files, constants with no logic, type-only files
 
+### E2E Tests (Consider for New Features)
+
+For each new feature, **evaluate** whether an E2E test would benefit stability. Not a hard requirement — add one when it makes sense. Good candidates: critical user journeys (auth, CRUD flows, navigation), new hub pages, or flows that touch multiple routes. See `e2e/journeys/` and `plans/playwright-e2e-plan.md`. Run with `bun run test:e2e` (requires dev server for Option A).
+
 ### Test Conventions
 
 - **Framework:** Vitest — `bun run test:unit`
@@ -114,6 +118,7 @@ app/
 - `bun run lint` / `bun run lint:fix` - Biome linting
 - `bun run typecheck` - Full type checking pipeline
 - `bun run test:unit` - Run Vitest
+- `bun run test:e2e` - Run Playwright E2E (start dev server first for Option A)
 - `bun run db:generate` - Generate Drizzle migrations
 - `bun run db:migrate:dev` - Apply migrations locally
 - `bun run db:migrate:prod` - Apply migrations remotely

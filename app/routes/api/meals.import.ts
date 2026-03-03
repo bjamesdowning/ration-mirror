@@ -15,6 +15,7 @@ import {
 } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import type { RecipeImportAIResponse } from "~/lib/schemas/recipe-import";
 import {
 	RECIPE_IMPORT_JSON_SCHEMA,
 	RecipeImportAIResponseSchema,
@@ -160,6 +161,30 @@ async function fetchPageContent(
 		clearTimeout(timeoutId);
 
 		if (!response.ok) {
+			// Site may rate-limit (429) or block (403) plain fetch; BR uses different infra
+			const retryWithBR =
+				(response.status === 429 || response.status === 403) &&
+				env.CF_BROWSER_RENDERING_TOKEN?.trim();
+			if (retryWithBR) {
+				log.info("recipe_import_plain_fetch_blocked", {
+					url: new URL(url).hostname,
+					status: response.status,
+				});
+				try {
+					const markdown = await fetchPageAsMarkdown(url, env);
+					if (markdown.length >= MIN_CONTENT_LENGTH) {
+						return {
+							content: `<page_content>\n${markdown}\n</page_content>`,
+							source: "browser_rendering",
+						};
+					}
+				} catch (brErr) {
+					log.info("recipe_import_browser_rendering_fallback", {
+						url: new URL(url).hostname,
+						reason: brErr instanceof Error ? brErr.message : "unknown",
+					});
+				}
+			}
 			throw data(
 				{ error: "Could not fetch the page. Check the URL and try again." },
 				{ status: 422 },
@@ -176,11 +201,51 @@ async function fetchPageContent(
 
 		const contentLength = response.headers.get("Content-Length");
 		if (contentLength && Number.parseInt(contentLength, 10) > MAX_HTML_BYTES) {
+			if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
+				log.info("recipe_import_plain_fetch_too_large", {
+					url: new URL(url).hostname,
+					contentLength: Number.parseInt(contentLength, 10),
+				});
+				try {
+					const markdown = await fetchPageAsMarkdown(url, env);
+					if (markdown.length >= MIN_CONTENT_LENGTH) {
+						return {
+							content: `<page_content>\n${markdown}\n</page_content>`,
+							source: "browser_rendering",
+						};
+					}
+				} catch (brErr) {
+					log.info("recipe_import_browser_rendering_fallback", {
+						url: new URL(url).hostname,
+						reason: brErr instanceof Error ? brErr.message : "unknown",
+					});
+				}
+			}
 			throw data({ error: "Page is too large to process." }, { status: 422 });
 		}
 
 		const raw = await response.text();
 		if (raw.length > MAX_HTML_BYTES) {
+			if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
+				log.info("recipe_import_plain_fetch_too_large", {
+					url: new URL(url).hostname,
+					bytes: raw.length,
+				});
+				try {
+					const markdown = await fetchPageAsMarkdown(url, env);
+					if (markdown.length >= MIN_CONTENT_LENGTH) {
+						return {
+							content: `<page_content>\n${markdown}\n</page_content>`,
+							source: "browser_rendering",
+						};
+					}
+				} catch (brErr) {
+					log.info("recipe_import_browser_rendering_fallback", {
+						url: new URL(url).hostname,
+						reason: brErr instanceof Error ? brErr.message : "unknown",
+					});
+				}
+			}
 			throw data({ error: "Page is too large to process." }, { status: 422 });
 		}
 		const html = raw;
@@ -248,6 +313,73 @@ async function fetchPageContent(
 			{ status: 422 },
 		);
 	}
+}
+
+/** Run AI extraction on page content; throws on parse/validation failure. */
+async function runRecipeExtractionAI(
+	AI: NonNullable<Env["AI"]>,
+	pageContent: string,
+): Promise<RecipeImportAIResponse> {
+	const response = await AI.run(RECIPE_IMPORT_MODEL, {
+		messages: [
+			{ role: "system", content: SYSTEM_PROMPT },
+			{ role: "user", content: pageContent },
+		],
+		response_format: {
+			type: "json_schema",
+			json_schema: RECIPE_IMPORT_JSON_SCHEMA,
+		},
+		max_tokens: 4096,
+	});
+
+	const rawResponse = (response as { response?: string | unknown }).response;
+	let aiResult: unknown;
+	if (typeof rawResponse === "string") {
+		try {
+			aiResult = JSON.parse(rawResponse) as unknown;
+		} catch (parseErr) {
+			log.error("Recipe import AI failed", parseErr);
+			throw data(
+				{
+					error:
+						"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
+				},
+				{ status: 422 },
+			);
+		}
+	} else if (rawResponse && typeof rawResponse === "object") {
+		aiResult = rawResponse;
+	} else {
+		throw new Error("Unexpected AI response shape");
+	}
+
+	const pre =
+		aiResult && typeof aiResult === "object"
+			? (aiResult as Record<string, unknown>)
+			: null;
+	if (pre?.status === "ok") {
+		const hasIngredients =
+			Array.isArray(pre.ingredients) &&
+			(pre.ingredients as unknown[]).length > 0;
+		const hasSteps =
+			Array.isArray(pre.steps) && (pre.steps as unknown[]).length > 0;
+		if (!hasIngredients || !hasSteps) {
+			throw data(
+				{
+					error:
+						"The recipe could not be extracted completely. Try a different page or paste the recipe manually.",
+				},
+				{ status: 422 },
+			);
+		}
+	}
+
+	const parsed = RecipeImportAIResponseSchema.safeParse(aiResult);
+	if (!parsed.success) {
+		log.error("Recipe import validation failed", parsed.error);
+		throw data({ error: "Import processing failed" }, { status: 500 });
+	}
+	return parsed.data;
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -363,43 +495,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					);
 				}
 
-				let aiResult: unknown;
+				let result: RecipeImportAIResponse;
 				try {
-					const response = await AI.run(RECIPE_IMPORT_MODEL, {
-						messages: [
-							{ role: "system", content: SYSTEM_PROMPT },
-							{
-								role: "user",
-								content: pageContent,
-							},
-						],
-						response_format: {
-							type: "json_schema",
-							json_schema: RECIPE_IMPORT_JSON_SCHEMA,
-						},
-						max_tokens: 4096,
-					});
-
-					const rawResponse = (response as { response?: string | unknown })
-						.response;
-					if (typeof rawResponse === "string") {
-						try {
-							aiResult = JSON.parse(rawResponse) as unknown;
-						} catch (parseErr) {
-							log.error("Recipe import AI failed", parseErr);
-							throw data(
-								{
-									error:
-										"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
-								},
-								{ status: 422 },
-							);
-						}
-					} else if (rawResponse && typeof rawResponse === "object") {
-						aiResult = rawResponse;
-					} else {
-						throw new Error("Unexpected AI response shape");
-					}
+					result = await runRecipeExtractionAI(AI, pageContent);
 				} catch (err) {
 					if (
 						err &&
@@ -413,35 +511,63 @@ export async function action({ request, context }: Route.ActionArgs) {
 					throw data({ error: "Import processing failed" }, { status: 500 });
 				}
 
-				// AI sometimes returns status "ok" but omits ingredients/steps
-				const pre =
-					aiResult && typeof aiResult === "object"
-						? (aiResult as Record<string, unknown>)
-						: null;
-				if (pre?.status === "ok") {
-					const hasIngredients =
-						Array.isArray(pre.ingredients) &&
-						(pre.ingredients as unknown[]).length > 0;
-					const hasSteps =
-						Array.isArray(pre.steps) && (pre.steps as unknown[]).length > 0;
-					if (!hasIngredients || !hasSteps) {
-						throw data(
-							{
-								error:
-									"The recipe could not be extracted completely. Try a different page or paste the recipe manually.",
-							},
-							{ status: 422 },
+				let finalSource: PageContentSource = source;
+
+				// When plain fetch yielded non-recipe content (e.g. Food52 nav/layout), retry with BR
+				if (
+					result.status === "error" &&
+					result.code === "NOT_A_RECIPE" &&
+					source === "plain_fetch" &&
+					context.cloudflare.env.CF_BROWSER_RENDERING_TOKEN?.trim()
+				) {
+					const notARecipePayload = {
+						success: false as const,
+						code: result.code,
+						message: result.message,
+						error: result.message,
+					};
+					log.info("recipe_import_retry_with_br", {
+						url: new URL(validatedUrl).hostname,
+					});
+					try {
+						const markdown = await fetchPageAsMarkdown(
+							validatedUrl,
+							context.cloudflare.env,
 						);
+						if (markdown.length >= MIN_CONTENT_LENGTH) {
+							const brContent = `<page_content>\n${markdown}\n</page_content>`;
+							const brResult = await runRecipeExtractionAI(AI, brContent);
+							if (brResult.status === "ok") {
+								log.info("recipe_import_retry_success", {
+									url: new URL(validatedUrl).hostname,
+								});
+								result = brResult;
+								finalSource = "browser_rendering";
+							} else {
+								log.info("recipe_import_retry_still_not_recipe", {
+									url: new URL(validatedUrl).hostname,
+								});
+								throw data(notARecipePayload, { status: 422 });
+							}
+						} else {
+							throw data(notARecipePayload, { status: 422 });
+						}
+					} catch (brErr) {
+						if (
+							brErr &&
+							typeof brErr === "object" &&
+							"type" in brErr &&
+							(brErr as { type: string }).type === "DataWithResponseInit"
+						) {
+							throw brErr;
+						}
+						log.info("recipe_import_browser_rendering_fallback", {
+							url: new URL(validatedUrl).hostname,
+							reason: brErr instanceof Error ? brErr.message : "unknown",
+						});
+						throw data(notARecipePayload, { status: 422 });
 					}
 				}
-
-				const parsed = RecipeImportAIResponseSchema.safeParse(aiResult);
-				if (!parsed.success) {
-					log.error("Recipe import validation failed", parsed.error);
-					throw data({ error: "Import processing failed" }, { status: 500 });
-				}
-
-				const result = parsed.data;
 
 				if (result.status === "error") {
 					throw data(
@@ -476,7 +602,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				};
 
 				log.info("recipe_import_success", {
-					source,
+					source: finalSource,
 					url: new URL(validatedUrl).hostname,
 				});
 

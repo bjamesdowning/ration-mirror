@@ -265,7 +265,7 @@ export const ImportRecipeButton = forwardRef<
 										/>
 										<p id="import-url-hint" className="text-xs text-muted mt-1">
 											HTTPS only. Tested with allrecipes.com and most major
-											recipe sites.
+											recipe sites. Some sites block imports.
 										</p>
 									</div>
 									<button

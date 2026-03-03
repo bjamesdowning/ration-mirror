@@ -299,11 +299,13 @@ export async function createMeal(
 /**
  * Creates multiple meals in a single atomic batch. All-or-nothing.
  * Returns the created meals with ingredients and tags.
+ * When env is provided, runs capacity check, trackD1BatchSize, and trackWriteOperation.
  */
 export async function createMeals(
 	db: D1Database,
 	organizationId: string,
 	inputs: MealInput[],
+	env?: Env,
 ) {
 	if (inputs.length === 0) return [];
 	if (inputs.length > MAX_BATCH_MEALS) {
@@ -311,6 +313,21 @@ export async function createMeals(
 			`Batch size exceeds maximum of ${MAX_BATCH_MEALS} meals per request`,
 		);
 	}
+
+	if (env) {
+		const capacity = await checkCapacity(
+			env,
+			organizationId,
+			"meals",
+			inputs.length,
+		);
+		if (!capacity.allowed) {
+			throw new Error(
+				`capacity_exceeded:meals:${capacity.current}:${capacity.limit}`,
+			);
+		}
+	}
+
 	const d1 = drizzle(db);
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
@@ -374,8 +391,20 @@ export async function createMeals(
 		}
 	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	await d1.batch(batch as [any, ...any[]]);
+	if (env) {
+		trackD1BatchSize("createMeals", batch.length, {
+			organizationRef: organizationId,
+		});
+		await trackWriteOperation(
+			"createMeals",
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			() => d1.batch(batch as [any, ...any[]]),
+			{ organizationRef: organizationId },
+		);
+	} else {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(batch as [any, ...any[]]);
+	}
 
 	const results = await Promise.all(
 		mealIds.map((id) => getMeal(db, organizationId, id)),

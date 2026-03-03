@@ -55,11 +55,13 @@ function RecipeCard({
 	idx,
 	selected,
 	onToggle,
+	readOnly = false,
 }: {
 	recipe: GeneratedRecipe;
 	idx: number;
 	selected: boolean;
 	onToggle: (idx: number) => void;
+	readOnly?: boolean;
 }) {
 	const [directionsOpen, setDirectionsOpen] = useState(false);
 
@@ -68,14 +70,16 @@ function RecipeCard({
 			<div className="p-5 flex-1 flex flex-col gap-4">
 				{/* Header row */}
 				<div className="flex items-start gap-3">
-					<input
-						type="checkbox"
-						id={`recipe-select-${idx}`}
-						checked={selected}
-						onChange={() => onToggle(idx)}
-						className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
-						aria-label={`Select ${recipe.name}`}
-					/>
+					{!readOnly && (
+						<input
+							type="checkbox"
+							id={`recipe-select-${idx}`}
+							checked={selected}
+							onChange={() => onToggle(idx)}
+							className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
+							aria-label={`Select ${recipe.name}`}
+						/>
+					)}
 					<div className="flex-1 min-w-0">
 						<h4 className="font-bold text-lg text-carbon dark:text-white group-hover:text-hyper-green transition-colors leading-snug">
 							{recipe.name}
@@ -177,10 +181,12 @@ function RecipeResultsGrid({
 	recipes,
 	selectedRecipes,
 	onToggle,
+	readOnly = false,
 }: {
 	recipes: GeneratedRecipe[];
 	selectedRecipes: Set<number>;
 	onToggle: (idx: number) => void;
+	readOnly?: boolean;
 }) {
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -191,6 +197,7 @@ function RecipeResultsGrid({
 					idx={idx}
 					selected={selectedRecipes.has(idx)}
 					onToggle={onToggle}
+					readOnly={readOnly}
 				/>
 			))}
 		</div>
@@ -208,12 +215,17 @@ export const GenerateMealButton = forwardRef<
 		new Set(),
 	);
 	const batchSaveInFlight = useRef(false);
-	const generateFetcher = useFetcher<{
-		recipes: GeneratedRecipe[];
-		error?: string;
-	}>();
+	const generateFetcher = useFetcher<
+		| { recipes: GeneratedRecipe[]; error?: string }
+		| { status: "queued"; requestId: string }
+	>();
 	const saveFetcher = useFetcher();
 	const navigate = useNavigate();
+	const [pollRequestId, setPollRequestId] = useState<string | null>(null);
+	const [recipes, setRecipes] = useState<GeneratedRecipe[] | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	/** True when recipes came from queue consumer (meals already in galley) */
+	const [mealsAlreadySaved, setMealsAlreadySaved] = useState(false);
 
 	// Expose open method via ref
 	useImperativeHandle(ref, () => ({
@@ -225,11 +237,107 @@ export const GenerateMealButton = forwardRef<
 
 	const isGenerating =
 		generateFetcher.state === "submitting" ||
-		generateFetcher.state === "loading";
-	const recipes = generateFetcher.data?.recipes;
-	const error = generateFetcher.data?.error;
+		generateFetcher.state === "loading" ||
+		pollRequestId !== null;
+
+	// Handle initial POST response: queued -> start poll; error -> set error; direct recipes (legacy) -> set recipes
+	useEffect(() => {
+		if (generateFetcher.state !== "idle" || !generateFetcher.data) return;
+		const d = generateFetcher.data as
+			| {
+					status?: string;
+					requestId?: string;
+					recipes?: GeneratedRecipe[];
+					error?: string;
+			  }
+			| undefined;
+		if (!d) return;
+		if (d.status === "queued" && typeof d.requestId === "string") {
+			setPollRequestId(d.requestId);
+			setError(null);
+			setMealsAlreadySaved(false);
+		} else if (d.error) {
+			setError(d.error);
+			setRecipes(null);
+			setMealsAlreadySaved(false);
+		}
+	}, [generateFetcher.state, generateFetcher.data]);
+
+	// Poll meal generation status when requestId is set
+	const POLL_INTERVAL_MS = 1500;
+	const MAX_POLL_ATTEMPTS = 60;
+	useEffect(() => {
+		if (!pollRequestId) return;
+
+		let attempts = 0;
+		const poll = async () => {
+			attempts++;
+			if (attempts > MAX_POLL_ATTEMPTS) {
+				setError("Generation timed out. Please try again.");
+				setPollRequestId(null);
+				return;
+			}
+			try {
+				const res = await fetch(`/api/meals/generate/status/${pollRequestId}`);
+				if (res.status === 404) {
+					setError("Job not found or expired. Please try again.");
+					setPollRequestId(null);
+					return;
+				}
+				const data = (await res.json()) as {
+					status: "pending" | "completed" | "failed";
+					mealIds?: string[];
+					recipes?: Array<{
+						name: string;
+						description: string;
+						ingredients: Array<{
+							name: string;
+							quantity: number;
+							unit: string;
+							inventoryName: string;
+						}>;
+						directions: string[];
+						prepTime: number;
+						cookTime: number;
+					}>;
+					error?: string;
+				};
+				if (data.status === "pending") {
+					return; // Keep polling
+				}
+				if (data.status === "completed" && data.recipes) {
+					const mapped: GeneratedRecipe[] = data.recipes.map((r) => ({
+						...r,
+						ingredients: r.ingredients.map((i) => ({
+							ingredientName: i.name,
+							quantity: i.quantity,
+							unit: i.unit,
+							inventoryName: i.inventoryName,
+						})),
+					}));
+					setRecipes(mapped);
+					setError(null);
+					setPollRequestId(null);
+					setMealsAlreadySaved(true); // consumer already created meals
+				} else if (data.status === "failed") {
+					setError(data.error ?? "Generation failed. Please try again.");
+					setPollRequestId(null);
+				}
+			} catch {
+				// Network error, keep polling
+			}
+		};
+
+		const id = setInterval(poll, POLL_INTERVAL_MS);
+		poll();
+		return () => clearInterval(id);
+	}, [pollRequestId]);
 
 	const handleGenerate = () => {
+		setRecipes(null);
+		setError(null);
+		setPollRequestId(null);
+		setMealsAlreadySaved(false);
 		const payload: Record<string, string> = {};
 		const trimmed = customization.trim();
 		if (trimmed) payload.customization = trimmed;
@@ -300,6 +408,10 @@ export const GenerateMealButton = forwardRef<
 	const handleClose = () => {
 		setShowModal(false);
 		setView("intro");
+		setRecipes(null);
+		setError(null);
+		setPollRequestId(null);
+		setMealsAlreadySaved(false);
 	};
 
 	return (
@@ -349,7 +461,7 @@ export const GenerateMealButton = forwardRef<
 												<Sparkles className="w-8 h-8 text-hyper-green" />
 											</div>
 											<h4 className="text-lg font-medium text-carbon dark:text-white">
-												Scanning Cargo...
+												Generating meals...
 											</h4>
 											<p className="text-muted text-sm">
 												Inventing recipes based on your stock.
@@ -431,13 +543,15 @@ export const GenerateMealButton = forwardRef<
 										recipes={recipes}
 										selectedRecipes={selectedRecipes}
 										onToggle={toggleRecipe}
+										readOnly={mealsAlreadySaved}
 									/>
 
-									{/* Batch Save Footer */}
+									{/* Footer: View in Galley (queue) or Save Selected (legacy) */}
 									<div className="sticky bottom-0 p-4 bg-ceramic/95 dark:bg-[#1A1A1A]/95 border-t border-platinum dark:border-white/10 rounded-b-2xl flex flex-col gap-3">
 										{saveFetcher.data &&
 											typeof saveFetcher.data === "object" &&
-											"error" in saveFetcher.data && (
+											"error" in saveFetcher.data &&
+											!mealsAlreadySaved && (
 												<div
 													className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm"
 													role="alert"
@@ -450,33 +564,56 @@ export const GenerateMealButton = forwardRef<
 												</div>
 											)}
 										<div className="flex flex-wrap items-center justify-between gap-4">
-											<button
-												type="button"
-												onClick={selectAll}
-												className="text-sm text-muted hover:text-hyper-green transition-colors"
-											>
-												{selectedRecipes.size === recipes.length
-													? "Deselect All"
-													: "Select All"}
-											</button>
-											<button
-												type="button"
-												onClick={handleBatchSave}
-												disabled={
-													saveFetcher.state !== "idle" ||
-													selectedRecipes.size === 0
-												}
-												className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
-											>
-												{saveFetcher.state !== "idle" ? (
-													<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
-												) : (
-													<>
-														<Check className="w-4 h-4" />
-														Save Selected ({selectedRecipes.size})
-													</>
-												)}
-											</button>
+											{mealsAlreadySaved ? (
+												<p className="text-sm text-muted">
+													Recipes added to your Galley.
+												</p>
+											) : (
+												<button
+													type="button"
+													onClick={selectAll}
+													className="text-sm text-muted hover:text-hyper-green transition-colors"
+												>
+													{selectedRecipes.size === recipes.length
+														? "Deselect All"
+														: "Select All"}
+												</button>
+											)}
+											{mealsAlreadySaved ? (
+												<button
+													type="button"
+													onClick={() => {
+														setShowModal(false);
+														setView("intro");
+														setRecipes(null);
+														setError(null);
+														navigate("/hub/galley");
+													}}
+													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+												>
+													<Check className="w-4 h-4" />
+													View in Galley
+												</button>
+											) : (
+												<button
+													type="button"
+													onClick={handleBatchSave}
+													disabled={
+														saveFetcher.state !== "idle" ||
+														selectedRecipes.size === 0
+													}
+													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
+												>
+													{saveFetcher.state !== "idle" ? (
+														<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
+													) : (
+														<>
+															<Check className="w-4 h-4" />
+															Save Selected ({selectedRecipes.size})
+														</>
+													)}
+												</button>
+											)}
 										</div>
 									</div>
 								</div>

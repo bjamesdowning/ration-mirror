@@ -51,6 +51,10 @@ export default [
 	route("api/meals/match", "routes/api/meals.match.ts"),
 	route("api/meals/:id", "routes/api/meals.$id.ts"),
 	route("api/meals/:id/cook", "routes/api/meals.$id.cook.ts"),
+	route(
+		"api/meals/generate/status/:requestId",
+		"routes/api/meals.generate.status.$requestId.ts",
+	),
 	route("api/meals/generate", "routes/api/meals.generate.ts"),
 	route("api/meals/clear-selections", "routes/api/meals.clear-selections.ts"),
 	route("api/meals/:id/toggle-active", "routes/api/meals.$id.toggle-active.ts"),
@@ -127,6 +131,7 @@ export default [
 
 	// API - Other
 	route("api/interest", "routes/api/interest.ts"),
+	route("api/scan/status/:requestId", "routes/api/scan.status.$requestId.ts"),
 	route("api/scan", "routes/api/scan.tsx"),
 	route("api/search", "routes/api/search.ts"),
 	route("api/checkout", "routes/api/checkout.tsx"),

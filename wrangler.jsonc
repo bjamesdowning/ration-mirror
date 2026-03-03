@@ -96,6 +96,26 @@
 			"index_name": "ration-cargo"
 		}
 	],
+	"queues": {
+		"producers": [
+			{ "queue": "ration-scan", "binding": "SCAN_QUEUE" },
+			{ "queue": "ration-meal-generate", "binding": "MEAL_GENERATE_QUEUE" }
+		],
+		"consumers": [
+			{
+				"queue": "ration-scan",
+				"max_batch_size": 5,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			},
+			{
+				"queue": "ration-meal-generate",
+				"max_batch_size": 3,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			}
+		]
+	},
 	/**
 	 * Scheduled Triggers (CRON)
 	 * https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/

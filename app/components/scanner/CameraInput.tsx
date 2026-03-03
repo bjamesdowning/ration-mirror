@@ -21,14 +21,19 @@ interface CameraInputProps {
 	className?: string;
 }
 
-type ScanApiResponse = ScanResult & {
-	existingInventory?: Array<{
-		id: string;
-		name: string;
-		quantity: number;
-		unit: string;
-	}>;
-};
+type ScanApiResponse =
+	| (ScanResult & {
+			existingInventory?: Array<{
+				id: string;
+				name: string;
+				quantity: number;
+				unit: string;
+			}>;
+	  })
+	| { status: "processing"; requestId: string };
+
+const POLL_INTERVAL_MS = 1500;
+const MAX_POLL_ATTEMPTS = 60; // ~90 seconds
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	({ onScanComplete, className }, ref) => {
@@ -37,9 +42,12 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		const inputRef = useRef<HTMLInputElement>(null);
 		const [isAnalyzing, setIsAnalyzing] = useState(false);
 		const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-		const [existingInventory, setExistingInventory] =
-			useState<ScanApiResponse["existingInventory"]>(undefined);
+		const [existingInventory, setExistingInventory] = useState<
+			| Array<{ id: string; name: string; quantity: number; unit: string }>
+			| undefined
+		>(undefined);
 		const [scanError, setScanError] = useState<string | null>(null);
+		const [pollRequestId, setPollRequestId] = useState<string | null>(null);
 
 		// Expose openCamera method via ref
 		useImperativeHandle(ref, () => ({
@@ -153,60 +161,116 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 
 		const lastState = useRef(fetcher.state);
 
+		// Handle initial POST response: processing -> start poll; error -> show; success (legacy) -> show result
 		useEffect(() => {
-			// Detect when fetcher finishes a submission
 			if (
 				isAnalyzing &&
 				lastState.current !== "idle" &&
 				fetcher.state === "idle"
 			) {
-				setIsAnalyzing(false);
-
 				if (fetcher.data) {
-					log.debug("Scan fetcher success", { hasData: !!fetcher.data });
-					if ("error" in fetcher.data) {
-						showError(
-							`Scan failed: ${(fetcher.data as { error: string }).error}`,
-						);
+					const d = fetcher.data as Record<string, unknown>;
+					const err = d.error;
+					if (typeof err === "string") {
+						showError(`Scan failed: ${err}`);
+						setIsAnalyzing(false);
+					} else if (
+						d.status === "processing" &&
+						typeof d.requestId === "string"
+					) {
+						setPollRequestId(d.requestId);
 					} else {
-						// Success - transform raw items to include required properties
-						// biome-ignore lint/suspicious/noExplicitAny: raw API response structure
-						const rawItems = (fetcher.data as any).items || [];
-						log.debug("Scan found items", { count: rawItems.length });
-						const transformedResult: ScanResult = {
-							// biome-ignore lint/suspicious/noExplicitAny: legacy
-							items: rawItems.map((item: any) => ({
-								id: crypto.randomUUID(),
-								name: item.name || "Unknown Item",
-								quantity: item.quantity ?? 1,
-								unit: item.unit || "unit",
-								domain: item.domain ?? "food",
-								tags: item.tags || [],
-								expiresAt: item.expiresAt,
-								selected: true,
-								confidence: item.confidence,
-								rawText: item.rawText,
-							})),
-							metadata: {
-								source: "image",
-								processedAt: new Date().toISOString(),
-							},
-						};
-						setScanResult(transformedResult);
-						setExistingInventory(
-							(fetcher.data as ScanApiResponse | undefined)?.existingInventory,
-						);
+						showError("Scan failed. Please try again.");
+						setIsAnalyzing(false);
 					}
 				} else {
-					// No data returned but idle (likely an unexpected error)
 					log.error("Scan fetcher completed with no data", undefined, {
 						state: fetcher.state,
 					});
 					showError("Scan failed. Please try again.");
+					setIsAnalyzing(false);
 				}
 			}
 			lastState.current = fetcher.state;
 		}, [fetcher.state, fetcher.data, isAnalyzing, showError]);
+
+		// Poll scan status when requestId is set
+		useEffect(() => {
+			if (!pollRequestId) return;
+
+			let attempts = 0;
+			const poll = async () => {
+				attempts++;
+				if (attempts > MAX_POLL_ATTEMPTS) {
+					showError("Scan timed out. Please try again.");
+					setIsAnalyzing(false);
+					setPollRequestId(null);
+					return;
+				}
+
+				try {
+					const res = await fetch(`/api/scan/status/${pollRequestId}`);
+					if (res.status === 404) {
+						showError("Job not found or expired. Please try again.");
+						setIsAnalyzing(false);
+						setPollRequestId(null);
+						return;
+					}
+					const data = (await res.json()) as {
+						status: "pending" | "completed" | "failed";
+						items?: Array<Record<string, unknown>>;
+						existingInventory?: Array<{
+							id: string;
+							name: string;
+							quantity: number;
+							unit: string;
+						}>;
+						error?: string;
+					};
+
+					if (data.status === "pending") {
+						return; // Keep polling
+					}
+					if (data.status === "completed" && data.items) {
+						const transformedResult = {
+							items: data.items.map((item: Record<string, unknown>) => ({
+								id: String(item.id ?? crypto.randomUUID()),
+								name: String(item.name ?? "Unknown Item"),
+								quantity: Number(item.quantity ?? 1),
+								unit: String(
+									item.unit ?? "unit",
+								) as ScanResult["items"][number]["unit"],
+								domain: "food" as const,
+								tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
+								expiresAt: item.expiresAt as string | undefined,
+								selected: true as const,
+								confidence: item.confidence as number | undefined,
+								rawText: item.rawText as string | undefined,
+							})),
+							metadata: {
+								source: "image" as const,
+								processedAt: new Date().toISOString(),
+							},
+						} satisfies ScanResult;
+						setScanResult(transformedResult);
+						setExistingInventory(data.existingInventory ?? []);
+						setIsAnalyzing(false);
+						setPollRequestId(null);
+					} else if (data.status === "failed") {
+						showError(data.error ?? "Scan failed. Please try again.");
+						setIsAnalyzing(false);
+						setPollRequestId(null);
+					}
+				} catch {
+					// Network error, keep polling until timeout
+				}
+			};
+
+			const id = setInterval(poll, POLL_INTERVAL_MS);
+			poll(); // first poll immediately
+
+			return () => clearInterval(id);
+		}, [pollRequestId, showError]);
 
 		const handleModalClose = () => {
 			setScanResult(null);

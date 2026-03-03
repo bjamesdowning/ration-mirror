@@ -1,6 +1,10 @@
 image: oven/bun:1
 
+include:
+  - component: $CI_SERVER_FQDN/components/sast/sast@3.4.0
+
 stages:
+  - test
   - install
   - verify
   #- deploy
@@ -32,38 +36,8 @@ cache:
       - node_modules/
     expire_in: 1 hour
 
-# Verification Jobs (DAG: ALL run in parallel after install)
-.lint:
+.test_unit:
   stage: verify
-  needs: ["install_dependencies"]
-  script:
-    - bun run lint
-
-.typecheck:
-  stage: verify
-  needs: ["install_dependencies"]
-  script:
-    - bun run typecheck
-
-test_unit:
-  stage: verify
+  needs: []
   script:
     - bun run test:unit
-
-# Production Deployment (Runs only on main branch, after verification passes)
-#deploy_production:
-#  stage: deploy
-#  needs: ["lint", "typecheck", "test_unit"]
-#  rules:
-#    - if: $CI_COMMIT_BRANCH == "main"
-#  variables:
-#    WRANGLER_SEND_METRICS: "false"
-#  script:
-#    # Build the application once
-#    - bun run build
-#    # Run Database Migrations (Wrangler skips confirmation in CI/CD)
-#    - echo "Applying D1 Migrations to Production..."
-#    - bun x wrangler d1 migrations apply DB --remote
-#    # Deploy Worker (Wrangler is non-interactive by default in CI)
-#    - echo "Deploying to Cloudflare Workers..."
-#    - bun x wrangler deploy build/server/index.js

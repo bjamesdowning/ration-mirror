@@ -1,6 +1,6 @@
 # Quick Commit
 
-Run the full pre-commit pipeline: lint, test, typecheck, generate and apply migrations, then commit and push changes.
+Run the full pre-commit pipeline: lint, unit tests, typecheck, E2E tests (local env), generate and apply migrations, then commit and push changes.
 
 ## Steps
 
@@ -24,32 +24,38 @@ Run the full pre-commit pipeline: lint, test, typecheck, generate and apply migr
    bun run typecheck
    ```
 
-5. Generate SQL migration files from the current schema:
+5. Run E2E tests against the local environment (starts or reuses `dev:remote` server):
+   ```bash
+   bun run test:e2e
+   ```
+   **Prerequisites:** `wrangler login`, `bun run db:migrate:dev`, and dev secrets in `.dev.vars`.
+
+6. Generate SQL migration files from the current schema:
    ```bash
    bun run db:generate
    ```
 
-6. Apply any pending SQL migrations to the remote (production) D1 database:
+7. Apply any pending SQL migrations to the remote (production) D1 database:
    ```bash
    bun run db:migrate:prod
    ```
 
-7. Check the git status to see what files will be committed:
+8. Check the git status to see what files will be committed:
    ```bash
    git status
    ```
 
-8. If all checks passed locally (and migrations are successful), add all changes to the staging area:
+9. If all checks passed locally (and migrations are successful), add all changes to the staging area:
    ```bash
    git add .
    ```
 
-9. Commit the changes with a descriptive commit message:
+10. Commit the changes with a descriptive commit message:
    ```bash
    git commit -m "YOUR_COMMIT_MESSAGE"
    ```
 
-10. Push the changes to the remote repository:
+11. Push the changes to the remote repository:
     ```bash
     git push
     ```

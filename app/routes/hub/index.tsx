@@ -22,6 +22,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		groupId,
 	} = await requireActiveGroup(context, request);
 	const db = context.cloudflare.env.DB;
+	const { WELCOME_VOUCHER } = await import("~/lib/tiers.server");
 
 	const settings = await getUserSettings(db, user.id);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
@@ -99,6 +100,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		hubLayout,
 		availableMealTags,
 		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
+		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		mealMatches,
 		partialMealMatches,
 		snackMatches,
@@ -140,6 +142,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		snackMatches,
 		manifestPreview,
 		welcomeVoucherRedeemed,
+		welcomePromoCode,
 		availableMealTags,
 	} = loaderData;
 
@@ -197,7 +200,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 			<div className="space-y-8">
 				{bannerVisible && (
 					<WelcomeBanner
-						promoCode="WELCOME60"
+						promoCode={welcomePromoCode}
 						onDismiss={() =>
 							dismissFetcher.submit(
 								{ intent: "dismiss-welcome-banner" },

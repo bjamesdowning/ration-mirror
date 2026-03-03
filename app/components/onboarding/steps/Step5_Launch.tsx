@@ -81,14 +81,14 @@ export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
 				<div className="bg-hyper-green/10 border border-hyper-green/30 rounded-xl px-4 py-3 mb-5 flex items-center justify-between gap-3">
 					<div>
 						<p className="text-xs font-semibold text-carbon dark:text-white mb-0.5">
-							Free credits — welcome gift
+							Free Supply Run — 65 credits
 						</p>
 						<p className="text-[11px] text-muted">
-							Use at checkout to claim your first Supply Run free.
+							Use at checkout to claim your first Supply Run pack free.
 						</p>
 					</div>
 					<span className="shrink-0 font-bold text-hyper-green text-sm tracking-widest font-mono">
-						WELCOME60
+						WELCOME65
 					</span>
 				</div>
 
@@ -129,11 +129,11 @@ export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
 
 				{/* Tech insight */}
 				<p className="text-[11px] text-muted italic border-l-2 border-hyper-green/40 pl-2.5 mb-6">
-					Your first Supply Run is on us — use code{" "}
+					Your first Supply Run (65 credits) is on us — use code{" "}
 					<span className="text-hyper-green font-mono font-bold">
-						WELCOME60
+						WELCOME65
 					</span>{" "}
-					for free credits.
+					at checkout.
 				</p>
 
 				{/* Navigation */}

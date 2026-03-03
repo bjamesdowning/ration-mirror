@@ -390,9 +390,18 @@ export async function processSubscriptionCheckoutSession(
 	// Invalidate the tier KV cache so the new tier is visible immediately
 	await invalidateTierCache(env, organizationId);
 
-	await addCredits(env, organizationId, userId, 60, "Crew Member Credits", {
-		sessionId,
-	});
+	// Only Annual plan gets credits; Monthly gets none
+	const firstItem = subscription.items?.data?.[0];
+	const priceId =
+		typeof firstItem?.price === "string"
+			? firstItem.price
+			: (firstItem?.price as { id?: string } | undefined)?.id;
+	const annualPriceId = env.STRIPE_PRICE_CREW_MEMBER_ANNUAL;
+	if (priceId && annualPriceId && priceId === annualPriceId) {
+		await addCredits(env, organizationId, userId, 65, "Crew Member Credits", {
+			sessionId,
+		});
+	}
 
 	return { userId, organizationId, periodEnd };
 }
@@ -432,14 +441,23 @@ export async function processSubscriptionInvoice(
 	// Invalidate the tier KV cache so the renewed tier is visible immediately
 	await invalidateTierCache(env, organizationId);
 
-	await addCredits(
-		env,
-		organizationId,
-		userId,
-		60,
-		"Crew Member Renewal Credits",
-		{ sessionId: invoiceId },
-	);
+	// Only Annual plan gets credits on renewal; Monthly gets none
+	const firstItem = subscription.items?.data?.[0];
+	const priceId =
+		typeof firstItem?.price === "string"
+			? firstItem.price
+			: (firstItem?.price as { id?: string } | undefined)?.id;
+	const annualPriceId = env.STRIPE_PRICE_CREW_MEMBER_ANNUAL;
+	if (priceId && annualPriceId && priceId === annualPriceId) {
+		await addCredits(
+			env,
+			organizationId,
+			userId,
+			65,
+			"Crew Member Renewal Credits",
+			{ sessionId: invoiceId },
+		);
+	}
 
 	return { userId, organizationId, periodEnd };
 }

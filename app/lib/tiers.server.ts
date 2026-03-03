@@ -36,14 +36,15 @@ export const TIER_ORDINAL: Record<TierSlug, number> = {
 export const CREW_MEMBER_PRODUCT = {
 	slug: "crew_member" as const,
 	name: "Crew Member",
-	price: "€12/year",
-	creditsOnSignup: 60,
-	creditsOnRenewal: 60,
-	description: "Unlimited capacity + groups, with 60 yearly credits.",
+	price: "€12/year or €2/month",
+	creditsOnSignup: 65,
+	creditsOnRenewal: 65,
+	description:
+		"Unlimited capacity + groups. Annual plan includes 65 credits on start and renewal; Monthly has no included credits.",
 };
 
 export const WELCOME_VOUCHER = {
-	promoCode: "WELCOME60",
+	promoCode: "WELCOME65",
 	appliesTo: "SUPPLY_RUN",
 	discountPercent: 100,
 };

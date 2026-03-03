@@ -1,19 +1,17 @@
 import type { Route } from "./+types/home";
 import "../../load-context";
-import { useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
 import { LifecycleStepper } from "~/components/home/LifecycleStepper";
 import {
 	CheckIcon,
-	CloseIcon,
 	CodeIcon,
 	LightningBoltIcon,
 } from "~/components/icons/PageIcons";
 import { createAuth } from "~/lib/auth.server";
 import { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } from "~/lib/stripe.server";
-import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
+import { TIER_LIMITS } from "~/lib/tiers.server";
 import { APP_VERSION } from "~/lib/version";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -28,7 +26,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		tierLimits: TIER_LIMITS,
 		creditPacks: CREDIT_PACKS,
 		subscriptionProducts: SUBSCRIPTION_PRODUCTS,
-		welcomeVoucher: WELCOME_VOUCHER,
 	};
 }
 
@@ -106,8 +103,6 @@ function SectionHeader({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-	const [voucherDismissed, setVoucherDismissed] = useState(false);
-
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
 			<div
@@ -632,26 +627,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							subtitle="Start free with full access to the lifecycle. AI features run on credits — buy packs anytime, or get yearly credits with Crew Member."
 						/>
 
-						{loaderData.welcomeVoucher && !voucherDismissed && (
-							<div className="glass-panel rounded-xl p-4 border border-hyper-green/30 text-center max-w-xl mx-auto relative">
-								<button
-									type="button"
-									onClick={() => setVoucherDismissed(true)}
-									className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-muted hover:text-carbon hover:bg-carbon/5 transition-colors"
-									aria-label="Dismiss"
-								>
-									<CloseIcon className="w-3.5 h-3.5" />
-								</button>
-								<p className="text-sm text-carbon">
-									Welcome voucher: use code{" "}
-									<span className="font-bold text-hyper-green">
-										{loaderData.welcomeVoucher.promoCode}
-									</span>{" "}
-									for a free Supply Run pack.
-								</p>
-							</div>
-						)}
-
 						{/* Feature comparison table */}
 						<div className="glass-panel rounded-2xl overflow-hidden">
 							<table className="w-full text-sm">
@@ -815,7 +790,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									Crew Member
 								</h3>
 								<p className="text-sm text-muted mb-5">
-									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} —
+									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} or{" "}
+									{loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.price} —
 									unlimited capacity, groups, credit transfers, and yearly
 									credits
 								</p>

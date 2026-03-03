@@ -11,7 +11,7 @@ import { CheckIcon, DiamondIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { TIER_LIMITS } from "~/lib/tiers.server";
+import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -56,7 +56,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		userTier: userRow?.tier ?? "free",
 		tierExpiresAt: userRow?.tierExpiresAt ?? null,
 		welcomeVoucherRedeemed: userRow?.welcomeVoucherRedeemed ?? false,
-		welcomePromoCode: "WELCOME60",
+		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		counts: {
 			inventory: inventoryCount[0]?.count ?? 0,
 			meals: mealCount[0]?.count ?? 0,
@@ -143,10 +143,12 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		});
 	};
 
-	const startCrewCheckout = () => {
+	const startCrewCheckout = (
+		subscriptionKey: keyof typeof loaderData.subscriptionProducts,
+	) => {
 		const formData = new FormData();
 		formData.append("type", "subscription");
-		formData.append("subscription", "CREW_MEMBER_ANNUAL");
+		formData.append("subscription", subscriptionKey);
 		formData.append("returnUrl", "/hub/checkout/return");
 		checkoutFetcher.submit(formData, {
 			method: "post",
@@ -167,11 +169,11 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 			{!loaderData.welcomeVoucherRedeemed && (
 				<div className="glass-panel rounded-xl p-4 border border-hyper-green/30">
 					<p className="text-sm text-carbon">
-						Welcome voucher: use code{" "}
+						New accounts get a free Supply Run pack (65 credits) — use code{" "}
 						<span className="font-bold text-hyper-green">
 							{loaderData.welcomePromoCode}
 						</span>{" "}
-						for a free Supply Run pack.
+						at checkout.
 					</p>
 				</div>
 			)}
@@ -207,7 +209,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Cargo items: 50</li>
 						<li>Meals: 20</li>
-						<li>1 supply list</li>
+						<li>3 supply lists</li>
 						<li>No member invites</li>
 					</ul>
 					<div className="mt-4 text-xs text-muted">
@@ -219,19 +221,21 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 				<div className="glass-panel rounded-xl p-6 border border-hyper-green/40">
 					<h2 className="text-xl font-bold text-carbon mb-1">Crew Member</h2>
 					<p className="text-sm text-muted mb-4">
-						{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} with
-						yearly credits
+						Unlimited capacity and groups. Annual includes 65 credits; Monthly
+						has no included credits — use WELCOME65 or buy packs.
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited Cargo items and meals</li>
 						<li>Shared supply lists and member invites</li>
 						<li>
+							Annual:{" "}
 							{
 								loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL
 									.creditsOnStart
 							}{" "}
 							credits on start and renewal
 						</li>
+						<li>Monthly: No included credits</li>
 					</ul>
 					{loaderData.userTier === "crew_member" ? (
 						<div className="mt-5 space-y-1">
@@ -251,13 +255,25 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							)}
 						</div>
 					) : (
-						<button
-							type="button"
-							onClick={startCrewCheckout}
-							className="mt-5 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
-						>
-							Start Crew Member
-						</button>
+						<div className="mt-5 flex flex-col sm:flex-row gap-2">
+							<button
+								type="button"
+								onClick={() => startCrewCheckout("CREW_MEMBER_ANNUAL")}
+								className="flex-1 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
+							>
+								{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price}
+								<span className="ml-1 text-xs font-normal opacity-90">
+									(Save 50%)
+								</span>
+							</button>
+							<button
+								type="button"
+								onClick={() => startCrewCheckout("CREW_MEMBER_MONTHLY")}
+								className="flex-1 px-4 py-2 bg-platinum text-carbon font-semibold rounded-lg transition-all hover:bg-platinum/80 active:scale-95"
+							>
+								{loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.price}
+							</button>
+						</div>
 					)}
 				</div>
 			</div>
@@ -272,8 +288,15 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					>
 				).map(([packKey, pack]) => (
 					<div key={packKey} className="glass-panel rounded-xl p-4">
-						<div className="text-sm font-semibold text-carbon">
-							{pack.displayName}
+						<div className="flex items-center gap-2">
+							<span className="text-sm font-semibold text-carbon">
+								{pack.displayName}
+							</span>
+							{pack.badge && (
+								<span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-hyper-green/20 text-hyper-green">
+									{pack.badge}
+								</span>
+							)}
 						</div>
 						<div className="text-2xl font-bold text-carbon mt-1">
 							{pack.price}

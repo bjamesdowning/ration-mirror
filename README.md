@@ -276,7 +276,7 @@ sequenceDiagram
         Note over User,Stripe: Phase 1: Checkout Session
         User->>Worker: POST /api/checkout { pack: "SUPPLY_RUN" }
         Worker->>KV: checkRateLimit("checkout", userId) — 10/min
-        Worker->>Stripe: checkout.sessions.create({ mode: "payment", metadata: { orgId, credits: 60 } })
+        Worker->>Stripe: checkout.sessions.create({ mode: "payment", metadata: { orgId, credits: 65 } })
         Stripe-->>Worker: { client_secret }
         Worker-->>User: { clientSecret } — Stripe.js renders embedded form
     end
@@ -290,8 +290,8 @@ sequenceDiagram
         KV-->>Worker: { alreadyProcessed: false }
         Worker->>Stripe: sessions.retrieve(sessionId)
         Stripe-->>Worker: { payment_status: "paid", metadata }
-        Worker->>D1: UPDATE org SET credits = credits + 60
-        Worker->>D1: INSERT INTO ledger (amount: +60, reason: "Stripe Purchase:{sessionId}")
+        Worker->>D1: UPDATE org SET credits = credits + 65
+        Worker->>D1: INSERT INTO ledger (amount: +65, reason: "Stripe Purchase:{sessionId}")
         D1-->>Worker: committed
         Worker-->>Stripe: 200 OK
     end
@@ -305,13 +305,14 @@ sequenceDiagram
 
 | Pack | Credits | Price | Notes |
 |------|---------|-------|-------|
-| Taste Test | 15 | €0.99 | ~7 scans |
-| Supply Run | 60 | €4.99 | Most Popular — `WELCOME60` promo applies |
-| Mission Crate | 150 | €9.99 | Best Value |
-| Orbital Stockpile | 500 | €24.99 | Bulk |
-| Crew Member (Annual) | 60/year | €12/year | Subscription — unlimited capacity + renewal credits |
+| Taste Test | 12 | €1 | ~6 scans |
+| Supply Run | 65 | €5 | Most Popular — `WELCOME65` promo applies |
+| Mission Crate | 165 | €10 | ~82 scans |
+| Orbital Stockpile | 550 | €25 | Best Value |
+| Crew Member (Annual) | 65/year | €12/year | Subscription — unlimited capacity + 65 credits on start and renewal |
+| Crew Member (Monthly) | — | €2/month | Unlimited capacity, no included credits — use WELCOME65 or buy packs |
 
-**Welcome voucher** (`WELCOME60`): New users are offered a 100% discount on the Supply Run (60 credits) via a Stripe Promotion Code. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
+**Welcome voucher** (`WELCOME65`): New users are offered a 100% discount on the Supply Run (65 credits) via a Stripe Promotion Code. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
 
 ---
 
@@ -1097,7 +1098,7 @@ flowchart TB
         C4["5 Owned Groups"]
         C5["Invite Members"]
         C6["Share Lists and Plans publicly"]
-        C7["60 Credits on Signup and Annual Renewal"]
+        C7["65 Credits on Signup and Annual Renewal (Annual plan only)"]
     end
 
     CheckRequest["API Write Request"] --> GetTier["getGroupTierLimits() — KV cached 60s"]

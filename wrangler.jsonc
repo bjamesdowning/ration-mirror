@@ -73,6 +73,8 @@
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
+	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
+	 *     (optional; when absent, recipe import uses plain fetch only)
 	 */
 	/*
 	 * Static Assets

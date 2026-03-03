@@ -4,6 +4,11 @@ import { data } from "react-router";
 import { meal } from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
+	fetchPageAsMarkdown,
+	MIN_CONTENT_LENGTH,
+} from "~/lib/browser-rendering.server";
+import { handleApiError } from "~/lib/error-handler";
+import {
 	AI_COSTS,
 	InsufficientCreditsError,
 	withCreditGate,
@@ -120,6 +125,120 @@ function sanitizeHtml(raw: string): string {
 		.slice(0, MAX_HTML_CHARS);
 }
 
+type PageContentSource = "browser_rendering" | "plain_fetch";
+
+async function fetchPageContent(
+	url: string,
+	env: Env,
+): Promise<{ content: string; source: PageContentSource }> {
+	// Try Browser Rendering first if token is configured
+	if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
+		try {
+			const markdown = await fetchPageAsMarkdown(url, env);
+			if (markdown.length >= MIN_CONTENT_LENGTH) {
+				return {
+					content: `<page_content>\n${markdown}\n</page_content>`,
+					source: "browser_rendering",
+				};
+			}
+		} catch (err) {
+			log.info("recipe_import_browser_rendering_fallback", {
+				url: new URL(url).hostname,
+				reason: err instanceof Error ? err.message : "unknown",
+			});
+		}
+	}
+
+	// Fallback: plain fetch
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+	try {
+		const response = await fetch(url, {
+			signal: controller.signal,
+			redirect: "follow",
+			headers: {
+				"User-Agent": USER_AGENT,
+				Accept: "text/html",
+			},
+		});
+		clearTimeout(timeoutId);
+
+		if (!response.ok) {
+			throw data(
+				{ error: "Could not fetch the page. Check the URL and try again." },
+				{ status: 422 },
+			);
+		}
+
+		const contentType = response.headers.get("Content-Type") ?? "";
+		if (!contentType.toLowerCase().includes("text/html")) {
+			throw data(
+				{ error: "URL did not return an HTML page." },
+				{ status: 422 },
+			);
+		}
+
+		const contentLength = response.headers.get("Content-Length");
+		if (contentLength && Number.parseInt(contentLength, 10) > MAX_HTML_BYTES) {
+			throw data({ error: "Page is too large to process." }, { status: 422 });
+		}
+
+		const raw = await response.text();
+		if (raw.length > MAX_HTML_BYTES) {
+			throw data({ error: "Page is too large to process." }, { status: 422 });
+		}
+		const html = raw;
+
+		// Prefer structured JSON-LD Recipe data if available
+		const jsonLdRecipe = extractJsonLdRecipe(html);
+		if (jsonLdRecipe) {
+			return {
+				content: `<recipe_json_ld>\n${jsonLdRecipe}\n</recipe_json_ld>`,
+				source: "plain_fetch",
+			};
+		}
+
+		const sanitized = sanitizeHtml(html);
+		if (sanitized.length < MIN_CONTENT_LENGTH) {
+			throw data(
+				{
+					error: "Page has too little text to extract a recipe.",
+					success: false,
+					code: "CONTENT_TOO_SHORT",
+					message: "Page has too little text to extract a recipe.",
+				},
+				{ status: 422 },
+			);
+		}
+		return {
+			content: `<page_content>\n${sanitized}\n</page_content>`,
+			source: "plain_fetch",
+		};
+	} catch (err) {
+		clearTimeout(timeoutId);
+		if (
+			err &&
+			typeof err === "object" &&
+			"type" in err &&
+			(err as { type: string }).type === "DataWithResponseInit"
+		) {
+			throw err;
+		}
+		if (err instanceof Error && err.name === "AbortError") {
+			throw data(
+				{
+					error: "Request timed out. Try again or use a different URL.",
+				},
+				{ status: 422 },
+			);
+		}
+		throw data(
+			{ error: "Could not fetch the page. Check the URL and try again." },
+			{ status: 422 },
+		);
+	}
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
 	const {
 		session: { user },
@@ -220,102 +339,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 				reason: "Import URL",
 			},
 			async () => {
-				let html: string;
-				try {
-					const controller = new AbortController();
-					const timeoutId = setTimeout(
-						() => controller.abort(),
-						FETCH_TIMEOUT_MS,
-					);
-					const response = await fetch(validatedUrl, {
-						signal: controller.signal,
-						redirect: "follow",
-						headers: {
-							"User-Agent": USER_AGENT,
-							Accept: "text/html",
-						},
-					});
-					clearTimeout(timeoutId);
-
-					if (!response.ok) {
-						throw data(
-							{
-								error: "Could not fetch the page. Check the URL and try again.",
-							},
-							{ status: 422 },
-						);
-					}
-
-					const contentType = response.headers.get("Content-Type") ?? "";
-					if (!contentType.toLowerCase().includes("text/html")) {
-						throw data(
-							{ error: "URL did not return an HTML page." },
-							{ status: 422 },
-						);
-					}
-
-					const contentLength = response.headers.get("Content-Length");
-					if (
-						contentLength &&
-						Number.parseInt(contentLength, 10) > MAX_HTML_BYTES
-					) {
-						throw data(
-							{ error: "Page is too large to process." },
-							{ status: 422 },
-						);
-					}
-
-					const raw = await response.text();
-					if (raw.length > MAX_HTML_BYTES) {
-						throw data(
-							{ error: "Page is too large to process." },
-							{ status: 422 },
-						);
-					}
-					html = raw;
-				} catch (err) {
-					if (
-						err &&
-						typeof err === "object" &&
-						"type" in err &&
-						(err as { type: string }).type === "DataWithResponseInit"
-					) {
-						throw err;
-					}
-					if (err instanceof Error && err.name === "AbortError") {
-						throw data(
-							{ error: "Request timed out. Try again or use a different URL." },
-							{ status: 422 },
-						);
-					}
-					throw data(
-						{ error: "Could not fetch the page. Check the URL and try again." },
-						{ status: 422 },
-					);
-				}
-
-				// Prefer structured JSON-LD Recipe data if available — it is far smaller
-				// and more reliable than regex-stripped blog prose.
-				const jsonLdRecipe = extractJsonLdRecipe(html);
-				let pageContent: string;
-
-				if (jsonLdRecipe) {
-					pageContent = `<recipe_json_ld>\n${jsonLdRecipe}\n</recipe_json_ld>`;
-				} else {
-					const sanitized = sanitizeHtml(html);
-					if (sanitized.length < 200) {
-						throw data(
-							{
-								error: "Page has too little text to extract a recipe.",
-								success: false,
-								code: "CONTENT_TOO_SHORT",
-								message: "Page has too little text to extract a recipe.",
-							},
-							{ status: 422 },
-						);
-					}
-					pageContent = `<page_content>\n${sanitized}\n</page_content>`;
-				}
+				const { content: pageContent, source } = await fetchPageContent(
+					validatedUrl,
+					context.cloudflare.env,
+				);
 
 				const AI = context.cloudflare.env.AI;
 				if (!AI) {
@@ -437,6 +464,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 					tags: (result.tags ?? []).map((t) => t.toLowerCase()),
 				};
 
+				log.info("recipe_import_success", {
+					source,
+					url: new URL(validatedUrl).hostname,
+				});
+
 				return { success: true, recipe };
 			},
 		);
@@ -461,6 +493,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 		) {
 			return error as ReturnType<typeof data>;
 		}
-		throw error;
+		return handleApiError(error);
 	}
 }

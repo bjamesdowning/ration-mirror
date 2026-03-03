@@ -65,6 +65,7 @@ export function createMockEnv(): Env {
 		STRIPE_PUBLISHABLE_KEY: "pk_test_mock",
 		STRIPE_WEBHOOK_SECRET: "whsec_mock",
 		CF_AIG_TOKEN: "mock-token",
+		CF_BROWSER_RENDERING_TOKEN: undefined,
 		AI_GATEWAY_ACCOUNT_ID: "841fa4c177353aa4844f0c7439b59f86",
 		AI_GATEWAY_ID: "ration-gateway",
 		STRIPE_PRICE_TASTE_TEST: "price_1T6fQ3FX10NMafIYI3DG2jeb",

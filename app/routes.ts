@@ -126,6 +126,7 @@ export default [
 	),
 
 	// API - Other
+	route("api/interest", "routes/api/interest.ts"),
 	route("api/scan", "routes/api/scan.tsx"),
 	route("api/search", "routes/api/search.ts"),
 	route("api/checkout", "routes/api/checkout.tsx"),

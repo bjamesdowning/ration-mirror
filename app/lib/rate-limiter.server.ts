@@ -191,6 +191,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 5,
 		keyPrefix: "rate:plan_week",
 	},
+	interest_signup: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:interest_signup",
+	},
 };
 
 // ─── Edge Cache TTL ───────────────────────────────────────────────────────────

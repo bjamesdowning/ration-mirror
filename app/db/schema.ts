@@ -618,3 +618,23 @@ export const apiKeyRelations = relations(apiKey, ({ one }) => ({
 		references: [user.id],
 	}),
 }));
+
+// Pre-launch interest signup (temporary — remove when no longer needed)
+export const interestSignup = sqliteTable(
+	"interest_signup",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		email: text("email").notNull(),
+		source: text("source"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("interest_signup_email_idx").on(table.email),
+		index("interest_signup_created_idx").on(table.createdAt),
+		unique("interest_signup_email_unique").on(table.email),
+	],
+);

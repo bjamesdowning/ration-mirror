@@ -3,6 +3,7 @@ import "../../load-context";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
+import { InterestSignupForm } from "~/components/home/InterestSignupForm";
 import { LifecycleStepper } from "~/components/home/LifecycleStepper";
 import {
 	CheckIcon,
@@ -145,7 +146,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Cargo → Galley → Manifest → Supply → Dock → Repeat.
 							</p>
 						</div>
-						<div className="w-full flex justify-center mt-4">
+						<div className="w-full flex flex-col items-center gap-6 mt-4">
+							<InterestSignupForm />
 							<AuthWidget defaultMode="signUp" />
 						</div>
 						<a

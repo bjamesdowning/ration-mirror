@@ -4,11 +4,14 @@ import { data } from "react-router";
 import type Stripe from "stripe";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { CheckoutFormSchema } from "~/lib/schemas/checkout";
 import {
 	CREDIT_PACKS,
 	getCreditPackPriceId,
+	getOrCreateStripeCustomer,
 	getStripe,
 	getSubscriptionPriceId,
 	SUBSCRIPTION_PRODUCTS,
@@ -48,21 +51,26 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 3. Parse Input
+	// 3. Parse and validate input
 	const formData = await request.formData();
-	const checkoutType = (formData.get("type") as string) || "credits";
-	const packKey = formData.get("pack") as keyof typeof CREDIT_PACKS;
-	const subscriptionKey = formData.get(
-		"subscription",
-	) as keyof typeof SUBSCRIPTION_PRODUCTS;
-	const returnUrlPath =
-		(formData.get("returnUrl") as string) || "/hub/checkout/return";
+	const raw = {
+		type: formData.get("type")?.toString() ?? "credits",
+		pack: formData.get("pack")?.toString() ?? undefined,
+		subscription: formData.get("subscription")?.toString() ?? undefined,
+		returnUrl: formData.get("returnUrl")?.toString() ?? "/hub/checkout/return",
+	};
 
-	// Validate returnUrl to prevent open redirects (simple allowlist or path check)
-	// We only allow dashboard paths
-	if (!returnUrlPath.startsWith("/hub")) {
-		throw data({ error: "Invalid return URL" }, { status: 400 });
+	const parsed = CheckoutFormSchema.safeParse(raw);
+	if (!parsed.success) {
+		return handleApiError(parsed.error);
 	}
+
+	const {
+		type: checkoutType,
+		pack: packKey,
+		subscription: subscriptionKey,
+		returnUrl: returnUrlPath,
+	} = parsed.data;
 
 	try {
 		// 4. Create Stripe Checkout Session (Embedded Mode)
@@ -75,22 +83,48 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const stripe = getStripe(context.cloudflare.env);
+		const db = drizzle(context.cloudflare.env.DB, { schema });
+
+		const userRow = await db.query.user.findFirst({
+			where: eq(schema.user.id, userId),
+			columns: {
+				stripeCustomerId: true,
+				welcomeVoucherRedeemed: true,
+				email: true,
+			},
+		});
+
+		if (!userRow?.email) {
+			throw data(
+				{ error: "Account email required for checkout" },
+				{ status: 400 },
+			);
+		}
+
+		const customerId = await getOrCreateStripeCustomer(
+			context.cloudflare.env,
+			db,
+			userId,
+			userRow.email,
+		);
 
 		if (checkoutType === "subscription" || checkoutType === "tier") {
-			if (!subscriptionKey || !SUBSCRIPTION_PRODUCTS[subscriptionKey]) {
-				throw data({ error: "Invalid subscription product" }, { status: 400 });
+			// subscriptionKey is validated by schema when type is subscription/tier
+			const sub = subscriptionKey;
+			if (!sub) {
+				throw data(
+					{ error: "Subscription required for subscription checkout" },
+					{ status: 400 },
+				);
 			}
-
-			const selectedSubscription = SUBSCRIPTION_PRODUCTS[subscriptionKey];
+			const selectedSubscription = SUBSCRIPTION_PRODUCTS[sub];
 			const session = await stripe.checkout.sessions.create({
 				ui_mode: "embedded",
 				mode: "subscription",
+				customer: customerId,
 				line_items: [
 					{
-						price: getSubscriptionPriceId(
-							context.cloudflare.env,
-							subscriptionKey,
-						),
+						price: getSubscriptionPriceId(context.cloudflare.env, sub),
 						quantity: 1,
 					},
 				],
@@ -117,27 +151,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 			};
 		}
 
-		if (!packKey || !CREDIT_PACKS[packKey]) {
-			throw data({ error: "Invalid credit pack" }, { status: 400 });
+		// packKey is validated by schema when type is credits
+		const pack = packKey;
+		if (!pack) {
+			throw data(
+				{ error: "Pack required for credit checkout" },
+				{ status: 400 },
+			);
 		}
-
-		const db = drizzle(context.cloudflare.env.DB, { schema });
-		const userRow = await db.query.user.findFirst({
-			where: eq(schema.user.id, userId),
-			columns: {
-				stripeCustomerId: true,
-				welcomeVoucherRedeemed: true,
-				email: true,
-			},
-		});
-
-		const welcomeVoucherRedeemed = userRow?.welcomeVoucherRedeemed ?? false;
+		const welcomeVoucherRedeemed = userRow.welcomeVoucherRedeemed ?? false;
 		const sessionParams: Stripe.Checkout.SessionCreateParams = {
 			ui_mode: "embedded",
 			mode: "payment",
+			customer: customerId,
 			line_items: [
 				{
-					price: getCreditPackPriceId(context.cloudflare.env, packKey),
+					price: getCreditPackPriceId(context.cloudflare.env, pack),
 					quantity: 1,
 				},
 			],
@@ -146,17 +175,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				type: "credits",
 				userId,
 				organizationId: groupId,
-				credits: CREDIT_PACKS[packKey].credits.toString(),
-				pack: packKey,
+				credits: CREDIT_PACKS[pack].credits.toString(),
+				pack,
 			},
 			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
 		};
-
-		if (userRow?.stripeCustomerId) {
-			sessionParams.customer = userRow.stripeCustomerId;
-		} else if (userRow?.email) {
-			sessionParams.customer_email = userRow.email;
-		}
 
 		const session = await stripe.checkout.sessions.create(sessionParams);
 
@@ -167,7 +190,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			sessionId: session.id,
 		};
 	} catch (error) {
-		log.error("Stripe checkout creation failed", error);
-		throw data({ error: "Failed to create checkout session" }, { status: 500 });
+		return handleApiError(error);
 	}
 }

@@ -1,4 +1,7 @@
+import { and, eq, isNull } from "drizzle-orm";
+import type { drizzle } from "drizzle-orm/d1";
 import Stripe from "stripe";
+import * as schema from "~/db/schema";
 
 /**
  * Initialize Stripe SDK with secret key from environment
@@ -136,4 +139,47 @@ export function getCreditsForPriceId(env: Env, priceId: string): number | null {
 		}
 	}
 	return null;
+}
+
+/**
+ * Get or create a Stripe Customer for the user.
+ * Creates a Customer in Stripe and saves stripeCustomerId to the user if they don't have one.
+ * Uses conditional update to avoid race conditions when two checkouts run concurrently.
+ */
+export async function getOrCreateStripeCustomer(
+	env: Env,
+	db: ReturnType<typeof drizzle<typeof schema>>,
+	userId: string,
+	email: string,
+): Promise<string> {
+	const userRow = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { stripeCustomerId: true },
+	});
+
+	if (userRow?.stripeCustomerId) {
+		return userRow.stripeCustomerId;
+	}
+
+	const stripe = getStripe(env);
+	const customer = await stripe.customers.create({
+		email,
+		metadata: { userId },
+	});
+
+	await db
+		.update(schema.user)
+		.set({ stripeCustomerId: customer.id })
+		.where(
+			and(eq(schema.user.id, userId), isNull(schema.user.stripeCustomerId)),
+		);
+
+	// Another request may have won the race and saved a different customer.
+	// Refetch to return the authoritative value.
+	const updated = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { stripeCustomerId: true },
+	});
+
+	return updated?.stripeCustomerId ?? customer.id;
 }

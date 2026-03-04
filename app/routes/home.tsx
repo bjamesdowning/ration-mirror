@@ -845,6 +845,87 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</div>
 						</div>
 					</section>
+
+					{/* ── FAQ ── */}
+					<section
+						id="faq"
+						className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24 scroll-mt-24"
+					>
+						<SectionHeader
+							centered
+							title="Frequently Asked Questions"
+							subtitle="Quick answers to common questions about Ration."
+						/>
+						<div className="space-y-4">
+							{[
+								{
+									q: "If I purchase Crew Member, can I invite my roommate (or family) to a group even if they haven't purchased?",
+									a: "Yes. One Crew Member subscription applies to the whole group. You create the group and send an invite link; they sign in (or sign up) and accept. They get full access to that group's Cargo, Galley, Manifest, and Supply without paying. Only the group owner needs an active Crew Member subscription for the group to have unlimited capacity and invite rights.",
+								},
+								{
+									q: "How do credits work when several people use a group?",
+									a: "Credits are stored per group. Any AI action (scan, meal import, meal generation, weekly planning) in that group uses the group's credit balance. So if you're the owner and you add credits (or have yearly credits from Crew Annual), everyone in the group benefits from that same pool when they use AI in that group.",
+								},
+								{
+									q: "What's the difference between Crew Member Annual and Monthly?",
+									a: "Features are the same: unlimited Cargo/Galley/Supply, groups, member invites, and credit transfer. The Annual plan includes 65 credits when you start and 65 on each renewal; the Monthly plan does not include credits. You can buy credit packs on either plan.",
+								},
+								{
+									q: "What are the limits on the Free tier?",
+									a: `Free includes the full lifecycle: Cargo, Galley, Manifest, Supply, and Dock. Limits: ${loaderData.tierLimits.free.maxInventoryItems} Cargo items, ${loaderData.tierLimits.free.maxMeals} meals, ${loaderData.tierLimits.free.maxGroceryLists} supply lists, and one group (your personal one). You can't invite others or share manifest/supply via link. You can buy credit packs and use all AI features within those limits.`,
+								},
+								{
+									q: "What do Cargo, Galley, Manifest, Supply, and Dock mean?",
+									a: "Cargo = your pantry inventory. Galley = your recipe/meal library. Manifest = your weekly meal plan (calendar). Supply = shopping list(s) generated from the plan and Galley. Dock = moving items from a Supply list into Cargo when you've bought them. Together they form the closed loop: Cargo → Galley → Manifest → Supply → Dock → repeat.",
+								},
+								{
+									q: "Can I be in more than one group?",
+									a: "Yes. You can own up to one group on Free and up to five on Crew Member. You can also be a member of other people's groups (e.g. your household). Each account can belong to up to 5 groups in total (owned + member). When you switch groups in the app, you see that group's Cargo, Galley, and Manifest.",
+								},
+								{
+									q: "Who can create shareable links for the Manifest or Supply list?",
+									a: "Only Crew Member groups. If the group owner has Crew Member, any admin or owner in that group can create read-only share links for the Manifest or Supply list so others (e.g. family) can view without logging in.",
+								},
+								{
+									q: "How do I change from Monthly to Annual (or vice versa)?",
+									a: "Use the billing portal from your account (e.g. Settings). There you can switch between Monthly and Annual Crew Member or cancel. You'll be charged according to the new plan at the next billing date.",
+								},
+								{
+									q: "If I leave a group, what happens to the data?",
+									a: "You lose access to that group's Cargo, Galley, Manifest, and Supply. The data stays with the group; other members keep using it. Your own personal group and any other groups you're in are unaffected.",
+								},
+							].map(({ q, a }) => (
+								<details
+									key={q}
+									className="group/faq glass-panel rounded-2xl overflow-hidden border border-carbon/5 hover:border-carbon/10 transition-colors"
+								>
+									<summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-carbon group-open/faq:text-hyper-green">
+										<span>{q}</span>
+										<span className="shrink-0 text-carbon/40 transition-transform group-open/faq:rotate-180">
+											<svg
+												className="h-4 w-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+												aria-hidden
+											>
+												<title>Expand</title>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M19 9l-7 7-7-7"
+												/>
+											</svg>
+										</span>
+									</summary>
+									<div className="border-t border-carbon/5 px-5 py-4">
+										<p className="text-sm text-muted leading-relaxed">{a}</p>
+									</div>
+								</details>
+							))}
+						</div>
+					</section>
 				</div>
 
 				{/* Data & Privacy */}

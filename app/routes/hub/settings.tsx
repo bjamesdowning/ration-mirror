@@ -31,7 +31,10 @@ import { log } from "~/lib/logging.server";
 import { type ApiScope, VALID_API_SCOPES } from "~/lib/schemas/api-keys";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import type { UserSettings } from "~/lib/types";
+import { APP_VERSION } from "~/lib/version";
 import type { Route } from "./+types/settings";
+
+const GITLAB_ISSUES_BASE = "https://gitlab.com/mayutic/ration/application";
 
 // ─── Nav section IDs ──────────────────────────────────────────────────────────
 type SectionId =
@@ -39,6 +42,7 @@ type SectionId =
 	| "group"
 	| "preferences"
 	| "developer"
+	| "help"
 	| "admin"
 	| "danger";
 
@@ -119,6 +123,26 @@ const NAV_ITEMS: { id: SectionId; label: string; icon: React.ReactNode }[] = [
 					strokeLinejoin="round"
 					strokeWidth={2}
 					d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+				/>
+			</svg>
+		),
+	},
+	{
+		id: "help",
+		label: "Help & Feedback",
+		icon: (
+			<svg
+				className="w-4 h-4"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth={2}
+					d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 				/>
 			</svg>
 		),
@@ -448,6 +472,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 				"group",
 				"preferences",
 				"developer",
+				"help",
 				"admin",
 				"danger",
 			];
@@ -461,7 +486,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
 	const navItems = isAdmin
 		? [
-				...NAV_ITEMS.slice(0, 4),
+				...NAV_ITEMS.slice(0, 5),
 				{
 					id: "admin" as SectionId,
 					label: "Admin",
@@ -482,7 +507,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						</svg>
 					),
 				},
-				NAV_ITEMS[4],
+				NAV_ITEMS[5],
 			]
 		: NAV_ITEMS;
 
@@ -586,6 +611,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							origin={loaderData.origin ?? ""}
 						/>
 					)}
+					{activeSection === "help" && <HelpSection />}
 					{activeSection === "admin" && isAdmin && <AdminSection />}
 					{activeSection === "danger" && (
 						<DangerSection isOwner={isOwner} organizationId={organizationId} />
@@ -967,38 +993,6 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 					Customize Hub
 				</Link>
 			</div>
-
-			{/* Tutorial */}
-			<div className="glass-panel rounded-xl p-6">
-				<h3 className="text-xs text-label text-muted mb-1">Tutorial</h3>
-				<p className="text-sm text-muted mb-4">
-					Replay the onboarding tour to revisit the Ration workflow and feature
-					overview.
-				</p>
-				<Form method="post">
-					<input type="hidden" name="intent" value="restart-onboarding" />
-					<button
-						type="submit"
-						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
-					>
-						<svg
-							className="w-4 h-4"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-							aria-hidden="true"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-							/>
-						</svg>
-						Restart Tutorial
-					</button>
-				</Form>
-			</div>
 		</div>
 	);
 }
@@ -1156,6 +1150,107 @@ function DeveloperSection({
 				organizationName={organizationName}
 				origin={origin}
 			/>
+		</div>
+	);
+}
+
+// ─── Help Section ──────────────────────────────────────────────────────────────
+
+function HelpSection() {
+	const bugUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=bug`;
+	const featureUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=feature-request`;
+
+	return (
+		<div className="space-y-4">
+			<SectionHeading>Help & Feedback</SectionHeading>
+			<div className="glass-panel rounded-xl p-6 space-y-6">
+				<div>
+					<h3 className="text-xs text-label text-muted mb-1">Contact</h3>
+					<p className="text-sm text-muted mb-2">
+						Questions, billing, or account help — reach us by email.
+					</p>
+					<a
+						href="mailto:help@mayutic.com"
+						className="text-hyper-green font-medium hover:underline"
+					>
+						help@mayutic.com
+					</a>
+				</div>
+
+				<div>
+					<h3 className="text-xs text-label text-muted mb-1">Feedback</h3>
+					<p className="text-sm text-muted mb-3">
+						Report bugs or suggest features via our issue tracker.
+					</p>
+					<div className="flex flex-wrap gap-3">
+						<a
+							href={bugUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+						>
+							Report a bug
+						</a>
+						<a
+							href={featureUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+						>
+							Request a feature
+						</a>
+					</div>
+				</div>
+
+				<div>
+					<h3 className="text-xs text-label text-muted mb-1">Tutorial</h3>
+					<p className="text-sm text-muted mb-4">
+						Replay the onboarding tour to revisit the Ration workflow and
+						feature overview.
+					</p>
+					<Form method="post">
+						<input type="hidden" name="intent" value="restart-onboarding" />
+						<button
+							type="submit"
+							className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+						>
+							<svg
+								className="w-4 h-4"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+								/>
+							</svg>
+							Restart Tutorial
+						</button>
+					</Form>
+				</div>
+
+				<div className="pt-4 border-t border-platinum">
+					<div className="flex flex-wrap gap-4 text-sm text-muted">
+						<Link
+							to="/legal/terms"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Terms of Service
+						</Link>
+						<Link
+							to="/legal/privacy"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Privacy Policy
+						</Link>
+					</div>
+					<p className="text-xs text-muted mt-3">Ration v{APP_VERSION}</p>
+				</div>
+			</div>
 		</div>
 	);
 }

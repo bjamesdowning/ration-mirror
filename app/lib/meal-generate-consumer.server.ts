@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo } from "~/db/schema";
 import { extractModelText } from "~/lib/ai.server";
+import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
 import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
 import { getUserSettings } from "~/lib/auth.server";
 import { log } from "~/lib/logging.server";
@@ -21,8 +22,6 @@ import {
 	findSimilarCargoBatch,
 	SIMILARITY_THRESHOLDS,
 } from "~/lib/vector.server";
-
-const GENERATE_MODEL = "gemini-3-flash-preview";
 
 export interface MealGenerateQueueMessage {
 	requestId: string;
@@ -151,7 +150,7 @@ ${customization}
 		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 
 		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${GENERATE_MODEL}:generateContent`,
+			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
 			{
 				method: "POST",
 				headers: {
@@ -164,6 +163,7 @@ ${customization}
 							parts: [{ text: systemPrompt }, { text: userPrompt }],
 						},
 					],
+					...getGenerationConfig("MEDIUM"),
 				}),
 			},
 		);

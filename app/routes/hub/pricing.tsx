@@ -31,6 +31,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				tier: true,
 				welcomeVoucherRedeemed: true,
 				tierExpiresAt: true,
+				subscriptionCancelAtPeriodEnd: true,
 			},
 		}),
 		db
@@ -55,6 +56,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		stripePublishableKey: context.cloudflare.env.STRIPE_PUBLISHABLE_KEY,
 		userTier: userRow?.tier ?? "free",
 		tierExpiresAt: userRow?.tierExpiresAt ?? null,
+		subscriptionCancelAtPeriodEnd:
+			userRow?.subscriptionCancelAtPeriodEnd ?? false,
 		welcomeVoucherRedeemed: userRow?.welcomeVoucherRedeemed ?? false,
 		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		counts: {
@@ -242,7 +245,9 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							<p className="text-sm font-medium text-hyper-green">Your plan</p>
 							{loaderData.tierExpiresAt ? (
 								<p className="text-xs text-muted">
-									Renews on{" "}
+									{loaderData.subscriptionCancelAtPeriodEnd
+										? "Ends on "
+										: "Renews on "}
 									{(loaderData.tierExpiresAt instanceof Date
 										? loaderData.tierExpiresAt
 										: new Date(loaderData.tierExpiresAt)

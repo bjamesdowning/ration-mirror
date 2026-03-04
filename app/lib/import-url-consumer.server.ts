@@ -1,12 +1,14 @@
 /**
  * Import-URL queue consumer logic.
- * Fetches page content (plain or Browser Rendering), runs Llama 3.3 for recipe
- * extraction, and stores the extracted recipe for user verification. The meal
- * is created only when the user confirms via POST /api/meals/import/confirm.
+ * Fetches page content (plain or Browser Rendering), runs Gemini via AI Gateway
+ * for recipe extraction (LOW thinking), and stores the extracted recipe for user
+ * verification. The meal is created only when the user confirms via POST /api/meals/import/confirm.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal } from "~/db/schema";
+import { extractModelText } from "~/lib/ai.server";
+import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
 import {
 	fetchPageAsMarkdown,
 	MIN_CONTENT_LENGTH,
@@ -16,12 +18,8 @@ import { updateQueueJobResult } from "~/lib/queue-job.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { RecipeImportAIResponse } from "~/lib/schemas/recipe-import";
-import {
-	RECIPE_IMPORT_JSON_SCHEMA,
-	RecipeImportAIResponseSchema,
-} from "~/lib/schemas/recipe-import";
+import { RecipeImportAIResponseSchema } from "~/lib/schemas/recipe-import";
 
-const RECIPE_IMPORT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const SYSTEM_PROMPT = `You are a recipe extraction engine. You receive raw text scraped from a webpage.
 Your task is to extract the recipe into structured JSON.
 
@@ -252,40 +250,68 @@ async function fetchPageContentForImport(
 }
 
 async function runRecipeExtractionAIForImport(
-	AI: NonNullable<Env["AI"]>,
+	env: Env,
 	pageContent: string,
 ): Promise<
 	| { ok: true; result: RecipeImportAIResponse }
 	| { ok: false; error: string; code?: string }
 > {
-	const response = await AI.run(RECIPE_IMPORT_MODEL, {
-		messages: [
-			{ role: "system", content: SYSTEM_PROMPT },
-			{ role: "user", content: pageContent },
-		],
-		response_format: {
-			type: "json_schema",
-			json_schema: RECIPE_IMPORT_JSON_SCHEMA,
-		},
-		max_tokens: 4096,
-	});
+	const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
+	if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
+		return { ok: false, error: "Import configuration missing" };
+	}
 
-	const rawResponse = (response as { response?: string | unknown }).response;
-	let aiResult: unknown;
-	if (typeof rawResponse === "string") {
-		try {
-			aiResult = JSON.parse(rawResponse) as unknown;
-		} catch {
-			return {
-				ok: false,
-				error:
-					"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
-			};
-		}
-	} else if (rawResponse && typeof rawResponse === "object") {
-		aiResult = rawResponse;
-	} else {
+	const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
+	const response = await fetch(
+		`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
+			},
+			body: JSON.stringify({
+				contents: [
+					{
+						parts: [{ text: SYSTEM_PROMPT }, { text: pageContent }],
+					},
+				],
+				...getGenerationConfig("LOW"),
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		return {
+			ok: false,
+			error:
+				response.status === 408 ||
+				response.status === 504 ||
+				response.status === 524
+					? "Import took too long. Try again."
+					: "Import processing failed",
+		};
+	}
+
+	const payload = (await response.json()) as unknown;
+	const modelText = extractModelText(payload);
+	if (!modelText) {
 		return { ok: false, error: "Import processing failed" };
+	}
+
+	let aiResult: unknown;
+	try {
+		const cleanedText = modelText
+			.replace(/^```(?:json)?\s*\n?/i, "")
+			.replace(/\n?```\s*$/i, "")
+			.trim();
+		aiResult = JSON.parse(cleanedText) as unknown;
+	} catch {
+		return {
+			ok: false,
+			error:
+				"The recipe was too long to extract completely. Try a shorter page or a simpler recipe.",
+		};
 	}
 
 	const parsed = RecipeImportAIResponseSchema.safeParse(aiResult);
@@ -321,8 +347,8 @@ export async function runImportUrlConsumerJob(
 	};
 
 	try {
-		const AI = env.AI;
-		if (!AI) {
+		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
+		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
 			await writeResult({
 				status: "failed",
 				success: false,
@@ -343,7 +369,7 @@ export async function runImportUrlConsumerJob(
 		}
 
 		const { content: pageContent, source } = fetchResult;
-		let aiResult = await runRecipeExtractionAIForImport(AI, pageContent);
+		let aiResult = await runRecipeExtractionAIForImport(env, pageContent);
 
 		// NOT_A_RECIPE retry with Browser Rendering when plain fetch gave non-recipe
 		if (
@@ -360,7 +386,7 @@ export async function runImportUrlConsumerJob(
 				const markdown = await fetchPageAsMarkdown(url, env);
 				if (markdown.length >= MIN_CONTENT_LENGTH) {
 					const brContent = `<page_content>\n${markdown}\n</page_content>`;
-					const brResult = await runRecipeExtractionAIForImport(AI, brContent);
+					const brResult = await runRecipeExtractionAIForImport(env, brContent);
 					if (brResult.ok && brResult.result.status === "ok") {
 						aiResult = brResult;
 					}

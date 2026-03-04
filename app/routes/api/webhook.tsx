@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import Stripe from "stripe";
 import * as schema from "~/db/schema";
 import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import {
@@ -31,11 +32,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		// 2. Verify webhook signature
-		const event = stripe.webhooks.constructEvent(
+		// 2. Verify webhook signature (async for Cloudflare Workers / Web Crypto)
+		const event = await stripe.webhooks.constructEventAsync(
 			body,
 			signature,
 			webhookSecret,
+			undefined,
+			Stripe.createSubtleCryptoProvider(),
 		);
 
 		// 3. Check event timestamp for replay protection
@@ -54,10 +57,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 		});
 
 		// 5. Idempotency: Check if event already processed (Distributed via KV)
-		const idempotencyCheck = await checkStripeWebhookProcessed(
-			context.cloudflare.env.RATION_KV,
-			event.id,
-		);
+		const kv = context.cloudflare.env.RATION_KV;
+		let idempotencyCheck: {
+			alreadyProcessed: boolean;
+			record?: { processedAt?: number };
+		} = {
+			alreadyProcessed: false,
+		};
+		if (kv) {
+			idempotencyCheck = await checkStripeWebhookProcessed(kv, event.id);
+		} else {
+			log.warn("RATION_KV not bound; skipping webhook idempotency", {
+				eventId: redactId(event.id),
+			});
+		}
 
 		if (idempotencyCheck.alreadyProcessed) {
 			log.warn("Duplicate webhook event", {
@@ -142,6 +155,35 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		if (event.type === "customer.subscription.updated") {
 			const subscription = event.data.object;
+			const cancelAtPeriodEnd = subscription.cancel_at_period_end === true;
+			const db = drizzle(context.cloudflare.env.DB, { schema });
+
+			// Resolve userId: metadata first, else fallback to stripeCustomerId lookup
+			let userId =
+				typeof subscription.metadata?.userId === "string"
+					? subscription.metadata.userId
+					: null;
+			if (!userId) {
+				const customerId =
+					typeof subscription.customer === "string"
+						? subscription.customer
+						: (subscription.customer as { id?: string })?.id;
+				if (customerId) {
+					const userRow = await db.query.user.findFirst({
+						where: eq(schema.user.stripeCustomerId, customerId),
+						columns: { id: true },
+					});
+					userId = userRow?.id ?? null;
+				}
+			}
+
+			if (userId) {
+				await db
+					.update(schema.user)
+					.set({ subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd })
+					.where(eq(schema.user.id, userId));
+			}
+
 			if (
 				subscription.status === "canceled" ||
 				subscription.cancel_at_period_end
@@ -149,6 +191,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				log.info("Subscription updated", {
 					subscriptionId: redactId(subscription.id),
 					status: subscription.status,
+					cancelAtPeriodEnd,
+					userIdResolved: !!userId,
 					eventId: redactId(event.id),
 				});
 			}
@@ -156,7 +200,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		return new Response("Webhook processed", { status: 200 });
 	} catch (error) {
-		log.error("Webhook processing failed", error);
+		log.error("Webhook processing failed", error, {
+			hint: "Check stack above; common causes: KV/D1 binding in dev, or missing org/user for session metadata",
+		});
 
 		// Don't expose internal errors to Stripe
 		if (error instanceof Error && error.message.includes("signature")) {

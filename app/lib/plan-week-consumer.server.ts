@@ -7,6 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { extractModelText } from "~/lib/ai.server";
+import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
 import { parseAllergens } from "~/lib/allergens";
 import { log } from "~/lib/logging.server";
 import { getMealsForPicker } from "~/lib/manifest.server";
@@ -16,8 +17,6 @@ import {
 	type WeekPlanRequest,
 } from "~/lib/schemas/week-plan";
 import { buildWeekPlanPrompt, toPromptMeal } from "~/lib/week-plan-prompt";
-
-const PLAN_WEEK_MODEL = "gemini-3-flash-preview";
 
 export interface PlanWeekQueueMessage {
 	requestId: string;
@@ -138,7 +137,7 @@ export async function runPlanWeekConsumerJob(
 		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 
 		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${PLAN_WEEK_MODEL}:generateContent`,
+			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
 			{
 				method: "POST",
 				headers: {
@@ -151,6 +150,7 @@ export async function runPlanWeekConsumerJob(
 							parts: [{ text: systemPrompt }, { text: userPrompt }],
 						},
 					],
+					...getGenerationConfig("MEDIUM"),
 				}),
 			},
 		);

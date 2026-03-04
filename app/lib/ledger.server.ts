@@ -481,6 +481,7 @@ export async function downgradeExpiredSubscription(
 		.set({
 			tier: "free",
 			tierExpiresAt: null,
+			subscriptionCancelAtPeriodEnd: false,
 		})
 		.where(eq(schema.user.id, userId));
 

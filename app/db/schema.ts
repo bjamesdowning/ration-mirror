@@ -32,6 +32,11 @@ export const user = sqliteTable("user", {
 		.notNull()
 		.default(false),
 	stripeCustomerId: text("stripe_customer_id"),
+	subscriptionCancelAtPeriodEnd: integer("subscription_cancel_at_period_end", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(false),
 	// Extended fields
 	settings: text("settings", { mode: "json" })
 		.$type<UserSettings>()

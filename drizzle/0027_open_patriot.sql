@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD `subscription_cancel_at_period_end` integer DEFAULT false NOT NULL;

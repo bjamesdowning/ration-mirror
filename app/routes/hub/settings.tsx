@@ -255,6 +255,8 @@ export async function loader(args: Route.LoaderArgs) {
 			isAdmin: user.isAdmin ?? false,
 			tier: user.tier ?? "free",
 			tierExpiresAt: user.tierExpiresAt ?? null,
+			subscriptionCancelAtPeriodEnd:
+				user.subscriptionCancelAtPeriodEnd ?? false,
 			apiKeys,
 			origin: url.origin,
 		};
@@ -739,7 +741,9 @@ function AccountSection({
 						</p>
 						{loaderData.tier === "crew_member" && (
 							<p className="text-xs text-muted mt-1">
-								Renews on{" "}
+								{loaderData.subscriptionCancelAtPeriodEnd
+									? "Ends on "
+									: "Renews on "}
 								{loaderData.tierExpiresAt
 									? (toExpiryDate(
 											loaderData.tierExpiresAt,

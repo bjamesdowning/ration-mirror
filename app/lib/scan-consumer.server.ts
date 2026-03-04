@@ -3,6 +3,7 @@
  * Runs AI vision on an image from R2, parses results, stores status in D1 for polling.
  */
 import { extractModelText } from "~/lib/ai.server";
+import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { log } from "~/lib/logging.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
@@ -12,7 +13,6 @@ import {
 	ScanResultSchema,
 } from "~/lib/schemas/scan";
 
-const SCAN_MODEL = "gemini-3-flash-preview";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function addDays(isoDate: string, days: number): string {
 	const d = new Date(isoDate);
@@ -129,7 +129,7 @@ export async function runScanConsumerJob(
 		const todayIso = new Date().toISOString().slice(0, 10);
 
 		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${SCAN_MODEL}:generateContent`,
+			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
 			{
 				method: "POST",
 				headers: {
@@ -150,6 +150,7 @@ export async function runScanConsumerJob(
 							],
 						},
 					],
+					...getGenerationConfig("HIGH"),
 				}),
 			},
 		);

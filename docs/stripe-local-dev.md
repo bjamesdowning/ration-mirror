@@ -1,6 +1,6 @@
 # Stripe Local Dev Setup
 
-For the WELCOME65 one-time-per-customer coupon to work locally, webhooks must reach your dev server and `STRIPE_WEBHOOK_SECRET` must match the Stripe CLI.
+For the WELCOME65 one-time-per-customer coupon (Supply Run only) to work locally, webhooks must reach your dev server and `STRIPE_WEBHOOK_SECRET` must match the Stripe CLI.
 
 ## 1. Start Stripe CLI
 
@@ -39,7 +39,7 @@ bun run dev
 
 ## 4. Verify webhooks are working
 
-When you complete a Supply Run checkout with WELCOME65:
+When you complete a Supply Run checkout with WELCOME65 (valid for Supply Run only):
 
 1. **Stripe CLI terminal** — You should see `checkout.session.completed` events.
 2. **Dev server terminal** — You should see `[INFO] Stripe webhook received` and `[INFO] Added credits from checkout`.

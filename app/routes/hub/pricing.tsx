@@ -176,7 +176,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<span className="font-bold text-hyper-green">
 							{loaderData.welcomePromoCode}
 						</span>{" "}
-						at checkout.
+						with Supply Run only at checkout.
 					</p>
 				</div>
 			)}
@@ -225,7 +225,8 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<h2 className="text-xl font-bold text-carbon mb-1">Crew Member</h2>
 					<p className="text-sm text-muted mb-4">
 						Unlimited capacity and groups. Annual includes 65 credits; Monthly
-						has no included credits — use WELCOME65 or buy packs.
+						has no included credits — use WELCOME65 with Supply Run only or buy
+						packs.
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited Cargo items and meals</li>

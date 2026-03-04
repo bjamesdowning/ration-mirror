@@ -47,6 +47,8 @@ export const WELCOME_VOUCHER = {
 	promoCode: "WELCOME65",
 	appliesTo: "SUPPLY_RUN",
 	discountPercent: 100,
+	/** User-facing note: valid for Supply Run only */
+	description: "Supply Run only",
 };
 
 export function isTierSlug(value: string): value is TierSlug {

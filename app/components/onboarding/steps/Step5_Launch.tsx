@@ -84,7 +84,8 @@ export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
 							Free Supply Run — 65 credits
 						</p>
 						<p className="text-[11px] text-muted">
-							Use at checkout to claim your first Supply Run pack free.
+							Use with Supply Run only at checkout to claim your first pack
+							free.
 						</p>
 					</div>
 					<span className="shrink-0 font-bold text-hyper-green text-sm tracking-widest font-mono">
@@ -133,7 +134,7 @@ export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
 					<span className="text-hyper-green font-mono font-bold">
 						WELCOME65
 					</span>{" "}
-					at checkout.
+					with Supply Run only at checkout.
 				</p>
 
 				{/* Navigation */}

@@ -637,7 +637,11 @@ function AccountSection({
 
 	useEffect(() => {
 		if (billingPortalFetcher.data?.url) {
-			window.location.href = billingPortalFetcher.data.url;
+			window.open(
+				billingPortalFetcher.data.url,
+				"_blank",
+				"noopener,noreferrer",
+			);
 		}
 	}, [billingPortalFetcher.data]);
 

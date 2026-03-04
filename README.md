@@ -315,13 +315,13 @@ sequenceDiagram
 | Pack | Credits | Price | Notes |
 |------|---------|-------|-------|
 | Taste Test | 12 | €1 | ~6 scans |
-| Supply Run | 65 | €5 | Most Popular — `WELCOME65` promo applies |
+| Supply Run | 65 | €5 | Most Popular — `WELCOME65` promo (Supply Run only) |
 | Mission Crate | 165 | €10 | ~82 scans |
 | Orbital Stockpile | 550 | €25 | Best Value |
 | Crew Member (Annual) | 65/year | €12/year | Subscription — unlimited capacity + 65 credits on start and renewal |
-| Crew Member (Monthly) | — | €2/month | Unlimited capacity, no included credits — use WELCOME65 or buy packs |
+| Crew Member (Monthly) | — | €2/month | Unlimited capacity, no included credits — use WELCOME65 with Supply Run only or buy packs |
 
-**Welcome voucher** (`WELCOME65`): New users are offered a 100% discount on the Supply Run (65 credits) via a Stripe Promotion Code. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
+**Welcome voucher** (`WELCOME65`): New users are offered a 100% discount on the Supply Run (65 credits) via a Stripe Promotion Code. The code applies to Supply Run only. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
 
 ---
 

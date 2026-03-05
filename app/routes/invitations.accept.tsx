@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { Form, redirect, useNavigation } from "react-router";
+import { data, Form, redirect, useNavigation } from "react-router";
 import { RocketIcon } from "~/components/icons/PageIcons";
 import * as schema from "~/db/schema";
 import { createAuth, requireAuth } from "~/lib/auth.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/invitations.accept";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -19,6 +20,30 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"group_invite",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{
+				error: "Too many invitation attempts. Please try again later.",
+				retryAfter: rateLimitResult.retryAfter,
+				resetAt: rateLimitResult.resetAt,
+			},
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
+				},
+			},
+		);
+	}
+
 	const formData = await request.formData();
 	const invitationId = formData.get("invitationId") as string;
 

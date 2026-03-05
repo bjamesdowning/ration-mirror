@@ -85,6 +85,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 					.set({ activeOrganizationId: null })
 					.where(eq(schema.session.activeOrganizationId, orgId));
 
+				// Delete queue jobs for this org (GDPR: queueJob has no FK, must delete explicitly)
+				await db
+					.delete(schema.queueJob)
+					.where(eq(schema.queueJob.organizationId, orgId));
+
 				// Manual cleanup of data — delete cargo vectors before D1
 				const orgCargoRows = await db
 					.select({ id: schema.cargo.id })

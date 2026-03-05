@@ -5,12 +5,13 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { data, useFetcher, useNavigate } from "react-router";
 import { CheckIcon, DiamondIcon } from "~/components/icons/PageIcons";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
 import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
 
@@ -105,6 +106,7 @@ function FeatureRow({
 export default function PricingPage({ loaderData }: Route.ComponentProps) {
 	const checkoutFetcher = useFetcher<CheckoutResponse>();
 	const navigate = useNavigate();
+	const checkoutSectionRef = useRef<HTMLDivElement>(null);
 	const [clientSecret, setClientSecret] = useState<string | null>(null);
 	const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -113,16 +115,22 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		[loaderData.stripePublishableKey],
 	);
 
-	if (
-		checkoutFetcher.data?.success &&
-		checkoutFetcher.data.clientSecret &&
-		clientSecret !== checkoutFetcher.data.clientSecret
-	) {
-		setClientSecret(checkoutFetcher.data.clientSecret);
-		if (checkoutFetcher.data.sessionId) {
-			setSessionId(checkoutFetcher.data.sessionId);
+	const fetcherData = checkoutFetcher.data;
+	if (shouldSyncCheckoutFromFetcher(fetcherData, clientSecret) && fetcherData) {
+		setClientSecret(fetcherData.clientSecret ?? null);
+		if (fetcherData.sessionId) {
+			setSessionId(fetcherData.sessionId);
 		}
 	}
+
+	useEffect(() => {
+		if (clientSecret) {
+			checkoutSectionRef.current?.scrollIntoView({
+				behavior: "smooth",
+				block: "start",
+			});
+		}
+	}, [clientSecret]);
 
 	const handleCheckoutComplete = () => {
 		if (sessionId) {
@@ -133,6 +141,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 	const closeCheckout = () => {
 		setClientSecret(null);
 		setSessionId(null);
+		checkoutFetcher.reset();
 	};
 
 	const startCreditCheckout = (pack: keyof typeof loaderData.creditPacks) => {
@@ -182,8 +191,8 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 			)}
 
 			{clientSecret && (
-				<div className="glass-panel rounded-xl p-2">
-					<div className="flex justify-end">
+				<div ref={checkoutSectionRef} className="glass-panel rounded-xl p-2">
+					<div className="relative z-10 flex justify-end">
 						<button
 							type="button"
 							onClick={closeCheckout}

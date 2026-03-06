@@ -46,7 +46,17 @@ When you complete a Supply Run checkout with WELCOME65 (valid for Supply Run onl
 
 If you don’t see these logs, the webhook is not reaching or verifying correctly.
 
-## 5. Troubleshooting 500 errors
+## 5. Troubleshooting checkout / pricing embed errors
+
+### "No such price" error
+
+Checkout uses price IDs from `wrangler.dev.jsonc`. Ensure `bun run dev` uses the dev config (it sets `CLOUDFLARE_ENV=dev`). If you see "No such price: 'price_xxx'", the app may be using production price IDs with test keys — verify the dev server started with wrangler.dev.jsonc.
+
+### "An error occurred with our connection to Stripe"
+
+This indicates a network failure reaching Stripe's API. Try: disable VPN (corporate proxies may block api.stripe.com), check firewall allows outbound HTTPS to api.stripe.com, and verify `.dev.vars` has valid test keys. The pricing page surfaces these errors in the UI; check the dev server terminal for `[ERROR] [checkout]` for the underlying error.
+
+## 6. Troubleshooting webhook 500 errors
 
 If the Stripe CLI shows **500** for webhook requests:
 
@@ -54,7 +64,7 @@ If the Stripe CLI shows **500** for webhook requests:
 2. **Use the correct port.** The forward URL must be `localhost:5173/api/webhook` (port **5173**). A typo like `localhost:173` will send events to the wrong place.
 3. **Common causes:** Missing or misconfigured KV binding in local dev (the webhook skips idempotency if `RATION_KV` is not bound), or a checkout session whose `userId`/`organizationId` refer to users/orgs that don’t exist in your local D1 (e.g. you created the session in prod).
 
-## 6. Checklist
+## 7. Checklist
 
 - [ ] Stripe CLI running: `stripe listen --forward-to localhost:5173/api/webhook`
 - [ ] `STRIPE_WEBHOOK_SECRET` in `.dev.vars` matches the CLI output

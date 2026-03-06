@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.0.1",
+	"version": "1.0.3",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -8,7 +8,7 @@
 		"build": "react-router build",
 		"cf-typegen": "wrangler types",
 		"deploy": "bun run build && wrangler deploy build/server/index.js",
-		"dev": "react-router dev",
+		"dev": "CLOUDFLARE_ENV=dev react-router dev",
 		"dev:remote": "CLOUDFLARE_ENV=dev react-router dev",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",

@@ -210,6 +210,24 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 				</div>
 			)}
 
+			{checkoutFetcher.data?.error && checkoutFetcher.state === "idle" && (
+				<div
+					className="glass-panel rounded-xl p-4 border border-danger/40 bg-danger/5"
+					role="alert"
+				>
+					<p className="text-sm text-carbon">
+						{checkoutFetcher.data.error}{" "}
+						<button
+							type="button"
+							onClick={() => checkoutFetcher.reset()}
+							className="text-hyper-green hover:underline ml-1"
+						>
+							Dismiss
+						</button>
+					</p>
+				</div>
+			)}
+
 			{clientSecret && (
 				<div ref={checkoutSectionRef} className="glass-panel rounded-xl p-2">
 					<div className="relative z-10 flex justify-end">

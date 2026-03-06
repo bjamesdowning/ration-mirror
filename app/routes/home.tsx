@@ -141,10 +141,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			<main className="flex-1 w-full relative z-20">
 				<div className="max-w-7xl mx-auto px-6 py-12 md:py-24 flex flex-col items-center gap-24 md:gap-32">
 					{/* ── HERO ── */}
-					<div
-						id="signup"
-						className="max-w-4xl w-full flex flex-col items-center gap-12 text-center scroll-mt-24"
-					>
+					<div className="max-w-4xl w-full flex flex-col items-center gap-12 text-center">
 						<div className="relative group">
 							<div className="absolute -inset-4 bg-hyper-green/5 rounded-full blur-xl group-hover:bg-hyper-green/10 transition-all duration-500" />
 							<img
@@ -165,7 +162,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Cargo → Galley → Manifest → Supply → Dock → Repeat.
 							</p>
 						</div>
-						<div className="w-full flex flex-col items-center gap-6 mt-4">
+						<div
+							id="signup"
+							className="w-full flex flex-col items-center gap-6 mt-4 scroll-mt-24"
+						>
 							<AuthWidget
 								defaultMode="signUp"
 								intentMessage={

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { invalidateTierCache } from "./capacity.server";
 import { log, redactId } from "./logging.server";
-import { getStripe } from "./stripe.server";
+import { getStripe, isAnnualSubscriptionPrice } from "./stripe.server";
 
 // ---------------------------------------------------------------------------
 // Cost Registry
@@ -396,8 +396,7 @@ export async function processSubscriptionCheckoutSession(
 		typeof firstItem?.price === "string"
 			? firstItem.price
 			: (firstItem?.price as { id?: string } | undefined)?.id;
-	const annualPriceId = env.STRIPE_PRICE_CREW_MEMBER_ANNUAL;
-	if (priceId && annualPriceId && priceId === annualPriceId) {
+	if (priceId && isAnnualSubscriptionPrice(env, priceId)) {
 		await addCredits(env, organizationId, userId, 65, "Crew Member Credits", {
 			sessionId,
 		});
@@ -447,8 +446,7 @@ export async function processSubscriptionInvoice(
 		typeof firstItem?.price === "string"
 			? firstItem.price
 			: (firstItem?.price as { id?: string } | undefined)?.id;
-	const annualPriceId = env.STRIPE_PRICE_CREW_MEMBER_ANNUAL;
-	if (priceId && annualPriceId && priceId === annualPriceId) {
+	if (priceId && isAnnualSubscriptionPrice(env, priceId)) {
 		await addCredits(
 			env,
 			organizationId,

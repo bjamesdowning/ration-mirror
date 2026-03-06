@@ -57,6 +57,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		type: formData.get("type")?.toString() ?? "credits",
 		pack: formData.get("pack")?.toString() ?? undefined,
 		subscription: formData.get("subscription")?.toString() ?? undefined,
+		currency: formData.get("currency")?.toString() ?? "EUR",
 		returnUrl: formData.get("returnUrl")?.toString() ?? "/hub/checkout/return",
 	};
 
@@ -69,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		type: checkoutType,
 		pack: packKey,
 		subscription: subscriptionKey,
+		currency,
 		returnUrl: returnUrlPath,
 	} = parsed.data;
 
@@ -124,7 +126,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				customer: customerId,
 				line_items: [
 					{
-						price: getSubscriptionPriceId(context.cloudflare.env, sub),
+						price: getSubscriptionPriceId(
+							context.cloudflare.env,
+							sub,
+							currency === "USD" ? "USD" : "EUR",
+						),
 						quantity: 1,
 					},
 				],
@@ -166,7 +172,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			customer: customerId,
 			line_items: [
 				{
-					price: getCreditPackPriceId(context.cloudflare.env, pack),
+					price: getCreditPackPriceId(
+						context.cloudflare.env,
+						pack,
+						currency === "USD" ? "USD" : "EUR",
+					),
 					quantity: 1,
 				},
 			],

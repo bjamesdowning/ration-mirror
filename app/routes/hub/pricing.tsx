@@ -8,9 +8,11 @@ import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { data, useFetcher, useNavigate } from "react-router";
 import { CheckIcon, DiamondIcon } from "~/components/icons/PageIcons";
+import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import type { DisplayCurrency } from "~/lib/currency";
 import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
 import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
@@ -109,6 +111,16 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 	const checkoutSectionRef = useRef<HTMLDivElement>(null);
 	const [clientSecret, setClientSecret] = useState<string | null>(null);
 	const [sessionId, setSessionId] = useState<string | null>(null);
+	const [currency, setCurrency] = useState<DisplayCurrency>("EUR");
+	useEffect(() => {
+		const stored = localStorage.getItem(
+			"ration:currency",
+		) as DisplayCurrency | null;
+		if (stored === "USD" || stored === "EUR") setCurrency(stored);
+	}, []);
+	useEffect(() => {
+		localStorage.setItem("ration:currency", currency);
+	}, [currency]);
 
 	const stripePromise = useMemo(
 		() => loadStripe(loaderData.stripePublishableKey),
@@ -148,6 +160,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		const formData = new FormData();
 		formData.append("type", "credits");
 		formData.append("pack", pack);
+		formData.append("currency", currency);
 		formData.append("returnUrl", "/hub/checkout/return");
 		checkoutFetcher.submit(formData, {
 			method: "post",
@@ -161,6 +174,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 		const formData = new FormData();
 		formData.append("type", "subscription");
 		formData.append("subscription", subscriptionKey);
+		formData.append("currency", currency);
 		formData.append("returnUrl", "/hub/checkout/return");
 		checkoutFetcher.submit(formData, {
 			method: "post",
@@ -170,10 +184,16 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader
-				icon={<DiamondIcon className="w-5 h-5 text-hyper-green" />}
-				title="Pricing"
-			/>
+			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+				<PageHeader
+					icon={<DiamondIcon className="w-5 h-5 text-hyper-green" />}
+					title="Pricing"
+				/>
+				<div className="flex items-center gap-2 text-sm text-muted">
+					<span>Show prices in</span>
+					<CurrencyToggle value={currency} onChange={setCurrency} />
+				</div>
+			</div>
 			<p className="text-sm text-muted">
 				Free plan for getting started. Crew Member unlocks unlimited capacity.
 			</p>
@@ -276,7 +296,11 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 								onClick={() => startCrewCheckout("CREW_MEMBER_ANNUAL")}
 								className="flex-1 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
 							>
-								{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price}
+								{
+									loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL[
+										currency === "USD" ? "priceUsd" : "priceEur"
+									]
+								}
 								<span className="ml-1 text-xs font-normal opacity-90">
 									(Save 50%)
 								</span>
@@ -286,7 +310,11 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 								onClick={() => startCrewCheckout("CREW_MEMBER_MONTHLY")}
 								className="flex-1 px-4 py-2 bg-platinum text-carbon font-semibold rounded-lg transition-all hover:bg-platinum/80 active:scale-95"
 							>
-								{loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.price}
+								{
+									loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY[
+										currency === "USD" ? "priceUsd" : "priceEur"
+									]
+								}
 							</button>
 						</div>
 					)}
@@ -314,7 +342,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							)}
 						</div>
 						<div className="text-2xl font-bold text-carbon mt-1">
-							{pack.price}
+							{pack[currency === "USD" ? "priceUsd" : "priceEur"]}
 						</div>
 						<div className="text-xs text-muted mt-1">
 							{pack.credits} credits

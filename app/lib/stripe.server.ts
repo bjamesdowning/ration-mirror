@@ -3,6 +3,10 @@ import type { drizzle } from "drizzle-orm/d1";
 import Stripe from "stripe";
 import * as schema from "~/db/schema";
 
+import type { DisplayCurrency } from "~/lib/currency";
+
+export type { DisplayCurrency };
+
 /**
  * Initialize Stripe SDK with secret key from environment
  */
@@ -29,6 +33,8 @@ export const CREDIT_PACKS = {
 		displayName: "Taste Test",
 		description: "~6 scans or generations",
 		price: "€1",
+		priceUsd: "$1",
+		priceEur: "€1",
 		badge: null,
 	},
 	SUPPLY_RUN: {
@@ -36,6 +42,8 @@ export const CREDIT_PACKS = {
 		displayName: "Supply Run",
 		description: "~32 scans or generations",
 		price: "€5",
+		priceUsd: "$5",
+		priceEur: "€5",
 		badge: "Most Popular",
 	},
 	MISSION_CRATE: {
@@ -43,6 +51,8 @@ export const CREDIT_PACKS = {
 		displayName: "Mission Crate",
 		description: "~82 scans or generations",
 		price: "€10",
+		priceUsd: "$10",
+		priceEur: "€10",
 		badge: null,
 	},
 	ORBITAL_STOCKPILE: {
@@ -50,6 +60,8 @@ export const CREDIT_PACKS = {
 		displayName: "Orbital Stockpile",
 		description: "~275 scans or generations",
 		price: "€25",
+		priceUsd: "$25",
+		priceEur: "€25",
 		badge: "Best Value",
 	},
 } as const;
@@ -59,6 +71,8 @@ export const SUBSCRIPTION_PRODUCTS = {
 		tier: "crew_member",
 		displayName: "Crew Member (Annual)",
 		price: "€12/year",
+		priceUsd: "$12/year",
+		priceEur: "€12/year",
 		creditsOnStart: 65,
 		creditsOnRenewal: 65,
 		interval: "year" as const,
@@ -67,6 +81,8 @@ export const SUBSCRIPTION_PRODUCTS = {
 		tier: "crew_member",
 		displayName: "Crew Member (Monthly)",
 		price: "€2/month",
+		priceUsd: "$2/month",
+		priceEur: "€2/month",
 		creditsOnStart: 0,
 		creditsOnRenewal: 0,
 		interval: "month" as const,
@@ -80,15 +96,36 @@ export const PROMO_CODES = {
 	},
 } as const;
 
+function isDualCurrencyEnv(env: Env): boolean {
+	return (
+		typeof (env as { STRIPE_PRICE_TASTE_TEST_eur?: string })
+			.STRIPE_PRICE_TASTE_TEST_eur === "string"
+	);
+}
+
 export function getCreditPackPriceId(
 	env: Env,
 	packKey: keyof typeof CREDIT_PACKS,
+	currency: DisplayCurrency = "EUR",
 ): string {
+	if (isDualCurrencyEnv(env)) {
+		const key =
+			currency === "USD"
+				? (`STRIPE_PRICE_${packKey}_usd` as const)
+				: (`STRIPE_PRICE_${packKey}_eur` as const);
+		const priceId = (env as unknown as Record<string, string | undefined>)[key];
+		if (!priceId) {
+			throw new Error(
+				`Missing Stripe price ID for credit pack: ${packKey} (${currency})`,
+			);
+		}
+		return priceId;
+	}
 	const map: Record<keyof typeof CREDIT_PACKS, string> = {
-		TASTE_TEST: env.STRIPE_PRICE_TASTE_TEST,
-		SUPPLY_RUN: env.STRIPE_PRICE_SUPPLY_RUN,
-		MISSION_CRATE: env.STRIPE_PRICE_MISSION_CRATE,
-		ORBITAL_STOCKPILE: env.STRIPE_PRICE_ORBITAL_STOCKPILE,
+		TASTE_TEST: env.STRIPE_PRICE_TASTE_TEST ?? "",
+		SUPPLY_RUN: env.STRIPE_PRICE_SUPPLY_RUN ?? "",
+		MISSION_CRATE: env.STRIPE_PRICE_MISSION_CRATE ?? "",
+		ORBITAL_STOCKPILE: env.STRIPE_PRICE_ORBITAL_STOCKPILE ?? "",
 	};
 	const priceId = map[packKey];
 	if (!priceId) {
@@ -100,10 +137,24 @@ export function getCreditPackPriceId(
 export function getSubscriptionPriceId(
 	env: Env,
 	productKey: keyof typeof SUBSCRIPTION_PRODUCTS,
+	currency: DisplayCurrency = "EUR",
 ): string {
+	if (isDualCurrencyEnv(env)) {
+		const key =
+			currency === "USD"
+				? (`STRIPE_PRICE_${productKey}_usd` as const)
+				: (`STRIPE_PRICE_${productKey}_eur` as const);
+		const priceId = (env as unknown as Record<string, string | undefined>)[key];
+		if (!priceId) {
+			throw new Error(
+				`Missing Stripe price ID for subscription: ${productKey} (${currency})`,
+			);
+		}
+		return priceId;
+	}
 	const map: Record<keyof typeof SUBSCRIPTION_PRODUCTS, string> = {
-		CREW_MEMBER_ANNUAL: env.STRIPE_PRICE_CREW_MEMBER_ANNUAL,
-		CREW_MEMBER_MONTHLY: env.STRIPE_PRICE_CREW_MEMBER_MONTHLY,
+		CREW_MEMBER_ANNUAL: env.STRIPE_PRICE_CREW_MEMBER_ANNUAL ?? "",
+		CREW_MEMBER_MONTHLY: env.STRIPE_PRICE_CREW_MEMBER_MONTHLY ?? "",
 	};
 	const priceId = map[productKey];
 	if (!priceId) {
@@ -117,7 +168,7 @@ export function getPromotionCodeId(
 	promoKey: keyof typeof PROMO_CODES,
 ): string {
 	const map: Record<keyof typeof PROMO_CODES, string> = {
-		WELCOME65: env.STRIPE_PROMO_WELCOME65,
+		WELCOME65: env.STRIPE_PROMO_WELCOME65 ?? "",
 	};
 	const promoId = map[promoKey];
 	if (!promoId) {
@@ -134,11 +185,32 @@ export function getCreditsForPriceId(env: Env, priceId: string): number | null {
 		keyof typeof CREDIT_PACKS
 	>;
 	for (const packKey of packKeys) {
-		if (getCreditPackPriceId(env, packKey) === priceId) {
+		if (isDualCurrencyEnv(env)) {
+			if (
+				getCreditPackPriceId(env, packKey, "USD") === priceId ||
+				getCreditPackPriceId(env, packKey, "EUR") === priceId
+			) {
+				return CREDIT_PACKS[packKey].credits;
+			}
+		} else if (getCreditPackPriceId(env, packKey) === priceId) {
 			return CREDIT_PACKS[packKey].credits;
 		}
 	}
 	return null;
+}
+
+/**
+ * Returns true if the price ID is for the Crew Member Annual plan (USD or EUR).
+ */
+export function isAnnualSubscriptionPrice(env: Env, priceId: string): boolean {
+	if (!priceId) return false;
+	if (isDualCurrencyEnv(env)) {
+		const envRecord = env as unknown as Record<string, string | undefined>;
+		const annualUsd = envRecord.STRIPE_PRICE_CREW_MEMBER_ANNUAL_usd;
+		const annualEur = envRecord.STRIPE_PRICE_CREW_MEMBER_ANNUAL_eur;
+		return priceId === annualUsd || priceId === annualEur;
+	}
+	return priceId === env.STRIPE_PRICE_CREW_MEMBER_ANNUAL;
 }
 
 /**

@@ -15,6 +15,7 @@ export const CheckoutFormSchema = z
 		type: z.enum(["credits", "subscription", "tier"]).default("credits"),
 		pack: z.enum(CREDIT_PACK_KEYS).optional(),
 		subscription: z.enum(SUBSCRIPTION_KEYS).optional(),
+		currency: z.enum(["USD", "EUR"]).optional().default("EUR"),
 		returnUrl: z
 			.string()
 			.min(1)

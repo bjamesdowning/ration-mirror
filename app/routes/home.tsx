@@ -1,5 +1,6 @@
 import type { Route } from "./+types/home";
 import "../../load-context";
+import { useEffect, useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
@@ -10,8 +11,9 @@ import {
 	CodeIcon,
 	LightningBoltIcon,
 } from "~/components/icons/PageIcons";
+import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { createAuth } from "~/lib/auth.server";
-import { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } from "~/lib/stripe.server";
+import type { DisplayCurrency } from "~/lib/currency";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import { APP_VERSION } from "~/lib/version";
 
@@ -22,6 +24,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	if (session?.user) {
 		throw redirect("/hub");
 	}
+
+	const { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } = await import(
+		"~/lib/stripe.server"
+	);
 
 	return {
 		tierLimits: TIER_LIMITS,
@@ -104,6 +110,17 @@ function SectionHeader({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+	const [currency, setCurrency] = useState<DisplayCurrency>("EUR");
+	useEffect(() => {
+		const stored = localStorage.getItem(
+			"ration:currency",
+		) as DisplayCurrency | null;
+		if (stored === "USD" || stored === "EUR") setCurrency(stored);
+	}, []);
+	useEffect(() => {
+		localStorage.setItem("ration:currency", currency);
+	}, [currency]);
+
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
 			<div
@@ -407,7 +424,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										How it works
 									</h4>
 									<ol className="text-xs text-muted space-y-1.5 list-decimal list-inside">
-										<li>Subscribe to Crew Member (€12/year)</li>
+										<li>
+											Subscribe to Crew Member (
+											{
+												loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL[
+													currency === "USD" ? "priceUsd" : "priceEur"
+												]
+											}
+											)
+										</li>
 										<li>Create a group and invite members via link</li>
 										<li>Members join — capacity unlocks automatically</li>
 										<li>Share Cargo, plan meals together, split shopping</li>
@@ -623,11 +648,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 					{/* ── PRICING ── */}
 					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
-						<SectionHeader
-							centered
-							title="Pricing"
-							subtitle="Start free with full access to the lifecycle. AI features run on credits — buy packs anytime, or get yearly credits with Crew Member."
-						/>
+						<div className="flex flex-col items-center gap-4">
+							<div className="flex items-center gap-2 text-sm text-muted">
+								<span>Show prices in</span>
+								<CurrencyToggle value={currency} onChange={setCurrency} />
+							</div>
+							<SectionHeader
+								centered
+								title="Pricing"
+								subtitle="Start free with full access to the lifecycle. AI features run on credits — buy packs anytime, or get yearly credits with Crew Member."
+							/>
+						</div>
 
 						{/* Feature comparison table */}
 						<div className="glass-panel rounded-2xl overflow-hidden">
@@ -792,9 +823,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									Crew Member
 								</h3>
 								<p className="text-sm text-muted mb-5">
-									{loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.price} or{" "}
-									{loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.price} —
-									unlimited capacity, groups, credit transfers, and yearly
+									{
+										loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL[
+											currency === "USD" ? "priceUsd" : "priceEur"
+										]
+									}{" "}
+									or{" "}
+									{
+										loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY[
+											currency === "USD" ? "priceUsd" : "priceEur"
+										]
+									}{" "}
+									— unlimited capacity, groups, credit transfers, and yearly
 									credits
 								</p>
 								<Link
@@ -826,7 +866,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											{pack.displayName}
 										</div>
 										<div className="text-2xl font-bold text-carbon mt-1">
-											{pack.price}
+											{pack[currency === "USD" ? "priceUsd" : "priceEur"]}
 										</div>
 										<div className="text-xs text-muted mt-1">
 											{pack.credits} credits

@@ -191,8 +191,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Ration is a kitchen inventory and meal-planning application that
 								helps you track what you have (Cargo), plan meals (Galley,
 								Manifest), and generate shopping lists (Supply). It uses AI for
-								receipt scanning and recipe import, and supports households with
-								shared groups and credits.
+								receipt scanning, weekly meal planning, and recipe import while
+								supporting households with shared groups and credits.
 							</p>
 							<p className="text-muted text-sm max-w-xl mx-auto font-mono">
 								Cargo → Galley → Manifest → Supply → Dock → Repeat.

@@ -88,6 +88,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			imported: importResult.imported,
 			updated: importResult.updated,
 			errors: importResult.errors.length > 0 ? importResult.errors : undefined,
+			...(importResult.truncated !== undefined &&
+				importResult.truncated > 0 && { truncated: importResult.truncated }),
 		};
 	} catch (e) {
 		return handleApiError(e);

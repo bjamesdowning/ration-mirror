@@ -30,6 +30,7 @@ export const ScanResultSchema = z.object({
 		filename: z.string().optional(),
 		processedAt: z.string(), // ISO timestamp
 		confidence: z.number().min(0).max(1).optional(), // Overall confidence
+		truncationWarning: z.string().optional(), // Shown when import was truncated (e.g. 500 row limit)
 	}),
 });
 

@@ -1,6 +1,7 @@
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { MAX_MEALS_IMPORT } from "~/lib/constants";
 import type { GalleyManifest } from "~/lib/schemas/galley-manifest";
 
 interface GalleyImportPreviewProps {
@@ -56,12 +57,19 @@ export function GalleyImportPreview({
 		});
 	};
 
+	const successData = fetcher.data as
+		| { success: true; imported?: number; updated?: number; truncated?: number }
+		| undefined;
+	const truncated = successData?.success ? (successData.truncated ?? 0) : 0;
+
 	useEffect(() => {
-		if (fetcher.state === "idle" && fetcher.data?.success) {
+		if (fetcher.state === "idle" && successData?.success) {
 			onSuccess();
-			onClose();
+			if (truncated === 0) {
+				onClose();
+			}
 		}
-	}, [fetcher.state, fetcher.data, onSuccess, onClose]);
+	}, [fetcher.state, successData?.success, truncated, onSuccess, onClose]);
 
 	const error =
 		fetcher.data && !("success" in fetcher.data) && "error" in fetcher.data
@@ -92,6 +100,23 @@ export function GalleyImportPreview({
 						<X className="w-6 h-6" />
 					</button>
 				</div>
+
+				{/* Pre-import truncation warning */}
+				{manifest.meals.length > MAX_MEALS_IMPORT && !successData?.success && (
+					<div className="mx-4 mt-4 p-4 bg-platinum/20 dark:bg-white/10 border border-platinum dark:border-white/20 rounded-xl text-sm text-muted">
+						Limit is 100 meals per import. Break your file into multiple
+						imports. Only the first 100 meals will be added.
+					</div>
+				)}
+
+				{/* Post-import truncation message */}
+				{successData?.success && truncated > 0 && (
+					<div className="mx-4 mt-4 p-4 bg-platinum/20 dark:bg-white/10 border border-hyper-green/50 rounded-xl text-sm text-muted">
+						Import complete. Only the first 100 meals were added. {truncated}{" "}
+						meal{truncated !== 1 ? "s" : ""} were not imported. Break your file
+						into multiple imports to add the rest.
+					</div>
+				)}
 
 				{/* Bulk Controls */}
 				<div className="p-4 border-b border-hyper-green/30 bg-carbon/20">
@@ -155,24 +180,26 @@ export function GalleyImportPreview({
 						onClick={onClose}
 						className="px-6 py-3 text-muted hover:text-hyper-green font-medium transition-colors"
 					>
-						Cancel
+						{successData?.success && truncated > 0 ? "Close" : "Cancel"}
 					</button>
-					<button
-						type="button"
-						onClick={handleSubmit}
-						disabled={selectedMeals.length === 0 || isSubmitting}
-						className="px-8 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-					>
-						{isSubmitting ? (
-							<>Importing...</>
-						) : (
-							<>
-								<Check className="w-5 h-5" />
-								Import {selectedMeals.length} Meal
-								{selectedMeals.length !== 1 ? "s" : ""}
-							</>
-						)}
-					</button>
+					{successData?.success && truncated > 0 ? null : (
+						<button
+							type="button"
+							onClick={handleSubmit}
+							disabled={selectedMeals.length === 0 || isSubmitting}
+							className="px-8 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+						>
+							{isSubmitting ? (
+								<>Importing...</>
+							) : (
+								<>
+									<Check className="w-5 h-5" />
+									Import {selectedMeals.length} Meal
+									{selectedMeals.length !== 1 ? "s" : ""}
+								</>
+							)}
+						</button>
+					)}
 				</div>
 			</div>
 		</div>

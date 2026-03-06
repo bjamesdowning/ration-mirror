@@ -37,6 +37,7 @@ import {
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
+import { PaginationBar } from "~/components/shell/PaginationBar";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
@@ -46,7 +47,11 @@ import { getCargo } from "~/lib/cargo.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
-import { getMeals, getOrganizationMealTags } from "~/lib/meals.server";
+import {
+	getMeals,
+	getMealsCount,
+	getOrganizationMealTags,
+} from "~/lib/meals.server";
 import type { Route } from "./+types/galley";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -74,23 +79,29 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [meals, availableTags, inventory, activeSelections] = await Promise.all(
-		[
+	const [meals, totalMeals, availableTags, inventory, activeSelections] =
+		await Promise.all([
 			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain, {
 				limit: GALLEY_PAGE_SIZE,
 				offset: page * GALLEY_PAGE_SIZE,
 			}),
+			getMealsCount(
+				context.cloudflare.env.DB,
+				groupId,
+				tag,
+				domain as ItemDomain | undefined,
+			),
 			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
 			getCargo(context.cloudflare.env.DB, groupId, undefined, {
 				limit: GALLEY_INVENTORY_PAGE_SIZE,
 				offset: 0,
 			}),
 			getActiveMealSelections(context.cloudflare.env.DB, groupId),
-		],
-	);
+		]);
 	const activeMealIds = activeSelections.map((selection) => selection.mealId);
 	return {
 		meals,
+		totalMeals,
 		availableTags,
 		currentTag: tag,
 		currentDomain: domain,
@@ -148,9 +159,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const {
 		meals,
+		totalMeals,
 		availableTags,
 		inventory,
 		activeMealIds,
+		page,
+		pageSize,
 		defaultViewMode,
 		userAllergens,
 	} = loaderData;
@@ -546,15 +560,25 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 
 				{/* Meal Grid / List */}
 				{filteredMeals.length > 0 && (
-					<MealGrid
-						meals={filteredMeals}
-						enableMatching={matchingEnabled}
-						inventory={inventory}
-						activeMealIds={selectedMealIds}
-						onToggleMealActive={handleToggleActive}
-						viewMode={viewMode}
-						userAllergens={userAllergens}
-					/>
+					<>
+						<MealGrid
+							meals={filteredMeals}
+							enableMatching={matchingEnabled}
+							inventory={inventory}
+							activeMealIds={selectedMealIds}
+							onToggleMealActive={handleToggleActive}
+							viewMode={viewMode}
+							userAllergens={userAllergens}
+						/>
+						{totalMeals > pageSize && (
+							<PaginationBar
+								currentPage={page}
+								totalItems={totalMeals}
+								pageSize={pageSize}
+								itemLabel="meals"
+							/>
+						)}
+					</>
 				)}
 			</div>
 

@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
+import { MAX_MEALS_IMPORT } from "./constants";
 import {
 	createMeal,
 	createProvision,
@@ -16,8 +17,6 @@ import type {
 	ManifestRecipe,
 } from "./schemas/galley-manifest";
 import { normalizeUnitAlias } from "./units";
-
-const MAX_MEALS_IMPORT = 100;
 
 type MealWithIngredients = Awaited<ReturnType<typeof getMeals>>[number];
 
@@ -79,6 +78,8 @@ export interface ApplyGalleyImportResult {
 	imported: number;
 	updated: number;
 	errors: Array<{ name: string; error: string }>;
+	/** Number of meals dropped due to import limit when manifest had more than MAX_MEALS_IMPORT */
+	truncated?: number;
 }
 
 /**
@@ -100,6 +101,10 @@ export async function applyGalleyImport(
 	const meals = manifest.meals.slice(0, MAX_MEALS_IMPORT);
 	if (meals.length === 0) {
 		return result;
+	}
+
+	if (manifest.meals.length > MAX_MEALS_IMPORT) {
+		result.truncated = manifest.meals.length - MAX_MEALS_IMPORT;
 	}
 
 	const d1 = drizzle(db);

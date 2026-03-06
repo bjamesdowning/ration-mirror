@@ -157,13 +157,33 @@ export function ScanResultsModal({
 		});
 	};
 
-	// Handle success
+	// Handle success — only close when all items were added; stay open on capacity_exceeded
+	const batchResponse = fetcher.data as
+		| {
+				success: boolean;
+				added?: number;
+				updated?: number;
+				total?: number;
+				errors?: Array<{ name: string; error: string }>;
+				error?: "capacity_exceeded";
+				canAdd?: number;
+		  }
+		| undefined;
+	const hasCapacityError = batchResponse?.errors?.some(
+		(e) => e.error === "capacity_exceeded",
+	);
+	const allSucceeded =
+		batchResponse?.success &&
+		(batchResponse.added ?? 0) + (batchResponse.updated ?? 0) ===
+			(batchResponse.total ?? 0);
+
 	useEffect(() => {
-		if (fetcher.state === "idle" && fetcher.data?.success) {
+		if (fetcher.state !== "idle" || !batchResponse?.success) return;
+		if (allSucceeded) {
 			onSuccess();
 			onClose();
 		}
-	}, [fetcher.state, fetcher.data, onSuccess, onClose]);
+	}, [fetcher.state, batchResponse?.success, allSucceeded, onSuccess, onClose]);
 
 	return (
 		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-carbon/80 backdrop-blur-sm">
@@ -187,6 +207,13 @@ export function ScanResultsModal({
 						<X className="w-6 h-6" />
 					</button>
 				</div>
+
+				{/* truncationWarning: set when CSV import hit row limit (e.g. 500); see ScanResultSchema */}
+				{result.metadata?.truncationWarning && (
+					<div className="mx-4 mt-4 p-4 bg-platinum/20 dark:bg-white/10 border border-platinum dark:border-white/20 rounded-xl text-sm text-muted">
+						{result.metadata.truncationWarning}
+					</div>
+				)}
 
 				{/* Bulk Controls */}
 				<div className="p-4 border-b border-hyper-green/30 bg-carbon/20">
@@ -241,6 +268,39 @@ export function ScanResultsModal({
 						)}
 					</div>
 				</div>
+
+				{/* Capacity exceeded banner — stays in modal so user can deselect and retry */}
+				{hasCapacityError && fetcher.state === "idle" && (
+					<div className="mx-4 mt-4 p-4 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-start gap-3">
+						<AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+						<div>
+							<p className="font-medium text-amber-700 dark:text-amber-400">
+								Inventory limit reached
+							</p>
+							<p className="text-sm text-muted mt-1">
+								{batchResponse &&
+								(batchResponse.added ?? 0) + (batchResponse.updated ?? 0) >
+									0 ? (
+									<>
+										{(batchResponse.added ?? 0) + (batchResponse.updated ?? 0)}{" "}
+										added.{" "}
+										{typeof batchResponse.canAdd === "number"
+											? `You have ${batchResponse.canAdd} slots left. Deselect ${batchResponse.errors?.length ?? 0} items to add within your limit.`
+											: `${batchResponse.errors?.length ?? 0} could not be added. Deselect items and try again.`}
+									</>
+								) : (
+									<>
+										You selected {batchResponse?.total ?? selectedItems.length}{" "}
+										items.{" "}
+										{typeof batchResponse?.canAdd === "number"
+											? `Deselect ${(batchResponse?.total ?? selectedItems.length) - batchResponse.canAdd} items to add within your limit.`
+											: "Your plan allows a limited number. Deselect some items to add within your limit."}
+									</>
+								)}
+							</p>
+						</div>
+					</div>
+				)}
 
 				{/* Items List */}
 				<div className="flex-1 overflow-y-auto p-4 space-y-2">

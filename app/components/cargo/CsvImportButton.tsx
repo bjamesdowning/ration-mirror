@@ -85,12 +85,19 @@ export const CsvImportButton = forwardRef<
 
 			setWarnings(result.warnings);
 			setErrorMessage(null);
+			const truncated = result.warnings.some((w) =>
+				w.toLowerCase().includes("row limit exceeded"),
+			);
 			setScanResult({
 				items,
 				metadata: {
 					source: "csv",
 					filename: file.name,
 					processedAt: new Date().toISOString(),
+					...(truncated && {
+						truncationWarning:
+							"Limit is 500 items per import. Only the first 500 will be added. Break your file into multiple imports to add more.",
+					}),
 				},
 			});
 		};

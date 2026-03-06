@@ -32,6 +32,7 @@ import {
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
+import { PaginationBar } from "~/components/shell/PaginationBar";
 import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
@@ -41,6 +42,7 @@ import {
 	addOrMergeItem,
 	CargoItemSchema,
 	getCargo,
+	getCargoCount,
 	getCargoTags,
 	jettisonItem,
 	updateItem,
@@ -90,19 +92,26 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [cargo, availableTags, promotedCargoIds] = await Promise.all([
-		getCargo(
-			context.cloudflare.env.DB,
-			groupId,
-			domain as ItemDomain | undefined,
-			{ limit: CARGO_PAGE_SIZE, offset: page * CARGO_PAGE_SIZE },
-		),
-		getCargoTags(context.cloudflare.env.DB, groupId),
-		getPromotedCargoIds(context.cloudflare.env.DB, groupId),
-	]);
+	const [cargo, totalCargo, availableTags, promotedCargoIds] =
+		await Promise.all([
+			getCargo(
+				context.cloudflare.env.DB,
+				groupId,
+				domain as ItemDomain | undefined,
+				{ limit: CARGO_PAGE_SIZE, offset: page * CARGO_PAGE_SIZE },
+			),
+			getCargoCount(
+				context.cloudflare.env.DB,
+				groupId,
+				domain as ItemDomain | undefined,
+			),
+			getCargoTags(context.cloudflare.env.DB, groupId),
+			getPromotedCargoIds(context.cloudflare.env.DB, groupId),
+		]);
 
 	return {
 		cargo,
+		totalCargo,
 		currentDomain: domain,
 		currentTag: tag,
 		availableTags,
@@ -319,8 +328,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const {
 		cargo: initialCargo,
+		totalCargo,
 		availableTags,
 		promotedCargoIds,
+		page,
+		pageSize,
 		defaultViewMode,
 	} = loaderData;
 	const actionData = useActionData<{
@@ -641,12 +653,22 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 
 				{/* Inventory Grid / List */}
 				{filteredCargo.length > 0 && (
-					<ManifestGrid
-						items={filteredCargo}
-						promotedCargoIds={promotedCargoIds}
-						onUpgradeRequired={() => setShowUpgradePrompt(true)}
-						viewMode={viewMode}
-					/>
+					<>
+						<ManifestGrid
+							items={filteredCargo}
+							promotedCargoIds={promotedCargoIds}
+							onUpgradeRequired={() => setShowUpgradePrompt(true)}
+							viewMode={viewMode}
+						/>
+						{totalCargo > pageSize && (
+							<PaginationBar
+								currentPage={page}
+								totalItems={totalCargo}
+								pageSize={pageSize}
+								itemLabel="items"
+							/>
+						)}
+					</>
 				)}
 			</div>
 			{/* Floating Action Bar (mobile only) */}

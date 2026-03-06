@@ -47,6 +47,38 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export const MAX_BATCH_MEALS = 10;
 
 /**
+ * Count meals for an organization, optionally filtered by tag or domain.
+ * Used for pagination total. Matches filters used by getMeals.
+ */
+export async function getMealsCount(
+	db: D1Database,
+	organizationId: string,
+	tag?: string,
+	domain?: (typeof meal.$inferSelect)["domain"],
+): Promise<number> {
+	const d1 = drizzle(db);
+	const conditions = [eq(meal.organizationId, organizationId)];
+	if (domain) {
+		conditions.push(eq(meal.domain, domain));
+	}
+	if (tag) {
+		const [row] = await d1
+			.select({
+				count: sql<number>`count(distinct ${meal.id})`,
+			})
+			.from(meal)
+			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+			.where(and(...conditions, eq(mealTag.tag, tag)));
+		return Number(row?.count ?? 0);
+	}
+	const [row] = await d1
+		.select({ count: sql<number>`count(*)` })
+		.from(meal)
+		.where(and(...conditions));
+	return Number(row?.count ?? 0);
+}
+
+/**
  * Retrieves meals for an organization, optionally filtered by tag or domain.
  * Returns meals with their associated tags and ingredients.
  *

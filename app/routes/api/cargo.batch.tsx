@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -72,6 +73,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		let added = 0;
 		let updated = 0;
 		const errors: Array<{ name: string; error: string }> = [];
+		const hasCapacityError = ingestResults.some(
+			(r) => r.status === "capacity_exceeded",
+		);
 		for (let i = 0; i < ingestResults.length; i++) {
 			const r = ingestResults[i];
 			const it = items[i];
@@ -81,13 +85,32 @@ export async function action({ request, context }: Route.ActionArgs) {
 				errors.push({ name: it.name, error: r.error ?? r.status });
 		}
 
-		return {
+		const response: {
+			success: boolean;
+			added: number;
+			updated: number;
+			total: number;
+			errors?: Array<{ name: string; error: string }>;
+			error?: "capacity_exceeded";
+			canAdd?: number;
+		} = {
 			success: true,
 			added,
 			updated,
 			total: items.length,
 			errors: errors.length > 0 ? errors : undefined,
 		};
+		if (hasCapacityError) {
+			response.error = "capacity_exceeded";
+			const capacity = await checkCapacity(
+				context.cloudflare.env,
+				groupId,
+				"cargo",
+				0,
+			);
+			response.canAdd = capacity.canAdd;
+		}
+		return response;
 	} catch (error) {
 		log.error("Batch add failed", error);
 		if (error instanceof Response) {

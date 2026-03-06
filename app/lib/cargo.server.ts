@@ -102,6 +102,27 @@ export async function getCargo(
 }
 
 /**
+ * Count inventory items for an organization, optionally filtered by domain.
+ * Used for pagination total.
+ */
+export async function getCargoCount(
+	db: D1Database,
+	organizationId: string,
+	domain?: (typeof ITEM_DOMAINS)[number],
+): Promise<number> {
+	const d1 = drizzle(db);
+	const conditions = [eq(cargo.organizationId, organizationId)];
+	if (domain) {
+		conditions.push(eq(cargo.domain, domain));
+	}
+	const [row] = await d1
+		.select({ count: sql<number>`count(*)` })
+		.from(cargo)
+		.where(and(...conditions));
+	return Number(row?.count ?? 0);
+}
+
+/**
  * Fetch a specific set of cargo rows by their IDs, scoped to the organization.
  * Used by MCP search to resolve Vectorize matches without a full-table scan.
  */

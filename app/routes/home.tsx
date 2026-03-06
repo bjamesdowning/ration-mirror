@@ -4,13 +4,8 @@ import { useEffect, useState } from "react";
 import { Link, redirect } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
-import { InterestSignupForm } from "~/components/home/InterestSignupForm";
 import { LifecycleStepper } from "~/components/home/LifecycleStepper";
-import {
-	CheckIcon,
-	CodeIcon,
-	LightningBoltIcon,
-} from "~/components/icons/PageIcons";
+import { CheckIcon, CodeIcon } from "~/components/icons/PageIcons";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
@@ -131,11 +126,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				}}
 			/>
 
-			{/* Early Access Banner */}
+			{/* Status Banner */}
 			<div className="relative z-50 bg-hyper-green/10 border-b border-hyper-green/20 p-2 text-center">
 				<p className="text-xs uppercase tracking-wider font-bold text-carbon">
-					<LightningBoltIcon className="w-3.5 h-3.5 text-hyper-green inline-block" />{" "}
-					Early Access {" // "}v{APP_VERSION}
+					<span
+						className="inline-block w-1.5 h-1.5 rounded-full bg-hyper-green mr-1.5 align-middle animate-pulse"
+						aria-hidden
+					/>
+					Live {" // "}v{APP_VERSION}
 				</p>
 			</div>
 
@@ -164,7 +162,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</p>
 						</div>
 						<div className="w-full flex flex-col items-center gap-6 mt-4">
-							<InterestSignupForm />
 							<AuthWidget defaultMode="signUp" />
 						</div>
 						<a

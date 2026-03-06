@@ -5,6 +5,7 @@ export default [
 	index("routes/home.tsx"),
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
+	route("auth/verify", "routes/auth.verify.tsx"),
 
 	// Hub
 	route("hub", "routes/hub.tsx", [

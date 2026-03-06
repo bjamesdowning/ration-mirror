@@ -1011,7 +1011,9 @@ erDiagram
 
 ### 7.1 Authentication Flow
 
-Authentication is handled by Better Auth with the `organization` plugin. Production uses Google OAuth 2.0. When `GOOGLE_CLIENT_ID` is absent (local dev), Better Auth falls back to email/password auth automatically — no code change required.
+Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
+
+**Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Magic links log to the server in dev when `RESEND_API_KEY` is not set (no email sent).
 
 ```mermaid
 sequenceDiagram
@@ -1021,8 +1023,8 @@ sequenceDiagram
     participant Google as Google OAuth
     participant D1 as D1
 
-    User->>App: Click "Sign in with Google"
-    App->>Auth: Redirect to /api/auth/signin/google
+    User->>App: Enter email (magic link) or "Continue with Google"
+    App->>Auth: POST magic-link/send or /api/auth/signin/google
     Auth->>Google: OAuth 2.0 authorization redirect
     Google-->>User: Consent screen
     User->>Google: Grant access
@@ -1041,6 +1043,8 @@ sequenceDiagram
 
     Auth-->>User: Set-Cookie: better-auth.session_token
 ```
+
+*Diagram shows Google OAuth flow. Magic link flow: user enters email → server sends link via Resend → user clicks link → Better Auth verifies token → session created.*
 
 **Post-signup provisioning** (in [`app/lib/auth.server.ts`](app/lib/auth.server.ts)): Every new user automatically receives a personal organization with `owner` role. Failures in this hook are non-fatal — the user can manually create a group. This ensures every user always has a valid group context for queries without requiring a separate onboarding step.
 

@@ -100,9 +100,27 @@ For each new feature, **evaluate** whether an E2E test would benefit stability. 
 
 - **README must stay current.** For each change, verify whether `README.md` needs to be updated. The README must be kept up to date always — commands, features, architecture, schema, workflows, or any referenced behaviour that changes must be reflected in the README.
 
+### Version Bump (Patch Increment)
+
+**Every change must increment the patch version.** For each commit that modifies application code, config, or behaviour:
+
+1. **Increment patch in `package.json`** — e.g. `1.0.0` → `1.0.1`, `1.0.1` → `1.0.2`
+2. **Sync `app/lib/version.ts`** — Set `APP_VERSION` to the same value as `package.json` so the banner and footer display correctly
+3. **Include in the git commit message** — Add a line such as `[v1.0.1]` to the commit message body or subject. Example:
+   ```
+   feat: add magic link auth
+   [v1.0.1]
+   ```
+
+This provides a clear audit trail of what shipped in each patch and keeps deploy/build identifiers monotonic.
+
 ### Definition of Done
 
-A change is not complete until `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors, **and** any affected documentation in `README.md` has been verified and updated.
+A change is not complete until:
+- `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors
+- The patch version has been incremented in `package.json` and `app/lib/version.ts`
+- The commit message includes the new version (e.g. `[v1.0.1]`)
+- Any affected documentation in `README.md` has been verified and updated
 
 ## File Organization
 

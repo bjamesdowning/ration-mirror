@@ -12,7 +12,7 @@ export default function PrivacyPolicy() {
 		<>
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: February 3, 2026
+				Last Updated: March 6, 2026
 			</p>
 
 			<h2>1. Introduction</h2>
@@ -37,7 +37,9 @@ export default function PrivacyPolicy() {
 				include, but is not limited to:
 			</p>
 			<ul>
-				<li>Email address</li>
+				<li>
+					Email address (used for magic link sign-in and account identification)
+				</li>
 				<li>First name and last name</li>
 				<li>Profile picture (via OAuth providers)</li>
 				<li>Cookies and Usage Data</li>
@@ -104,7 +106,20 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>5. Google User Data</h2>
+			<h2>5. Magic Link Authentication</h2>
+			<div className="glass-panel rounded-xl p-6 my-6">
+				<p className="font-bold text-carbon">Email-Based Sign-In</p>
+				<p className="mt-2">
+					We offer passwordless sign-in via magic links. When you enter your
+					email address, we send you a one-time sign-in link to that address.
+					The link expires in 5 minutes and can only be used once. We use your
+					email solely to deliver this link and to identify your account. The
+					sign-in link is delivered via our transactional email provider (see
+					Data Processors below).
+				</p>
+			</div>
+
+			<h2>6. Google User Data</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Google OAuth Disclosure</p>
 				<p className="mt-2">
@@ -127,7 +142,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>6. Data Processors & Third Parties</h2>
+			<h2>7. Data Processors & Third Parties</h2>
 			<p>
 				We may employ third party companies and individuals to facilitate our
 				Service ("Service Providers"), to provide the Service on our behalf, to
@@ -142,17 +157,32 @@ export default function PrivacyPolicy() {
 
 			<ul>
 				<li>
-					<strong>Cloudflare:</strong> We use Cloudflare for infrastructure,
-					edge computing, and security.
+					<strong>Cloudflare:</strong> Infrastructure, edge computing, and
+					security. Data stored: Application data, images (R2), database (D1).
 				</li>
 				<li>
-					<strong>Stripe:</strong> Payment processing services. We do not store
-					or collect your payment card details. That information is provided
-					directly to our third-party payment processors whose use of your
-					personal information is governed by their Privacy Policy.
+					<strong>Resend:</strong> Transactional email delivery. We use Resend
+					to send magic link sign-in emails to your email address. Resend
+					processes your email address and the email content we provide solely
+					for delivery. See{" "}
+					<a
+						href="https://resend.com/legal/privacy-policy"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Resend&apos;s Privacy Policy
+					</a>
+					.
 				</li>
 				<li>
-					<strong>Better Auth:</strong> Authentication services.
+					<strong>Stripe:</strong> Payment processing. We do not store or
+					collect your payment card details. That information is provided
+					directly to Stripe.
+				</li>
+				<li>
+					<strong>Better Auth:</strong> Authentication (session management,
+					magic link verification, OAuth).
 				</li>
 				<li>
 					<strong>
@@ -164,7 +194,7 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>7. Data Retention & Deletion</h2>
+			<h2>8. Data Retention & Deletion</h2>
 			<p>
 				We will retain your Personal Data only for as long as is necessary for
 				the purposes set out in this Privacy Policy. We will retain and use your
@@ -181,7 +211,7 @@ export default function PrivacyPolicy() {
 				Account" function in the User Profile settings.
 			</p>
 
-			<h2>8. Security of Data</h2>
+			<h2>9. Security of Data</h2>
 			<p>
 				The security of your data is important to us, but remember that no
 				method of transmission over the Internet, or method of electronic
@@ -190,7 +220,7 @@ export default function PrivacyPolicy() {
 				security.
 			</p>
 
-			<h2>9. Changes to This Privacy Policy</h2>
+			<h2>10. Changes to This Privacy Policy</h2>
 			<p>
 				We may update our Privacy Policy from time to time. We will notify you
 				of any changes by posting the new Privacy Policy on this page. You are
@@ -199,7 +229,7 @@ export default function PrivacyPolicy() {
 				this page.
 			</p>
 
-			<h2>10. Contact Us & Data Subject Rights</h2>
+			<h2>11. Contact Us & Data Subject Rights</h2>
 			<p>
 				If you have any questions about this Privacy Policy, or wish to exercise
 				your rights under applicable data protection law (including the right to

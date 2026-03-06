@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { magicLink, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
 	adminAc,
@@ -13,6 +13,7 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
+import { buildMagicLinkEmail, sendEmail } from "./email.server";
 import { log, redactId } from "./logging.server";
 import type { UserSettings } from "./types";
 
@@ -44,15 +45,24 @@ const member = ac.newRole({
 export function createAuth(env: Cloudflare.Env) {
 	const db = drizzle(env.DB, { schema });
 
-	// Dev Mode Detection: Enable credential provider if Google OAuth is not configured
 	const authEnv = env as Cloudflare.Env & {
 		GOOGLE_CLIENT_ID?: string;
 		GOOGLE_CLIENT_SECRET?: string;
+		RESEND_API_KEY?: string;
 	};
-	const isDevMode =
-		!authEnv.GOOGLE_CLIENT_ID || authEnv.GOOGLE_CLIENT_ID.trim() === "";
+
+	// Google OAuth is optional — falls back to magic-link-only when not configured
+	const hasGoogleOAuth =
+		!!authEnv.GOOGLE_CLIENT_ID && authEnv.GOOGLE_CLIENT_ID.trim() !== "";
+
+	// Dev-only: enable email/password for Dev Login (dev@ration.app / ration-dev).
+	// Only when BETTER_AUTH_URL is localhost — never in production.
+	const isDev = env.BETTER_AUTH_URL.includes("localhost");
 
 	return betterAuth({
+		...(isDev && {
+			emailAndPassword: { enabled: true },
+		}),
 		database: drizzleAdapter(db, {
 			provider: "sqlite",
 			schema: {
@@ -109,10 +119,37 @@ export function createAuth(env: Cloudflare.Env) {
 				},
 				allowUserToCreateOrganization: true,
 			}),
+			magicLink({
+				// Token stored hashed at rest — prevents exposure if DB is compromised
+				storeToken: "hashed",
+				// 5-minute expiry; single-use (allowedAttempts defaults to 1)
+				expiresIn: 300,
+				disableSignUp: false, // Auto-register new users
+				sendMagicLink: async ({ email, url }) => {
+					const resendApiKey = authEnv.RESEND_API_KEY;
+					if (!resendApiKey) {
+						// In local dev without RESEND_API_KEY: skip sending. No log of URL/token
+						// (avoids PII/sensitive token exposure per security directive).
+						return;
+					}
+					const { html, text } = buildMagicLinkEmail(url);
+					// Fire-and-forget: do NOT await — prevents timing attacks that
+					// reveal whether an email address is registered.
+					sendEmail(resendApiKey, {
+						to: email,
+						subject: "Your Ration sign-in link",
+						html,
+						text,
+					}).catch((err) => {
+						log.error("[Auth] Failed to send magic link email", {
+							message: err instanceof Error ? err.message : String(err),
+						});
+					});
+				},
+			}),
 		],
-		socialProviders: isDevMode
-			? {}
-			: {
+		socialProviders: hasGoogleOAuth
+			? {
 					google: {
 						clientId: (env as Cloudflare.Env & { GOOGLE_CLIENT_ID: string })
 							.GOOGLE_CLIENT_ID,
@@ -120,13 +157,8 @@ export function createAuth(env: Cloudflare.Env) {
 							env as Cloudflare.Env & { GOOGLE_CLIENT_SECRET: string }
 						).GOOGLE_CLIENT_SECRET,
 					},
-				},
-		...(isDevMode && {
-			emailAndPassword: {
-				enabled: true,
-				requireEmailVerification: false,
-			},
-		}),
+				}
+			: {},
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
 		databaseHooks: {

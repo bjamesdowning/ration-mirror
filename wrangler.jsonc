@@ -79,6 +79,7 @@
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
+	 *   - RESEND_API_KEY: Resend transactional email API key (for magic link auth)
 	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
 	 *     (optional; when absent, recipe import uses plain fetch only)
 	 */
@@ -104,10 +105,22 @@
 	],
 	"queues": {
 		"producers": [
-			{ "queue": "ration-scan", "binding": "SCAN_QUEUE" },
-			{ "queue": "ration-meal-generate", "binding": "MEAL_GENERATE_QUEUE" },
-			{ "queue": "ration-plan-week", "binding": "PLAN_WEEK_QUEUE" },
-			{ "queue": "ration-import-url", "binding": "IMPORT_URL_QUEUE" }
+			{
+				"queue": "ration-scan",
+				"binding": "SCAN_QUEUE"
+			},
+			{
+				"queue": "ration-meal-generate",
+				"binding": "MEAL_GENERATE_QUEUE"
+			},
+			{
+				"queue": "ration-plan-week",
+				"binding": "PLAN_WEEK_QUEUE"
+			},
+			{
+				"queue": "ration-import-url",
+				"binding": "IMPORT_URL_QUEUE"
+			}
 		],
 		"consumers": [
 			{
@@ -146,7 +159,6 @@
 	"triggers": {
 		"crons": ["0 3 * * *"]
 	},
-
 	/**
 	 * Dev Environment — isolated Cloudflare resources for remote dev testing.
 	 * Connects AI and Vectorize (unavailable in local mode) while keeping prod data safe.

@@ -1956,15 +1956,33 @@ function McpReferencePanel({
 							<code className="bg-platinum/50 px-1 rounded font-mono">
 								&lt;your-mcp-scoped-key&gt;
 							</code>{" "}
-							with the key you generated above. The{" "}
+							with the actual API key you generated above. The{" "}
 							<code className="bg-platinum/50 px-1 rounded font-mono">
 								RATION_AUTH_HEADER
 							</code>{" "}
-							env var is read by{" "}
+							env var must be the full value including the{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								Bearer{" "}
+							</code>{" "}
+							prefix (e.g.{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								Bearer rtn_live_...
+							</code>
+							). It is read by{" "}
 							<code className="bg-platinum/50 px-1 rounded font-mono">
 								mcp-remote
 							</code>{" "}
 							at runtime — your key is never hardcoded.
+						</p>
+						<p className="text-xs text-muted mt-1">
+							<strong className="text-carbon">Connection fails?</strong> Verify{" "}
+							<code className="bg-platinum/50 px-1 rounded font-mono">
+								RATION_AUTH_HEADER
+							</code>{" "}
+							is set correctly in your Cursor/Claude config (full{" "}
+							<code className="font-mono">Bearer </code>
+							prefix), and try <code className="font-mono">--debug</code> in the
+							args for mcp-remote to inspect logs.
 						</p>
 					</div>
 

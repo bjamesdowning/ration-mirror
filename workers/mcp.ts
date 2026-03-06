@@ -20,6 +20,13 @@ export default {
 		env: Cloudflare.Env,
 		ctx: ExecutionContext,
 	): Promise<Response> {
+		// Only authenticate /mcp. OAuth discovery paths (/.well-known/*, /register) get 404
+		// so mcp-remote can fail discovery cleanly and use custom headers for the MCP endpoint.
+		const url = new URL(request.url);
+		if (url.pathname !== "/mcp") {
+			return new Response("Not Found", { status: 404 });
+		}
+
 		try {
 			// Extract orgId from API key
 			const orgId = await authenticateMcp(env, request);

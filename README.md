@@ -1381,6 +1381,12 @@ Host: mcp.ration.mayutic.com
 Authorization: Bearer rtn_live_<your-api-key>
 ```
 
+**Troubleshooting MCP connections:**
+
+- **ServerError / Connection closed:** Ensure `RATION_AUTH_HEADER` in your Cursor/Claude config is set to the full value including the `Bearer ` prefix (e.g. `Bearer rtn_live_xxxxx`). Only `/mcp` requires auth; OAuth discovery paths return 404 so mcp-remote can use custom headers.
+- **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
+- **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.
+
 ---
 
 ## 11. Public REST API (v1)

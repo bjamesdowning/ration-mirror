@@ -1,7 +1,7 @@
 import type { Route } from "./+types/home";
 import "../../load-context";
 import { useEffect, useState } from "react";
-import { Link, redirect } from "react-router";
+import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
 import { LifecycleStepper } from "~/components/home/LifecycleStepper";
@@ -105,6 +105,7 @@ function SectionHeader({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+	const location = useLocation();
 	const [currency, setCurrency] = useState<DisplayCurrency>("EUR");
 	useEffect(() => {
 		const stored = localStorage.getItem(
@@ -140,7 +141,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			<main className="flex-1 w-full relative z-20">
 				<div className="max-w-7xl mx-auto px-6 py-12 md:py-24 flex flex-col items-center gap-24 md:gap-32">
 					{/* ── HERO ── */}
-					<div className="max-w-4xl w-full flex flex-col items-center gap-12 text-center">
+					<div
+						id="signup"
+						className="max-w-4xl w-full flex flex-col items-center gap-12 text-center scroll-mt-24"
+					>
 						<div className="relative group">
 							<div className="absolute -inset-4 bg-hyper-green/5 rounded-full blur-xl group-hover:bg-hyper-green/10 transition-all duration-500" />
 							<img
@@ -162,7 +166,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</p>
 						</div>
 						<div className="w-full flex flex-col items-center gap-6 mt-4">
-							<AuthWidget defaultMode="signUp" />
+							<AuthWidget
+								defaultMode="signUp"
+								intentMessage={
+									location.hash === "#signup"
+										? "Create an account to get started and choose your plan."
+										: undefined
+								}
+							/>
 						</div>
 						<a
 							href="#lifecycle"
@@ -808,12 +819,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								<p className="text-sm text-muted mb-5">
 									Everything you need to run the lifecycle
 								</p>
-								<Link
-									to="/hub/pricing"
+								<a
+									href="#signup"
 									className="inline-block w-full py-2.5 px-4 bg-platinum text-carbon rounded-lg text-sm font-medium hover:bg-platinum/80 transition-colors"
 								>
 									Get started free
-								</Link>
+								</a>
 							</div>
 							<div className="glass-panel rounded-2xl p-6 text-center border border-hyper-green/40">
 								<h3 className="text-display text-xl text-carbon mb-1">
@@ -834,12 +845,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									— unlimited capacity, groups, credit transfers, and yearly
 									credits
 								</p>
-								<Link
-									to="/hub/pricing"
+								<a
+									href="#signup"
 									className="inline-block w-full py-2.5 px-4 bg-hyper-green text-carbon font-bold rounded-lg hover:opacity-90 transition-opacity"
 								>
 									Start Crew Member
-								</Link>
+								</a>
 							</div>
 						</div>
 
@@ -871,12 +882,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										<div className="text-xs text-muted mt-1">
 											{pack.description}
 										</div>
-										<Link
-											to="/hub/pricing"
+										<a
+											href="#signup"
 											className="block mt-3 w-full py-2 px-3 bg-platinum text-carbon rounded-lg text-sm font-medium text-center hover:bg-platinum/80 transition-colors"
 										>
 											Buy Credits
-										</Link>
+										</a>
 									</div>
 								))}
 							</div>

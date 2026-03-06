@@ -13,12 +13,15 @@ interface AuthWidgetProps {
 	showLogo?: boolean;
 	/** Show footer links below the widget (used in standalone pages) */
 	showFooterLinks?: boolean;
+	/** Optional contextual message (e.g. when arriving from pricing CTA) */
+	intentMessage?: string;
 }
 
 export function AuthWidget({
 	defaultMode = "signUp",
 	showLogo = false,
 	showFooterLinks = false,
+	intentMessage,
 }: AuthWidgetProps) {
 	const [mode, setMode] = useState<AuthMode>(defaultMode);
 	const [email, setEmail] = useState("");
@@ -254,6 +257,11 @@ export function AuthWidget({
 							? "Enter your email to get started"
 							: "Enter your email to sign in"}
 					</p>
+					{intentMessage && (
+						<p className="text-hyper-green/90 text-sm text-center mb-4 font-medium">
+							{intentMessage}
+						</p>
+					)}
 
 					{/* Error banner */}
 					{(errorMsg || flowState === "error") && (

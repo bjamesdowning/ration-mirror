@@ -524,7 +524,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			<PageHeader
 				icon={<PackageIcon className="w-6 h-6 text-hyper-green" />}
 				title="Cargo"
-				itemCount={filteredCargo.length}
+				itemCount={totalCargo}
 				showSearch={true}
 				searchPlaceholder="Search items..."
 				onSearchChange={setSearchQuery}
@@ -628,14 +628,6 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								>
 									Add First Item
 								</button>
-								<a
-									href="https://www.hellofresh.com/"
-									target="_blank"
-									rel="noreferrer"
-									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
-								>
-									Explore Meal Kits
-								</a>
 							</div>
 						}
 					/>

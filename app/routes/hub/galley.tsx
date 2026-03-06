@@ -361,7 +361,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			<PageHeader
 				icon={<ChefHatIcon className="w-6 h-6 text-hyper-green" />}
 				title="Galley"
-				itemCount={filteredMeals.length}
+				itemCount={totalMeals}
 				showSearch={true}
 				searchPlaceholder="Search meals..."
 				onSearchChange={setSearchQuery}

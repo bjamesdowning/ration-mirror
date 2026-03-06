@@ -19,7 +19,11 @@ import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
 import { normalizeForCargoDedup } from "./matching";
-import { chunkArray, D1_MAX_BOUND_PARAMS } from "./query-utils.server";
+import {
+	chunkArray,
+	chunkedQuery,
+	D1_MAX_BOUND_PARAMS,
+} from "./query-utils.server";
 import { UnitSchema } from "./schemas/units";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
@@ -125,6 +129,7 @@ export async function getCargoCount(
 /**
  * Fetch a specific set of cargo rows by their IDs, scoped to the organization.
  * Used by MCP search to resolve Vectorize matches without a full-table scan.
+ * Uses chunkedQuery to stay under D1's 100 bound-parameter limit.
  */
 export async function getCargoByIds(
 	db: D1Database,
@@ -133,13 +138,22 @@ export async function getCargoByIds(
 ) {
 	if (ids.length === 0) return [];
 	const d1 = drizzle(db);
-	return d1
-		.select()
-		.from(cargo)
-		.where(
-			and(eq(cargo.organizationId, organizationId), inArray(cargo.id, ids)),
-		)
-		.limit(ids.length);
+	// orgId = 1 param; inArray adds N. Use chunkSize 99 to stay under 100.
+	return chunkedQuery(
+		ids,
+		(chunk) =>
+			d1
+				.select()
+				.from(cargo)
+				.where(
+					and(
+						eq(cargo.organizationId, organizationId),
+						inArray(cargo.id, chunk),
+					),
+				)
+				.limit(chunk.length),
+		99,
+	);
 }
 
 /**

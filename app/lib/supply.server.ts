@@ -20,6 +20,7 @@ import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
 	chunkedInsert,
+	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
@@ -393,10 +394,15 @@ export async function getSupplyListById(
 
 	const mealNameById = new Map<string, string>();
 	if (sourceMealIds.length > 0) {
-		const sourceMeals = await d1
-			.select({ id: meal.id, name: meal.name })
-			.from(meal)
-			.where(inArray(meal.id, sourceMealIds));
+		const sourceMeals = await chunkedQuery(
+			sourceMealIds,
+			(chunk) =>
+				d1
+					.select({ id: meal.id, name: meal.name })
+					.from(meal)
+					.where(inArray(meal.id, chunk)),
+			99,
+		);
 		for (const sourceMeal of sourceMeals) {
 			mealNameById.set(sourceMeal.id, sourceMeal.name);
 		}
@@ -1275,29 +1281,39 @@ async function buildIngredientRowsFromOccurrences(
 ): Promise<IngredientRow[]> {
 	if (occurrences.length === 0) return [];
 
-	const mealIds = [...new Set(occurrences.map((o) => o.mealId))];
+	const allMealIds = [...new Set(occurrences.map((o) => o.mealId))];
 
-	// Batch-load meal metadata and ingredients for all unique meal IDs
-	const allMealIds = mealIds;
+	// Batch-load meal metadata and ingredients for all unique meal IDs.
+	// Chunk to stay under D1's 100 bound-parameter limit (orgId + inArray).
 	const [mealRows, ingredientRows] = await Promise.all([
-		d1
-			.select({ id: meal.id, domain: meal.domain, servings: meal.servings })
-			.from(meal)
-			.where(
-				and(
-					eq(meal.organizationId, organizationId),
-					inArray(meal.id, allMealIds),
-				),
-			),
-		d1
-			.select({
-				mealId: mealIngredient.mealId,
-				ingredientName: mealIngredient.ingredientName,
-				quantity: mealIngredient.quantity,
-				unit: mealIngredient.unit,
-			})
-			.from(mealIngredient)
-			.where(inArray(mealIngredient.mealId, allMealIds)),
+		chunkedQuery(
+			allMealIds,
+			(chunk) =>
+				d1
+					.select({ id: meal.id, domain: meal.domain, servings: meal.servings })
+					.from(meal)
+					.where(
+						and(
+							eq(meal.organizationId, organizationId),
+							inArray(meal.id, chunk),
+						),
+					),
+			99,
+		),
+		chunkedQuery(
+			allMealIds,
+			(chunk) =>
+				d1
+					.select({
+						mealId: mealIngredient.mealId,
+						ingredientName: mealIngredient.ingredientName,
+						quantity: mealIngredient.quantity,
+						unit: mealIngredient.unit,
+					})
+					.from(mealIngredient)
+					.where(inArray(mealIngredient.mealId, chunk)),
+			99,
+		),
 	]);
 
 	const mealMeta = new Map(mealRows.map((m) => [m.id, m]));

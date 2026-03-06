@@ -129,8 +129,15 @@ export function createAuth(env: Cloudflare.Env) {
 				sendMagicLink: async ({ email, url }) => {
 					const resendApiKey = authEnv.RESEND_API_KEY;
 					if (!resendApiKey) {
-						// In local dev without RESEND_API_KEY: skip sending. No log of URL/token
-						// (avoids PII/sensitive token exposure per security directive).
+						if (isDev) {
+							// In local dev without RESEND_API_KEY: skip sending. No log of URL/token
+							// (avoids PII/sensitive token exposure per security directive).
+							return;
+						}
+						log.error(
+							"[Auth] RESEND_API_KEY missing in production — magic link email not sent",
+							{ hasEmail: !!email },
+						);
 						return;
 					}
 					const { html, text } = buildMagicLinkEmail(url);

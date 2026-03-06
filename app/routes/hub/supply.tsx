@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-	data,
-	useFetcher,
-	useRevalidator,
-	useRouteLoaderData,
-} from "react-router";
+import { data, useFetcher, useRevalidator } from "react-router";
 
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
@@ -17,7 +12,6 @@ import {
 	ShareIcon,
 	ShoppingCartIcon,
 } from "~/components/icons/PageIcons";
-import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -185,11 +179,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		cargo,
 		snoozes = [],
 	} = loaderData;
-	const dashboardData = useRouteLoaderData("routes/hub") as {
-		capacity?: {
-			supplyLists?: { current: number; limit: number };
-		};
-	} | null;
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
 	const revalidator = useRevalidator();
@@ -413,15 +402,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{dashboardData?.capacity?.supplyLists &&
-				dashboardData.capacity.supplyLists.limit !== -1 && (
-					<CapacityIndicator
-						label="Supply lists"
-						current={dashboardData.capacity.supplyLists.current}
-						limit={dashboardData.capacity.supplyLists.limit}
-					/>
-				)}
-
 			{!list ? (
 				<EmptyPanel
 					icon={<ShoppingCartIcon className="w-12 h-12 text-muted" />}

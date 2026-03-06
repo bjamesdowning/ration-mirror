@@ -10,14 +10,20 @@ interface Step5Props {
 const tiers = [
 	{
 		name: "Free",
-		features: ["Up to 50 Cargo items", "Up to 10 Meals", "1 Supply list"],
+		features: [
+			"35 cargo",
+			"15 meals",
+			"1 Supply list",
+			"+ AI Features (credits)",
+		],
 	},
 	{
 		name: "Crew Member",
 		features: [
 			"Unlimited Cargo",
 			"Unlimited Meals",
-			"Unlimited lists + AI scans",
+			"Unlimited lists",
+			"65 credits for AI scans (Annual)",
 		],
 		highlight: true,
 	},
@@ -73,8 +79,7 @@ export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
 
 				{/* Credits line */}
 				<p className="text-sm text-carbon/80 dark:text-white/80 mb-4">
-					Scans and AI features use credits. Purchase as you go, or upgrade for
-					unlimited access.
+					Scans and AI features use credits. Purchase as you go.
 				</p>
 
 				{/* Welcome voucher */}

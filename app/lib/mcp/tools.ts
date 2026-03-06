@@ -92,11 +92,27 @@ export function registerTools(
 		},
 		async (args: { domain?: "food" | "household" | "alcohol" }) => {
 			const { domain } = args;
+
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_list",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
 			// Intentional full-table scan: agents need the complete inventory to plan
 			// meals/shopping. This endpoint is read-only and scoped to the org via RLS.
 			const cargo = await getCargo(env.DB, env.__orgId, domain);
 
-			// Map to a more agent-friendly format
 			const mapped = cargo.map((c) => ({
 				id: c.id,
 				name: c.name,
@@ -107,8 +123,20 @@ export function registerTools(
 				expiresAt: c.expiresAt,
 			}));
 
+			const MAX_LIST_INVENTORY = 500;
+			const truncated = mapped.length > MAX_LIST_INVENTORY;
+			const items = truncated ? mapped.slice(0, MAX_LIST_INVENTORY) : mapped;
+			const note = truncated
+				? `\n\n[Results truncated: showing ${MAX_LIST_INVENTORY} of ${mapped.length} items. Use search_ingredients for targeted lookup.]`
+				: "";
+
 			return {
-				content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify(items, null, 2) + note,
+					},
+				],
 			};
 		},
 	);
@@ -122,6 +150,22 @@ export function registerTools(
 		"Retrieve the user's active supply list (shopping list).",
 		{},
 		async () => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_list",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
 			const list = await getSupplyList(env.DB, env.__orgId);
 			if (!list) {
 				return {
@@ -166,6 +210,23 @@ export function registerTools(
 		},
 		async (args: { tag?: string }) => {
 			const { tag } = args;
+
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_list",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
 			const meals = await getMeals(env.DB, env.__orgId, tag);
 
 			const mapped = meals.map((m) => ({
@@ -183,8 +244,20 @@ export function registerTools(
 				})),
 			}));
 
+			const MAX_LIST_MEALS = 200;
+			const truncated = mapped.length > MAX_LIST_MEALS;
+			const items = truncated ? mapped.slice(0, MAX_LIST_MEALS) : mapped;
+			const note = truncated
+				? `\n\n[Results truncated: showing ${MAX_LIST_MEALS} of ${mapped.length} meals.]`
+				: "";
+
 			return {
-				content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify(items, null, 2) + note,
+					},
+				],
 			};
 		},
 	);

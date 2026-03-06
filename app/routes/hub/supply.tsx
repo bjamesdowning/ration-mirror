@@ -17,6 +17,7 @@ import {
 	ShareIcon,
 	ShoppingCartIcon,
 } from "~/components/icons/PageIcons";
+import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -412,13 +413,13 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
 			{dashboardData?.capacity?.supplyLists &&
 				dashboardData.capacity.supplyLists.limit !== -1 && (
-					<p className="text-xs text-muted -mt-2 mb-2">
-						{dashboardData.capacity.supplyLists.current}/
-						{dashboardData.capacity.supplyLists.limit} lists
-					</p>
+					<CapacityIndicator
+						label="Supply lists"
+						current={dashboardData.capacity.supplyLists.current}
+						limit={dashboardData.capacity.supplyLists.limit}
+					/>
 				)}
 
 			{!list ? (

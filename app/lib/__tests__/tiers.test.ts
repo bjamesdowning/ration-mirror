@@ -24,8 +24,16 @@ describe("isTierSlug", () => {
 });
 
 describe("TIER_LIMITS", () => {
-	it("free tier has finite inventory cap", () => {
-		expect(TIER_LIMITS.free.maxInventoryItems).toBeGreaterThan(0);
+	it("free tier has finite inventory cap (moderate: 35)", () => {
+		expect(TIER_LIMITS.free.maxInventoryItems).toBe(35);
+	});
+
+	it("free tier has finite meal cap (moderate: 15)", () => {
+		expect(TIER_LIMITS.free.maxMeals).toBe(15);
+	});
+
+	it("free tier has finite grocery list cap (3)", () => {
+		expect(TIER_LIMITS.free.maxGroceryLists).toBe(3);
 	});
 
 	it("crew_member tier has unlimited inventory (-1)", () => {

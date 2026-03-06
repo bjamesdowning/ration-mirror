@@ -239,9 +239,9 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 					<h2 className="text-xl font-bold text-carbon mb-1">Free</h2>
 					<p className="text-sm text-muted mb-4">Personal Cargo starter tier</p>
 					<ul className="space-y-2 text-sm text-carbon">
-						<li>Cargo items: 50</li>
-						<li>Meals: 20</li>
-						<li>3 supply lists</li>
+						<li>Cargo items: {loaderData.tierLimits.free.maxInventoryItems}</li>
+						<li>Meals: {loaderData.tierLimits.free.maxMeals}</li>
+						<li>{loaderData.tierLimits.free.maxGroceryLists} supply lists</li>
 						<li>No member invites</li>
 					</ul>
 					<div className="mt-4 text-xs text-muted">

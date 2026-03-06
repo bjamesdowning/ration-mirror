@@ -11,8 +11,8 @@ export interface TierLimits {
 
 export const TIER_LIMITS: Record<TierSlug, TierLimits> = {
 	free: {
-		maxInventoryItems: 50,
-		maxMeals: 20,
+		maxInventoryItems: 35,
+		maxMeals: 15,
 		maxGroceryLists: 3,
 		maxOwnedGroups: 1,
 		canInviteMembers: false,

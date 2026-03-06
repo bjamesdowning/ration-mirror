@@ -25,6 +25,7 @@ import {
 } from "~/components/scanner/CameraInput";
 import { ScanIntroModal } from "~/components/scanner/ScanIntroModal";
 import { ApiHint } from "~/components/shell/ApiHint";
+import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -526,13 +527,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 					/>
 				}
 			/>
-			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
 			{dashboardData?.capacity?.cargo &&
 				dashboardData.capacity.cargo.limit !== -1 && (
-					<p className="text-xs text-muted -mt-2 mb-2">
-						{dashboardData.capacity.cargo.current}/
-						{dashboardData.capacity.cargo.limit} items
-					</p>
+					<CapacityIndicator
+						label="Cargo items"
+						current={dashboardData.capacity.cargo.current}
+						limit={dashboardData.capacity.cargo.limit}
+					/>
 				)}
 
 			<div className="space-y-6">

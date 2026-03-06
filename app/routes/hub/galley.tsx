@@ -30,6 +30,7 @@ import {
 	SparkleIcon,
 } from "~/components/icons/PageIcons";
 import { ApiHint } from "~/components/shell/ApiHint";
+import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -320,7 +321,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				open={showUpgradePrompt}
 				onClose={() => setShowUpgradePrompt(false)}
 				title="Meal capacity reached"
-				description="You've reached the free plan limit of 20 meals. Upgrade to Crew Member for unlimited meals."
+				description={`You've reached the free plan limit of ${dashboardData?.capacity?.meals?.limit ?? 15} meals. Upgrade to Crew Member for unlimited meals.`}
 			/>
 
 			{/* Hidden instances for ref + modal (always in DOM, even on mobile) */}
@@ -361,13 +362,13 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					/>
 				}
 			/>
-			{/* Only show capacity for free-tier users — paid (limit === -1) have unlimited */}
 			{dashboardData?.capacity?.meals &&
 				dashboardData.capacity.meals.limit !== -1 && (
-					<p className="text-xs text-muted -mt-2 mb-2">
-						{dashboardData.capacity.meals.current}/
-						{dashboardData.capacity.meals.limit} meals
-					</p>
+					<CapacityIndicator
+						label="Meals"
+						current={dashboardData.capacity.meals.current}
+						limit={dashboardData.capacity.meals.limit}
+					/>
 				)}
 
 			<div className="space-y-6">

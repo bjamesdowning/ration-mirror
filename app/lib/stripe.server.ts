@@ -214,6 +214,32 @@ export function isAnnualSubscriptionPrice(env: Env, priceId: string): boolean {
 }
 
 /**
+ * Clear a user's stored Stripe customer ID. Use when the customer no longer exists
+ * in Stripe (e.g. Test→Live migration) so the next checkout creates a new customer.
+ */
+export async function clearStripeCustomerId(
+	db: ReturnType<typeof drizzle<typeof schema>>,
+	userId: string,
+): Promise<void> {
+	await db
+		.update(schema.user)
+		.set({ stripeCustomerId: null })
+		.where(eq(schema.user.id, userId));
+}
+
+/**
+ * Returns true if the error indicates the Stripe customer does not exist
+ * (e.g. customer was created in Test mode but we're now using Live keys).
+ */
+export function isStripeNoSuchCustomerError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	return (
+		error.message.includes("No such customer") ||
+		(error as { code?: string }).code === "resource_missing"
+	);
+}
+
+/**
  * Get or create a Stripe Customer for the user.
  * Creates a Customer in Stripe and saves stripeCustomerId to the user if they don't have one.
  * Uses conditional update to avoid race conditions when two checkouts run concurrently.

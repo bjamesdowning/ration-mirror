@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as schema from "~/db/schema";
-import { getOrCreateStripeCustomer } from "~/lib/stripe.server";
+import {
+	getOrCreateStripeCustomer,
+	isStripeNoSuchCustomerError,
+} from "~/lib/stripe.server";
 import { createMockEnv } from "~/test/helpers/mock-env";
 
 // Mock Stripe SDK to avoid real API calls
@@ -84,5 +87,33 @@ describe("getOrCreateStripeCustomer", () => {
 
 		expect(result).toBe("cus_new123");
 		expect(db.update).toHaveBeenCalled();
+	});
+});
+
+describe("isStripeNoSuchCustomerError", () => {
+	it("returns true for 'No such customer' message", () => {
+		expect(
+			isStripeNoSuchCustomerError(new Error("No such customer: 'cus_xxx'")),
+		).toBe(true);
+	});
+
+	it("returns true for resource_missing code", () => {
+		const err = new Error("Resource missing") as Error & { code?: string };
+		err.code = "resource_missing";
+		expect(isStripeNoSuchCustomerError(err)).toBe(true);
+	});
+
+	it("returns false for other errors", () => {
+		expect(isStripeNoSuchCustomerError(new Error("Rate limit exceeded"))).toBe(
+			false,
+		);
+		expect(isStripeNoSuchCustomerError(new Error("Invalid API key"))).toBe(
+			false,
+		);
+	});
+
+	it("returns false for non-Error values", () => {
+		expect(isStripeNoSuchCustomerError("string")).toBe(false);
+		expect(isStripeNoSuchCustomerError(null)).toBe(false);
 	});
 });

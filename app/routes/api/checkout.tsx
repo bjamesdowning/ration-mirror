@@ -10,10 +10,12 @@ import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { CheckoutFormSchema } from "~/lib/schemas/checkout";
 import {
 	CREDIT_PACKS,
+	clearStripeCustomerId,
 	getCreditPackPriceId,
 	getOrCreateStripeCustomer,
 	getStripe,
 	getSubscriptionPriceId,
+	isStripeNoSuchCustomerError,
 	SUBSCRIPTION_PRODUCTS,
 } from "~/lib/stripe.server";
 import type { Route } from "./+types/checkout";
@@ -103,95 +105,115 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const customerId = await getOrCreateStripeCustomer(
-			context.cloudflare.env,
-			db,
-			userId,
-			userRow.email,
-		);
+		const sub = subscriptionKey;
+		const pack = packKey;
+
+		const createSessionWithCustomer = async (customerId: string) => {
+			if ((checkoutType === "subscription" || checkoutType === "tier") && sub) {
+				const selectedSubscription = SUBSCRIPTION_PRODUCTS[sub];
+				return stripe.checkout.sessions.create({
+					ui_mode: "embedded",
+					mode: "subscription",
+					customer: customerId,
+					line_items: [
+						{
+							price: getSubscriptionPriceId(
+								context.cloudflare.env,
+								sub,
+								currency === "USD" ? "USD" : "EUR",
+							),
+							quantity: 1,
+						},
+					],
+					subscription_data: {
+						metadata: {
+							userId,
+							organizationId: groupId,
+							tier: selectedSubscription.tier,
+						},
+					},
+					metadata: {
+						type: "subscription",
+						userId,
+						organizationId: groupId,
+						tier: selectedSubscription.tier,
+					},
+					return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
+				});
+			}
+
+			if (!pack) throw new Error("Pack required"); // validated above
+			const welcomeVoucherRedeemed = userRow.welcomeVoucherRedeemed ?? false;
+			return stripe.checkout.sessions.create({
+				ui_mode: "embedded",
+				mode: "payment",
+				customer: customerId,
+				line_items: [
+					{
+						price: getCreditPackPriceId(
+							context.cloudflare.env,
+							pack,
+							currency === "USD" ? "USD" : "EUR",
+						),
+						quantity: 1,
+					},
+				],
+				allow_promotion_codes: !welcomeVoucherRedeemed,
+				metadata: {
+					type: "credits",
+					userId,
+					organizationId: groupId,
+					credits: CREDIT_PACKS[pack].credits.toString(),
+					pack,
+				},
+				return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
+			});
+		};
 
 		if (checkoutType === "subscription" || checkoutType === "tier") {
-			// subscriptionKey is validated by schema when type is subscription/tier
-			const sub = subscriptionKey;
 			if (!sub) {
 				throw data(
 					{ error: "Subscription required for subscription checkout" },
 					{ status: 400 },
 				);
 			}
-			const selectedSubscription = SUBSCRIPTION_PRODUCTS[sub];
-			const session = await stripe.checkout.sessions.create({
-				ui_mode: "embedded",
-				mode: "subscription",
-				customer: customerId,
-				line_items: [
-					{
-						price: getSubscriptionPriceId(
-							context.cloudflare.env,
-							sub,
-							currency === "USD" ? "USD" : "EUR",
-						),
-						quantity: 1,
-					},
-				],
-				subscription_data: {
-					metadata: {
-						userId,
-						organizationId: groupId,
-						tier: selectedSubscription.tier,
-					},
-				},
-				metadata: {
-					type: "subscription",
+		} else {
+			if (!pack) {
+				throw data(
+					{ error: "Pack required for credit checkout" },
+					{ status: 400 },
+				);
+			}
+		}
+
+		let customerId = await getOrCreateStripeCustomer(
+			context.cloudflare.env,
+			db,
+			userId,
+			userRow.email,
+		);
+
+		let session: Stripe.Checkout.Session;
+		try {
+			session = await createSessionWithCustomer(customerId);
+		} catch (sessionError) {
+			if (isStripeNoSuchCustomerError(sessionError)) {
+				log.warn("[checkout] Stale Stripe customer, clearing and retrying", {
 					userId,
-					organizationId: groupId,
-					tier: selectedSubscription.tier,
-				},
-				return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
-			});
-
-			return {
-				success: true,
-				clientSecret: session.client_secret,
-				sessionId: session.id,
-			};
+					customerId,
+				});
+				await clearStripeCustomerId(db, userId);
+				customerId = await getOrCreateStripeCustomer(
+					context.cloudflare.env,
+					db,
+					userId,
+					userRow.email,
+				);
+				session = await createSessionWithCustomer(customerId);
+			} else {
+				throw sessionError;
+			}
 		}
-
-		// packKey is validated by schema when type is credits
-		const pack = packKey;
-		if (!pack) {
-			throw data(
-				{ error: "Pack required for credit checkout" },
-				{ status: 400 },
-			);
-		}
-		const welcomeVoucherRedeemed = userRow.welcomeVoucherRedeemed ?? false;
-		const sessionParams: Stripe.Checkout.SessionCreateParams = {
-			ui_mode: "embedded",
-			mode: "payment",
-			customer: customerId,
-			line_items: [
-				{
-					price: getCreditPackPriceId(
-						context.cloudflare.env,
-						pack,
-						currency === "USD" ? "USD" : "EUR",
-					),
-					quantity: 1,
-				},
-			],
-			allow_promotion_codes: !welcomeVoucherRedeemed,
-			metadata: {
-				type: "credits",
-				userId,
-				organizationId: groupId,
-				credits: CREDIT_PACKS[pack].credits.toString(),
-				pack,
-			},
-			return_url: `${context.cloudflare.env.BETTER_AUTH_URL}${returnUrlPath}?session_id={CHECKOUT_SESSION_ID}`,
-		};
-
-		const session = await stripe.checkout.sessions.create(sessionParams);
 
 		// 5. Return client secret and session ID for frontend (sessionId used for onComplete navigation)
 		return {

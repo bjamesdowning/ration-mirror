@@ -52,25 +52,41 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
 
 The entire application runs on Cloudflare's edge network as a single Worker (`ration`) with bindings to D1, R2, KV, Queues, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol. Both Workers share the same D1/KV/R2/AI/Vectorize bindings in production.
 
+#### 1.1 Traffic flow — Users and AI agents
+
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph Internet["Internet"]
         User["User — Browser"]
         AIAgent["AI Agent — MCP Client"]
     end
 
-    subgraph CloudflareDNS["Cloudflare DNS (mayutic.com)"]
+    subgraph DNS["Cloudflare DNS"]
         CustomDomain["ration.mayutic.com"]
         McpDomain["mcp.ration.mayutic.com"]
     end
 
-    subgraph CloudflareEdge["Cloudflare Edge Network"]
-        CDN["Global CDN — SSL/TLS Termination"]
-        SmartPlacement["Smart Placement — Auto-routing to D1 region"]
+    subgraph Edge["Cloudflare Edge"]
+        CDN["CDN — SSL/TLS"]
+        SmartPlacement["Smart Placement"]
     end
 
+    subgraph Workers["Workers"]
+        Worker["ration"]
+        McpHandler["ration-mcp"]
+    end
+
+    User -->|HTTPS| CustomDomain
+    AIAgent -->|HTTPS + X-Api-Key| McpDomain
+    CustomDomain --> CDN --> SmartPlacement --> Worker
+    McpDomain --> McpHandler
+```
+
+#### 1.2 Main Worker (ration) — internal stack
+
+```mermaid
+flowchart TB
     subgraph MainWorker["Cloudflare Worker: ration"]
-        direction TB
         Worker["workers/app.ts"]
         ReactRouter["React Router v7 — SSR + Client Hydration"]
         BetterAuth["Better Auth — Session Management"]
@@ -80,6 +96,22 @@ flowchart TB
         ReactRouter --> DrizzleORM
     end
 
+    subgraph External["External Services"]
+        Google["Google OAuth 2.0"]
+        Stripe["Stripe API + Webhooks"]
+        BrowserRendering["Browser Rendering REST API"]
+    end
+
+    BetterAuth -->|OAuth| Google
+    ReactRouter -->|Checkout / Portal| Stripe
+    Stripe -->|POST /api/webhook| Worker
+    Worker -->|Recipe import| BrowserRendering
+```
+
+#### 1.3 MCP Worker (ration-mcp) — AI agent interface
+
+```mermaid
+flowchart TB
     subgraph McpWorker["Cloudflare Worker: ration-mcp"]
         McpHandler["workers/mcp.ts"]
         McpAuth["API Key Auth — mcp scope"]
@@ -87,50 +119,44 @@ flowchart TB
         McpHandler --> McpAuth
         McpHandler --> McpTools
     end
+```
 
-    subgraph CloudflareStorage["Cloudflare Storage"]
-        D1[("D1 — ration-db — binding: DB")]
-        R2[("R2 — ration-storage — binding: STORAGE")]
-        KV[("KV — RATION_KV — Rate Limits / Cache / Idempotency")]
-        Assets["Static Assets — binding: ASSETS"]
-        Queues[("Queues — ration-scan, ration-meal-generate, ration-plan-week, ration-import-url")]
+#### 1.4 Shared Cloudflare bindings — storage and AI
+
+```mermaid
+flowchart TB
+    subgraph Workers["Workers"]
+        Worker["ration"]
+        McpHandler["ration-mcp"]
     end
 
-    subgraph CloudflareAI["Cloudflare AI Services"]
-        AIBinding["Workers AI — binding: AI — Embedding Model"]
-        Vectorize[("Vectorize — ration-cargo — 768-dim cosine")]
-        AIGateway["AI Gateway — Proxy to Google AI Studio"]
+    subgraph Storage["Cloudflare Storage"]
+        D1[("D1 — ration-db")]
+        R2[("R2 — ration-storage")]
+        KV[("KV — RATION_KV")]
+        Assets["Static Assets"]
+        Queues[("Queues — scan, meal-generate, plan-week, import-url")]
     end
 
-    subgraph ExternalServices["External Services"]
-        Google["Google OAuth 2.0"]
-        Stripe["Stripe API + Webhooks"]
-        BrowserRendering["Browser Rendering REST API — Recipe import"]
+    subgraph AI["Cloudflare AI"]
+        AIBinding["Workers AI — Embedding"]
+        Vectorize[("Vectorize — ration-cargo")]
+        AIGateway["AI Gateway → Google AI Studio"]
     end
 
-    User -->|"HTTPS"| CustomDomain
-    AIAgent -->|"HTTPS + X-Api-Key"| McpDomain
-    CustomDomain --> CDN --> SmartPlacement --> Worker
-    McpDomain --> McpHandler
+    Worker --> D1
+    Worker --> R2
+    Worker --> KV
+    Worker --> Assets
+    Worker --> Queues
+    Worker --> AIBinding
+    Worker --> Vectorize
+    Worker --> AIGateway
 
-    Worker -->|"binding: DB"| D1
-    Worker -->|"binding: STORAGE"| R2
-    Worker -->|"binding: RATION_KV"| KV
-    Worker -->|"binding: ASSETS"| Assets
-    Worker -->|"binding: SCAN_QUEUE, MEAL_GENERATE_QUEUE, PLAN_WEEK_QUEUE, IMPORT_URL_QUEUE"| Queues
-    Worker -->|"binding: AI"| AIBinding
-    Worker -->|"binding: VECTORIZE"| Vectorize
-    Worker -->|"fetch() via AI Gateway"| AIGateway
-    Worker -->|"fetch() — Recipe import"| BrowserRendering
-
-    McpHandler -->|"binding: DB"| D1
-    McpHandler -->|"binding: RATION_KV"| KV
-    McpHandler -->|"binding: AI"| AIBinding
-    McpHandler -->|"binding: VECTORIZE"| Vectorize
-
-    BetterAuth -->|"OAuth Flow"| Google
-    ReactRouter -->|"Checkout / Portal"| Stripe
-    Stripe -->|"POST /api/webhook"| Worker
+    McpHandler --> D1
+    McpHandler --> KV
+    McpHandler --> AIBinding
+    McpHandler --> Vectorize
 ```
 
 ### Bindings Reference

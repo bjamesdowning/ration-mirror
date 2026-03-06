@@ -1,3 +1,4 @@
+import { waitUntil } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, organization } from "better-auth/plugins";
@@ -135,7 +136,8 @@ export function createAuth(env: Cloudflare.Env) {
 					const { html, text } = buildMagicLinkEmail(url);
 					// Fire-and-forget: do NOT await — prevents timing attacks that
 					// reveal whether an email address is registered.
-					sendEmail(resendApiKey, {
+					// waitUntil ensures the Resend fetch completes before isolate teardown.
+					const emailPromise = sendEmail(resendApiKey, {
 						to: email,
 						subject: "Your Ration sign-in link",
 						html,
@@ -145,6 +147,7 @@ export function createAuth(env: Cloudflare.Env) {
 							message: err instanceof Error ? err.message : String(err),
 						});
 					});
+					waitUntil(emailPromise);
 				},
 			}),
 		],

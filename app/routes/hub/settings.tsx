@@ -667,17 +667,28 @@ function AccountSection({
 						{session.user.image ? (
 							<img
 								src={session.user.image}
-								alt={session.user.name || "User"}
+								alt={
+									session.user.name ||
+									session.user.email?.split("@")[0] ||
+									"User"
+								}
 								className="w-16 h-16 rounded-full border-2 border-platinum object-cover shadow-sm"
 							/>
 						) : (
 							<div className="w-16 h-16 rounded-full bg-platinum/50 flex items-center justify-center text-2xl font-bold text-muted border-2 border-platinum border-dashed">
-								{session.user.name?.charAt(0).toUpperCase() || "?"}
+								{(
+									session.user.name?.charAt(0) ||
+									session.user.email?.charAt(0) ||
+									"?"
+								).toUpperCase()}
 							</div>
 						)}
 						<div>
 							<p className="text-xl font-bold text-carbon">
-								{session.user.name || "Unknown User"}
+								{session.user.name ||
+									(session.user.email
+										? session.user.email.split("@")[0]
+										: "Account")}
 							</p>
 							<p className="text-sm font-mono text-muted tracking-wide">
 								{session.user.email}

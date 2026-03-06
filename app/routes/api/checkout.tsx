@@ -200,6 +200,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			sessionId: session.id,
 		};
 	} catch (error) {
+		// Log before handleApiError sanitizes — helps diagnose production 500s
+		log.error("[checkout] Unhandled error", error, {
+			checkoutType,
+			pack: packKey,
+			subscription: subscriptionKey,
+			currency,
+		});
 		return handleApiError(error);
 	}
 }

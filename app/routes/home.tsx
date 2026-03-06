@@ -127,16 +127,49 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				}}
 			/>
 
-			{/* Status Banner */}
-			<div className="relative z-50 bg-hyper-green/10 border-b border-hyper-green/20 p-2 text-center">
-				<p className="text-xs uppercase tracking-wider font-bold text-carbon">
-					<span
-						className="inline-block w-1.5 h-1.5 rounded-full bg-hyper-green mr-1.5 align-middle animate-pulse"
-						aria-hidden
+			{/* Header — nav + legal links for Google OAuth verification */}
+			<header className="relative z-50 flex items-center justify-between px-6 py-3 border-b border-carbon/10 bg-ceramic">
+				<Link to="/" className="shrink-0">
+					<img
+						src="/static/ration-logo.svg"
+						alt="Ration"
+						className="h-8 md:h-9 w-auto"
 					/>
-					Live {" // "}v{APP_VERSION}
-				</p>
-			</div>
+				</Link>
+				<nav
+					className="flex items-center gap-4 md:gap-6 text-sm text-muted"
+					aria-label="Site navigation"
+				>
+					<a
+						href="#pricing"
+						className="hover:text-hyper-green transition-colors"
+					>
+						Pricing
+					</a>
+					<a
+						href="https://ration.mayutic.com/legal/terms"
+						className="hover:text-hyper-green transition-colors"
+					>
+						Terms
+					</a>
+					<a
+						href="https://ration.mayutic.com/legal/privacy"
+						className="hover:text-hyper-green transition-colors"
+					>
+						Privacy
+					</a>
+					<span
+						className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-carbon"
+						title={`Live version ${APP_VERSION}`}
+					>
+						<span
+							className="w-1.5 h-1.5 rounded-full bg-hyper-green animate-pulse shrink-0"
+							aria-hidden
+						/>
+						Live · v{APP_VERSION}
+					</span>
+				</nav>
+			</header>
 
 			<main className="flex-1 w-full relative z-20">
 				<div className="max-w-7xl mx-auto px-6 py-12 md:py-24 flex flex-col items-center gap-24 md:gap-32">
@@ -155,8 +188,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								Ration<span className="text-hyper-green">.app</span>
 							</h1>
 							<p className="text-muted text-lg md:text-xl max-w-2xl mx-auto">
-								Kitchen lifecycle management. A closed-loop platform that tracks
-								what you have, plans what to cook, and knows what to buy next.
+								Ration is a kitchen inventory and meal-planning application that
+								helps you track what you have (Cargo), plan meals (Galley,
+								Manifest), and generate shopping lists (Supply). It uses AI for
+								receipt scanning and recipe import, and supports households with
+								shared groups and credits.
 							</p>
 							<p className="text-muted text-sm max-w-xl mx-auto font-mono">
 								Cargo → Galley → Manifest → Supply → Dock → Repeat.
@@ -655,7 +691,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					</section>
 
 					{/* ── PRICING ── */}
-					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+					<section
+						id="pricing"
+						className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24 scroll-mt-24"
+					>
 						<div className="flex flex-col items-center gap-4">
 							<div className="flex items-center gap-2 text-sm text-muted">
 								<span>Show prices in</span>

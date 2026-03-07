@@ -136,6 +136,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:mcp_list",
 	},
+	mcp_write: {
+		windowMs: 60_000, // 1 minute — tighter than reads to guard mutations
+		maxRequests: 15,
+		keyPrefix: "rate:mcp_write",
+	},
 	credits_transfer: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

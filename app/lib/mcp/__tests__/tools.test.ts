@@ -14,6 +14,9 @@ vi.mock("~/lib/cargo.server", () => ({
 vi.mock("~/lib/manifest.server", () => ({
 	ensureMealPlan: vi.fn(),
 	addEntry: vi.fn(),
+	getMealPlan: vi.fn(),
+	getTodayISO: vi.fn(() => "2026-03-07"),
+	getWeekEntries: vi.fn(),
 }));
 
 vi.mock("~/lib/matching.server", () => ({
@@ -23,6 +26,7 @@ vi.mock("~/lib/matching.server", () => ({
 vi.mock("~/lib/meals.server", () => ({
 	getMeals: vi.fn(),
 	cookMeal: vi.fn(),
+	updateMeal: vi.fn(),
 }));
 
 vi.mock("~/lib/ledger.server", () => ({
@@ -60,9 +64,11 @@ const { getCargo, ingestCargoItems, jettisonItem, updateItem } = await import(
 	"~/lib/cargo.server"
 );
 const { checkBalance } = await import("~/lib/ledger.server");
-const { ensureMealPlan, addEntry } = await import("~/lib/manifest.server");
+const { ensureMealPlan, addEntry, getMealPlan, getWeekEntries } = await import(
+	"~/lib/manifest.server"
+);
 const { matchMeals } = await import("~/lib/matching.server");
-const { getMeals, cookMeal } = await import("~/lib/meals.server");
+const { getMeals, cookMeal, updateMeal } = await import("~/lib/meals.server");
 const { checkRateLimit } = await import("~/lib/rate-limiter.server");
 const {
 	getSupplyList,
@@ -220,6 +226,92 @@ describe("MCP tools", () => {
 		});
 	});
 
+	describe("get_meal_plan", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_meal_plan")({});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(getMealPlan).not.toHaveBeenCalled();
+		});
+
+		it("returns no-active-meal-plan when getMealPlan returns null", async () => {
+			vi.mocked(getMealPlan).mockResolvedValueOnce(null);
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_meal_plan")({});
+			expect(result.content[0]?.text).toBe("No active meal plan found.");
+			expect(getWeekEntries).not.toHaveBeenCalled();
+		});
+
+		it("returns plan and entries when plan exists", async () => {
+			const mockPlan = {
+				id: "plan-1",
+				name: "Meal Plan",
+				organizationId: "org-test-123",
+			};
+			const mockEntries = [
+				{
+					id: "entry-1",
+					planId: "plan-1",
+					mealId: "meal-1",
+					date: "2026-03-07",
+					slotType: "breakfast",
+					orderIndex: 0,
+					servingsOverride: null,
+					notes: null,
+					consumedAt: null,
+					createdAt: new Date(),
+					mealName: "Oatmeal",
+					mealServings: 2,
+					mealType: "recipe",
+					mealPrepTime: null,
+					mealCookTime: null,
+				},
+			];
+			vi.mocked(getMealPlan).mockResolvedValueOnce(mockPlan as never);
+			vi.mocked(getWeekEntries).mockResolvedValueOnce(mockEntries as never);
+
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_meal_plan")({});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.planId).toBe("plan-1");
+			expect(parsed.planName).toBe("Meal Plan");
+			expect(parsed.entries).toHaveLength(1);
+			expect(parsed.entries[0]).toMatchObject({
+				mealName: "Oatmeal",
+				slotType: "breakfast",
+				servings: 2,
+			});
+			expect(getWeekEntries).toHaveBeenCalledWith(
+				expect.anything(),
+				"plan-1",
+				"2026-03-07",
+				"2026-03-13",
+			);
+		});
+
+		it("respects startDate and days parameters", async () => {
+			const mockPlan = { id: "plan-1", name: "Meal Plan" };
+			vi.mocked(getMealPlan).mockResolvedValueOnce(mockPlan as never);
+			vi.mocked(getWeekEntries).mockResolvedValueOnce([] as never);
+
+			const server = makeServer();
+			await getToolHandler(
+				server,
+				"get_meal_plan",
+			)({
+				startDate: "2026-03-10",
+				days: 3,
+			});
+			expect(getWeekEntries).toHaveBeenCalledWith(
+				expect.anything(),
+				"plan-1",
+				"2026-03-10",
+				"2026-03-12",
+			);
+		});
+	});
+
 	describe("list_meals", () => {
 		it("returns empty array when no meals", async () => {
 			vi.mocked(getMeals).mockResolvedValueOnce([]);
@@ -229,6 +321,57 @@ describe("MCP tools", () => {
 			const parsed = JSON.parse(text);
 			expect(parsed).toEqual([]);
 			expect(result.content[0]?.text).not.toContain("truncated");
+		});
+
+		it("returns full meal shape with directions, equipment, ingredientName", async () => {
+			const mockMeals = [
+				{
+					id: "meal-1",
+					name: "pancakes",
+					domain: "food",
+					type: "recipe",
+					description: "Fluffy pancakes",
+					directions: "Mix and cook.",
+					equipment: ["pan"],
+					servings: 4,
+					prepTime: 5,
+					cookTime: 10,
+					customFields: {},
+					tags: ["breakfast"],
+					ingredients: [
+						{
+							ingredientName: "flour",
+							quantity: 200,
+							unit: "g",
+							cargoId: null,
+							isOptional: false,
+							orderIndex: 0,
+							mealId: "meal-1",
+						},
+					],
+				},
+			];
+			vi.mocked(getMeals).mockResolvedValueOnce(mockMeals as never);
+			const server = makeServer();
+			const result = await getToolHandler(server, "list_meals")({});
+			const parsed = JSON.parse(result.content[0]?.text ?? "[]");
+			expect(parsed).toHaveLength(1);
+			expect(parsed[0]).toMatchObject({
+				id: "meal-1",
+				name: "pancakes",
+				domain: "food",
+				directions: "Mix and cook.",
+				equipment: ["pan"],
+				prepTime: 5,
+				cookTime: 10,
+			});
+			expect(parsed[0].ingredients[0]).toMatchObject({
+				ingredientName: "flour",
+				quantity: 200,
+				unit: "g",
+				isOptional: false,
+				orderIndex: 0,
+			});
 		});
 	});
 
@@ -687,6 +830,118 @@ describe("MCP tools", () => {
 				quantity: 1,
 			});
 			expect(result.content[0]?.text).toContain("not found");
+		});
+	});
+
+	describe("update_meal", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const mealPayload = {
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "pancakes",
+				domain: "food",
+				ingredients: [
+					{
+						ingredientName: "flour",
+						quantity: 250,
+						unit: "g",
+					},
+				],
+				tags: [],
+			};
+			const result = await getToolHandler(
+				server,
+				"update_meal",
+			)({
+				meal: mealPayload,
+			});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(updateMeal).not.toHaveBeenCalled();
+		});
+
+		it("returns meal-not-found when updateMeal returns null", async () => {
+			vi.mocked(updateMeal).mockResolvedValueOnce(null as never);
+			const server = makeServer();
+			const mealPayload = {
+				id: "550e8400-e29b-41d4-a716-446655440000",
+				name: "pancakes",
+				domain: "food",
+				ingredients: [
+					{
+						ingredientName: "flour",
+						quantity: 250,
+						unit: "g",
+					},
+				],
+				tags: [],
+			};
+			const result = await getToolHandler(
+				server,
+				"update_meal",
+			)({
+				meal: mealPayload,
+			});
+			expect(result.content[0]?.text).toContain("Meal not found");
+		});
+
+		it("updates meal and returns confirmation", async () => {
+			const mealId = "550e8400-e29b-41d4-a716-446655440001";
+			const mockUpdated = {
+				id: mealId,
+				name: "pancakes",
+				domain: "food",
+				description: null,
+				servings: 4,
+				ingredients: [
+					{
+						ingredientName: "flour",
+						quantity: 250,
+						unit: "g",
+					},
+				],
+				tags: ["breakfast"],
+			};
+			vi.mocked(updateMeal).mockResolvedValueOnce(mockUpdated as never);
+			const server = makeServer();
+			const mealPayload = {
+				id: mealId,
+				name: "pancakes",
+				domain: "food",
+				ingredients: [
+					{
+						ingredientName: "flour",
+						quantity: 250,
+						unit: "g",
+					},
+				],
+				tags: ["breakfast"],
+			};
+			const result = await getToolHandler(
+				server,
+				"update_meal",
+			)({
+				meal: mealPayload,
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.updated).toMatchObject({
+				id: mealId,
+				name: "pancakes",
+				servings: 4,
+			});
+			expect(parsed.updated.ingredients[0]).toMatchObject({
+				ingredientName: "flour",
+				quantity: 250,
+			});
+			expect(updateMeal).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				mealId,
+				expect.objectContaining({
+					name: "pancakes",
+					ingredients: expect.any(Array),
+				}),
+			);
 		});
 	});
 });

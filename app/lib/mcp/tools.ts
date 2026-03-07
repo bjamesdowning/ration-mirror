@@ -11,10 +11,18 @@ import {
 	updateItem,
 } from "../cargo.server";
 import { checkBalance } from "../ledger.server";
-import { addEntry, ensureMealPlan } from "../manifest.server";
+import {
+	addEntry,
+	ensureMealPlan,
+	getMealPlan,
+	getTodayISO,
+	getWeekEntries,
+} from "../manifest.server";
+import { addDays } from "../manifest-dates";
 import { matchMeals } from "../matching.server";
-import { cookMeal, getMeals } from "../meals.server";
+import { cookMeal, getMeals, updateMeal } from "../meals.server";
 import { checkRateLimit } from "../rate-limiter.server";
+import { MealUpdateSchema } from "../schemas/meal";
 import {
 	addSupplyItem,
 	deleteSupplyItem,
@@ -219,6 +227,83 @@ export function registerTools(
 	);
 
 	/**
+	 * Tool: get_meal_plan
+	 * Retrieves the user's weekly meal plan entries for a date range.
+	 */
+	server.tool(
+		"get_meal_plan",
+		"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack).",
+		{
+			startDate: z
+				.string()
+				.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
+				.optional()
+				.describe("Start date for the range (default: today)"),
+			days: z
+				.number()
+				.int()
+				.min(1)
+				.max(14)
+				.optional()
+				.default(7)
+				.describe(
+					"Number of days from startDate to include (default 7, max 14)",
+				),
+		},
+		async (args: { startDate?: string; days?: number }) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_list",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			const plan = await getMealPlan(env.DB, env.__orgId);
+			if (!plan) {
+				return {
+					content: [{ type: "text", text: "No active meal plan found." }],
+				};
+			}
+
+			const startDate = args.startDate ?? getTodayISO();
+			const days = args.days ?? 7;
+			const endDate = addDays(startDate, days - 1);
+
+			const entries = await getWeekEntries(env.DB, plan.id, startDate, endDate);
+
+			const mapped = {
+				planId: plan.id,
+				planName: plan.name,
+				startDate,
+				endDate,
+				entries: entries.map((e) => ({
+					id: e.id,
+					date: e.date,
+					slotType: e.slotType,
+					mealId: e.mealId,
+					mealName: e.mealName,
+					servings: e.servingsOverride ?? e.mealServings,
+					notes: e.notes,
+					consumedAt: e.consumedAt,
+				})),
+			};
+
+			return {
+				content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
+			};
+		},
+	);
+
+	/**
 	 * Tool: list_meals
 	 * Retrieves the user's recipes/meals and their required ingredients.
 	 */
@@ -252,15 +337,23 @@ export function registerTools(
 			const mapped = meals.map((m) => ({
 				id: m.id,
 				name: m.name,
-				description: m.description,
-				type: m.type,
 				domain: m.domain,
-				servings: m.servings,
+				description: m.description ?? undefined,
+				directions: m.directions ?? undefined,
+				equipment: m.equipment ?? [],
+				servings: m.servings ?? 1,
+				prepTime: m.prepTime ?? undefined,
+				cookTime: m.cookTime ?? undefined,
+				customFields: m.customFields ?? {},
+				type: m.type,
 				tags: m.tags,
 				ingredients: m.ingredients.map((i) => ({
-					name: i.ingredientName,
+					ingredientName: i.ingredientName,
 					quantity: i.quantity,
 					unit: i.unit,
+					cargoId: i.cargoId ?? undefined,
+					isOptional: i.isOptional ?? false,
+					orderIndex: i.orderIndex ?? 0,
 				})),
 			}));
 
@@ -1331,6 +1424,86 @@ export function registerTools(
 										unit: updated.unit,
 										domain: updated.domain,
 										expiresAt: updated.expiresAt,
+									},
+								},
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: update_meal
+	 * Updates any aspect of a Galley recipe. Full round-trip: fetch via list_meals,
+	 * modify fields, pass complete meal object (including id).
+	 */
+	server.tool(
+		"update_meal",
+		"Update any aspect of a Galley recipe. Use list_meals to fetch the full meal, modify the fields you need to change, then pass the complete meal object (including id). Can update name, description, directions, ingredients, tags, servings, prep time, cook time, and more.",
+		{
+			meal: MealUpdateSchema.describe(
+				"Full meal object from list_meals with desired modifications. Must include id.",
+			),
+		},
+		async (args: { meal: z.infer<typeof MealUpdateSchema> }) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const parsed = MealUpdateSchema.parse(args.meal);
+				const { id, ...mealInput } = parsed;
+				const updated = await updateMeal(env.DB, env.__orgId, id, mealInput);
+				if (!updated) {
+					return {
+						content: [
+							{ type: "text", text: "Meal not found or unauthorized." },
+						],
+					};
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{
+									updated: {
+										id: updated.id,
+										name: updated.name,
+										domain: updated.domain,
+										description: updated.description,
+										servings: updated.servings,
+										ingredients: updated.ingredients.map((i) => ({
+											ingredientName: i.ingredientName,
+											quantity: i.quantity,
+											unit: i.unit,
+										})),
+										tags: updated.tags,
 									},
 								},
 								null,

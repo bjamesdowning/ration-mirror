@@ -1859,6 +1859,13 @@ const MCP_TOOLS = [
 		write: false,
 	},
 	{
+		name: "get_meal_plan",
+		description: "Weekly meal plan by date and slot",
+		params:
+			"startDate (YYYY-MM-DD, optional), days (1–14, optional, default 7)",
+		write: false,
+	},
+	{
 		name: "list_meals",
 		description: "All recipes with ingredients",
 		params: "tag (string, optional)",
@@ -1919,6 +1926,13 @@ const MCP_TOOLS = [
 		description: "Update pantry item (name, qty, unit, expiry, domain, tags)",
 		params:
 			"itemId (required); name, quantity, unit, domain, tags, expiresAt (optional)",
+		write: true,
+	},
+	{
+		name: "update_meal",
+		description: "Update any aspect of a Galley recipe",
+		params:
+			"meal (full object from list_meals with modifications; must include id)",
 		write: true,
 	},
 	{

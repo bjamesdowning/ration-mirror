@@ -1380,7 +1380,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | Meal mutations | userId | 60s | 30 | Write storm protection |
 | Supply list mutations | userId | 60s | 60 | Write storm protection |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
-| MCP read tools (list_inventory, get_supply_list, list_meals, get_expiring_items, get_credit_balance) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
+| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_credit_balance) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
@@ -1401,7 +1401,8 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `search_ingredients` | Read | Semantic vector search against the org's cargo (Vectorize, threshold 0.60 for agent-friendly recall) | mcp_search (20/min) |
 | `list_inventory` | Read | Full cargo listing, optionally filtered by `domain` (food/household/alcohol) | mcp_list (30/min) |
 | `get_supply_list` | Read | Active supply list with item names, quantities, units, and source meal names | mcp_list (30/min) |
-| `list_meals` | Read | All meals/recipes with ingredients and servings, optionally filtered by `tag` | mcp_list (30/min) |
+| `get_meal_plan` | Read | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
+| `list_meals` | Read | All meals/recipes with full data (ingredients, directions, equipment, etc.) for editing; optionally filtered by `tag` | mcp_list (30/min) |
 | `match_meals` | Read | Meals cookable from pantry (strict or delta mode, with missing-ingredient details) | mcp_search (20/min) |
 | `get_expiring_items` | Read | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
 | `get_credit_balance` | Read | Current AI credits for the organization | mcp_list (30/min) |
@@ -1411,6 +1412,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `mark_supply_purchased` | Write | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
 | `add_cargo_item` | Write | Add item to the pantry (uses `skipVectorPhase` to avoid AI cost) | mcp_write (15/min) |
 | `update_cargo_item` | Write | Update pantry item (name, quantity, unit, expiry, domain, tags) | mcp_write (15/min) |
+| `update_meal` | Write | Update any aspect of a Galley recipe; pass full meal from list_meals with modifications | mcp_write (15/min) |
 | `remove_cargo_item` | Write | Remove item from the pantry | mcp_write (15/min) |
 | `consume_meal` | Write | Cook a meal and deduct its ingredients from cargo | mcp_write (15/min) |
 | `add_meal_plan_entry` | Write | Add a meal to the weekly plan for a date and slot | mcp_write (15/min) |

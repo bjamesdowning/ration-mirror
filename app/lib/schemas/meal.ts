@@ -87,6 +87,10 @@ export const MealSchema = z.object({
 export type MealInput = z.infer<typeof MealSchema>;
 export type MealIngredientInput = z.infer<typeof MealIngredientSchema>;
 
+/** Schema for MCP update_meal tool: MealSchema plus id for identification. */
+export const MealUpdateSchema = MealSchema.extend({ id: z.string().uuid() });
+export type MealUpdateInput = z.infer<typeof MealUpdateSchema>;
+
 /** Schema for creating/updating a provision (single-item "meal"). */
 export const ProvisionSchema = z.object({
 	name: z

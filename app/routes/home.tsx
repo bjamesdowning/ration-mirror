@@ -37,7 +37,7 @@ export function meta(_: Route.MetaArgs) {
 		{
 			name: "description",
 			content:
-				"Closed-loop kitchen management powered by vector intelligence. Track Cargo, plan meals in the Galley, schedule via Manifest, auto-generate Supply lists, and Dock it back.",
+				"AI-native kitchen management powered by vector intelligence and MCP. Track Cargo, plan meals in the Galley, schedule via Manifest, auto-generate Supply lists — or control it all from Claude, Cursor, or any MCP client.",
 		},
 	];
 }
@@ -321,6 +321,72 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</div>
 					</section>
 
+					{/* ── AI NATIVE ── */}
+					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
+						<SectionHeader
+							eyebrow="AI NATIVE"
+							title="Built for AI Agents and Vector Search"
+							subtitle="Control Ration entirely from Claude, Cursor, or any MCP client. Vector embeddings power semantic search — match by meaning, not keywords. No copy-paste, no manual updates. Your AI has direct read/write access."
+						/>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+							<div className="glass-panel rounded-2xl overflow-hidden border border-hyper-green/20">
+								<img
+									src="/static/mcp-server-chat.webp"
+									alt="MCP server in action — AI assistant querying Ration inventory"
+									className="w-full h-auto"
+									loading="lazy"
+								/>
+							</div>
+							<div className="space-y-6">
+								<div className="space-y-2">
+									<h3 className="text-display text-lg text-carbon">
+										Full control via MCP
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Add and remove Cargo, manage Supply lists, cook meals, plan
+										your Manifest — all from your AI. 16+ MCP tools cover the
+										full lifecycle: search_ingredients, list_inventory,
+										match_meals, consume_meal, add_supply_item, and more.
+									</p>
+								</div>
+								<div className="space-y-2">
+									<h3 className="text-display text-lg text-carbon">
+										Vector-first backend
+									</h3>
+									<p className="text-sm text-muted leading-relaxed">
+										Ask for &quot;tomatoes&quot; and we match canned, fresh, and
+										cherry — by meaning, not exact strings. Every ingredient is
+										embedded at 768 dimensions. Semantic matching runs through
+										deduplication, meal matching, supply generation, and
+										consumption deduction.
+									</p>
+								</div>
+								<a
+									href="#signup"
+									className="inline-flex items-center gap-1.5 text-xs font-semibold text-hyper-green hover:text-hyper-green/80 transition-colors"
+								>
+									Connect Claude, Cursor, or any MCP client — sign up to get
+									started
+									<svg
+										className="w-3.5 h-3.5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										aria-hidden
+									>
+										<title>Arrow</title>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M13 7l5 5m0 0l-5 5m5-5H6"
+										/>
+									</svg>
+								</a>
+							</div>
+						</div>
+					</section>
+
 					{/* ── MANIFEST & MEAL PLANNING ── */}
 					<section className="w-full max-w-5xl space-y-10 border-t border-carbon/10 pt-16 md:pt-24">
 						<SectionHeader
@@ -596,12 +662,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										</li>
 									</ul>
 								</div>
-								<Link
-									to="/hub/settings#api"
+								<a
+									href="#signup"
 									className="mt-auto text-xs font-semibold text-carbon/50 hover:text-carbon transition-colors"
 								>
 									View API reference →
-								</Link>
+								</a>
 							</div>
 
 							{/* MCP Server panel */}
@@ -655,18 +721,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 									</ul>
 								</div>
 
-								{/* Screenshot */}
-								<div className="rounded-xl overflow-hidden border border-carbon/10 bg-platinum/30">
-									<img
-										src="/static/mcp-server-chat.webp"
-										alt="MCP server in action — AI assistant querying Ration inventory"
-										className="w-full h-auto"
-										loading="lazy"
-									/>
-								</div>
-
-								<Link
-									to="/hub/settings#developer"
+								<a
+									href="#signup"
 									className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-hyper-green hover:text-hyper-green/80 transition-colors"
 								>
 									Connect your AI client
@@ -685,7 +741,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											d="M13 7l5 5m0 0l-5 5m5-5H6"
 										/>
 									</svg>
-								</Link>
+								</a>
 							</div>
 						</div>
 					</section>
@@ -964,6 +1020,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								{
 									q: "What do Cargo, Galley, Manifest, Supply, and Dock mean?",
 									a: "Cargo = your pantry inventory. Galley = your recipe/meal library. Manifest = your weekly meal plan (calendar). Supply = shopping list(s) generated from the plan and Galley. Dock = moving items from a Supply list into Cargo when you've bought them. Together they form the closed loop: Cargo → Galley → Manifest → Supply → Dock → repeat.",
+								},
+								{
+									q: "Can I use Ration without the web app?",
+									a: "Yes. The MCP server gives your AI full control over inventory, meals, supply lists, and meal plans. Connect Claude, Cursor, or any MCP-compatible assistant to query what's in stock, add items, cook meals, and generate shopping lists — no copy-paste, no manual updates.",
 								},
 								{
 									q: "Can I be in more than one group?",

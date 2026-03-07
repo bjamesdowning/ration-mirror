@@ -1,0 +1,25 @@
+# Pushes GitHub staging branch to GitLab staging.
+# Agent commits to GitHub staging → workflow pushes to GitLab staging.
+# GitLab mirror (main only) avoids redundant runs when merging staging → main.
+# Requires secret: GITLAB_MIRROR_TOKEN (GitLab PAT with write_repository)
+
+name: Mirror to GitLab Staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitLab staging
+        run: |
+          git remote add gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/mayutic/ration/application.git 2>/dev/null || git remote set-url gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.com/mayutic/ration/application.git
+          git push gitlab staging:staging
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}

@@ -1,0 +1,53 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ration-local",
+	"compatibility_date": "2026-01-14",
+	"main": "./workers/app.ts",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		"BETTER_AUTH_URL": "http://localhost:5173",
+		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+		"AI_GATEWAY_ID": "ration-gateway",
+		"STRIPE_PRICE_TASTE_TEST": "price_1T6fQ3FX10NMafIYI3DG2jeb",
+		"STRIPE_PRICE_SUPPLY_RUN": "price_1T6fQdFX10NMafIYJcjEP9kb",
+		"STRIPE_PRICE_MISSION_CRATE": "price_1T6fREFX10NMafIYyBKWIYHD",
+		"STRIPE_PRICE_ORBITAL_STOCKPILE": "price_1T6fTCFX10NMafIYitO2F4pe",
+		"STRIPE_PRICE_CREW_MEMBER_ANNUAL": "price_1T1r4zFX10NMafIY7ZFHe8xE",
+		"STRIPE_PRICE_CREW_MEMBER_MONTHLY": "price_1T6fBlFX10NMafIYHEbyNKwN",
+		"STRIPE_PROMO_WELCOME65": "promo_1T7CtfFX10NMafIYkyQyhzO6"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ration-db",
+			"database_id": "41e98836-d752-4bbe-a14f-68e802c72c10",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "afafb8640ed44b6e9cfe5df204eb6a74",
+			"preview_id": "f00538f983d84810b478a6050a214963"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo"
+		}
+	],
+	"assets": {
+		"directory": "./build/client",
+		"binding": "ASSETS"
+	}
+}

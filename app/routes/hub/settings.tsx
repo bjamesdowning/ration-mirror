@@ -1839,25 +1839,106 @@ function ApiKeysSection({
 // ─── MCP Reference Panel ───────────────────────────────────────────────────────
 
 const MCP_TOOLS = [
+	// Read
 	{
 		name: "search_ingredients",
 		description: "Semantic vector search for pantry items",
 		params: "query (string), topK (1–20, optional)",
+		write: false,
 	},
 	{
 		name: "list_inventory",
 		description: "Full pantry listing",
 		params: "domain (food/household/alcohol, optional)",
+		write: false,
 	},
 	{
 		name: "get_supply_list",
 		description: "Active shopping list with source meals",
 		params: "none",
+		write: false,
 	},
 	{
 		name: "list_meals",
 		description: "All recipes with ingredients",
 		params: "tag (string, optional)",
+		write: false,
+	},
+	{
+		name: "match_meals",
+		description: "Meals cookable from pantry (strict or delta mode)",
+		params: "mode, minMatch, limit, tags (all optional)",
+		write: false,
+	},
+	{
+		name: "get_expiring_items",
+		description: "Items expiring within N days",
+		params: "days (optional, default 7)",
+		write: false,
+	},
+	{
+		name: "get_credit_balance",
+		description: "Current AI credits for the org",
+		params: "none",
+		write: false,
+	},
+	// Write
+	{
+		name: "add_supply_item",
+		description: "Add item to shopping list",
+		params: "name (required), quantity, unit, domain (optional)",
+		write: true,
+	},
+	{
+		name: "update_supply_item",
+		description: "Update a supply list item",
+		params: "itemId (required), name, quantity, unit (optional)",
+		write: true,
+	},
+	{
+		name: "remove_supply_item",
+		description: "Remove item from supply list",
+		params: "itemId (required)",
+		write: true,
+	},
+	{
+		name: "mark_supply_purchased",
+		description: "Mark supply item as purchased",
+		params: "itemId (required), purchased (boolean)",
+		write: true,
+	},
+	{
+		name: "add_cargo_item",
+		description: "Add item to pantry",
+		params:
+			"name, quantity, unit (required); domain, tags, expiresAt (optional)",
+		write: true,
+	},
+	{
+		name: "update_cargo_item",
+		description: "Update pantry item (name, qty, unit, expiry, domain, tags)",
+		params:
+			"itemId (required); name, quantity, unit, domain, tags, expiresAt (optional)",
+		write: true,
+	},
+	{
+		name: "remove_cargo_item",
+		description: "Remove item from pantry",
+		params: "itemId (required)",
+		write: true,
+	},
+	{
+		name: "consume_meal",
+		description: "Cook a meal, deduct ingredients from pantry",
+		params: "mealId (required), servings (optional)",
+		write: true,
+	},
+	{
+		name: "add_meal_plan_entry",
+		description: "Add meal to weekly plan",
+		params:
+			"mealId, date (YYYY-MM-DD), slotType (required); servingsOverride, notes (optional)",
+		write: true,
 	},
 ] as const;
 
@@ -1923,8 +2004,10 @@ function McpReferencePanel({
 				<div className="mt-4 space-y-5 text-sm">
 					<p className="text-muted">
 						Connect any MCP-compatible AI client to your Ration data in real
-						time. Query your inventory, meals, and shopping list from Claude,
-						Cursor, or any agent that supports the Model Context Protocol.
+						time. Query inventory, meals, and shopping lists, or add items,
+						update pantry quantities, cook meals, and manage meal plans from
+						Claude, Cursor, or any agent that supports the Model Context
+						Protocol.
 					</p>
 
 					<div>
@@ -2007,6 +2090,9 @@ function McpReferencePanel({
 											Tool
 										</th>
 										<th className="px-3 py-2 font-semibold text-carbon">
+											Type
+										</th>
+										<th className="px-3 py-2 font-semibold text-carbon">
 											Description
 										</th>
 										<th className="px-3 py-2 font-semibold text-carbon">
@@ -2019,6 +2105,17 @@ function McpReferencePanel({
 										<tr key={tool.name} className="border-t border-platinum/50">
 											<td className="px-3 py-2 font-mono text-hyper-green">
 												{tool.name}
+											</td>
+											<td className="px-3 py-2">
+												<span
+													className={
+														tool.write
+															? "px-1.5 py-0.5 rounded text-[10px] font-bold bg-carbon/10 text-carbon"
+															: "px-1.5 py-0.5 rounded text-[10px] font-bold bg-platinum/50 text-muted"
+													}
+												>
+													{tool.write ? "Write" : "Read"}
+												</span>
 											</td>
 											<td className="px-3 py-2 text-muted">
 												{tool.description}
@@ -2034,10 +2131,11 @@ function McpReferencePanel({
 					</div>
 
 					<div className="text-xs text-muted p-3 bg-platinum/30 rounded-lg">
-						<span className="font-semibold text-carbon">Rate limits:</span>{" "}
-						<code className="font-mono">search_ingredients</code> is subject to
-						the MCP search bucket limit. All other tools are read-only with no
-						additional credit cost.
+						<span className="font-semibold text-carbon">Rate limits:</span> Read
+						tools: <code className="font-mono">mcp_list</code> (30/min),{" "}
+						<code className="font-mono">mcp_search</code> (20/min). Write tools:{" "}
+						<code className="font-mono">mcp_write</code> (15/min). Write tools
+						are D1-only; no AI credits are consumed.
 					</div>
 
 					<button

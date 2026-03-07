@@ -8,7 +8,9 @@ import {
 	getCargoByIds,
 	ingestCargoItems,
 	jettisonItem,
+	updateItem,
 } from "../cargo.server";
+import { checkBalance } from "../ledger.server";
 import { addEntry, ensureMealPlan } from "../manifest.server";
 import { matchMeals } from "../matching.server";
 import { cookMeal, getMeals } from "../meals.server";
@@ -1170,6 +1172,172 @@ export function registerTools(
 
 				return {
 					content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	// ─── Credit Tools ─────────────────────────────────────────────────────────
+
+	/**
+	 * Tool: get_credit_balance
+	 * Returns the organization's current AI credit balance.
+	 */
+	server.tool(
+		"get_credit_balance",
+		"Check how many AI credits remain for your organization. Credits are used for AI features like recipe importing and visual scanning.",
+		{},
+		async () => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_list",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const balance = await checkBalance(env, env.__orgId);
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify({ balance, currency: "credits" }, null, 2),
+						},
+					],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: update_cargo_item
+	 * Updates any field on an existing pantry item. RLS-scoped by orgId.
+	 * Automatically re-upserts the vector embedding when name changes.
+	 */
+	server.tool(
+		"update_cargo_item",
+		"Update a pantry item's name, quantity, unit, expiry date, domain, or tags. Use item IDs from list_inventory or search_ingredients.",
+		{
+			itemId: z
+				.string()
+				.uuid()
+				.describe("ID of the cargo item to update (from list_inventory)"),
+			name: z.string().min(1).optional().describe("New name for the item"),
+			quantity: z
+				.number()
+				.positive()
+				.optional()
+				.describe("New quantity (e.g. 0.4 for 400ml remaining)"),
+			unit: z
+				.string()
+				.optional()
+				.describe(
+					"New unit of measurement (e.g. 'kg', 'g', 'l', 'ml', 'piece')",
+				),
+			domain: z
+				.enum(["food", "household", "alcohol"])
+				.optional()
+				.describe("Item domain"),
+			tags: z
+				.array(z.string())
+				.optional()
+				.describe("New tags — replaces existing tags entirely"),
+			expiresAt: z
+				.string()
+				.optional()
+				.describe("New expiry date in ISO 8601 format (e.g. '2026-04-01')"),
+		},
+		async (args: {
+			itemId: string;
+			name?: string;
+			quantity?: number;
+			unit?: string;
+			domain?: "food" | "household" | "alcohol";
+			tags?: string[];
+			expiresAt?: string;
+		}) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const unit = args.unit ? toSupportedUnit(args.unit) : undefined;
+				const updated = await updateItem(env, env.__orgId, args.itemId, {
+					name: args.name,
+					quantity: args.quantity,
+					unit,
+					domain: args.domain,
+					tags: args.tags,
+					expiresAt: args.expiresAt ? new Date(args.expiresAt) : undefined,
+				});
+
+				if (!updated) {
+					return {
+						content: [
+							{ type: "text", text: `Cargo item ${args.itemId} not found.` },
+						],
+					};
+				}
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{
+									updated: {
+										id: updated.id,
+										name: updated.name,
+										quantity: updated.quantity,
+										unit: updated.unit,
+										domain: updated.domain,
+										expiresAt: updated.expiresAt,
+									},
+								},
+								null,
+								2,
+							),
+						},
+					],
 				};
 			} catch (e) {
 				return {

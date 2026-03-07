@@ -8,6 +8,7 @@ vi.mock("~/lib/cargo.server", () => ({
 	getCargoByIds: vi.fn(),
 	ingestCargoItems: vi.fn(),
 	jettisonItem: vi.fn(),
+	updateItem: vi.fn(),
 }));
 
 vi.mock("~/lib/manifest.server", () => ({
@@ -22,6 +23,10 @@ vi.mock("~/lib/matching.server", () => ({
 vi.mock("~/lib/meals.server", () => ({
 	getMeals: vi.fn(),
 	cookMeal: vi.fn(),
+}));
+
+vi.mock("~/lib/ledger.server", () => ({
+	checkBalance: vi.fn(),
 }));
 
 vi.mock("~/lib/rate-limiter.server", () => ({
@@ -51,9 +56,10 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
-const { getCargo, ingestCargoItems, jettisonItem } = await import(
+const { getCargo, ingestCargoItems, jettisonItem, updateItem } = await import(
 	"~/lib/cargo.server"
 );
+const { checkBalance } = await import("~/lib/ledger.server");
 const { ensureMealPlan, addEntry } = await import("~/lib/manifest.server");
 const { matchMeals } = await import("~/lib/matching.server");
 const { getMeals, cookMeal } = await import("~/lib/meals.server");
@@ -590,6 +596,97 @@ describe("MCP tools", () => {
 				"get_expiring_items",
 			)({ days: 7 });
 			expect(result.content[0]?.text).toContain("No items expiring");
+		});
+	});
+
+	// ── New Credit / Cargo Tools ─────────────────────────────────────────────
+
+	describe("get_credit_balance", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_credit_balance")({});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(checkBalance).not.toHaveBeenCalled();
+		});
+
+		it("returns balance and currency", async () => {
+			vi.mocked(checkBalance).mockResolvedValueOnce(42);
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_credit_balance")({});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.balance).toBe(42);
+			expect(parsed.currency).toBe("credits");
+		});
+
+		it("returns 0 when org has no credits", async () => {
+			vi.mocked(checkBalance).mockResolvedValueOnce(0);
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_credit_balance")({});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.balance).toBe(0);
+		});
+	});
+
+	describe("update_cargo_item", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				quantity: 0.4,
+			});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(updateItem).not.toHaveBeenCalled();
+		});
+
+		it("updates item and returns new state", async () => {
+			const mockItem = {
+				id: "c1",
+				name: "oat milk",
+				quantity: 0.4,
+				unit: "l",
+				domain: "food",
+				expiresAt: null,
+			};
+			vi.mocked(updateItem).mockResolvedValueOnce(mockItem as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				quantity: 0.4,
+				unit: "l",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.updated).toMatchObject({
+				id: "c1",
+				quantity: 0.4,
+				unit: "l",
+			});
+			expect(updateItem).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				"00000000-0000-0000-0000-000000000001",
+				expect.objectContaining({ quantity: 0.4 }),
+			);
+		});
+
+		it("returns not-found when updateItem returns null", async () => {
+			vi.mocked(updateItem).mockResolvedValueOnce(null as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				quantity: 1,
+			});
+			expect(result.content[0]?.text).toContain("not found");
 		});
 	});
 });

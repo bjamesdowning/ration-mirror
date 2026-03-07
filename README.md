@@ -115,7 +115,7 @@ flowchart TB
     subgraph McpWorker["Cloudflare Worker: ration-mcp"]
         McpHandler["workers/mcp.ts"]
         McpAuth["API Key Auth — mcp scope"]
-        McpTools["MCP Tools — search, list, supply"]
+        McpTools["MCP Tools — search, list, supply, match, write"]
         McpHandler --> McpAuth
         McpHandler --> McpTools
     end
@@ -1379,7 +1379,9 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | Inventory mutations | userId | 60s | 60 | Write storm protection |
 | Meal mutations | userId | 60s | 30 | Write storm protection |
 | Supply list mutations | userId | 60s | 60 | Write storm protection |
-| MCP `search_ingredients` | orgId | 60s | 20 | AI cost control |
+| MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
+| MCP read tools (list_inventory, get_supply_list, list_meals, get_expiring_items, get_credit_balance) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
+| MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---
@@ -1394,14 +1396,26 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Available tools:**
 
-| Tool | Description | Rate Limited |
-|------|-------------|-------------|
-| `search_ingredients` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60 for agent-friendly recall) | Yes — 20/min per org |
-| `list_inventory` | Full cargo listing, optionally filtered by `domain` (food/household/alcohol) | No |
-| `get_supply_list` | Returns the active supply list with item names, quantities, units, and source meal names | No |
-| `list_meals` | Returns all meals/recipes with ingredients and servings, optionally filtered by `tag` | No |
+| Tool | Type | Description | Rate Category |
+|------|------|-------------|---------------|
+| `search_ingredients` | Read | Semantic vector search against the org's cargo (Vectorize, threshold 0.60 for agent-friendly recall) | mcp_search (20/min) |
+| `list_inventory` | Read | Full cargo listing, optionally filtered by `domain` (food/household/alcohol) | mcp_list (30/min) |
+| `get_supply_list` | Read | Active supply list with item names, quantities, units, and source meal names | mcp_list (30/min) |
+| `list_meals` | Read | All meals/recipes with ingredients and servings, optionally filtered by `tag` | mcp_list (30/min) |
+| `match_meals` | Read | Meals cookable from pantry (strict or delta mode, with missing-ingredient details) | mcp_search (20/min) |
+| `get_expiring_items` | Read | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
+| `get_credit_balance` | Read | Current AI credits for the organization | mcp_list (30/min) |
+| `add_supply_item` | Write | Add item to the active supply/shopping list | mcp_write (15/min) |
+| `update_supply_item` | Write | Update a supply list item (name, quantity, unit) | mcp_write (15/min) |
+| `remove_supply_item` | Write | Remove item from the supply list | mcp_write (15/min) |
+| `mark_supply_purchased` | Write | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
+| `add_cargo_item` | Write | Add item to the pantry (uses `skipVectorPhase` to avoid AI cost) | mcp_write (15/min) |
+| `update_cargo_item` | Write | Update pantry item (name, quantity, unit, expiry, domain, tags) | mcp_write (15/min) |
+| `remove_cargo_item` | Write | Remove item from the pantry | mcp_write (15/min) |
+| `consume_meal` | Write | Cook a meal and deduct its ingredients from cargo | mcp_write (15/min) |
+| `add_meal_plan_entry` | Write | Add a meal to the weekly plan for a date and slot | mcp_write (15/min) |
 
-**Why is `search_ingredients` rate limited but `list_inventory` is not?** `search_ingredients` calls Workers AI for embedding generation on every cache miss. `list_inventory` is a pure D1 read — more expensive in bytes returned but free in AI cost. The rate limit on search protects AI billing; the intentional full-table scan in `list_inventory` is documented as an acceptable tradeoff since agents legitimately need the complete inventory to plan meals.
+**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min). Write tools are D1-only and do not consume AI credits; `search_ingredients` and `match_meals` trigger Vectorize queries and are rate limited in the search bucket.
 
 **Integration example:**
 

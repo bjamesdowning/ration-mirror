@@ -55,6 +55,8 @@ export async function loader(args: Route.LoaderArgs) {
 		topOrgsByCargoResult,
 		// Heavy hitters: top 5 orgs by meal count
 		topOrgsByMealResult,
+		// Recent signups: last 10 users
+		recentSignupsResult,
 	] = await Promise.all([
 		// ── Overview totals ──────────────────────────────────────────────────
 		db.$count(schema.user),
@@ -219,6 +221,18 @@ export async function loader(args: Route.LoaderArgs) {
 			.groupBy(schema.meal.organizationId)
 			.orderBy(desc(count()))
 			.limit(5),
+
+		// ── Recent signups: last 10 users ───────────────────────────────────
+		db
+			.select({
+				id: schema.user.id,
+				name: schema.user.name,
+				email: schema.user.email,
+				createdAt: schema.user.createdAt,
+			})
+			.from(schema.user)
+			.orderBy(desc(schema.user.createdAt))
+			.limit(10),
 	]);
 
 	// Resolve org names for heavy hitters
@@ -285,6 +299,7 @@ export async function loader(args: Route.LoaderArgs) {
 			orgName: orgNames[r.organizationId] ?? r.organizationId,
 			count: r.mealCount,
 		})),
+		recentSignups: recentSignupsResult,
 	};
 }
 
@@ -479,6 +494,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		verifiedEmailRate,
 		topOrgsByCargo,
 		topOrgsByMeal,
+		recentSignups,
 	} = loaderData;
 
 	const searchFetcher = useFetcher<{ users: SearchUser[] }>();
@@ -773,6 +789,50 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							subtitle="Paid conversion rate"
 							iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
 						/>
+					</div>
+				</section>
+
+				{/* Recent Signups */}
+				<section>
+					<SectionHeading>Recent Signups</SectionHeading>
+					<p className="text-sm text-muted mb-4">Last 10 users who joined</p>
+					<div className="glass-panel rounded-2xl p-6">
+						{recentSignups.length === 0 ? (
+							<p className="text-muted text-sm">No users yet.</p>
+						) : (
+							<table className="w-full text-left">
+								<thead>
+									<tr className="border-b border-carbon/10">
+										<th className="text-label text-muted py-2 pr-4 text-xs">
+											Name
+										</th>
+										<th className="text-label text-muted py-2 pr-4 text-xs">
+											Email
+										</th>
+										<th className="text-label text-muted py-2 pr-4 text-xs">
+											Joined
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{recentSignups.map((user) => (
+										<tr key={user.id} className="border-b border-carbon/5">
+											<td className="py-2.5 pr-4 font-medium text-sm text-carbon">
+												{user.name}
+											</td>
+											<td className="py-2.5 pr-4 text-muted text-sm">
+												{user.email}
+											</td>
+											<td className="py-2.5 text-muted text-sm">
+												{user.createdAt
+													? new Date(user.createdAt).toLocaleDateString()
+													: "—"}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						)}
 					</div>
 				</section>
 

@@ -566,7 +566,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => importRef.current?.openImport()}
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 								>
 									<ImportIcon className="w-4 h-4" />
 									Import CSV
@@ -574,7 +574,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								<a
 									href="/api/cargo/export"
 									download="ration-cargo.csv"
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 								>
 									<ExportIcon className="w-4 h-4" />
 									Export CSV
@@ -624,7 +624,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}
-									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+									className="px-6 py-3 btn-secondary font-medium rounded-xl"
 								>
 									Add First Item
 								</button>

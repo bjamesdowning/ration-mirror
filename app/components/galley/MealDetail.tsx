@@ -1,6 +1,7 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
@@ -18,6 +19,8 @@ interface MealDetailProps {
 	isOwner: boolean;
 	/** User's declared allergen slugs — used to display warning banner. */
 	userAllergens?: AllergenSlug[];
+	/** Whether this meal is selected for Supply list (same as Galley add-meal toggle). */
+	isSelectedForSupply?: boolean;
 }
 
 interface IngredientAvailability {
@@ -35,6 +38,7 @@ export function MealDetail({
 	meal,
 	isOwner,
 	userAllergens = [],
+	isSelectedForSupply = false,
 }: MealDetailProps) {
 	const baseServings = meal.servings ?? 1;
 	const [desiredServings, setDesiredServings] = useState(baseServings);
@@ -159,6 +163,12 @@ export function MealDetail({
 
 	const { confirm } = useConfirm();
 	const deleteFetcher = useFetcher();
+	const toggleSupplyFetcher = useFetcher<{
+		success?: boolean;
+		isActive?: boolean;
+	}>();
+	const [localSelectedForSupply, setLocalSelectedForSupply] =
+		useState(isSelectedForSupply);
 	const fetcher = useFetcher<{
 		result?: { cooked: boolean };
 		error?: string;
@@ -203,6 +213,41 @@ export function MealDetail({
 			method: "DELETE",
 			action: `/hub/galley/${meal.id}`,
 		});
+	};
+
+	useEffect(() => {
+		if (
+			toggleSupplyFetcher.state === "idle" &&
+			toggleSupplyFetcher.data?.isActive !== undefined
+		) {
+			setLocalSelectedForSupply(toggleSupplyFetcher.data.isActive);
+		} else if (toggleSupplyFetcher.state === "idle") {
+			setLocalSelectedForSupply(isSelectedForSupply);
+		}
+	}, [
+		toggleSupplyFetcher.state,
+		toggleSupplyFetcher.data?.isActive,
+		isSelectedForSupply,
+	]);
+
+	const handleToggleSupply = () => {
+		const nextActive = !localSelectedForSupply;
+		setLocalSelectedForSupply(nextActive);
+		if (nextActive) {
+			toggleSupplyFetcher.submit(
+				JSON.stringify({ servings: desiredServings }),
+				{
+					method: "POST",
+					action: `/api/meals/${meal.id}/toggle-active`,
+					encType: "application/json",
+				},
+			);
+		} else {
+			toggleSupplyFetcher.submit(null, {
+				method: "POST",
+				action: `/api/meals/${meal.id}/toggle-active`,
+			});
+		}
 	};
 
 	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -435,6 +480,35 @@ export function MealDetail({
 							);
 						})}
 					</ul>
+
+					{/* Add to Supply */}
+					<button
+						type="button"
+						onClick={handleToggleSupply}
+						disabled={toggleSupplyFetcher.state !== "idle"}
+						title={
+							localSelectedForSupply
+								? "Remove from Supply list"
+								: "Add to Supply list"
+						}
+						className={`mb-4 w-full flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-xl transition-all ${
+							localSelectedForSupply
+								? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
+								: "bg-platinum text-carbon border border-platinum hover:border-hyper-green/50"
+						} ${toggleSupplyFetcher.state !== "idle" ? "opacity-75 cursor-wait" : ""}`}
+					>
+						{localSelectedForSupply ? (
+							<>
+								<CheckIcon className="w-4 h-4" />
+								Remove from Supply
+							</>
+						) : (
+							<>
+								<PlusIcon className="w-4 h-4" />
+								Add to Supply
+							</>
+						)}
+					</button>
 
 					{/* Cook Action */}
 					{cookError && (

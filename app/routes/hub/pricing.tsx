@@ -326,7 +326,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => startCrewCheckout("CREW_MEMBER_MONTHLY")}
-								className="flex-1 px-4 py-2 bg-platinum text-carbon font-semibold rounded-lg transition-all hover:bg-platinum/80 active:scale-95"
+								className="flex-1 px-4 py-2 btn-secondary font-semibold rounded-lg active:scale-95"
 							>
 								{
 									loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY[

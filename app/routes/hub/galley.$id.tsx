@@ -4,6 +4,7 @@ import { HubHeader } from "~/components/hub/HubHeader";
 import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
+import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { deleteMeal, getMeal } from "~/lib/meals.server";
 import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/galley.$id";
@@ -23,8 +24,13 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
+	const [meal, activeSelections] = await Promise.all([
+		getMeal(context.cloudflare.env.DB, groupId, id),
+		getActiveMealSelections(context.cloudflare.env.DB, groupId),
+	]);
 	if (!meal) throw redirect("/hub/galley");
+
+	const isSelectedForSupply = activeSelections.some((s) => s.mealId === id);
 
 	// MealDetail expects 'MealInput & { id }'. getMeal returns database record + arrays.
 	// We match the shape.
@@ -53,7 +59,11 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		})),
 	};
 
-	return { meal: sanitizedMeal, userAllergens };
+	return {
+		meal: sanitizedMeal,
+		userAllergens,
+		isSelectedForSupply,
+	};
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -71,7 +81,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
-	const { meal, userAllergens } = loaderData;
+	const { meal, userAllergens, isSelectedForSupply } = loaderData;
 
 	return (
 		<>
@@ -80,7 +90,12 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 				subtitle={`ID: ${meal.id.split("-")[0]}`}
 			/>
 
-			<MealDetail meal={meal} isOwner={true} userAllergens={userAllergens} />
+			<MealDetail
+				meal={meal}
+				isOwner={true}
+				userAllergens={userAllergens}
+				isSelectedForSupply={isSelectedForSupply}
+			/>
 		</>
 	);
 }

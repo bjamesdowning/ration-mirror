@@ -117,7 +117,7 @@ export const GalleyImportButton = forwardRef<
 				<button
 					type="button"
 					onClick={() => inputRef.current?.click()}
-					className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+					className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 				>
 					<FileIcon className="w-4 h-4" aria-hidden="true" />
 					Import JSON

@@ -30,7 +30,7 @@ export function UpgradePrompt({
 					<button
 						type="button"
 						onClick={onClose}
-						className="px-4 py-2 rounded-lg bg-platinum text-carbon font-medium"
+						className="px-4 py-2 rounded-lg btn-secondary font-medium"
 					>
 						Not now
 					</button>

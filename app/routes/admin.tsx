@@ -568,7 +568,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 				<div className="flex items-center gap-4">
 					<Link
 						to="/hub"
-						className="inline-flex items-center gap-2 px-4 py-2 bg-platinum/50 text-carbon rounded-lg font-medium hover:bg-platinum transition-colors"
+						className="inline-flex items-center gap-2 px-4 py-2 btn-secondary rounded-lg font-medium"
 					>
 						Back to Dashboard
 					</Link>

@@ -422,7 +422,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => galleyImportRef.current?.openImport()}
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 								>
 									<ImportIcon className="w-4 h-4" />
 									Import JSON
@@ -430,7 +430,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								<a
 									href="/api/galley/export"
 									download="ration-galley.json"
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 								>
 									<ExportIcon className="w-4 h-4" />
 									Export JSON
@@ -539,7 +539,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => setAddStep("choice")}
-									className="px-6 py-3 bg-platinum text-carbon font-medium rounded-xl hover:bg-platinum/80 transition-all"
+									className="px-6 py-3 btn-secondary font-medium rounded-xl"
 								>
 									Add
 								</button>

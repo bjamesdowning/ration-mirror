@@ -34,7 +34,7 @@ export function StandardCard({ children, actions }: StandardCardProps) {
 										? "bg-danger text-white hover:bg-danger/90"
 										: action.label === "Edit"
 											? "bg-hyper-green text-carbon hover:shadow-glow"
-											: "bg-platinum text-carbon hover:bg-white"
+											: "btn-secondary hover:bg-white dark:hover:bg-white/20"
 								}`}
 							>
 								{action.label}
@@ -56,7 +56,7 @@ export function StandardCard({ children, actions }: StandardCardProps) {
 									? "bg-danger text-white hover:bg-danger/90"
 									: action.label === "Edit"
 										? "bg-hyper-green text-carbon hover:shadow-glow"
-										: "bg-platinum text-carbon hover:bg-white"
+										: "btn-secondary hover:bg-white dark:hover:bg-white/20"
 							}`}
 						>
 							{action.label}

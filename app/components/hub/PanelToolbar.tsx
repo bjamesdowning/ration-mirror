@@ -47,7 +47,7 @@ export function PanelToolbar({
 							${
 								showQuickAdd
 									? "bg-hyper-green text-carbon shadow-glow-sm"
-									: "border-2 border-dashed border-carbon/20 text-muted hover:border-hyper-green hover:text-hyper-green"
+									: "border-2 border-dashed border-carbon/20 dark:border-white/20 text-muted hover:border-hyper-green hover:text-hyper-green"
 							}
 						`}
 					>

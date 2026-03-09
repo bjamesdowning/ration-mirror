@@ -168,7 +168,7 @@ export function CargoEditModal({
 						<button
 							type="button"
 							onClick={onClose}
-							className="bg-platinum text-carbon px-4 py-2 rounded-lg hover:bg-platinum/80 transition-colors"
+							className="btn-secondary px-4 py-2 rounded-lg"
 						>
 							Cancel
 						</button>

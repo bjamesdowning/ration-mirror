@@ -509,7 +509,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									type="button"
 									onClick={() => handleConsumeAll(selectedDay)}
 									disabled={consumeFetcher.state !== "idle"}
-									className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all disabled:opacity-50"
 									title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
 								>
 									<ConsumeIcon className="w-4 h-4" />
@@ -530,7 +530,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => setShareOpen(true)}
-								className="flex items-center gap-2 px-4 py-3 bg-platinum text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 							>
 								<ShareIcon className="w-4 h-4" />
 								Share

@@ -164,7 +164,7 @@ export function ShareModal({
 								className={`px-4 py-2 rounded-lg font-semibold transition-all ${
 									copied
 										? "bg-hyper-green text-carbon shadow-glow-sm"
-										: "bg-platinum text-carbon hover:bg-platinum/80"
+										: "btn-secondary"
 								}`}
 							>
 								{copied ? "Copied!" : "Copy"}

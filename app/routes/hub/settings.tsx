@@ -25,6 +25,7 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { getGroupTierLimits } from "~/lib/capacity.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { log } from "~/lib/logging.server";
@@ -234,6 +235,9 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const credits = await checkBalance(env, groupId);
 
+		const groupTierLimits = await getGroupTierLimits(env, groupId);
+		const groupCanInviteMembers = groupTierLimits.limits.canInviteMembers;
+
 		const apiKeys = await db.query.apiKey.findMany({
 			where: (key, { eq }) => eq(key.organizationId, groupId),
 			columns: {
@@ -251,6 +255,7 @@ export async function loader(args: Route.LoaderArgs) {
 			members,
 			isOwner,
 			currentUserRole,
+			groupCanInviteMembers,
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
 			userOrganizations: userOrganizations.map((m) => m.organization),
@@ -464,6 +469,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		members,
 		isOwner,
 		currentUserRole,
+		groupCanInviteMembers,
 		organizationId,
 		userOrganizations,
 		userMemberships = [],
@@ -604,10 +610,10 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<GroupSection
 							members={members}
 							currentUserRole={currentUserRole}
+							groupCanInviteMembers={groupCanInviteMembers}
 							settings={settings}
 							userOrganizations={userOrganizations}
 							userMemberships={userMemberships}
-							tier={loaderData.tier === "crew_member" ? "crew_member" : "free"}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -717,7 +723,7 @@ function AccountSection({
 						<button
 							type="button"
 							onClick={handleSignOut}
-							className="px-4 py-2 border border-platinum/50 rounded-lg text-sm text-muted hover:text-carbon hover:bg-platinum/50 transition-all font-medium whitespace-nowrap"
+							className="px-4 py-2 border border-platinum/50 dark:border-white/20 rounded-lg text-sm text-muted hover:text-carbon hover:bg-platinum/50 dark:hover:bg-white/10 transition-all font-medium whitespace-nowrap"
 						>
 							Log Out
 						</button>
@@ -802,7 +808,7 @@ function AccountSection({
 									action: "/api/billing-portal",
 								})
 							}
-							className="px-4 py-2 bg-platinum text-carbon rounded-lg font-medium text-sm hover:bg-platinum/80 transition-colors"
+							className="px-4 py-2 btn-secondary rounded-lg font-medium text-sm"
 						>
 							{billingPortalFetcher.state !== "idle"
 								? "Loading..."
@@ -820,14 +826,15 @@ function AccountSection({
 function GroupSection({
 	members,
 	currentUserRole,
+	groupCanInviteMembers,
 	settings,
 	userOrganizations,
 	userMemberships,
-	tier,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
 	currentUserRole: "owner" | "admin" | "member";
+	groupCanInviteMembers: boolean;
 	settings: UserSettings;
 	userOrganizations: { id: string; name: string; credits: number }[];
 	userMemberships: {
@@ -836,7 +843,6 @@ function GroupSection({
 		role: string;
 		credits: number;
 	}[];
-	tier: "free" | "crew_member";
 }) {
 	return (
 		<div className="space-y-4">
@@ -844,7 +850,7 @@ function GroupSection({
 			<GroupManagement
 				members={members}
 				currentUserRole={currentUserRole}
-				tier={tier}
+				groupCanInviteMembers={groupCanInviteMembers}
 			/>
 			<RoleDescriptions />
 			<DefaultGroupCard
@@ -1611,7 +1617,7 @@ function ApiKeysSection({
 						<button
 							type="button"
 							onClick={() => setNewKeyDisplay(null)}
-							className="px-3 py-1 bg-platinum text-carbon text-xs font-semibold rounded"
+							className="px-3 py-1 btn-secondary text-xs font-semibold rounded"
 						>
 							Done
 						</button>
@@ -2576,7 +2582,7 @@ function MemberRoleControl({
 					onChange={(e) =>
 						handleRoleChange(e.target.value as "admin" | "member")
 					}
-					className="text-xs px-2 py-1 bg-platinum border border-carbon/10 rounded text-carbon capitalize cursor-pointer hover:bg-platinum/80 transition-colors disabled:opacity-50"
+					className="text-xs px-2 py-1 btn-secondary border border-carbon/10 dark:border-white/20 rounded capitalize cursor-pointer disabled:opacity-50"
 				>
 					<option value="member">Member</option>
 					<option value="admin">Admin</option>
@@ -2597,12 +2603,12 @@ function MemberRoleControl({
 function GroupManagement({
 	members,
 	currentUserRole,
-	tier,
+	groupCanInviteMembers,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
 	currentUserRole: "owner" | "admin" | "member";
-	tier: "free" | "crew_member";
+	groupCanInviteMembers: boolean;
 }) {
 	const session = authClient.useSession();
 	const activeOrgId = session.data?.session.activeOrganizationId;
@@ -2615,10 +2621,12 @@ function GroupManagement({
 	}>();
 	const copyToast = useToast({ duration: 3000 });
 
-	const isFree = tier !== "crew_member";
+	// Gate invite on group tier (owner's tier), not acting user's tier — admins can invite when group has Crew
+	const canInvite =
+		groupCanInviteMembers && ["owner", "admin"].includes(currentUserRole);
 
 	const handleInvite = () => {
-		if (isFree) {
+		if (!canInvite) {
 			setShowUpgrade(true);
 			return;
 		}
@@ -2659,25 +2667,27 @@ function GroupManagement({
 						Manage who has access to this Cargo
 					</p>
 				</div>
-				<button
-					type="button"
-					onClick={handleInvite}
-					disabled={fetcher.state !== "idle"}
-					className="px-4 py-2 bg-platinum text-carbon font-medium rounded-lg hover:bg-platinum/80 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
-				>
-					{fetcher.state === "submitting" ? (
-						"Creating..."
-					) : (
-						<>
-							Invite Member
-							{isFree && (
-								<span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-hyper-green/20 text-hyper-green rounded">
-									Crew
-								</span>
-							)}
-						</>
-					)}
-				</button>
+				{["owner", "admin"].includes(currentUserRole) && (
+					<button
+						type="button"
+						onClick={handleInvite}
+						disabled={fetcher.state !== "idle"}
+						className="px-4 py-2 btn-secondary font-medium rounded-lg text-sm disabled:opacity-50 flex items-center gap-2"
+					>
+						{fetcher.state === "submitting" ? (
+							"Creating..."
+						) : (
+							<>
+								Invite Member
+								{!groupCanInviteMembers && (
+									<span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-hyper-green/20 text-hyper-green rounded">
+										Crew
+									</span>
+								)}
+							</>
+						)}
+					</button>
+				)}
 			</div>
 
 			{inviteLink && (

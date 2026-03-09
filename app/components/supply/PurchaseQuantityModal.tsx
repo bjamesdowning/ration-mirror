@@ -132,7 +132,7 @@ export function PurchaseQuantityModal({
 							type="button"
 							onClick={handleUseAsListed}
 							disabled={isPending}
-							className="w-full bg-platinum text-carbon font-semibold px-6 py-2 rounded-lg hover:bg-platinum/80 transition-colors disabled:opacity-50"
+							className="w-full btn-secondary font-semibold px-6 py-2 rounded-lg disabled:opacity-50"
 						>
 							Use as listed ({quantity} {normalizedUnit})
 						</button>

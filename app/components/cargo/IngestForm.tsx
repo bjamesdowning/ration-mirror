@@ -277,7 +277,7 @@ export function IngestForm({
 							<button
 								type="button"
 								onClick={() => handleMergeChoice("new")}
-								className="px-4 py-2 bg-platinum text-carbon font-semibold rounded-lg hover:bg-platinum/80 transition-colors"
+								className="px-4 py-2 btn-secondary font-semibold rounded-lg"
 							>
 								Create New Item
 							</button>

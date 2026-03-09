@@ -120,7 +120,7 @@ export function CopyDayModal({
 												? "bg-platinum/30 text-muted/50 cursor-not-allowed"
 												: isSelected
 													? "bg-hyper-green text-carbon shadow-glow-sm"
-													: "bg-platinum text-carbon hover:bg-hyper-green/20 hover:text-hyper-green"
+													: "btn-secondary hover:bg-hyper-green/20 hover:text-hyper-green"
 									}`}
 								>
 									{getDayName(date, true)}
@@ -150,7 +150,7 @@ export function CopyDayModal({
 					<button
 						type="button"
 						onClick={onClose}
-						className="flex-1 py-2.5 rounded-xl bg-platinum text-carbon font-semibold text-sm font-mono hover:bg-platinum/70 transition-all"
+						className="flex-1 py-2.5 rounded-xl btn-secondary font-semibold text-sm font-mono"
 					>
 						Cancel
 					</button>

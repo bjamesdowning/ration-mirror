@@ -916,7 +916,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								</p>
 								<a
 									href="#signup"
-									className="inline-block w-full py-2.5 px-4 bg-platinum text-carbon rounded-lg text-sm font-medium hover:bg-platinum/80 transition-colors"
+									className="inline-block w-full py-2.5 px-4 btn-secondary rounded-lg text-sm font-medium"
 								>
 									Get started free
 								</a>
@@ -979,7 +979,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 										</div>
 										<a
 											href="#signup"
-											className="block mt-3 w-full py-2 px-3 bg-platinum text-carbon rounded-lg text-sm font-medium text-center hover:bg-platinum/80 transition-colors"
+											className="block mt-3 w-full py-2 px-3 btn-secondary rounded-lg text-sm font-medium text-center"
 										>
 											Buy Credits
 										</a>

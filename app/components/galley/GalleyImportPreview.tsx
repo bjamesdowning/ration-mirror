@@ -143,7 +143,7 @@ export function GalleyImportPreview({
 									type="checkbox"
 									checked={selectedIds.has(index)}
 									onChange={() => toggleSelection(index)}
-									className="mt-1 w-5 h-5 accent-hyper-green rounded"
+									className="mt-1 w-5 h-5 accent-hyper-green rounded border-muted"
 								/>
 								<div className="flex-1 min-w-0">
 									<h3 className="text-lg font-semibold text-carbon capitalize">

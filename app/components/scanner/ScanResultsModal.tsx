@@ -543,7 +543,7 @@ function ScanResultItemRow({
 					type="checkbox"
 					checked={item.selected}
 					onChange={() => onToggleSelection(item.id)}
-					className="mt-1 w-5 h-5 accent-hyper-green rounded"
+					className="mt-1 w-5 h-5 accent-hyper-green rounded border-muted"
 				/>
 				<div className="flex-1 min-w-0">
 					<div className="flex items-start justify-between gap-3">

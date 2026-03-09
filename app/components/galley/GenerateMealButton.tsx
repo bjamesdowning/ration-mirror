@@ -77,7 +77,7 @@ function RecipeCard({
 							id={`recipe-select-${idx}`}
 							checked={selected}
 							onChange={() => onToggle(idx)}
-							className="mt-1 w-4 h-4 rounded border-platinum text-hyper-green focus:ring-hyper-green"
+							className="mt-1 w-4 h-4 rounded border-muted accent-hyper-green focus:ring-2 focus:ring-hyper-green focus:ring-offset-0"
 							aria-label={`Select ${recipe.name}`}
 						/>
 					)}

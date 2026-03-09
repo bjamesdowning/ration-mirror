@@ -60,6 +60,17 @@
     color: var(--text-primary);
     font-family: var(--font-mono);
   }
+
+  /* Checkbox visibility in light and dark mode — use muted border for contrast */
+  input[type="checkbox"] {
+    border: 2px solid var(--text-muted);
+    background-color: var(--bg-surface);
+    border-radius: 0.25rem;
+  }
+
+  input[type="checkbox"]:hover {
+    border-color: var(--text-primary);
+  }
 }
 
 /* Orbital Luxury Utility Classes */

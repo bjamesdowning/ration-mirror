@@ -470,6 +470,8 @@ export async function getSupplyListByShareToken(
 	}
 
 	return {
+		id: list.id,
+		organizationId: list.organizationId,
 		name: list.name,
 		items,
 	};

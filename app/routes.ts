@@ -46,6 +46,7 @@ export default [
 		"api/shared/:token/items/:itemId",
 		"routes/api/shared.$token.items.$itemId.ts",
 	),
+	route("api/shared/:token/items", "routes/api/shared.$token.items.ts"),
 
 	// API - Meals
 	route("api/meals", "routes/api/meals.ts"),
@@ -155,6 +156,10 @@ export default [
 	route(
 		"api/groups/invitations/create",
 		"routes/api/groups.invitations.create.ts",
+	),
+	route(
+		"api/groups/members/:memberId/role",
+		"routes/api/groups.members.$memberId.role.ts",
 	),
 	route("api/api-keys", "routes/api/api-keys.ts"),
 	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),

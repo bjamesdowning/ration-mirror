@@ -201,6 +201,10 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const currentMember = members.find((m) => m.userId === userId);
 		const isOwner = currentMember?.role === "owner";
+		const currentUserRole = (currentMember?.role ?? "member") as
+			| "owner"
+			| "admin"
+			| "member";
 		const currentOrg = members[0]?.organization;
 
 		const userOrganizations = await db.query.member.findMany({
@@ -246,6 +250,7 @@ export async function loader(args: Route.LoaderArgs) {
 			settings,
 			members,
 			isOwner,
+			currentUserRole,
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
 			userOrganizations: userOrganizations.map((m) => m.organization),
@@ -458,6 +463,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 		settings,
 		members,
 		isOwner,
+		currentUserRole,
 		organizationId,
 		userOrganizations,
 		userMemberships = [],
@@ -597,6 +603,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{activeSection === "group" && (
 						<GroupSection
 							members={members}
+							currentUserRole={currentUserRole}
 							settings={settings}
 							userOrganizations={userOrganizations}
 							userMemberships={userMemberships}
@@ -812,6 +819,7 @@ function AccountSection({
 
 function GroupSection({
 	members,
+	currentUserRole,
 	settings,
 	userOrganizations,
 	userMemberships,
@@ -819,6 +827,7 @@ function GroupSection({
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
+	currentUserRole: "owner" | "admin" | "member";
 	settings: UserSettings;
 	userOrganizations: { id: string; name: string; credits: number }[];
 	userMemberships: {
@@ -832,7 +841,12 @@ function GroupSection({
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Group</SectionHeading>
-			<GroupManagement members={members} tier={tier} />
+			<GroupManagement
+				members={members}
+				currentUserRole={currentUserRole}
+				tier={tier}
+			/>
+			<RoleDescriptions />
 			<DefaultGroupCard
 				settings={settings}
 				userOrganizations={userOrganizations}
@@ -2395,14 +2409,199 @@ function TransferCreditsSection({
 	);
 }
 
+// ─── Role Descriptions ─────────────────────────────────────────────────────────
+
+const ROLE_INFO: {
+	role: "Owner" | "Admin" | "Member";
+	badge: string;
+	description: string;
+	perks: string[];
+}[] = [
+	{
+		role: "Owner",
+		badge: "bg-carbon text-ceramic",
+		description: "Full command authority over the group.",
+		perks: [
+			"Manage and promote/demote all members",
+			"Transfer credits between groups",
+			"Delete the group",
+			"All Admin privileges",
+		],
+	},
+	{
+		role: "Admin",
+		badge: "bg-hyper-green/20 text-hyper-green",
+		description: "Trusted crew leads with extended operational access.",
+		perks: [
+			"Invite new members to the group",
+			"Promote members to Admin",
+			"Add items to shared supply lists (great for live shopping runs)",
+			"All Member privileges",
+		],
+	},
+	{
+		role: "Member",
+		badge: "bg-platinum text-carbon",
+		description: "Standard crew access to all shared group data.",
+		perks: [
+			"View and edit cargo, meals, and supply lists",
+			"Mark items as purchased on shared lists",
+			"Use AI scan and recipe features",
+		],
+	},
+];
+
+function RoleDescriptions() {
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Crew Roles</h3>
+			<p className="text-sm text-muted mb-4">
+				Each role controls what a member can do within this group.
+			</p>
+			<div className="space-y-4">
+				{ROLE_INFO.map(({ role, badge, description, perks }) => (
+					<div key={role} className="flex gap-3">
+						<div className="pt-0.5">
+							<span
+								className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${badge}`}
+							>
+								{role}
+							</span>
+						</div>
+						<div className="flex-1 min-w-0">
+							<p className="text-sm font-medium text-carbon mb-1">
+								{description}
+							</p>
+							<ul className="space-y-0.5">
+								{perks.map((perk) => (
+									<li
+										key={perk}
+										className="text-xs text-muted flex items-start gap-1.5"
+									>
+										<span className="text-hyper-green mt-0.5 shrink-0">
+											&#10003;
+										</span>
+										{perk}
+									</li>
+								))}
+							</ul>
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
 // ─── Group Management ──────────────────────────────────────────────────────────
+
+function MemberRoleControl({
+	member,
+	currentUserRole,
+}: {
+	// biome-ignore lint/suspicious/noExplicitAny: member type is complex from Drizzle query
+	member: any;
+	currentUserRole: "owner" | "admin" | "member";
+}) {
+	const { confirm } = useConfirm();
+	const roleFetcher = useFetcher<{
+		success?: boolean;
+		error?: string;
+	}>();
+	const successToast = useToast({ duration: 3000 });
+
+	// Track the in-flight role so the control reflects it while the request is pending
+	const [pendingRole, setPendingRole] = useState<"admin" | "member" | null>(
+		null,
+	);
+	const displayRole = pendingRole ?? member.role;
+	const isPending = roleFetcher.state !== "idle";
+
+	useEffect(() => {
+		if (roleFetcher.state === "idle") {
+			if (roleFetcher.data?.success) {
+				successToast.show();
+			}
+			setPendingRole(null);
+		}
+	}, [roleFetcher.state, roleFetcher.data, successToast.show]);
+
+	const canManage =
+		currentUserRole === "owner" ||
+		(currentUserRole === "admin" && member.role === "member");
+
+	if (!canManage || member.role === "owner") {
+		return (
+			<span className="text-xs text-muted capitalize px-2 py-1 bg-platinum/50 rounded">
+				{member.role}
+			</span>
+		);
+	}
+
+	const handleRoleChange = async (newRole: "admin" | "member") => {
+		if (newRole === member.role || isPending) return;
+		const label = newRole === "admin" ? "promote to Admin" : "demote to Member";
+		const confirmed = await confirm({
+			title: "Change member role",
+			message: `Are you sure you want to ${label} ${member.user.name}?`,
+			confirmLabel: "Confirm",
+			variant: "warning",
+		});
+		if (!confirmed) return;
+		setPendingRole(newRole);
+		roleFetcher.submit(JSON.stringify({ role: newRole }), {
+			method: "PATCH",
+			action: `/api/groups/members/${member.id}/role`,
+			encType: "application/json",
+		});
+	};
+
+	return (
+		<>
+			{currentUserRole === "admin" ? (
+				// Admins can only promote members to admin
+				<button
+					type="button"
+					disabled={isPending}
+					onClick={() => handleRoleChange("admin")}
+					className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20 rounded transition-colors disabled:opacity-50"
+				>
+					{isPending ? "Updating..." : "Promote to Admin"}
+				</button>
+			) : (
+				// Owner sees full dropdown
+				<select
+					value={displayRole}
+					disabled={isPending}
+					onChange={(e) =>
+						handleRoleChange(e.target.value as "admin" | "member")
+					}
+					className="text-xs px-2 py-1 bg-platinum border border-carbon/10 rounded text-carbon capitalize cursor-pointer hover:bg-platinum/80 transition-colors disabled:opacity-50"
+				>
+					<option value="member">Member</option>
+					<option value="admin">Admin</option>
+				</select>
+			)}
+			{successToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Role updated"
+					description={`${member.user.name} is now ${displayRole}`}
+					onDismiss={successToast.hide}
+				/>
+			)}
+		</>
+	);
+}
 
 function GroupManagement({
 	members,
+	currentUserRole,
 	tier,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
+	currentUserRole: "owner" | "admin" | "member";
 	tier: "free" | "crew_member";
 }) {
 	const session = authClient.useSession();
@@ -2527,6 +2726,10 @@ function GroupManagement({
 								</div>
 							</div>
 						</div>
+						<MemberRoleControl
+							member={member}
+							currentUserRole={currentUserRole}
+						/>
 					</div>
 				))}
 			</div>

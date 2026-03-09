@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { drizzle } from "drizzle-orm/d1";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
 import { ClipboardIcon } from "~/components/icons/PageIcons";
 import { PurchaseQuantityModal } from "~/components/supply/PurchaseQuantityModal";
-import { DOMAIN_LABELS } from "~/lib/domain";
+import * as schema from "~/db/schema";
+import { getAuth } from "~/lib/auth.server";
+import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { getSupplyListByShareToken } from "~/lib/supply.server";
 import type { Route } from "./+types/shared.$token";
@@ -70,7 +73,30 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		throw data({ error: "List not found or link expired" }, { status: 404 });
 	}
 
-	return { list };
+	// Determine if the viewer is an admin/owner of the list's organization,
+	// which grants them the ability to add items directly from this shared view.
+	let canAddItems = false;
+	try {
+		const auth = getAuth(context.cloudflare.env);
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (session) {
+			const db = drizzle(context.cloudflare.env.DB, { schema });
+			const membership = await db.query.member.findFirst({
+				where: (m, { and, eq: deq }) =>
+					and(
+						deq(m.organizationId, list.organizationId),
+						deq(m.userId, session.user.id),
+					),
+			});
+			if (membership && ["owner", "admin"].includes(membership.role)) {
+				canAddItems = true;
+			}
+		}
+	} catch {
+		// Non-critical — fall back to read-only view
+	}
+
+	return { list, canAddItems };
 }
 
 function SharedGroceryItem({
@@ -197,8 +223,86 @@ function SharedGroceryItem({
 	);
 }
 
+function AdminAddItemBar({
+	token,
+	onItemAdded,
+}: {
+	token: string;
+	onItemAdded: (item: SharedItem) => void;
+}) {
+	const fetcher = useFetcher<{ item?: SharedItem; error?: string }>();
+	const [name, setName] = useState("");
+	const [domain, setDomain] = useState<string>("food");
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (fetcher.state === "idle" && fetcher.data?.item) {
+			onItemAdded(fetcher.data.item);
+			setName("");
+			inputRef.current?.focus();
+		}
+	}, [fetcher.state, fetcher.data, onItemAdded]);
+
+	const handleSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		const trimmed = name.trim();
+		if (!trimmed) return;
+		fetcher.submit(JSON.stringify({ name: trimmed, domain }), {
+			method: "POST",
+			action: `/api/shared/${token}/items`,
+			encType: "application/json",
+		});
+	};
+
+	const isPending = fetcher.state !== "idle";
+
+	return (
+		<div className="glass-panel rounded-xl p-4">
+			<p className="text-[10px] font-bold uppercase tracking-wider text-hyper-green mb-3">
+				Admin — Add Item
+			</p>
+			<form onSubmit={handleSubmit} className="flex gap-2">
+				<input
+					ref={inputRef}
+					type="text"
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					placeholder="Item name..."
+					disabled={isPending}
+					className="flex-1 min-w-0 bg-white/60 border border-carbon/10 rounded-lg px-3 py-2 text-sm text-carbon placeholder:text-muted/60 focus:outline-none focus:border-hyper-green/50 disabled:opacity-50"
+				/>
+				<select
+					value={domain}
+					onChange={(e) => setDomain(e.target.value)}
+					disabled={isPending}
+					className="bg-white/60 border border-carbon/10 rounded-lg px-2 py-2 text-sm text-carbon focus:outline-none focus:border-hyper-green/50 disabled:opacity-50"
+				>
+					{ITEM_DOMAINS.map((d) => (
+						<option key={d} value={d}>
+							{DOMAIN_LABELS[d]}
+						</option>
+					))}
+				</select>
+				<button
+					type="submit"
+					disabled={isPending || !name.trim()}
+					className="px-4 py-2 bg-hyper-green text-carbon font-semibold text-sm rounded-lg hover:bg-hyper-green/90 transition-colors disabled:opacity-50 shrink-0"
+				>
+					{isPending ? "Adding..." : "Add"}
+				</button>
+			</form>
+			{fetcher.data?.error && (
+				<p className="text-xs text-danger mt-2">{fetcher.data.error}</p>
+			)}
+		</div>
+	);
+}
+
 export default function SharedListPage() {
-	const { list } = useLoaderData<{ list: SharedList }>();
+	const { list, canAddItems } = useLoaderData<{
+		list: SharedList;
+		canAddItems: boolean;
+	}>();
 	const { token } = useParams();
 	const [items, setItems] = useState<SharedItem[]>(list.items);
 
@@ -221,6 +325,10 @@ export default function SharedListPage() {
 		},
 		[],
 	);
+
+	const handleItemAdded = useCallback((item: SharedItem) => {
+		setItems((current) => [...current, item]);
+	}, []);
 
 	const groupedItems = useMemo(
 		() =>
@@ -263,6 +371,9 @@ export default function SharedListPage() {
 
 			{/* Content */}
 			<main className="max-w-2xl mx-auto p-4 space-y-6">
+				{canAddItems && token && (
+					<AdminAddItemBar token={token} onItemAdded={handleItemAdded} />
+				)}
 				{items.length === 0 ? (
 					<div className="text-center py-16 glass-panel rounded-2xl">
 						<div className="flex justify-center mb-4">

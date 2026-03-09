@@ -8,12 +8,14 @@ import {
 	useFetcher,
 	useNavigate,
 	useNavigation,
+	useRevalidator,
 } from "react-router";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
+import { UserAvatar } from "~/components/shell/UserAvatar";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { type AllergenSlug, parseAllergens } from "~/lib/allergens";
@@ -28,6 +30,7 @@ import { authClient } from "~/lib/auth-client";
 import { getGroupTierLimits } from "~/lib/capacity.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
+import { getUserDisplayName } from "~/lib/display-name";
 import { log } from "~/lib/logging.server";
 import { type ApiScope, VALID_API_SCOPES } from "~/lib/schemas/api-keys";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
@@ -646,7 +649,17 @@ function AccountSection({
 }) {
 	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
+	const revalidator = useRevalidator();
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
+	const successToast = useToast({ duration: 3000 });
+	const errorToast = useToast({ duration: 4000 });
+	const [isEditingName, setIsEditingName] = useState(false);
+	const [nameInput, setNameInput] = useState("");
+	const [profileName, setProfileName] = useState("");
+	const [profileImage, setProfileImage] = useState<string | null>(null);
+	const [isSavingName, setIsSavingName] = useState(false);
+	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+	const [errorMessage, setErrorMessage] = useState("Unable to update profile.");
 
 	useEffect(() => {
 		if (billingPortalFetcher.data?.url) {
@@ -658,6 +671,13 @@ function AccountSection({
 		}
 	}, [billingPortalFetcher.data]);
 
+	useEffect(() => {
+		if (!session) return;
+		setProfileName(session.user.name ?? "");
+		setNameInput(session.user.name ?? "");
+		setProfileImage(session.user.image ?? null);
+	}, [session, session?.user.image, session?.user.name]);
+
 	if (!session) return null;
 
 	const handleSignOut = async () => {
@@ -668,6 +688,90 @@ function AccountSection({
 		});
 	};
 
+	const handleSaveName = async () => {
+		const trimmedName = nameInput.trim();
+		if (!trimmedName || trimmedName.length > 100) {
+			setErrorMessage("Name must be between 1 and 100 characters.");
+			errorToast.show();
+			return;
+		}
+		if (trimmedName === profileName.trim()) {
+			setIsEditingName(false);
+			return;
+		}
+
+		setIsSavingName(true);
+		try {
+			const result = await authClient.updateUser({ name: trimmedName });
+			if (result.error) {
+				throw new Error(result.error.message || "Failed to update name");
+			}
+			setProfileName(trimmedName);
+			setIsEditingName(false);
+			successToast.show();
+			revalidator.revalidate();
+		} catch {
+			setErrorMessage("Unable to save your name right now.");
+			errorToast.show();
+		} finally {
+			setIsSavingName(false);
+		}
+	};
+
+	const handleAvatarUpload = async (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = event.currentTarget.files?.[0];
+		if (!file) return;
+
+		if (file.size > 2 * 1024 * 1024) {
+			setErrorMessage("Profile photo must be 2MB or smaller.");
+			errorToast.show();
+			event.currentTarget.value = "";
+			return;
+		}
+
+		const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+		if (!allowedMimeTypes.includes(file.type)) {
+			setErrorMessage("Use JPEG, PNG, or WebP for profile photos.");
+			errorToast.show();
+			event.currentTarget.value = "";
+			return;
+		}
+
+		setIsUploadingAvatar(true);
+		try {
+			const formData = new FormData();
+			formData.append("avatar", file);
+			const response = await fetch("/api/user/avatar", {
+				method: "POST",
+				body: formData,
+			});
+			const payload = (await response.json()) as {
+				success?: boolean;
+				image?: string;
+				error?: string;
+			};
+			if (!response.ok || !payload.image) {
+				throw new Error(payload.error || "Failed to upload avatar");
+			}
+			setProfileImage(payload.image);
+			successToast.show();
+			revalidator.revalidate();
+		} catch {
+			setErrorMessage("Unable to upload your profile photo.");
+			errorToast.show();
+		} finally {
+			setIsUploadingAvatar(false);
+			event.currentTarget.value = "";
+		}
+	};
+
+	const displayName = getUserDisplayName({
+		name: profileName,
+		email: session.user.email,
+	});
+
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Account</SectionHeading>
@@ -677,32 +781,75 @@ function AccountSection({
 				<h3 className="text-xs text-label text-muted mb-4">Profile</h3>
 				<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
 					<div className="flex items-center gap-4">
-						{session.user.image ? (
-							<img
-								src={session.user.image}
-								alt={
-									session.user.name ||
-									session.user.email?.split("@")[0] ||
-									"User"
-								}
-								className="w-16 h-16 rounded-full border-2 border-platinum object-cover shadow-sm"
+						<label
+							className="relative cursor-pointer group"
+							htmlFor="profile-avatar"
+						>
+							<UserAvatar
+								size="lg"
+								name={profileName}
+								email={session.user.email}
+								image={profileImage}
 							/>
-						) : (
-							<div className="w-16 h-16 rounded-full bg-platinum/50 flex items-center justify-center text-2xl font-bold text-muted border-2 border-platinum border-dashed">
-								{(
-									session.user.name?.charAt(0) ||
-									session.user.email?.charAt(0) ||
-									"?"
-								).toUpperCase()}
-							</div>
-						)}
+							<input
+								id="profile-avatar"
+								type="file"
+								accept="image/jpeg,image/png,image/webp"
+								className="sr-only"
+								onChange={handleAvatarUpload}
+							/>
+							<span className="absolute -bottom-1 -right-1 text-[10px] px-1.5 py-0.5 rounded bg-carbon text-white opacity-0 group-hover:opacity-100 transition-opacity">
+								Edit
+							</span>
+							{isUploadingAvatar && (
+								<span className="absolute inset-0 rounded-full bg-carbon/45 text-white text-xs flex items-center justify-center">
+									...
+								</span>
+							)}
+						</label>
 						<div>
-							<p className="text-xl font-bold text-carbon">
-								{session.user.name ||
-									(session.user.email
-										? session.user.email.split("@")[0]
-										: "Account")}
-							</p>
+							{isEditingName ? (
+								<div className="flex flex-wrap items-center gap-2">
+									<input
+										type="text"
+										value={nameInput}
+										onChange={(e) => setNameInput(e.currentTarget.value)}
+										maxLength={100}
+										className="text-sm px-2 py-1 rounded-md border border-platinum bg-white/80 text-carbon"
+										placeholder="Add your name"
+									/>
+									<button
+										type="button"
+										onClick={handleSaveName}
+										disabled={isSavingName}
+										className="text-xs px-2 py-1 rounded bg-hyper-green/20 text-hyper-green font-semibold disabled:opacity-60"
+									>
+										{isSavingName ? "Saving..." : "Save"}
+									</button>
+									<button
+										type="button"
+										onClick={() => {
+											setNameInput(profileName);
+											setIsEditingName(false);
+										}}
+										disabled={isSavingName}
+										className="text-xs px-2 py-1 rounded bg-platinum/60 text-muted disabled:opacity-60"
+									>
+										Cancel
+									</button>
+								</div>
+							) : (
+								<div className="flex items-center gap-2">
+									<p className="text-xl font-bold text-carbon">{displayName}</p>
+									<button
+										type="button"
+										onClick={() => setIsEditingName(true)}
+										className="text-xs px-2 py-0.5 rounded bg-platinum/60 text-muted hover:text-carbon"
+									>
+										Edit
+									</button>
+								</div>
+							)}
 							<p className="text-sm font-mono text-muted tracking-wide">
 								{session.user.email}
 							</p>
@@ -730,6 +877,22 @@ function AccountSection({
 					</div>
 				</div>
 			</div>
+			{successToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Profile updated"
+					description="Your profile changes were saved."
+					onDismiss={successToast.hide}
+				/>
+			)}
+			{errorToast.isOpen && (
+				<Toast
+					variant="error"
+					title="Update failed"
+					description={errorMessage}
+					onDismiss={errorToast.hide}
+				/>
+			)}
 
 			{/* Plan & billing */}
 			<div className="glass-panel rounded-xl p-6">
@@ -1533,8 +1696,9 @@ function ApiKeysSection({
 	useEffect(() => {
 		if (typeof window !== "undefined" && window.location.hash === "#api") {
 			setApiRefExpanded(true);
+			const apiRefNode = apiRefRef.current;
 			queueMicrotask(() => {
-				apiRefRef.current?.scrollIntoView({ behavior: "smooth" });
+				apiRefNode?.scrollIntoView({ behavior: "smooth" });
 			});
 		}
 	}, []);
@@ -2521,6 +2685,7 @@ function MemberRoleControl({
 		null,
 	);
 	const displayRole = pendingRole ?? member.role;
+	const memberDisplayName = getUserDisplayName(member.user);
 	const isPending = roleFetcher.state !== "idle";
 
 	useEffect(() => {
@@ -2549,7 +2714,7 @@ function MemberRoleControl({
 		const label = newRole === "admin" ? "promote to Admin" : "demote to Member";
 		const confirmed = await confirm({
 			title: "Change member role",
-			message: `Are you sure you want to ${label} ${member.user.name}?`,
+			message: `Are you sure you want to ${label} ${memberDisplayName}?`,
 			confirmLabel: "Confirm",
 			variant: "warning",
 		});
@@ -2592,7 +2757,7 @@ function MemberRoleControl({
 				<Toast
 					variant="success"
 					title="Role updated"
-					description={`${member.user.name} is now ${displayRole}`}
+					description={`${memberDisplayName} is now ${displayRole}`}
 					onDismiss={successToast.hide}
 				/>
 			)}
@@ -2724,12 +2889,15 @@ function GroupManagement({
 						className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg"
 					>
 						<div className="flex items-center gap-3">
-							<div className="w-8 h-8 rounded-full bg-hyper-green/20 flex items-center justify-center text-hyper-green font-bold text-xs">
-								{member.user.name?.charAt(0).toUpperCase()}
-							</div>
+							<UserAvatar
+								size="sm"
+								name={member.user.name}
+								email={member.user.email}
+								image={member.user.image}
+							/>
 							<div>
 								<div className="text-sm font-medium text-carbon">
-									{member.user.name}
+									{getUserDisplayName(member.user)}
 								</div>
 								<div className="text-xs text-muted capitalize">
 									{member.role}

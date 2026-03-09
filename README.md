@@ -25,6 +25,7 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
   - [4.3 Manifest (Meal Plan Calendar)](#43-manifest-meal-plan-calendar)
   - [4.4 Supply List](#44-supply-list)
   - [4.5 Hub Dashboard](#45-hub-dashboard)
+  - [4.6 Settings & Identity](#46-settings--identity)
 - [5. AI & Vector Systems](#5-ai--vector-systems)
   - [5.1 Embedding Pipeline](#51-embedding-pipeline)
   - [5.2 Meal Matching Engine](#52-meal-matching-engine)
@@ -660,6 +661,19 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 **Layout customisation:** Users can customise the widget grid by choosing a profile preset (`full`, `cook`, `shop`, `minimal`) or dragging widgets. The layout is persisted in `user.settings.hubLayout` (JSON). The `LayoutEngine` component renders a 12-column CSS grid where widgets map to `sm` (4 cols), `md` (6 cols), or `lg` (12 cols) widths.
 
 **Onboarding:** New users trigger a 6-step guided tour (`OnboardingTour`) that spotlights each major feature area in sequence. Progress is persisted to `user.settings.onboarding`. The tour respects keyboard navigation (Esc = skip, arrow keys = next/back) and fires a confetti animation on completion.
+
+---
+
+### 4.6 Settings & Identity
+
+The Settings page (`/hub/settings`) supports profile identity management across collaborative groups:
+
+- **Editable display name** — users can add or update their name directly in the profile card.
+- **Avatar upload** — users can upload a JPEG/PNG/WebP profile photo (max 2MB), stored in R2 under `users/{userId}/avatar` (single object key, overwritten on update).
+- **Fallback identity rendering** — when no name is available, the UI falls back to email for display labels and avatar initials.
+- **Group member clarity** — member rows and role-change confirmations now consistently use `name || email || "Unknown"` so magic-link users remain identifiable.
+
+Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api/user/avatar`.
 
 ---
 

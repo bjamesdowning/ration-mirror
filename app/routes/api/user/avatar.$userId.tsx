@@ -2,7 +2,11 @@ import { z } from "zod";
 import type { Route } from "./+types/avatar.$userId";
 
 const paramsSchema = z.object({
-	userId: z.string().uuid(),
+	userId: z
+		.string()
+		.min(1)
+		.max(128)
+		.regex(/^[A-Za-z0-9_-]+$/),
 });
 
 export async function loader({ params, context }: Route.LoaderArgs) {

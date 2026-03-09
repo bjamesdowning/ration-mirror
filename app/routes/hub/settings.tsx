@@ -1361,6 +1361,7 @@ function DeveloperSection({
 function HelpSection() {
 	const bugUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=bug`;
 	const featureUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=feature-request`;
+	const [howItWorksExpanded, setHowItWorksExpanded] = useState(false);
 
 	return (
 		<div className="space-y-4">
@@ -1433,6 +1434,93 @@ function HelpSection() {
 							Restart Tutorial
 						</button>
 					</Form>
+				</div>
+
+				<div>
+					<h3 className="text-xs text-label text-muted mb-1">
+						How Ration Works
+					</h3>
+					<p className="text-sm text-muted mb-3">
+						Understand why units and ingredient matches may differ from recipe
+						wording.
+					</p>
+					<button
+						type="button"
+						onClick={() => setHowItWorksExpanded((value) => !value)}
+						className="flex items-center gap-2 text-sm font-medium text-carbon hover:text-hyper-green transition-colors"
+					>
+						<svg
+							className={`w-4 h-4 transition-transform ${howItWorksExpanded ? "rotate-90" : ""}`}
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							aria-hidden
+						>
+							<title>Expand</title>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 5l7 7-7 7"
+							/>
+						</svg>
+						{howItWorksExpanded
+							? "Hide How Ration Works"
+							: "View How Ration Works"}
+					</button>
+					{howItWorksExpanded && (
+						<div className="mt-4 space-y-4 text-sm">
+							<div>
+								<h4 className="font-semibold text-carbon mb-2">
+									Unit conversion & supply list
+								</h4>
+								<p className="text-muted">
+									Recipes often use cups and spoons, while stores sell by
+									weight. Ration converts between weight and volume using
+									ingredient density. For example, about 100g of rice can
+									satisfy roughly{" "}
+									<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+										1/2 cup
+									</code>
+									, depending on ingredient density and rounding. Use{" "}
+									<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+										Metric
+									</code>
+									/
+									<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+										Imperial
+									</code>{" "}
+									for shopping units, or{" "}
+									<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+										Cooking
+									</code>{" "}
+									to keep recipe-style units.
+								</p>
+							</div>
+
+							<div>
+								<h4 className="font-semibold text-carbon mb-2">
+									Semantic ingredient matching
+								</h4>
+								<p className="text-muted">
+									Ration matches ingredients by meaning, not only exact text.
+									&quot;Cherry tomatoes&quot; can match &quot;grape
+									tomatoes&quot; through vector similarity, reducing duplicate
+									items and improving stock matching.
+								</p>
+							</div>
+
+							<div>
+								<h4 className="font-semibold text-carbon mb-2">Match Mode</h4>
+								<p className="text-muted">
+									In Galley, Match Mode highlights meals you can cook now.
+									Ration compares recipe ingredients with Cargo using semantic
+									matching and conversion logic, so partial naming and unit
+									differences are handled automatically.
+								</p>
+							</div>
+						</div>
+					)}
 				</div>
 
 				<div className="pt-4 border-t border-platinum">

@@ -42,7 +42,8 @@ export function Step2_Galley({ step, onNext, onBack, onSkip }: StepProps) {
 
 			<TechInsight>
 				Ingredients are matched to Cargo using semantic vectors — "canned
-				tomatoes" resolves to "tinned tomatoes" automatically.
+				tomatoes" resolves to "tinned tomatoes" automatically. Match Mode then
+				highlights meals you can cook right now.
 			</TechInsight>
 		</TourCard>
 	);

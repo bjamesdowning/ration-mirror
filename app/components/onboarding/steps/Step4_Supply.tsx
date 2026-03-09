@@ -54,6 +54,11 @@ export function Step4_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 				Hybrid search (boolean + semantic) ensures nothing is missed, even with
 				partial or misspelled ingredient names.
 			</TechInsight>
+			<TechInsight>
+				Supply converts recipe units (cups, tbsp) to store units (g, kg) using
+				ingredient density. About 100g of rice can cover around 1/2 cup in a
+				recipe, so you do not need to convert manually.
+			</TechInsight>
 		</TourCard>
 	);
 }

@@ -39,6 +39,8 @@ export interface UserSettings {
 		cargo?: "card" | "list";
 		galley?: "card" | "list";
 	};
+	/** Supply list quantity display mode. */
+	supplyUnitMode?: "cooking" | "metric" | "imperial";
 	[key: string]: unknown; // Index signature for database compatibility
 }
 

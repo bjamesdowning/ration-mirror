@@ -33,6 +33,9 @@ If the page content is NOT a recipe (e.g. a news article, homepage, error page),
 Rules:
 - Use lowercase for ingredient names
 - Normalize units to common cooking units (g, kg, ml, l, tbsp, tsp, cup, unit)
+- For dry/solid ingredients that are commonly sold by weight (e.g. flour, sugar, rice, cheese), prefer g/kg over cup/tbsp/tsp
+- For liquids (e.g. milk, water, stock, oil, vinegar), prefer ml/l
+- Only use cup/tbsp/tsp when no practical weight/metric-volume quantity can be inferred
 - Steps must be complete sentences — each step must contain at least one action verb and one of: an ingredient name, a time cue (e.g. "for 5 minutes"), a visual cue (e.g. "until golden"), or a heat level (e.g. "over medium heat")
 - Every step must be a distinct action; do NOT combine multiple actions into one step
 - Minimum 3 steps for any recipe — if the page has fewer distinct steps, return status "error" with code "EXTRACTION_FAILED"

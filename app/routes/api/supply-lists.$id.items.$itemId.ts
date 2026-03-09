@@ -2,8 +2,13 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { SnoozeItemSchema, SupplyItemUpdateSchema } from "~/lib/schemas/supply";
 import {
+	ConvertSupplyUnitSchema,
+	SnoozeItemSchema,
+	SupplyItemUpdateSchema,
+} from "~/lib/schemas/supply";
+import {
+	convertSupplyItemUnit,
 	deleteSupplyItem,
 	snoozeSupplyItem,
 	updateSupplyItem,
@@ -63,6 +68,18 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 		if (request.method === "POST") {
 			const json = await request.json();
+			if (json && typeof json === "object" && "intent" in json) {
+				const input = ConvertSupplyUnitSchema.parse(json);
+				const item = await convertSupplyItemUnit(
+					context.cloudflare.env.DB,
+					groupId,
+					listId,
+					itemId,
+					input.mode,
+					input.preferredSystem,
+				);
+				return { item };
+			}
 			const { duration } = SnoozeItemSchema.parse(json);
 			const result = await snoozeSupplyItem(
 				context.cloudflare.env.DB,

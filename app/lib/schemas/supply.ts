@@ -64,6 +64,14 @@ export const SnoozeItemSchema = z.object({
 	duration: SnoozeDurationSchema,
 });
 
+export const SupplyUnitModeSchema = z.enum(["cooking", "metric", "imperial"]);
+
+export const ConvertSupplyUnitSchema = z.object({
+	intent: z.literal("convert-unit"),
+	mode: z.enum(["cooking", "shopping"]).default("shopping"),
+	preferredSystem: z.enum(["metric", "imperial"]).default("metric"),
+});
+
 export type SupplyListInput = z.infer<typeof SupplyListSchema>;
 export type SupplyItemInput = z.infer<typeof SupplyItemSchema>;
 export type SupplyItemUpdateInput = z.infer<typeof SupplyItemUpdateSchema>;

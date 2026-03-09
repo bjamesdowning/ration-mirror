@@ -1,3 +1,5 @@
+import { isLikelyLiquidIngredient, lookupDensity } from "./ingredient-density";
+
 const UNIT_FACTORS_TO_BASE = {
 	// Weight (metric)
 	kg: { family: "weight_metric", baseUnit: "g", factor: 1000 },
@@ -32,6 +34,7 @@ const UNIT_FACTORS_TO_BASE = {
 export type SupportedUnit = keyof typeof UNIT_FACTORS_TO_BASE;
 export type UnitFamily = (typeof UNIT_FACTORS_TO_BASE)[SupportedUnit]["family"];
 export type BaseUnit = (typeof UNIT_FACTORS_TO_BASE)[SupportedUnit]["baseUnit"];
+export type SupplyUnitMode = "cooking" | "metric" | "imperial";
 
 /** Canonical list of supported units for schemas and UI */
 export const SUPPORTED_UNITS = Object.keys(
@@ -147,12 +150,55 @@ function getBaseUnit(unit: SupportedUnit): BaseUnit {
 	return UNIT_FACTORS_TO_BASE[unit].baseUnit;
 }
 
+function toGrams(quantity: number, unit: SupportedUnit): number | null {
+	if (unit === "g") return quantity;
+	if (unit === "kg") return quantity * 1000;
+	if (unit === "oz") return quantity / OZ_PER_G;
+	if (unit === "lb") return (quantity * 16) / OZ_PER_G;
+	return null;
+}
+
+function fromGramsToWeightFamily(
+	grams: number,
+	target: SupportedUnit,
+): number | null {
+	if (target === "g") return grams;
+	if (target === "kg") return grams / 1000;
+	if (target === "oz") return grams * OZ_PER_G;
+	if (target === "lb") return (grams * OZ_PER_G) / 16;
+	return null;
+}
+
+function isWeightUnit(unit: SupportedUnit): boolean {
+	const family = getUnitFamily(unit);
+	return family === "weight_metric" || family === "weight_imperial";
+}
+
+function chooseMetricVolumeUnit(quantityMl: number): {
+	quantity: number;
+	unit: SupportedUnit;
+} {
+	if (quantityMl >= 1000) {
+		return { quantity: quantityMl / 1000, unit: "l" };
+	}
+	return { quantity: quantityMl, unit: "ml" };
+}
+
 export function getUnitMultiplier(
 	from: SupportedUnit,
 	to: SupportedUnit,
 ): number | null {
 	if (from === to) return 1;
-	if (!areSameFamily(from, to)) return null;
+	if (!areSameFamily(from, to)) {
+		// Bridge metric <-> imperial weight (e.g. g <-> oz, kg <-> lb)
+		if (isWeightUnit(from) && isWeightUnit(to)) {
+			const fromInGrams = toGrams(1, from);
+			if (fromInGrams === null) return null;
+			const converted = fromGramsToWeightFamily(fromInGrams, to);
+			return converted;
+		}
+		return null;
+	}
 
 	const fromFactor = getFactorToBase(from);
 	const toFactor = getFactorToBase(to);
@@ -319,4 +365,83 @@ export function chooseReadableUnit(
 	}
 
 	return { quantity: baseQuantity, unit: baseUnit };
+}
+
+export function toShoppingUnit(
+	quantity: number,
+	unit: SupportedUnit,
+	ingredientName: string,
+	mode: Exclude<SupplyUnitMode, "cooking"> = "metric",
+): { quantity: number; unit: SupportedUnit } {
+	if (mode === "imperial") {
+		if (isWeightUnit(unit)) {
+			const oz = convertQuantity(quantity, unit, "oz");
+			if (oz !== null) return chooseReadableUnit(oz, "oz");
+		}
+	}
+
+	if (mode === "metric") {
+		if (isWeightUnit(unit)) {
+			const grams = convertQuantity(quantity, unit, "g");
+			if (grams !== null) return chooseReadableUnit(grams, "g");
+		}
+	}
+
+	const family = getUnitFamily(unit);
+	if (family !== "volume") {
+		return { quantity, unit };
+	}
+
+	const volumeInMl = convertQuantity(quantity, unit, "ml");
+	if (volumeInMl === null) return { quantity, unit };
+
+	// Liquids are typically bought by volume. Keep them in metric/imperial volume.
+	if (isLikelyLiquidIngredient(ingredientName)) {
+		if (mode === "metric") return chooseMetricVolumeUnit(volumeInMl);
+		return chooseReadableUnit(volumeInMl, "ml");
+	}
+
+	// Solids measured by volume (e.g. cups of rice) are better shown by weight.
+	const density = lookupDensity(ingredientName);
+	if (!density) {
+		return mode === "metric"
+			? chooseMetricVolumeUnit(volumeInMl)
+			: chooseReadableUnit(volumeInMl, "ml");
+	}
+
+	const grams = convertQuantityWithDensity(quantity, unit, "g", density);
+	if (grams === null) {
+		return mode === "metric"
+			? chooseMetricVolumeUnit(volumeInMl)
+			: chooseReadableUnit(volumeInMl, "ml");
+	}
+
+	if (mode === "imperial") {
+		const ounces = convertQuantity(grams, "g", "oz");
+		if (ounces !== null) return chooseReadableUnit(ounces, "oz");
+	}
+	return chooseReadableUnit(grams, "g");
+}
+
+export function toCookingUnit(
+	quantity: number,
+	unit: SupportedUnit,
+	ingredientName: string,
+): { quantity: number; unit: SupportedUnit } {
+	const family = getUnitFamily(unit);
+	if (family === "volume" || !isWeightUnit(unit)) {
+		return { quantity, unit };
+	}
+
+	if (isLikelyLiquidIngredient(ingredientName)) {
+		// Keep liquids in purchase units to avoid awkward "cups of oil" toggles.
+		return { quantity, unit };
+	}
+
+	const density = lookupDensity(ingredientName);
+	if (!density) return { quantity, unit };
+
+	const volumeInMl = convertQuantityWithDensity(quantity, unit, "ml", density);
+	if (volumeInMl === null) return { quantity, unit };
+	return chooseReadableUnit(volumeInMl, "ml");
 }

@@ -28,14 +28,19 @@ import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
-import { requireActiveGroup } from "~/lib/auth.server";
+import {
+	getUserSettings,
+	patchUserSettings,
+	requireActiveGroup,
+} from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { getCargo, getCargoTags } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
-import { ListIdSchema } from "~/lib/schemas/supply";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { ListIdSchema, SupplyUnitModeSchema } from "~/lib/schemas/supply";
 import {
 	completeSupplyList,
 	createSupplyListFromSelectedMeals,
@@ -49,7 +54,7 @@ import {
 import type { Route } from "./+types/supply";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { groupId, session } = await requireActiveGroup(context, request);
 
 	// Light loader: ensure list exists and load current state. Heavy sync (createSupplyListFromSelectedMeals)
 	// runs only via action (Update list button or background sync) to avoid Worker resource limits in production.
@@ -60,6 +65,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableTags,
 		manifestWeekMeals,
 		snoozes,
+		userSettings,
 	] = await Promise.all([
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
@@ -67,6 +73,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getCargoTags(context.cloudflare.env.DB, groupId),
 		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
+		getUserSettings(context.cloudflare.env.DB, session.user.id),
 	]);
 
 	return {
@@ -76,11 +83,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableTags,
 		cargo: cargoItems,
 		snoozes,
+		supplyUnitMode: SupplyUnitModeSchema.catch("metric").parse(
+			userSettings.supplyUnitMode,
+		),
 	};
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const { groupId, session } = await requireActiveGroup(context, request);
+	const userId = session.user.id;
 
 	try {
 		const formData = await request.formData();
@@ -88,6 +99,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		// Manual Update / Refresh
 		if (intent === "update-list") {
+			const userSettings = await getUserSettings(
+				context.cloudflare.env.DB,
+				userId,
+			);
+			const supplyUnitMode = SupplyUnitModeSchema.catch("metric").parse(
+				userSettings.supplyUnitMode,
+			);
 			const syncSource = formData.get("syncSource");
 			const telemetryContext = {
 				requestId: request.headers.get("cf-ray") ?? undefined,
@@ -107,6 +125,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					groupId,
 					undefined,
 					telemetryContext,
+					supplyUnitMode,
 				);
 				emitSupplySyncInfo("supply_sync.action.success", telemetryContext, {
 					intent: "update-list",
@@ -149,6 +168,41 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return { success: true, docked: result.docked };
 		}
 
+		if (intent === "update-supply-unit-mode") {
+			const rateLimitResult = await checkRateLimit(
+				context.cloudflare.env.RATION_KV,
+				"grocery_mutation",
+				userId,
+			);
+			if (!rateLimitResult.allowed) {
+				throw data(
+					{ error: "Too many requests. Please try again later." },
+					{ status: 429, headers: { "Retry-After": "60" } },
+				);
+			}
+			const nextMode = SupplyUnitModeSchema.parse(formData.get("mode"));
+			await patchUserSettings(context.cloudflare.env.DB, userId, {
+				supplyUnitMode: nextMode,
+			});
+			const result = await createSupplyListFromSelectedMeals(
+				context.cloudflare.env,
+				groupId,
+				undefined,
+				{
+					requestId: request.headers.get("cf-ray") ?? undefined,
+					trigger: "dashboard_grocery_action_update_list",
+					organizationId: groupId,
+				},
+				nextMode,
+			);
+			return {
+				success: true,
+				mode: nextMode,
+				list: result.list,
+				summary: result.summary,
+			};
+		}
+
 		return { error: "Invalid intent" };
 	} catch (e) {
 		if (e instanceof CapacityExceededError) {
@@ -178,15 +232,23 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		availableTags,
 		cargo,
 		snoozes = [],
+		supplyUnitMode,
 	} = loaderData;
 	const fetcher = useFetcher(); // For update list
 	const dockFetcher = useFetcher(); // For docking
+	const unitModeFetcher = useFetcher<{
+		success?: boolean;
+		mode?: "cooking" | "metric" | "imperial";
+	}>();
 	const revalidator = useRevalidator();
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showShareModal, setShowShareModal] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	const [displayUnitMode, setDisplayUnitMode] = useState<
+		"cooking" | "metric" | "imperial"
+	>(supplyUnitMode);
 	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
@@ -262,6 +324,44 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					onTagChange={handleTagChange}
 				/>
 			)}
+
+			{/* Unit mode toggle (available on all screen sizes inside the sheet) */}
+			<div className="space-y-2">
+				<p className="text-xs font-semibold text-muted uppercase tracking-widest">
+					Unit Display
+				</p>
+				<div className="flex items-center rounded-lg border border-platinum overflow-hidden">
+					{(
+						[
+							{ id: "metric", label: "Metric" },
+							{ id: "cooking", label: "Cooking" },
+							{ id: "imperial", label: "Imperial" },
+						] as const
+					).map((mode) => (
+						<button
+							key={mode.id}
+							type="button"
+							onClick={() => {
+								setDisplayUnitMode(mode.id);
+								unitModeFetcher.submit(
+									{
+										intent: "update-supply-unit-mode",
+										mode: mode.id,
+									},
+									{ method: "POST" },
+								);
+							}}
+							className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+								displayUnitMode === mode.id
+									? "bg-hyper-green/20 text-hyper-green"
+									: "text-muted hover:bg-platinum/60"
+							}`}
+						>
+							{mode.label}
+						</button>
+					))}
+				</div>
+			</div>
 
 			{/* Actions */}
 			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6 md:hidden">
@@ -365,6 +465,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		dockToast.show();
 	}, [dockFetcher.data?.success, dockToast.show]);
 
+	useEffect(() => {
+		setDisplayUnitMode(supplyUnitMode);
+	}, [supplyUnitMode]);
+
 	// FAB actions for mobile
 	const fabActions: FloatingAction[] = [
 		{
@@ -415,6 +519,37 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 						<PanelToolbar
 							primaryAction={
 								<div className="flex gap-2">
+									<div className="flex items-center rounded-lg border border-platinum overflow-hidden">
+										{(
+											[
+												{ id: "metric", label: "Metric" },
+												{ id: "cooking", label: "Cooking" },
+												{ id: "imperial", label: "Imperial" },
+											] as const
+										).map((mode) => (
+											<button
+												key={mode.id}
+												type="button"
+												onClick={() => {
+													setDisplayUnitMode(mode.id);
+													unitModeFetcher.submit(
+														{
+															intent: "update-supply-unit-mode",
+															mode: mode.id,
+														},
+														{ method: "POST" },
+													);
+												}}
+												className={`px-3 py-2 text-xs font-semibold transition-colors ${
+													displayUnitMode === mode.id
+														? "bg-hyper-green/20 text-hyper-green"
+														: "text-muted hover:bg-platinum/60"
+												}`}
+											>
+												{mode.label}
+											</button>
+										))}
+									</div>
 									{/* Add to Cargo (Dock) Button */}
 									<button
 										type="button"

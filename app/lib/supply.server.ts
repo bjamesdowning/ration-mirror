@@ -37,7 +37,10 @@ import {
 	convertQuantityWithDensity,
 	getUnitMultiplier,
 	normalizeToBaseUnit,
+	type SupplyUnitMode,
 	type SupportedUnit,
+	toCookingUnit,
+	toShoppingUnit,
 	toSupportedUnit,
 } from "./units";
 import {
@@ -226,7 +229,10 @@ function getExistingListQuantity(
 	return total;
 }
 
-function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
+function aggregateIngredients(
+	rows: IngredientRow[],
+	unitMode: SupplyUnitMode = "metric",
+): AggregatedIngredient[] {
 	const aggregation = new Map<
 		string,
 		{
@@ -274,11 +280,20 @@ function aggregateIngredients(rows: IngredientRow[]): AggregatedIngredient[] {
 
 	return Array.from(aggregation.values()).map((entry) => {
 		const readable = chooseReadableUnit(entry.baseQuantity, entry.baseUnit);
+		const converted =
+			unitMode === "cooking"
+				? toCookingUnit(readable.quantity, readable.unit, entry.name)
+				: toShoppingUnit(
+						readable.quantity,
+						readable.unit,
+						entry.name,
+						unitMode,
+					);
 		return {
 			name: entry.name,
 			normalizedName: entry.normalizedName,
-			quantity: readable.quantity,
-			unit: readable.unit,
+			quantity: converted.quantity,
+			unit: converted.unit,
 			domain: entry.domain,
 			sourceMealIds: Array.from(entry.sourceMealIds),
 		};
@@ -728,6 +743,51 @@ export async function updateSupplyItem(
 		.where(eq(supplyItem.id, itemId));
 
 	return item;
+}
+
+/**
+ * Converts an item's unit to either shopping-friendly or cooking-friendly form.
+ */
+export async function convertSupplyItemUnit(
+	db: D1Database,
+	organizationId: string,
+	listId: string,
+	itemId: string,
+	mode: "shopping" | "cooking",
+	preferredSystem: "metric" | "imperial" = "metric",
+) {
+	const d1 = drizzle(db);
+
+	// Verify list ownership before fetching item to prevent cross-org enumeration.
+	const [list] = await d1
+		.select()
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.id, listId),
+				eq(supplyList.organizationId, organizationId),
+			),
+		);
+
+	if (!list) throw new Error("Supply list not found or unauthorized");
+
+	const [item] = await d1
+		.select()
+		.from(supplyItem)
+		.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId)));
+
+	if (!item) throw new Error("Supply item not found");
+
+	const sourceUnit = toSupportedUnit(item.unit);
+	const converted =
+		mode === "cooking"
+			? toCookingUnit(item.quantity, sourceUnit, item.name)
+			: toShoppingUnit(item.quantity, sourceUnit, item.name, preferredSystem);
+
+	return updateSupplyItem(db, organizationId, listId, itemId, {
+		quantity: converted.quantity,
+		unit: converted.unit,
+	});
 }
 
 /**
@@ -1207,6 +1267,7 @@ export async function createSupplyListFromAllMeals(
 	env: Env,
 	organizationId: string,
 	_listName?: string,
+	unitMode: SupplyUnitMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -1269,6 +1330,8 @@ export async function createSupplyListFromAllMeals(
 		organizationId,
 		allIngredients,
 		meals.length,
+		undefined,
+		unitMode,
 	);
 }
 
@@ -1367,6 +1430,7 @@ export async function createSupplyListFromSelectedMeals(
 	organizationId: string,
 	_listName?: string,
 	telemetryContext?: SupplySyncTelemetryContext,
+	unitMode: SupplyUnitMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -1494,6 +1558,7 @@ export async function createSupplyListFromSelectedMeals(
 			allIngredients,
 			unified.length,
 			telemetry,
+			unitMode,
 		);
 
 		emitSupplySyncInfo(
@@ -1537,6 +1602,7 @@ async function syncSupplyFromIngredientRows(
 	allIngredients: IngredientRow[],
 	mealsProcessed: number,
 	telemetryContext?: SupplySyncTelemetryContext,
+	unitMode: SupplyUnitMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -1600,7 +1666,10 @@ async function syncSupplyFromIngredientRows(
 		const inventoryFetchDurationMs = Date.now() - inventoryFetchStartedAtMs;
 
 		const aggregateStartedAtMs = Date.now();
-		const aggregatedIngredients = aggregateIngredients(allIngredients);
+		const aggregatedIngredients = aggregateIngredients(
+			allIngredients,
+			unitMode,
+		);
 		const aggregateDurationMs = Date.now() - aggregateStartedAtMs;
 		const existingItems = refreshedList.items ?? [];
 

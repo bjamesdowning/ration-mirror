@@ -359,6 +359,21 @@ const DENSITY_ALIASES: Record<string, string> = {
 	"almond meal": "almond flour",
 };
 
+const LIQUID_HINTS = new Set<string>([
+	"water",
+	"milk",
+	"cream",
+	"broth",
+	"stock",
+	"oil",
+	"vinegar",
+	"juice",
+	"wine",
+	"sauce",
+	"syrup",
+	"extract",
+]);
+
 /**
  * Normalizes a name for density lookup.
  * Matches matching.server.ts normalizeIngredientName: lowercase, trim, remove punctuation, strip trailing 's'.
@@ -388,4 +403,24 @@ export function lookupDensity(
 	// Bounds check
 	if (density < DENSITY_MIN || density > DENSITY_MAX) return null;
 	return density;
+}
+
+/**
+ * Heuristic classifier for liquid-like ingredients so unit conversion can favor
+ * store-friendly volume units (ml/l) instead of weight where appropriate.
+ */
+export function isLikelyLiquidIngredient(
+	name: string | null | undefined,
+): boolean {
+	if (name == null || String(name).trim() === "") return false;
+	const normalized = normalizeForDensityLookup(String(name));
+	if (!normalized) return false;
+	const canonical = DENSITY_ALIASES[normalized] ?? normalized;
+	const density = DENSITY_CANONICAL[canonical];
+	if (typeof density === "number" && density >= 0.9 && density <= 1.15) {
+		return true;
+	}
+
+	const tokens = canonical.split(" ");
+	return tokens.some((token) => LIQUID_HINTS.has(token));
 }

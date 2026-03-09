@@ -632,6 +632,7 @@ The supply list bridges the Galley and Cargo — it holds ingredients needed to 
 
 **Key workflows:**
 - **Sync** — `POST /hub/supply` (intent `update-list`) re-computes the entire list from the current active meal selections + manifest week meals. Vectorize resolves fuzzy name matches. Snoozed items are excluded.
+- **Unit normalization** — Supply sync can render quantities in `metric`, `imperial`, or `cooking` mode (`user.settings.supplyUnitMode`). In metric mode, volume-based solids (e.g. rice/flour/cheese in cups) are converted to weight using ingredient density so docked store quantities satisfy recipe needs without manual editing.
 - **From meal** — `POST /api/supply-lists/:id/from-meal` adds missing ingredients for a single specific meal.
 - **Dock cargo** — `POST /api/supply-lists/:id/complete` moves all purchased items into cargo inventory. Uses the same vector dedup pipeline as direct cargo adds. Purchased items are removed from the list in a single `db.batch()`.
 - **Snooze** — An item can be snoozed for a duration (via `supply_snooze` table, keyed on `normalizedName + domain`). Snoozed items are silently excluded from all future syncs until the snooze expires or is manually dismissed. Useful for items that are always on hand.

@@ -4,8 +4,11 @@ import {
 	chooseReadableUnit,
 	convertQuantity,
 	convertQuantityWithDensity,
+	getUnitMultiplier,
 	normalizeToBaseUnit,
 	normalizeUnitAlias,
+	toCookingUnit,
+	toShoppingUnit,
 	toSupportedUnit,
 } from "~/lib/units";
 
@@ -109,8 +112,10 @@ describe("convertQuantity", () => {
 		expect(convertQuantity(1, "unit", "g")).toBeNull();
 	});
 
-	it("returns null for metric vs imperial weight", () => {
-		expect(convertQuantity(1, "g", "oz")).toBeNull();
+	it("bridges metric and imperial weight", () => {
+		expect(convertQuantity(1000, "g", "oz")).toBeCloseTo(35.274, 2);
+		expect(convertQuantity(1, "lb", "g")).toBeCloseTo(453.592, 2);
+		expect(getUnitMultiplier("g", "oz")).toBeCloseTo(0.03527, 5);
 	});
 
 	it("same unit returns multiplier of 1", () => {
@@ -229,5 +234,28 @@ describe("chooseReadableUnit", () => {
 	it("promotes ml to gal at >= 3785.41 ml", () => {
 		const result = chooseReadableUnit(4000, "ml");
 		expect(result.unit).toBe("gal");
+	});
+});
+
+describe("shopping/cooking presentation conversion", () => {
+	it("converts volume solids to metric shopping units", () => {
+		// 1 cup rice (~0.85 g/ml) ≈ 201 g
+		const result = toShoppingUnit(1, "cup", "rice", "metric");
+		expect(result.unit).toBe("g");
+		expect(result.quantity).toBeCloseTo(201, 0);
+	});
+
+	it("keeps liquids in metric volume for shopping mode", () => {
+		const result = toShoppingUnit(1, "cup", "milk", "metric");
+		expect(result.unit).toBe("ml");
+		expect(result.quantity).toBeCloseTo(236.588, 2);
+	});
+
+	it("can convert weight solids back to cooking units", () => {
+		const result = toCookingUnit(201, "g", "rice");
+		expect(["fl oz", "cup"]).toContain(result.unit);
+		const asCups = convertQuantity(result.quantity, result.unit, "cup");
+		expect(asCups).not.toBeNull();
+		expect(asCups ?? 0).toBeCloseTo(1, 1);
 	});
 });

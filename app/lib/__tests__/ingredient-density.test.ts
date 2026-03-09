@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { lookupDensity } from "~/lib/ingredient-density";
+import {
+	isLikelyLiquidIngredient,
+	lookupDensity,
+} from "~/lib/ingredient-density";
 
 describe("lookupDensity", () => {
 	it("returns density for a canonical key", () => {
@@ -64,5 +67,17 @@ describe("lookupDensity", () => {
 				expect(density).toBeLessThanOrEqual(3.0);
 			}
 		}
+	});
+});
+
+describe("isLikelyLiquidIngredient", () => {
+	it("returns true for known liquids", () => {
+		expect(isLikelyLiquidIngredient("milk")).toBe(true);
+		expect(isLikelyLiquidIngredient("olive oil")).toBe(true);
+	});
+
+	it("returns false for dry solids", () => {
+		expect(isLikelyLiquidIngredient("rice")).toBe(false);
+		expect(isLikelyLiquidIngredient("all purpose flour")).toBe(false);
 	});
 });

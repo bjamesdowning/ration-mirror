@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { Clock, RefreshCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import type { supplyItem } from "~/db/schema";
@@ -19,6 +19,7 @@ interface SupplyItemProps {
 	listId: string;
 	onDelete?: () => void;
 	onSnooze?: () => void;
+	onRefresh?: () => void;
 }
 
 function isMealSourced(item: SupplyItemProps["item"]): boolean {
@@ -36,16 +37,18 @@ export function SupplyItem({
 	listId,
 	onDelete,
 	onSnooze,
+	onRefresh,
 }: SupplyItemProps) {
 	const { confirm } = useConfirm();
 	const fetcher = useFetcher<{
 		snoozed?: boolean;
 		deleted?: boolean;
+		item?: { id: string };
 	}>();
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 	const [isMarkingPurchased, setIsMarkingPurchased] = useState(false);
-	const pendingMutation = useRef<"snooze" | "delete" | null>(null);
+	const pendingMutation = useRef<"snooze" | "delete" | "convert" | null>(null);
 
 	const isPending = fetcher.state !== "idle";
 	const optimisticPurchased =
@@ -100,6 +103,32 @@ export function SupplyItem({
 		setIsMenuOpen(false);
 	};
 
+	const currentUnitNorm = item.unit.trim().toLowerCase();
+	const isWeightUnit =
+		currentUnitNorm === "g" ||
+		currentUnitNorm === "kg" ||
+		currentUnitNorm === "oz" ||
+		currentUnitNorm === "lb";
+	const convertLabel = isWeightUnit
+		? "Convert to cooking units"
+		: "Convert to shopping units";
+
+	const handleConvertUnit = () => {
+		pendingMutation.current = "convert";
+		fetcher.submit(
+			JSON.stringify({
+				intent: "convert-unit",
+				mode: isWeightUnit ? "cooking" : "shopping",
+				preferredSystem: "metric",
+			}),
+			{
+				method: "POST",
+				action: `/api/supply-lists/${listId}/items/${item.id}`,
+				encType: "application/json",
+			},
+		);
+	};
+
 	const handleDelete = async () => {
 		if (
 			!(await confirm({
@@ -136,8 +165,12 @@ export function SupplyItem({
 			onDelete?.();
 		}
 
+		if (pendingMutation.current === "convert" && fetcher.data?.item) {
+			onRefresh?.();
+		}
+
 		pendingMutation.current = null;
-	}, [fetcher.state, fetcher.data, onDelete, onSnooze]);
+	}, [fetcher.state, fetcher.data, onDelete, onSnooze, onRefresh]);
 
 	return (
 		<>
@@ -191,9 +224,23 @@ export function SupplyItem({
 					</span>
 
 					{/* Quantity */}
-					<span className="text-sm text-muted text-data flex-shrink-0">
+					<span className="text-sm text-muted text-data flex-shrink-0 min-w-[88px] text-right">
 						{formatQuantity(item.quantity, item.unit)}
 					</span>
+
+					<button
+						type="button"
+						onClick={handleConvertUnit}
+						disabled={isPending}
+						className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-muted hover:text-carbon transition-all p-1 flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+						aria-label={convertLabel}
+						title={convertLabel}
+					>
+						<RefreshCcw
+							className={`w-4 h-4 ${isPending && pendingMutation.current === "convert" ? "animate-spin" : ""}`}
+							aria-hidden="true"
+						/>
+					</button>
 
 					{/* Action Menu: Snooze (meal-sourced) or Remove (manual) */}
 					{mealSourced ? (

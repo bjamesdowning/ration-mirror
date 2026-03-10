@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
+import { GroupAvatar } from "~/components/shell/GroupAvatar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
@@ -261,6 +262,7 @@ export async function loader(args: Route.LoaderArgs) {
 			groupCanInviteMembers,
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
+			organizationLogo: currentOrg?.logo ?? null,
 			userOrganizations: userOrganizations.map((m) => m.organization),
 			userMemberships,
 			credits,
@@ -617,6 +619,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							settings={settings}
 							userOrganizations={userOrganizations}
 							userMemberships={userMemberships}
+							organizationId={organizationId}
+							organizationName={loaderData.organizationName ?? "Unknown Group"}
+							organizationLogo={loaderData.organizationLogo ?? null}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -994,6 +999,9 @@ function GroupSection({
 	settings,
 	userOrganizations,
 	userMemberships,
+	organizationId,
+	organizationName,
+	organizationLogo,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
@@ -1007,10 +1015,137 @@ function GroupSection({
 		role: string;
 		credits: number;
 	}[];
+	organizationId: string;
+	organizationName: string;
+	organizationLogo: string | null;
 }) {
+	const revalidator = useRevalidator();
+	const successToast = useToast({ duration: 3000 });
+	const errorToast = useToast({ duration: 4000 });
+	const [groupImageError, setGroupImageError] = useState(
+		"Unable to upload group image.",
+	);
+	// Optimistic override until loader revalidation returns new logo
+	const [pendingUploadUrl, setPendingUploadUrl] = useState<string | null>(null);
+	const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
+
+	// Clear optimistic override when server data catches up (revalidation)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: organizationLogo is the trigger; we clear when it changes
+	useEffect(() => {
+		setPendingUploadUrl(null);
+	}, [organizationLogo]);
+
+	const canEditGroupImage =
+		currentUserRole === "owner" || currentUserRole === "admin";
+
+	const displayImage = pendingUploadUrl ?? organizationLogo;
+
+	const handleGroupImageUpload = async (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = event.currentTarget.files?.[0];
+		if (!file) return;
+
+		if (file.size > 2 * 1024 * 1024) {
+			setGroupImageError("Image too large. Max 2MB.");
+			errorToast.show();
+			event.currentTarget.value = "";
+			return;
+		}
+
+		const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+		if (!allowedMimeTypes.includes(file.type)) {
+			setGroupImageError("Unsupported format. Use JPEG, PNG, or WebP.");
+			errorToast.show();
+			event.currentTarget.value = "";
+			return;
+		}
+
+		setIsUploadingGroupImage(true);
+		try {
+			const formData = new FormData();
+			formData.append("avatar", file);
+			const response = await fetch("/api/organization/avatar", {
+				method: "POST",
+				body: formData,
+			});
+			const payload = (await response.json()) as {
+				success?: boolean;
+				image?: string;
+				error?: string;
+			};
+			if (!response.ok || !payload.image) {
+				throw new Error(payload.error || "Failed to upload group image");
+			}
+			setPendingUploadUrl(payload.image);
+			successToast.show();
+			revalidator.revalidate();
+		} catch {
+			setGroupImageError("Unable to upload group image.");
+			errorToast.show();
+		} finally {
+			setIsUploadingGroupImage(false);
+			event.currentTarget.value = "";
+		}
+	};
+
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Group</SectionHeading>
+
+			{canEditGroupImage && (
+				<div className="glass-panel rounded-xl p-6">
+					<h3 className="text-xs text-label text-muted mb-4">Group Image</h3>
+					<div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+						<label
+							className="relative cursor-pointer group"
+							htmlFor="group-image"
+						>
+							<GroupAvatar
+								name={organizationName}
+								orgId={organizationId}
+								image={displayImage}
+								size="md"
+							/>
+							<input
+								id="group-image"
+								type="file"
+								accept="image/jpeg,image/png,image/webp"
+								className="sr-only"
+								onChange={handleGroupImageUpload}
+							/>
+							<span className="absolute -bottom-1 -right-1 text-[10px] px-1.5 py-0.5 rounded bg-carbon text-white opacity-0 group-hover:opacity-100 transition-opacity">
+								Edit
+							</span>
+							{isUploadingGroupImage && (
+								<span className="absolute inset-0 rounded-full bg-carbon/45 text-white text-xs flex items-center justify-center">
+									...
+								</span>
+							)}
+						</label>
+						<div>
+							<p className="text-sm text-muted">JPEG, PNG, or WebP. Max 2MB.</p>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{successToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Group image updated"
+					description="Your group image was saved."
+					onDismiss={successToast.hide}
+				/>
+			)}
+			{errorToast.isOpen && (
+				<Toast
+					variant="error"
+					title="Upload failed"
+					description={groupImageError}
+					onDismiss={errorToast.hide}
+				/>
+			)}
 			<GroupManagement
 				members={members}
 				currentUserRole={currentUserRole}

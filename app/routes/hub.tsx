@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import { NavLink, Outlet, redirect } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
@@ -5,6 +7,7 @@ import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
+import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
 	checkCapacityWithTier,
@@ -59,34 +62,48 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
-	const [balance, cargoCapacity, mealsCapacity, listCapacity, userSettings] =
-		await Promise.all([
-			checkBalance(context.cloudflare.env, groupId),
-			checkCapacityWithTier(
-				context.cloudflare.env,
-				groupId,
-				"cargo",
-				tierInfo,
-				0,
-			),
-			checkCapacityWithTier(
-				context.cloudflare.env,
-				groupId,
-				"meals",
-				tierInfo,
-				0,
-			),
-			checkCapacityWithTier(
-				context.cloudflare.env,
-				groupId,
-				"supplyLists",
-				tierInfo,
-				0,
-			),
-			getUserSettings(context.cloudflare.env.DB, session.user.id),
-		]);
+	const db = drizzle(context.cloudflare.env.DB, { schema });
+	const [
+		orgRow,
+		balance,
+		cargoCapacity,
+		mealsCapacity,
+		listCapacity,
+		userSettings,
+	] = await Promise.all([
+		db
+			.select({ logo: schema.organization.logo })
+			.from(schema.organization)
+			.where(eq(schema.organization.id, groupId))
+			.limit(1)
+			.then((rows) => rows[0]),
+		checkBalance(context.cloudflare.env, groupId),
+		checkCapacityWithTier(
+			context.cloudflare.env,
+			groupId,
+			"cargo",
+			tierInfo,
+			0,
+		),
+		checkCapacityWithTier(
+			context.cloudflare.env,
+			groupId,
+			"meals",
+			tierInfo,
+			0,
+		),
+		checkCapacityWithTier(
+			context.cloudflare.env,
+			groupId,
+			"supplyLists",
+			tierInfo,
+			0,
+		),
+		getUserSettings(context.cloudflare.env.DB, session.user.id),
+	]);
 
 	return {
+		activeOrganizationLogo: orgRow?.logo ?? null,
 		balance,
 		/** Credit cost per AI feature; keep in sync with ledger.server.ts AI_COSTS */
 		aiCosts: {

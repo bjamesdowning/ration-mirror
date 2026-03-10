@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useRouteLoaderData } from "react-router";
 import { DiamondIcon } from "~/components/icons/PageIcons";
+import { GroupAvatar } from "~/components/shell/GroupAvatar";
 import { authClient } from "~/lib/auth-client";
 import type { OrganizationWithCredits } from "~/lib/types";
 
@@ -9,13 +11,20 @@ export function GroupSwitcher() {
 	const organizations = authClient.useListOrganizations();
 	const navigate = useNavigate();
 	const [isOpen, setIsOpen] = useState(false);
-	const dropdownRef = useRef<HTMLDivElement>(null);
+	const [menuPos, setMenuPos] = useState<{
+		top: number;
+		left?: number;
+		right?: number;
+	} | null>(null);
+	const buttonRef = useRef<HTMLButtonElement>(null);
 
-	// Get credits from dashboard loader
-	const dashboardData = useRouteLoaderData("routes/hub") as {
+	// Get credits and org logo from dashboard loader
+	const hubData = useRouteLoaderData("routes/hub") as {
 		balance: number;
 		tier?: "free" | "crew_member";
+		activeOrganizationLogo?: string | null;
 	} | null;
+	const dashboardData = hubData;
 
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const activeOrg = organizations.data?.find((org) => org.id === activeOrgId) as
@@ -31,46 +40,186 @@ export function GroupSwitcher() {
 	const credits = dashboardData?.balance ?? activeOrg?.credits ?? 0;
 	const tierLabel = dashboardData?.tier === "crew_member" ? "CREW" : "FREE";
 
-	// Close dropdown when clicking outside
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (
-				dropdownRef.current &&
-				!dropdownRef.current.contains(event.target as Node)
-			) {
-				setIsOpen(false);
-			}
-		};
+	const handleClose = useCallback(() => {
+		setIsOpen(false);
+		setMenuPos(null);
+	}, []);
 
-		if (isOpen) {
-			document.addEventListener("mousedown", handleClickOutside);
-			return () => {
-				document.removeEventListener("mousedown", handleClickOutside);
-			};
+	// Close on scroll or resize to avoid stale positioning
+	useEffect(() => {
+		if (!isOpen) return;
+		window.addEventListener("scroll", handleClose, {
+			capture: true,
+			passive: true,
+		});
+		window.addEventListener("resize", handleClose, { passive: true });
+		return () => {
+			window.removeEventListener("scroll", handleClose, { capture: true });
+			window.removeEventListener("resize", handleClose);
+		};
+	}, [isOpen, handleClose]);
+
+	const handleOpen = (e: React.MouseEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!isOpen && buttonRef.current) {
+			const rect = buttonRef.current.getBoundingClientRect();
+			const menuWidth = 256;
+			const right = window.innerWidth - rect.right;
+			const wouldOverflowLeft = right + menuWidth > window.innerWidth;
+			setMenuPos(
+				wouldOverflowLeft
+					? {
+							top: rect.bottom + 8,
+							left: Math.max(8, rect.left),
+						}
+					: {
+							top: rect.bottom + 8,
+							right,
+						},
+			);
 		}
-	}, [isOpen]);
+		setIsOpen((prev) => !prev);
+	};
 
 	const handleSwitch = async (orgId: string) => {
+		handleClose();
 		await authClient.organization.setActive({
 			organizationId: orgId,
 		});
-		setIsOpen(false);
 		// Reload to ensure all server loaders re-run with new context
 		window.location.reload();
 	};
 
+	const dropdownContent =
+		isOpen && menuPos
+			? createPortal(
+					<>
+						{/* Backdrop */}
+						<button
+							type="button"
+							className="fixed inset-0 z-[9998] w-full h-full cursor-default focus:outline-none"
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								handleClose();
+							}}
+							aria-label="Close menu"
+						/>
+
+						{/* Dropdown — rendered outside overflow ancestors via portal */}
+						<div
+							className="fixed z-[9999] w-64 bg-ceramic border border-platinum rounded-xl shadow-xl"
+							style={{
+								top: menuPos.top,
+								left: menuPos.left,
+								right: menuPos.right,
+							}}
+						>
+							<div className="p-2 space-y-1">
+								<div className="px-3 py-2 text-xs font-semibold text-muted uppercase tracking-wider">
+									Switch Group
+								</div>
+
+								{organizations.data?.map((org) => (
+									<button
+										key={org.id}
+										type="button"
+										onClick={() => handleSwitch(org.id)}
+										className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+											org.id === activeOrgId
+												? "bg-hyper-green/10 text-carbon font-medium"
+												: "text-muted hover:bg-platinum hover:text-carbon"
+										}`}
+									>
+										<span className="truncate">{org.name}</span>
+										{org.id === activeOrgId && (
+											<svg
+												aria-hidden="true"
+												className="w-4 h-4 text-hyper-green shrink-0"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M5 13l4 4L19 7"
+												/>
+											</svg>
+										)}
+									</button>
+								))}
+
+								<div className="h-px bg-platinum my-1" />
+
+								<button
+									type="button"
+									onClick={() => {
+										handleClose();
+										navigate("/hub/groups/new");
+									}}
+									className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-platinum hover:text-carbon transition-colors"
+								>
+									<svg
+										aria-hidden="true"
+										className="w-4 h-4 shrink-0"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+									Create New Group
+								</button>
+							</div>
+						</div>
+					</>,
+					document.body,
+				)
+			: null;
+
 	return (
-		<div ref={dropdownRef} className="relative z-50">
+		<div className="relative">
 			<button
+				ref={buttonRef}
 				type="button"
-				onClick={() => setIsOpen(!isOpen)}
+				onClick={handleOpen}
 				aria-expanded={isOpen}
 				aria-haspopup="true"
-				className="flex items-center gap-2 px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10"
+				aria-label={`${displayName}, ${credits} credits`}
+				title={displayName}
+				className="flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10 min-w-0"
 			>
-				<span className="text-sm font-bold text-carbon leading-none max-w-[160px] truncate">
-					{displayName}
-				</span>
+				{/* Mobile: avatar only; Desktop: full name */}
+				<div className="hidden md:flex items-center gap-2 min-w-0 flex-1">
+					<span
+						className="text-sm font-bold text-carbon leading-none max-w-[160px] truncate"
+						title={displayName}
+					>
+						{displayName}
+					</span>
+				</div>
+				<div className="md:hidden shrink-0" aria-hidden>
+					{activeOrg ? (
+						<GroupAvatar
+							name={activeOrg.name}
+							orgId={activeOrg.id}
+							image={hubData?.activeOrganizationLogo ?? activeOrg.logo ?? null}
+							size="sm"
+						/>
+					) : (
+						<div className="w-9 h-9 rounded-full bg-platinum/50 flex items-center justify-center text-xs font-bold text-muted shrink-0">
+							?
+						</div>
+					)}
+				</div>
 				{activeOrg && (
 					<span className="text-[10px] uppercase tracking-wide text-hyper-green font-medium leading-none flex items-center gap-0.5">
 						{credits}
@@ -100,79 +249,7 @@ export function GroupSwitcher() {
 				</svg>
 			</button>
 
-			{/* Dropdown Menu */}
-			<div
-				className={`absolute left-0 top-full mt-2 w-64 bg-ceramic border border-platinum rounded-xl shadow-xl transition-all transform origin-top-left z-50 ${
-					isOpen
-						? "opacity-100 visible"
-						: "opacity-0 invisible pointer-events-none"
-				}`}
-			>
-				<div className="p-2 space-y-1">
-					<div className="px-3 py-2 text-xs font-semibold text-muted uppercase tracking-wider">
-						Switch Group
-					</div>
-
-					{organizations.data?.map((org) => (
-						<button
-							key={org.id}
-							type="button"
-							onClick={() => handleSwitch(org.id)}
-							className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-								org.id === activeOrgId
-									? "bg-hyper-green/10 text-carbon font-medium"
-									: "text-muted hover:bg-platinum hover:text-carbon"
-							}`}
-						>
-							<span className="truncate">{org.name}</span>
-							{org.id === activeOrgId && (
-								<svg
-									aria-hidden="true"
-									className="w-4 h-4 text-hyper-green"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M5 13l4 4L19 7"
-									/>
-								</svg>
-							)}
-						</button>
-					))}
-
-					<div className="h-px bg-platinum my-1" />
-
-					<button
-						type="button"
-						onClick={() => {
-							setIsOpen(false);
-							navigate("/hub/groups/new");
-						}}
-						// Future: navigate("/groups/create")
-						className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-platinum hover:text-carbon transition-colors"
-					>
-						<svg
-							aria-hidden="true"
-							className="w-4 h-4"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M12 4v16m8-8H4"
-							/>
-						</svg>
-						Create New Group
-					</button>
-				</div>
-			</div>
+			{dropdownContent}
 		</div>
 	);
 }

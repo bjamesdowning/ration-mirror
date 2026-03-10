@@ -152,6 +152,11 @@ export default [
 	route("api/billing-portal", "routes/api/billing-portal.ts"),
 	route("api/user/avatar", "routes/api/user/avatar.tsx"),
 	route("api/user/avatar/:userId", "routes/api/user/avatar.$userId.tsx"),
+	route("api/organization/avatar", "routes/api/organization/avatar.tsx"),
+	route(
+		"api/organization/avatar/:orgId",
+		"routes/api/organization/avatar.$orgId.tsx",
+	),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/groups/create", "routes/api/groups.create.ts"),

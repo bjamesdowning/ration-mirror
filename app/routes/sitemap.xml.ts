@@ -1,6 +1,13 @@
 import type { Route } from "./+types/sitemap.xml";
 
-const STATIC_PATHS = ["/", "/legal/terms", "/legal/privacy", "/blog"] as const;
+const STATIC_PATHS = [
+	"/",
+	"/legal/terms",
+	"/legal/privacy",
+	"/blog",
+	"/tools",
+	"/tools/unit-converter",
+] as const;
 
 /**
  * sitemap.xml — Serves indexable URLs for crawler discovery.
@@ -15,7 +22,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const allPaths = [...STATIC_PATHS, ...blogPaths];
 
 	const urlEntries = allPaths.map((path) => {
-		const priority = path === "/" ? "1.0" : path === "/blog" ? "0.9" : "0.8";
+		const priority =
+			path === "/"
+				? "1.0"
+				: path === "/blog" || path === "/tools"
+					? "0.9"
+					: path === "/tools/unit-converter"
+						? "0.85"
+						: "0.8";
 		return `  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${priority}</priority></url>`;
 	});
 	const urls = urlEntries.join("\n");

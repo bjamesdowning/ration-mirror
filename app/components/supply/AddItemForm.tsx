@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 
 interface AddItemFormProps {
@@ -114,12 +114,20 @@ export function AddItemForm({
 							/>
 						</div>
 						<div className="flex-1">
-							<label
-								htmlFor="unit"
-								className="block text-label text-muted mb-1"
-							>
-								Unit
-							</label>
+							<div className="flex items-center justify-between mb-1">
+								<label htmlFor="unit" className="block text-label text-muted">
+									Unit
+								</label>
+								<Link
+									to="/tools/unit-converter"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-xs text-muted hover:text-hyper-green transition-colors font-mono"
+									title="Open cooking unit converter"
+								>
+									⇄ Convert
+								</Link>
+							</div>
 							<input
 								id="unit"
 								type="text"

@@ -179,6 +179,10 @@ export default [
 	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
+	// Tools (public, no auth)
+	route("tools", "routes/tools.tsx"),
+	route("tools/unit-converter", "routes/tools.unit-converter.tsx"),
+
 	// Legal
 	route("legal", "routes/legal.tsx", [
 		route("terms", "routes/legal.terms.tsx"),

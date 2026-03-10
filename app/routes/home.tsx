@@ -77,6 +77,13 @@ function MobileNav() {
 								Blog
 							</Link>
 							<Link
+								to="/tools"
+								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors"
+								onClick={() => setOpen(false)}
+							>
+								Tools
+							</Link>
+							<Link
 								to="/#pricing"
 								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors block"
 								onClick={() => setOpen(false)}
@@ -216,6 +223,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				>
 					<Link to="/blog" className="hover:text-hyper-green transition-colors">
 						Blog
+					</Link>
+					<Link
+						to="/tools"
+						className="hover:text-hyper-green transition-colors"
+					>
+						Tools
 					</Link>
 					<a
 						href="#pricing"
@@ -1192,8 +1205,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			{/* Footer */}
 			<footer className="relative z-20 border-t border-carbon/10 bg-ceramic/90 backdrop-blur p-4 mt-12">
 				<div className="flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto text-xs text-muted gap-4">
-					<div className="flex gap-6">
+					<div className="flex flex-wrap gap-6">
 						<span>Build v{APP_VERSION}</span>
+						<Link
+							to="/blog"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Blog
+						</Link>
+						<Link
+							to="/tools"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Tools
+						</Link>
 						<Link
 							to="/legal/privacy"
 							className="hover:text-hyper-green transition-colors"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -127,6 +127,18 @@ export function IngestForm({
 				</div>
 
 				{/* Qty & Unit */}
+				<div className="flex items-center justify-between mb-1">
+					<span className="text-label text-muted text-xs">Qty &amp; Unit</span>
+					<Link
+						to="/tools/unit-converter"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-xs text-muted hover:text-hyper-green transition-colors font-mono"
+						title="Open cooking unit converter"
+					>
+						⇄ Convert units
+					</Link>
+				</div>
 				<div className="grid grid-cols-2 gap-4">
 					<div className="flex flex-col">
 						<label

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import type { MealIngredientInput } from "~/lib/schemas/meal";
 import { SUPPORTED_UNITS, toSupportedUnit } from "~/lib/units";
 
@@ -126,7 +127,16 @@ export function IngredientPicker({
 		<div className="glass-panel rounded-xl p-4 space-y-4 relative overflow-visible">
 			<div className="flex justify-between items-center">
 				<h3 className="text-label text-muted text-sm">Components</h3>
-				<div className="flex gap-2">
+				<div className="flex items-center gap-2">
+					<Link
+						to="/tools/unit-converter"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-xs text-muted hover:text-hyper-green transition-colors font-mono"
+						title="Open cooking unit converter"
+					>
+						⇄ Convert units
+					</Link>
 					<button
 						type="button"
 						onClick={addIngredient}

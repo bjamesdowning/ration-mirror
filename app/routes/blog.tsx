@@ -52,6 +52,18 @@ export default function BlogIndex({ loaderData }: Route.ComponentProps) {
 							Home
 						</Link>
 						<Link
+							to="/blog"
+							className="text-muted hover:text-hyper-green transition-colors"
+						>
+							Blog
+						</Link>
+						<Link
+							to="/tools"
+							className="text-muted hover:text-hyper-green transition-colors"
+						>
+							Tools
+						</Link>
+						<Link
 							to="/hub/pricing"
 							className="text-muted hover:text-hyper-green transition-colors"
 						>

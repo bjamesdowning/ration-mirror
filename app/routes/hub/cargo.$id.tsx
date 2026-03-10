@@ -1,13 +1,16 @@
-import { redirect } from "react-router";
+import { Link, redirect } from "react-router";
 import { CargoDetail } from "~/components/cargo/CargoDetail";
 import { HubHeader } from "~/components/hub/HubHeader";
+import { DetailNavRocker } from "~/components/shell/DetailNavRocker";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
 	CargoItemSchema,
+	getAdjacentCargoIds,
 	getCargoItem,
 	jettisonItem,
 	updateItem,
 } from "~/lib/cargo.server";
+import { ITEM_DOMAINS } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { getMealsForCargo } from "~/lib/meals.server";
 import type { Route } from "./+types/cargo.$id";
@@ -17,17 +20,36 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const { id } = params;
 	if (!id) throw redirect("/hub/cargo");
 
+	const url = new URL(request.url);
+	const tag = url.searchParams.get("tag")?.trim().slice(0, 100) ?? undefined;
+	const domainParam = url.searchParams.get("domain");
+	const domain =
+		domainParam &&
+		ITEM_DOMAINS.includes(domainParam as (typeof ITEM_DOMAINS)[number])
+			? domainParam
+			: undefined;
+
 	const item = await getCargoItem(context.cloudflare.env.DB, groupId, id);
 	if (!item) throw redirect("/hub/cargo");
 
-	const connectedMeals = await getMealsForCargo(
-		context.cloudflare.env.DB,
-		groupId,
-		id,
-		item.name,
-	);
+	const [connectedMeals, adjacent] = await Promise.all([
+		getMealsForCargo(context.cloudflare.env.DB, groupId, id, item.name),
+		getAdjacentCargoIds(
+			context.cloudflare.env.DB,
+			groupId,
+			{ id: item.id, createdAt: item.createdAt },
+			{ domain },
+		),
+	]);
 
-	return { item, connectedMeals };
+	return {
+		item,
+		connectedMeals,
+		prevId: adjacent.prevId,
+		nextId: adjacent.nextId,
+		navTag: tag,
+		navDomain: domain,
+	};
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -136,7 +158,8 @@ export function HydrateFallback() {
 }
 
 export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
-	const { item, connectedMeals } = loaderData;
+	const { item, connectedMeals, prevId, nextId, navTag, navDomain } =
+		loaderData;
 
 	return (
 		<>
@@ -144,6 +167,22 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 				title="INGREDIENT DETAILS"
 				subtitle={`ID: ${item.id.slice(0, 8)}`}
 			/>
+			<div className="flex items-center justify-between mb-6">
+				<Link
+					to="/hub/cargo"
+					className="text-sm text-muted hover:text-hyper-green transition-colors"
+				>
+					← Back to Cargo
+				</Link>
+				<DetailNavRocker
+					prevId={prevId}
+					nextId={nextId}
+					basePath="/hub/cargo"
+					tag={navTag}
+					domain={navDomain}
+					itemLabel="ingredient"
+				/>
+			</div>
 			<CargoDetail item={item} connectedMeals={connectedMeals} />
 		</>
 	);

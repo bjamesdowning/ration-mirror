@@ -9,6 +9,7 @@ interface ManifestGridProps {
 	promotedCargoIds?: string[];
 	onUpgradeRequired?: () => void;
 	viewMode?: ViewMode;
+	getDetailHref?: (item: typeof cargo.$inferSelect) => string;
 }
 
 export function ManifestGrid({
@@ -16,6 +17,7 @@ export function ManifestGrid({
 	promotedCargoIds,
 	onUpgradeRequired,
 	viewMode = "card",
+	getDetailHref,
 }: ManifestGridProps) {
 	if (items.length === 0) {
 		return (
@@ -35,6 +37,7 @@ export function ManifestGrid({
 						item={item}
 						isPromoted={promotedCargoIds?.includes(item.id) ?? false}
 						onUpgradeRequired={onUpgradeRequired}
+						detailHref={getDetailHref?.(item)}
 					/>
 				))}
 			</div>
@@ -50,6 +53,7 @@ export function ManifestGrid({
 						item={item}
 						isPromoted={promotedCargoIds?.includes(item.id) ?? false}
 						onUpgradeRequired={onUpgradeRequired}
+						detailHref={getDetailHref?.(item)}
 					/>
 				))}
 			</div>

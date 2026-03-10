@@ -38,6 +38,7 @@ interface MealGridProps {
 	viewMode?: ViewMode;
 	/** User's declared allergen slugs — propagated to MealCard for warning badges. */
 	userAllergens?: AllergenSlug[];
+	getDetailHref?: (meal: { id: string }) => string;
 }
 
 export function MealGrid({
@@ -48,6 +49,7 @@ export function MealGrid({
 	onToggleMealActive,
 	viewMode = "card",
 	userAllergens = [],
+	getDetailHref,
 }: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
 	const [minMatch, setMinMatch] = useState(50);
@@ -196,6 +198,7 @@ export function MealGrid({
 											availableIngredients={inventory}
 											isActive={activeMealIds?.has(result.meal.id)}
 											onToggleActive={onToggleMealActive}
+											detailHref={getDetailHref?.(result.meal)}
 										/>
 										<div className="absolute top-3 right-12">
 											<MealMatchBadge
@@ -216,6 +219,7 @@ export function MealGrid({
 												meal={result.meal}
 												isActive={activeMealIds?.has(result.meal.id)}
 												onToggleActive={onToggleMealActive}
+												detailHref={getDetailHref?.(result.meal)}
 											/>
 										) : (
 											<MealCard
@@ -224,6 +228,7 @@ export function MealGrid({
 												isActive={activeMealIds?.has(result.meal.id)}
 												onToggleActive={onToggleMealActive}
 												userAllergens={userAllergens}
+												detailHref={getDetailHref?.(result.meal)}
 											/>
 										)}
 										<div className="absolute top-2 right-2">
@@ -267,6 +272,7 @@ export function MealGrid({
 						availableIngredients={inventory}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						detailHref={getDetailHref?.(mealItem)}
 					/>
 				))}
 			</div>
@@ -283,6 +289,7 @@ export function MealGrid({
 						meal={mealItem}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						detailHref={getDetailHref?.(mealItem)}
 					/>
 				) : (
 					<MealCard
@@ -292,6 +299,7 @@ export function MealGrid({
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
 						userAllergens={userAllergens}
+						detailHref={getDetailHref?.(mealItem)}
 					/>
 				),
 			)}

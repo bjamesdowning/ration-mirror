@@ -32,6 +32,7 @@ interface MealListRowProps {
 	availableIngredients?: InventoryItem[];
 	isActive?: boolean;
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
+	detailHref?: string;
 }
 
 export function MealListRow({
@@ -39,6 +40,7 @@ export function MealListRow({
 	availableIngredients = [],
 	isActive = false,
 	onToggleActive,
+	detailHref,
 }: MealListRowProps) {
 	const fetcher = useFetcher();
 	const toggleFetcher = useFetcher<{
@@ -172,7 +174,7 @@ export function MealListRow({
 				<div className="shrink-0">
 					<ActionMenu
 						actions={[
-							{ label: "View", to: `/hub/galley/${meal.id}` },
+							{ label: "View", to: detailHref ?? `/hub/galley/${meal.id}` },
 							{ label: "Edit", onClick: () => setIsEditing(true) },
 							{ label: "Delete", onClick: handleDelete, destructive: true },
 						]}

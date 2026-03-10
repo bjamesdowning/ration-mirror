@@ -12,12 +12,14 @@ interface CargoCardProps {
 	item: typeof cargo.$inferSelect;
 	isPromoted?: boolean;
 	onUpgradeRequired?: () => void;
+	detailHref?: string;
 }
 
 export function CargoCard({
 	item,
 	isPromoted: initialIsPromoted = false,
 	onUpgradeRequired,
+	detailHref,
 }: CargoCardProps) {
 	const fetcher = useFetcher<{
 		success?: boolean;
@@ -134,7 +136,7 @@ export function CargoCard({
 				/>
 			)}
 			<StandardCard
-				to={`/hub/cargo/${item.id}`}
+				to={detailHref ?? `/hub/cargo/${item.id}`}
 				actions={[
 					{
 						label: "Edit",

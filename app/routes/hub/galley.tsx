@@ -569,6 +569,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							onToggleMealActive={handleToggleActive}
 							viewMode={viewMode}
 							userAllergens={userAllergens}
+							getDetailHref={(meal) => {
+								const params = new URLSearchParams();
+								if (activeDomain && activeDomain !== "all")
+									params.set("domain", activeDomain);
+								if (currentTag) params.set("tag", currentTag);
+								const qs = params.toString();
+								return `/hub/galley/${meal.id}${qs ? `?${qs}` : ""}`;
+							}}
 						/>
 						{totalMeals > pageSize && (
 							<PaginationBar

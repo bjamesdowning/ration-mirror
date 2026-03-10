@@ -1,4 +1,15 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNull,
+	lt,
+	or,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -9,6 +20,7 @@ import {
 } from "../db/schema";
 import { checkCapacity } from "./capacity.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
+import { ITEM_DOMAINS } from "./domain";
 import { normalizeForCargoDedup } from "./matching";
 import {
 	chunkedQuery,
@@ -234,6 +246,84 @@ export async function getMeal(
 		...foundMeal,
 		ingredients,
 		tags: tags.map((t) => t.tag),
+	};
+}
+
+/**
+ * Returns the IDs of the previous and next meals in the org-scoped list
+ * (ordered by createdAt desc, id asc for tie-breaker).
+ * Supports optional tag and domain filters matching getMeals.
+ */
+export async function getAdjacentMealIds(
+	db: D1Database,
+	organizationId: string,
+	current: { id: string; createdAt: Date },
+	filters: { tag?: string; domain?: string },
+): Promise<{ prevId: string | null; nextId: string | null }> {
+	const d1 = drizzle(db);
+	const tag = filters.tag?.trim().slice(0, 100);
+	const domain =
+		filters.domain &&
+		ITEM_DOMAINS.includes(filters.domain as (typeof ITEM_DOMAINS)[number])
+			? filters.domain
+			: undefined;
+
+	const baseConditions = [eq(meal.organizationId, organizationId)];
+	if (domain) {
+		baseConditions.push(eq(meal.domain, domain));
+	}
+	if (tag) {
+		baseConditions.push(eq(mealTag.tag, tag));
+	}
+	const baseWhere = and(...baseConditions);
+
+	const prevCursorCondition = or(
+		gt(meal.createdAt, current.createdAt),
+		and(eq(meal.createdAt, current.createdAt), lt(meal.id, current.id)),
+	);
+	const nextCursorCondition = or(
+		lt(meal.createdAt, current.createdAt),
+		and(eq(meal.createdAt, current.createdAt), gt(meal.id, current.id)),
+	);
+
+	if (tag) {
+		const prevQuery = d1
+			.select({ id: meal.id })
+			.from(meal)
+			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+			.where(and(baseWhere, prevCursorCondition))
+			.orderBy(asc(meal.createdAt), desc(meal.id))
+			.limit(1);
+		const nextQuery = d1
+			.select({ id: meal.id })
+			.from(meal)
+			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+			.where(and(baseWhere, nextCursorCondition))
+			.orderBy(desc(meal.createdAt), asc(meal.id))
+			.limit(1);
+		const [prevResult, nextResult] = await d1.batch([prevQuery, nextQuery]);
+		return {
+			prevId: prevResult[0]?.id ?? null,
+			nextId: nextResult[0]?.id ?? null,
+		};
+	}
+
+	const prevQuery = d1
+		.select({ id: meal.id })
+		.from(meal)
+		.where(and(baseWhere, prevCursorCondition))
+		.orderBy(asc(meal.createdAt), desc(meal.id))
+		.limit(1);
+	const nextQuery = d1
+		.select({ id: meal.id })
+		.from(meal)
+		.where(and(baseWhere, nextCursorCondition))
+		.orderBy(desc(meal.createdAt), asc(meal.id))
+		.limit(1);
+	const [prevResult, nextResult] = await d1.batch([prevQuery, nextQuery]);
+	return {
+		prevId: prevResult[0]?.id ?? null,
+		nextId: nextResult[0]?.id ?? null,
 	};
 }
 

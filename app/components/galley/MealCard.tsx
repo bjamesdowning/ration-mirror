@@ -35,6 +35,7 @@ interface MealCardProps {
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
 	/** User's declared allergen slugs — used to display warning badges. */
 	userAllergens?: AllergenSlug[];
+	detailHref?: string;
 }
 
 export function MealCard({
@@ -43,6 +44,7 @@ export function MealCard({
 	isActive = false,
 	onToggleActive,
 	userAllergens = [],
+	detailHref,
 }: MealCardProps) {
 	const fetcher = useFetcher();
 	const toggleFetcher = useFetcher<{
@@ -131,7 +133,7 @@ export function MealCard({
 				</button>
 
 				<StandardCard
-					to={`/hub/galley/${meal.id}`}
+					to={detailHref ?? `/hub/galley/${meal.id}`}
 					actions={[
 						{
 							label: "Edit",

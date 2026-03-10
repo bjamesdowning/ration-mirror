@@ -651,6 +651,14 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 							promotedCargoIds={promotedCargoIds}
 							onUpgradeRequired={() => setShowUpgradePrompt(true)}
 							viewMode={viewMode}
+							getDetailHref={(item) => {
+								const params = new URLSearchParams();
+								if (activeDomain && activeDomain !== "all")
+									params.set("domain", activeDomain);
+								if (currentTag) params.set("tag", currentTag);
+								const qs = params.toString();
+								return `/hub/cargo/${item.id}${qs ? `?${qs}` : ""}`;
+							}}
 						/>
 						{totalCargo > pageSize && (
 							<PaginationBar

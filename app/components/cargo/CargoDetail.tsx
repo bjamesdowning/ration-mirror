@@ -93,12 +93,6 @@ export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
 
 	return (
 		<div className="max-w-5xl mx-auto space-y-8">
-			<div className="text-sm">
-				<Link to="/hub/cargo" className="text-muted hover:text-hyper-green">
-					Back to Cargo
-				</Link>
-			</div>
-
 			<div className="glass-panel rounded-xl p-6 border border-platinum/70">
 				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 					<div className="space-y-3">

@@ -3,11 +3,13 @@ import {
 	asc,
 	desc,
 	eq,
+	gt,
 	gte,
 	inArray,
 	isNotNull,
 	lt,
 	lte,
+	or,
 	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -142,6 +144,66 @@ export async function getCargoItem(
 		.limit(1);
 
 	return item ?? null;
+}
+
+/**
+ * Returns the IDs of the previous and next cargo items in the org-scoped list
+ * (ordered by createdAt desc, id asc for tie-breaker).
+ * Uses cursor-based queries; no pagination needed.
+ */
+export async function getAdjacentCargoIds(
+	db: D1Database,
+	organizationId: string,
+	current: { id: string; createdAt: Date },
+	filters: { domain?: string },
+): Promise<{ prevId: string | null; nextId: string | null }> {
+	const d1 = drizzle(db);
+	const baseConditions = [eq(cargo.organizationId, organizationId)];
+	if (
+		filters.domain &&
+		ITEM_DOMAINS.includes(filters.domain as (typeof ITEM_DOMAINS)[number])
+	) {
+		baseConditions.push(eq(cargo.domain, filters.domain));
+	}
+	const baseWhere = and(...baseConditions);
+
+	// Prev: item with (createdAt > current) OR (createdAt = current AND id < current) — newer in DESC list
+	const prevQuery = d1
+		.select({ id: cargo.id })
+		.from(cargo)
+		.where(
+			and(
+				baseWhere,
+				or(
+					gt(cargo.createdAt, current.createdAt),
+					and(eq(cargo.createdAt, current.createdAt), lt(cargo.id, current.id)),
+				),
+			),
+		)
+		.orderBy(asc(cargo.createdAt), desc(cargo.id))
+		.limit(1);
+
+	// Next: item with (createdAt < current) OR (createdAt = current AND id > current) — older in DESC list
+	const nextQuery = d1
+		.select({ id: cargo.id })
+		.from(cargo)
+		.where(
+			and(
+				baseWhere,
+				or(
+					lt(cargo.createdAt, current.createdAt),
+					and(eq(cargo.createdAt, current.createdAt), gt(cargo.id, current.id)),
+				),
+			),
+		)
+		.orderBy(desc(cargo.createdAt), asc(cargo.id))
+		.limit(1);
+
+	const [prevResult, nextResult] = await d1.batch([prevQuery, nextQuery]);
+	return {
+		prevId: prevResult[0]?.id ?? null,
+		nextId: nextResult[0]?.id ?? null,
+	};
 }
 
 /**

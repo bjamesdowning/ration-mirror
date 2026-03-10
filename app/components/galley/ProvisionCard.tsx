@@ -17,12 +17,14 @@ interface ProvisionCardProps {
 	};
 	isActive?: boolean;
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
+	detailHref?: string;
 }
 
 export function ProvisionCard({
 	meal,
 	isActive = false,
 	onToggleActive,
+	detailHref,
 }: ProvisionCardProps) {
 	const fetcher = useFetcher();
 	const toggleFetcher = useFetcher<{
@@ -102,7 +104,7 @@ export function ProvisionCard({
 				</button>
 
 				<StandardCard
-					to={`/hub/galley/${meal.id}`}
+					to={detailHref ?? `/hub/galley/${meal.id}`}
 					actions={[
 						{ label: "Edit", onClick: () => setIsEditing(true) },
 						{ label: "Delete", onClick: handleDelete, destructive: true },

@@ -10,6 +10,7 @@ interface CargoListRowProps {
 	item: typeof cargo.$inferSelect;
 	isPromoted?: boolean;
 	onUpgradeRequired?: () => void;
+	detailHref?: string;
 }
 
 function parseDate(value?: Date | string | null) {
@@ -53,6 +54,7 @@ export function CargoListRow({
 	item,
 	isPromoted: initialIsPromoted = false,
 	onUpgradeRequired,
+	detailHref,
 }: CargoListRowProps) {
 	const fetcher = useFetcher<{
 		success?: boolean;
@@ -170,7 +172,10 @@ export function CargoListRow({
 				/>
 
 				{/* Name — opens ingredient details */}
-				<Link to={`/hub/cargo/${item.id}`} className="flex-1 text-left min-w-0">
+				<Link
+					to={detailHref ?? `/hub/cargo/${item.id}`}
+					className="flex-1 text-left min-w-0"
+				>
 					<span
 						className="text-sm font-semibold text-carbon dark:text-white truncate block group-hover:text-hyper-green transition-colors"
 						title={item.name}

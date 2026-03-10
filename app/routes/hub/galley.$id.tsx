@@ -1,11 +1,12 @@
-import { redirect } from "react-router";
+import { Link, redirect } from "react-router";
 import { MealDetail } from "~/components/galley/MealDetail";
 import { HubHeader } from "~/components/hub/HubHeader";
+import { DetailNavRocker } from "~/components/shell/DetailNavRocker";
 import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
-import { deleteMeal, getMeal } from "~/lib/meals.server";
+import { deleteMeal, getAdjacentMealIds, getMeal } from "~/lib/meals.server";
 import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/galley.$id";
 
@@ -13,6 +14,15 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/hub/galley");
+
+	const url = new URL(request.url);
+	const tag = url.searchParams.get("tag")?.trim().slice(0, 100) ?? undefined;
+	const domainParam = url.searchParams.get("domain");
+	const domain =
+		domainParam &&
+		ITEM_DOMAINS.includes(domainParam as (typeof ITEM_DOMAINS)[number])
+			? domainParam
+			: undefined;
 
 	const rawSettings = session.user.settings;
 	let userAllergens: ReturnType<typeof parseAllergens> = [];
@@ -24,11 +34,18 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [meal, activeSelections] = await Promise.all([
-		getMeal(context.cloudflare.env.DB, groupId, id),
-		getActiveMealSelections(context.cloudflare.env.DB, groupId),
-	]);
+	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
 	if (!meal) throw redirect("/hub/galley");
+
+	const [activeSelections, adjacent] = await Promise.all([
+		getActiveMealSelections(context.cloudflare.env.DB, groupId),
+		getAdjacentMealIds(
+			context.cloudflare.env.DB,
+			groupId,
+			{ id: meal.id, createdAt: meal.createdAt },
+			{ tag, domain },
+		),
+	]);
 
 	const isSelectedForSupply = activeSelections.some((s) => s.mealId === id);
 
@@ -63,6 +80,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		meal: sanitizedMeal,
 		userAllergens,
 		isSelectedForSupply,
+		prevId: adjacent.prevId,
+		nextId: adjacent.nextId,
+		navTag: tag,
+		navDomain: domain,
 	};
 }
 
@@ -81,7 +102,15 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
-	const { meal, userAllergens, isSelectedForSupply } = loaderData;
+	const {
+		meal,
+		userAllergens,
+		isSelectedForSupply,
+		prevId,
+		nextId,
+		navTag,
+		navDomain,
+	} = loaderData;
 
 	return (
 		<>
@@ -89,7 +118,22 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 				title="PROTOCOL DETAILS"
 				subtitle={`ID: ${meal.id.split("-")[0]}`}
 			/>
-
+			<div className="flex items-center justify-between mb-6">
+				<Link
+					to="/hub/galley"
+					className="text-sm text-muted hover:text-hyper-green transition-colors"
+				>
+					← Back to Galley
+				</Link>
+				<DetailNavRocker
+					prevId={prevId}
+					nextId={nextId}
+					basePath="/hub/galley"
+					tag={navTag}
+					domain={navDomain}
+					itemLabel="recipe"
+				/>
+			</div>
 			<MealDetail
 				meal={meal}
 				isOwner={true}

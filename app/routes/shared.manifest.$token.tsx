@@ -101,6 +101,7 @@ function WeekGrid({
 }: {
 	dates: string[];
 	entries: Array<{
+		id: string;
 		date: string;
 		slotType: string;
 		mealName: string;
@@ -154,9 +155,9 @@ function WeekGrid({
 										<p className="text-[10px] font-semibold text-muted uppercase tracking-wide">
 											{SLOT_LABELS[slot]}
 										</p>
-										{slotEntries.map((e, i) => (
+										{slotEntries.map((e) => (
 											<p
-												key={`${e.date}-${slot}-${i}`}
+												key={e.id}
 												className="text-[11px] text-carbon truncate font-medium"
 											>
 												{formatEntryLabel(e)}
@@ -183,6 +184,7 @@ function DayList({
 }: {
 	dates: string[];
 	entries: Array<{
+		id: string;
 		date: string;
 		slotType: string;
 		mealName: string;
@@ -258,9 +260,9 @@ function DayList({
 												{SLOT_LABELS[slot]}
 											</span>
 											<div className="space-y-0.5 flex-1">
-												{slotEntries.map((e, i) => (
+												{slotEntries.map((e) => (
 													<p
-														key={`${e.date}-${slot}-${i}`}
+														key={e.id}
 														className="text-sm text-carbon font-medium"
 													>
 														{formatEntryLabel(e)}

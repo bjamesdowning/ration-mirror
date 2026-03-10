@@ -23,6 +23,7 @@ import {
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
 
 interface GeneratedRecipe {
+	id?: string;
 	name: string;
 	description: string;
 	ingredients: Array<{
@@ -193,7 +194,7 @@ function RecipeResultsGrid({
 		<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 			{recipes.map((recipe, idx) => (
 				<RecipeCard
-					key={`${recipe.name}-${idx}`}
+					key={recipe.id ?? recipe.name}
 					recipe={recipe}
 					idx={idx}
 					selected={selectedRecipes.has(idx)}
@@ -309,6 +310,7 @@ export const GenerateMealButton = forwardRef<
 				if (data.status === "completed" && data.recipes) {
 					const mapped: GeneratedRecipe[] = data.recipes.map((r) => ({
 						...r,
+						id: crypto.randomUUID(),
 						ingredients: r.ingredients.map((i) => ({
 							ingredientName: i.name,
 							quantity: i.quantity,

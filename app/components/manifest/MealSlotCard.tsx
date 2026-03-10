@@ -17,6 +17,8 @@ interface MealSlotCardProps {
 	isConsuming?: boolean;
 	/** Allergens triggered by this meal's ingredients (pre-computed in loader). */
 	triggeredAllergens?: AllergenSlug[];
+	/** Whether this meal currently has all required ingredients in cargo. */
+	isReady?: boolean;
 }
 
 export function MealSlotCard({
@@ -27,6 +29,7 @@ export function MealSlotCard({
 	onCopy,
 	isConsuming = false,
 	triggeredAllergens = [],
+	isReady,
 }: MealSlotCardProps) {
 	const fetcher = useFetcher();
 	const isRemoving = fetcher.state !== "idle";
@@ -101,6 +104,16 @@ export function MealSlotCard({
 							<ClockIcon className="w-3 h-3 shrink-0" />
 							{totalMinutes}m
 						</span>
+					)}
+					{!isConsumed && isReady !== undefined && (
+						<span
+							className={`inline-block h-1.5 w-1.5 rounded-full ${
+								isReady ? "bg-hyper-green" : "bg-amber-400"
+							}`}
+							title={
+								isReady ? "All ingredients available" : "Missing ingredients"
+							}
+						/>
 					)}
 				</div>
 

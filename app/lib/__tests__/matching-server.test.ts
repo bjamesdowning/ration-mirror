@@ -1,10 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import {
 	buildCargoIndex,
+	checkMealReadiness,
 	getMatchCacheKey,
 	strictMatch,
 } from "~/lib/matching.server";
+
+const { mockChunkedQuery, mockFetchOrgCargoIndex, mockFindSimilarCargoBatch } =
+	vi.hoisted(() => ({
+		mockChunkedQuery: vi.fn(),
+		mockFetchOrgCargoIndex: vi.fn(),
+		mockFindSimilarCargoBatch: vi.fn(),
+	}));
+
+vi.mock("~/lib/query-utils.server", () => ({
+	chunkedQuery: mockChunkedQuery,
+}));
+
+vi.mock("~/lib/cargo-index.server", () => ({
+	fetchOrgCargoIndex: mockFetchOrgCargoIndex,
+}));
+
+vi.mock("~/lib/vector.server", () => ({
+	findSimilarCargoBatch: mockFindSimilarCargoBatch,
+	SIMILARITY_THRESHOLDS: { INGREDIENT_MATCH: 0.7 },
+}));
 
 // ---------------------------------------------------------------------------
 // getMatchCacheKey — tag normalisation
@@ -204,5 +225,56 @@ describe("strictMatch", () => {
 		const index = buildCargoIndex([]);
 		const results = strictMatch([], index, new Map());
 		expect(results).toHaveLength(0);
+	});
+});
+
+describe("checkMealReadiness", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("marks meals as ready only when all required ingredients are available", async () => {
+		mockChunkedQuery.mockResolvedValueOnce([
+			{
+				id: "i-1",
+				mealId: "meal-ready",
+				cargoId: null,
+				ingredientName: "pasta",
+				quantity: 200,
+				unit: "g",
+				isOptional: false,
+				orderIndex: 0,
+			},
+			{
+				id: "i-2",
+				mealId: "meal-missing",
+				cargoId: null,
+				ingredientName: "tomato sauce",
+				quantity: 250,
+				unit: "ml",
+				isOptional: false,
+				orderIndex: 1,
+			},
+		]);
+		mockFetchOrgCargoIndex.mockResolvedValueOnce([
+			{ id: "c-1", name: "pasta", quantity: 500, unit: "g", domain: "food" },
+			{
+				id: "c-2",
+				name: "tomato sauce",
+				quantity: 100,
+				unit: "ml",
+				domain: "food",
+			},
+		]);
+		mockFindSimilarCargoBatch.mockResolvedValueOnce(new Map());
+
+		const env = { DB: {}, VECTORIZE: {}, AI: {} } as unknown as Env;
+		const readiness = await checkMealReadiness(env, "org-1", [
+			"meal-ready",
+			"meal-missing",
+		]);
+
+		expect(readiness["meal-ready"]).toBe(true);
+		expect(readiness["meal-missing"]).toBe(false);
 	});
 });

@@ -625,6 +625,93 @@ export async function resolveIngredientsToCargo(
 	return result;
 }
 
+/**
+ * Checks whether specific meals are currently makeable with available cargo.
+ * Returns a map keyed by mealId where true means all non-optional ingredients
+ * are available at base servings.
+ */
+export async function checkMealReadiness(
+	env: Env,
+	organizationId: string,
+	mealIds: string[],
+): Promise<Record<string, boolean>> {
+	const readiness: Record<string, boolean> = {};
+	if (mealIds.length === 0) return readiness;
+
+	const uniqueMealIds = [...new Set(mealIds)];
+	const d1 = drizzle(env.DB);
+
+	const ingredientsData = await chunkedQuery(uniqueMealIds, (chunk) =>
+		d1
+			.select()
+			.from(mealIngredient)
+			.where(inArray(mealIngredient.mealId, chunk)),
+	);
+
+	const ingredientsByMeal = new Map<
+		string,
+		(typeof mealIngredient.$inferSelect)[]
+	>();
+	for (const ing of ingredientsData) {
+		const existing = ingredientsByMeal.get(ing.mealId) || [];
+		existing.push(ing);
+		ingredientsByMeal.set(ing.mealId, existing);
+	}
+
+	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
+	const cargoIndex = buildCargoIndex(orgCargo);
+
+	const missNames = new Set<string>();
+	for (const ingredient of ingredientsData) {
+		const normalized = normalizeForCargoDedup(ingredient.ingredientName);
+		if (!cargoIndex.has(normalized)) {
+			missNames.add(ingredient.ingredientName);
+		}
+	}
+
+	const similarityMap =
+		missNames.size > 0
+			? await findSimilarCargoBatch(
+					env,
+					organizationId,
+					Array.from(missNames),
+					{
+						topK: 3,
+						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+					},
+				)
+			: new Map<string, SimilarCargoMatch[]>();
+
+	for (const mealId of uniqueMealIds) {
+		const ingredients = ingredientsByMeal.get(mealId) ?? [];
+		if (ingredients.length === 0) {
+			readiness[mealId] = true;
+			continue;
+		}
+
+		let hasAllRequired = true;
+		for (const ingredient of ingredients) {
+			if (ingredient.isOptional) continue;
+
+			const targetUnit = toSupportedUnit(ingredient.unit);
+			const available = getAvailableQuantityWithMap(
+				ingredient.ingredientName,
+				targetUnit,
+				cargoIndex,
+				similarityMap,
+			);
+			if (available < ingredient.quantity) {
+				hasAllRequired = false;
+				break;
+			}
+		}
+
+		readiness[mealId] = hasAllRequired;
+	}
+
+	return readiness;
+}
+
 const MATCH_CACHE_PREFIX = "match:";
 const MATCH_CACHE_TTL = 10; // seconds
 

@@ -18,6 +18,8 @@ interface MealSlotProps {
 	compact?: boolean;
 	/** Pre-computed map of mealId → triggered allergen slugs. */
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
+	/** Pre-computed map of mealId → is-ready boolean. */
+	readyMealIds?: Record<string, boolean>;
 }
 
 export function MealSlot({
@@ -32,6 +34,7 @@ export function MealSlot({
 	readOnly = false,
 	compact = false,
 	triggeredAllergensByMealId = {},
+	readyMealIds = {},
 }: MealSlotProps) {
 	const slotEntries = entries
 		.filter((e) => e.slotType === slot)
@@ -67,6 +70,7 @@ export function MealSlot({
 								onCopy={onCopy}
 								isConsuming={isConsuming}
 								triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
+								isReady={readyMealIds[entry.mealId]}
 							/>
 						))}
 						{!readOnly && (
@@ -116,6 +120,7 @@ export function MealSlot({
 						onCopy={onCopy}
 						isConsuming={isConsuming}
 						triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
+						isReady={readyMealIds[entry.mealId]}
 					/>
 				))}
 			</div>

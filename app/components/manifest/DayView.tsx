@@ -16,6 +16,7 @@ interface DayViewProps {
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
+	readyMealIds?: Record<string, boolean>;
 }
 
 const MONTH_NAMES = [
@@ -44,6 +45,7 @@ export function DayView({
 	showSnackSlot = true,
 	readOnly = false,
 	triggeredAllergensByMealId = {},
+	readyMealIds = {},
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
@@ -97,6 +99,7 @@ export function DayView({
 					isConsuming={isConsuming}
 					readOnly={readOnly}
 					triggeredAllergensByMealId={triggeredAllergensByMealId}
+					readyMealIds={readyMealIds}
 				/>
 			))}
 		</div>

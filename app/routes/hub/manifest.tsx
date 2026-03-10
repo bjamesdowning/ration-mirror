@@ -51,6 +51,7 @@ import {
 	getWeekStart,
 } from "~/lib/manifest.server";
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
+import { checkMealReadiness } from "~/lib/matching.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/manifest";
 
@@ -105,11 +106,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// Build a per-meal allergen map for the scheduled entries so slot cards
 	// can display warnings without a per-card API call.
 	const scheduledMealIds = [...new Set(entries.map((e) => e.mealId))];
-	const triggeredAllergensByMealId = await getTriggeredAllergens(
-		db,
-		scheduledMealIds,
-		userAllergens,
-	);
+	const [triggeredAllergensByMealId, readyMealIds] = await Promise.all([
+		getTriggeredAllergens(db, scheduledMealIds, userAllergens),
+		checkMealReadiness(context.cloudflare.env, groupId, scheduledMealIds),
+	]);
 
 	return {
 		plan,
@@ -125,6 +125,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		credits,
 		planWeekCost: AI_COSTS.MEAL_PLAN_WEEKLY,
 		triggeredAllergensByMealId,
+		readyMealIds,
 	};
 }
 
@@ -153,6 +154,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		credits,
 		planWeekCost,
 		triggeredAllergensByMealId,
+		readyMealIds,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -569,6 +571,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							isConsuming={consumeFetcher.state !== "idle"}
 							showSnackSlot={showSnackSlot}
 							triggeredAllergensByMealId={triggeredAllergensByMealId}
+							readyMealIds={readyMealIds}
 						/>
 					)}
 				</div>
@@ -595,6 +598,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					selectedDate={selectedDay}
 					onSelectDate={setSelectedDay}
 					triggeredAllergensByMealId={triggeredAllergensByMealId}
+					readyMealIds={readyMealIds}
 				/>
 			</div>
 

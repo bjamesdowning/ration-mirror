@@ -22,6 +22,7 @@ interface WeekViewProps {
 	/** Callback to set the selected day */
 	onSelectDate?: (date: string) => void;
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
+	readyMealIds?: Record<string, boolean>;
 }
 
 export function WeekView({
@@ -39,6 +40,7 @@ export function WeekView({
 	selectedDate,
 	onSelectDate,
 	triggeredAllergensByMealId = {},
+	readyMealIds = {},
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -156,6 +158,7 @@ export function WeekView({
 									readOnly={readOnly}
 									compact
 									triggeredAllergensByMealId={triggeredAllergensByMealId}
+									readyMealIds={readyMealIds}
 								/>
 							))}
 						</div>

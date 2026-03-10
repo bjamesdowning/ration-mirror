@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFormData } from "~/lib/form-utils";
+import { getFormActionPath, parseFormData } from "~/lib/form-utils";
 
 function makeFormData(entries: Record<string, string>): FormData {
 	const fd = new FormData();
@@ -78,6 +78,60 @@ describe("parseFormData — MAX_ARRAY_SIZE overflow", () => {
 	it("does not throw for index 99 (last valid)", () => {
 		const fd = makeFormData({ "ingredients[99].name": "last" });
 		expect(() => parseFormData(fd)).not.toThrow();
+	});
+});
+
+/**
+ * Regression tests for getFormActionPath.
+ *
+ * Background: `HTMLFormElement.action` (the DOM *property*) always returns an
+ * absolute URL, e.g. "https://example.com/api/meals/abc/cook". Passing that
+ * absolute URL to React Router's `fetcher.submit({ action })` bypasses route
+ * matching and produces a not-found 400/404 response.
+ *
+ * `getFormActionPath` reads the *attribute* value instead, which is the
+ * relative path as written in JSX (e.g. "/api/meals/abc/cook"), keeping React
+ * Router happy.
+ */
+describe("getFormActionPath — router-safe action extraction", () => {
+	// In the node test environment there is no real DOM, so we stub just the
+	// `.getAttribute()` method — the only thing getFormActionPath calls.
+	function makeForm(actionAttr?: string): HTMLFormElement {
+		return {
+			getAttribute: (name: string) =>
+				name === "action" ? (actionAttr ?? null) : null,
+		} as unknown as HTMLFormElement;
+	}
+
+	it("returns a relative path unchanged — the safe cook action case", () => {
+		const mealId = "abc123";
+		const form = makeForm(`/api/meals/${mealId}/cook`);
+		expect(getFormActionPath(form)).toBe(`/api/meals/${mealId}/cook`);
+	});
+
+	it("does NOT return an absolute URL that would break React Router matching", () => {
+		// HTMLFormElement.action (DOM *property*) resolves to an absolute URL in a
+		// real browser (e.g. "https://ration.app/api/meals/abc123/cook"). Our
+		// helper reads the *attribute* value instead, ensuring the result is always
+		// a relative path that React Router can match.
+		const form = makeForm("/api/meals/abc123/cook");
+		const result = getFormActionPath(form);
+		expect(result).not.toMatch(/^https?:\/\//);
+	});
+
+	it("returns '/' as safe fallback when action attribute is absent", () => {
+		const form = makeForm();
+		expect(getFormActionPath(form)).toBe("/");
+	});
+
+	it("preserves query params in the action attribute", () => {
+		const form = makeForm("/api/meals/abc123/cook?debug=1");
+		expect(getFormActionPath(form)).toBe("/api/meals/abc123/cook?debug=1");
+	});
+
+	it("preserves a relative path that has no leading slash", () => {
+		const form = makeForm("api/meals/abc123/cook");
+		expect(getFormActionPath(form)).toBe("api/meals/abc123/cook");
 	});
 });
 

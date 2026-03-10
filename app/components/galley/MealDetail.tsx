@@ -6,6 +6,7 @@ import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
 import { useConfirm } from "~/lib/confirm-context";
+import { getFormActionPath } from "~/lib/form-utils";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
@@ -266,7 +267,7 @@ export function MealDetail({
 			return;
 		fetcher.submit(new FormData(form), {
 			method: "POST",
-			action: form.action,
+			action: getFormActionPath(form),
 		});
 	};
 

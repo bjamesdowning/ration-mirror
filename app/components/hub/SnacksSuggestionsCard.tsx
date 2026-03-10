@@ -4,6 +4,7 @@ import { Link, useFetcher } from "react-router";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
+import { getFormActionPath } from "~/lib/form-utils";
 import type { MealMatchResult } from "~/lib/matching.server";
 import { CheckIcon, MealIcon, RecipeIcon } from "../icons/HubIcons";
 
@@ -151,7 +152,7 @@ export function SnacksSuggestionsCard({ meals }: SnacksSuggestionsCardProps) {
 												return;
 											fetcher.submit(new FormData(form), {
 												method: "POST",
-												action: form.action,
+												action: getFormActionPath(form),
 											});
 										}}
 									>

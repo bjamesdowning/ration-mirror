@@ -1,4 +1,21 @@
 /**
+ * Returns a router-safe action path from an HTML form element.
+ *
+ * `HTMLFormElement.action` is a DOM property that always returns an absolute
+ * URL (e.g. "https://example.com/api/meals/123/cook"). Passing that absolute
+ * URL to React Router's `fetcher.submit({ action })` causes the router to fail
+ * matching the route, producing a not-found 400/404 response.
+ *
+ * This helper reads the `action` *attribute* value via `getAttribute("action")`
+ * which returns the relative path as written in JSX (e.g. "/api/meals/123/cook").
+ * If the attribute is missing or empty it falls back to `"/"` rather than
+ * throwing, so callers never need a try/catch.
+ */
+export function getFormActionPath(form: HTMLFormElement): string {
+	return form.getAttribute("action") ?? "/";
+}
+
+/**
  * Fields that should be parsed as comma-separated arrays.
  * These are typically text inputs where users enter multiple values.
  */

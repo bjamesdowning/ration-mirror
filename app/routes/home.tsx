@@ -4,13 +4,14 @@ import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
+import { JsonLd } from "~/components/blog/JsonLd";
 import { FeatureCarousel } from "~/components/home/FeatureCarousel";
 import { LifecycleStepper } from "~/components/home/LifecycleStepper";
 import { CheckIcon, CodeIcon } from "~/components/icons/PageIcons";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
-import { ogMeta } from "~/lib/seo";
+import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import { APP_VERSION } from "~/lib/version";
 
@@ -40,6 +41,7 @@ export function meta(_: Route.MetaArgs) {
 	return [
 		{ title },
 		{ name: "description", content: description },
+		canonicalMeta("/"),
 		...ogMeta({ title, description, path: "/" }),
 	];
 }
@@ -196,8 +198,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		localStorage.setItem("ration:currency", currency);
 	}, [currency]);
 
+	const websiteSchema = {
+		"@context": "https://schema.org",
+		"@type": "WebSite",
+		name: "Ration",
+		url: SITE_ORIGIN,
+		description:
+			"AI-native kitchen management: pantry tracking, meal planning, shopping lists. Use from the app or from Claude, Cursor, and MCP.",
+	};
+
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
+			<JsonLd data={websiteSchema} />
 			<div
 				className="absolute inset-0 pointer-events-none opacity-30"
 				style={{

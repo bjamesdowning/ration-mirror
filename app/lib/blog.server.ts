@@ -20,6 +20,26 @@ function slugFromPath(filePath: string): string {
 	return match ? match[1] : filePath;
 }
 
+export function normalizeBlogDate(value: unknown): string {
+	if (value instanceof Date && !Number.isNaN(value.getTime())) {
+		return value.toISOString().slice(0, 10);
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+			return trimmed;
+		}
+
+		const parsed = new Date(trimmed);
+		if (!Number.isNaN(parsed.getTime())) {
+			return parsed.toISOString().slice(0, 10);
+		}
+	}
+
+	return new Date().toISOString().slice(0, 10);
+}
+
 function parsePost(path: string, raw: string): BlogPost {
 	const { data, content } = matter(raw);
 	const slug = (data.slug as string) || slugFromPath(path);
@@ -27,7 +47,7 @@ function parsePost(path: string, raw: string): BlogPost {
 		slug,
 		title: (data.title as string) || "Untitled",
 		description: (data.description as string) || "",
-		date: (data.date as string) || new Date().toISOString().slice(0, 10),
+		date: normalizeBlogDate(data.date),
 		content,
 	};
 }

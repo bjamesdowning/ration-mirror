@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { JsonLd } from "~/components/blog/JsonLd";
-import { ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
 import type { Route } from "./+types/tools";
 
 export function meta(_: Route.MetaArgs) {
@@ -10,6 +10,7 @@ export function meta(_: Route.MetaArgs) {
 	return [
 		{ title },
 		{ name: "description", content: description },
+		canonicalMeta("/tools"),
 		...ogMeta({ title, description, path: "/tools" }),
 	];
 }

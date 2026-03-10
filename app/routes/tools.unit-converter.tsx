@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { JsonLd } from "~/components/blog/JsonLd";
 import { MeasurementReference } from "~/components/tools/MeasurementReference";
 import { UnitConverterForm } from "~/components/tools/UnitConverterForm";
-import { ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
 import type { Route } from "./+types/tools.unit-converter";
 
 export function meta(_: Route.MetaArgs) {
@@ -18,6 +18,7 @@ export function meta(_: Route.MetaArgs) {
 			content:
 				"cups to grams, cooking unit converter, flour grams per cup, tablespoons to milliliters, ounces to grams, recipe measurement converter, baking conversion",
 		},
+		canonicalMeta("/tools/unit-converter"),
 		...ogMeta({ title, description, path: "/tools/unit-converter" }),
 	];
 }

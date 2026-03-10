@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { ogMeta } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
 import type { Route } from "./+types/blog";
 
 export async function loader() {
@@ -15,6 +15,7 @@ export function meta(_: Route.MetaArgs) {
 	return [
 		{ title },
 		{ name: "description", content: description },
+		canonicalMeta("/blog"),
 		...ogMeta({ title, description, path: "/blog" }),
 	];
 }

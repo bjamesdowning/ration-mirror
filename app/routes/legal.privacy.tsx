@@ -1,4 +1,4 @@
-import { ogMeta } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
 import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
@@ -7,6 +7,7 @@ export const meta: Route.MetaFunction = () => {
 	return [
 		{ title },
 		{ name: "description", content: description },
+		canonicalMeta("/legal/privacy"),
 		...ogMeta({ title, description, path: "/legal/privacy" }),
 	];
 };

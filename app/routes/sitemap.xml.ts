@@ -9,6 +9,13 @@ const STATIC_PATHS = [
 	"/tools/unit-converter",
 ] as const;
 
+function priorityForPath(path: string): string {
+	if (path === "/") return "1.0";
+	if (path === "/blog" || path === "/tools") return "0.9";
+	if (path === "/tools/unit-converter") return "0.85";
+	return "0.8";
+}
+
 /**
  * sitemap.xml — Serves indexable URLs for crawler discovery.
  */
@@ -16,23 +23,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const origin = url.origin;
 
-	const { getAllSlugs } = await import("~/lib/blog.server");
-	const blogSlugs = getAllSlugs();
-	const blogPaths = blogSlugs.map((slug) => `/blog/${slug}`);
-	const allPaths = [...STATIC_PATHS, ...blogPaths];
+	const { getAllPosts } = await import("~/lib/blog.server");
+	const posts = getAllPosts();
 
-	const urlEntries = allPaths.map((path) => {
-		const priority =
-			path === "/"
-				? "1.0"
-				: path === "/blog" || path === "/tools"
-					? "0.9"
-					: path === "/tools/unit-converter"
-						? "0.85"
-						: "0.8";
-		return `  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${priority}</priority></url>`;
-	});
-	const urls = urlEntries.join("\n");
+	const staticEntries = STATIC_PATHS.map(
+		(path) =>
+			`  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${priorityForPath(path)}</priority></url>`,
+	);
+
+	const blogEntries = posts.map(
+		(post) =>
+			`  <url><loc>${origin}/blog/${post.slug}</loc><lastmod>${post.date}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
+	);
+
+	const urls = [...staticEntries, ...blogEntries].join("\n");
 
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

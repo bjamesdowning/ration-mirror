@@ -12,6 +12,15 @@ export type SeoMeta = {
 	path: string;
 };
 
+/** Returns a canonical descriptor that React Router can render in <Meta />. */
+export function canonicalMeta(path: string) {
+	return {
+		tagName: "link" as const,
+		rel: "canonical",
+		href: `${SITE_ORIGIN}${path}`,
+	};
+}
+
 /** Returns meta descriptors for Open Graph and Twitter cards. */
 export function ogMeta({ title, description, path }: SeoMeta) {
 	const url = `${SITE_ORIGIN}${path}`;

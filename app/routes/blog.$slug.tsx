@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { BlogCTA } from "~/components/blog/BlogCTA";
 import { BlogMarkdown } from "~/components/blog/BlogMarkdown";
 import { JsonLd } from "~/components/blog/JsonLd";
-import { ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
 import type { Route } from "./+types/blog.$slug";
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -20,6 +20,7 @@ export function meta({ data }: Route.MetaArgs) {
 	return [
 		{ title },
 		{ name: "description", content: description },
+		canonicalMeta(`/blog/${post.slug}`),
 		...ogMeta({ title, description, path: `/blog/${post.slug}` }),
 	];
 }

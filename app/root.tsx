@@ -36,9 +36,11 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const sessionTheme = (session?.user?.settings as { theme?: "light" | "dark" })
 		?.theme;
 
+	const url = new URL(request.url);
 	return {
 		user: session?.user,
 		theme: cookieTheme ?? sessionTheme ?? "dark",
+		origin: url.origin,
 	};
 };
 

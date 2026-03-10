@@ -12,6 +12,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 User-agent: *
 Allow: /
 Allow: /legal/
+Allow: /blog/
 
 Disallow: /api/
 Disallow: /hub/
@@ -20,8 +21,7 @@ Disallow: /invitations/
 Disallow: /select-group
 Disallow: /shared/
 
-# Sitemap (add when available)
-# Sitemap: ${origin}/sitemap.xml
+Sitemap: ${origin}/sitemap.xml
 `;
 
 	return new Response(content.trim(), {

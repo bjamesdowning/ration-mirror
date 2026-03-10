@@ -1191,6 +1191,8 @@ flowchart TB
 | `requireAdmin()` | `user` (with isAdmin) | Redirect `→ /` |
 | `requireApiKey()` | `{ organizationId, scopes }` | 401 / 403 JSON response |
 
+**SEO & Discovery** — Public indexable pages (`/`, `/legal/terms`, `/legal/privacy`) include Open Graph and Twitter Card meta tags for social sharing. `robots.txt` allows crawlers for `/`, `/legal/`, and `/blog/`; `sitemap.xml` lists indexable URLs. Hub, API, admin, and shared routes are disallowed from indexing.
+
 ---
 
 ### 7.4 Defence in Depth Layers

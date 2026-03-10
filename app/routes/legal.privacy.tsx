@@ -1,9 +1,13 @@
+import { ogMeta } from "~/lib/seo";
 import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
+	const title = "Privacy Policy | Ration";
+	const description = "Privacy Policy for the Ration platform.";
 	return [
-		{ title: "Privacy Policy | Ration" },
-		{ name: "description", content: "Privacy Policy for the Ration platform." },
+		{ title },
+		{ name: "description", content: description },
+		...ogMeta({ title, description, path: "/legal/privacy" }),
 	];
 };
 

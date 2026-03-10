@@ -1,12 +1,13 @@
+import { ogMeta } from "~/lib/seo";
 import type { Route } from "./+types/legal.terms";
 
 export const meta: Route.MetaFunction = () => {
+	const title = "Terms of Service | Ration";
+	const description = "Terms of Service for the Ration platform.";
 	return [
-		{ title: "Terms of Service | Ration" },
-		{
-			name: "description",
-			content: "Terms of Service for the Ration platform.",
-		},
+		{ title },
+		{ name: "description", content: description },
+		...ogMeta({ title, description, path: "/legal/terms" }),
 	];
 };
 

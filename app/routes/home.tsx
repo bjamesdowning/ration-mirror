@@ -9,6 +9,7 @@ import { CheckIcon, CodeIcon } from "~/components/icons/PageIcons";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
+import { ogMeta } from "~/lib/seo";
 import { TIER_LIMITS } from "~/lib/tiers.server";
 import { APP_VERSION } from "~/lib/version";
 
@@ -32,13 +33,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export function meta(_: Route.MetaArgs) {
+	const title = "Ration — Kitchen Lifecycle Management";
+	const description =
+		"AI-native kitchen management powered by vector intelligence and MCP. Track Cargo, plan meals in the Galley, schedule via Manifest, auto-generate Supply lists — or control it all from Claude, Cursor, or any MCP client.";
 	return [
-		{ title: "Ration — Kitchen Lifecycle Management" },
-		{
-			name: "description",
-			content:
-				"AI-native kitchen management powered by vector intelligence and MCP. Track Cargo, plan meals in the Galley, schedule via Manifest, auto-generate Supply lists — or control it all from Claude, Cursor, or any MCP client.",
-		},
+		{ title },
+		{ name: "description", content: description },
+		...ogMeta({ title, description, path: "/" }),
 	];
 }
 

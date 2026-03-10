@@ -455,7 +455,7 @@ sequenceDiagram
         Vectorize-->>Worker: Map<name, SimilarCargoMatch[]>
     end
 
-    Worker->>Worker: sumConvertedToTarget() — unit conversion (density-based cross-family fallback)
+    Worker->>Worker: sumConvertedToTarget() via convertIngredientAmount() — canonical unit conversion
     Worker->>Worker: Compute delta: ingredient needed - cargo available
     Worker->>D1: Upsert supply items for gaps, skip snoozed items
     Worker-->>User: Updated supply list
@@ -752,7 +752,7 @@ The matching engine (in [`app/lib/matching.server.ts`](app/lib/matching.server.t
 4. `fetchOrgCargoIndex()` — narrow 5-column projection.
 5. Phase 1: exact key lookup against normalised cargo names.
 6. Phase 2: one `findSimilarCargoBatch()` call for all unresolved names.
-7. Unit conversion via `sumConvertedToTarget()` — handles cross-family conversions using `lookupDensity()` (e.g. grams to cups for flour).
+7. Unit conversion via `sumConvertedToTarget()` — delegates to `convertIngredientAmount()`, the canonical conversion helper used by all product surfaces (matching, cook deduction, supply sync). Handles same-family and cross-family weight ↔ volume conversion via `lookupDensity()` (e.g. 500 g rice satisfies a recipe requiring 1 cup rice).
 8. Apply scale factor if servings override given.
 9. Write result to KV cache, return capped to `limit`.
 

@@ -36,8 +36,7 @@ import type {
 } from "./schemas/meal";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
-	convertQuantity,
-	getUnitMultiplier,
+	convertIngredientAmount,
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
@@ -916,36 +915,46 @@ function findCargoForDeduction(
 	};
 	const candidates: Candidate[] = [];
 
+	// Exact name match candidates — use canonical conversion so cross-family
+	// (e.g. cargo in grams, recipe in cups) is resolved via ingredient density.
 	for (const item of orgCargo) {
 		const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
-		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-		if (multiplier === null) continue;
-
-		const qtyInTargetUnit = item.quantity * multiplier;
 		const normalizedItem = normalizeForCargoDedup(item.name);
-		const isExact = normalizedItem === normalizedName;
+		if (normalizedItem !== normalizedName) continue;
 
-		if (isExact) {
-			candidates.push({
-				cargo: item,
-				qtyInTargetUnit,
-				isExact: true,
-				score: 1,
-			});
-		}
+		const qtyInTargetUnit = convertIngredientAmount(
+			item.quantity,
+			itemUnit,
+			targetUnit,
+			ingredientName,
+		);
+		if (qtyInTargetUnit === null) continue;
+
+		candidates.push({
+			cargo: item,
+			qtyInTargetUnit,
+			isExact: true,
+			score: 1,
+		});
 	}
 
+	// Semantic fallback candidates when no exact match found.
 	if (candidates.length === 0) {
 		const similar = prefetchedVectors.get(ingredientName) ?? [];
 		for (const match of similar) {
 			const item = orgCargo.find((c) => c.id === match.itemId);
 			if (!item) continue;
 			const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
-			const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-			if (multiplier === null) continue;
+			const qtyInTargetUnit = convertIngredientAmount(
+				item.quantity,
+				itemUnit,
+				targetUnit,
+				ingredientName,
+			);
+			if (qtyInTargetUnit === null) continue;
 			candidates.push({
 				cargo: item,
-				qtyInTargetUnit: item.quantity * multiplier,
+				qtyInTargetUnit,
 				isExact: false,
 				score: match.score,
 			});
@@ -961,18 +970,29 @@ function findCargoForDeduction(
 	let remaining = requiredQtyInTargetUnit;
 	const allocations: { cargoId: string; quantityToDeduct: number }[] = [];
 
-	for (const { cargo: item } of candidates) {
+	for (const {
+		cargo: item,
+		qtyInTargetUnit: availableInTarget,
+	} of candidates) {
 		if (remaining <= 0) break;
 
 		const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
-		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-		if (multiplier === null) continue;
-
-		const availableInTarget = item.quantity * multiplier;
 		const toDeductInTarget = Math.min(remaining, availableInTarget);
 		remaining -= toDeductInTarget;
 
-		const toDeductInCargoUnit = toDeductInTarget / multiplier;
+		// Convert the amount to deduct back into the cargo's native unit using the
+		// same canonical conversion to guarantee symmetric round-trip math.
+		const toDeductInCargoUnit = convertIngredientAmount(
+			toDeductInTarget,
+			targetUnit,
+			itemUnit,
+			ingredientName,
+		);
+		if (toDeductInCargoUnit === null) {
+			// Should not happen if forward conversion succeeded; skip defensively.
+			remaining += toDeductInTarget;
+			continue;
+		}
 		allocations.push({
 			cargoId: item.id,
 			quantityToDeduct: toDeductInCargoUnit,
@@ -1085,10 +1105,11 @@ export async function cookMeal(
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
-			const deductionInCargoUnit = convertQuantity(
+			const deductionInCargoUnit = convertIngredientAmount(
 				scaledQty,
 				ingUnit,
 				cargoUnit,
+				ing.ingredientName,
 			);
 			if (deductionInCargoUnit === null) return true;
 			return c.quantity < deductionInCargoUnit;
@@ -1108,10 +1129,11 @@ export async function cookMeal(
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
-			const deductionInCargoUnit = convertQuantity(
+			const deductionInCargoUnit = convertIngredientAmount(
 				scaledQty,
 				ingUnit,
 				cargoUnit,
+				ing.ingredientName,
 			);
 			if (deductionInCargoUnit === null) {
 				if (ing.isOptional) continue;
@@ -1155,7 +1177,12 @@ export async function cookMeal(
 				const ingUnit = toSupportedUnit(ing.unit);
 				const cargoUnit = toSupportedUnit(c.unit);
 				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
-				const deduction = convertQuantity(scaledQty, ingUnit, cargoUnit);
+				const deduction = convertIngredientAmount(
+					scaledQty,
+					ingUnit,
+					cargoUnit,
+					ing.ingredientName,
+				);
 				if (deduction === null) continue;
 				if (c.quantity < deduction && ing.isOptional) continue;
 				linkedDeductions.set(

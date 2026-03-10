@@ -3,14 +3,12 @@ import { drizzle } from "drizzle-orm/d1";
 import { meal, mealIngredient, mealTag } from "../db/schema";
 import type { CargoIndexRow } from "./cargo-index.server";
 import { fetchOrgCargoIndex } from "./cargo-index.server";
-import { lookupDensity } from "./ingredient-density";
 import { log, redactId } from "./logging.server";
 import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import {
-	convertQuantity,
-	convertQuantityWithDensity,
+	convertIngredientAmount,
 	type SupportedUnit,
 	toSupportedUnit,
 } from "./units";
@@ -100,7 +98,8 @@ export function buildCargoIndex(items: CargoIndexRow[]) {
 
 /**
  * Converts cargo quantity to target unit and sums. Returns 0 if no convertible matches.
- * Falls back to density-based conversion (mass ↔ volume) when same-family conversion fails.
+ * Uses the canonical convertIngredientAmount for consistent same-family and
+ * density-backed cross-family (weight ↔ volume) conversion.
  */
 export function sumConvertedToTarget(
 	matches: {
@@ -114,19 +113,12 @@ export function sumConvertedToTarget(
 	let total = 0;
 	for (const match of matches) {
 		const fromUnit = toSupportedUnit(match.original.unit);
-		let converted = convertQuantity(match.totalQuantity, fromUnit, targetUnit);
-		// Fallback: cross-family conversion using ingredient density (e.g. g → cup for flour)
-		if (converted === null && ingredientName) {
-			const density = lookupDensity(ingredientName);
-			if (density) {
-				converted = convertQuantityWithDensity(
-					match.totalQuantity,
-					fromUnit,
-					targetUnit,
-					density,
-				);
-			}
-		}
+		const converted = convertIngredientAmount(
+			match.totalQuantity,
+			fromUnit,
+			targetUnit,
+			ingredientName,
+		);
 		if (converted !== null) total += converted;
 	}
 	return total;

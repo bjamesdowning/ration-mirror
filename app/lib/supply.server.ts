@@ -13,7 +13,6 @@ import {
 import { dockSupplyItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { toExpiryDate } from "./date-utils";
-import { lookupDensity } from "./ingredient-density";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { normalizeForCargoDedup } from "./matching.server";
@@ -33,8 +32,8 @@ import { TIER_LIMITS } from "./tiers.server";
 import {
 	type BaseUnit,
 	chooseReadableUnit,
+	convertIngredientAmount,
 	convertQuantity,
-	convertQuantityWithDensity,
 	getUnitMultiplier,
 	normalizeToBaseUnit,
 	type SupplyUnitMode,
@@ -128,21 +127,6 @@ type AggregatedIngredient = {
 	sourceMealIds: string[];
 };
 
-function convertCargoToTarget(
-	quantity: number,
-	fromUnit: SupportedUnit,
-	targetUnit: SupportedUnit,
-	ingredientName: string,
-): number | null {
-	const converted = convertQuantity(quantity, fromUnit, targetUnit);
-	if (converted !== null) return converted;
-
-	// Fallback: cross-family conversion using ingredient density (e.g. g → cup for flour)
-	const density = lookupDensity(ingredientName);
-	if (!density) return null;
-	return convertQuantityWithDensity(quantity, fromUnit, targetUnit, density);
-}
-
 /**
  * Returns available quantity of `name` in `targetUnit` from `orgCargo`.
  *
@@ -165,7 +149,7 @@ function getAvailableCargoQuantity(
 		if (normalizedItem !== normalizedName) continue;
 
 		const itemUnit = toSupportedUnit(item.unit);
-		const converted = convertCargoToTarget(
+		const converted = convertIngredientAmount(
 			item.quantity,
 			itemUnit,
 			targetUnit,
@@ -183,7 +167,7 @@ function getAvailableCargoQuantity(
 	for (const item of orgCargo) {
 		if (normalizeForCargoDedup(item.name) !== matchedName) continue;
 		const itemUnit = toSupportedUnit(item.unit);
-		const converted = convertCargoToTarget(
+		const converted = convertIngredientAmount(
 			item.quantity,
 			itemUnit,
 			targetUnit,
@@ -209,20 +193,12 @@ function getExistingListQuantity(
 		if (normalizeForCargoDedup(item.name) !== normalizedName) continue;
 
 		const itemUnit = toSupportedUnit(item.unit);
-		const multiplier = getUnitMultiplier(itemUnit, targetUnit);
-		let converted: number | null =
-			multiplier !== null ? item.quantity * multiplier : null;
-		if (converted === null && ingredientName) {
-			const density = lookupDensity(ingredientName);
-			if (density) {
-				converted = convertQuantityWithDensity(
-					item.quantity,
-					itemUnit,
-					targetUnit,
-					density,
-				);
-			}
-		}
+		const converted = convertIngredientAmount(
+			item.quantity,
+			itemUnit,
+			targetUnit,
+			ingredientName ?? normalizedName,
+		);
 		if (converted !== null) total += converted;
 	}
 

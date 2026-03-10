@@ -402,7 +402,8 @@ export function MealDetail({
 					<ul className="space-y-1">
 						{meal.ingredients.map((ing) => {
 							const availability = getAvailabilityStatus(ing.ingredientName);
-							const isAvailable = availability?.available ?? true;
+							// Unknown status is treated as unavailable (not green) to prevent false positives.
+							const isAvailable = availability?.available ?? false;
 							const hasPartialStock =
 								availability &&
 								!availability.available &&
@@ -421,7 +422,14 @@ export function MealDetail({
 								>
 									<div className="flex items-center gap-3 flex-1">
 										{/* Availability Indicator */}
-										{!isLoadingAvailability && (
+										{isLoadingAvailability ? (
+											<div
+												className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 bg-platinum/30"
+												title="Checking availability"
+											>
+												<span className="w-2 h-2 rounded-full bg-platinum/70 animate-pulse" />
+											</div>
+										) : (
 											<div
 												className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
 													isAvailable

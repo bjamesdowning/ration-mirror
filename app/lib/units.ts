@@ -309,6 +309,45 @@ export function convertQuantityWithDensity(
 	return null;
 }
 
+/**
+ * Canonical ingredient-aware unit conversion used by ALL product surfaces
+ * (matching, cook deduction, supply sync).
+ *
+ * Decision order:
+ *   1. Same-family / cross-weight-family conversion via `convertQuantity`.
+ *   2. Cross-family weight ↔ volume conversion via density lookup + `convertQuantityWithDensity`.
+ *   3. Returns `null` only when conversion is genuinely impossible.
+ *
+ * This is the ONLY function that should be used for ingredient quantity
+ * conversions in business logic. Direct calls to `convertQuantity`,
+ * `getUnitMultiplier`, or `convertQuantityWithDensity` should be limited to
+ * low-level helpers that are called exclusively from this function or from
+ * display/formatting utilities.
+ *
+ * @param quantity - Source quantity
+ * @param from - Source unit (will be treated as-is; normalize before calling)
+ * @param to - Target unit
+ * @param ingredientName - Ingredient name for density lookup (optional but
+ *   required for weight ↔ volume cross-family conversion)
+ * @returns Converted quantity in the target unit, or null if not convertible
+ */
+export function convertIngredientAmount(
+	quantity: number,
+	from: SupportedUnit,
+	to: SupportedUnit,
+	ingredientName?: string | null,
+): number | null {
+	// Step 1: same-family + cross-weight-family (metric ↔ imperial)
+	const direct = convertQuantity(quantity, from, to);
+	if (direct !== null) return direct;
+
+	// Step 2: cross-family weight ↔ volume via density
+	if (!ingredientName) return null;
+	const density = lookupDensity(ingredientName);
+	if (!density) return null;
+	return convertQuantityWithDensity(quantity, from, to, density);
+}
+
 export function convertFromBaseUnit(
 	baseQuantity: number,
 	baseUnit: BaseUnit,

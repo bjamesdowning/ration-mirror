@@ -15,8 +15,12 @@ export const SIMILARITY_THRESHOLDS = {
 	INGREDIENT_MATCH: 0.78,
 	/** Cargo deduplication on ingest — kept aligned with universal threshold */
 	CARGO_MERGE: 0.78,
-	/** Cook deduction is intentionally slightly more conservative to avoid over-subtracting real stock */
-	CARGO_DEDUCTION: 0.8,
+	/**
+	 * Cook deduction threshold — aligned with INGREDIENT_MATCH so that any
+	 * ingredient the availability check considers a match is also eligible for
+	 * deduction. Prevents "shows available, fails to cook" false positives.
+	 */
+	CARGO_DEDUCTION: 0.78,
 } as const;
 
 function sha256(text: string): string {

@@ -20,7 +20,7 @@ function addDays(isoDate: string, days: number): string {
 	return d.toISOString().slice(0, 10);
 }
 
-function buildScanPrompt(todayIso: string): string {
+export function buildScanPrompt(todayIso: string): string {
 	return `You are an expert pantry inventory assistant.
 Analyze this image and extract all food items visible.
 You MUST respond with ONLY a valid JSON object matching this exact schema — no markdown, no explanation, no extra text:
@@ -49,6 +49,43 @@ Expiry date rules (today is ${todayIso}):
 Examples:
 - "Tesco Finest Irish Whole Milk 1L" -> name: "whole milk", quantity: 1, unit: "l", expiresAt: "${addDays(todayIso, 14)}", confidence: 0.95
 - "Morton Sea Salt 737g" -> name: "sea salt", quantity: 737, unit: "g", expiresAt: null, confidence: 0.97`;
+}
+
+export function buildReceiptPdfPrompt(todayIso: string): string {
+	return `You are an expert pantry inventory assistant processing a grocery receipt.
+Extract every food and household item purchased from this receipt.
+You MUST respond with ONLY a valid JSON object matching this exact schema — no markdown, no explanation, no extra text:
+
+{"items":[{"name":"string","quantity":number,"unit":"string","tags":["string"],"expiresAt":"string or null","confidence":number}]}
+
+Rules:
+- Use lowercase item names
+- IMPORTANT: Strip all brand names, store names, and marketing terms from item names
+- Normalize to generic ingredient names (e.g., "whole milk" not "tesco finest whole milk")
+- Keep meaningful qualifiers that affect cooking or storage: whole/skimmed, salted/unsalted, fresh/dried, minced/diced, organic
+- For weighted items (e.g. "Bananas 0.372 kg"), set quantity to the weight and unit accordingly
+- For items sold by count (e.g. "6 Free Range Eggs"), set quantity to the count and unit to "piece" or the correct unit
+- For items with a pack size in the name (e.g. "Cheddar 400g"), extract the weight as quantity+unit
+- If the same item appears multiple times on the receipt, combine into one entry with summed quantity
+- Ignore non-product lines: subtotals, discounts, Clubcard savings, VAT, totals, payment method lines
+- quantity defaults to 1 if unknown
+- unit must be one of: ${SCAN_UNITS.join(", ")}
+- tags are descriptive strings in an array (e.g. ["dairy","cheese"])
+- confidence is a number 0.0–1.0 reflecting how certain you are about the item identification
+- Respond with ONLY the JSON object, nothing else.
+
+Expiry date rules (today is ${todayIso}):
+- expiresAt must be YYYY-MM-DD or null
+- Infer an expiry date when you have HIGH CONFIDENCE (0.85+) about the item type and its typical shelf life
+- Use USDA FoodKeeper reference shelf-life estimates from the purchase date (today)
+- Return null for: shelf-stable pantry goods, frozen items (shelf life unclear without defrost date), or ambiguous items
+
+Examples:
+- "Tesco Whole Milk 2.272L" -> name: "whole milk", quantity: 2.272, unit: "l", expiresAt: "${addDays(todayIso, 14)}", confidence: 0.97
+- "Free Range Eggs 12 Pack" -> name: "eggs", quantity: 12, unit: "piece", expiresAt: "${addDays(todayIso, 28)}", confidence: 0.95
+- "Tesco Salted Butter 250g" -> name: "salted butter", quantity: 250, unit: "g", expiresAt: "${addDays(todayIso, 90)}", confidence: 0.95
+- "Tesco Plain Flour 1.5kg" -> name: "plain flour", quantity: 1.5, unit: "kg", expiresAt: null, confidence: 0.97
+- "Bananas 0.372 kg @ £1.11/kg" -> name: "bananas", quantity: 0.372, unit: "kg", expiresAt: "${addDays(todayIso, 5)}", confidence: 0.92`;
 }
 
 export interface ScanQueueMessage {
@@ -127,6 +164,10 @@ export async function runScanConsumerJob(
 
 		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 		const todayIso = new Date().toISOString().slice(0, 10);
+		const isPdf = mimeType === "application/pdf";
+		const prompt = isPdf
+			? buildReceiptPdfPrompt(todayIso)
+			: buildScanPrompt(todayIso);
 
 		const response = await fetch(
 			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
@@ -146,7 +187,7 @@ export async function runScanConsumerJob(
 										data: base64Image,
 									},
 								},
-								{ text: buildScanPrompt(todayIso) },
+								{ text: prompt },
 							],
 						},
 					],
@@ -241,7 +282,7 @@ export async function runScanConsumerJob(
 				confidence: item.confidence,
 			})),
 			metadata: {
-				source: "image",
+				source: isPdf ? ("pdf" as const) : ("image" as const),
 				filename,
 				processedAt: new Date().toISOString(),
 			},

@@ -50,21 +50,27 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const imageFile = formData.get("image");
 
 	if (!imageFile || !(imageFile instanceof File)) {
-		throw data({ error: "No image file provided" }, { status: 400 });
+		throw data({ error: "No file provided" }, { status: 400 });
 	}
 
-	if (imageFile.size > 5 * 1024 * 1024) {
-		throw data({ error: "Image too large (Max 5MB)" }, { status: 400 });
-	}
-
-	const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+	const ALLOWED_MIME_TYPES = [
+		"image/jpeg",
+		"image/png",
+		"image/webp",
+		"application/pdf",
+	] as const;
 	type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
 	const mimeType = imageFile.type as AllowedMimeType;
 	if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
 		throw data(
-			{ error: "Unsupported image format. Use JPEG, PNG, or WebP." },
+			{ error: "Unsupported file format. Use JPEG, PNG, WebP, or PDF." },
 			{ status: 415 },
 		);
+	}
+
+	// 5 MB cap for all types — keeps AI processing costs bounded and prevents large-PDF abuse
+	if (imageFile.size > 5 * 1024 * 1024) {
+		throw data({ error: "File too large (Max 5MB)" }, { status: 400 });
 	}
 
 	// 4. Credit gate, upload to R2, enqueue, return processing status
@@ -89,7 +95,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				}
 
 				const requestId = crypto.randomUUID();
-				const imageKey = `${SCAN_PENDING_PREFIX}${requestId}.jpg`;
+				const ext = mimeType === "application/pdf" ? "pdf" : "jpg";
+				const imageKey = `${SCAN_PENDING_PREFIX}${requestId}.${ext}`;
 
 				// Upload image to R2 for consumer to process
 				const arrayBuffer = await imageFile.arrayBuffer();

@@ -248,7 +248,7 @@ sequenceDiagram
     participant Consumer as Queue Consumer
     participant AIGateway as AI Gateway
 
-    User->>Worker: POST /api/scan (image file)
+    User->>Worker: POST /api/scan (image or PDF file)
 
     rect rgb(255, 243, 224)
         Note over Worker,KV: Step 1: Auth + Rate Limit
@@ -286,7 +286,9 @@ sequenceDiagram
 
 **Refund policy** (in [`app/lib/ledger.server.ts`](app/lib/ledger.server.ts)): Every thrown error inside `withCreditGate()` triggers an automatic `addCredits` refund. The consumer calls `updateQueueJobResult` with status `failed` and the error is returned to the user on the next poll. Users never pay for failed AI operations.
 
-**Image pre-processing** (in the `CameraInput` component): Before the image is sent to the worker, the browser resizes it to a maximum of 1024px on either side at 0.8 JPEG quality on a canvas with a white background. This reduces payload size and normalises the input for the vision model without any server-side image processing dependency.
+**File pre-processing** (in the `CameraInput` component): For images, the browser resizes to a maximum of 1024px on either side at 0.8 JPEG quality on a canvas with a white background before upload. For PDFs (e.g. exported grocery receipts), the file is sent directly without canvas processing. Both types share a 5 MB client-side and server-side size limit. Accepted formats: JPEG, PNG, WebP, PDF.
+
+**PDF receipts**: When a PDF is uploaded the consumer selects a receipt-specific prompt optimised for parsing grocery receipt line items (item name, weight/count columns, brand-name stripping). The metadata `source` field is set to `"pdf"` to distinguish PDF scans from image scans.
 
 **AI Gateway routing:**
 ```

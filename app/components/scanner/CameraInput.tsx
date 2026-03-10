@@ -33,6 +33,8 @@ type ScanApiResponse =
 	  })
 	| { status: "processing"; requestId: string };
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB — matches server limit
+
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	({ onScanComplete, className }, ref) => {
 		const fetcher = useFetcher<ScanApiResponse>();
@@ -71,18 +73,27 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			setScanError(null);
 			setIsAnalyzing(true);
 
-			try {
-				// Resize Image
-				const resizedBlob = await resizeImage(
-					file,
-					MAX_DIMENSION,
-					COMPRESSION_QUALITY,
-				);
+			if (file.size > MAX_FILE_SIZE) {
+				showError("File too large. Maximum size is 5MB.");
+				return;
+			}
 
+			try {
 				const formData = new FormData();
-				// Send as jpeg with original name (but forced .jpg extension)
-				const filename = `${file.name.replace(/\.[^/.]+$/, "")}.jpg`;
-				formData.append("image", resizedBlob, filename);
+
+				if (file.type === "application/pdf") {
+					// PDFs cannot be canvas-resized; send directly with original filename
+					formData.append("image", file, file.name);
+				} else {
+					// Resize and re-encode images as JPEG before upload
+					const resizedBlob = await resizeImage(
+						file,
+						MAX_DIMENSION,
+						COMPRESSION_QUALITY,
+					);
+					const filename = `${file.name.replace(/\.[^/.]+$/, "")}.jpg`;
+					formData.append("image", resizedBlob, filename);
+				}
 
 				fetcher.submit(formData, {
 					method: "POST",
@@ -90,8 +101,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					encType: "multipart/form-data",
 				});
 			} catch (error) {
-				log.error("Image processing failed", error);
-				showError("Failed to process image. Please try again.");
+				log.error("File processing failed", error);
+				showError("Failed to process file. Please try again.");
 			}
 		};
 
@@ -293,8 +304,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					<input
 						ref={inputRef}
 						type="file"
-						accept="image/*"
-						capture="environment"
+						accept="image/*,application/pdf"
 						className="hidden"
 						onChange={handleFileChange}
 						disabled={isAnalyzing}

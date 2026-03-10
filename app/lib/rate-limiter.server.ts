@@ -216,6 +216,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 5,
 		keyPrefix: "rate:plan_week",
 	},
+	cargo_list: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 60, // Cheap D1 read; cached client-side after first call
+		keyPrefix: "rate:cargo_list",
+	},
 	interest_signup: {
 		windowMs: 60_000,
 		maxRequests: 10,

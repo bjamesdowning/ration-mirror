@@ -113,8 +113,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// the visible week range, and a cheap hash of the scheduled meal IDs so the
 	// result is invalidated automatically whenever the set of scheduled meals
 	// changes or a new week is viewed.
-	let readyMealIds: Record<string, boolean> = {};
-	if (scheduledMealIds.length > 0) {
+	// getTriggeredAllergens runs in parallel with the readiness resolution so
+	// neither blocks the other (important on cache-miss when checkMealReadiness
+	// is a slow vector-matching call).
+	async function resolveReadiness(): Promise<Record<string, boolean>> {
+		if (scheduledMealIds.length === 0) return {};
 		const idsHash =
 			scheduledMealIds
 				.slice()
@@ -125,25 +128,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const kvKey = `manifest-ready:${groupId}:${currentRangeStart}:${idsHash}`;
 		const kv = context.cloudflare.env.RATION_KV;
 		const cached = await kv.get<Record<string, boolean>>(kvKey, "json");
-		if (cached) {
-			readyMealIds = cached;
-		} else {
-			readyMealIds = await checkMealReadiness(
-				context.cloudflare.env,
-				groupId,
-				scheduledMealIds,
-			);
-			await kv.put(kvKey, JSON.stringify(readyMealIds), {
-				expirationTtl: 300,
-			});
-		}
+		if (cached) return cached;
+		const result = await checkMealReadiness(
+			context.cloudflare.env,
+			groupId,
+			scheduledMealIds,
+		);
+		await kv.put(kvKey, JSON.stringify(result), { expirationTtl: 300 });
+		return result;
 	}
 
-	const triggeredAllergensByMealId = await getTriggeredAllergens(
-		db,
-		scheduledMealIds,
-		userAllergens,
-	);
+	const [readyMealIds, triggeredAllergensByMealId] = await Promise.all([
+		resolveReadiness(),
+		getTriggeredAllergens(db, scheduledMealIds, userAllergens),
+	]);
 
 	return {
 		plan,
@@ -189,12 +187,20 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		readyMealIds,
 	} = loaderData;
 
-	// Picker meals are fetched on-demand from /api/meals when the picker opens.
-	// The fetcher result is cached for the component lifetime so subsequent
-	// picker opens reuse the already-loaded list.
+	// Picker meals are loaded client-side from /api/meals. The load is triggered
+	// on mount so data is ready by the time the user opens the meal picker or
+	// the PlanWeekButton modal (which uses the meal tag list to populate its
+	// tag-filter dropdown). Subsequent opens reuse the cached fetcher result.
 	const pickerFetcher = useFetcher<{ meals: MealForPicker[] }>();
 	const pickerMeals = (pickerFetcher.data?.meals ?? []) as MealForPicker[];
-	const pickerMealsLoading = pickerFetcher.state !== "idle";
+	const pickerMealsLoading =
+		pickerFetcher.state !== "idle" && !pickerFetcher.data;
+
+	useEffect(() => {
+		if (!pickerFetcher.data && pickerFetcher.state === "idle") {
+			pickerFetcher.load("/api/meals");
+		}
+	}, [pickerFetcher.data, pickerFetcher.state, pickerFetcher.load]);
 
 	const [searchParams] = useSearchParams();
 
@@ -238,10 +244,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		setPickerSlot(slot);
 		setPickerDate(date);
 		setPickerOpen(true);
-		// Load picker meals on first open; subsequent opens reuse cached data.
-		if (!pickerFetcher.data && pickerFetcher.state === "idle") {
-			pickerFetcher.load("/api/meals");
-		}
 	};
 
 	const [lastBulkSource, setLastBulkSource] = useState<"copy" | "plan-week">(

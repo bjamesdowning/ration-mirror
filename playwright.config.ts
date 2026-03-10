@@ -44,7 +44,8 @@ export default defineConfig({
 	webServer: {
 		command: "bun run dev:remote",
 		url: baseURL,
-		reuseExistingServer: !process.env.CI,
+		// Reuse when not in CI; in CI we start fresh. Explicit true/false avoids env quirks.
+		reuseExistingServer: process.env.CI !== "true",
 		timeout: 180000,
 	},
 });

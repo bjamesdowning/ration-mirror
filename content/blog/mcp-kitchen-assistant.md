@@ -41,7 +41,9 @@ Add this to your `claude_desktop_config.json`:
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://mcp.ration.mayutic.com/mcp"
+        "https://mcp.ration.mayutic.com/mcp",
+        "--header",
+        "Authorization:${RATION_AUTH_HEADER}"
       ],
       "env": {
         "RATION_AUTH_HEADER": "Bearer rtn_live_your_key_here"

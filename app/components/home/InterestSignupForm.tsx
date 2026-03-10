@@ -62,6 +62,8 @@ export function InterestSignupForm() {
 						<div className="flex gap-2">
 							<input
 								type="email"
+								inputMode="email"
+								autoComplete="email"
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
 								placeholder="your@email.com"

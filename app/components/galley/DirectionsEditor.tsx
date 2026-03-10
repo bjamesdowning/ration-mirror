@@ -55,6 +55,19 @@ export function DirectionsEditor({
 		});
 	};
 
+	const moveStep = (index: number, direction: -1 | 1) => {
+		setSteps((prev) => {
+			const nextIndex = index + direction;
+			if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+			const next = [...prev];
+			[next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+			return next;
+		});
+		setTimeout(() => {
+			inputRefs.current[index + direction]?.focus();
+		}, 0);
+	};
+
 	// Drag state
 	const dragIndex = useRef<number | null>(null);
 
@@ -111,7 +124,7 @@ export function DirectionsEditor({
 						<button
 							type="button"
 							aria-label="Drag to reorder"
-							className="mt-2 text-muted opacity-40 group-hover:opacity-80 cursor-grab active:cursor-grabbing shrink-0"
+							className="mt-2 text-muted opacity-60 md:opacity-40 md:group-hover:opacity-80 cursor-grab active:cursor-grabbing shrink-0"
 						>
 							<GripVertical size={16} />
 						</button>
@@ -154,12 +167,34 @@ export function DirectionsEditor({
 							}
 						/>
 
+						{/* Mobile-only reorder controls */}
+						<div className="flex flex-col gap-0.5 md:hidden shrink-0 mt-1">
+							<button
+								type="button"
+								onClick={() => moveStep(index, -1)}
+								aria-label={`Move step ${index + 1} up`}
+								className="w-7 h-7 flex items-center justify-center text-muted hover:text-carbon transition-colors disabled:opacity-30"
+								disabled={index === 0}
+							>
+								▲
+							</button>
+							<button
+								type="button"
+								onClick={() => moveStep(index, 1)}
+								aria-label={`Move step ${index + 1} down`}
+								className="w-7 h-7 flex items-center justify-center text-muted hover:text-carbon transition-colors disabled:opacity-30"
+								disabled={index === steps.length - 1}
+							>
+								▼
+							</button>
+						</div>
+
 						{/* Remove button */}
 						<button
 							type="button"
 							onClick={() => removeStep(index)}
 							aria-label={`Remove step ${index + 1}`}
-							className="mt-2 text-muted opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-red-500 transition-opacity shrink-0"
+							className="mt-2 text-muted opacity-60 md:opacity-0 md:group-hover:opacity-60 hover:!opacity-100 hover:text-red-500 transition-opacity shrink-0"
 						>
 							<Trash2 size={14} />
 						</button>

@@ -65,7 +65,7 @@ export function MealPicker({
 				aria-label={`Add meal to ${dayLabel} ${SLOT_LABELS[slot]}`}
 				className="fixed inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center z-[80]"
 			>
-				<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-md md:mx-auto flex flex-col max-h-[85vh] md:max-h-[70vh]">
+				<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-md md:mx-auto flex flex-col max-h-[85vh] md:max-h-[70vh] safe-area-pb">
 					{/* Header */}
 					<div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
 						<div>
@@ -77,7 +77,7 @@ export function MealPicker({
 						<button
 							type="button"
 							onClick={onClose}
-							className="text-muted hover:text-carbon transition-colors"
+							className="text-muted hover:text-carbon transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
 							aria-label="Close"
 						>
 							<CloseIcon className="w-5 h-5" />
@@ -91,6 +91,8 @@ export function MealPicker({
 							<input
 								ref={searchRef}
 								type="text"
+								inputMode="search"
+								autoComplete="off"
 								placeholder="Search meals..."
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
@@ -152,6 +154,7 @@ export function MealPicker({
 								<input
 									id="servings-override"
 									type="number"
+									inputMode="numeric"
 									min={1}
 									placeholder={String(selectedMeal.servings)}
 									value={servings}

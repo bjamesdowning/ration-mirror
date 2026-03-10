@@ -203,7 +203,7 @@ export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
 										</div>
 									</div>
 
-									<div className="min-w-[220px] space-y-2">
+									<div className="min-w-0 sm:min-w-[220px] space-y-2">
 										{connectedMeal.connectedIngredients.map((connection) => (
 											<div
 												key={connection.id}

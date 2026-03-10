@@ -89,7 +89,7 @@ export function PageHeader({
 				<div className="flex items-center justify-between mb-3">
 					<div className="flex items-center gap-2 flex-1 min-w-0">
 						<span className="text-2xl shrink-0">{icon}</span>
-						<h1 className="text-2xl font-bold text-carbon dark:text-white shrink-0">
+						<h1 className="text-2xl font-bold text-carbon dark:text-white min-w-0 truncate">
 							{title}
 						</h1>
 						{itemCount !== undefined && (
@@ -115,7 +115,7 @@ export function PageHeader({
 								(hasActiveFilters ? "Filters active" : "More options")
 							}
 							className={`
-						ml-2 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all shrink-0
+						ml-2 flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0
 						${
 							hasActiveFilters
 								? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
@@ -140,6 +140,8 @@ export function PageHeader({
 						<SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
 						<input
 							type="text"
+							inputMode="search"
+							autoComplete="off"
 							placeholder={searchPlaceholder}
 							value={searchQuery}
 							onChange={handleSearchChange}

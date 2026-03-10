@@ -141,7 +141,7 @@ export function FilterChip({
 			type="button"
 			onClick={onClick}
 			className={`
-				flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all
+				flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-all
 				${
 					isActive
 						? "bg-hyper-green text-carbon"

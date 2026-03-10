@@ -19,9 +19,11 @@ interface ActionMenuProps {
 
 export function ActionMenu({ actions }: ActionMenuProps) {
 	const [isOpen, setIsOpen] = useState(false);
-	const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
-		null,
-	);
+	const [menuPos, setMenuPos] = useState<{
+		top: number;
+		right?: number;
+		left?: number;
+	} | null>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 
 	const handleOpen = (e: React.MouseEvent) => {
@@ -29,10 +31,20 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 		e.stopPropagation();
 		if (!isOpen && buttonRef.current) {
 			const rect = buttonRef.current.getBoundingClientRect();
-			setMenuPos({
-				top: rect.bottom + 4,
-				right: window.innerWidth - rect.right,
-			});
+			const menuWidth = 200;
+			const right = window.innerWidth - rect.right;
+			const wouldOverflowLeft = right + menuWidth > window.innerWidth;
+			setMenuPos(
+				wouldOverflowLeft
+					? {
+							top: rect.bottom + 4,
+							left: Math.max(8, rect.left),
+						}
+					: {
+							top: rect.bottom + 4,
+							right,
+						},
+			);
 		}
 		setIsOpen((prev) => !prev);
 	};
@@ -82,7 +94,11 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 						{/* Dropdown — rendered outside overflow ancestors via portal */}
 						<div
 							className="fixed z-[9999] glass-panel rounded-xl shadow-lg p-2 min-w-[160px]"
-							style={{ top: menuPos.top, right: menuPos.right }}
+							style={{
+								top: menuPos.top,
+								right: menuPos.right,
+								left: menuPos.left,
+							}}
 						>
 							{actions.map((action) => {
 								const Content = () => (
@@ -149,7 +165,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 				ref={buttonRef}
 				type="button"
 				onClick={handleOpen}
-				className="flex items-center justify-center w-8 h-8 rounded-lg bg-ceramic/90 backdrop-blur-sm hover:bg-platinum transition-colors shadow-sm"
+				className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-ceramic/90 backdrop-blur-sm hover:bg-platinum transition-colors shadow-sm"
 				aria-label="More actions"
 			>
 				<MoreVertical className="w-4 h-4 text-carbon" />

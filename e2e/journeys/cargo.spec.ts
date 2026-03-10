@@ -28,12 +28,13 @@ test.describe("cargo", () => {
 			timeout: 5000,
 		});
 
-		// Cleanup: delete the item we created (desktop: hover reveals overlay with Delete)
+		// Cleanup: delete the item we created (desktop: hover reveals ActionMenu; open menu, then Delete)
 		const card = page
 			.locator(".glass-panel")
 			.filter({ hasText: E2E_CARGO_NAME });
 		await card.hover();
-		await card.getByRole("button", { name: "Delete" }).click();
+		await card.getByRole("button", { name: "More actions" }).click();
+		await page.getByRole("button", { name: "Delete" }).click();
 
 		// Verify item is removed
 		await expect(page.getByText(E2E_CARGO_NAME)).not.toBeVisible({

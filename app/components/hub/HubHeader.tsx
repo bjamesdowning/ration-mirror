@@ -67,6 +67,8 @@ export function HubHeader({
 						<div className="relative group">
 							<input
 								type="text"
+								inputMode="search"
+								autoComplete="off"
 								placeholder={searchPlaceholder}
 								className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
 								onChange={handleSearchChange}
@@ -85,6 +87,8 @@ export function HubHeader({
 							<input
 								type="text"
 								name="q"
+								inputMode="search"
+								autoComplete="off"
 								placeholder={searchPlaceholder}
 								className="w-full bg-platinum/50 border border-platinum rounded-lg p-2 pl-4 text-sm text-carbon placeholder:text-muted focus:border-hyper-green focus:ring-1 focus:ring-hyper-green outline-none transition-all"
 								onChange={handleSearchChange}
@@ -118,7 +122,7 @@ export function HubHeader({
 								type="submit"
 								disabled={isGenerating}
 								title="Generate List Now"
-								className="p-1 hover:bg-platinum rounded-md text-hyper-green transition-colors disabled:opacity-50"
+								className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-platinum rounded-md text-hyper-green transition-colors disabled:opacity-50"
 							>
 								<svg
 									aria-hidden="true"

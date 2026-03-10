@@ -34,7 +34,7 @@ export function IngredientPicker({
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
+		const handleClickOutside = (event: PointerEvent) => {
 			if (activeIndex !== null) {
 				const dropdown = document.getElementById("ingredient-dropdown");
 				const input = inputRefs.current[activeIndex];
@@ -49,9 +49,9 @@ export function IngredientPicker({
 			}
 		};
 
-		document.addEventListener("mousedown", handleClickOutside);
+		document.addEventListener("pointerdown", handleClickOutside);
 		return () => {
-			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("pointerdown", handleClickOutside);
 		};
 	}, [activeIndex]);
 
@@ -168,6 +168,7 @@ export function IngredientPicker({
 									inputRefs.current[idx] = el;
 								}}
 								type="text"
+								inputMode="text"
 								name={`ingredients[${idx}].ingredientName`}
 								value={ing.ingredientName}
 								onChange={(e) =>
@@ -224,6 +225,7 @@ export function IngredientPicker({
 						<div className="col-span-2">
 							<input
 								type="number"
+								inputMode="decimal"
 								step="any"
 								name={`ingredients[${idx}].quantity`}
 								value={ing.quantity}

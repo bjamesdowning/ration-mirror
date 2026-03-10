@@ -61,14 +61,14 @@ export function ProvisionEditModal({
 	};
 
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
-			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md w-full">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80] p-0 md:p-4">
+			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md max-h-[90vh] overflow-y-auto safe-area-pb">
 				<div className="flex justify-between items-center mb-6">
 					<h2 className="text-xl font-bold text-carbon">Edit Item</h2>
 					<button
 						type="button"
 						onClick={onClose}
-						className="text-muted hover:text-carbon text-2xl transition-colors"
+						className="text-muted hover:text-carbon text-2xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
 						aria-label="Close"
 					>
 						×
@@ -92,6 +92,7 @@ export function ProvisionEditModal({
 						<input
 							id="provision-name"
 							type="text"
+							inputMode="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							required
@@ -110,6 +111,7 @@ export function ProvisionEditModal({
 							<input
 								id="provision-quantity"
 								type="number"
+								inputMode="decimal"
 								min="0.01"
 								step="any"
 								value={quantity}
@@ -171,6 +173,7 @@ export function ProvisionEditModal({
 						<input
 							id="provision-tags"
 							type="text"
+							inputMode="text"
 							value={tagsStr}
 							onChange={(e) => setTagsStr(e.target.value)}
 							placeholder="e.g. snack, staple"
@@ -182,7 +185,7 @@ export function ProvisionEditModal({
 						<button
 							type="button"
 							onClick={onClose}
-							className="flex-1 py-3 rounded-xl font-medium border border-platinum text-carbon hover:bg-platinum/50 transition-colors"
+							className="flex-1 py-2.5 rounded-xl font-medium border border-platinum text-carbon hover:bg-platinum/50 transition-colors"
 						>
 							Cancel
 						</button>

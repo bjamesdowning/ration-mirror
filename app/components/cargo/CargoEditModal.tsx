@@ -19,14 +19,14 @@ export function CargoEditModal({
 	isUpdating,
 }: CargoEditModalProps) {
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80]">
-			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80]">
+			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md md:mx-4 max-h-[90vh] overflow-y-auto safe-area-pb">
 				<div className="flex justify-between items-center mb-6">
 					<h2 className="text-xl font-bold text-carbon">Edit Item</h2>
 					<button
 						type="button"
 						onClick={onClose}
-						className="text-muted hover:text-carbon text-2xl transition-colors"
+						className="text-muted hover:text-carbon text-2xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
 					>
 						×
 					</button>
@@ -45,6 +45,7 @@ export function CargoEditModal({
 						</label>
 						<input
 							type="text"
+							inputMode="text"
 							name="name"
 							id={`name-${item.id}`}
 							defaultValue={item.name}
@@ -63,6 +64,7 @@ export function CargoEditModal({
 							</label>
 							<input
 								type="number"
+								inputMode="decimal"
 								name="quantity"
 								id={`quantity-${item.id}`}
 								defaultValue={item.quantity}
@@ -128,6 +130,7 @@ export function CargoEditModal({
 						</label>
 						<input
 							type="text"
+							inputMode="text"
 							name="tags"
 							id={`tags-${item.id}`}
 							defaultValue={tags.join(", ")}
@@ -168,7 +171,7 @@ export function CargoEditModal({
 						<button
 							type="button"
 							onClick={onClose}
-							className="btn-secondary px-4 py-2 rounded-lg"
+							className="btn-secondary px-4 py-2.5 rounded-lg"
 						>
 							Cancel
 						</button>

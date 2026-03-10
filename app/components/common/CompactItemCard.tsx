@@ -68,7 +68,7 @@ export function CompactItemCard({
 						onToggleSelect();
 					}}
 					className={`
-						absolute top-2 left-2 z-10 w-6 h-6 rounded-md flex items-center justify-center
+						absolute top-2 left-2 z-10 min-w-[44px] min-h-[44px] rounded-md flex items-center justify-center
 						text-xs font-bold transition-all border
 						${
 							isSelected
@@ -88,7 +88,7 @@ export function CompactItemCard({
 			{/* Status dot */}
 			<div className="flex items-start justify-between mb-2">
 				<div
-					className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[status]} ${onToggleSelect ? "ml-8" : ""}`}
+					className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[status]} ${onToggleSelect ? "ml-11" : ""}`}
 					title={statusTooltip}
 				/>
 				<span className="text-lg font-bold text-carbon dark:text-white">
@@ -98,7 +98,7 @@ export function CompactItemCard({
 
 			{/* Name */}
 			<h4
-				className={`font-semibold text-carbon dark:text-white truncate ${onToggleSelect ? "pl-8" : ""}`}
+				className={`font-semibold text-carbon dark:text-white truncate ${onToggleSelect ? "pl-11" : ""}`}
 				title={name}
 			>
 				{name}
@@ -107,7 +107,7 @@ export function CompactItemCard({
 			{/* Subtitle */}
 			{subtitle && (
 				<p
-					className={`text-xs text-muted truncate mt-0.5 ${onToggleSelect ? "pl-8" : ""}`}
+					className={`text-xs text-muted truncate mt-0.5 ${onToggleSelect ? "pl-11" : ""}`}
 				>
 					{subtitle}
 				</p>

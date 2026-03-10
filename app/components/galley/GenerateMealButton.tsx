@@ -493,6 +493,7 @@ export const GenerateMealButton = forwardRef<
 												<input
 													id="meal-customization"
 													type="text"
+													inputMode="text"
 													value={customization}
 													onChange={(e) =>
 														setCustomization(

@@ -121,7 +121,7 @@ export default function NewMeal({ loaderData }: Route.ComponentProps) {
 				}
 			/>
 			<HubHeader title="New Meal" subtitle="Create a new meal" />
-			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-8">
+			<div className="max-w-4xl mx-auto glass-panel rounded-2xl p-4 md:p-8">
 				<MealBuilder availableIngredients={loaderData?.cargo} />
 			</div>
 		</>

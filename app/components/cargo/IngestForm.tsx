@@ -118,6 +118,7 @@ export function IngestForm({
 						id="item-name"
 						ref={nameInputRef}
 						type="text"
+						inputMode="text"
 						name="name"
 						required
 						placeholder="Enter item name"
@@ -138,6 +139,7 @@ export function IngestForm({
 							id="item-quantity"
 							ref={qtyInputRef}
 							type="number"
+							inputMode="decimal"
 							name="quantity"
 							required
 							min="0"
@@ -245,6 +247,7 @@ export function IngestForm({
 							<input
 								id="item-tags"
 								type="text"
+								inputMode="text"
 								name="tags"
 								placeholder="e.g. Dry, Italian, Snack"
 								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none placeholder-muted/50"

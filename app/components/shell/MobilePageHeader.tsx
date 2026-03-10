@@ -50,9 +50,9 @@ export function MobilePageHeader({
 			<header className="mb-4">
 				{/* Title row */}
 				<div className="flex items-center justify-between mb-3">
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-2 min-w-0 flex-1">
 						<span className="text-2xl">{icon}</span>
-						<h1 className="text-2xl font-bold text-carbon dark:text-white">
+						<h1 className="text-2xl font-bold text-carbon dark:text-white min-w-0 truncate">
 							{title}
 						</h1>
 						{itemCount !== undefined && (
@@ -68,7 +68,7 @@ export function MobilePageHeader({
 							type="button"
 							onClick={() => setIsFilterOpen(true)}
 							className={`
-								md:hidden flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
+								md:hidden flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
 								${
 									hasActiveFilters
 										? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
@@ -90,6 +90,8 @@ export function MobilePageHeader({
 						<SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
 						<input
 							type="text"
+							inputMode="search"
+							autoComplete="off"
 							placeholder={searchPlaceholder}
 							value={searchQuery}
 							onChange={handleSearchChange}

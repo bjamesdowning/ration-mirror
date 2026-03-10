@@ -155,7 +155,7 @@ function SchedulePreview({
 										type="button"
 										onClick={() => onRemove(idx)}
 										aria-label={`Remove ${entry.mealName} from ${entry.slotType}`}
-										className="shrink-0 p-1.5 rounded-lg text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+										className="shrink-0 p-2 min-w-[44px] min-h-[44px] rounded-lg text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 flex items-center justify-center"
 									>
 										<X className="w-3.5 h-3.5" />
 									</button>

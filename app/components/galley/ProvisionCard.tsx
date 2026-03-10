@@ -85,7 +85,7 @@ export function ProvisionCard({
 					}}
 					disabled={isToggling}
 					aria-pressed={localActive}
-					className={`absolute top-4 left-4 z-40 flex items-center justify-center w-7 h-7 border text-xs font-bold transition-all shadow-sm ${
+					className={`absolute top-4 left-4 z-40 flex items-center justify-center min-w-[44px] min-h-[44px] border text-xs font-bold transition-all shadow-sm ${
 						localActive
 							? "bg-hyper-green text-carbon border-hyper-green"
 							: "bg-platinum/70 text-muted border-carbon/20 hover:bg-platinum"
@@ -110,7 +110,7 @@ export function ProvisionCard({
 				>
 					<div className="flex justify-between items-start mb-2">
 						<div className="flex items-start gap-2 min-w-0">
-							<div className="w-7 h-7 flex-shrink-0" />
+							<div className="w-11 h-11 flex-shrink-0" />
 							<h3
 								className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2 capitalize"
 								title={meal.name}

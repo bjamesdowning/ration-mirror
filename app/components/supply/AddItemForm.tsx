@@ -65,6 +65,7 @@ export function AddItemForm({
 					<input
 						id="supply-item-name"
 						type="text"
+						inputMode="text"
 						value={name}
 						onChange={(e) => setName(e.target.value)}
 						placeholder="Add item to list..."
@@ -105,6 +106,7 @@ export function AddItemForm({
 							<input
 								id="quantity"
 								type="number"
+								inputMode="decimal"
 								value={quantity}
 								onChange={(e) => setQuantity(Number(e.target.value))}
 								min={1}
@@ -121,6 +123,7 @@ export function AddItemForm({
 							<input
 								id="unit"
 								type="text"
+								inputMode="text"
 								value={unit}
 								onChange={(e) => setUnit(e.target.value)}
 								placeholder="kg, ml, pcs..."

@@ -148,7 +148,7 @@ export function MealSlotCard({
 								onClick={handleConsume}
 								disabled={isConsuming}
 								aria-label={`Consume ${entry.mealName} (deduct from Cargo)`}
-								className="p-1.5 rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all disabled:opacity-50"
+								className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all disabled:opacity-50 flex items-center justify-center"
 							>
 								<ConsumeIcon className="w-4 h-4" />
 							</button>
@@ -158,7 +158,7 @@ export function MealSlotCard({
 								type="button"
 								onClick={() => onCopy(entry)}
 								aria-label={`Copy ${entry.mealName} to other days`}
-								className="p-1 rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+								className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-muted hover:text-hyper-green hover:bg-hyper-green/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 flex items-center justify-center"
 							>
 								<svg
 									className="w-3.5 h-3.5"
@@ -183,7 +183,7 @@ export function MealSlotCard({
 								onClick={handleRemove}
 								disabled={isRemoving}
 								aria-label={`Remove ${entry.mealName}`}
-								className="p-1 rounded-lg text-muted hover:text-red-500 hover:bg-red-500/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+								className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-muted hover:text-red-500 hover:bg-red-500/10 transition-all md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 flex items-center justify-center"
 							>
 								<svg
 									className="w-3.5 h-3.5"

@@ -127,7 +127,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 				{/* Main Content Area */}
 				<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
 					{/* Global Top Bar (Group Context) */}
-					<header className="px-4 md:px-8 py-0 flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 h-12">
+					<header className="px-4 md:px-8 py-0 safe-area-pt flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
 						<GroupSwitcher />
 						<div className="flex items-center gap-1">
 							<ThemeToggle />

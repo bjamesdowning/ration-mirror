@@ -73,6 +73,7 @@ export function MealQuickAdd({
 					<input
 						ref={nameInputRef}
 						type="text"
+						inputMode="text"
 						id="quick-meal-name"
 						name="name"
 						required
@@ -115,6 +116,7 @@ export function MealQuickAdd({
 								</label>
 								<input
 									type="text"
+									inputMode="text"
 									id="quick-meal-description"
 									name="description"
 									placeholder="Brief description..."
@@ -132,6 +134,7 @@ export function MealQuickAdd({
 								</label>
 								<input
 									type="number"
+									inputMode="numeric"
 									id="quick-meal-servings"
 									name="servings"
 									defaultValue={2}
@@ -152,6 +155,7 @@ export function MealQuickAdd({
 								</label>
 								<input
 									type="number"
+									inputMode="numeric"
 									name="prepTime"
 									id="prepTime"
 									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
@@ -168,6 +172,7 @@ export function MealQuickAdd({
 								</label>
 								<input
 									type="number"
+									inputMode="numeric"
 									name="cookTime"
 									id="cookTime"
 									className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
@@ -196,6 +201,7 @@ export function MealQuickAdd({
 							</label>
 							<input
 								type="text"
+								inputMode="text"
 								id="quick-meal-tags"
 								name="tags"
 								placeholder="e.g. breakfast, quick, vegetarian"

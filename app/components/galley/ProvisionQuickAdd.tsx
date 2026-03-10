@@ -84,6 +84,7 @@ export function ProvisionQuickAdd({
 					ref={nameRef}
 					id="provision-quick-name"
 					type="text"
+					inputMode="text"
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					required
@@ -103,6 +104,7 @@ export function ProvisionQuickAdd({
 					<input
 						id="provision-quick-quantity"
 						type="number"
+						inputMode="decimal"
 						min="0.01"
 						step="any"
 						value={quantity}
@@ -163,6 +165,7 @@ export function ProvisionQuickAdd({
 				<input
 					id="provision-quick-tags"
 					type="text"
+					inputMode="text"
 					value={tagsStr}
 					onChange={(e) => setTagsStr(e.target.value)}
 					placeholder="e.g. snack, staple"

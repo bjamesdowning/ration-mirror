@@ -812,6 +812,7 @@ function AccountSection({
 								<div className="flex flex-wrap items-center gap-2">
 									<input
 										type="text"
+										inputMode="text"
 										value={nameInput}
 										onChange={(e) => setNameInput(e.currentTarget.value)}
 										maxLength={100}
@@ -1886,6 +1887,7 @@ function ApiKeysSection({
 				<div className="flex gap-2">
 					<input
 						type="text"
+						inputMode="text"
 						name="name"
 						value={createName}
 						onChange={(e) => setCreateName(e.target.value)}
@@ -2631,6 +2633,7 @@ function TransferCreditsSection({
 					<input
 						id="transfer-amount"
 						type="number"
+						inputMode="numeric"
 						name="amount"
 						min={1}
 						max={maxAmount}

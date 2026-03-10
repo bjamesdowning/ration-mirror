@@ -265,6 +265,7 @@ function AdminAddItemBar({
 				<input
 					ref={inputRef}
 					type="text"
+					inputMode="text"
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Item name..."

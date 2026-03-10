@@ -63,14 +63,14 @@ export function PurchaseQuantityModal({
 	}
 
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80]">
-			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80]">
+			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md md:mx-4 max-h-[90vh] overflow-y-auto safe-area-pb">
 				<div className="flex justify-between items-center mb-4">
 					<h2 className="text-xl font-bold text-carbon">What did you buy?</h2>
 					<button
 						type="button"
 						onClick={onCancel}
-						className="text-muted hover:text-carbon text-2xl transition-colors"
+						className="text-muted hover:text-carbon text-2xl transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
 						aria-label="Cancel"
 					>
 						×
@@ -92,6 +92,7 @@ export function PurchaseQuantityModal({
 								ref={quantityInputRef}
 								id="purchase-quantity"
 								type="number"
+								inputMode="decimal"
 								value={localQuantity}
 								onChange={(e) => setLocalQuantity(Number(e.target.value))}
 								min={0}
@@ -132,14 +133,14 @@ export function PurchaseQuantityModal({
 							type="button"
 							onClick={handleUseAsListed}
 							disabled={isPending}
-							className="w-full btn-secondary font-semibold px-6 py-2 rounded-lg disabled:opacity-50"
+							className="w-full btn-secondary font-semibold px-6 py-2.5 rounded-lg disabled:opacity-50"
 						>
 							Use as listed ({quantity} {normalizedUnit})
 						</button>
 						<button
 							type="button"
 							onClick={onCancel}
-							className="w-full text-muted hover:text-carbon font-medium py-2 transition-colors"
+							className="w-full text-muted hover:text-carbon font-medium py-2.5 transition-colors"
 						>
 							Cancel
 						</button>

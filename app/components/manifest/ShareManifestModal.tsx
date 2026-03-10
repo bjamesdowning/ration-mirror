@@ -105,13 +105,13 @@ export function ShareManifestModal({
 	};
 
 	return (
-		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
-			<div className="bg-ceramic rounded-2xl shadow-xl p-6 max-w-md mx-auto w-full relative">
+		<div className="fixed inset-0 bg-carbon/30 backdrop-blur-sm flex items-end md:items-center md:justify-center z-[80] p-0 md:p-4">
+			<div className="bg-ceramic rounded-t-2xl md:rounded-2xl shadow-xl p-6 w-full md:max-w-md md:mx-auto relative max-h-[90vh] overflow-y-auto safe-area-pb">
 				{/* Close button */}
 				<button
 					type="button"
 					onClick={onClose}
-					className="absolute top-4 right-4 text-muted hover:text-carbon transition-colors"
+					className="absolute top-4 right-4 text-muted hover:text-carbon transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
 					aria-label="Close"
 				>
 					<svg

@@ -144,6 +144,10 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.h-safe-area-inset-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
 /*
  * Secondary button — light: platinum fill; dark: frosted white with visible border.
  * Apply alongside size/layout classes (px-*, py-*, rounded-*, font-*, etc.)

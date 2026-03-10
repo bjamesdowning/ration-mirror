@@ -345,13 +345,14 @@ export function MealDetail({
 									aria-label="Decrease servings"
 									disabled={desiredServings <= MIN_SERVINGS}
 									onClick={() => handleServingsChange(desiredServings - 1)}
-									className="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 								>
 									<Minus className="w-3.5 h-3.5" />
 								</button>
 								<input
 									ref={inputRef}
 									type="number"
+									inputMode="numeric"
 									min={MIN_SERVINGS}
 									max={MAX_SERVINGS}
 									value={inputValue}
@@ -367,7 +368,7 @@ export function MealDetail({
 									aria-label="Increase servings"
 									disabled={desiredServings >= MAX_SERVINGS}
 									onClick={() => handleServingsChange(desiredServings + 1)}
-									className="w-6 h-6 rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 								>
 									<Plus className="w-3.5 h-3.5" />
 								</button>

@@ -559,7 +559,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	]);
 
 	return (
-		<div className="min-h-screen bg-ceramic text-carbon p-8">
+		<div className="min-h-screen bg-ceramic text-carbon p-4 md:p-8">
 			<header className="mb-12 border-b border-carbon/10 pb-4 flex justify-between items-center">
 				<div>
 					<h1 className="text-display text-3xl text-carbon">Admin Dashboard</h1>

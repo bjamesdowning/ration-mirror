@@ -49,6 +49,7 @@ export function MealBuilder({
 							</label>
 							<input
 								type="text"
+								inputMode="text"
 								name="name"
 								id="name"
 								defaultValue={defaultValue.name}
@@ -85,6 +86,7 @@ export function MealBuilder({
 							</label>
 							<input
 								type="number"
+								inputMode="numeric"
 								name="servings"
 								id="servings"
 								defaultValue={defaultValue.servings || 1}
@@ -101,6 +103,7 @@ export function MealBuilder({
 							</label>
 							<input
 								type="text"
+								inputMode="text"
 								name="description"
 								id="description"
 								defaultValue={defaultValue.description}
@@ -116,6 +119,7 @@ export function MealBuilder({
 						</label>
 						<input
 							type="text"
+							inputMode="text"
 							name="tags"
 							id="tags"
 							defaultValue={defaultValue.tags?.join(", ")}
@@ -136,6 +140,7 @@ export function MealBuilder({
 						</label>
 						<input
 							type="text"
+							inputMode="text"
 							name="equipment"
 							id="equipment"
 							defaultValue={defaultValue.equipment?.join(", ")}
@@ -157,6 +162,7 @@ export function MealBuilder({
 							</label>
 							<input
 								type="number"
+								inputMode="numeric"
 								name="prepTime"
 								id="prepTime"
 								defaultValue={defaultValue.prepTime}
@@ -172,6 +178,7 @@ export function MealBuilder({
 							</label>
 							<input
 								type="number"
+								inputMode="numeric"
 								name="cookTime"
 								id="cookTime"
 								defaultValue={defaultValue.cookTime}

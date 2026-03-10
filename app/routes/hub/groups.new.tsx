@@ -52,7 +52,7 @@ export default function CreateGroupPage() {
 				showSearch={false}
 			/>
 
-			<div className="glass-panel rounded-xl p-8">
+			<div className="glass-panel rounded-xl p-4 md:p-8">
 				<fetcher.Form
 					method="post"
 					action="/api/groups/create"
@@ -91,6 +91,7 @@ export default function CreateGroupPage() {
 						<div className="relative">
 							<input
 								type="text"
+								inputMode="text"
 								name="name"
 								id="name"
 								required
@@ -110,6 +111,7 @@ export default function CreateGroupPage() {
 						<div className="relative">
 							<input
 								type="text"
+								inputMode="text"
 								name="slug"
 								id="slug"
 								required

@@ -29,7 +29,7 @@ export function ThemeToggle() {
 				onClick={() => handleToggle("light")}
 				aria-pressed={theme === "light"}
 				aria-label="Light mode"
-				className={`flex items-center justify-center w-8 h-8 transition-colors ${
+				className={`flex items-center justify-center w-9 h-9 transition-colors ${
 					theme === "light"
 						? "bg-hyper-green text-carbon"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"
@@ -42,7 +42,7 @@ export function ThemeToggle() {
 				onClick={() => handleToggle("dark")}
 				aria-pressed={theme === "dark"}
 				aria-label="Dark mode"
-				className={`flex items-center justify-center w-8 h-8 transition-colors ${
+				className={`flex items-center justify-center w-9 h-9 transition-colors ${
 					theme === "dark"
 						? "bg-hyper-green text-carbon"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"

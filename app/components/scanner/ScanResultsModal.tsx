@@ -395,6 +395,7 @@ function ScanResultItemRow({
 						<label className="text-xs text-muted block mb-1">Item Name</label>
 						<input
 							type="text"
+							inputMode="text"
 							value={editedItem.name}
 							onChange={(e) =>
 								setEditedItem({ ...editedItem, name: e.target.value })
@@ -412,6 +413,7 @@ function ScanResultItemRow({
 						<input
 							id="edit-quantity"
 							type="number"
+							inputMode="decimal"
 							value={editedItem.quantity}
 							onChange={(e) =>
 								setEditedItem({

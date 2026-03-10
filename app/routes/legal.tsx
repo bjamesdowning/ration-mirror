@@ -17,13 +17,13 @@ export default function LegalLayout() {
 					<nav className="flex gap-6 text-sm">
 						<Link
 							to="/legal/terms"
-							className="text-muted hover:text-hyper-green transition-colors"
+							className="text-muted hover:text-hyper-green transition-colors py-2"
 						>
 							Terms
 						</Link>
 						<Link
 							to="/legal/privacy"
-							className="text-muted hover:text-hyper-green transition-colors"
+							className="text-muted hover:text-hyper-green transition-colors py-2"
 						>
 							Privacy
 						</Link>

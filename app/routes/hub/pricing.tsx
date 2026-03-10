@@ -379,136 +379,140 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 
 			{/* Feature matrix */}
 			<div className="glass-panel rounded-2xl overflow-hidden">
-				<table className="w-full text-sm">
-					<thead>
-						<tr className="border-b border-carbon/10">
-							<th className="text-left p-4 text-muted font-normal">Feature</th>
-							<th className="p-4 text-center text-carbon font-semibold w-28">
-								Free
-							</th>
-							<th className="p-4 text-center text-hyper-green font-semibold w-28">
-								Crew
-							</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-carbon/5">
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Cargo
-							</td>
-						</tr>
-						<FeatureRow
-							label="Cargo items"
-							free={`${loaderData.tierLimits.free.maxInventoryItems}`}
-							crew="Unlimited"
-						/>
-						<FeatureRow label="Manual item entry" free crew />
-						<FeatureRow label="CSV/TSV bulk import" free crew />
-						<FeatureRow label="Expiry alerts & domain filters" free crew />
-						<FeatureRow label="Semantic search & smart filters" free crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Galley
-							</td>
-						</tr>
-						<FeatureRow
-							label="Meals & provisions"
-							free={`${loaderData.tierLimits.free.maxMeals}`}
-							crew="Unlimited"
-						/>
-						<FeatureRow label="Match Mode (vector matching)" free crew />
-						<FeatureRow label="Promote Cargo to provisions" free crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Manifest
-							</td>
-						</tr>
-						<FeatureRow label="Weekly meal calendar" free crew />
-						<FeatureRow label="Consume & auto-deduct" free crew />
-						<FeatureRow label="Share manifest via link" crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Supply
-							</td>
-						</tr>
-						<FeatureRow
-							label="Auto-generate from Galley & Manifest"
-							free
-							crew
-						/>
-						<FeatureRow label="Dock Cargo (list → inventory)" free crew />
-						<FeatureRow label="Export (text, markdown, CSV)" free crew />
-						<FeatureRow label="Share via public link" crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								AI (via credits)
-							</td>
-						</tr>
-						<FeatureRow label="Photo & receipt scanning" free crew />
-						<FeatureRow label="Meal import via URL" free crew />
-						<FeatureRow label="AI meal generation" free crew />
-						<FeatureRow label="AI weekly meal planning" free crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Collaboration
-							</td>
-						</tr>
-						<FeatureRow
-							label="Groups"
-							free={`${loaderData.tierLimits.free.maxOwnedGroups}`}
-							crew={`${loaderData.tierLimits.crew_member.maxOwnedGroups}`}
-						/>
-						<FeatureRow label="Member invites" crew />
-						<FeatureRow label="Shared Cargo & Galley" crew />
-						<FeatureRow label="Credit transfer between groups" crew />
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Credits
-							</td>
-						</tr>
-						<FeatureRow label="Purchase credit packs" free crew />
-						<FeatureRow
-							label="Yearly credits included"
-							free={false}
-							crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
-						/>
-						<tr className="bg-carbon/[0.02]">
-							<td
-								colSpan={3}
-								className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
-							>
-								Integrations
-							</td>
-						</tr>
-						<FeatureRow
-							label="REST API (inventory, galley, supply)"
-							free
-							crew
-						/>
-						<FeatureRow label="MCP Server (AI agent access)" free crew />
-					</tbody>
-				</table>
+				<div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+					<table className="w-full min-w-[32rem] text-sm">
+						<thead>
+							<tr className="border-b border-carbon/10">
+								<th className="text-left p-4 text-muted font-normal">
+									Feature
+								</th>
+								<th className="p-4 text-center text-carbon font-semibold w-28">
+									Free
+								</th>
+								<th className="p-4 text-center text-hyper-green font-semibold w-28">
+									Crew
+								</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-carbon/5">
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Cargo
+								</td>
+							</tr>
+							<FeatureRow
+								label="Cargo items"
+								free={`${loaderData.tierLimits.free.maxInventoryItems}`}
+								crew="Unlimited"
+							/>
+							<FeatureRow label="Manual item entry" free crew />
+							<FeatureRow label="CSV/TSV bulk import" free crew />
+							<FeatureRow label="Expiry alerts & domain filters" free crew />
+							<FeatureRow label="Semantic search & smart filters" free crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Galley
+								</td>
+							</tr>
+							<FeatureRow
+								label="Meals & provisions"
+								free={`${loaderData.tierLimits.free.maxMeals}`}
+								crew="Unlimited"
+							/>
+							<FeatureRow label="Match Mode (vector matching)" free crew />
+							<FeatureRow label="Promote Cargo to provisions" free crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Manifest
+								</td>
+							</tr>
+							<FeatureRow label="Weekly meal calendar" free crew />
+							<FeatureRow label="Consume & auto-deduct" free crew />
+							<FeatureRow label="Share manifest via link" crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Supply
+								</td>
+							</tr>
+							<FeatureRow
+								label="Auto-generate from Galley & Manifest"
+								free
+								crew
+							/>
+							<FeatureRow label="Dock Cargo (list → inventory)" free crew />
+							<FeatureRow label="Export (text, markdown, CSV)" free crew />
+							<FeatureRow label="Share via public link" crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									AI (via credits)
+								</td>
+							</tr>
+							<FeatureRow label="Photo & receipt scanning" free crew />
+							<FeatureRow label="Meal import via URL" free crew />
+							<FeatureRow label="AI meal generation" free crew />
+							<FeatureRow label="AI weekly meal planning" free crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Collaboration
+								</td>
+							</tr>
+							<FeatureRow
+								label="Groups"
+								free={`${loaderData.tierLimits.free.maxOwnedGroups}`}
+								crew={`${loaderData.tierLimits.crew_member.maxOwnedGroups}`}
+							/>
+							<FeatureRow label="Member invites" crew />
+							<FeatureRow label="Shared Cargo & Galley" crew />
+							<FeatureRow label="Credit transfer between groups" crew />
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Credits
+								</td>
+							</tr>
+							<FeatureRow label="Purchase credit packs" free crew />
+							<FeatureRow
+								label="Yearly credits included"
+								free={false}
+								crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
+							/>
+							<tr className="bg-carbon/[0.02]">
+								<td
+									colSpan={3}
+									className="px-4 py-2 text-xs uppercase tracking-wider text-muted font-semibold"
+								>
+									Integrations
+								</td>
+							</tr>
+							<FeatureRow
+								label="REST API (inventory, galley, supply)"
+								free
+								crew
+							/>
+							<FeatureRow label="MCP Server (AI agent access)" free crew />
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	);

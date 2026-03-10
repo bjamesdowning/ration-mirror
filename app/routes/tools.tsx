@@ -86,7 +86,7 @@ export default function ToolsIndex() {
 							Tools
 						</Link>
 						<Link
-							to="/hub/pricing"
+							to="/#pricing"
 							className="text-muted hover:text-hyper-green transition-colors"
 						>
 							Pricing

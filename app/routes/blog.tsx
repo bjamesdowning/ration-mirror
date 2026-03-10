@@ -65,7 +65,7 @@ export default function BlogIndex({ loaderData }: Route.ComponentProps) {
 							Tools
 						</Link>
 						<Link
-							to="/hub/pricing"
+							to="/#pricing"
 							className="text-muted hover:text-hyper-green transition-colors"
 						>
 							Pricing

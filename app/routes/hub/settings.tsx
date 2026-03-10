@@ -1542,6 +1542,20 @@ function HelpSection() {
 				</div>
 
 				<div>
+					<h3 className="text-xs text-label text-muted mb-1">Blog</h3>
+					<p className="text-sm text-muted mb-3">
+						Tips, guides, and how-tos — including using Ration with Claude and
+						Cursor via MCP.
+					</p>
+					<Link
+						to="/blog"
+						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+					>
+						Visit blog
+					</Link>
+				</div>
+
+				<div>
 					<h3 className="text-xs text-label text-muted mb-1">Tutorial</h3>
 					<p className="text-sm text-muted mb-4">
 						Replay the onboarding tour to revisit the Ration workflow and

@@ -33,17 +33,7 @@ export default function LegalLayout() {
 
 			{/* Content Container */}
 			<main className="max-w-4xl mx-auto px-6 py-12">
-				<article
-					className="prose prose-gray max-w-none 
-            prose-headings:text-carbon prose-headings:font-bold
-            prose-h1:text-display prose-h1:text-3xl prose-h1:mb-8 prose-h1:border-b prose-h1:border-carbon/10 prose-h1:pb-4
-            prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4
-            prose-h3:text-lg prose-h3:mt-6 prose-h3:mb-3
-            prose-a:text-hyper-green prose-a:no-underline hover:prose-a:underline
-            prose-strong:text-carbon
-            prose-ul:my-4 prose-li:my-1
-            text-muted leading-relaxed"
-				>
+				<article className="prose-article max-w-none">
 					<Outlet />
 				</article>
 			</main>

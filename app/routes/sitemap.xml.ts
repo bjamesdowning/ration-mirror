@@ -1,6 +1,6 @@
 import type { Route } from "./+types/sitemap.xml";
 
-const INDEXABLE_PATHS = ["/", "/legal/terms", "/legal/privacy"] as const;
+const STATIC_PATHS = ["/", "/legal/terms", "/legal/privacy", "/blog"] as const;
 
 /**
  * sitemap.xml — Serves indexable URLs for crawler discovery.
@@ -9,10 +9,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const origin = url.origin;
 
-	const urls = INDEXABLE_PATHS.map(
-		(path) =>
-			`  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.8"}</priority></url>`,
-	).join("\n");
+	const { getAllSlugs } = await import("~/lib/blog.server");
+	const blogSlugs = getAllSlugs();
+	const blogPaths = blogSlugs.map((slug) => `/blog/${slug}`);
+	const allPaths = [...STATIC_PATHS, ...blogPaths];
+
+	const urlEntries = allPaths.map((path) => {
+		const priority = path === "/" ? "1.0" : path === "/blog" ? "0.9" : "0.8";
+		return `  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${priority}</priority></url>`;
+	});
+	const urls = urlEntries.join("\n");
 
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

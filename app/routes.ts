@@ -38,6 +38,10 @@ export default [
 	// Admin
 	route("admin", "routes/admin.tsx"),
 
+	// Blog
+	route("blog", "routes/blog.tsx"),
+	route("blog/:slug", "routes/blog.$slug.tsx"),
+
 	// Shared (public) routes
 	route("shared/:token", "routes/shared.$token.tsx"),
 	route("shared/manifest/:token", "routes/shared.manifest.$token.tsx"),

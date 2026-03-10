@@ -44,6 +44,16 @@
 			"formatter": {
 				"enabled": false
 			}
+		},
+		{
+			"includes": ["app/components/blog/JsonLd.tsx"],
+			"linter": {
+				"rules": {
+					"security": {
+						"noDangerouslySetInnerHtml": "off"
+					}
+				}
+			}
 		}
 	]
 }

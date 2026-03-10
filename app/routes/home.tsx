@@ -1,5 +1,6 @@
 import type { Route } from "./+types/home";
 import "../../load-context";
+import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
@@ -41,6 +42,76 @@ export function meta(_: Route.MetaArgs) {
 		{ name: "description", content: description },
 		...ogMeta({ title, description, path: "/" }),
 	];
+}
+
+function MobileNav() {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="flex md:hidden">
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				aria-label={open ? "Close menu" : "Open menu"}
+				aria-expanded={open}
+				className="p-2 -m-2 text-muted hover:text-carbon transition-colors rounded-lg"
+			>
+				{open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+			</button>
+			{open && (
+				<>
+					<div
+						className="fixed inset-0 z-40 bg-carbon/20 backdrop-blur-sm md:hidden"
+						aria-hidden
+						onClick={() => setOpen(false)}
+					/>
+					<nav
+						className="absolute right-0 top-full mt-0 w-full max-w-xs sm:max-w-sm py-4 px-4 bg-ceramic border border-carbon/10 border-t-0 rounded-b-xl shadow-lg z-50 md:hidden"
+						aria-label="Mobile navigation"
+					>
+						<div className="flex flex-col gap-1">
+							<Link
+								to="/blog"
+								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors"
+								onClick={() => setOpen(false)}
+							>
+								Blog
+							</Link>
+							<Link
+								to="/#pricing"
+								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors block"
+								onClick={() => setOpen(false)}
+							>
+								Pricing
+							</Link>
+							<a
+								href="https://ration.mayutic.com/legal/terms"
+								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors"
+								onClick={() => setOpen(false)}
+							>
+								Terms
+							</a>
+							<a
+								href="https://ration.mayutic.com/legal/privacy"
+								className="py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors"
+								onClick={() => setOpen(false)}
+							>
+								Privacy
+							</a>
+							<div className="flex items-center gap-2 py-3 px-3 mt-2 pt-4 border-t border-carbon/10">
+								<span
+									className="w-1.5 h-1.5 rounded-full bg-hyper-green animate-pulse shrink-0"
+									aria-hidden
+								/>
+								<span className="text-xs font-bold uppercase tracking-wider text-carbon">
+									Live · v{APP_VERSION}
+								</span>
+							</div>
+						</div>
+					</nav>
+				</>
+			)}
+		</div>
+	);
 }
 
 function FeatureRow({
@@ -129,18 +200,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* Header — nav + legal links for Google OAuth verification */}
-			<header className="relative z-50 flex items-center justify-between px-6 py-3 border-b border-carbon/10 bg-ceramic">
+			<header className="relative z-50 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-carbon/10 bg-ceramic">
 				<Link to="/" className="shrink-0">
 					<img
 						src="/static/ration-logo.svg"
 						alt="Ration"
-						className="h-8 md:h-9 w-auto"
+						className="h-7 sm:h-8 md:h-9 w-auto"
 					/>
 				</Link>
+
+				{/* Desktop nav — hidden on mobile */}
 				<nav
-					className="flex items-center gap-4 md:gap-6 text-sm text-muted"
+					className="hidden md:flex items-center gap-4 lg:gap-6 text-sm text-muted"
 					aria-label="Site navigation"
 				>
+					<Link to="/blog" className="hover:text-hyper-green transition-colors">
+						Blog
+					</Link>
 					<a
 						href="#pricing"
 						className="hover:text-hyper-green transition-colors"
@@ -170,6 +246,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						Live · v{APP_VERSION}
 					</span>
 				</nav>
+
+				{/* Mobile: hamburger menu */}
+				<MobileNav />
 			</header>
 
 			<main className="flex-1 w-full relative z-20">

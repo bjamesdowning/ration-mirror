@@ -20,15 +20,41 @@ import type { Route } from "./+types/hub";
 
 export function shouldRevalidate({
 	nextUrl,
+	formAction,
 	defaultShouldRevalidate,
 }: {
 	nextUrl: URL;
+	formAction?: string;
 	defaultShouldRevalidate: boolean;
 }) {
-	// Force layout revalidation when returning from checkout so tier/capacity reflect the purchase
-	if (nextUrl.searchParams.get("transaction") === "success") {
-		return true;
-	}
+	// Always revalidate after checkout so tier/credits update immediately.
+	if (nextUrl.searchParams.get("transaction") === "success") return true;
+
+	// Settings, checkout, webhooks, and AI-credit endpoints must always revalidate
+	// because they mutate balance, tier, logo, or onboarding state that the hub
+	// shell displays.
+	const alwaysRevalidate = [
+		"/hub/settings",
+		"/hub/checkout/return",
+		"/api/checkout",
+		"/api/webhook",
+		"/api/scan",
+		"/api/meals/generate",
+		"/api/meals/import",
+	];
+	if (alwaysRevalidate.some((p) => formAction?.startsWith(p))) return true;
+
+	// Cargo, supply, galley, and manifest form actions cannot change shell-visible
+	// state (org logo, tier, credit balance, onboarding step). Suppress the hub
+	// loader re-run to avoid the redundant auth + KV round-trips on every CRUD action.
+	const suppressRoutes = [
+		"/hub/cargo",
+		"/hub/supply",
+		"/hub/galley",
+		"/hub/manifest",
+	];
+	if (suppressRoutes.some((p) => formAction?.startsWith(p))) return false;
+
 	return defaultShouldRevalidate;
 }
 

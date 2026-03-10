@@ -34,7 +34,7 @@ import {
 	requireActiveGroup,
 } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
-import { getCargo, getCargoTags } from "~/lib/cargo.server";
+import { getCargoTagIndex, getCargoTags } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
@@ -53,6 +53,34 @@ import {
 } from "~/lib/telemetry.server";
 import type { Route } from "./+types/supply";
 
+/** Skip revalidation when only domain/tag filters change — Supply filters are client-side only. */
+export function shouldRevalidate({
+	currentUrl,
+	nextUrl,
+	defaultShouldRevalidate,
+	formAction,
+}: {
+	currentUrl: URL;
+	nextUrl: URL;
+	defaultShouldRevalidate: boolean;
+	formAction?: string;
+}) {
+	// Form submissions (actions) should always revalidate
+	if (formAction) return defaultShouldRevalidate;
+	// Same path — check if only cosmetic params changed
+	if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
+	const currentKeys = new Set(currentUrl.searchParams.keys());
+	const nextKeys = new Set(nextUrl.searchParams.keys());
+	const allKeys = new Set([...currentKeys, ...nextKeys]);
+	for (const key of allKeys) {
+		if (key === "domain" || key === "tag") continue;
+		if (currentUrl.searchParams.get(key) !== nextUrl.searchParams.get(key)) {
+			return defaultShouldRevalidate;
+		}
+	}
+	return false;
+}
+
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { groupId, session } = await requireActiveGroup(context, request);
 
@@ -69,7 +97,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	] = await Promise.all([
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
-		getCargo(context.cloudflare.env.DB, groupId, undefined, { limit: 500 }),
+		getCargoTagIndex(context.cloudflare.env.DB, groupId),
 		getCargoTags(context.cloudflare.env.DB, groupId),
 		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
@@ -234,13 +262,27 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		snoozes = [],
 		supplyUnitMode,
 	} = loaderData;
-	const fetcher = useFetcher(); // For update list
+	type SyncResult = {
+		list?: typeof list;
+		summary?: {
+			addedItems: number;
+			skippedItems: number;
+			mealsProcessed: number;
+			totalIngredients: number;
+		};
+	};
+	const fetcher = useFetcher<SyncResult>(); // For update list
 	const dockFetcher = useFetcher(); // For docking
 	const unitModeFetcher = useFetcher<{
 		success?: boolean;
 		mode?: "cooking" | "metric" | "imperial";
+		list?: typeof list;
 	}>();
 	const revalidator = useRevalidator();
+
+	// Prefer the fresh list returned by the most recent sync/unit-mode action so
+	// the page updates immediately without an extra loader round-trip.
+	const displayList = unitModeFetcher.data?.list ?? fetcher.data?.list ?? list;
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -263,8 +305,8 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 	// Local Search Logic (matches Cargo/Galley pattern)
 	const filteredItems = useMemo(() => {
-		if (!list?.items) return [];
-		let items = list.items;
+		if (!displayList?.items) return [];
+		let items = displayList.items;
 
 		// Filter by Domain
 		if (activeDomain !== "all") {
@@ -305,7 +347,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		}
 
 		return items;
-	}, [list?.items, searchQuery, activeDomain, currentTag, cargo]);
+	}, [displayList?.items, searchQuery, activeDomain, currentTag, cargo]);
 
 	// Filter content for mobile sheet
 	const filterContent = (
@@ -397,10 +439,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const isDocking = dockFetcher.state !== "idle";
 
 	// Calculate purchased count for Dock button state
-	const purchasedCount = list?.items?.filter((i) => i.isPurchased).length || 0;
+	const purchasedCount =
+		displayList?.items?.filter((i) => i.isPurchased).length || 0;
 
 	const handleDockCargo = async () => {
-		if (!list) return;
+		if (!displayList) return;
 		if (purchasedCount === 0) return;
 		if (
 			!(await confirm({
@@ -413,15 +456,15 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			return;
 
 		dockFetcher.submit(
-			{ intent: "dock-cargo", listId: list.id },
+			{ intent: "dock-cargo", listId: displayList.id },
 			{ method: "POST" },
 		);
 	};
 
-	// One-time background sync when page loads with selected meals or Manifest week entries
-	// (keeps list fresh without heavy work in loader)
+	// One-time background sync when page loads with active selections or manifest entries.
+	// The action returns { list } so the component re-renders from fetcher.data directly —
+	// no second revalidator.revalidate() call needed.
 	const hasTriggeredSync = useRef(false);
-	const hasRevalidatedAfterSync = useRef(false);
 	useEffect(() => {
 		if (
 			(activeSelectionCount === 0 && manifestWeekMealCount === 0) ||
@@ -430,7 +473,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		)
 			return;
 		hasTriggeredSync.current = true;
-		hasRevalidatedAfterSync.current = false;
 		const formData = new FormData();
 		formData.set("intent", "update-list");
 		formData.set("syncSource", "background");
@@ -441,17 +483,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		fetcher.state,
 		fetcher.submit,
 	]);
-	useEffect(() => {
-		if (
-			fetcher.state === "idle" &&
-			hasTriggeredSync.current &&
-			fetcher.data?.list &&
-			!hasRevalidatedAfterSync.current
-		) {
-			hasRevalidatedAfterSync.current = true;
-			revalidator.revalidate();
-		}
-	}, [fetcher.state, fetcher.data?.list, revalidator]);
 
 	// Show summary toast when auto-update or manual update occurs with new items?
 	useEffect(() => {
@@ -506,7 +537,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				hasActiveFilters={hasActiveFilters}
 				onFilterOpenChange={setIsFilterSheetOpen}
 			/>
-			{!list ? (
+			{!displayList ? (
 				<EmptyPanel
 					icon={<ShoppingCartIcon className="w-12 h-12 text-muted" />}
 					title="No Supply List"
@@ -515,6 +546,16 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				/>
 			) : (
 				<div className="space-y-6 pb-36 md:pb-0">
+					{/* Sync status banner — visible during background or manual list update */}
+					{fetcher.state !== "idle" && (
+						<output
+							className="flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green text-sm font-medium"
+							aria-live="polite"
+						>
+							<span className="animate-pulse">●</span>
+							Updating list from your meal plan...
+						</output>
+					)}
 					<div className="hidden md:block">
 						<PanelToolbar
 							primaryAction={
@@ -579,7 +620,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							}
 							secondaryAction={
 								<div className="flex gap-2">
-									<ExportMenu listId={list.id} />
+									<ExportMenu listId={displayList.id} />
 									<button
 										type="button"
 										onClick={() => setShowShareModal(true)}
@@ -595,7 +636,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
 							quickAddForm={
 								<AddItemForm
-									listId={list.id}
+									listId={displayList.id}
 									defaultDomain={activeDomain === "all" ? "food" : activeDomain}
 									onAdd={() => revalidator.revalidate()}
 								/>
@@ -607,7 +648,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					{showQuickAdd && (
 						<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 							<AddItemForm
-								listId={list.id}
+								listId={displayList.id}
 								defaultDomain={activeDomain === "all" ? "food" : activeDomain}
 								onAdd={() => {
 									revalidator.revalidate();
@@ -630,8 +671,8 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					{/* Supply List Content */}
 					{!(filteredItems.length === 0 && searchQuery) && (
 						<SupplyList
-							key={list.id}
-							list={{ ...list, items: filteredItems }}
+							key={displayList.id}
+							list={{ ...displayList, items: filteredItems }}
 							filterDomain="all"
 							filterSearch=""
 							onRefresh={() => revalidator.revalidate()}
@@ -642,7 +683,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					{snoozes.length > 0 && (
 						<SnoozedItemsPanel
 							snoozes={snoozes}
-							listId={list.id}
+							listId={displayList.id}
 							onUnsnooze={() => revalidator.revalidate()}
 						/>
 					)}
@@ -683,10 +724,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
 
 			{/* Share Modal */}
-			{showShareModal && list && (
+			{showShareModal && displayList && (
 				<ShareModal
-					listId={list.id}
-					existingShareToken={list.shareToken}
+					listId={displayList.id}
+					existingShareToken={displayList.shareToken}
 					onClose={() => setShowShareModal(false)}
 					onUpgradeRequired={() => setShowUpgradePrompt(true)}
 				/>

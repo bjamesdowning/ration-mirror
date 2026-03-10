@@ -74,6 +74,7 @@ export default [
 	route("api/provisions/:id", "routes/api/provisions.$id.ts"),
 
 	// API - Cargo (static paths before :id)
+	route("api/cargo", "routes/api/cargo.ts"),
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
 

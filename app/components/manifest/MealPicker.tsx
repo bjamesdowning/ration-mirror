@@ -8,6 +8,8 @@ interface MealPickerProps {
 	dayLabel: string;
 	slot: SlotType;
 	meals: MealForPicker[];
+	/** True while the meal list is being fetched on first open. */
+	isLoading?: boolean;
 	onSelect: (meal: MealForPicker, servingsOverride?: number) => void;
 	onClose: () => void;
 }
@@ -16,6 +18,7 @@ export function MealPicker({
 	dayLabel,
 	slot,
 	meals,
+	isLoading = false,
 	onSelect,
 	onClose,
 }: MealPickerProps) {
@@ -103,7 +106,11 @@ export function MealPicker({
 
 					{/* Meal list */}
 					<div className="flex-1 overflow-y-auto px-3 pb-2">
-						{filtered.length === 0 ? (
+						{isLoading ? (
+							<p className="text-center text-sm text-muted py-8 animate-pulse">
+								Loading meals...
+							</p>
+						) : filtered.length === 0 ? (
 							<p className="text-center text-sm text-muted py-8">
 								{query
 									? "No meals match your search"

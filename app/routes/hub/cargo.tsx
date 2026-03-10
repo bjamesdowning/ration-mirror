@@ -73,6 +73,31 @@ const CreateMergeIntentSchema = z
 
 const CARGO_PAGE_SIZE = 200;
 
+/** Skip revalidation when only tag filter changes — Cargo tag filter is client-side; domain and page are server-consumed. */
+export function shouldRevalidate({
+	currentUrl,
+	nextUrl,
+	defaultShouldRevalidate,
+	formAction,
+}: {
+	currentUrl: URL;
+	nextUrl: URL;
+	defaultShouldRevalidate: boolean;
+	formAction?: string;
+}) {
+	if (formAction) return defaultShouldRevalidate;
+	if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
+	// If domain or page changed, we must revalidate (server-consumed)
+	if (
+		currentUrl.searchParams.get("domain") !== nextUrl.searchParams.get("domain")
+	)
+		return defaultShouldRevalidate;
+	if (currentUrl.searchParams.get("page") !== nextUrl.searchParams.get("page"))
+		return defaultShouldRevalidate;
+	// Only tag changed — client-side filter, skip revalidation
+	return false;
+}
+
 // --- LOADER ---
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);

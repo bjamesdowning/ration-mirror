@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useRouteLoaderData } from "react-router";
+import { useNavigate, useRevalidator, useRouteLoaderData } from "react-router";
 import { DiamondIcon } from "~/components/icons/PageIcons";
 import { GroupAvatar } from "~/components/shell/GroupAvatar";
 import { authClient } from "~/lib/auth-client";
@@ -10,7 +10,9 @@ export function GroupSwitcher() {
 	const session = authClient.useSession();
 	const organizations = authClient.useListOrganizations();
 	const navigate = useNavigate();
+	const revalidator = useRevalidator();
 	const [isOpen, setIsOpen] = useState(false);
+	const [isSwitching, setIsSwitching] = useState(false);
 	const [menuPos, setMenuPos] = useState<{
 		top: number;
 		left?: number;
@@ -83,12 +85,18 @@ export function GroupSwitcher() {
 	};
 
 	const handleSwitch = async (orgId: string) => {
+		if (orgId === activeOrgId) return;
 		handleClose();
-		await authClient.organization.setActive({
-			organizationId: orgId,
-		});
-		// Reload to ensure all server loaders re-run with new context
-		window.location.reload();
+		setIsSwitching(true);
+		try {
+			await authClient.organization.setActive({
+				organizationId: orgId,
+			});
+			navigate("/hub", { replace: true });
+			revalidator.revalidate();
+		} finally {
+			setIsSwitching(false);
+		}
 	};
 
 	const dropdownContent =
@@ -191,11 +199,13 @@ export function GroupSwitcher() {
 				ref={buttonRef}
 				type="button"
 				onClick={handleOpen}
+				disabled={isSwitching}
 				aria-expanded={isOpen}
 				aria-haspopup="true"
+				aria-busy={isSwitching}
 				aria-label={`${displayName}, ${credits} credits`}
 				title={displayName}
-				className="flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10 min-w-0"
+				className="flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10 min-w-0 disabled:opacity-70 disabled:cursor-wait"
 			>
 				{/* Mobile: avatar only; Desktop: full name */}
 				<div className="hidden md:flex items-center gap-2 min-w-0 flex-1">
@@ -203,7 +213,7 @@ export function GroupSwitcher() {
 						className="text-sm font-bold text-carbon leading-none max-w-[160px] truncate"
 						title={displayName}
 					>
-						{displayName}
+						{isSwitching ? "Switching..." : displayName}
 					</span>
 				</div>
 				<div className="md:hidden shrink-0" aria-hidden>

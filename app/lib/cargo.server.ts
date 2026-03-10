@@ -108,6 +108,25 @@ export async function getCargo(
 }
 
 /**
+ * Narrow tag-index fetch: returns only `id`, `name`, and `tags` for every
+ * cargo item belonging to the organisation. Used by Supply's tag filter which
+ * needs to cross-reference cargo item names against their tags but has no
+ * need for quantity, unit, domain, or timestamps. ~60 % smaller payload than
+ * a full getCargo() call.
+ */
+export async function getCargoTagIndex(
+	db: D1Database,
+	organizationId: string,
+): Promise<{ id: string; name: string; tags: unknown }[]> {
+	const d1 = drizzle(db);
+	return d1
+		.select({ id: cargo.id, name: cargo.name, tags: cargo.tags })
+		.from(cargo)
+		.where(eq(cargo.organizationId, organizationId))
+		.orderBy(asc(cargo.name));
+}
+
+/**
  * Count inventory items for an organization, optionally filtered by domain.
  * Used for pagination total.
  */

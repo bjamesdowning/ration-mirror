@@ -34,6 +34,7 @@ function NavItem({
 		<NavLink
 			to={to}
 			end={to === "/hub"}
+			prefetch="intent"
 			className={({ isActive }) =>
 				`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg transition-colors ${
 					isActive ? "text-hyper-green" : "text-muted"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { meal } from "~/db/schema";
 import type { AllergenSlug } from "~/lib/allergens";
 import { log } from "~/lib/logging.client";
@@ -58,43 +58,60 @@ export function MealGrid({
 	);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const abortRef = useRef<AbortController | null>(null);
 
-	// Fetch match results when mode or minMatch changes
+	// Fetch match results when mode or minMatch changes (debounced, cancellable)
 	useEffect(() => {
 		if (!enableMatching) return;
 
-		const fetchMatches = async () => {
-			setIsLoading(true);
-			setError(null);
+		debounceRef.current = setTimeout(() => {
+			debounceRef.current = null;
+			abortRef.current?.abort();
+			abortRef.current = new AbortController();
+			const signal = abortRef.current.signal;
 
-			try {
-				const params = new URLSearchParams({
-					mode: matchMode,
-					minMatch: minMatch.toString(),
-					limit: "50",
-				});
+			const fetchMatches = async () => {
+				setIsLoading(true);
+				setError(null);
 
-				const response = await fetch(`/api/meals/match?${params}`);
-				const data = (await response.json()) as {
-					results: MealMatchResult[];
-					error?: string;
-					cached?: boolean;
-				};
+				try {
+					const params = new URLSearchParams({
+						mode: matchMode,
+						minMatch: minMatch.toString(),
+						limit: "50",
+					});
 
-				if (!response.ok) {
-					throw new Error(data.error || "Failed to fetch matches");
+					const response = await fetch(`/api/meals/match?${params}`, {
+						signal,
+					});
+					const data = (await response.json()) as {
+						results: MealMatchResult[];
+						error?: string;
+						cached?: boolean;
+					};
+
+					if (!response.ok) {
+						throw new Error(data.error || "Failed to fetch matches");
+					}
+
+					setMatchResults(data.results);
+				} catch (err) {
+					if (err instanceof Error && err.name === "AbortError") return;
+					log.error("Match fetch error", err);
+					setError(err instanceof Error ? err.message : "Unknown error");
+				} finally {
+					if (!signal.aborted) setIsLoading(false);
 				}
+			};
 
-				setMatchResults(data.results);
-			} catch (err) {
-				log.error("Match fetch error", err);
-				setError(err instanceof Error ? err.message : "Unknown error");
-			} finally {
-				setIsLoading(false);
-			}
+			fetchMatches();
+		}, 200);
+
+		return () => {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+			abortRef.current?.abort();
 		};
-
-		fetchMatches();
 	}, [matchMode, minMatch, enableMatching]);
 
 	if (meals.length === 0) {
@@ -169,13 +186,6 @@ export function MealGrid({
 					</div>
 				</div>
 
-				{/* Loading State */}
-				{isLoading && (
-					<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
-						<p className="animate-pulse">Processing match query...</p>
-					</div>
-				)}
-
 				{/* Error State */}
 				{error && (
 					<div className="bg-danger/10 rounded-xl p-4 text-danger text-sm">
@@ -183,9 +193,27 @@ export function MealGrid({
 					</div>
 				)}
 
-				{/* Match Results */}
-				{!isLoading && matchResults && (
-					<>
+				{/* Initial loading state when no results yet */}
+				{isLoading && !matchResults && (
+					<div className="bg-platinum/50 rounded-xl p-8 text-center text-muted">
+						<p className="animate-pulse">Processing match query...</p>
+					</div>
+				)}
+
+				{/* Match Results — preserve previous results while loading, show overlay */}
+				{matchResults && (
+					<div
+						className={
+							isLoading ? "relative opacity-75 pointer-events-none" : ""
+						}
+					>
+						{isLoading && (
+							<div className="absolute inset-0 flex items-center justify-center z-10 bg-ceramic/60 rounded-xl">
+								<span className="text-sm text-muted animate-pulse">
+									Updating matches...
+								</span>
+							</div>
+						)}
 						<div className="text-sm text-muted">
 							Found {matchResults.length} matching meals
 						</div>
@@ -242,7 +270,7 @@ export function MealGrid({
 								))}
 							</div>
 						)}
-					</>
+					</div>
 				)}
 
 				{!isLoading && matchResults?.length === 0 && (

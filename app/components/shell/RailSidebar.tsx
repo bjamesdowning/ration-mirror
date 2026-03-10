@@ -24,6 +24,7 @@ export function RailSidebar() {
 						key={item.to}
 						to={item.to}
 						end={item.to === "/hub"}
+						prefetch="intent"
 						className={({ isActive }) =>
 							`w-14 h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
 								isActive

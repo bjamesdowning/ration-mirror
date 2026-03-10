@@ -44,7 +44,6 @@ import type {
 } from "~/lib/manifest.server";
 import {
 	ensureMealPlan,
-	getMealsForPicker,
 	getTodayISO,
 	getTriggeredAllergens,
 	getWeekEntries,
@@ -90,11 +89,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	const userAllergens = parseAllergens(settings.allergens);
 
-	const [plan, meals, credits] = await Promise.all([
+	const [plan, credits] = await Promise.all([
 		ensureMealPlan(db, groupId),
-		getMealsForPicker(db, groupId),
 		checkBalance(context.cloudflare.env, groupId),
 	]);
+
+	// Picker meals (MealForPicker[]) are loaded on-demand from /api/meals when
+	// the user opens the picker — not eagerly here. This removes an N+1 tag
+	// query and the full meal list payload from every Manifest page load.
 
 	const entries = await getWeekEntries(
 		db,
@@ -106,15 +108,46 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// Build a per-meal allergen map for the scheduled entries so slot cards
 	// can display warnings without a per-card API call.
 	const scheduledMealIds = [...new Set(entries.map((e) => e.mealId))];
-	const [triggeredAllergensByMealId, readyMealIds] = await Promise.all([
-		getTriggeredAllergens(db, scheduledMealIds, userAllergens),
-		checkMealReadiness(context.cloudflare.env, groupId, scheduledMealIds),
-	]);
+
+	// KV-cache readiness results for 5 minutes. The cache key encodes the group,
+	// the visible week range, and a cheap hash of the scheduled meal IDs so the
+	// result is invalidated automatically whenever the set of scheduled meals
+	// changes or a new week is viewed.
+	let readyMealIds: Record<string, boolean> = {};
+	if (scheduledMealIds.length > 0) {
+		const idsHash =
+			scheduledMealIds
+				.slice()
+				.sort()
+				.join(",")
+				.split("")
+				.reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0) >>> 0;
+		const kvKey = `manifest-ready:${groupId}:${currentRangeStart}:${idsHash}`;
+		const kv = context.cloudflare.env.RATION_KV;
+		const cached = await kv.get<Record<string, boolean>>(kvKey, "json");
+		if (cached) {
+			readyMealIds = cached;
+		} else {
+			readyMealIds = await checkMealReadiness(
+				context.cloudflare.env,
+				groupId,
+				scheduledMealIds,
+			);
+			await kv.put(kvKey, JSON.stringify(readyMealIds), {
+				expirationTtl: 300,
+			});
+		}
+	}
+
+	const triggeredAllergensByMealId = await getTriggeredAllergens(
+		db,
+		scheduledMealIds,
+		userAllergens,
+	);
 
 	return {
 		plan,
 		entries,
-		meals,
 		today,
 		currentRangeStart,
 		currentRangeEnd,
@@ -143,7 +176,6 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const {
 		plan,
 		entries,
-		meals,
 		today,
 		currentRangeStart,
 		currentRangeEnd,
@@ -156,6 +188,13 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		triggeredAllergensByMealId,
 		readyMealIds,
 	} = loaderData;
+
+	// Picker meals are fetched on-demand from /api/meals when the picker opens.
+	// The fetcher result is cached for the component lifetime so subsequent
+	// picker opens reuse the already-loaded list.
+	const pickerFetcher = useFetcher<{ meals: MealForPicker[] }>();
+	const pickerMeals = (pickerFetcher.data?.meals ?? []) as MealForPicker[];
+	const pickerMealsLoading = pickerFetcher.state !== "idle";
 
 	const [searchParams] = useSearchParams();
 
@@ -199,6 +238,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		setPickerSlot(slot);
 		setPickerDate(date);
 		setPickerOpen(true);
+		// Load picker meals on first open; subsequent opens reuse cached data.
+		if (!pickerFetcher.data && pickerFetcher.state === "idle") {
+			pickerFetcher.load("/api/meals");
+		}
 	};
 
 	const [lastBulkSource, setLastBulkSource] = useState<"copy" | "plan-week">(
@@ -526,7 +569,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 									weekDates={weekDates}
 									planStartDate={planStartDate}
 									showSnackSlot={showSnackSlot}
-									meals={meals}
+									meals={pickerMeals}
 									onScheduleConfirmed={handleScheduleConfirmed}
 									isSubmitting={bulkFetcher.state !== "idle"}
 								/>
@@ -609,7 +652,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				<MealPicker
 					dayLabel={activeDayLabel}
 					slot={pickerSlot}
-					meals={meals}
+					meals={pickerMeals}
+					isLoading={pickerMealsLoading}
 					onSelect={handleMealSelect}
 					onClose={() => setPickerOpen(false)}
 				/>
@@ -729,7 +773,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				weekDates={weekDates}
 				planStartDate={planStartDate}
 				showSnackSlot={showSnackSlot}
-				meals={meals}
+				meals={pickerMeals}
 				onScheduleConfirmed={handleScheduleConfirmed}
 				isSubmitting={bulkFetcher.state !== "idle"}
 				open={showPlanWeekModal}

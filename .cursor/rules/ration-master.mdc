@@ -100,25 +100,29 @@ For each new feature, **evaluate** whether an E2E test would benefit stability. 
 
 - **README must stay current.** For each change, verify whether `README.md` needs to be updated. The README must be kept up to date always — commands, features, architecture, schema, workflows, or any referenced behaviour that changes must be reflected in the README.
 
-### Version Bump (Patch Increment)
+### Version Bump (Patch and Minor)
 
-**Every change must increment the patch version.** For each commit that modifies application code, config, or behaviour:
+**Every change must increment the version.** Use `1.X.[1-49]` for patches; before reaching `1.X.50`, bump to `1.(X+1).0`. Each minor version represents 50 changes.
 
-1. **Increment patch in `package.json`** — e.g. `1.1.0` → `1.1.1`, `1.1.1` → `1.1.2`
-2. **Sync `app/lib/version.ts`** — Set `APP_VERSION` to the same value as `package.json` so the banner and footer display correctly
-3. **Include in the git commit message** — Add a line such as `[v1.1.1]` to the commit message body or subject. Example:
-   ```
-   feat: add magic link auth
-   [v1.1.1]
-   ```
+**Rules:**
+- Patch range: `1.X.1` … `1.X.49` (e.g. `1.1.0` → `1.1.1`, `1.1.1` → `1.1.2`, … `1.1.49`)
+- Before `1.X.50`: bump to `1.(X+1).0` (e.g. after `1.1.49` → `1.2.0`)
+- Sync `app/lib/version.ts` with `package.json`
+- Add the version to the commit message, e.g. `[v1.1.1]`
 
-This provides a clear audit trail of what shipped in each patch and keeps deploy/build identifiers monotonic.
+Example:
+```
+feat: add magic link auth
+[v1.1.1]
+```
+
+This keeps a clear audit trail and deploy/build identifiers monotonic.
 
 ### Definition of Done
 
 A change is not complete until:
 - `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors
-- The patch version has been incremented in `package.json` and `app/lib/version.ts`
+- The version has been incremented in `package.json` and `app/lib/version.ts` (patch 1-49, or minor bump at 50)
 - The commit message includes the new version (e.g. `[v1.1.1]`)
 - Any affected documentation in `README.md` has been verified and updated
 

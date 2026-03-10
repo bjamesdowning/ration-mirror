@@ -43,7 +43,6 @@ import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { parseAllergens } from "~/lib/allergens";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getCargo } from "~/lib/cargo.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
@@ -57,7 +56,6 @@ import type { Route } from "./+types/galley";
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 const GALLEY_PAGE_SIZE = 100;
-const GALLEY_INVENTORY_PAGE_SIZE = 200;
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);
@@ -79,7 +77,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [meals, totalMeals, availableTags, inventory, activeSelections] =
+	// Inventory (cargo) is NOT loaded here — it is 200 full rows that are only
+	// needed when the user activates match mode or opens the recipe quick-add
+	// form. Lazy-loading it client-side via /api/cargo on first need saves every
+	// Galley page view from serialising an extra ~200-row payload.
+	const [meals, totalMeals, availableTags, activeSelections] =
 		await Promise.all([
 			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain, {
 				limit: GALLEY_PAGE_SIZE,
@@ -92,10 +94,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				domain as ItemDomain | undefined,
 			),
 			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
-			getCargo(context.cloudflare.env.DB, groupId, undefined, {
-				limit: GALLEY_INVENTORY_PAGE_SIZE,
-				offset: 0,
-			}),
 			getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		]);
 	const activeMealIds = activeSelections.map((selection) => selection.mealId);
@@ -105,7 +103,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableTags,
 		currentTag: tag,
 		currentDomain: domain,
-		inventory,
 		activeMealIds,
 		page,
 		pageSize: GALLEY_PAGE_SIZE,
@@ -156,18 +153,44 @@ export async function action({ request, context }: Route.ActionArgs) {
 	return { success: false, error: "Unknown Intent" };
 }
 
+type InventoryItem = {
+	id: string;
+	name: string;
+	unit: string;
+	quantity: number;
+};
+
 export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const {
 		meals,
 		totalMeals,
 		availableTags,
-		inventory,
 		activeMealIds,
 		page,
 		pageSize,
 		defaultViewMode,
 		userAllergens,
 	} = loaderData;
+
+	// Inventory is loaded lazily — only when the user activates match mode or
+	// opens the recipe quick-add form. Once fetched it is cached in state so
+	// subsequent toggling does not re-fetch within the same page session.
+	const [lazyInventory, setLazyInventory] = useState<InventoryItem[] | null>(
+		null,
+	);
+	const inventoryLoadedRef = useRef(false);
+
+	const loadInventoryIfNeeded = () => {
+		if (inventoryLoadedRef.current) return;
+		inventoryLoadedRef.current = true;
+		fetch("/api/cargo")
+			.then((r) => r.json())
+			.then((data) => {
+				const d = data as { items?: InventoryItem[] };
+				setLazyInventory(d.items ?? []);
+			})
+			.catch(() => setLazyInventory([]));
+	};
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance?: number;
 		aiCosts?: { MEAL_GENERATE: number; IMPORT_URL: number };
@@ -178,6 +201,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	type AddStep = null | "choice" | "recipe" | "provision";
 	const [addStep, setAddStep] = useState<AddStep>(null);
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
+
+	const toggleMatching = (next: boolean) => {
+		setMatchingEnabled(next);
+		if (next) loadInventoryIfNeeded();
+	};
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -288,7 +316,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				<h4 className="text-sm font-medium text-muted mb-3">Match Mode</h4>
 				<button
 					type="button"
-					onClick={() => setMatchingEnabled(!matchingEnabled)}
+					onClick={() => toggleMatching(!matchingEnabled)}
 					className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all ${
 						matchingEnabled
 							? "bg-hyper-green text-carbon"
@@ -319,7 +347,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					type="button"
 					onClick={() => {
 						clearAllFilters();
-						setMatchingEnabled(false);
+						toggleMatching(false);
 					}}
 					className="w-full py-3 text-center text-hyper-green font-medium hover:bg-hyper-green/10 rounded-xl transition-colors"
 				>
@@ -458,7 +486,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						quickAddForm={
 							addStep === "choice" ? (
 								<AddTypeChoice
-									onSelectRecipe={() => setAddStep("recipe")}
+									onSelectRecipe={() => {
+										setAddStep("recipe");
+										loadInventoryIfNeeded();
+									}}
 									onSelectItem={() => setAddStep("provision")}
 								/>
 							) : addStep === "provision" ? (
@@ -477,7 +508,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 										setAddStep(null);
 										setShowUpgradePrompt(true);
 									}}
-									availableIngredients={inventory}
+									availableIngredients={lazyInventory ?? []}
 								/>
 							) : null
 						}
@@ -489,7 +520,10 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						{addStep === "choice" ? (
 							<AddTypeChoice
-								onSelectRecipe={() => setAddStep("recipe")}
+								onSelectRecipe={() => {
+									setAddStep("recipe");
+									loadInventoryIfNeeded();
+								}}
 								onSelectItem={() => setAddStep("provision")}
 							/>
 						) : addStep === "provision" ? (
@@ -508,7 +542,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									setAddStep(null);
 									setShowUpgradePrompt(true);
 								}}
-								availableIngredients={inventory}
+								availableIngredients={lazyInventory ?? []}
 							/>
 						)}
 					</div>
@@ -564,7 +598,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						<MealGrid
 							meals={filteredMeals}
 							enableMatching={matchingEnabled}
-							inventory={inventory}
+							inventory={lazyInventory ?? []}
 							activeMealIds={selectedMealIds}
 							onToggleMealActive={handleToggleActive}
 							viewMode={viewMode}

@@ -169,19 +169,15 @@ export function CargoListRow({
 					aria-hidden="true"
 				/>
 
-				{/* Name — tappable to edit */}
-				<button
-					type="button"
-					onClick={() => setIsEditing(true)}
-					className="flex-1 text-left min-w-0"
-				>
+				{/* Name — opens ingredient details */}
+				<Link to={`/hub/cargo/${item.id}`} className="flex-1 text-left min-w-0">
 					<span
 						className="text-sm font-semibold text-carbon dark:text-white truncate block group-hover:text-hyper-green transition-colors"
 						title={item.name}
 					>
 						{item.name}
 					</span>
-				</button>
+				</Link>
 
 				{/* Tags (up to 2, hidden on very small screens) */}
 				<div className="hidden sm:flex items-center gap-1 shrink-0">

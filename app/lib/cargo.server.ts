@@ -127,6 +127,24 @@ export async function getCargoCount(
 }
 
 /**
+ * Fetch a single cargo item by ID, scoped to the organization.
+ */
+export async function getCargoItem(
+	db: D1Database,
+	organizationId: string,
+	cargoId: string,
+) {
+	const d1 = drizzle(db);
+	const [item] = await d1
+		.select()
+		.from(cargo)
+		.where(and(eq(cargo.organizationId, organizationId), eq(cargo.id, cargoId)))
+		.limit(1);
+
+	return item ?? null;
+}
+
+/**
  * Fetch a specific set of cargo rows by their IDs, scoped to the organization.
  * Used by MCP search to resolve Vectorize matches without a full-table scan.
  * Uses chunkedQuery to stay under D1's 100 bound-parameter limit.

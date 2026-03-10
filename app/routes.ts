@@ -17,6 +17,7 @@ export default [
 
 		// Cargo
 		route("cargo", "routes/hub/cargo.tsx"),
+		route("cargo/:id", "routes/hub/cargo.$id.tsx"),
 
 		// Galley
 		route("galley", "routes/hub/galley.tsx"),

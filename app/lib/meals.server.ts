@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -235,6 +235,137 @@ export async function getMeal(
 		ingredients,
 		tags: tags.map((t) => t.tag),
 	};
+}
+
+export type MealIngredientConnectionType = "direct" | "name_match";
+
+export interface ConnectedMealIngredient {
+	id: string;
+	mealId: string;
+	cargoId: string | null;
+	ingredientName: string;
+	quantity: number;
+	unit: string;
+	isOptional: boolean | null;
+	orderIndex: number | null;
+	connectionType: MealIngredientConnectionType;
+}
+
+/**
+ * Retrieves meals that reference a cargo item either by direct cargoId link
+ * or by case-insensitive ingredient name match (for unlinked ingredients).
+ */
+export async function getMealsForCargo(
+	db: D1Database,
+	organizationId: string,
+	cargoId: string,
+	cargoName: string,
+) {
+	const d1 = drizzle(db);
+	const normalizedName = cargoName.trim().toLowerCase();
+
+	const [directRows, nameRows] = await d1.batch([
+		d1
+			.select({
+				id: mealIngredient.id,
+				mealId: mealIngredient.mealId,
+				cargoId: mealIngredient.cargoId,
+				ingredientName: mealIngredient.ingredientName,
+				quantity: mealIngredient.quantity,
+				unit: mealIngredient.unit,
+				isOptional: mealIngredient.isOptional,
+				orderIndex: mealIngredient.orderIndex,
+			})
+			.from(mealIngredient)
+			.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+			.where(
+				and(
+					eq(meal.organizationId, organizationId),
+					eq(mealIngredient.cargoId, cargoId),
+				),
+			),
+		d1
+			.select({
+				id: mealIngredient.id,
+				mealId: mealIngredient.mealId,
+				cargoId: mealIngredient.cargoId,
+				ingredientName: mealIngredient.ingredientName,
+				quantity: mealIngredient.quantity,
+				unit: mealIngredient.unit,
+				isOptional: mealIngredient.isOptional,
+				orderIndex: mealIngredient.orderIndex,
+			})
+			.from(mealIngredient)
+			.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
+			.where(
+				and(
+					eq(meal.organizationId, organizationId),
+					isNull(mealIngredient.cargoId),
+					sql`lower(${mealIngredient.ingredientName}) = ${normalizedName}`,
+				),
+			),
+	]);
+
+	const allConnections: ConnectedMealIngredient[] = [
+		...directRows.map((row) => ({ ...row, connectionType: "direct" as const })),
+		...nameRows.map((row) => ({
+			...row,
+			connectionType: "name_match" as const,
+		})),
+	];
+
+	if (allConnections.length === 0) {
+		return [];
+	}
+
+	const mealIds = [...new Set(allConnections.map((row) => row.mealId))];
+	const [meals, allTags] = await Promise.all([
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select()
+				.from(meal)
+				.where(
+					and(eq(meal.organizationId, organizationId), inArray(meal.id, chunk)),
+				),
+		),
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select({
+					mealId: mealTag.mealId,
+					tag: mealTag.tag,
+				})
+				.from(mealTag)
+				.where(inArray(mealTag.mealId, chunk)),
+		),
+	]);
+
+	const tagsByMealId = new Map<string, string[]>();
+	for (const t of allTags) {
+		const existing = tagsByMealId.get(t.mealId) ?? [];
+		existing.push(t.tag);
+		tagsByMealId.set(t.mealId, existing);
+	}
+
+	const connectionsByMealId = new Map<string, ConnectedMealIngredient[]>();
+	for (const connection of allConnections) {
+		const existing = connectionsByMealId.get(connection.mealId) ?? [];
+		existing.push(connection);
+		connectionsByMealId.set(connection.mealId, existing);
+	}
+
+	return meals
+		.map((mealRecord) => ({
+			...mealRecord,
+			tags: tagsByMealId.get(mealRecord.id) ?? [],
+			connectedIngredients: (connectionsByMealId.get(mealRecord.id) ?? []).sort(
+				(a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0),
+			),
+		}))
+		.sort((a, b) => {
+			const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+			const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+			return bTime - aTime;
+		});
 }
 
 /**

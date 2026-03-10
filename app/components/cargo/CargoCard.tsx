@@ -46,9 +46,11 @@ export function CargoCard({
 	}, [fetcher.state, currentIntent]);
 
 	// Close modal on successful update
-	if (isEditing && fetcher.state === "idle" && fetcher.data?.success) {
-		setIsEditing(false);
-	}
+	useEffect(() => {
+		if (isEditing && fetcher.state === "idle" && fetcher.data?.success) {
+			setIsEditing(false);
+		}
+	}, [isEditing, fetcher.state, fetcher.data?.success]);
 
 	// Handle promote result
 	useEffect(() => {
@@ -132,6 +134,7 @@ export function CargoCard({
 				/>
 			)}
 			<StandardCard
+				to={`/hub/cargo/${item.id}`}
 				actions={[
 					{
 						label: "Edit",
@@ -155,12 +158,12 @@ export function CargoCard({
 				<div className="flex justify-between items-start mb-2">
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2 flex-wrap">
-							<h3
-								className="text-lg font-bold text-carbon truncate"
+							<span
+								className="text-lg font-bold text-carbon truncate group-hover:text-hyper-green transition-colors"
 								title={item.name}
 							>
 								{item.name}
-							</h3>
+							</span>
 							{isPromoted && (
 								<span className="shrink-0 text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium">
 									In Galley

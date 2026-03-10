@@ -79,7 +79,10 @@ export function ProvisionCard({
 			<div className="relative">
 				<button
 					type="button"
-					onClick={handleToggleActive}
+					onClick={(e) => {
+						e.stopPropagation();
+						handleToggleActive();
+					}}
 					disabled={isToggling}
 					aria-pressed={localActive}
 					className={`absolute top-4 left-4 z-40 flex items-center justify-center w-7 h-7 border text-xs font-bold transition-all shadow-sm ${
@@ -99,8 +102,8 @@ export function ProvisionCard({
 				</button>
 
 				<StandardCard
+					to={`/hub/galley/${meal.id}`}
 					actions={[
-						{ label: "View", to: `/hub/galley/${meal.id}` },
 						{ label: "Edit", onClick: () => setIsEditing(true) },
 						{ label: "Delete", onClick: handleDelete, destructive: true },
 					]}

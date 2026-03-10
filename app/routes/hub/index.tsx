@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { HubEditMode } from "~/components/hub/HubEditMode";
+import { HubEditModeMobile } from "~/components/hub/HubEditModeMobile";
 import { WelcomeBanner } from "~/components/hub/WelcomeBanner";
 import { LayoutEngine } from "~/components/hub/widgets/LayoutEngine";
 import { resolveLayout } from "~/components/hub/widgets/registry";
@@ -150,6 +151,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	const [isEditing, setIsEditing] = useState(
 		() => searchParams.get("edit") === "1",
 	);
+	const [isDesktop, setIsDesktop] = useState(true);
 	const dismissFetcher = useFetcher();
 	// Optimistic: hide the banner as soon as the user dismisses, before the server confirms
 	const bannerVisible =
@@ -168,6 +170,16 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		snackMatches,
 		manifestPreview,
 	};
+
+	useEffect(() => {
+		const mediaQuery = window.matchMedia("(min-width: 768px)");
+		setIsDesktop(mediaQuery.matches);
+		const handleChange = (event: MediaQueryListEvent) => {
+			setIsDesktop(event.matches);
+		};
+		mediaQuery.addEventListener("change", handleChange);
+		return () => mediaQuery.removeEventListener("change", handleChange);
+	}, []);
 
 	return (
 		<>
@@ -211,13 +223,23 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 				)}
 
 				{isEditing ? (
-					<HubEditMode
-						hubProfile={hubProfile}
-						hubLayout={hubLayout}
-						data={widgetData}
-						availableMealTags={availableMealTags}
-						onExit={() => setIsEditing(false)}
-					/>
+					isDesktop ? (
+						<HubEditMode
+							hubProfile={hubProfile}
+							hubLayout={hubLayout}
+							data={widgetData}
+							availableMealTags={availableMealTags}
+							onExit={() => setIsEditing(false)}
+						/>
+					) : (
+						<HubEditModeMobile
+							hubProfile={hubProfile}
+							hubLayout={hubLayout}
+							data={widgetData}
+							availableMealTags={availableMealTags}
+							onExit={() => setIsEditing(false)}
+						/>
+					)
 				) : (
 					<LayoutEngine layout={resolvedLayout} data={widgetData} />
 				)}

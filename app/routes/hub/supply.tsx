@@ -514,7 +514,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					className="py-10"
 				/>
 			) : (
-				<div className="space-y-6">
+				<div className="space-y-6 pb-36 md:pb-0">
 					<div className="hidden md:block">
 						<PanelToolbar
 							primaryAction={

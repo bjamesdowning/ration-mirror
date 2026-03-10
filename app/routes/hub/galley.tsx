@@ -385,7 +385,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					/>
 				)}
 
-			<div className="space-y-6">
+			<div className="space-y-6 pb-36 md:pb-0">
 				{/* Selection status bar */}
 				{selectedCount > 0 && (
 					<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">

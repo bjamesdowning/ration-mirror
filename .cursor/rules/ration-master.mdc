@@ -104,12 +104,12 @@ For each new feature, **evaluate** whether an E2E test would benefit stability. 
 
 **Every change must increment the patch version.** For each commit that modifies application code, config, or behaviour:
 
-1. **Increment patch in `package.json`** — e.g. `1.0.0` → `1.0.1`, `1.0.1` → `1.0.2`
+1. **Increment patch in `package.json`** — e.g. `1.1.0` → `1.1.1`, `1.1.1` → `1.1.2`
 2. **Sync `app/lib/version.ts`** — Set `APP_VERSION` to the same value as `package.json` so the banner and footer display correctly
-3. **Include in the git commit message** — Add a line such as `[v1.0.1]` to the commit message body or subject. Example:
+3. **Include in the git commit message** — Add a line such as `[v1.1.1]` to the commit message body or subject. Example:
    ```
    feat: add magic link auth
-   [v1.0.1]
+   [v1.1.1]
    ```
 
 This provides a clear audit trail of what shipped in each patch and keeps deploy/build identifiers monotonic.
@@ -119,7 +119,7 @@ This provides a clear audit trail of what shipped in each patch and keeps deploy
 A change is not complete until:
 - `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors
 - The patch version has been incremented in `package.json` and `app/lib/version.ts`
-- The commit message includes the new version (e.g. `[v1.0.1]`)
+- The commit message includes the new version (e.g. `[v1.1.1]`)
 - Any affected documentation in `README.md` has been verified and updated
 
 ## File Organization

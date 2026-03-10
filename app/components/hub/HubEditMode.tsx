@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import {
+	createHubLayoutFormData,
+	hasActiveWidgetFilters,
+	initEditableWidgets,
+	moveWidget as moveWidgetInLayout,
+	setWidgetFilters,
+	setWidgetSize,
+	toggleWidgetVisibility,
+} from "~/components/hub/hubEditUtils";
+import {
+	supportsWidgetFilters,
+	WidgetFilterPanel,
+} from "~/components/hub/WidgetFilterPanel";
+import {
 	type HubWidgetId,
-	PROFILE_PRESETS,
 	WIDGET_REGISTRY,
 } from "~/components/hub/widgets/registry";
 import type {
@@ -11,32 +23,6 @@ import type {
 	HubWidgetFilters,
 	HubWidgetLayout,
 } from "~/lib/types";
-
-// Widgets that support tag filtering (OR logic)
-const TAG_FILTER_WIDGETS: HubWidgetId[] = [
-	"meals-ready",
-	"meals-partial",
-	"snacks-ready",
-	"manifest-preview",
-];
-
-// Widgets that support a limit override
-const LIMIT_FILTER_WIDGETS: HubWidgetId[] = [
-	"meals-ready",
-	"meals-partial",
-	"snacks-ready",
-	"cargo-expiring",
-	"supply-preview",
-];
-
-// Widgets that support slot-type filtering
-const SLOT_FILTER_WIDGETS: HubWidgetId[] = ["manifest-preview"];
-
-// Widgets that support domain filtering
-const DOMAIN_FILTER_WIDGETS: HubWidgetId[] = ["cargo-expiring"];
-
-const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
-const CARGO_DOMAINS = ["food", "household", "alcohol"] as const;
 
 interface HubEditModeProps {
 	hubProfile?: HubProfile;
@@ -57,260 +43,6 @@ function getColSpanClass(size: "sm" | "md" | "lg"): string {
 		default:
 			return "md:col-span-6";
 	}
-}
-
-function initEditableWidgets(
-	hubProfile: HubProfile | undefined,
-	hubLayout: { widgets: HubWidgetLayout[] } | undefined,
-): HubWidgetLayout[] {
-	let base: HubWidgetLayout[];
-
-	if (hubProfile === "custom" && hubLayout?.widgets?.length) {
-		base = hubLayout.widgets
-			.filter((w) => WIDGET_REGISTRY.has(w.id as HubWidgetId))
-			.map((w) => ({ ...w }));
-	} else {
-		const presetKey = (hubProfile ?? "full") as Exclude<HubProfile, "custom">;
-		const preset = PROFILE_PRESETS[presetKey] ?? PROFILE_PRESETS.full;
-		base = preset.map((w) => ({ ...w }));
-	}
-
-	// Ensure all registered widgets are present; add missing ones as hidden
-	const included = new Set(base.map((w) => w.id));
-	for (const [id, def] of WIDGET_REGISTRY) {
-		if (!included.has(id)) {
-			base.push({
-				id,
-				order: base.length,
-				size: def.defaultSize,
-				visible: false,
-			});
-		}
-	}
-
-	return base.sort((a, b) => a.order - b.order);
-}
-
-// ---------------------------------------------------------------------------
-// Widget filter panel
-// ---------------------------------------------------------------------------
-
-interface WidgetFilterPanelProps {
-	widgetId: HubWidgetId;
-	filters: HubWidgetFilters | undefined;
-	availableMealTags: string[];
-	isSaving: boolean;
-	onChange: (filters: HubWidgetFilters) => void;
-}
-
-function WidgetFilterPanel({
-	widgetId,
-	filters,
-	availableMealTags,
-	isSaving,
-	onChange,
-}: WidgetFilterPanelProps) {
-	const supportsTags = TAG_FILTER_WIDGETS.includes(widgetId);
-	const supportsSlot = SLOT_FILTER_WIDGETS.includes(widgetId);
-	const supportsDomain = DOMAIN_FILTER_WIDGETS.includes(widgetId);
-	const supportsLimit = LIMIT_FILTER_WIDGETS.includes(widgetId);
-	const hasAnyFilter =
-		supportsTags || supportsSlot || supportsDomain || supportsLimit;
-
-	if (!hasAnyFilter) return null;
-
-	const currentTags = filters?.tags ?? [];
-	const currentSlot = filters?.slotType;
-	const currentDomain = filters?.domain;
-	const currentLimit = filters?.limit;
-
-	const update = (patch: Partial<HubWidgetFilters>) => {
-		onChange({ ...filters, ...patch });
-	};
-
-	const toggleTag = (tag: string) => {
-		const next = currentTags.includes(tag)
-			? currentTags.filter((t) => t !== tag)
-			: [...currentTags, tag].slice(0, 5);
-		update({ tags: next.length ? next : undefined });
-	};
-
-	return (
-		<div className="mt-2 px-3 py-3 bg-[#1a1a1a] rounded-lg border border-white/10 space-y-3">
-			{/* Tag filter */}
-			{supportsTags && availableMealTags.length > 0 && (
-				<div>
-					<p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">
-						Filter by Tag
-						{currentTags.length > 0 && (
-							<span className="ml-1.5 text-hyper-green">
-								({currentTags.length})
-							</span>
-						)}
-					</p>
-					<div className="flex flex-wrap gap-1.5">
-						{availableMealTags.map((tag) => {
-							const active = currentTags.includes(tag);
-							return (
-								<button
-									key={tag}
-									type="button"
-									disabled={isSaving}
-									onClick={() => toggleTag(tag)}
-									className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors capitalize ${
-										active
-											? "bg-hyper-green text-carbon"
-											: "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
-									}`}
-								>
-									{tag}
-								</button>
-							);
-						})}
-					</div>
-					{currentTags.length > 0 && (
-						<button
-							type="button"
-							disabled={isSaving}
-							onClick={() => update({ tags: undefined })}
-							className="mt-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors"
-						>
-							Clear tags
-						</button>
-					)}
-				</div>
-			)}
-
-			{/* Slot type filter */}
-			{supportsSlot && (
-				<div>
-					<p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">
-						Slot
-					</p>
-					<div className="flex gap-1.5 flex-wrap">
-						<button
-							type="button"
-							disabled={isSaving}
-							onClick={() => update({ slotType: undefined })}
-							className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
-								!currentSlot
-									? "bg-hyper-green text-carbon"
-									: "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
-							}`}
-						>
-							All
-						</button>
-						{SLOT_TYPES.map((slot) => (
-							<button
-								key={slot}
-								type="button"
-								disabled={isSaving}
-								onClick={() =>
-									update({ slotType: currentSlot === slot ? undefined : slot })
-								}
-								className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
-									currentSlot === slot
-										? "bg-hyper-green text-carbon"
-										: "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
-								}`}
-							>
-								{slot}
-							</button>
-						))}
-					</div>
-				</div>
-			)}
-
-			{/* Domain filter */}
-			{supportsDomain && (
-				<div>
-					<p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">
-						Domain
-					</p>
-					<div className="flex gap-1.5 flex-wrap">
-						<button
-							type="button"
-							disabled={isSaving}
-							onClick={() => update({ domain: undefined })}
-							className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
-								!currentDomain
-									? "bg-hyper-green text-carbon"
-									: "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
-							}`}
-						>
-							All
-						</button>
-						{CARGO_DOMAINS.map((d) => (
-							<button
-								key={d}
-								type="button"
-								disabled={isSaving}
-								onClick={() =>
-									update({ domain: currentDomain === d ? undefined : d })
-								}
-								className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
-									currentDomain === d
-										? "bg-hyper-green text-carbon"
-										: "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
-								}`}
-							>
-								{d}
-							</button>
-						))}
-					</div>
-				</div>
-			)}
-
-			{/* Limit override */}
-			{supportsLimit && (
-				<div>
-					<p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">
-						Show up to
-					</p>
-					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							disabled={isSaving || (currentLimit ?? 6) <= 1}
-							onClick={() =>
-								update({
-									limit:
-										currentLimit !== undefined
-											? Math.max(1, currentLimit - 1)
-											: undefined,
-								})
-							}
-							className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold disabled:opacity-30 transition-colors"
-						>
-							−
-						</button>
-						<span className="text-sm font-bold text-white min-w-[2ch] text-center">
-							{currentLimit ?? "—"}
-						</span>
-						<button
-							type="button"
-							disabled={isSaving || (currentLimit ?? 20) >= 20}
-							onClick={() =>
-								update({ limit: Math.min(20, (currentLimit ?? 6) + 1) })
-							}
-							className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold disabled:opacity-30 transition-colors"
-						>
-							+
-						</button>
-						{currentLimit !== undefined && (
-							<button
-								type="button"
-								disabled={isSaving}
-								onClick={() => update({ limit: undefined })}
-								className="text-[10px] text-white/40 hover:text-white/70 transition-colors ml-1"
-							>
-								Reset
-							</button>
-						)}
-					</div>
-				</div>
-			)}
-		</div>
-	);
 }
 
 // ---------------------------------------------------------------------------
@@ -342,47 +74,32 @@ export function HubEditMode({
 	}, [fetcher.state, revalidator]);
 
 	const save = (next: HubWidgetLayout[]) => {
-		const formData = new FormData();
-		formData.set("intent", "update-hub-layout");
-		formData.set("hubLayout", JSON.stringify({ widgets: next }));
-		fetcher.submit(formData, { method: "post", action: "/hub/settings" });
+		fetcher.submit(createHubLayoutFormData(next), {
+			method: "post",
+			action: "/hub/settings",
+		});
 	};
 
 	const toggleVisibility = (id: string) => {
-		const next = widgets.map((w) =>
-			w.id === id ? { ...w, visible: !w.visible } : w,
-		);
+		const next = toggleWidgetVisibility(widgets, id);
 		setWidgets(next);
 		save(next);
 	};
 
 	const moveWidget = (id: string, direction: "up" | "down") => {
-		const idx = widgets.findIndex((w) => w.id === id);
-		if (idx < 0) return;
-		const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-		if (swapIdx < 0 || swapIdx >= widgets.length) return;
-		const next = [...widgets];
-		[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-		const reordered = next.map((w, i) => ({ ...w, order: i }));
-		setWidgets(reordered);
-		save(reordered);
+		const next = moveWidgetInLayout(widgets, id, direction);
+		setWidgets(next);
+		save(next);
 	};
 
 	const setSize = (id: string, size: "sm" | "md" | "lg") => {
-		const next = widgets.map((w) => (w.id === id ? { ...w, size } : w));
+		const next = setWidgetSize(widgets, id, size);
 		setWidgets(next);
 		save(next);
 	};
 
 	const updateFilters = (id: string, filters: HubWidgetFilters) => {
-		// Prune keys that are undefined so storage stays compact
-		const cleaned: HubWidgetFilters = Object.fromEntries(
-			Object.entries(filters).filter(([, v]) => v !== undefined),
-		) as HubWidgetFilters;
-		const hasAny = Object.keys(cleaned).length > 0;
-		const next = widgets.map((w) =>
-			w.id === id ? { ...w, filters: hasAny ? cleaned : undefined } : w,
-		);
+		const next = setWidgetFilters(widgets, id, filters);
 		setWidgets(next);
 		save(next);
 	};
@@ -422,17 +139,9 @@ export function HubEditMode({
 					const size = (w.size ?? def.defaultSize) as "sm" | "md" | "lg";
 					const isHidden = !w.visible;
 					const widgetId = w.id as HubWidgetId;
-					const supportsFilter =
-						TAG_FILTER_WIDGETS.includes(widgetId) ||
-						SLOT_FILTER_WIDGETS.includes(widgetId) ||
-						DOMAIN_FILTER_WIDGETS.includes(widgetId) ||
-						LIMIT_FILTER_WIDGETS.includes(widgetId);
+					const supportsFilter = supportsWidgetFilters(widgetId);
 					const filterOpen = expandedFilterId === w.id;
-					const hasActiveFilters =
-						w.filters &&
-						Object.values(w.filters).some(
-							(v) => v !== undefined && !(Array.isArray(v) && v.length === 0),
-						);
+					const hasActiveFilters = hasActiveWidgetFilters(w.filters);
 
 					return (
 						<div key={w.id} className={getColSpanClass(size)}>
@@ -442,14 +151,14 @@ export function HubEditMode({
 								}`}
 							>
 								{/* Per-widget control bar */}
-								<div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-[#111111] rounded-lg gap-2">
+								<div className="flex items-center justify-between px-2 py-2 mb-2 bg-[#111111] rounded-lg gap-2">
 									{/* Reorder arrows */}
-									<div className="flex items-center gap-0.5 shrink-0">
+									<div className="flex items-center gap-1 shrink-0">
 										<button
 											type="button"
 											onClick={() => moveWidget(w.id, "up")}
 											disabled={idx <= 0 || isSaving}
-											className="p-1 rounded text-white/60 hover:text-white disabled:opacity-20 transition-colors"
+											className="min-w-[44px] min-h-[44px] rounded text-white/60 hover:text-white disabled:opacity-20 transition-colors flex items-center justify-center"
 											aria-label="Move up"
 										>
 											<ChevronUpIcon />
@@ -458,7 +167,7 @@ export function HubEditMode({
 											type="button"
 											onClick={() => moveWidget(w.id, "down")}
 											disabled={idx >= widgets.length - 1 || isSaving}
-											className="p-1 rounded text-white/60 hover:text-white disabled:opacity-20 transition-colors"
+											className="min-w-[44px] min-h-[44px] rounded text-white/60 hover:text-white disabled:opacity-20 transition-colors flex items-center justify-center"
 											aria-label="Move down"
 										>
 											<ChevronDownIcon />
@@ -466,23 +175,23 @@ export function HubEditMode({
 									</div>
 
 									{/* Widget title */}
-									<span className="flex-1 text-xs font-bold uppercase tracking-widest text-white/80 text-center truncate px-1">
+									<span className="flex-1 text-xs font-bold uppercase tracking-widest text-white/80 text-center truncate px-2">
 										{def.title}
 									</span>
 
 									{/* Size selector + filter toggle + visibility toggle */}
-									<div className="flex items-center gap-1.5 shrink-0">
-										<div className="flex gap-0.5">
+									<div className="flex items-center gap-2 shrink-0">
+										<div className="flex gap-1">
 											{(["sm", "md", "lg"] as const).map((s) => (
 												<button
 													key={s}
 													type="button"
 													onClick={() => setSize(w.id, s)}
 													disabled={isSaving}
-													className={`px-1.5 py-0.5 text-xs rounded font-bold transition-colors ${
+													className={`min-h-[44px] px-3 text-xs rounded font-bold transition-colors ${
 														size === s
 															? "bg-hyper-green text-carbon"
-															: "text-white/40 hover:text-white"
+															: "text-white/50 hover:text-white hover:bg-white/10"
 													}`}
 												>
 													{s.toUpperCase()}
@@ -498,7 +207,7 @@ export function HubEditMode({
 													setExpandedFilterId(filterOpen ? null : w.id)
 												}
 												disabled={isSaving}
-												className={`p-1 rounded transition-colors relative ${
+												className={`min-w-[44px] min-h-[44px] rounded transition-colors relative flex items-center justify-center ${
 													filterOpen
 														? "text-hyper-green"
 														: hasActiveFilters
@@ -521,7 +230,7 @@ export function HubEditMode({
 											type="button"
 											onClick={() => toggleVisibility(w.id)}
 											disabled={isSaving}
-											className={`p-1 rounded transition-colors ${
+											className={`min-w-[44px] min-h-[44px] rounded transition-colors flex items-center justify-center ${
 												w.visible
 													? "text-hyper-green hover:text-hyper-green/70"
 													: "text-white/30 hover:text-white/60"

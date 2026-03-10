@@ -492,114 +492,116 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				}
 			/>
 
-			{/* Desktop: week navigator + calendar span selector + action toolbar */}
-			<div className="hidden md:block mb-5">
-				<div className="flex items-center gap-4 mb-3">
-					<WeekNavigator
-						calendarSpan={calendarSpan}
-						currentRangeStart={currentRangeStart}
-						today={today}
-						weekStartPref={weekStartPref}
-					/>
-					<CalendarSpanSelector currentSpan={calendarSpan} />
-				</div>
-				<PanelToolbar
-					secondaryAction={
-						<div className="flex gap-2 flex-wrap">
-							{unconsumedForSelectedDay > 0 && (
+			<div className="pb-36 md:pb-0">
+				{/* Desktop: week navigator + calendar span selector + action toolbar */}
+				<div className="hidden md:block mb-5">
+					<div className="flex items-center gap-4 mb-3">
+						<WeekNavigator
+							calendarSpan={calendarSpan}
+							currentRangeStart={currentRangeStart}
+							today={today}
+							weekStartPref={weekStartPref}
+						/>
+						<CalendarSpanSelector currentSpan={calendarSpan} />
+					</div>
+					<PanelToolbar
+						secondaryAction={
+							<div className="flex gap-2 flex-wrap">
+								{unconsumedForSelectedDay > 0 && (
+									<button
+										type="button"
+										onClick={() => handleConsumeAll(selectedDay)}
+										disabled={consumeFetcher.state !== "idle"}
+										className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all disabled:opacity-50"
+										title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
+									>
+										<ConsumeIcon className="w-4 h-4" />
+										Consume {selectedDayLabel}
+									</button>
+								)}
+								<PlanWeekButton
+									planId={plan.id}
+									credits={credits}
+									cost={planWeekCost}
+									weekDates={weekDates}
+									planStartDate={planStartDate}
+									showSnackSlot={showSnackSlot}
+									meals={meals}
+									onScheduleConfirmed={handleScheduleConfirmed}
+									isSubmitting={bulkFetcher.state !== "idle"}
+								/>
 								<button
 									type="button"
-									onClick={() => handleConsumeAll(selectedDay)}
-									disabled={consumeFetcher.state !== "idle"}
-									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all disabled:opacity-50"
-									title={`Consume all meals for ${selectedDayLabel} (deduct from Cargo)`}
+									onClick={() => setShareOpen(true)}
+									className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
 								>
-									<ConsumeIcon className="w-4 h-4" />
-									Consume {selectedDayLabel}
+									<ShareIcon className="w-4 h-4" />
+									Share
 								</button>
-							)}
-							<PlanWeekButton
-								planId={plan.id}
-								credits={credits}
-								cost={planWeekCost}
-								weekDates={weekDates}
-								planStartDate={planStartDate}
-								showSnackSlot={showSnackSlot}
-								meals={meals}
-								onScheduleConfirmed={handleScheduleConfirmed}
-								isSubmitting={bulkFetcher.state !== "idle"}
-							/>
-							<button
-								type="button"
-								onClick={() => setShareOpen(true)}
-								className="flex items-center gap-2 px-4 py-3 btn-secondary font-semibold rounded-lg transition-all"
-							>
-								<ShareIcon className="w-4 h-4" />
-								Share
-							</button>
-						</div>
-					}
-				/>
-			</div>
-
-			{/* Week summary bar */}
-			<WeekSummary entries={entries} />
-
-			{/* Mobile: Day tabs + single-day view */}
-			<div className="md:hidden">
-				<DayTab
-					dates={weekDates}
-					activeDate={activeDay}
-					today={today}
-					onSelect={(date) => {
-						setActiveDay(date);
-						setSelectedDay(date);
-					}}
-					plannedDates={plannedDates}
-				/>
-				<div className="mt-4">
-					{!hasEntries ? (
-						<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
-					) : (
-						<DayView
-							date={activeDay}
-							entries={entries}
-							planId={plan.id}
-							onAdd={handleAdd}
-							onConsume={handleConsumeSingle}
-							onCopy={setCopyEntry}
-							isConsuming={consumeFetcher.state !== "idle"}
-							showSnackSlot={showSnackSlot}
-							triggeredAllergensByMealId={triggeredAllergensByMealId}
-							readyMealIds={readyMealIds}
-						/>
-					)}
+							</div>
+						}
+					/>
 				</div>
-			</div>
 
-			{/* Desktop: Full week grid */}
-			<div className="hidden md:block">
-				{!hasEntries && (
-					<p className="text-sm text-muted mb-4">
-						Add meals from your Galley using the + on any slot below.
-					</p>
-				)}
-				<WeekView
-					dates={weekDates}
-					entries={entries}
-					planId={plan.id}
-					onAdd={handleAdd}
-					onConsume={handleConsumeSingle}
-					onCopy={setCopyEntry}
-					onCopyDay={setCopyDayDate}
-					isConsuming={consumeFetcher.state !== "idle"}
-					today={today}
-					showSnackSlot={showSnackSlot}
-					selectedDate={selectedDay}
-					onSelectDate={setSelectedDay}
-					triggeredAllergensByMealId={triggeredAllergensByMealId}
-					readyMealIds={readyMealIds}
-				/>
+				{/* Week summary bar */}
+				<WeekSummary entries={entries} />
+
+				{/* Mobile: Day tabs + single-day view */}
+				<div className="md:hidden">
+					<DayTab
+						dates={weekDates}
+						activeDate={activeDay}
+						today={today}
+						onSelect={(date) => {
+							setActiveDay(date);
+							setSelectedDay(date);
+						}}
+						plannedDates={plannedDates}
+					/>
+					<div className="mt-4">
+						{!hasEntries ? (
+							<EmptyManifest onAdd={handleAdd} activeDate={activeDay} />
+						) : (
+							<DayView
+								date={activeDay}
+								entries={entries}
+								planId={plan.id}
+								onAdd={handleAdd}
+								onConsume={handleConsumeSingle}
+								onCopy={setCopyEntry}
+								isConsuming={consumeFetcher.state !== "idle"}
+								showSnackSlot={showSnackSlot}
+								triggeredAllergensByMealId={triggeredAllergensByMealId}
+								readyMealIds={readyMealIds}
+							/>
+						)}
+					</div>
+				</div>
+
+				{/* Desktop: Full week grid */}
+				<div className="hidden md:block">
+					{!hasEntries && (
+						<p className="text-sm text-muted mb-4">
+							Add meals from your Galley using the + on any slot below.
+						</p>
+					)}
+					<WeekView
+						dates={weekDates}
+						entries={entries}
+						planId={plan.id}
+						onAdd={handleAdd}
+						onConsume={handleConsumeSingle}
+						onCopy={setCopyEntry}
+						onCopyDay={setCopyDayDate}
+						isConsuming={consumeFetcher.state !== "idle"}
+						today={today}
+						showSnackSlot={showSnackSlot}
+						selectedDate={selectedDay}
+						onSelectDate={setSelectedDay}
+						triggeredAllergensByMealId={triggeredAllergensByMealId}
+						readyMealIds={readyMealIds}
+					/>
+				</div>
 			</div>
 
 			{/* Meal picker */}

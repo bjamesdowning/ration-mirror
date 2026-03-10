@@ -7,7 +7,7 @@ interface StepProps {
 	onSkip: () => void;
 }
 
-export function Step2_Galley({ step, onNext, onBack, onSkip }: StepProps) {
+export function Step3_Galley({ step, onNext, onBack, onSkip }: StepProps) {
 	return (
 		<TourCard step={step} onNext={onNext} onBack={onBack} onSkip={onSkip}>
 			<div className="flex items-center gap-2 mb-3">
@@ -36,14 +36,22 @@ export function Step2_Galley({ step, onNext, onBack, onSkip }: StepProps) {
 				Your recipe book, ingredient-aware.
 			</h3>
 			<p className="text-sm text-carbon/80 dark:text-white/80">
-				Build meals and link each ingredient directly to Cargo. Ration shows you
-				what you can cook right now based on what's in stock.
+				Build meals and link each ingredient directly to Cargo. Generate new
+				recipes with AI from your current Cargo. Ration shows you what you can
+				cook right now based on what's in stock.
 			</p>
 
 			<TechInsight>
 				Ingredients are matched to Cargo using semantic vectors — "canned
 				tomatoes" resolves to "tinned tomatoes" automatically. Match Mode then
 				highlights meals you can cook right now.
+			</TechInsight>
+			<TechInsight>
+				Recipes use cups and spoons; Ration converts to grams or oz for easier
+				shopping.
+			</TechInsight>
+			<TechInsight>
+				Import from URL, paste JSON, or manage meals via MCP.
 			</TechInsight>
 		</TourCard>
 	);

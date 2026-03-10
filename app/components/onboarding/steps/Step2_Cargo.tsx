@@ -7,7 +7,7 @@ interface StepProps {
 	onSkip: () => void;
 }
 
-export function Step1_Cargo({ step, onNext, onBack, onSkip }: StepProps) {
+export function Step2_Cargo({ step, onNext, onBack, onSkip }: StepProps) {
 	return (
 		<TourCard step={step} onNext={onNext} onBack={onBack} onSkip={onSkip}>
 			{/* Spotlight indicator */}
@@ -38,12 +38,17 @@ export function Step1_Cargo({ step, onNext, onBack, onSkip }: StepProps) {
 			</h3>
 			<p className="text-sm text-carbon/80 dark:text-white/80">
 				Track everything by type (Dry / Frozen), quantity, and expiry date. Add
-				in bulk by scanning a receipt — the AI does the parsing.
+				in bulk by scanning a receipt or snapping a photo of your fridge or
+				pantry — the AI extracts items, quantities, and units.
 			</p>
 
 			<TechInsight>
-				OCR + LLM extracts item names, quantities, and units from a photo in
-				seconds.
+				OCR + LLM extracts item names, quantities, and units from a receipt or
+				fridge/pantry photo in seconds.
+			</TechInsight>
+			<TechInsight>Import CSV for bulk spreadsheet upload.</TechInsight>
+			<TechInsight>
+				Control Cargo from any MCP-compatible AI client (Claude, Cursor).
 			</TechInsight>
 		</TourCard>
 	);

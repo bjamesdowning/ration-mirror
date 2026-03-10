@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { Step0_Welcome } from "./steps/Step0_Welcome";
-import { Step1_Cargo } from "./steps/Step1_Cargo";
-import { Step2_Galley } from "./steps/Step2_Galley";
-import { Step3_Manifest } from "./steps/Step3_Manifest";
-import { Step4_Supply } from "./steps/Step4_Supply";
-import { Step5_Launch } from "./steps/Step5_Launch";
+import { Step1_Groups } from "./steps/Step1_Groups";
+import { Step2_Cargo } from "./steps/Step2_Cargo";
+import { Step3_Galley } from "./steps/Step3_Galley";
+import { Step4_Manifest } from "./steps/Step4_Manifest";
+import { Step5_Supply } from "./steps/Step5_Supply";
+import { Step6_Launch } from "./steps/Step6_Launch";
 import { TourOverlay } from "./TourOverlay";
 
 interface OnboardingTourProps {
@@ -16,10 +17,11 @@ interface OnboardingTourProps {
 }
 
 const STEP_ROUTES: Record<number, string> = {
-	1: "/hub/cargo",
-	2: "/hub/galley",
-	3: "/hub/manifest",
-	4: "/hub/supply",
+	1: "/hub/settings#group",
+	2: "/hub/cargo",
+	3: "/hub/galley",
+	4: "/hub/manifest",
+	5: "/hub/supply",
 };
 
 /**
@@ -34,7 +36,7 @@ export function OnboardingTour({
 	initialStep,
 }: OnboardingTourProps) {
 	const [open, setOpen] = useState(!isCompleted);
-	const [step, setStep] = useState(() => Math.min(initialStep, 5));
+	const [step, setStep] = useState(() => Math.min(initialStep, 6));
 	const navigate = useNavigate();
 	const fetcher = useFetcher();
 	const hasPersisted = useRef(false);
@@ -80,7 +82,7 @@ export function OnboardingTour({
 	);
 
 	const handleNext = useCallback(() => {
-		if (step < 5) goTo(step + 1);
+		if (step < 6) goTo(step + 1);
 	}, [step, goTo]);
 
 	const handleBack = useCallback(() => {
@@ -99,7 +101,7 @@ export function OnboardingTour({
 		// hasPersisted may already be true if skip fired during the confetti delay.
 		// Always write completion — the timestamp is idempotent and more accurate here.
 		hasPersisted.current = true;
-		persistStep(5, true);
+		persistStep(6, true);
 		setOpen(false);
 	}, [persistStep]);
 
@@ -144,21 +146,22 @@ export function OnboardingTour({
 		onSkip: handleSkip,
 	};
 
-	// Steps 0 and 5 are intentional full-screen moments; steps 1–4 are spotlight
+	// Steps 0 and 6 are intentional full-screen moments; steps 1–5 are spotlight
 	// steps where the user should see the page behind the card.
-	const isFullscreen = step === 0 || step === 5;
+	const isFullscreen = step === 0 || step === 6;
 
 	return (
 		<TourOverlay onSkip={handleSkip} fullscreen={isFullscreen}>
 			{step === 0 && (
 				<Step0_Welcome onBegin={() => goTo(1)} onSkip={handleSkip} />
 			)}
-			{step === 1 && <Step1_Cargo {...stepProps} />}
-			{step === 2 && <Step2_Galley {...stepProps} />}
-			{step === 3 && <Step3_Manifest {...stepProps} />}
-			{step === 4 && <Step4_Supply {...stepProps} />}
-			{step === 5 && (
-				<Step5_Launch
+			{step === 1 && <Step1_Groups {...stepProps} />}
+			{step === 2 && <Step2_Cargo {...stepProps} />}
+			{step === 3 && <Step3_Galley {...stepProps} />}
+			{step === 4 && <Step4_Manifest {...stepProps} />}
+			{step === 5 && <Step5_Supply {...stepProps} />}
+			{step === 6 && (
+				<Step6_Launch
 					onBack={handleBack}
 					onComplete={handleComplete}
 					onSkip={handleSkip}

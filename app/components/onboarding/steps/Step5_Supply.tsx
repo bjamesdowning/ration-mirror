@@ -7,7 +7,7 @@ interface StepProps {
 	onSkip: () => void;
 }
 
-export function Step4_Supply({ step, onNext, onBack, onSkip }: StepProps) {
+export function Step5_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 	return (
 		<TourCard
 			step={step}
@@ -47,7 +47,7 @@ export function Step4_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 				and any meals or provisions selected directly in{" "}
 				<span className="text-hyper-green font-medium">Galley</span>. Both are
 				cross-referenced against your Cargo levels to generate exactly what you
-				need to buy.
+				need to buy. Share the list with others for live shopping runs.
 			</p>
 
 			<TechInsight>
@@ -58,6 +58,10 @@ export function Step4_Supply({ step, onNext, onBack, onSkip }: StepProps) {
 				Supply converts recipe units (cups, tbsp) to store units (g, kg) using
 				ingredient density. About 100g of rice can cover around 1/2 cup in a
 				recipe, so you do not need to convert manually.
+			</TechInsight>
+			<TechInsight>
+				Generate a shareable link so others can view or mark items purchased
+				(Crew Member).
 			</TechInsight>
 		</TourCard>
 	);

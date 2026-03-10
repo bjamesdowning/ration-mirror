@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { fireConfetti } from "../confetti";
 
-interface Step5Props {
+interface Step6Props {
 	onComplete: () => void;
 	onSkip: () => void;
 	onBack: () => void;
@@ -30,10 +30,10 @@ const tiers = [
 ];
 
 /**
- * Step 5 — Full-screen launch card.
+ * Step 6 — Full-screen launch card.
  * Fires canvas confetti on "Begin Mission" before closing the tour.
  */
-export function Step5_Launch({ onComplete, onSkip, onBack }: Step5Props) {
+export function Step6_Launch({ onComplete, onSkip, onBack }: Step6Props) {
 	function handleBeginMission() {
 		fireConfetti();
 		// Short delay so confetti is visible before overlay fades

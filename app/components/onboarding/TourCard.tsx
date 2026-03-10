@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { CloseIcon } from "~/components/icons/PageIcons";
 
-const TOTAL_STEPS = 6;
-const STEP_INDICES = ["0", "1", "2", "3", "4", "5"] as const;
+const TOTAL_STEPS = 7;
+const STEP_INDICES = ["0", "1", "2", "3", "4", "5", "6"] as const;
 
 interface TourCardProps {
 	step: number;
@@ -15,7 +15,7 @@ interface TourCardProps {
 }
 
 /**
- * Floating card used on all tour steps (steps 1–4).
+ * Floating card used on all tour steps (steps 1–5).
  * On mobile: full-width bottom sheet.
  * On desktop: compact floating card, max-w-sm.
  */

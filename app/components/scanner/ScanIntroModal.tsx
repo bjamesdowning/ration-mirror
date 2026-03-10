@@ -29,13 +29,13 @@ export function ScanIntroModal({
 			open={open}
 			onClose={onClose}
 			title="Scan to add items"
-			subtitle="Receipt or single item photo"
+			subtitle="Receipt or fridge or pantry"
 			icon={<Camera className="w-5 h-5 text-hyper-green" />}
 			maxWidth="sm"
 			titleId="scan-intro-title"
 		>
 			<AIFeatureIntroView
-				description="AI reads your receipt or product photo and suggests items to add to Cargo—no manual typing."
+				description="AI reads your receipt or fridge/pantry photo and suggests items to add to Cargo—no manual typing."
 				cost={costPerScan}
 				costLabel="per scan"
 				credits={credits}

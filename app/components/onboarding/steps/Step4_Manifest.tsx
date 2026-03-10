@@ -7,7 +7,7 @@ interface StepProps {
 	onSkip: () => void;
 }
 
-export function Step3_Manifest({ step, onNext, onBack, onSkip }: StepProps) {
+export function Step4_Manifest({ step, onNext, onBack, onSkip }: StepProps) {
 	return (
 		<TourCard step={step} onNext={onNext} onBack={onBack} onSkip={onSkip}>
 			<div className="flex items-center gap-2 mb-3">
@@ -36,13 +36,18 @@ export function Step3_Manifest({ step, onNext, onBack, onSkip }: StepProps) {
 				Plan the week. Feed the system.
 			</h3>
 			<p className="text-sm text-carbon/80 dark:text-white/80">
-				Schedule meals into daily slots. The Manifest is the source of truth
-				your Supply list reads from.
+				Schedule meals into daily slots. Use AI to plan the week, or schedule
+				manually. The Manifest is the source of truth your Supply list reads
+				from.
 			</p>
 
 			<TechInsight>
 				Manifest data drives automated gap analysis — no manual list-building
 				needed.
+			</TechInsight>
+			<TechInsight>See which meals are ready to cook at a glance.</TechInsight>
+			<TechInsight>
+				Share your meal plan with others via a read-only link (Crew Member).
 			</TechInsight>
 		</TourCard>
 	);

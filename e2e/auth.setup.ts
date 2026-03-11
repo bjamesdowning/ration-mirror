@@ -13,18 +13,40 @@ async function ensureActiveGroup(page: Page) {
 	const createPersonalGroup = page.getByRole("button", {
 		name: "Create Personal Group",
 	});
-	for (let attempt = 0; attempt < 3; attempt++) {
-		const orgButton = page.locator(".space-y-3 > button").first();
+	const hasUnselectedGroup = async () =>
+		page
+			.getByRole("button", { name: /Select Group/i })
+			.isVisible()
+			.catch(() => false);
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const orgButton = page
+			.locator("div.space-y-3 button")
+			.filter({ hasNotText: "Create Personal Group" })
+			.first();
 		if (await orgButton.isVisible({ timeout: 1000 }).catch(() => false)) {
 			await orgButton.click();
-			await page.waitForURL(/\/hub/, { timeout: 10000 });
-			return;
+			if (
+				await page
+					.waitForURL(/\/hub/, { timeout: 15000 })
+					.then(() => true)
+					.catch(() => false)
+			) {
+				if (!(await hasUnselectedGroup())) {
+					return;
+				}
+			}
+			await page.goto("/select-group");
+			continue;
 		}
 
 		if (await createPersonalGroup.isVisible().catch(() => false)) {
 			await createPersonalGroup.click();
-			await page.waitForTimeout(500);
+			await page.waitForLoadState("domcontentloaded");
+			if (page.url().includes("/hub") && !(await hasUnselectedGroup())) {
+				return;
+			}
 		}
+		await page.waitForTimeout(500);
 	}
 
 	throw new Error("Failed to ensure an active group for E2E auth setup.");

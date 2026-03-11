@@ -1,2 +1,2 @@
 // Auto-generated version constant from package.json
-export const APP_VERSION = "1.1.28";
+export const APP_VERSION = "1.1.29";

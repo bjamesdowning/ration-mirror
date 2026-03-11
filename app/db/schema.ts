@@ -37,6 +37,10 @@ export const user = sqliteTable("user", {
 	})
 		.notNull()
 		.default(false),
+	tosAcceptedAt: integer("tos_accepted_at", { mode: "timestamp" })
+		.notNull()
+		.default(sql`(unixepoch())`),
+	tosVersion: text("tos_version").notNull().default("2026-03-11"),
 	// Extended fields
 	settings: text("settings", { mode: "json" })
 		.$type<UserSettings>()

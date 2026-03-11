@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
@@ -104,8 +104,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 					db.delete(schema.cargo).where(eq(schema.cargo.organizationId, orgId)),
 					db.delete(schema.meal).where(eq(schema.meal.organizationId, orgId)),
 					db
+						.delete(schema.activeMealSelection)
+						.where(eq(schema.activeMealSelection.organizationId, orgId)),
+					db
 						.delete(schema.supplyList)
 						.where(eq(schema.supplyList.organizationId, orgId)),
+					db
+						.delete(schema.supplySnooze)
+						.where(eq(schema.supplySnooze.organizationId, orgId)),
+					db
+						.delete(schema.mealPlan)
+						.where(eq(schema.mealPlan.organizationId, orgId)),
 					db
 						.delete(schema.ledger)
 						.where(eq(schema.ledger.organizationId, orgId)),
@@ -147,9 +156,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 		}
 
-		// 3–6. Delete memberships, invitations, sessions, accounts; anonymize ledger
+		// 3–9. Delete memberships, invitations, sessions, accounts, API keys, and
+		// residual identifiers; anonymize ledger.
 		log.info(
-			"[Purge] 3-6. Deleting user memberships, invitations, sessions, accounts...",
+			"[Purge] 3-9. Deleting user memberships, invitations, sessions, accounts...",
 		);
 		await db.batch([
 			db.delete(schema.member).where(eq(schema.member.userId, userId)),
@@ -160,6 +170,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 				.update(schema.ledger)
 				.set({ userId: null })
 				.where(eq(schema.ledger.userId, userId)),
+			db.delete(schema.apiKey).where(eq(schema.apiKey.userId, userId)),
+			db
+				.delete(schema.verification)
+				.where(
+					or(
+						eq(schema.verification.identifier, user.email),
+						like(schema.verification.identifier, `%${user.email}%`),
+					),
+				),
+			db
+				.delete(schema.interestSignup)
+				.where(eq(schema.interestSignup.email, user.email)),
 			db.delete(schema.session).where(eq(schema.session.userId, userId)),
 			db.delete(schema.account).where(eq(schema.account.userId, userId)),
 			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex

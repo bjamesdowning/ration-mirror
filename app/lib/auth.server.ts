@@ -108,6 +108,18 @@ export function createAuth(env: Cloudflare.Env) {
 					returned: true,
 					input: false,
 				},
+				tosAcceptedAt: {
+					type: "number",
+					required: false,
+					returned: true,
+					input: false,
+				},
+				tosVersion: {
+					type: "string",
+					required: false,
+					returned: true,
+					input: false,
+				},
 			},
 		},
 		plugins: [
@@ -195,6 +207,14 @@ export function createAuth(env: Cloudflare.Env) {
 								role: "owner",
 								createdAt: new Date(),
 							});
+
+							await db
+								.update(schema.user)
+								.set({
+									tosAcceptedAt: new Date(),
+									tosVersion: "2026-03-11",
+								})
+								.where(eq(schema.user.id, user.id));
 
 							log.info("[Auth] Created personal group", {
 								orgId: redactId(personalOrgId),

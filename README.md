@@ -1021,7 +1021,7 @@ erDiagram
 
 | Table | Owner | Purpose | Key Indexes |
 |-------|-------|---------|-------------|
-| `user` | — | Authenticated users, tier info, allergen settings | `email` (unique) |
+| `user` | — | Authenticated users, tier info, allergen settings, and legal acceptance metadata (`tos_accepted_at`, `tos_version`) | `email` (unique) |
 | `session` | user | Active auth sessions with org context | `token` (unique) |
 | `account` | user | OAuth provider links (Google, email/password) | — |
 | `verification` | — | Auth verification tokens (email confirm) | `identifier` |
@@ -1093,7 +1093,7 @@ sequenceDiagram
 
 *Diagram shows Google OAuth flow. Magic link flow: user enters email → server sends link via Resend → user clicks link → Better Auth verifies token → session created.*
 
-**Post-signup provisioning** (in [`app/lib/auth.server.ts`](app/lib/auth.server.ts)): Every new user automatically receives a personal organization with `owner` role. Failures in this hook are non-fatal — the user can manually create a group. This ensures every user always has a valid group context for queries without requiring a separate onboarding step.
+**Post-signup provisioning** (in [`app/lib/auth.server.ts`](app/lib/auth.server.ts)): Every new user automatically receives a personal organization with `owner` role, and legal acceptance metadata is stamped (`tosAcceptedAt`, `tosVersion`) at account creation. Failures in this hook are non-fatal — the user can manually create a group. This ensures every user always has a valid group context for queries without requiring a separate onboarding step.
 
 ---
 

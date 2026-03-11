@@ -226,7 +226,52 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>9. Data Retention & Deletion</h2>
+			<h2>9. International Data Transfers</h2>
+			<p>
+				Our Service Providers may process personal data in countries outside
+				your country of residence, including the United States. Where GDPR or UK
+				GDPR applies and personal data is transferred outside the EEA/UK, we
+				rely on appropriate safeguards such as the European Commission's
+				Standard Contractual Clauses (SCCs) or the UK International Data
+				Transfer Agreement (or the UK Addendum to SCCs), as applicable.
+			</p>
+			<ul>
+				<li>
+					<strong>Cloudflare:</strong>{" "}
+					<a
+						href="https://www.cloudflare.com/cloudflare-customer-dpa/"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Customer DPA
+					</a>
+				</li>
+				<li>
+					<strong>Stripe:</strong>{" "}
+					<a
+						href="https://stripe.com/legal/dpa"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Data Processing Agreement
+					</a>
+				</li>
+				<li>
+					<strong>Resend:</strong>{" "}
+					<a
+						href="https://resend.com/legal/data-processing-agreement"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Data Processing Agreement
+					</a>
+				</li>
+			</ul>
+
+			<h2>10. Data Retention & Deletion</h2>
 			<p>
 				We will retain your Personal Data only for as long as is necessary for
 				the purposes set out in this Privacy Policy. We will retain and use your
@@ -243,7 +288,7 @@ export default function PrivacyPolicy() {
 				Account" function in the User Profile settings.
 			</p>
 
-			<h2>10. Security of Data</h2>
+			<h2>11. Security of Data</h2>
 			<p>
 				The security of your data is important to us, but remember that no
 				method of transmission over the Internet, or method of electronic
@@ -252,7 +297,7 @@ export default function PrivacyPolicy() {
 				security.
 			</p>
 
-			<h2>11. Changes to This Privacy Policy</h2>
+			<h2>12. Changes to This Privacy Policy</h2>
 			<p>
 				We may update our Privacy Policy from time to time. We will notify you
 				of any changes by posting the new Privacy Policy on this page. You are
@@ -261,7 +306,7 @@ export default function PrivacyPolicy() {
 				this page.
 			</p>
 
-			<h2>12. Contact Us & Data Subject Rights</h2>
+			<h2>13. Contact Us & Data Subject Rights</h2>
 			<p>
 				If you have any questions about this Privacy Policy, or wish to exercise
 				your rights under applicable data protection law (including the right to

@@ -67,7 +67,7 @@ export default function PrivacyPolicy() {
 				Data").
 			</p>
 
-			<h3>Dietary & Allergen Data (Special Category)</h3>
+			<h3 id="allergen">Dietary & Allergen Data (Special Category)</h3>
 			<div className="glass-panel rounded-xl p-6 my-6 border border-hyper-green/20">
 				<p className="font-bold text-carbon">Health Data — GDPR Article 9</p>
 				<p className="mt-2">

@@ -298,7 +298,10 @@ export function AuthWidget({
 						<button
 							type="submit"
 							disabled={
-								isLoading || !email.trim() || !isValidEmail(email.trim())
+								isLoading ||
+								!email.trim() ||
+								!isValidEmail(email.trim()) ||
+								consentBlocked
 							}
 							className="w-full bg-hyper-green text-carbon font-bold py-3.5 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-ring"
 						>
@@ -384,7 +387,7 @@ export function AuthWidget({
 					<button
 						type="button"
 						onClick={handleGoogleAuth}
-						disabled={isLoading}
+						disabled={isLoading || consentBlocked}
 						className="w-full border border-carbon/10 bg-white/60 text-carbon py-3 px-4 rounded-xl text-sm font-semibold hover:bg-platinum transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 focus-ring"
 					>
 						{socialLoading ? (

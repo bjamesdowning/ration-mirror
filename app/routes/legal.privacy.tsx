@@ -260,15 +260,16 @@ export default function PrivacyPolicy() {
 				</li>
 				<li>
 					<strong>
-						AI Providers (Google Gemini via Cloudflare AI Gateway; Llama 3.3 via
-						Cloudflare Workers AI):
+						AI Providers (Google Gemini via Cloudflare AI Gateway):
 					</strong>{" "}
-					We use these services to process the following categories of data:
+					We use Google Gemini (proxied via Cloudflare AI Gateway) to process
+					the following categories of data:
 					<ul className="list-disc pl-5 mt-1">
 						<li>
 							<strong>Visual Data</strong> — receipt and product images you
 							upload, encoded as base64 and sent to Gemini for item
-							identification (Scan feature).
+							identification (Scan feature). Images are deleted from our storage
+							immediately after processing.
 						</li>
 						<li>
 							<strong>Inventory Data</strong> — ingredient names and quantities
@@ -282,14 +283,31 @@ export default function PrivacyPolicy() {
 						</li>
 						<li>
 							<strong>Recipe URLs & Page Content</strong> — web page content
-							fetched from URLs you submit for recipe import, sent to Llama 3.3
-							for structured extraction.
+							fetched from URLs you submit for recipe import, sent to Gemini for
+							structured recipe extraction.
 						</li>
 					</ul>
 					<p className="mt-1">
 						Your data is not used to train these models. Processing is governed
-						by Cloudflare&apos;s AI Gateway and model providers&apos; data
-						processing terms.
+						by Cloudflare&apos;s{" "}
+						<a
+							href="https://www.cloudflare.com/cloudflare-customer-dpa/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-hyper-green hover:underline"
+						>
+							AI Gateway terms
+						</a>{" "}
+						and{" "}
+						<a
+							href="https://ai.google.dev/gemini-api/terms"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-hyper-green hover:underline"
+						>
+							Google&apos;s Gemini API Terms
+						</a>
+						.
 					</p>
 				</li>
 			</ul>
@@ -359,8 +377,11 @@ export default function PrivacyPolicy() {
 				the deletion of your account and all associated data. Upon such request,
 				we will permanently purge your Personal Data, Usage Data, Cargo Data,
 				and Visual Data from our systems (D1 Databases, Vectorize Indexes, R2
-				Storage). You can initiate this process through the specific "Purge
-				Account" function in the User Profile settings.
+				Storage). You can initiate this process through the "Purge Account"
+				function in your profile settings. Note: inventory and meal data you
+				have contributed to shared groups you do not solely own may be retained
+				as part of that group's collective data, as it is also associated with
+				other members.
 			</p>
 
 			<h2>12. Data Breach Notification</h2>

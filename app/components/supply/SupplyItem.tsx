@@ -175,6 +175,7 @@ export function SupplyItem({
 	return (
 		<>
 			<div
+				data-testid="supply-item-row"
 				className={`group py-3 px-4 border-b border-platinum last:border-0 transition-all ${
 					isPending ? "opacity-60" : ""
 				} ${optimisticPurchased ? "opacity-50" : ""}`}

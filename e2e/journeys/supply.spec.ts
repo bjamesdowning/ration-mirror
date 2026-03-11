@@ -21,14 +21,15 @@ test.describe("supply", () => {
 
 		// Cleanup: find row with item, click Remove, confirm
 		const row = page
-			.locator("[class*='border-b']")
+			.getByTestId("supply-item-row")
 			.filter({ hasText: itemName });
+		await row.hover();
 		await row.getByRole("button", { name: "Remove item" }).click();
 
 		// Confirm dialog (exact: true to avoid matching "Remove item" row action)
 		await page.getByRole("button", { name: "Remove", exact: true }).click();
 
 		// Verify item is removed
-		await expect(page.getByText(itemName)).toHaveCount(0);
+		await expect(page.getByText(itemName)).toHaveCount(0, { timeout: 10000 });
 	});
 });

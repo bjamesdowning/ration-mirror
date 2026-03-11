@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 
@@ -13,13 +13,14 @@ export function AddItemForm({
 	onAdd,
 	defaultDomain = "food",
 }: AddItemFormProps) {
-	const fetcher = useFetcher();
+	const fetcher = useFetcher<{ item?: unknown }>();
 	const [name, setName] = useState("");
 	const [quantity, setQuantity] = useState(1);
 	const [unit, setUnit] = useState("unit");
 	const [domain, setDomain] =
 		useState<(typeof ITEM_DOMAINS)[number]>(defaultDomain);
 	const [expanded, setExpanded] = useState(false);
+	const didSubmit = useRef(false);
 
 	const isPending = fetcher.state !== "idle";
 
@@ -41,6 +42,7 @@ export function AddItemForm({
 				encType: "application/json",
 			},
 		);
+		didSubmit.current = true;
 
 		// Reset form
 		setName("");
@@ -48,8 +50,14 @@ export function AddItemForm({
 		setUnit("unit");
 		setDomain(defaultDomain);
 		setExpanded(false);
-		onAdd?.();
 	};
+
+	useEffect(() => {
+		if (fetcher.state === "idle" && didSubmit.current && fetcher.data?.item) {
+			didSubmit.current = false;
+			onAdd?.();
+		}
+	}, [fetcher.state, fetcher.data, onAdd]);
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">

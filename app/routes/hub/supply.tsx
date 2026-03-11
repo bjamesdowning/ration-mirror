@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { data, useFetcher, useRevalidator } from "react-router";
+import { data, useFetcher } from "react-router";
 
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
@@ -65,6 +65,8 @@ export function shouldRevalidate({
 	defaultShouldRevalidate: boolean;
 	formAction?: string;
 }) {
+	// Same URL means a mutation-triggered refresh, not filter-only navigation.
+	if (currentUrl.href === nextUrl.href) return true;
 	// Form submissions (actions) should always revalidate
 	if (formAction) return defaultShouldRevalidate;
 	// Same path — check if only cosmetic params changed
@@ -278,11 +280,15 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		mode?: "cooking" | "metric" | "imperial";
 		list?: typeof list;
 	}>();
-	const revalidator = useRevalidator();
 
-	// Prefer the fresh list returned by the most recent sync/unit-mode action so
-	// the page updates immediately without an extra loader round-trip.
-	const displayList = unitModeFetcher.data?.list ?? fetcher.data?.list ?? list;
+	// Use fetcher-returned list only while its revalidation is loading; once idle,
+	// always fall back to loader data so mutations don't render stale snapshots.
+	const displayList =
+		(unitModeFetcher.state === "loading"
+			? unitModeFetcher.data?.list
+			: undefined) ??
+		(fetcher.state === "loading" ? fetcher.data?.list : undefined) ??
+		list;
 	const [showQuickAdd, setShowQuickAdd] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
@@ -638,7 +644,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 								<AddItemForm
 									listId={displayList.id}
 									defaultDomain={activeDomain === "all" ? "food" : activeDomain}
-									onAdd={() => revalidator.revalidate()}
 								/>
 							}
 						/>
@@ -650,10 +655,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							<AddItemForm
 								listId={displayList.id}
 								defaultDomain={activeDomain === "all" ? "food" : activeDomain}
-								onAdd={() => {
-									revalidator.revalidate();
-									setShowQuickAdd(false);
-								}}
+								onAdd={() => setShowQuickAdd(false)}
 							/>
 						</div>
 					)}
@@ -675,17 +677,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							list={{ ...displayList, items: filteredItems }}
 							filterDomain="all"
 							filterSearch=""
-							onRefresh={() => revalidator.revalidate()}
 						/>
 					)}
 
 					{/* Snoozed Items (collapsible) */}
 					{snoozes.length > 0 && (
-						<SnoozedItemsPanel
-							snoozes={snoozes}
-							listId={displayList.id}
-							onUnsnooze={() => revalidator.revalidate()}
-						/>
+						<SnoozedItemsPanel snoozes={snoozes} listId={displayList.id} />
 					)}
 				</div>
 			)}

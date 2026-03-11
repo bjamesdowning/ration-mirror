@@ -310,6 +310,25 @@ export default function PrivacyPolicy() {
 						.
 					</p>
 				</li>
+				<li>
+					<strong>
+						AI Providers — Cloudflare Workers AI (embedding model):
+					</strong>{" "}
+					We use Cloudflare Workers AI to generate semantic vector embeddings.
+					Ingredient names from your Cargo (e.g. "whole milk", "chicken breast")
+					are sent to the{" "}
+					<code className="text-xs bg-platinum/50 px-1 rounded">
+						@cf/google/embeddinggemma-300m
+					</code>{" "}
+					embedding model hosted on Cloudflare&apos;s infrastructure. The
+					resulting vectors are stored in Cloudflare Vectorize and used solely
+					to power semantic ingredient-matching features (e.g. matching recipe
+					ingredients to your pantry). Embeddings are cached in Cloudflare KV
+					for up to 7 days to reduce redundant processing. Embeddings are
+					deleted when you remove the corresponding inventory item or purge your
+					account. No personally identifiable information beyond ingredient name
+					text is included in embedding requests.
+				</li>
 			</ul>
 
 			<h2>10. International Data Transfers</h2>

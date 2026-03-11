@@ -4,13 +4,19 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-const isRemoteDev = process.env.CLOUDFLARE_ENV === "dev";
+const cloudflareEnv = process.env.CLOUDFLARE_ENV;
+const configPath =
+	cloudflareEnv === "local"
+		? "./wrangler.local.jsonc"
+		: cloudflareEnv === "dev"
+			? "./wrangler.dev.jsonc"
+			: undefined;
 
 export default defineConfig(({ isSsrBuild }) => ({
 	plugins: [
 		cloudflare({
 			viteEnvironment: { name: "server" },
-			...(isRemoteDev && { configPath: "./wrangler.dev.jsonc" }),
+			...(configPath && { configPath }),
 		}),
 		reactRouter(),
 		tailwindcss(),

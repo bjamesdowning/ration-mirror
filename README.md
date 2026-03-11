@@ -1495,10 +1495,16 @@ The test suite uses **Vitest** with co-located `__tests__/` directories. The `AI
 
 ```bash
 bun run test:unit     # Vitest unit tests
+bun run test:e2e      # Playwright E2E (starts dev server)
+bun run test:e2e:ui   # Playwright UI mode
+bun run test:e2e:headed # Playwright headed (visible browser)
+bun run test:e2e:report # Open last HTML report
 bun run typecheck     # cf-typegen + react-router typegen + tsc -b
 bun run lint          # Biome v2 lint check
 bun run lint:fix      # Biome v2 auto-fix
 ```
+
+**E2E testing:** Playwright uses `bun run dev:local` (local D1/KV/R2, fast startup). If a dev server is already running on port 5173, Playwright reuses it. Run `bun run db:migrate:local` before first E2E run. Dev Login (`dev@ration.app`). Auth state saved in `e2e/.auth/user.json`. Public smoke tests run without auth state; journeys reuse the saved authenticated session. To scale local runs, set workers explicitly (for example `PLAYWRIGHT_WORKERS=4 bun run test:e2e`). Fixtures: `e2e/fixtures/avatar.png`, `e2e/fixtures/sample-scan.png`. Scan tests mock the API to avoid AI/credits.
 
 **What is tested:**
 

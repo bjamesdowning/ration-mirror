@@ -32,4 +32,30 @@ test.describe("navigation", () => {
 		await page.getByRole("link", { name: "System settings" }).click();
 		await expect(page).toHaveURL("/hub/settings");
 	});
+
+	test("pricing page loads", async ({ authenticatedPage: page }) => {
+		await page.goto("/hub/pricing");
+		await expect(page).toHaveURL("/hub/pricing");
+		await expect(page.getByRole("heading", { name: "Free" })).toBeVisible({
+			timeout: 5000,
+		});
+	});
+
+	test("groups new page loads", async ({ authenticatedPage: page }) => {
+		await page.goto("/hub/groups/new");
+		await expect(page).toHaveURL("/hub/groups/new");
+		await expect(
+			page.getByRole("heading", { name: "Create Group" }),
+		).toBeVisible({
+			timeout: 5000,
+		});
+	});
+
+	test("hub index renders", async ({ authenticatedPage: page }) => {
+		await page.goto("/hub");
+		await expect(page).toHaveURL(/\/(hub|hub\/)$/);
+		await expect(page.locator('aside a[href="/hub/cargo"]')).toBeVisible({
+			timeout: 5000,
+		});
+	});
 });

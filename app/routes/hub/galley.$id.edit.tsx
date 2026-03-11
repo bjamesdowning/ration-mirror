@@ -84,6 +84,7 @@ export default function EditMeal({ loaderData }: Route.ComponentProps) {
 					defaultValue={meal}
 					availableIngredients={loaderData.cargo}
 					method="post"
+					submitLabel="Update Meal"
 				/>
 			</div>
 		</>

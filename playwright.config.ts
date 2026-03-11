@@ -1,11 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * For local dev:remote, use localhost:5173.
- * For branch preview deploys, set PLAYWRIGHT_BASE_URL to the deployed URL
- * and disable webServer (set webServer: undefined or a no-op).
+ * E2E runs against local dev server on port 5173.
+ * - Default: Playwright starts `bun run dev:local` (local D1/KV/R2, fast startup).
+ * - With existing server: `bun run dev` in one terminal, then `bun run test:e2e` — Playwright reuses it.
+ * - With custom URL: `PLAYWRIGHT_BASE_URL=http://localhost:5173 bun run test:e2e` — Playwright reuses it.
+ * - With deployed URL: `PLAYWRIGHT_BASE_URL=https://... bun run test:e2e` — set webServer to undefined.
  */
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
+const useExternalServer = !!process.env.PLAYWRIGHT_BASE_URL;
+const requestedWorkers = Number(process.env.PLAYWRIGHT_WORKERS ?? "2");
+const localWorkers =
+	Number.isFinite(requestedWorkers) && requestedWorkers > 0
+		? requestedWorkers
+		: 2;
 
 const authFile = "e2e/.auth/user.json";
 
@@ -14,7 +22,7 @@ export default defineConfig({
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 1,
-	workers: process.env.CI ? 2 : 1,
+	workers: process.env.CI ? 2 : localWorkers,
 	timeout: 30000,
 	reporter: process.env.CI ? "github" : "html",
 	use: {
@@ -26,26 +34,33 @@ export default defineConfig({
 	projects: [
 		{ name: "setup", testMatch: /auth\.setup\.ts/ },
 		{
-			name: "chromium",
+			name: "chromium-public",
+			use: { ...devices["Desktop Chrome"] },
+			testMatch: ["e2e/smoke/**/*.spec.ts", "e2e/journeys/shared.spec.ts"],
+			testIgnore: "e2e/smoke/navigation.spec.ts",
+		},
+		{
+			name: "chromium-auth",
 			use: {
 				...devices["Desktop Chrome"],
 				storageState: authFile,
 			},
-			testMatch: /\.spec\.ts/,
-			testIgnore: /auth\.spec\.ts/,
+			testMatch: ["e2e/journeys/**/*.spec.ts", "e2e/smoke/navigation.spec.ts"],
+			testIgnore: ["e2e/journeys/auth.spec.ts", "e2e/journeys/shared.spec.ts"],
 			dependencies: ["setup"],
 		},
 		{
 			name: "auth",
 			use: { ...devices["Desktop Chrome"] },
-			testMatch: /auth\.spec\.ts/,
+			testMatch: "e2e/journeys/auth.spec.ts",
 		},
 	],
-	webServer: {
-		command: "bun run dev:remote",
-		url: baseURL,
-		// Reuse when not in CI; in CI we start fresh. Explicit true/false avoids env quirks.
-		reuseExistingServer: process.env.CI !== "true",
-		timeout: 180000,
-	},
+	webServer: useExternalServer
+		? undefined
+		: {
+				command: "bun run dev:local",
+				url: baseURL,
+				reuseExistingServer: process.env.CI !== "true",
+				timeout: 120000,
+			},
 });

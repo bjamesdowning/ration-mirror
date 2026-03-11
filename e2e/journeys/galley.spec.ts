@@ -33,6 +33,36 @@ test.describe("galley", () => {
 		await expect(page).toHaveURL("/hub/galley");
 		await expect(page.getByText(mealName)).toHaveCount(0);
 	});
+
+	test("edit meal name", async ({ authenticatedPage: page }) => {
+		const mealName = `e2e-galley-edit-${Date.now()}`;
+		const editedName = `${mealName}-edited`;
+		await page.goto("/hub/galley");
+
+		// Create meal
+		await page.getByRole("button", { name: "Add" }).first().click();
+		await page.getByRole("button", { name: "Recipe" }).click();
+		await page.getByLabel("Meal Name").fill(mealName);
+		await page.getByRole("button", { name: "Create Meal" }).click();
+		await expect(page).toHaveURL(/\/hub\/galley\/.+/);
+
+		// Edit meal
+		await page.getByRole("link", { name: "Edit" }).click();
+		await expect(page).toHaveURL(/\/hub\/galley\/.+\/edit/);
+		await page.getByLabel("Name").fill(editedName);
+		await page.getByRole("button", { name: "Update Meal" }).click();
+
+		// Verify redirect to detail and new name
+		await expect(page).toHaveURL(/\/hub\/galley\/[^/]+$/);
+		await expect(page.getByText(editedName)).toBeVisible({ timeout: 5000 });
+
+		// Cleanup
+		await page.getByRole("button", { name: "Delete" }).click();
+		await page
+			.getByRole("dialog")
+			.getByRole("button", { name: "Delete" })
+			.click();
+	});
 });
 
 // AI features: smaller subset, run separately with test:e2e --grep "AI"

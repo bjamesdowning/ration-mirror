@@ -1,0 +1,98 @@
+/**
+ * Local dev config for @cloudflare/vite-plugin.
+ * Used by `bun run dev:local` via configPath in vite.config.ts.
+ * All bindings use local Miniflare simulation — no remote Cloudflare calls.
+ * Fast startup, ideal for E2E tests. Run migrations: bun run db:migrate:local
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ration-local",
+	"compatibility_date": "2026-01-14",
+	"main": "./workers/app.ts",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		"BETTER_AUTH_URL": "http://localhost:5173",
+		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
+		"AI_GATEWAY_ID": "ration-gateway",
+		"STRIPE_PRICE_TASTE_TEST_usd": "price_1T6ftCFX10NMafIY76s3Zi25",
+		"STRIPE_PRICE_TASTE_TEST_eur": "price_1T6fQ3FX10NMafIYI3DG2jeb",
+		"STRIPE_PRICE_SUPPLY_RUN_usd": "price_1T6ftpFX10NMafIY9wmctqNQ",
+		"STRIPE_PRICE_SUPPLY_RUN_eur": "price_1T6fQdFX10NMafIYJcjEP9kb",
+		"STRIPE_PRICE_MISSION_CRATE_usd": "price_1T6fsBFX10NMafIYO7BtS3ui",
+		"STRIPE_PRICE_MISSION_CRATE_eur": "price_1T6fREFX10NMafIYyBKWIYHD",
+		"STRIPE_PRICE_ORBITAL_STOCKPILE_usd": "price_1T6fqLFX10NMafIYDN7dJg5E",
+		"STRIPE_PRICE_ORBITAL_STOCKPILE_eur": "price_1T6fTCFX10NMafIYitO2F4pe",
+		"STRIPE_PRICE_CREW_MEMBER_ANNUAL_usd": "price_1T6futFX10NMafIYpGpDTzjq",
+		"STRIPE_PRICE_CREW_MEMBER_ANNUAL_eur": "price_1T1r4zFX10NMafIY7ZFHe8xE",
+		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_usd": "price_1T6fvKFX10NMafIY69fY4MXY",
+		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_eur": "price_1T6fBlFX10NMafIYHEbyNKwN",
+		"STRIPE_PROMO_WELCOME65": "promo_1T7CtfFX10NMafIYkyQyhzO6"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ration-db-dev",
+			"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage-dev"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "9653e02f53844dcca292bf7c21013048"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo-dev"
+		}
+	],
+	"queues": {
+		"producers": [
+			{ "queue": "ration-scan", "binding": "SCAN_QUEUE" },
+			{ "queue": "ration-meal-generate", "binding": "MEAL_GENERATE_QUEUE" },
+			{ "queue": "ration-plan-week", "binding": "PLAN_WEEK_QUEUE" },
+			{ "queue": "ration-import-url", "binding": "IMPORT_URL_QUEUE" }
+		],
+		"consumers": [
+			{
+				"queue": "ration-scan",
+				"max_batch_size": 5,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			},
+			{
+				"queue": "ration-meal-generate",
+				"max_batch_size": 3,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			},
+			{
+				"queue": "ration-plan-week",
+				"max_batch_size": 3,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			},
+			{
+				"queue": "ration-import-url",
+				"max_batch_size": 3,
+				"max_batch_timeout": 10,
+				"max_retries": 3
+			}
+		]
+	},
+	"assets": {
+		"directory": "./build/client",
+		"binding": "ASSETS"
+	}
+}

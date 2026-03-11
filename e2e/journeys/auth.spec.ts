@@ -20,6 +20,12 @@ test.describe("auth", () => {
 	test("submitting email shows check-inbox success state", async ({ page }) => {
 		await page.goto("/");
 		await page.getByLabel("Email address").fill("test@example.com");
+		// Clickwrap: must agree to ToS/Privacy before submit is enabled
+		await page
+			.getByRole("checkbox", {
+				name: /agree to the Terms of Service and Privacy Policy/i,
+			})
+			.check();
 		// Note: in local dev the form posts but no email is sent, the UI should
 		// still transition to the "sent" state. We mock the auth endpoint to
 		// return a 200 OK so the test doesn't depend on an external service.
@@ -62,6 +68,11 @@ test.describe("auth", () => {
 
 	test("invalid email keeps submit button disabled", async ({ page }) => {
 		await page.goto("/");
+		await page
+			.getByRole("checkbox", {
+				name: /agree to the Terms of Service and Privacy Policy/i,
+			})
+			.check();
 		await page.getByLabel("Email address").fill("not-an-email");
 		const btn = page.getByRole("button", { name: /send sign-up link/i });
 		await expect(btn).toBeDisabled();

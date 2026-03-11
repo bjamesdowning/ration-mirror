@@ -1144,6 +1144,8 @@ flowchart TB
 | **Vectorize namespacing** | `namespace = organizationId` | Vector queries are scoped to the org's namespace, matching the D1 tenant isolation at the semantic layer. |
 | **API key isolation** | `api_key.organization_id` | Programmatic keys are scoped to a single org. `verifyApiKey()` returns the `organizationId` which is used as the RLS anchor for all subsequent queries. |
 
+**Account deletion and ownership transfer:** When a user deletes their account (Purge Account in settings), groups they own are handled as follows: if other members have joined, ownership auto-transfers to the first admin or first member. If the owner is the sole member (including when invitations are pending and not yet accepted), the group and all its data are permanently deleted. Owners can proactively transfer ownership to another member via the "Transfer ownership" option in group settings (Danger Zone) before deleting their account.
+
 ---
 
 ### 7.3 Route Access Control
@@ -1391,6 +1393,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `POST /api/checkout` | userId | 60s | 10 | Payment spam prevention |
 | `POST /api/groups/create` | userId | 60s | 5 | Spam prevention |
 | `POST /api/groups/invitations/create` | userId | 60s | 10 | Invitation spam |
+| `POST /api/groups/ownership/transfer` | userId | 60s | 5 | Ownership transfer abuse |
 | `POST /api/groups/credits/transfer` | userId | 60s | 10 | Transfer abuse |
 | `POST /api/cargo/batch` | userId | 60s | 20 | Bulk write protection |
 | `POST /api/user/purge` | userId | 300s | 1 | Destructive action guard |

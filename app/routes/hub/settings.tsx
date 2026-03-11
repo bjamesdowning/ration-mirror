@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -254,6 +255,19 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
+		// Groups the user owns with no other members (will be deleted on account purge)
+		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
+		const ownedGroupsWithNoOtherMembers: string[] = [];
+		for (const m of ownedMemberships) {
+			const orgMembers = await db
+				.select()
+				.from(schema.member)
+				.where(eq(schema.member.organizationId, m.organizationId));
+			if (orgMembers.length === 1) {
+				ownedGroupsWithNoOtherMembers.push(m.organizationName);
+			}
+		}
+
 		return {
 			settings,
 			members,
@@ -274,6 +288,7 @@ export async function loader(args: Route.LoaderArgs) {
 				user.subscriptionCancelAtPeriodEnd ?? false,
 			apiKeys,
 			origin: url.origin,
+			ownedGroupsWithNoOtherMembers,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -637,7 +652,14 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{activeSection === "help" && <HelpSection />}
 					{activeSection === "admin" && isAdmin && <AdminSection />}
 					{activeSection === "danger" && (
-						<DangerSection isOwner={isOwner} organizationId={organizationId} />
+						<DangerSection
+							isOwner={isOwner}
+							organizationId={organizationId}
+							members={members}
+							ownedGroupsWithNoOtherMembers={
+								loaderData.ownedGroupsWithNoOtherMembers ?? []
+							}
+						/>
 					)}
 				</div>
 			</div>
@@ -1734,15 +1756,49 @@ function AdminSection() {
 function DangerSection({
 	isOwner,
 	organizationId,
+	members,
+	ownedGroupsWithNoOtherMembers,
 }: {
 	isOwner: boolean;
 	organizationId: string;
+	members: Array<{
+		id: string;
+		role: string;
+		user: { id: string; name: string | null; email: string };
+	}>;
+	ownedGroupsWithNoOtherMembers: string[];
 }) {
 	const { confirm } = useConfirm();
 	const purgeFetcher = useFetcher();
 	const deleteGroupFetcher = useFetcher();
+	const transferOwnershipFetcher = useFetcher<{
+		success?: boolean;
+		error?: string;
+	}>();
+	const revalidator = useRevalidator();
+	const successToast = useToast({ duration: 3000 });
 	const isPurging = purgeFetcher.state !== "idle";
 	const isDeletingGroup = deleteGroupFetcher.state !== "idle";
+	const isTransferring = transferOwnershipFetcher.state !== "idle";
+
+	const nonOwnerMembers = members.filter((m) => m.role !== "owner");
+	const canTransferOwnership = isOwner && nonOwnerMembers.length > 0;
+
+	// Revalidate and show toast on transfer success
+	useEffect(() => {
+		if (
+			transferOwnershipFetcher.state === "idle" &&
+			transferOwnershipFetcher.data?.success
+		) {
+			revalidator.revalidate();
+			successToast.show();
+		}
+	}, [
+		transferOwnershipFetcher.state,
+		transferOwnershipFetcher.data,
+		revalidator,
+		successToast.show,
+	]);
 
 	return (
 		<div className="space-y-4">
@@ -1760,19 +1816,27 @@ function DangerSection({
 						type="button"
 						disabled={isPurging}
 						onClick={async () => {
+							const consequences = [
+								"All inventory items and their history",
+								"Your remaining credit balance (non-refundable)",
+								"Active subscription — no pro-rated refund",
+								"All meal plans and recipes",
+								"All group memberships and shared data you own",
+								"API keys — all integrations will stop working immediately",
+							];
+							if (ownedGroupsWithNoOtherMembers.length > 0) {
+								consequences.push(
+									`Groups with no other members will be permanently deleted: ${ownedGroupsWithNoOtherMembers.join(", ")}`,
+								);
+							}
 							if (
 								!(await confirm({
 									title: "Delete your account permanently?",
 									message:
-										"There is no recovery path. This cannot be reversed by support.",
-									consequences: [
-										"All inventory items and their history",
-										"Your remaining credit balance (non-refundable)",
-										"Active subscription — no pro-rated refund",
-										"All meal plans and recipes",
-										"All group memberships and shared data you own",
-										"API keys — all integrations will stop working immediately",
-									],
+										ownedGroupsWithNoOtherMembers.length > 0
+											? "You own group(s) with no other members. These will be permanently deleted. If you invited people who haven't joined yet, consider waiting for them to accept or transferring ownership first."
+											: "There is no recovery path. This cannot be reversed by support.",
+									consequences,
 									requireTyped: "delete",
 									confirmLabel: "Delete My Account",
 									variant: "danger",
@@ -1789,6 +1853,75 @@ function DangerSection({
 						{isPurging ? "Deleting..." : "Delete Account"}
 					</button>
 				</div>
+
+				{/* Transfer Ownership — owner only, when other members exist */}
+				{canTransferOwnership && (
+					<div className="pt-6 border-t border-danger/20">
+						<h3 className="text-sm font-bold text-carbon mb-1">
+							Transfer Ownership
+						</h3>
+						<p className="text-sm text-muted mb-4 max-w-md">
+							Hand off this group to another member before leaving or deleting
+							your account. You will become a regular member. The new owner's
+							subscription tier will determine group limits (Crew vs free).
+						</p>
+						<select
+							id="transfer-owner-select"
+							className="mb-3 w-full max-w-sm px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+							defaultValue=""
+							onChange={async (e) => {
+								const newOwnerMemberId = e.target.value;
+								if (!newOwnerMemberId) return;
+								const targetMember = nonOwnerMembers.find(
+									(m) => m.id === newOwnerMemberId,
+								);
+								if (!targetMember) return;
+								const displayName = getUserDisplayName(targetMember.user);
+								if (
+									!(await confirm({
+										title: "Transfer ownership?",
+										message: `You will hand off ownership to ${displayName}. You will become a regular member. The new owner's subscription tier will determine group limits.`,
+										consequences: [
+											"You will lose owner privileges (delete group, transfer credits)",
+											"Group limits will follow the new owner's tier",
+										],
+										requireTyped: "transfer",
+										confirmLabel: "Transfer Ownership",
+										variant: "warning",
+									}))
+								)
+									return;
+								transferOwnershipFetcher.submit(
+									JSON.stringify({ newOwnerMemberId }),
+									{
+										method: "post",
+										action: "/api/groups/ownership/transfer",
+										encType: "application/json",
+									},
+								);
+								e.target.value = "";
+							}}
+							disabled={isTransferring}
+						>
+							<option value="">Select member to transfer to…</option>
+							{nonOwnerMembers.map((m) => (
+								<option key={m.id} value={m.id}>
+									{getUserDisplayName(m.user)} ({m.role})
+								</option>
+							))}
+						</select>
+						{isTransferring && (
+							<span className="text-hyper-green animate-pulse text-sm block mt-1">
+								Transferring...
+							</span>
+						)}
+						{transferOwnershipFetcher.data?.error && (
+							<p className="text-sm text-danger mt-1">
+								{transferOwnershipFetcher.data.error}
+							</p>
+						)}
+					</div>
+				)}
 
 				{/* Delete Group — owner only */}
 				{isOwner && (
@@ -1833,6 +1966,15 @@ function DangerSection({
 					</div>
 				)}
 			</div>
+
+			{successToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Ownership transferred"
+					description="You are now a regular member."
+					onDismiss={successToast.hide}
+				/>
+			)}
 		</div>
 	);
 }

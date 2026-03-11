@@ -397,9 +397,21 @@ export default function PrivacyPolicy() {
 				we will permanently purge your Personal Data, Usage Data, Cargo Data,
 				and Visual Data from our systems (D1 Databases, Vectorize Indexes, R2
 				Storage). You can initiate this process through the "Purge Account"
-				function in your profile settings. Note: inventory and meal data you
-				have contributed to shared groups you do not solely own may be retained
-				as part of that group's collective data, as it is also associated with
+				function in your profile settings.
+			</p>
+			<p>
+				<strong>Groups you own:</strong> For groups where other members have
+				joined, ownership is automatically transferred to an admin or member
+				when you delete your account. If you are the sole member (including when
+				invitations are pending and not yet accepted), the group and all its
+				data are permanently deleted. You may use the "Transfer ownership"
+				option in group settings to hand off a group to another member before
+				deleting your account.
+			</p>
+			<p>
+				<strong>Shared groups:</strong> Inventory and meal data you have
+				contributed to shared groups you do not solely own may be retained as
+				part of that group's collective data, as it is also associated with
 				other members.
 			</p>
 

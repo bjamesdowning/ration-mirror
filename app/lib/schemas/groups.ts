@@ -5,3 +5,9 @@ export const RoleUpdateSchema = z.object({
 });
 
 export type RoleUpdateInput = z.infer<typeof RoleUpdateSchema>;
+
+export const TransferOwnershipSchema = z.object({
+	newOwnerMemberId: z.string().uuid(),
+});
+
+export type TransferOwnershipInput = z.infer<typeof TransferOwnershipSchema>;

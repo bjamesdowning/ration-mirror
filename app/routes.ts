@@ -168,6 +168,10 @@ export default [
 	route("api/groups/delete", "routes/api/groups.delete.ts"),
 	route("api/groups/credits/transfer", "routes/api/groups.credits.transfer.ts"),
 	route(
+		"api/groups/ownership/transfer",
+		"routes/api/groups.ownership.transfer.ts",
+	),
+	route(
 		"api/groups/invitations/create",
 		"routes/api/groups.invitations.create.ts",
 	),

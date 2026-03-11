@@ -252,42 +252,19 @@ export function getAuth(env: Cloudflare.Env): Auth {
 
 /**
  * Helper function to auto-activate personal organization if no active org is set.
- * Also syncs theme cookie if missing (e.g., new browser login).
  * Should be called in loaders/actions after getting session.
  */
 export async function ensureActiveOrganization(
 	env: Cloudflare.Env,
 	session: NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>,
-	request?: Request,
 ): Promise<{
 	session: NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>;
 	headers?: Headers;
 }> {
 	const db = drizzle(env.DB, { schema });
-	let syncHeaders: Headers | undefined;
-
-	// Sync theme cookie if missing (new browser login)
-	if (request) {
-		const cookieHeader = request.headers.get("Cookie") || "";
-		const hasThemeCookie = /theme=(light|dark)/.test(cookieHeader);
-
-		if (!hasThemeCookie) {
-			const user = await db.query.user.findFirst({
-				where: eq(schema.user.id, session.user.id),
-			});
-			const theme =
-				(user?.settings as { theme?: "light" | "dark" })?.theme || "light";
-			const secureFlag = request.url.startsWith("https://") ? "; Secure" : "";
-			syncHeaders = new Headers();
-			syncHeaders.set(
-				"Set-Cookie",
-				`theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax${secureFlag}`,
-			);
-		}
-	}
 
 	if (session.session.activeOrganizationId) {
-		return { session, headers: syncHeaders };
+		return { session };
 	}
 
 	try {
@@ -326,7 +303,6 @@ export async function ensureActiveOrganization(
 							activeOrganizationId: defaultGroupId,
 						},
 					},
-					headers: syncHeaders,
 				};
 			}
 			log.info("[Auth] User default group no longer accessible", {
@@ -358,14 +334,13 @@ export async function ensureActiveOrganization(
 						activeOrganizationId: personalGroup.id,
 					},
 				},
-				headers: syncHeaders,
 			};
 		}
 	} catch (error) {
 		log.error("[Auth] Failed to auto-activate organization", error);
 	}
 
-	return { session, headers: syncHeaders };
+	return { session };
 }
 
 export async function requireAuth(context: AppLoadContext, request: Request) {
@@ -379,7 +354,6 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	const { session: updatedSession } = await ensureActiveOrganization(
 		context.cloudflare.env,
 		session,
-		request,
 	);
 
 	return updatedSession;

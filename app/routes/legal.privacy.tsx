@@ -17,7 +17,7 @@ export default function PrivacyPolicy() {
 		<>
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: March 6, 2026
+				Last Updated: March 11, 2026
 			</p>
 
 			<h2>1. Introduction</h2>
@@ -67,7 +67,34 @@ export default function PrivacyPolicy() {
 				Data").
 			</p>
 
-			<h2>3. How We Use Your Information</h2>
+			<h2>3. Cookies</h2>
+			<p>
+				We use cookies strictly necessary for the operation of our Service and
+				to provide functionality you request. Per GDPR Article 13(1)(f), we
+				disclose each cookie below:
+			</p>
+			<ul>
+				<li>
+					<strong>better-auth.session_token</strong> — Authentication and
+					session management. Set when you sign in (magic link or OAuth). Allows
+					us to recognise you and keep you logged in. Expiry: session duration
+					(e.g. 7 days). Essential; exempt from consent.
+				</li>
+				<li>
+					<strong>theme</strong> — A functionality cookie that stores your
+					light/dark mode preference. It is set only when you actively use the
+					theme toggle or change your theme in settings; it is not set
+					automatically on first visit. Expiry: 1 year. Functionality cookie set
+					in response to user action; exempt from consent.
+				</li>
+			</ul>
+			<p>
+				<strong>Cloudflare Web Analytics</strong> — We use Cloudflare Web
+				Analytics to understand site performance. It does not use cookies and is
+				privacy-preserving.
+			</p>
+
+			<h2>4. How We Use Your Information</h2>
 			<p>Ration uses the collected data for various purposes:</p>
 			<ul>
 				<li>To provide and maintain the Service</li>
@@ -86,7 +113,7 @@ export default function PrivacyPolicy() {
 				<li>To process payments via our third-party payment processor</li>
 			</ul>
 
-			<h2>4. Legal Basis for Processing (EU / UK Users)</h2>
+			<h2>5. Legal Basis for Processing (EU / UK Users)</h2>
 			<p>
 				Where the General Data Protection Regulation (GDPR) or UK GDPR applies,
 				we rely on the following lawful bases under Article 6 to process your
@@ -111,7 +138,7 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>5. Magic Link Authentication</h2>
+			<h2>6. Magic Link Authentication</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Email-Based Sign-In</p>
 				<p className="mt-2">
@@ -124,7 +151,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>6. Google User Data</h2>
+			<h2>7. Google User Data</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Google OAuth Disclosure</p>
 				<p className="mt-2">
@@ -147,7 +174,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>7. Data Processors & Third Parties</h2>
+			<h2>8. Data Processors & Third Parties</h2>
 			<p>
 				We may employ third party companies and individuals to facilitate our
 				Service ("Service Providers"), to provide the Service on our behalf, to
@@ -199,7 +226,7 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 
-			<h2>8. Data Retention & Deletion</h2>
+			<h2>9. Data Retention & Deletion</h2>
 			<p>
 				We will retain your Personal Data only for as long as is necessary for
 				the purposes set out in this Privacy Policy. We will retain and use your
@@ -216,7 +243,7 @@ export default function PrivacyPolicy() {
 				Account" function in the User Profile settings.
 			</p>
 
-			<h2>9. Security of Data</h2>
+			<h2>10. Security of Data</h2>
 			<p>
 				The security of your data is important to us, but remember that no
 				method of transmission over the Internet, or method of electronic
@@ -225,7 +252,7 @@ export default function PrivacyPolicy() {
 				security.
 			</p>
 
-			<h2>10. Changes to This Privacy Policy</h2>
+			<h2>11. Changes to This Privacy Policy</h2>
 			<p>
 				We may update our Privacy Policy from time to time. We will notify you
 				of any changes by posting the new Privacy Policy on this page. You are
@@ -234,7 +261,7 @@ export default function PrivacyPolicy() {
 				this page.
 			</p>
 
-			<h2>11. Contact Us & Data Subject Rights</h2>
+			<h2>12. Contact Us & Data Subject Rights</h2>
 			<p>
 				If you have any questions about this Privacy Policy, or wish to exercise
 				your rights under applicable data protection law (including the right to

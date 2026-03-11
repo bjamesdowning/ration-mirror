@@ -67,6 +67,27 @@ export default function PrivacyPolicy() {
 				Data").
 			</p>
 
+			<h3>Dietary & Allergen Data (Special Category)</h3>
+			<div className="glass-panel rounded-xl p-6 my-6 border border-hyper-green/20">
+				<p className="font-bold text-carbon">Health Data — GDPR Article 9</p>
+				<p className="mt-2">
+					Ration allows you to record dietary restrictions and allergens (e.g.
+					gluten, nuts, dairy) to personalise meal recommendations and flag
+					unsafe ingredients. Under GDPR Article 9, allergen data is considered{" "}
+					<strong>special category health data</strong> because it may reveal
+					information about your medical condition or physiological make-up.
+				</p>
+				<p className="mt-2">
+					We process this data <strong>only</strong> on the basis of your{" "}
+					<strong>explicit consent (GDPR Art. 9(2)(a))</strong> — specifically,
+					the act of adding allergen information in your account settings. You
+					may withdraw this consent at any time by removing your allergen
+					selections. Allergen data is used solely to personalise your
+					experience within the Service and is never shared with third parties
+					for marketing purposes.
+				</p>
+			</div>
+
 			<h2>3. Cookies</h2>
 			<p>
 				We use cookies strictly necessary for the operation of our Service and
@@ -94,7 +115,23 @@ export default function PrivacyPolicy() {
 				privacy-preserving.
 			</p>
 
-			<h2>4. How We Use Your Information</h2>
+			<h2>4. Children's Privacy</h2>
+			<p>
+				Our Service is not directed to individuals under the age of 16 (or the
+				applicable age of digital consent in your jurisdiction). We do not
+				knowingly collect personal data from children. If you are a parent or
+				guardian and believe your child has provided us with personal data,
+				please contact us at{" "}
+				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> and we will
+				delete that information promptly.
+			</p>
+			<p>
+				If you are located in the United States, our Service is also not
+				intended for children under 13 in accordance with the Children's Online
+				Privacy Protection Act (COPPA).
+			</p>
+
+			<h2>5. How We Use Your Information</h2>
 			<p>Ration uses the collected data for various purposes:</p>
 			<ul>
 				<li>To provide and maintain the Service</li>
@@ -113,7 +150,7 @@ export default function PrivacyPolicy() {
 				<li>To process payments via our third-party payment processor</li>
 			</ul>
 
-			<h2>5. Legal Basis for Processing (EU / UK Users)</h2>
+			<h2>6. Legal Basis for Processing (EU / UK Users)</h2>
 			<p>
 				Where the General Data Protection Regulation (GDPR) or UK GDPR applies,
 				we rely on the following lawful bases under Article 6 to process your
@@ -137,8 +174,13 @@ export default function PrivacyPolicy() {
 					interests do not override your rights and freedoms.
 				</li>
 			</ul>
+			<p>
+				For allergen and dietary restriction data (special category data), we
+				rely on your <strong>explicit consent (GDPR Art. 9(2)(a))</strong> as
+				the legal basis. See Section 2 above.
+			</p>
 
-			<h2>6. Magic Link Authentication</h2>
+			<h2>7. Magic Link Authentication</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Email-Based Sign-In</p>
 				<p className="mt-2">
@@ -151,7 +193,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>7. Google User Data</h2>
+			<h2>8. Google User Data</h2>
 			<div className="glass-panel rounded-xl p-6 my-6">
 				<p className="font-bold text-carbon">Google OAuth Disclosure</p>
 				<p className="mt-2">
@@ -174,7 +216,7 @@ export default function PrivacyPolicy() {
 				</p>
 			</div>
 
-			<h2>8. Data Processors & Third Parties</h2>
+			<h2>9. Data Processors & Third Parties</h2>
 			<p>
 				We may employ third party companies and individuals to facilitate our
 				Service ("Service Providers"), to provide the Service on our behalf, to
@@ -218,15 +260,41 @@ export default function PrivacyPolicy() {
 				</li>
 				<li>
 					<strong>
-						AI Providers (e.g., OpenAI, Meta Llama via Cloudflare Workers AI):
+						AI Providers (Google Gemini via Cloudflare AI Gateway; Llama 3.3 via
+						Cloudflare Workers AI):
 					</strong>{" "}
-					We use these services to process text and images. Your Visual Data is
-					processed to identify items and is not used by us to train these
-					models.
+					We use these services to process the following categories of data:
+					<ul className="list-disc pl-5 mt-1">
+						<li>
+							<strong>Visual Data</strong> — receipt and product images you
+							upload, encoded as base64 and sent to Gemini for item
+							identification (Scan feature).
+						</li>
+						<li>
+							<strong>Inventory Data</strong> — ingredient names and quantities
+							from your Cargo, sent to Gemini to generate personalised meal
+							suggestions.
+						</li>
+						<li>
+							<strong>Allergen Profile</strong> — your dietary restriction
+							settings, sent alongside inventory data to ensure AI-generated
+							meals exclude unsafe ingredients.
+						</li>
+						<li>
+							<strong>Recipe URLs & Page Content</strong> — web page content
+							fetched from URLs you submit for recipe import, sent to Llama 3.3
+							for structured extraction.
+						</li>
+					</ul>
+					<p className="mt-1">
+						Your data is not used to train these models. Processing is governed
+						by Cloudflare&apos;s AI Gateway and model providers&apos; data
+						processing terms.
+					</p>
 				</li>
 			</ul>
 
-			<h2>9. International Data Transfers</h2>
+			<h2>10. International Data Transfers</h2>
 			<p>
 				Our Service Providers may process personal data in countries outside
 				your country of residence, including the United States. Where GDPR or UK
@@ -270,8 +338,15 @@ export default function PrivacyPolicy() {
 					</a>
 				</li>
 			</ul>
+			<p>
+				Ration Operating Company is established in the United States. We have
+				not designated a formal EU/EEA representative under GDPR Article 27 at
+				this time. If you have questions or wish to exercise your rights, please
+				contact us directly at{" "}
+				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>.
+			</p>
 
-			<h2>10. Data Retention & Deletion</h2>
+			<h2>11. Data Retention & Deletion</h2>
 			<p>
 				We will retain your Personal Data only for as long as is necessary for
 				the purposes set out in this Privacy Policy. We will retain and use your
@@ -288,7 +363,17 @@ export default function PrivacyPolicy() {
 				Account" function in the User Profile settings.
 			</p>
 
-			<h2>11. Security of Data</h2>
+			<h2>12. Data Breach Notification</h2>
+			<p>
+				In the event of a personal data breach that is likely to result in a
+				risk to your rights and freedoms, we will notify the relevant
+				supervisory authority without undue delay and, where feasible, within 72
+				hours of becoming aware of the breach (GDPR Art. 33). Where a breach is
+				likely to result in a high risk to your rights and freedoms, we will
+				also notify you directly without undue delay (GDPR Art. 34).
+			</p>
+
+			<h2>13. Security of Data</h2>
 			<p>
 				The security of your data is important to us, but remember that no
 				method of transmission over the Internet, or method of electronic
@@ -297,7 +382,44 @@ export default function PrivacyPolicy() {
 				security.
 			</p>
 
-			<h2>12. Changes to This Privacy Policy</h2>
+			<h2>14. California Privacy Rights (CCPA / CPRA)</h2>
+			<p>
+				If you are a resident of California, you have specific rights under the
+				California Consumer Privacy Act (CCPA) and the California Privacy Rights
+				Act (CPRA):
+			</p>
+			<ul>
+				<li>
+					<strong>Right to Know:</strong> You may request information about the
+					categories and specific pieces of personal information we have
+					collected, the purposes for which it is used, and the categories of
+					third parties with whom it is shared.
+				</li>
+				<li>
+					<strong>Right to Delete:</strong> You may request deletion of personal
+					information we have collected, subject to certain exceptions.
+				</li>
+				<li>
+					<strong>Right to Correct:</strong> You may request correction of
+					inaccurate personal information.
+				</li>
+				<li>
+					<strong>Right to Opt-Out:</strong>{" "}
+					<strong>We do not sell or share your personal information</strong> for
+					cross-context behavioural advertising. No opt-out action is required.
+				</li>
+				<li>
+					<strong>Right to Non-Discrimination:</strong> We will not discriminate
+					against you for exercising any of these rights.
+				</li>
+			</ul>
+			<p>
+				To exercise your California privacy rights, contact us at{" "}
+				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>. We will
+				respond within 45 days of receiving a verifiable request.
+			</p>
+
+			<h2>15. Changes to This Privacy Policy</h2>
 			<p>
 				We may update our Privacy Policy from time to time. We will notify you
 				of any changes by posting the new Privacy Policy on this page. You are
@@ -306,7 +428,7 @@ export default function PrivacyPolicy() {
 				this page.
 			</p>
 
-			<h2>13. Contact Us & Data Subject Rights</h2>
+			<h2>16. Contact Us & Data Subject Rights</h2>
 			<p>
 				If you have any questions about this Privacy Policy, or wish to exercise
 				your rights under applicable data protection law (including the right to
@@ -323,6 +445,31 @@ export default function PrivacyPolicy() {
 				within <strong>30 days</strong> of receipt, in accordance with GDPR
 				Article 12. Account deletion can also be initiated directly via the
 				"Purge Account" function in your profile settings.
+			</p>
+			<p>
+				<strong>Right to lodge a complaint (GDPR Art. 77):</strong> You have the
+				right to lodge a complaint with a supervisory authority. If you are in
+				the EU or EEA, you may contact your local Data Protection Authority. A
+				list of EU supervisory authorities is available at{" "}
+				<a
+					href="https://edpb.europa.eu/about-edpb/about-edpb/members_en"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-hyper-green hover:underline"
+				>
+					edpb.europa.eu
+				</a>
+				. If you are in the United Kingdom, you may contact the Information
+				Commissioner's Office (ICO) at{" "}
+				<a
+					href="https://ico.org.uk"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-hyper-green hover:underline"
+				>
+					ico.org.uk
+				</a>
+				.
 			</p>
 		</>
 	);

@@ -1185,6 +1185,18 @@ function AllergenSection({ settings }: { settings: UserSettings }) {
 				Select any ingredients you need to avoid. Meals containing these will be
 				flagged with a warning everywhere they appear.
 			</p>
+			<p className="text-xs text-muted mb-4 opacity-70">
+				Allergen data is health-related information. By saving a selection you
+				explicitly consent to its processing under{" "}
+				<a
+					href="/legal/privacy#allergen"
+					className="underline hover:text-hyper-green"
+				>
+					GDPR Art. 9(2)(a)
+				</a>{" "}
+				for the sole purpose of personalising your experience. You can withdraw
+				consent at any time by removing all restrictions.
+			</p>
 			<AllergenSelector
 				selected={currentAllergens}
 				onChange={handleChange}

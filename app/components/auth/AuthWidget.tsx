@@ -29,9 +29,11 @@ export function AuthWidget({
 	const [errorMsg, setErrorMsg] = useState("");
 	const [socialLoading, setSocialLoading] = useState(false);
 	const [devLoginLoading, setDevLoginLoading] = useState(false);
+	const [tosConsent, setTosConsent] = useState(false);
 
 	const isDev = import.meta.env.DEV;
 	const isLoading = flowState === "sending" || socialLoading || devLoginLoading;
+	const consentBlocked = mode === "signUp" && !tosConsent;
 
 	/** RFC 5322–style regex for basic email validation (relaxed for real-world use) */
 	const isValidEmail = (value: string): boolean =>
@@ -40,7 +42,7 @@ export function AuthWidget({
 	const handleMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
 		const trimmed = email.trim();
-		if (!trimmed || isLoading) return;
+		if (!trimmed || isLoading || consentBlocked) return;
 
 		if (!isValidEmail(trimmed)) {
 			setErrorMsg("Please enter a valid email address.");
@@ -76,6 +78,7 @@ export function AuthWidget({
 	};
 
 	const handleGoogleAuth = async () => {
+		if (consentBlocked) return;
 		setSocialLoading(true);
 		setErrorMsg("");
 		try {
@@ -412,22 +415,35 @@ export function AuthWidget({
 					</button>
 
 					{mode === "signUp" && (
-						<p className="mt-5 text-xs text-muted text-center">
-							By signing up, you agree to our{" "}
-							<Link
-								to="/legal/terms"
-								className="text-hyper-green hover:text-hyper-green/80"
-							>
-								Terms of Service
-							</Link>{" "}
-							and{" "}
-							<Link
-								to="/legal/privacy"
-								className="text-hyper-green hover:text-hyper-green/80"
-							>
-								Privacy Policy
-							</Link>
-						</p>
+						<label className="mt-5 flex items-start gap-2 cursor-pointer group">
+							<input
+								type="checkbox"
+								className="mt-0.5 h-4 w-4 shrink-0 rounded border border-carbon/20 accent-hyper-green cursor-pointer"
+								checked={tosConsent}
+								onChange={(e) => setTosConsent(e.target.checked)}
+								aria-label="I agree to the Terms of Service and Privacy Policy"
+							/>
+							<span className="text-xs text-muted leading-relaxed">
+								I have read and agree to the{" "}
+								<Link
+									to="/legal/terms"
+									className="text-hyper-green hover:text-hyper-green/80 underline"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Terms of Service
+								</Link>{" "}
+								and{" "}
+								<Link
+									to="/legal/privacy"
+									className="text-hyper-green hover:text-hyper-green/80 underline"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Privacy Policy
+								</Link>
+							</span>
+						</label>
 					)}
 				</div>
 			</div>

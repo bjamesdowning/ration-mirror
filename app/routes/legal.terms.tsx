@@ -17,7 +17,7 @@ export default function TermsOfService() {
 		<>
 			<h1>Terms of Service</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: February 3, 2026
+				Last Updated: March 11, 2026
 			</p>
 
 			<h2>1. Acceptance of Terms</h2>
@@ -40,7 +40,19 @@ export default function TermsOfService() {
 				<li>Free visual scanning utilizing third-party AI providers</li>
 			</ul>
 
-			<h2>3. User Accounts & Security</h2>
+			<h2>3. Age Requirement</h2>
+			<p>
+				You must be at least <strong>16 years old</strong> to use the Service
+				(or the applicable age of digital consent in your jurisdiction — for
+				example, 13 in the United States). By creating an account, you represent
+				and warrant that you meet this requirement. If you are a parent or
+				guardian who has discovered that your child has created an account
+				without your consent, please contact us at{" "}
+				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> and we will
+				delete the account promptly.
+			</p>
+
+			<h2>4. User Accounts & Security</h2>
 			<p>
 				You are responsible for maintaining the confidentiality of your account
 				credentials. You agree to accept responsibility for all activities that
@@ -48,7 +60,7 @@ export default function TermsOfService() {
 				aware of any breach of security or unauthorized use of your account.
 			</p>
 
-			<h2>4. User Conduct</h2>
+			<h2>5. User Conduct</h2>
 			<p>You agree not to use the Service:</p>
 			<ul>
 				<li>
@@ -78,7 +90,7 @@ export default function TermsOfService() {
 				</li>
 			</ul>
 
-			<h2>5. Intellectual Property</h2>
+			<h2>6. Intellectual Property</h2>
 			<p>
 				The Service and its original content (excluding Content provided by
 				users), features, and functionality are and will remain the exclusive
@@ -89,7 +101,7 @@ export default function TermsOfService() {
 				consent of Ration Operating Company.
 			</p>
 
-			<h2>6. Termination</h2>
+			<h2>7. Termination</h2>
 			<p>
 				We may terminate or suspend your account and bar access to the Service
 				immediately, without prior notice or liability, under our sole
@@ -98,7 +110,7 @@ export default function TermsOfService() {
 				account, you may simply discontinue using the Service.
 			</p>
 
-			<h2>7. Payments, Subscriptions & Refunds</h2>
+			<h2>8. Payments, Subscriptions & Refunds</h2>
 			<p>
 				Certain features of the Service require the purchase of credits or an
 				active subscription, processed via Stripe. By completing a purchase you
@@ -142,7 +154,7 @@ export default function TermsOfService() {
 				</li>
 			</ul>
 
-			<h2>8. Disclaimer</h2>
+			<h2>9. Disclaimer</h2>
 			<p>
 				Your use of the Service is at your sole risk. The Service is provided on
 				an "AS IS" and "AS AVAILABLE" basis. The Service is provided without
@@ -156,7 +168,7 @@ export default function TermsOfService() {
 				of any AI-generated content or analysis.
 			</p>
 
-			<h2>9. Limitation of Liability</h2>
+			<h2>10. Limitation of Liability</h2>
 			<p>
 				In no event shall Ration Operating Company, nor its directors,
 				employees, partners, agents, suppliers, or affiliates, be liable for any
@@ -172,14 +184,14 @@ export default function TermsOfService() {
 				set forth herein is found to have failed of its essential purpose.
 			</p>
 
-			<h2>10. Governing Law</h2>
+			<h2>11. Governing Law</h2>
 			<p>
 				These Terms shall be governed and construed in accordance with the laws
 				of Delaware, United States, without regard to its conflict of law
 				provisions.
 			</p>
 
-			<h2>11. Changes</h2>
+			<h2>12. Changes</h2>
 			<p>
 				We reserve the right, at our sole discretion, to modify or replace these
 				Terms at any time. If a revision is material we will provide at least 30
@@ -187,7 +199,7 @@ export default function TermsOfService() {
 				material change will be determined at our sole discretion.
 			</p>
 
-			<h2>12. Contact Us</h2>
+			<h2>13. Contact Us</h2>
 			<p>
 				If you have any questions about these Terms, please contact us at:{" "}
 				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>

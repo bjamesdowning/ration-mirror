@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
+import { lockBodyScroll } from "~/lib/body-scroll-lock";
 
 interface FilterSheetProps {
 	/** Whether the sheet is currently open */
@@ -37,16 +38,10 @@ export function FilterSheet({
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [isOpen, onClose]);
 
-	// Prevent body scroll when open
+	// Shared lock manager allows safe stacking with other overlays.
 	useEffect(() => {
-		if (isOpen) {
-			document.body.style.overflow = "hidden";
-		} else {
-			document.body.style.overflow = "";
-		}
-		return () => {
-			document.body.style.overflow = "";
-		};
+		if (!isOpen) return;
+		return lockBodyScroll();
 	}, [isOpen]);
 
 	if (!isOpen) return null;

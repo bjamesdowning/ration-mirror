@@ -2,7 +2,14 @@ import { Link } from "react-router";
 import { BlogCTA } from "~/components/blog/BlogCTA";
 import { BlogMarkdown } from "~/components/blog/BlogMarkdown";
 import { JsonLd } from "~/components/blog/JsonLd";
-import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { PublicHeader } from "~/components/shell/PublicHeader";
+import {
+	absoluteSiteUrl,
+	canonicalMeta,
+	OG_IMAGE,
+	ogMeta,
+	SITE_ORIGIN,
+} from "~/lib/seo";
 import type { Route } from "./+types/blog.$slug";
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -21,7 +28,16 @@ export function meta({ data }: Route.MetaArgs) {
 		{ title },
 		{ name: "description", content: description },
 		canonicalMeta(`/blog/${post.slug}`),
-		...ogMeta({ title, description, path: `/blog/${post.slug}` }),
+		...ogMeta({
+			title,
+			description,
+			path: `/blog/${post.slug}`,
+			image: post.image,
+			type: "article",
+			publishedTime: post.date,
+			modifiedTime: post.dateModified,
+			tags: post.tags,
+		}),
 	];
 }
 
@@ -43,14 +59,37 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
 export default function BlogPost({ loaderData }: Route.ComponentProps) {
 	const { post } = loaderData;
+	const authorSchema = post.authorUrl
+		? {
+				"@type": "Person",
+				name: post.authorName,
+				url: post.authorUrl,
+			}
+		: {
+				"@type": "Person",
+				name: post.authorName,
+			};
 
 	const articleSchema = {
 		"@context": "https://schema.org",
-		"@type": "Article",
+		"@type": "BlogPosting",
 		headline: post.title,
 		description: post.description,
 		datePublished: post.date,
+		dateModified: post.dateModified,
 		url: `${SITE_ORIGIN}/blog/${post.slug}`,
+		mainEntityOfPage: `${SITE_ORIGIN}/blog/${post.slug}`,
+		image: [absoluteSiteUrl(post.image)],
+		author: authorSchema,
+		publisher: {
+			"@type": "Organization",
+			name: "Ration",
+			logo: {
+				"@type": "ImageObject",
+				url: OG_IMAGE,
+			},
+		},
+		keywords: post.tags,
 	};
 
 	return (
@@ -66,33 +105,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 				}}
 			/>
 
-			{/* Header */}
-			<header className="relative z-50 border-b border-carbon/10 bg-ceramic/90 backdrop-blur sticky top-0">
-				<div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-					<Link
-						to="/"
-						className="text-display text-xl text-carbon group flex items-center gap-2.5"
-					>
-						<div className="w-3 h-3 rounded-full bg-hyper-green group-hover:animate-pulse shadow-glow-sm" />
-						Ration
-						<span className="text-muted text-base"> / Blog</span>
-					</Link>
-					<nav className="flex items-center gap-6 text-sm">
-						<Link
-							to="/blog"
-							className="text-muted hover:text-hyper-green transition-colors"
-						>
-							All posts
-						</Link>
-						<Link
-							to="/"
-							className="text-muted hover:text-hyper-green transition-colors"
-						>
-							Home
-						</Link>
-					</nav>
-				</div>
-			</header>
+			<PublicHeader breadcrumb="Blog" breadcrumbHref="/blog" />
 
 			<main className="relative z-20 flex-1 w-full">
 				{/* Post hero */}
@@ -111,16 +124,25 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 						<p className="text-muted text-base leading-relaxed max-w-2xl mb-6">
 							{post.description}
 						</p>
-						<time
-							dateTime={post.date}
-							className="text-xs font-mono text-carbon/50"
-						>
-							{new Date(post.date).toLocaleDateString("en-US", {
-								year: "numeric",
-								month: "long",
-								day: "numeric",
-							})}
-						</time>
+						<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono text-carbon/50">
+							<time dateTime={post.date}>
+								Published{" "}
+								{new Date(post.date).toLocaleDateString("en-US", {
+									year: "numeric",
+									month: "long",
+									day: "numeric",
+								})}
+							</time>
+							<time dateTime={post.dateModified}>
+								Updated{" "}
+								{new Date(post.dateModified).toLocaleDateString("en-US", {
+									year: "numeric",
+									month: "long",
+									day: "numeric",
+								})}
+							</time>
+							<span>By {post.authorName}</span>
+						</div>
 					</div>
 				</div>
 

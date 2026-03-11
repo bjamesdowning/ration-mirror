@@ -1,10 +1,16 @@
 import matter from "gray-matter";
+import { OG_IMAGE } from "./seo";
 
 export type BlogPost = {
 	slug: string;
 	title: string;
 	description: string;
 	date: string;
+	dateModified: string;
+	authorName: string;
+	authorUrl?: string;
+	image: string;
+	tags: string[];
 	content: string;
 };
 
@@ -40,14 +46,42 @@ export function normalizeBlogDate(value: unknown): string {
 	return new Date().toISOString().slice(0, 10);
 }
 
+function normalizeBlogImage(value: unknown): string {
+	if (typeof value === "string" && value.trim().length > 0) {
+		return value.trim();
+	}
+
+	return OG_IMAGE;
+}
+
+function normalizeBlogTags(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.filter((tag): tag is string => typeof tag === "string")
+		.map((tag) => tag.trim())
+		.filter(Boolean);
+}
+
 function parsePost(path: string, raw: string): BlogPost {
 	const { data, content } = matter(raw);
 	const slug = (data.slug as string) || slugFromPath(path);
+	const publishedDate = normalizeBlogDate(data.date);
 	return {
 		slug,
 		title: (data.title as string) || "Untitled",
 		description: (data.description as string) || "",
-		date: normalizeBlogDate(data.date),
+		date: publishedDate,
+		dateModified: normalizeBlogDate(data.dateModified ?? publishedDate),
+		authorName: (data.authorName as string) || "Billy Downing",
+		authorUrl:
+			typeof data.authorUrl === "string" && data.authorUrl.trim().length > 0
+				? data.authorUrl.trim()
+				: undefined,
+		image: normalizeBlogImage(data.image),
+		tags: normalizeBlogTags(data.tags),
 		content,
 	};
 }

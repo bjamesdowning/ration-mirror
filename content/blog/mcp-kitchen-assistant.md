@@ -2,13 +2,23 @@
 title: "Your Kitchen Has an API Now"
 description: "How to connect Ration to Claude, Cursor, and any MCP client — with real prompts, real outputs, and workflows that make it worth setting up."
 date: 2026-03-10
+dateModified: 2026-03-11
+authorName: "Billy Downing"
+authorUrl: "https://linkedin.com/in/billy-downing"
+image: "/static/ration-logo.svg"
+tags:
+  - MCP
+  - AI assistant
+  - pantry management
+  - meal planning
+  - kitchen API
 ---
 
 Most kitchen apps are designed around tapping and swiping. Ration is too — but it also speaks a language that AI assistants understand natively.
 
-Through the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), you can manage your entire pantry, meal plan, and shopping list from Claude, Cursor, or any MCP-compatible client. No custom integrations. No webhooks. No glue code.
+Through the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), you can manage your entire pantry, meal plan, and shopping list from [Ration](https://ration.mayutic.com) inside Claude, Cursor, or any MCP-compatible client. No custom integrations. No webhooks. No glue code.
 
-This post walks through what that actually looks like in practice.
+This post walks through what that actually looks like in practice, and why it turns pantry management, meal planning, and shopping list workflows into something an AI assistant can actually help with.
 
 ---
 
@@ -55,7 +65,7 @@ Add this to your `claude_desktop_config.json`:
 
 ### Cursor
 
-Add the same server block under your MCP settings panel. Once connected, the tools show up automatically. No SDK to install, nothing to build.
+Add the same server block under your MCP settings panel. Once connected, the tools show up automatically. No SDK to install, nothing to build. If you want a public example of Ration's kitchen tooling before connecting MCP, the [unit converter](https://ration.mayutic.com/tools/unit-converter) shows the same measurement system the app uses internally.
 
 ---
 
@@ -182,7 +192,7 @@ Claude calls `update_meal` with the modified ingredient list. The recipe updates
 
 ## The compound effect
 
-Any single interaction saves a few taps. The real value is in chaining them.
+Any single interaction saves a few taps. The real value is in chaining them across pantry tracking, meal planning, and shopping list management.
 
 A full session might look like this:
 
@@ -218,7 +228,7 @@ Reads are capped at 30 per minute. Writes at 15 per minute. That's plenty for co
 
 ## Who is this for?
 
-Anyone who already uses Claude or Cursor and manages a household.
+Anyone who already uses Claude or Cursor and wants faster pantry tracking, meal planning, and shopping list management.
 
 The setup takes two minutes. After that, your kitchen becomes part of your existing AI workflow instead of a separate app you have to remember to open.
 

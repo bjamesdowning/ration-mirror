@@ -13,6 +13,7 @@ User-agent: *
 Allow: /
 Allow: /legal/
 Allow: /blog/
+Allow: /tools/
 
 Disallow: /api/
 Disallow: /hub/

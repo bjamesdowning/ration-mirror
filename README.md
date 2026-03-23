@@ -1404,10 +1404,11 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `POST /api/v1/*/import` | orgId | 60s | 20 | API import throttle |
 | Inventory mutations | userId | 60s | 60 | Write storm protection |
 | Meal mutations | userId | 60s | 30 | Write storm protection |
-| Supply list mutations | userId | 60s | 60 | Write storm protection |
+| Supply list mutations | userId | 60s | 60 | Write storm protection (Hub Supply → Update list, REST) |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
 | MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_credit_balance) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
+| MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---
@@ -1443,11 +1444,11 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `consume_meal` | Write | Cook a meal and deduct its ingredients from cargo | mcp_write (15/min) |
 | `add_meal_plan_entry` | Write | Add a meal to the weekly plan for a date and slot | mcp_write (15/min) |
 | `remove_meal_plan_entry` | Write | Remove a meal plan entry by id (from `get_meal_plan`) | mcp_write (15/min) |
-| `update_meal_plan_entry` | Write | Patch date, slot, servings override, notes, or order on a plan entry | mcp_write (15/min) |
-| `sync_supply_from_selected_meals` | Write | Rebuild the supply list from the current week’s manifest plus Galley selections (same as Supply → Update list); may query Vectorize for ingredient resolution | mcp_write (15/min) |
+| `update_meal_plan_entry` | Write | Patch date, slot, servings override (set int or clearServingsOverride: true), notes, or order on a plan entry; omit servings fields to leave unchanged | mcp_write (15/min) |
+| `sync_supply_from_selected_meals` | Write | Rebuild the supply list from the current week’s manifest plus Galley selections (same as Supply → Update list); may query Vectorize for ingredient resolution | mcp_supply_sync (8/min) |
 | `create_meal` | Write | Create a new Galley recipe (structured data); respects meal capacity limits | mcp_write (15/min) |
 
-**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min). Writes do not consume **AI credits**. `search_ingredients` and `match_meals` query Vectorize (search bucket). `sync_supply_from_selected_meals` may call Vectorize while diffing recipe ingredients against cargo; bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
+**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
 
 **AI features (scan, meal generation, plan week, URL import)** are only available in the Ration app and use the credit ledger — they are **not** exposed as MCP tools.
 

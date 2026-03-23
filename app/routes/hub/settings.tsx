@@ -2541,7 +2541,7 @@ const MCP_TOOLS = [
 		name: "update_meal_plan_entry",
 		description: "Change date, slot, servings, or notes on a plan entry",
 		params:
-			"entryId (required); date, slotType, servingsOverride, clearServingsOverride, notes, orderIndex (optional — need at least one)",
+			"entryId (required); date, slotType, servingsOverride (set), clearServingsOverride (clear), notes, orderIndex (optional — need at least one; omit servings fields to leave unchanged)",
 		write: true,
 	},
 	{
@@ -2750,8 +2750,10 @@ function McpReferencePanel({
 						<span className="font-semibold text-carbon">Rate limits:</span> Read
 						tools: <code className="font-mono">mcp_list</code> (30/min),{" "}
 						<code className="font-mono">mcp_search</code> (20/min). Write tools:{" "}
-						<code className="font-mono">mcp_write</code> (15/min). Write tools
-						are D1-only; no AI credits are consumed.
+						<code className="font-mono">mcp_write</code> (15/min);{" "}
+						<code className="font-mono">sync_supply_from_selected_meals</code>{" "}
+						uses <code className="font-mono">mcp_supply_sync</code> (8/min). No
+						AI credits are consumed.
 					</div>
 
 					<button

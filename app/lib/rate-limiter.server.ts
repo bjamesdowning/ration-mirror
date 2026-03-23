@@ -146,6 +146,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 15,
 		keyPrefix: "rate:mcp_write",
 	},
+	mcp_supply_sync: {
+		windowMs: 60_000, // 1 minute — heavy operation (D1 + Vectorize); decoupled from mcp_write
+		maxRequests: 8,
+		keyPrefix: "rate:mcp_supply_sync",
+	},
 	credits_transfer: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

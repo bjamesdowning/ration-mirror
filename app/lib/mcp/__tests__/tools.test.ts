@@ -793,6 +793,33 @@ describe("MCP tools", () => {
 			expect(parsed.reason).toContain("not found");
 		});
 
+		it("returns updated false when entry is already consumed", async () => {
+			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+			} as never);
+			vi.mocked(drizzle).mockImplementationOnce(
+				() =>
+					({
+						select: vi.fn().mockReturnThis(),
+						from: vi.fn().mockReturnThis(),
+						where: vi.fn().mockReturnThis(),
+						limit: vi.fn().mockResolvedValue([{ consumedAt: new Date() }]),
+					}) as never,
+			);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+				date: "2026-03-12",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.updated).toBe(false);
+			expect(parsed.reason).toContain("consumed");
+			expect(updateEntry).not.toHaveBeenCalled();
+		});
+
 		it("updates when entry exists", async () => {
 			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
 				id: "plan-1",

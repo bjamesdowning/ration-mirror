@@ -10,7 +10,9 @@ import {
 	jettisonItem,
 	updateItem,
 } from "../cargo.server";
+import { publicErrorMessageForTool } from "../error-handler";
 import { checkBalance } from "../ledger.server";
+import { log } from "../logging.server";
 import {
 	addEntry,
 	deleteEntry,
@@ -457,11 +459,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -557,11 +560,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -622,11 +626,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -709,11 +714,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -833,11 +839,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -887,11 +894,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -959,8 +967,8 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				const message = e instanceof Error ? e.message : String(e);
-				// Surface insufficient-cargo errors clearly so the AI can relay them
 				const isInsufficient = message.startsWith("Insufficient Cargo");
 				return {
 					content: [
@@ -968,7 +976,7 @@ export function registerTools(
 							type: "text",
 							text: isInsufficient
 								? `Cannot cook meal: ${message}. Check inventory with list_inventory or search_ingredients.`
-								: `Error: ${message}`,
+								: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1060,11 +1068,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1140,11 +1149,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1158,7 +1168,7 @@ export function registerTools(
 	 */
 	server.tool(
 		"update_meal_plan_entry",
-		"Update an existing meal plan entry (date, slot, servings, notes). Get entryId from get_meal_plan. Cannot change consumed entries.",
+		"Update an existing meal plan entry (date, slot, servings, notes). Get entryId from get_meal_plan. Cannot change consumed entries. For servings: omit both servingsOverride and clearServingsOverride to leave unchanged; pass a positive int to set override; pass clearServingsOverride: true to revert to recipe default.",
 		{
 			entryId: z
 				.string()
@@ -1179,13 +1189,13 @@ export function registerTools(
 				.positive()
 				.optional()
 				.describe(
-					"Override servings for this occurrence (omit to clear override)",
+					"Set override for servings on this occurrence. Omit to leave unchanged; use clearServingsOverride: true to revert to recipe default.",
 				),
 			clearServingsOverride: z
 				.boolean()
 				.optional()
 				.describe(
-					"Set true to clear servingsOverride and use the recipe default",
+					"Set true to clear servingsOverride and use the recipe default. Omit to leave servings as-is.",
 				),
 			notes: z.string().max(500).optional().describe("Notes for this entry"),
 			orderIndex: z
@@ -1351,11 +1361,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1379,7 +1390,7 @@ export function registerTools(
 		async (args: { unitMode?: "metric" | "imperial" }) => {
 			const rateLimit = await checkRateLimit(
 				env.RATION_KV,
-				"mcp_write",
+				"mcp_supply_sync",
 				env.__orgId,
 			);
 			if (!rateLimit.allowed) {
@@ -1436,11 +1447,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1501,6 +1513,7 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				const message = e instanceof Error ? e.message : String(e);
 				if (message.startsWith("capacity_exceeded")) {
 					return {
@@ -1521,7 +1534,7 @@ export function registerTools(
 					};
 				}
 				return {
-					content: [{ type: "text", text: `Error: ${message}` }],
+					content: [{ type: "text", text: publicErrorMessageForTool(e) }],
 				};
 			}
 		},
@@ -1626,11 +1639,12 @@ export function registerTools(
 					content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1725,11 +1739,12 @@ export function registerTools(
 					content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1775,11 +1790,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1891,11 +1907,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};
@@ -1971,11 +1988,12 @@ export function registerTools(
 					],
 				};
 			} catch (e) {
+				log.error("[MCP] Tool error", e);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+							text: publicErrorMessageForTool(e),
 						},
 					],
 				};

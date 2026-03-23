@@ -107,3 +107,35 @@ export function handleApiError(error: unknown) {
 		{ status: 500 },
 	);
 }
+
+/**
+ * Returns a safe, user-facing error message for MCP tool responses.
+ * Logs the real error server-side; never exposes internal details to the client.
+ * Use in MCP tool catch blocks — call log.error before returning.
+ */
+export function publicErrorMessageForTool(error: unknown): string {
+	if (error instanceof z.ZodError) {
+		const flat = error.flatten();
+		const fieldKeys = Object.keys(flat.fieldErrors).filter(Boolean);
+		return fieldKeys.length > 0
+			? `Validation failed: ${fieldKeys.join(", ")}`
+			: "Validation failed.";
+	}
+
+	if (error instanceof Error) {
+		// Insufficient Cargo is actionable — user needs to add ingredients
+		if (error.message.startsWith("Insufficient Cargo for:")) {
+			return error.message;
+		}
+		// capacity_exceeded — safe tier message, no internal detail
+		if (error.message.startsWith("capacity_exceeded:")) {
+			return "Tier limit reached. Upgrade or remove items.";
+		}
+		// D1 contention — same copy as handleApiError
+		if (isD1ContentionError(error)) {
+			return "The server is under heavy load. Please wait a moment and try again.";
+		}
+	}
+
+	return "An unexpected error occurred. Try again later.";
+}

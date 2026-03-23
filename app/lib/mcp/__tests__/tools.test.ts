@@ -14,6 +14,8 @@ vi.mock("~/lib/cargo.server", () => ({
 vi.mock("~/lib/manifest.server", () => ({
 	ensureMealPlan: vi.fn(),
 	addEntry: vi.fn(),
+	deleteEntry: vi.fn(),
+	updateEntry: vi.fn(),
 	getMealPlan: vi.fn(),
 	getTodayISO: vi.fn(() => "2026-03-07"),
 	getWeekEntries: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("~/lib/meals.server", () => ({
 	getMeals: vi.fn(),
 	cookMeal: vi.fn(),
 	updateMeal: vi.fn(),
+	createMeal: vi.fn(),
 }));
 
 vi.mock("~/lib/ledger.server", () => ({
@@ -44,6 +47,7 @@ vi.mock("~/lib/supply.server", () => ({
 	addSupplyItem: vi.fn(),
 	updateSupplyItem: vi.fn(),
 	deleteSupplyItem: vi.fn(),
+	createSupplyListFromSelectedMeals: vi.fn(),
 }));
 
 vi.mock("~/lib/vector.server", () => ({
@@ -57,6 +61,7 @@ vi.mock("drizzle-orm/d1", () => ({
 		from: vi.fn().mockReturnThis(),
 		where: vi.fn().mockReturnThis(),
 		orderBy: vi.fn().mockResolvedValue([]),
+		limit: vi.fn().mockResolvedValue([]),
 	})),
 }));
 
@@ -64,11 +69,18 @@ const { getCargo, ingestCargoItems, jettisonItem, updateItem } = await import(
 	"~/lib/cargo.server"
 );
 const { checkBalance } = await import("~/lib/ledger.server");
-const { ensureMealPlan, addEntry, getMealPlan, getWeekEntries } = await import(
-	"~/lib/manifest.server"
-);
+const {
+	ensureMealPlan,
+	addEntry,
+	deleteEntry,
+	updateEntry,
+	getMealPlan,
+	getWeekEntries,
+} = await import("~/lib/manifest.server");
 const { matchMeals } = await import("~/lib/matching.server");
-const { getMeals, cookMeal, updateMeal } = await import("~/lib/meals.server");
+const { getMeals, cookMeal, updateMeal, createMeal } = await import(
+	"~/lib/meals.server"
+);
 const { checkRateLimit } = await import("~/lib/rate-limiter.server");
 const {
 	getSupplyList,
@@ -77,7 +89,9 @@ const {
 	addSupplyItem,
 	updateSupplyItem,
 	deleteSupplyItem,
+	createSupplyListFromSelectedMeals,
 } = await import("~/lib/supply.server");
+const { drizzle } = await import("drizzle-orm/d1");
 const { findSimilarCargoBatch } = await import("~/lib/vector.server");
 
 function getToolHandler(
@@ -680,6 +694,235 @@ describe("MCP tools", () => {
 			expect(parsed.added.entryId).toBe("entry-1");
 			expect(parsed.added.mealName).toBe("Beef Burritos");
 			expect(parsed.added.date).toBe("2026-03-10");
+		});
+	});
+
+	describe("remove_meal_plan_entry", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"remove_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+			});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(deleteEntry).not.toHaveBeenCalled();
+		});
+
+		it("returns removed true when deleteEntry succeeds", async () => {
+			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+			} as never);
+			vi.mocked(deleteEntry).mockResolvedValueOnce(true);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"remove_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.removed).toBe(true);
+			expect(deleteEntry).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				"plan-1",
+				"00000000-0000-0000-0000-000000000001",
+			);
+		});
+
+		it("returns removed false when entry missing", async () => {
+			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+			} as never);
+			vi.mocked(deleteEntry).mockResolvedValueOnce(false);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"remove_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.removed).toBe(false);
+		});
+	});
+
+	describe("update_meal_plan_entry", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+				date: "2026-03-12",
+			});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(updateEntry).not.toHaveBeenCalled();
+		});
+
+		it("requires at least one patch field", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+			});
+			expect(result.content[0]?.text).toContain("Provide at least one");
+		});
+
+		it("returns not found when no matching entry", async () => {
+			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+				date: "2026-03-12",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.updated).toBe(false);
+			expect(parsed.reason).toContain("not found");
+		});
+
+		it("updates when entry exists", async () => {
+			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
+				id: "plan-1",
+			} as never);
+			vi.mocked(drizzle).mockImplementationOnce(
+				() =>
+					({
+						select: vi.fn().mockReturnThis(),
+						from: vi.fn().mockReturnThis(),
+						where: vi.fn().mockReturnThis(),
+						limit: vi.fn().mockResolvedValue([{ consumedAt: null }]),
+					}) as never,
+			);
+			vi.mocked(updateEntry).mockResolvedValueOnce({
+				id: "entry-1",
+				date: "2026-03-12",
+				slotType: "lunch",
+				mealName: "salad",
+				servingsOverride: null,
+				mealServings: 2,
+				notes: null,
+				orderIndex: 0,
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"update_meal_plan_entry",
+			)({
+				entryId: "00000000-0000-0000-0000-000000000001",
+				date: "2026-03-12",
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.updated.entryId).toBe("entry-1");
+			expect(updateEntry).toHaveBeenCalled();
+		});
+	});
+
+	describe("sync_supply_from_selected_meals", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"sync_supply_from_selected_meals",
+			)({});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(createSupplyListFromSelectedMeals).not.toHaveBeenCalled();
+		});
+
+		it("returns summary and item count", async () => {
+			vi.mocked(createSupplyListFromSelectedMeals).mockResolvedValueOnce({
+				list: { id: "l1" },
+				summary: {
+					addedItems: 3,
+					skippedItems: 1,
+					mealsProcessed: 2,
+					totalIngredients: 10,
+				},
+			} as never);
+			vi.mocked(getSupplyListById).mockResolvedValueOnce({
+				id: "l1",
+				items: [{}, {}, {}],
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"sync_supply_from_selected_meals",
+			)({ unitMode: "metric" });
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.summary.addedItems).toBe(3);
+			expect(parsed.itemCount).toBe(3);
+			expect(createSupplyListFromSelectedMeals).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				undefined,
+				expect.objectContaining({ trigger: "mcp_sync_supply" }),
+				"metric",
+			);
+		});
+	});
+
+	describe("create_meal", () => {
+		it("blocks when rate limited", async () => {
+			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"create_meal",
+			)({
+				meal: {
+					name: "toast",
+					servings: 1,
+					ingredients: [
+						{ ingredientName: "bread", quantity: 1, unit: "slice" },
+					],
+				},
+			});
+			expect(result.content[0]?.text).toContain("Rate limit exceeded");
+			expect(createMeal).not.toHaveBeenCalled();
+		});
+
+		it("creates meal and returns id", async () => {
+			vi.mocked(createMeal).mockResolvedValueOnce({
+				id: "new-meal-id",
+				name: "toast",
+				servings: 1,
+				ingredients: [{ ingredientName: "bread", quantity: 1, unit: "slice" }],
+				tags: [],
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"create_meal",
+			)({
+				meal: {
+					name: "Toast",
+					servings: 1,
+					ingredients: [
+						{ ingredientName: "bread", quantity: 1, unit: "slice" },
+					],
+				},
+			});
+			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+			expect(parsed.created.id).toBe("new-meal-id");
+			expect(createMeal).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				expect.objectContaining({ name: "toast", servings: 1 }),
+				expect.anything(),
+			);
 		});
 	});
 

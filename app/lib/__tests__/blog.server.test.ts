@@ -25,7 +25,7 @@ describe("getPostBySlug", () => {
 
 		expect(post).not.toBeNull();
 		expect(post?.date).toBe("2026-03-10");
-		expect(post?.dateModified).toBe("2026-03-11");
+		expect(post?.dateModified).toBe("2026-03-21");
 		expect(post?.authorName).toBe("Billy Downing");
 		expect(post?.authorUrl).toBe("https://linkedin.com/in/billy-downing");
 		expect(post?.image).toBe("/static/ration-logo.svg");

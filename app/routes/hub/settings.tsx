@@ -2531,6 +2531,31 @@ const MCP_TOOLS = [
 			"mealId, date (YYYY-MM-DD), slotType (required); servingsOverride, notes (optional)",
 		write: true,
 	},
+	{
+		name: "remove_meal_plan_entry",
+		description: "Remove a scheduled meal from the plan",
+		params: "entryId from get_meal_plan (required)",
+		write: true,
+	},
+	{
+		name: "update_meal_plan_entry",
+		description: "Change date, slot, servings, or notes on a plan entry",
+		params:
+			"entryId (required); date, slotType, servingsOverride, clearServingsOverride, notes, orderIndex (optional — need at least one)",
+		write: true,
+	},
+	{
+		name: "sync_supply_from_selected_meals",
+		description: "Rebuild shopping list from this week’s plan + Galley picks",
+		params: "unitMode: metric | imperial (optional, default metric)",
+		write: true,
+	},
+	{
+		name: "create_meal",
+		description: "Create a new Galley recipe (not AI-generated)",
+		params: "meal object (name, servings, ingredients, …)",
+		write: true,
+	},
 ] as const;
 
 const MCP_CONFIG_SNIPPET = `{

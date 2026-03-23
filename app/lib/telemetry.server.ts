@@ -4,7 +4,8 @@ export const SUPPLY_SYNC_TELEMETRY_SCHEMA = "ration.supply_sync.v1";
 
 export type SupplySyncTrigger =
 	| "dashboard_grocery_action_update_list"
-	| "dashboard_grocery_background_sync";
+	| "dashboard_grocery_background_sync"
+	| "mcp_sync_supply";
 
 export interface SupplySyncTelemetryContext {
 	requestId?: string;

@@ -2,7 +2,7 @@
 title: "Your Kitchen Has an API Now"
 description: "How to connect Ration to Claude, Cursor, and any MCP client — with real prompts, real outputs, and workflows that make it worth setting up."
 date: 2026-03-10
-dateModified: 2026-03-11
+dateModified: 2026-03-21
 authorName: "Billy Downing"
 authorUrl: "https://linkedin.com/in/billy-downing"
 image: "/static/ration-logo.svg"
@@ -214,11 +214,17 @@ You've rescued expiring food, planned a meal, and built a shopping list. That's 
 
 ### Not available via MCP
 
-AI-powered features like receipt scanning, meal generation, and weekly auto-planning are triggered from the dashboard and use Ration's credit system. They aren't exposed through MCP yet.
+AI-powered features like receipt scanning, meal generation, weekly auto-planning, and URL recipe import run only in the Ration dashboard and use Ration's credit system. **They are intentionally not exposed through MCP** — MCP is for structured pantry, plan, supply, and recipe CRUD, not for triggering billed AI jobs remotely.
 
 ### What does work
 
 **Semantic search** (`search_ingredients`) is fully available. It uses the same vector embeddings as the dashboard — search for "tomato" and you'll find "chopped tomatoes," "cherry tomatoes," and "tomato passata."
+
+**Meal plan edits** — Remove or reschedule entries (`remove_meal_plan_entry`, `update_meal_plan_entry`) using ids from `get_meal_plan`.
+
+**Supply list from selections** — `sync_supply_from_selected_meals` runs the same rebuild as Supply → Update list (current week's plan plus Galley selections). It may use Vectorize to match ingredient names to cargo; it does **not** spend AI credits.
+
+**New recipes** — `create_meal` adds a Galley recipe from structured data. For large imports, use the REST API (`galley` scope) instead of hundreds of tool calls.
 
 ### Rate limits
 

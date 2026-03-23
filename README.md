@@ -1442,8 +1442,14 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `remove_cargo_item` | Write | Remove item from the pantry | mcp_write (15/min) |
 | `consume_meal` | Write | Cook a meal and deduct its ingredients from cargo | mcp_write (15/min) |
 | `add_meal_plan_entry` | Write | Add a meal to the weekly plan for a date and slot | mcp_write (15/min) |
+| `remove_meal_plan_entry` | Write | Remove a meal plan entry by id (from `get_meal_plan`) | mcp_write (15/min) |
+| `update_meal_plan_entry` | Write | Patch date, slot, servings override, notes, or order on a plan entry | mcp_write (15/min) |
+| `sync_supply_from_selected_meals` | Write | Rebuild the supply list from the current week’s manifest plus Galley selections (same as Supply → Update list); may query Vectorize for ingredient resolution | mcp_write (15/min) |
+| `create_meal` | Write | Create a new Galley recipe (structured data); respects meal capacity limits | mcp_write (15/min) |
 
-**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min). Write tools are D1-only and do not consume AI credits; `search_ingredients` and `match_meals` trigger Vectorize queries and are rate limited in the search bucket.
+**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min). Writes do not consume **AI credits**. `search_ingredients` and `match_meals` query Vectorize (search bucket). `sync_supply_from_selected_meals` may call Vectorize while diffing recipe ingredients against cargo; bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
+
+**AI features (scan, meal generation, plan week, URL import)** are only available in the Ration app and use the credit ledger — they are **not** exposed as MCP tools.
 
 **Integration example:**
 

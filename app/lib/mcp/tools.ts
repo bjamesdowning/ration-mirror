@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { cargo } from "../../db/schema";
+import { cargo, mealPlanEntry } from "../../db/schema";
 import {
 	getCargo,
 	getCargoByIds,
@@ -13,18 +13,21 @@ import {
 import { checkBalance } from "../ledger.server";
 import {
 	addEntry,
+	deleteEntry,
 	ensureMealPlan,
 	getMealPlan,
 	getTodayISO,
 	getWeekEntries,
+	updateEntry,
 } from "../manifest.server";
 import { addDays } from "../manifest-dates";
 import { matchMeals } from "../matching.server";
-import { cookMeal, getMeals, updateMeal } from "../meals.server";
+import { cookMeal, createMeal, getMeals, updateMeal } from "../meals.server";
 import { checkRateLimit } from "../rate-limiter.server";
-import { MealUpdateSchema } from "../schemas/meal";
+import { McpCreateMealSchema, MealUpdateSchema } from "../schemas/meal";
 import {
 	addSupplyItem,
+	createSupplyListFromSelectedMeals,
 	deleteSupplyItem,
 	ensureSupplyList,
 	getSupplyList,
@@ -1064,6 +1067,461 @@ export function registerTools(
 							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
 						},
 					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: remove_meal_plan_entry
+	 * Deletes a scheduled meal from the plan. Use entry id from get_meal_plan.
+	 */
+	server.tool(
+		"remove_meal_plan_entry",
+		"Remove a meal from the weekly plan. Provide entryId from get_meal_plan entries[].id.",
+		{
+			entryId: z
+				.string()
+				.uuid()
+				.describe("Meal plan entry ID from get_meal_plan"),
+		},
+		async (args: { entryId: string }) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const plan = await ensureMealPlan(env.DB, env.__orgId);
+				const removed = await deleteEntry(
+					env.DB,
+					env.__orgId,
+					plan.id,
+					args.entryId,
+				);
+				if (!removed) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(
+									{
+										removed: false,
+										reason: "Entry not found on your active meal plan.",
+									},
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{ removed: true, entryId: args.entryId },
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: update_meal_plan_entry
+	 * Patch date, slot, servings override, notes, or order for a plan entry.
+	 */
+	server.tool(
+		"update_meal_plan_entry",
+		"Update an existing meal plan entry (date, slot, servings, notes). Get entryId from get_meal_plan. Cannot change consumed entries.",
+		{
+			entryId: z
+				.string()
+				.uuid()
+				.describe("Meal plan entry ID from get_meal_plan"),
+			date: z
+				.string()
+				.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+				.optional()
+				.describe("New date for this entry"),
+			slotType: z
+				.enum(["breakfast", "lunch", "dinner", "snack"])
+				.optional()
+				.describe("Meal slot"),
+			servingsOverride: z
+				.number()
+				.int()
+				.positive()
+				.optional()
+				.describe(
+					"Override servings for this occurrence (omit to clear override)",
+				),
+			clearServingsOverride: z
+				.boolean()
+				.optional()
+				.describe(
+					"Set true to clear servingsOverride and use the recipe default",
+				),
+			notes: z.string().max(500).optional().describe("Notes for this entry"),
+			orderIndex: z
+				.number()
+				.int()
+				.nonnegative()
+				.optional()
+				.describe("Sort order within the same day and slot"),
+		},
+		async (args: {
+			entryId: string;
+			date?: string;
+			slotType?: "breakfast" | "lunch" | "dinner" | "snack";
+			servingsOverride?: number;
+			clearServingsOverride?: boolean;
+			notes?: string;
+			orderIndex?: number;
+		}) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			const hasPatch =
+				args.date !== undefined ||
+				args.slotType !== undefined ||
+				args.servingsOverride !== undefined ||
+				args.clearServingsOverride === true ||
+				args.notes !== undefined ||
+				args.orderIndex !== undefined;
+			if (!hasPatch) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Provide at least one of: date, slotType, servingsOverride, clearServingsOverride, notes, orderIndex.",
+						},
+					],
+				};
+			}
+
+			try {
+				const plan = await ensureMealPlan(env.DB, env.__orgId);
+				const d1 = drizzle(env.DB);
+				const [existing] = await d1
+					.select({ consumedAt: mealPlanEntry.consumedAt })
+					.from(mealPlanEntry)
+					.where(
+						and(
+							eq(mealPlanEntry.id, args.entryId),
+							eq(mealPlanEntry.planId, plan.id),
+						),
+					)
+					.limit(1);
+
+				if (!existing) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(
+									{
+										updated: false,
+										reason: "Entry not found on your active meal plan.",
+									},
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+				if (existing.consumedAt != null) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(
+									{
+										updated: false,
+										reason:
+											"This entry is already marked consumed; remove it or edit unconsumed entries only.",
+									},
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+
+				const input: {
+					date?: string;
+					slotType?: string;
+					orderIndex?: number;
+					servingsOverride?: number | null;
+					notes?: string | null;
+				} = {};
+				if (args.date !== undefined) input.date = args.date;
+				if (args.slotType !== undefined) input.slotType = args.slotType;
+				if (args.orderIndex !== undefined) input.orderIndex = args.orderIndex;
+				if (args.clearServingsOverride === true) {
+					input.servingsOverride = null;
+				} else if (args.servingsOverride !== undefined) {
+					input.servingsOverride = args.servingsOverride;
+				}
+				if (args.notes !== undefined) input.notes = args.notes;
+
+				const updated = await updateEntry(
+					env.DB,
+					env.__orgId,
+					plan.id,
+					args.entryId,
+					input,
+				);
+
+				if (!updated) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(
+									{ updated: false, reason: "Update failed." },
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{
+									updated: {
+										entryId: updated.id,
+										date: updated.date,
+										slotType: updated.slotType,
+										mealName: updated.mealName,
+										servings: updated.servingsOverride ?? updated.mealServings,
+										notes: updated.notes,
+										orderIndex: updated.orderIndex,
+									},
+								},
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: sync_supply_from_selected_meals
+	 * Rebuilds the active supply list from Manifest (current week) + Galley selections — same as the Supply page “Update list”.
+	 */
+	server.tool(
+		"sync_supply_from_selected_meals",
+		"Rebuild the shopping list from this week's meal plan entries plus Galley active selections (same as Supply → Update list). Uses semantic matching vs pantry for gaps; may call Vectorize. For one-off items use add_supply_item. unitMode defaults to metric (web uses per-user supply preference).",
+		{
+			unitMode: z
+				.enum(["metric", "imperial"])
+				.optional()
+				.describe("Shopping list units (default: metric)"),
+		},
+		async (args: { unitMode?: "metric" | "imperial" }) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const result = await createSupplyListFromSelectedMeals(
+					env,
+					env.__orgId,
+					undefined,
+					{
+						trigger: "mcp_sync_supply",
+						organizationId: env.__orgId,
+					},
+					args.unitMode ?? "metric",
+				);
+
+				const list = result.list;
+				if (!list) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "Error: supply sync did not return a list.",
+							},
+						],
+					};
+				}
+
+				const fullList = await getSupplyListById(env.DB, env.__orgId, list.id);
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{
+									listId: list.id,
+									summary: result.summary,
+									itemCount: fullList?.items.length ?? 0,
+								},
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (e) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+						},
+					],
+				};
+			}
+		},
+	);
+
+	/**
+	 * Tool: create_meal
+	 * Creates a new Galley recipe (not AI-generated). Respects org meal capacity limits.
+	 */
+	server.tool(
+		"create_meal",
+		"Create a new recipe in the Galley. Same fields as list_meals output shape (without id). For bulk import use REST POST /api/v1/galley/import with galley scope. AI recipe generation stays in the Ration app only.",
+		{
+			meal: McpCreateMealSchema.describe(
+				"New meal: name, domain, servings, ingredients, optional tags/directions/equipment.",
+			),
+		},
+		async (args: { meal: z.infer<typeof McpCreateMealSchema> }) => {
+			const rateLimit = await checkRateLimit(
+				env.RATION_KV,
+				"mcp_write",
+				env.__orgId,
+			);
+			if (!rateLimit.allowed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+						},
+					],
+				};
+			}
+
+			try {
+				const parsed = McpCreateMealSchema.parse(args.meal);
+				const created = await createMeal(env.DB, env.__orgId, parsed, env);
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(
+								{
+									created: {
+										id: created?.id,
+										name: created?.name,
+										servings: created?.servings,
+										ingredientCount: created?.ingredients.length ?? 0,
+										tags: created?.tags ?? [],
+									},
+								},
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (e) {
+				const message = e instanceof Error ? e.message : String(e);
+				if (message.startsWith("capacity_exceeded")) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(
+									{
+										error: "capacity_exceeded",
+										detail: message,
+										hint: "Upgrade tier or remove recipes in Settings.",
+									},
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+				return {
+					content: [{ type: "text", text: `Error: ${message}` }],
 				};
 			}
 		},

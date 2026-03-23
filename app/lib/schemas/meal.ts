@@ -87,6 +87,26 @@ export const MealSchema = z.object({
 export type MealInput = z.infer<typeof MealSchema>;
 export type MealIngredientInput = z.infer<typeof MealIngredientSchema>;
 
+/**
+ * MCP `create_meal` — same shape as MealSchema with injection checks on free-text fields.
+ */
+export const McpCreateMealSchema = MealSchema.superRefine((data, ctx) => {
+	const check = (path: (string | number)[], value: string | undefined) => {
+		if (value !== undefined && INJECTION_PATTERNS.test(value)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Invalid text",
+				path,
+			});
+		}
+	};
+	check(["name"], data.name);
+	check(["description"], data.description);
+	check(["directions"], data.directions);
+});
+
+export type McpCreateMealInput = z.infer<typeof McpCreateMealSchema>;
+
 /** Schema for MCP update_meal tool: MealSchema plus id for identification. */
 export const MealUpdateSchema = MealSchema.extend({ id: z.string().uuid() });
 export type MealUpdateInput = z.infer<typeof MealUpdateSchema>;

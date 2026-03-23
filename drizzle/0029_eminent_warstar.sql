@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD `crew_subscribed_at` integer;

@@ -6,6 +6,7 @@ import { data, Link, useFetcher } from "react-router";
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
 import { handleApiError } from "../lib/error-handler";
+import { formatOnboardingAdminLabel } from "../lib/onboarding-admin.server";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
@@ -154,14 +155,14 @@ export async function loader(args: Route.LoaderArgs) {
 				),
 			)
 			.get(),
-		// Crew conversions 24h: users who became crew_member with tierExpiresAt set in the last 24h
+		// Crew conversions 24h: users who first subscribed to crew in the last 24h
 		db
 			.select({ count: count() })
 			.from(schema.user)
 			.where(
 				and(
 					eq(schema.user.tier, "crew_member"),
-					gt(schema.user.tierExpiresAt, oneDayAgo),
+					gt(schema.user.crewSubscribedAt, oneDayAgo),
 				),
 			)
 			.get(),
@@ -229,6 +230,7 @@ export async function loader(args: Route.LoaderArgs) {
 				name: schema.user.name,
 				email: schema.user.email,
 				createdAt: schema.user.createdAt,
+				settings: schema.user.settings,
 			})
 			.from(schema.user)
 			.orderBy(desc(schema.user.createdAt))
@@ -386,15 +388,9 @@ function MetricCard({
 			</div>
 			<div className="mt-3 flex items-center gap-3">
 				<span className="text-xs text-muted">{subtitle}</span>
-				{delta !== undefined && (
-					<span
-						className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums ${
-							delta > 0
-								? "bg-hyper-green/15 text-hyper-green"
-								: "bg-platinum/60 text-muted"
-						}`}
-					>
-						+{delta.toLocaleString()} today
+				{delta !== undefined && delta > 0 && (
+					<span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-hyper-green/15 text-hyper-green">
+						+{delta.toLocaleString()} last 24h
 					</span>
 				)}
 			</div>
@@ -826,6 +822,9 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											Email
 										</th>
 										<th className="text-label text-muted py-2 pr-4 text-xs">
+											Onboarding
+										</th>
+										<th className="text-label text-muted py-2 pr-4 text-xs">
 											Joined
 										</th>
 									</tr>
@@ -889,6 +888,9 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 															)}
 														</button>
 													</span>
+												</td>
+												<td className="py-2.5 pr-4 text-muted text-sm">
+													{formatOnboardingAdminLabel(user.settings)}
 												</td>
 												<td className="py-2.5 text-muted text-sm">
 													{user.createdAt

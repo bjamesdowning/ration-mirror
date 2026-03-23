@@ -364,13 +364,10 @@ export async function processSubscriptionCheckoutSession(
 	const periodEnd = new Date(currentPeriodEnd * 1000);
 	const db = drizzle(env.DB, { schema });
 
-	const updatePayload: {
-		tier: "crew_member";
-		tierExpiresAt: Date;
-		stripeCustomerId?: string;
-	} = {
+	const updatePayload: Record<string, unknown> = {
 		tier: "crew_member",
 		tierExpiresAt: periodEnd,
+		crewSubscribedAt: sql`coalesce(crew_subscribed_at, unixepoch())`,
 	};
 	if (typeof session.customer === "string") {
 		updatePayload.stripeCustomerId = session.customer;
@@ -434,6 +431,7 @@ export async function processSubscriptionInvoice(
 		.set({
 			tier: "crew_member",
 			tierExpiresAt: periodEnd,
+			crewSubscribedAt: sql`coalesce(crew_subscribed_at, unixepoch())`,
 		})
 		.where(eq(schema.user.id, userId));
 
@@ -479,6 +477,7 @@ export async function downgradeExpiredSubscription(
 		.set({
 			tier: "free",
 			tierExpiresAt: null,
+			crewSubscribedAt: null,
 			subscriptionCancelAtPeriodEnd: false,
 		})
 		.where(eq(schema.user.id, userId));

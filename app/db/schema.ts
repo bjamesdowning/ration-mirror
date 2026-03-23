@@ -26,6 +26,8 @@ export const user = sqliteTable("user", {
 	isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
 	tier: text("tier").notNull().default("free"), // 'free' | 'crew_member'
 	tierExpiresAt: integer("tier_expires_at", { mode: "timestamp" }),
+	/** When user first subscribed to crew (for admin metrics); null on downgrade. */
+	crewSubscribedAt: integer("crew_subscribed_at", { mode: "timestamp" }),
 	welcomeVoucherRedeemed: integer("welcome_voucher_redeemed", {
 		mode: "boolean",
 	})

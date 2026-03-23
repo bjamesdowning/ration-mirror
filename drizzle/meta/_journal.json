@@ -204,6 +204,13 @@
       "when": 1773247201827,
       "tag": "0028_legal_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1774280000035,
+      "tag": "0029_eminent_warstar",
+      "breakpoints": true
     }
   ]
 }

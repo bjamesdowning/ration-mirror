@@ -6,7 +6,7 @@ import { data, Link, useFetcher } from "react-router";
 import * as schema from "../db/schema";
 import { requireAdmin } from "../lib/auth.server";
 import { handleApiError } from "../lib/error-handler";
-import { formatOnboardingAdminLabel } from "../lib/onboarding-admin.server";
+import { formatOnboardingAdminLabel } from "../lib/onboarding-admin";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 

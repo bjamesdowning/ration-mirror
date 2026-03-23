@@ -1,5 +1,5 @@
 /**
- * Admin utilities for onboarding progress display.
+ * Admin utilities for onboarding progress display (shared; safe for client bundles).
  */
 
 const ONBOARDING_STEP_MAX = 6;

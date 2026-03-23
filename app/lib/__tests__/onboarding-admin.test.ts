@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatOnboardingAdminLabel } from "~/lib/onboarding-admin.server";
+import { formatOnboardingAdminLabel } from "~/lib/onboarding-admin";
 
 describe("formatOnboardingAdminLabel", () => {
 	it("returns em-dash for null or undefined", () => {

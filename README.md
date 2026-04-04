@@ -46,6 +46,7 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
 - [10. MCP Server](#10-mcp-server)
 - [11. Public REST API (v1)](#11-public-rest-api-v1)
 - [12. Testing](#12-testing)
+- [13. Fin knowledge hub (support)](#13-fin-knowledge-hub-support)
 
 ---
 
@@ -1535,3 +1536,9 @@ bun run lint:fix      # Biome v2 auto-fix
 - Prefer `toBe()` / `toEqual()` over `toBeTruthy()`. Test boundary conditions, not just happy paths
 
 **Definition of done:** A change is not complete until `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors.
+
+---
+
+## 13. Fin knowledge hub (support)
+
+Customer-facing Markdown for **Intercom Fin** (and similar) lives in [`docs/fin/`](docs/fin/). See [`docs/fin/README.md`](docs/fin/README.md) for collection mapping, [`docs/fin/INDEX.md`](docs/fin/INDEX.md) for article titles and example questions, and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md) for post-import golden questions. Keep articles aligned with sections 3–11 of this README when user-visible behavior changes.

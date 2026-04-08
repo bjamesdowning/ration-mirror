@@ -16,6 +16,7 @@ import "@fontsource/space-mono/700.css";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { createAuth } from "./lib/auth.server";
+import { intercomIdentityHash } from "./lib/intercom.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
@@ -36,17 +37,50 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const sessionTheme = (session?.user?.settings as { theme?: "light" | "dark" })
 		?.theme;
 
+	const env = context.cloudflare.env;
+	const rawIntercomId =
+		typeof env.INTERCOM_APP_ID === "string" ? env.INTERCOM_APP_ID.trim() : "";
+	const intercomAppId = rawIntercomId !== "" ? rawIntercomId : null;
+
+	let intercomUserHash: string | null = null;
+	const intercomSecret = env.INTERCOM_IDENTITY_VERIFICATION_SECRET?.trim();
+	if (session?.user?.id && intercomSecret) {
+		intercomUserHash = await intercomIdentityHash(
+			session.user.id,
+			intercomSecret,
+		);
+	}
+
+	const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+
 	const url = new URL(request.url);
 	return {
 		user: session?.user,
 		theme: cookieTheme ?? sessionTheme ?? "dark",
 		origin: url.origin,
+		intercomAppId,
+		intercomUserHash,
+		activeOrganizationId,
 	};
 };
 
+/** Merged with Stripe, Cloudflare Insights, and Intercom (official allowlist). */
+const CONTENT_SECURITY_POLICY = [
+	"default-src 'self'",
+	"base-uri 'self'",
+	"form-action 'self' https://intercom.help https://api-iam.intercom.io https://api-iam.eu.intercom.io https://api-iam.au.intercom.io",
+	"frame-ancestors 'none'",
+	"img-src 'self' data: blob: https://js.intercomcdn.com https://static.intercomassets.com https://downloads.intercomcdn.com https://downloads.intercomcdn.eu https://downloads.au.intercomcdn.com https://uploads.intercomusercontent.com https://gifs.intercomcdn.com https://video-messages.intercomcdn.com https://messenger-apps.intercom.io https://messenger-apps.eu.intercom.io https://messenger-apps.au.intercom.io https://*.intercom-attachments-1.com https://*.intercom-attachments.eu https://*.au.intercom-attachments.com https://*.intercom-attachments-2.com https://*.intercom-attachments-3.com https://*.intercom-attachments-4.com https://*.intercom-attachments-5.com https://*.intercom-attachments-6.com https://*.intercom-attachments-7.com https://*.intercom-attachments-8.com https://*.intercom-attachments-9.com https://static.intercomassets.eu https://static.au.intercomassets.com",
+	"font-src 'self' https://fonts.gstatic.com https://js.intercomcdn.com https://fonts.intercomcdn.com",
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+	"script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com https://app.intercom.io https://widget.intercom.io https://js.intercomcdn.com",
+	"connect-src 'self' https://api.stripe.com https://cloudflareinsights.com https://via.intercom.io https://api.intercom.io https://api.au.intercom.io https://api.eu.intercom.io https://api-iam.intercom.io https://api-iam.eu.intercom.io https://api-iam.au.intercom.io https://api-ping.intercom.io https://*.intercom-messenger.com wss://*.intercom-messenger.com https://nexus-websocket-a.intercom.io wss://nexus-websocket-a.intercom.io https://nexus-websocket-b.intercom.io wss://nexus-websocket-b.intercom.io https://nexus-europe-websocket.intercom.io wss://nexus-europe-websocket.intercom.io https://nexus-australia-websocket.intercom.io wss://nexus-australia-websocket.intercom.io https://uploads.intercomcdn.com https://uploads.intercomcdn.eu https://uploads.au.intercomcdn.com https://uploads.eu.intercomcdn.com https://uploads.intercomusercontent.com",
+	"media-src 'self' https://js.intercomcdn.com https://downloads.intercomcdn.com https://downloads.intercomcdn.eu https://downloads.au.intercomcdn.com",
+	"frame-src https://js.stripe.com https://hooks.stripe.com https://intercom-sheets.com https://www.intercom-reporting.com https://www.youtube.com https://player.vimeo.com https://fast.wistia.net",
+].join("; ");
+
 export const headers: Route.HeadersFunction = () => ({
-	"Content-Security-Policy":
-		"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com; connect-src 'self' https://api.stripe.com https://cloudflareinsights.com; frame-src https://js.stripe.com https://hooks.stripe.com",
+	"Content-Security-Policy": CONTENT_SECURITY_POLICY,
 	"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 	"X-Frame-Options": "DENY",
 	"X-Content-Type-Options": "nosniff",

@@ -7,6 +7,7 @@ import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
+import { HubIntercomFromRoot } from "~/components/support/HubIntercom";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
@@ -159,10 +160,21 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
-	const { onboardingCompletedAt, onboardingStep } = loaderData;
+	const {
+		onboardingCompletedAt,
+		onboardingStep,
+		balance,
+		tier,
+		isTierExpired,
+	} = loaderData;
 
 	return (
 		<ConfirmProvider>
+			<HubIntercomFromRoot
+				tier={tier}
+				isTierExpired={isTierExpired}
+				balance={balance}
+			/>
 			<div className="flex min-h-screen bg-ceramic">
 				{/* Desktop Rail Sidebar */}
 				<RailSidebar />

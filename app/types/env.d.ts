@@ -28,5 +28,9 @@ declare namespace Cloudflare {
 		STRIPE_PRICE_CREW_MEMBER_ANNUAL?: string;
 		STRIPE_PRICE_CREW_MEMBER_MONTHLY?: string;
 		STRIPE_PROMO_WELCOME65?: string;
+		/** Public Intercom workspace app id (wrangler vars). */
+		INTERCOM_APP_ID?: string;
+		/** Intercom Messenger identity verification — `wrangler secret put INTERCOM_IDENTITY_VERIFICATION_SECRET` */
+		INTERCOM_IDENTITY_VERIFICATION_SECRET?: string;
 	}
 }

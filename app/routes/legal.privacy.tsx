@@ -17,7 +17,7 @@ export default function PrivacyPolicy() {
 		<>
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: March 11, 2026
+				Last Updated: April 8, 2026
 			</p>
 
 			<h2>1. Introduction</h2>
@@ -113,6 +113,22 @@ export default function PrivacyPolicy() {
 				<strong>Cloudflare Web Analytics</strong> — We use Cloudflare Web
 				Analytics to understand site performance. It does not use cookies and is
 				privacy-preserving.
+			</p>
+			<p className="mt-3">
+				<strong>Intercom Messenger</strong> — When you are signed in and using
+				the main in-app experience, we may load{" "}
+				<a
+					href="https://www.intercom.com/legal/privacy"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-hyper-green hover:underline"
+				>
+					Intercom
+				</a>{" "}
+				to provide customer support and (where enabled) AI-assisted help
+				(&quot;Fin&quot;). Intercom may set its own cookies or use similar
+				storage on your device to operate the messenger. See Section 9 for
+				categories of data shared with Intercom.
 			</p>
 
 			<h2>4. Children's Privacy</h2>
@@ -259,6 +275,25 @@ export default function PrivacyPolicy() {
 					magic link verification, OAuth).
 				</li>
 				<li>
+					<strong>Intercom:</strong> In-app customer support and (where enabled)
+					automated assistance (Fin) for authenticated users in the main product
+					workspace. We share identifiers and profile data with Intercom to
+					recognise your account in the messenger, such as your user id, email
+					address, name, account creation time, and (for workspace context) your
+					active group identifier and product attributes we configure (e.g.
+					subscription tier label, credit balance). Support conversations you
+					start are processed by Intercom under their terms. See{" "}
+					<a
+						href="https://www.intercom.com/legal/privacy"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Intercom&apos;s Privacy Policy
+					</a>
+					.
+				</li>
+				<li>
 					<strong>
 						AI Providers (Google Gemini via Cloudflare AI Gateway):
 					</strong>{" "}
@@ -374,6 +409,17 @@ export default function PrivacyPolicy() {
 						Data Processing Agreement
 					</a>
 				</li>
+				<li>
+					<strong>Intercom:</strong>{" "}
+					<a
+						href="https://www.intercom.com/legal/data-processing-agreement"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-hyper-green hover:underline"
+					>
+						Data Processing Agreement
+					</a>
+				</li>
 			</ul>
 			<p>
 				Ration Operating Company is established in the United States. We have
@@ -398,6 +444,16 @@ export default function PrivacyPolicy() {
 				and Visual Data from our systems (D1 Databases, Vectorize Indexes, R2
 				Storage). You can initiate this process through the "Purge Account"
 				function in your profile settings.
+			</p>
+			<p>
+				<strong>Third-party support records:</strong> Data held in Intercom
+				(e.g. support conversations and contact records tied to your user id) is
+				retained under Intercom&apos;s policies and product settings, which may
+				differ from our purge timelines for Ration systems. After you delete
+				your Ration account, you may contact us at{" "}
+				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> to request that
+				we coordinate deletion or suppression of your Intercom profile where
+				applicable.
 			</p>
 			<p>
 				<strong>Groups you own:</strong> For groups where other members have

@@ -13,7 +13,7 @@ type RootLoaderSlice = {
 		createdAt: unknown;
 	} | null;
 	intercomAppId: string | null;
-	intercomUserHash: string | null;
+	intercomUserJwt: string | null;
 	activeOrganizationId: string | null;
 };
 
@@ -26,7 +26,7 @@ export type HubIntercomContext = {
 type HubIntercomProps = {
 	user: NonNullable<RootLoaderSlice["user"]>;
 	intercomAppId: string;
-	intercomUserHash: string | null;
+	intercomUserJwt: string | null;
 	activeOrganizationId: string | null;
 	hub: HubIntercomContext;
 };
@@ -39,7 +39,7 @@ type HubIntercomProps = {
 export function HubIntercom({
 	user,
 	intercomAppId,
-	intercomUserHash,
+	intercomUserJwt,
 	activeOrganizationId,
 	hub,
 }: HubIntercomProps) {
@@ -66,7 +66,7 @@ export function HubIntercom({
 				name: user.name,
 				email: user.email,
 				...(createdAt !== undefined ? { created_at: createdAt } : {}),
-				...(intercomUserHash ? { user_hash: intercomUserHash } : {}),
+				...(intercomUserJwt ? { intercom_user_jwt: intercomUserJwt } : {}),
 				...(activeOrganizationId
 					? { company: { company_id: activeOrganizationId } }
 					: {}),
@@ -103,7 +103,7 @@ export function HubIntercom({
 		user.name,
 		user.createdAt,
 		intercomAppId,
-		intercomUserHash,
+		intercomUserJwt,
 		activeOrganizationId,
 		hub.tier,
 		hub.isTierExpired,
@@ -123,7 +123,7 @@ export function HubIntercomFromRoot(hub: HubIntercomContext) {
 		<HubIntercom
 			user={data.user}
 			intercomAppId={data.intercomAppId}
-			intercomUserHash={data.intercomUserHash}
+			intercomUserJwt={data.intercomUserJwt}
 			activeOrganizationId={data.activeOrganizationId}
 			hub={hub}
 		/>

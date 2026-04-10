@@ -16,7 +16,7 @@ import "@fontsource/space-mono/700.css";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { createAuth } from "./lib/auth.server";
-import { intercomIdentityHash } from "./lib/intercom.server";
+import { signIntercomJwt } from "./lib/intercom.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
@@ -42,16 +42,18 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		typeof env.INTERCOM_APP_ID === "string" ? env.INTERCOM_APP_ID.trim() : "";
 	const intercomAppId = rawIntercomId !== "" ? rawIntercomId : null;
 
-	let intercomUserHash: string | null = null;
-	const intercomSecret = env.INTERCOM_IDENTITY_VERIFICATION_SECRET?.trim();
-	if (session?.user?.id && intercomSecret) {
-		intercomUserHash = await intercomIdentityHash(
+	const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+
+	let intercomUserJwt: string | null = null;
+	const jwtSecret = env.INTERCOM_MESSENGER_JWT_SECRET?.trim();
+	if (session?.user?.id && jwtSecret) {
+		intercomUserJwt = await signIntercomJwt(
 			session.user.id,
-			intercomSecret,
+			session.user.email ?? "",
+			activeOrganizationId,
+			jwtSecret,
 		);
 	}
-
-	const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
 
 	const url = new URL(request.url);
 	return {
@@ -59,7 +61,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		theme: cookieTheme ?? sessionTheme ?? "dark",
 		origin: url.origin,
 		intercomAppId,
-		intercomUserHash,
+		intercomUserJwt,
 		activeOrganizationId,
 	};
 };

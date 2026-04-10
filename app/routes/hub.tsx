@@ -8,6 +8,7 @@ import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { HubIntercomFromRoot } from "~/components/support/HubIntercom";
+import { IntercomLauncherButton } from "~/components/support/IntercomLauncherButton";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
@@ -15,6 +16,7 @@ import {
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { ConfirmProvider } from "~/lib/confirm-context";
+import { IntercomLauncherProvider } from "~/lib/intercom-launcher-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import type { Route } from "./+types/hub";
@@ -170,47 +172,50 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<ConfirmProvider>
-			<HubIntercomFromRoot
-				tier={tier}
-				isTierExpired={isTierExpired}
-				balance={balance}
-			/>
-			<div className="flex min-h-screen bg-ceramic">
-				{/* Desktop Rail Sidebar */}
-				<RailSidebar />
+			<IntercomLauncherProvider>
+				<HubIntercomFromRoot
+					tier={tier}
+					isTierExpired={isTierExpired}
+					balance={balance}
+				/>
+				<div className="flex min-h-screen bg-ceramic">
+					{/* Desktop Rail Sidebar */}
+					<RailSidebar />
 
-				{/* Main Content Area */}
-				<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
-					{/* Global Top Bar (Group Context) */}
-					<header className="px-4 md:px-8 py-0 safe-area-pt flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
-						<GroupSwitcher />
-						<div className="flex items-center gap-1">
-							<ThemeToggle />
-							<NavLink
-								to="/hub/settings"
-								className={({ isActive }) =>
-									`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
-										isActive
-											? "text-hyper-green bg-hyper-green/10"
-											: "text-muted hover:text-carbon hover:bg-platinum/60"
-									}`
-								}
-								aria-label="System settings"
-							>
-								<SettingsIcon className="w-4 h-4" />
-							</NavLink>
+					{/* Main Content Area */}
+					<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
+						{/* Global Top Bar (Group Context) */}
+						<header className="px-4 md:px-8 py-0 safe-area-pt flex justify-between items-center bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
+							<GroupSwitcher />
+							<div className="flex items-center gap-1">
+								<ThemeToggle />
+								<IntercomLauncherButton />
+								<NavLink
+									to="/hub/settings"
+									className={({ isActive }) =>
+										`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+											isActive
+												? "text-hyper-green bg-hyper-green/10"
+												: "text-muted hover:text-carbon hover:bg-platinum/60"
+										}`
+									}
+									aria-label="System settings"
+								>
+									<SettingsIcon className="w-4 h-4" />
+								</NavLink>
+							</div>
+						</header>
+
+						{/* Content */}
+						<div className="px-4 md:px-8 py-6">
+							<Outlet />
 						</div>
-					</header>
+					</main>
 
-					{/* Content */}
-					<div className="px-4 md:px-8 py-6">
-						<Outlet />
-					</div>
-				</main>
-
-				{/* Mobile Bottom Nav */}
-				<BottomNav />
-			</div>
+					{/* Mobile Bottom Nav */}
+					<BottomNav />
+				</div>
+			</IntercomLauncherProvider>
 			<ConfirmDialog />
 			<OnboardingTour
 				initialStep={onboardingStep}

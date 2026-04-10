@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { useRouteLoaderData } from "react-router";
+import { withHubIntercomLauncher } from "~/lib/intercom-hub-settings";
+import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { toUnixSeconds } from "~/lib/intercom-utils";
 
 /** Subset of root loader fields used by HubIntercom (avoids importing the root route module). */
@@ -31,6 +33,7 @@ type HubIntercomProps = {
 
 /**
  * Loads Intercom only while the hub layout is mounted (`/hub/*`).
+ * Uses a header-bound custom launcher so the default bubble does not cover mobile Supply.
  * Calls `shutdown` on unmount to avoid leaking identity on shared devices.
  */
 export function HubIntercom({
@@ -40,27 +43,30 @@ export function HubIntercom({
 	activeOrganizationId,
 	hub,
 }: HubIntercomProps) {
+	const { setHasUnread, resetUnread } = useIntercomLauncher();
+
 	useEffect(() => {
 		let cancelled = false;
 
 		const run = async () => {
-			const { default: initIntercom, shutdown } = await import(
-				"@intercom/messenger-js-sdk"
-			);
+			const {
+				default: initIntercom,
+				onUnreadCountChange,
+				shutdown,
+			} = await import("@intercom/messenger-js-sdk");
 			if (cancelled) return;
 
 			shutdown();
+			resetUnread();
 
 			const createdAt = toUnixSeconds(user.createdAt);
-			initIntercom({
+			const base = {
 				app_id: intercomAppId,
 				user_id: user.id,
 				name: user.name,
 				email: user.email,
 				...(createdAt !== undefined ? { created_at: createdAt } : {}),
 				...(intercomUserHash ? { user_hash: intercomUserHash } : {}),
-				vertical_padding: 80,
-				horizontal_padding: 16,
 				...(activeOrganizationId
 					? { company: { company_id: activeOrganizationId } }
 					: {}),
@@ -69,6 +75,16 @@ export function HubIntercom({
 					ration_tier_expired: hub.isTierExpired,
 					ration_credit_balance: hub.balance,
 				},
+			};
+
+			initIntercom(withHubIntercomLauncher(base));
+
+			// Defer until after paint so `#ration-intercom-launcher` is in the document.
+			queueMicrotask(() => {
+				if (cancelled) return;
+				onUnreadCountChange((count: number) => {
+					setHasUnread(count > 0);
+				});
 			});
 		};
 
@@ -76,6 +92,7 @@ export function HubIntercom({
 
 		return () => {
 			cancelled = true;
+			resetUnread();
 			void import("@intercom/messenger-js-sdk").then(({ shutdown }) =>
 				shutdown(),
 			);
@@ -91,6 +108,8 @@ export function HubIntercom({
 		hub.tier,
 		hub.isTierExpired,
 		hub.balance,
+		setHasUnread,
+		resetUnread,
 	]);
 
 	return null;

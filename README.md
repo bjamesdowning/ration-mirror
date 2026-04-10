@@ -179,7 +179,7 @@ flowchart TB
 
 **Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
 
-**Vars:** `INTERCOM_APP_ID` — public Intercom workspace app id; set in `wrangler.jsonc` / `wrangler.dev.jsonc` / `wrangler.local.jsonc`. The Intercom Messenger loads only on authenticated `/hub/*` routes (see `app/components/support/HubIntercom.tsx`). The app **Content-Security-Policy** in `app/root.tsx` includes Intercom script/connect/img/font/media/frame/form-action sources required by their widget.
+**Vars:** `INTERCOM_APP_ID` — public Intercom workspace app id; set in `wrangler.jsonc` / `wrangler.dev.jsonc` / `wrangler.local.jsonc`. The Intercom Messenger loads only on authenticated `/hub/*` routes (see `app/components/support/HubIntercom.tsx`). The default floating launcher is hidden; support opens from the hub header chat control (`app/components/support/IntercomLauncherButton.tsx`) so it does not cover the mobile bottom nav. The app **Content-Security-Policy** in `app/root.tsx` includes Intercom script/connect/img/font/media/frame/form-action sources required by their widget.
 
 **Secrets (optional):** `INTERCOM_IDENTITY_VERIFICATION_SECRET` — `wrangler secret put INTERCOM_IDENTITY_VERIFICATION_SECRET`; when set, the root loader supplies Intercom identity verification (`user_hash`). See [Intercom identity verification](https://www.intercom.com/help/en/articles/183-set-up-identity-verification-for-web-messenger).
 

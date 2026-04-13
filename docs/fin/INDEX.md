@@ -18,7 +18,7 @@ Use this table for Intercom tagging, Fin source configuration, and **golden-ques
 | [17-matching-cookable-meals.md](./17-matching-cookable-meals.md) | Matching cookable meals | Support | What does “meals ready” mean? Strict vs partial match? |
 | [18-hub-dashboard-and-settings.md](./18-hub-dashboard-and-settings.md) | Hub dashboard and settings | Support | Where is pricing? API keys? How do I delete my account? |
 | [20-credits-explained.md](./20-credits-explained.md) | AI credits explained | Both | What uses credits? Do MCP calls use credits? Who shares the balance? |
-| [21-buying-credits-and-stripe.md](./21-buying-credits-and-stripe.md) | Buying credits and checkout | Support | Checkout failed; credits missing? Billing portal? After payment success? |
+| [21-buying-credits-and-stripe.md](./21-buying-credits-and-stripe.md) | Buying credits and checkout | Support | Checkout failed; credits missing? Billing portal? Fin cancel/resume? After payment success? |
 | [22-subscription-tiers.md](./22-subscription-tiers.md) | Free vs Crew Member | Both | Why can’t I invite someone? Why are limits different? Who sets tier for a group? |
 | [23-welcome-offer-and-promotions.md](./23-welcome-offer-and-promotions.md) | Welcome offer (WELCOME65) | Sales, Support | What is the welcome code? Supply Run credits? |
 | [30-mcp-overview.md](./30-mcp-overview.md) | MCP overview | Support | What is Ration MCP? Which API key scope? |
@@ -34,6 +34,7 @@ Use this table for Intercom tagging, Fin source configuration, and **golden-ques
 | [52-limits-and-rate-limits.md](./52-limits-and-rate-limits.md) | Limits and rate limits | Support | How many scans per minute? MCP throttling? |
 | [60-troubleshooting-common.md](./60-troubleshooting-common.md) | Common troubleshooting | Support | Not enough credits; wrong group; can’t share; duplicate recipe URL. |
 | [61-billing-issues.md](./61-billing-issues.md) | Billing troubleshooting | Support | Paid but no credits yet; subscription status; what to send support. |
+| [70-fin-chat-capability-roadmap.md](./70-fin-chat-capability-roadmap.md) | Fin chat: capability rollout | Internal | What to build next after billing cancel/resume. |
 
 **Sales objection handling:** prioritize `01`, `02`, `20`, `22`, `40`, `41`, `50`.
 

@@ -29,6 +29,10 @@ Capacity and certain features for a group depend on the **organization owner’s
 
 If a **Crew Member** subscription **expires**, the group may fall back to **free** limits until renewed. Cached tier data refreshes shortly after Stripe updates.
 
+## Canceling Crew Member
+
+Users can cancel through **Stripe Customer Portal** (from **Hub → Settings** or **Pricing** when **Manage billing** is shown), or—when enabled—via **Fin** using the subscription cancel/resume data connectors (cancel **at end of billing period**, not instant removal). Until the period ends, the household keeps Crew limits.
+
 ## Roles
 
 **Owner** and **admin** can perform some administrative actions (invitations, transfers—see Settings). **Member** access is more limited.

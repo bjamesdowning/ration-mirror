@@ -15,6 +15,7 @@ Map article groups to Intercom collections for navigation and Fin grounding:
 | E — Security & privacy | `40`–`42` |
 | F — Architecture & limits | `50`–`52` |
 | G — Troubleshooting | `60`–`61` |
+| H — Roadmap (internal) | `70` |
 
 ## Authoring rules
 

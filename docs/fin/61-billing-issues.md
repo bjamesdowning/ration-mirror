@@ -11,6 +11,8 @@
 
 Use **Manage billing** / customer portal from **Pricing** or **Settings** when available. Cancellations and payment method updates happen in **Stripe’s** portal.
 
+If **Fin** is configured with Ration’s billing connectors, users can also ask in chat whether they are subscribed, when renewal is, or to **cancel at period end** / **resume** (undo a pending cancellation). Answers must match the live API; if chat and the app disagree, **the app wins**—update Fin articles and connector behavior.
+
 ## Wrong amount charged
 
 Compare **Stripe receipt** line items to **Pricing** in-app. For disputes, use **Stripe** or your card issuer per their policies; Ration support can explain **product mapping** but cannot override processor decisions.

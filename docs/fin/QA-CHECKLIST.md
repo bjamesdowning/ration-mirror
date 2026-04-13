@@ -33,6 +33,9 @@ Use after importing articles into **Intercom** (or your Fin knowledge source). P
 - Why can’t I invite my partner?
 - Does MCP use my AI credits?
 - What is WELCOME65?
+- Am I subscribed? When does my Crew Member plan renew?
+- Cancel my subscription (Fin should confirm, then cancel **at period end** only).
+- Am I set to cancel? How do I undo cancellation before the period ends?
 
 ### MCP / API
 

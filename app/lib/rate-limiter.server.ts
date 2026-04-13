@@ -241,6 +241,12 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30, // Fin retries and conversational turns can fan out quickly
 		keyPrefix: "rate:fin_billing",
 	},
+	/** Fin subscription cancel/resume — tighter than read-only billing summary */
+	fin_billing_write: {
+		windowMs: 60_000,
+		maxRequests: 8,
+		keyPrefix: "rate:fin_billing_write",
+	},
 	admin_search: {
 		windowMs: 60_000,
 		maxRequests: 30,

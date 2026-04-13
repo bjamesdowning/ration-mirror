@@ -18,6 +18,19 @@ test.describe("auth", () => {
 	});
 
 	test("submitting email shows check-inbox success state", async ({ page }) => {
+		// Better Auth magic-link client posts to `/api/auth/sign-in/magic-link` (not `magic-link/send`).
+		// Register before navigation so the handler is always in place under parallel workers.
+		await page.route("**/api/auth/sign-in/magic-link", (route) => {
+			if (route.request().method() !== "POST") {
+				route.continue();
+				return;
+			}
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({ status: true }),
+			});
+		});
 		await page.goto("/");
 		await page.getByLabel("Email address").fill("test@example.com");
 		// Clickwrap: must agree to ToS/Privacy before submit is enabled
@@ -26,12 +39,6 @@ test.describe("auth", () => {
 				name: /agree to the Terms of Service and Privacy Policy/i,
 			})
 			.check();
-		// Note: in local dev the form posts but no email is sent, the UI should
-		// still transition to the "sent" state. We mock the auth endpoint to
-		// return a 200 OK so the test doesn't depend on an external service.
-		await page.route("**/api/auth/magic-link/send**", (route) => {
-			route.fulfill({ status: 200, body: JSON.stringify({ status: true }) });
-		});
 		await page.getByRole("button", { name: /send sign-up link/i }).click();
 		await expect(page.getByText("Check your inbox")).toBeVisible({
 			timeout: 5000,

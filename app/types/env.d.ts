@@ -32,5 +32,7 @@ declare namespace Cloudflare {
 		INTERCOM_APP_ID?: string;
 		/** Intercom Messenger Security — HS256 JWT signing secret. `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET` */
 		INTERCOM_MESSENGER_JWT_SECRET?: string;
+		/** Shared secret for Intercom Fin Data Connector -> Ration billing endpoint auth. */
+		FIN_INTERCOM_CONNECTOR_SECRET?: string;
 	}
 }

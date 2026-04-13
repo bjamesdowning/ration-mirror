@@ -183,6 +183,8 @@ flowchart TB
 
 **Secrets (optional):** `INTERCOM_MESSENGER_JWT_SECRET` — `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET`; when set, the root loader signs a short-lived HS256 JWT and the hub Messenger boots with `intercom_user_jwt` (Messenger Security / Fin). Generate the secret in Intercom under **Settings → Messenger → Security**. See [Authenticating users in the Messenger with JWTs](https://www.intercom.com/help/en/articles/10589769-authenticating-users-in-the-messenger-with-json-web-tokens-jwts).
 
+**Secrets (optional):** `FIN_INTERCOM_CONNECTOR_SECRET` — shared secret between Intercom Fin Data Connectors and `GET /api/fin/billing-summary`. Store with `wrangler secret put FIN_INTERCOM_CONNECTOR_SECRET` (and in local `.dev.vars`). Intercom sends this as either `Authorization: Bearer <token>` or `x-intercom-token`; the Worker validates the token before reading user billing data from D1/Stripe.
+
 **JWT-only verification checklist (post-enforcement):**
 - Hub requests contain `intercom_user_jwt`
 - Intercom Security logs show accepted JWT requests

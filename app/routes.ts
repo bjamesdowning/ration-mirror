@@ -155,6 +155,7 @@ export default [
 	route("api/checkout", "routes/api/checkout.tsx"),
 	route("api/webhook", "routes/api/webhook.tsx"),
 	route("api/billing-portal", "routes/api/billing-portal.ts"),
+	route("api/fin/billing-summary", "routes/api/fin.billing-summary.ts"),
 	route("api/user/avatar", "routes/api/user/avatar.tsx"),
 	route("api/user/avatar/:userId", "routes/api/user/avatar.$userId.tsx"),
 	route("api/organization/avatar", "routes/api/organization/avatar.tsx"),

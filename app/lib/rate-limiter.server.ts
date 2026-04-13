@@ -236,6 +236,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:interest_signup",
 	},
+	fin_billing: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 30, // Fin retries and conversational turns can fan out quickly
+		keyPrefix: "rate:fin_billing",
+	},
 	admin_search: {
 		windowMs: 60_000,
 		maxRequests: 30,

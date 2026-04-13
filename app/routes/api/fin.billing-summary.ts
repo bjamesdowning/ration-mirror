@@ -161,11 +161,36 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				customer: user.stripeCustomerId,
 				subscription: selected.id,
 			});
-			nextPaymentDate = toIsoDateOrNull(upcoming.due_date) ?? nextPaymentDate;
+			// Priority order for auto-charge subscriptions:
+			// 1. next_payment_attempt — set for charge_automatically, null for send_invoice
+			// 2. due_date             — set for send_invoice, null for charge_automatically
+			// 3. period_end           — end of current billing window (always present)
+			// 4. subscription.current_period_end — last-resort fallback from list call
+			const upcomingNextPayment =
+				(upcoming as unknown as { next_payment_attempt?: number | null })
+					.next_payment_attempt ?? null;
+			nextPaymentDate =
+				toIsoDateOrNull(upcomingNextPayment) ??
+				toIsoDateOrNull(upcoming.due_date) ??
+				toIsoDateOrNull(
+					(upcoming as unknown as { period_end?: number | null }).period_end,
+				) ??
+				nextPaymentDate;
 			amountDueMinor = upcoming.amount_due;
 			currency = upcoming.currency.toUpperCase();
-		} catch {
-			// Upcoming invoices are not guaranteed (e.g. canceled or incomplete subscriptions).
+		} catch (previewError) {
+			log.warn(
+				"Fin billing: invoice preview unavailable, using subscription fallback",
+				{
+					userId: redactId(user.id),
+					subscriptionId: selected.id,
+					errorCode:
+						(previewError as { code?: string })?.code ??
+						(previewError instanceof Error
+							? previewError.message
+							: String(previewError)),
+				},
+			);
 		}
 
 		return {

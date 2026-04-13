@@ -29,21 +29,21 @@ export function IntercomLauncherButton() {
 			id={RATION_INTERCOM_LAUNCHER_ID}
 			className={[
 				"group relative inline-flex min-h-[44px] max-w-[11rem] shrink-0 items-center justify-center gap-1.5",
-				"rounded-full border px-2.5 md:px-3 text-sm font-medium whitespace-nowrap transition-colors",
-				"border-hyper-green/45 bg-hyper-green/15 text-carbon",
-				"hover:border-hyper-green/70 hover:bg-hyper-green/25",
-				"active:bg-hyper-green/30",
+				"rounded-lg px-2.5 md:px-3.5 text-sm font-semibold whitespace-nowrap transition-colors",
+				"border border-hyper-green/80 bg-hyper-green text-carbon shadow-sm",
+				"hover:border-hyper-green hover:bg-hyper-green/90 hover:brightness-[1.02]",
+				"active:bg-hyper-green/85",
 				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hyper-green focus-visible:ring-offset-2 focus-visible:ring-offset-ceramic",
-				"dark:border-hyper-green/50 dark:bg-hyper-green/20 dark:text-ceramic",
-				"dark:hover:border-hyper-green dark:hover:bg-hyper-green/30",
+				"dark:border-hyper-green dark:bg-hyper-green dark:text-carbon",
+				"dark:hover:bg-hyper-green/90 dark:hover:brightness-[1.03]",
 				"dark:focus-visible:ring-offset-carbon",
 				hasUnread
-					? "border-hyper-green/70 bg-hyper-green/25 shadow-[0_0_0_1px_rgba(0,224,136,0.35)] dark:border-hyper-green dark:bg-hyper-green/35"
+					? "shadow-[0_0_0_2px_rgba(0,224,136,0.45),0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-carbon/10 dark:ring-white/20"
 					: "",
 			].join(" ")}
 			aria-label={ariaLabel}
 		>
-			<MessageCircle className="size-4 shrink-0 text-hyper-green" aria-hidden />
+			<MessageCircle className="size-4 shrink-0 text-carbon" aria-hidden />
 			<span className="hidden md:inline" aria-hidden>
 				Ask Ration
 			</span>
@@ -52,7 +52,7 @@ export function IntercomLauncherButton() {
 			</span>
 			{hasUnread ? (
 				<span
-					className="absolute top-1 right-1 size-2 rounded-full bg-hyper-green ring-2 ring-ceramic dark:ring-carbon pointer-events-none"
+					className="absolute top-1.5 right-1.5 size-2 rounded-full bg-carbon ring-2 ring-white dark:bg-white dark:ring-carbon pointer-events-none"
 					aria-hidden
 				/>
 			) : null}

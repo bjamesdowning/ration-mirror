@@ -205,7 +205,7 @@ export function GroupSwitcher() {
 				aria-busy={isSwitching}
 				aria-label={`${displayName}, ${credits} credits`}
 				title={displayName}
-				className="flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg bg-platinum/50 hover:bg-platinum transition-all border border-transparent hover:border-carbon/10 min-w-0 disabled:opacity-70 disabled:cursor-wait"
+				className="flex items-center gap-2 px-2.5 md:px-3.5 py-2 min-h-[44px] rounded-xl border border-platinum/60 dark:border-white/10 bg-platinum/35 dark:bg-white/[0.06] hover:bg-platinum/55 dark:hover:bg-white/10 hover:border-platinum dark:hover:border-white/15 shadow-sm transition-all min-w-0 disabled:opacity-70 disabled:cursor-wait"
 			>
 				{/* Mobile: avatar only; Desktop: full name */}
 				<div className="hidden md:flex items-center gap-2 min-w-0 flex-1">

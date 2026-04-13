@@ -181,7 +181,14 @@ flowchart TB
 
 **Vars:** `INTERCOM_APP_ID` — public Intercom workspace app id; set in `wrangler.jsonc` / `wrangler.dev.jsonc` / `wrangler.local.jsonc`. The Intercom Messenger loads only on authenticated `/hub/*` routes (see `app/components/support/HubIntercom.tsx`). The default floating launcher is hidden; support opens from the hub header chat control (`app/components/support/IntercomLauncherButton.tsx`) so it does not cover the mobile bottom nav. The app **Content-Security-Policy** in `app/root.tsx` includes Intercom script/connect/img/font/media/frame/form-action sources required by their widget.
 
-**Secrets (optional):** `INTERCOM_MESSENGER_JWT_SECRET` — `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET`; when set, the root loader signs a short-lived HS256 JWT and the hub Messenger boots with `intercom_user_jwt` (Messenger Security / Fin). Generate the secret in Intercom under **Settings → Messenger → Security**. Validate in Intercom’s installation logs and JWT decoder, protect `user_id` / `email` attributes as needed, then **Enforce JWT Authentication**. See [Authenticating users in the Messenger with JWTs](https://www.intercom.com/help/en/articles/10589769-authenticating-users-in-the-messenger-with-json-web-tokens-jwts). The legacy `INTERCOM_IDENTITY_VERIFICATION_SECRET` (`user_hash`) is no longer used by the app; remove it from Workers after you have migrated Intercom-side.
+**Secrets (optional):** `INTERCOM_MESSENGER_JWT_SECRET` — `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET`; when set, the root loader signs a short-lived HS256 JWT and the hub Messenger boots with `intercom_user_jwt` (Messenger Security / Fin). Generate the secret in Intercom under **Settings → Messenger → Security**. See [Authenticating users in the Messenger with JWTs](https://www.intercom.com/help/en/articles/10589769-authenticating-users-in-the-messenger-with-json-web-tokens-jwts).
+
+**JWT-only verification checklist (post-enforcement):**
+- Hub requests contain `intercom_user_jwt`
+- Intercom Security logs show accepted JWT requests
+- No `user_hash` is present in Messenger payloads
+
+**Operations note:** If you rotate `INTERCOM_MESSENGER_JWT_SECRET`, redeploy/restart the environment before validating new JWT traffic.
 
 **Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, and configurable retry/fallback — all from the Cloudflare dashboard with zero code changes. It also means the Google API key never needs to be rotated into application secrets; only the gateway ID is referenced.
 

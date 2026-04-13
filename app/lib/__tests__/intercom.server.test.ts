@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intercomIdentityHash, signIntercomJwt } from "../intercom.server";
+import { signIntercomJwt } from "../intercom.server";
 
 function base64UrlDecodeToString(s: string): string {
 	const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
@@ -52,16 +52,14 @@ function parseJwtPayload(token: string): Record<string, unknown> {
 	return JSON.parse(base64UrlDecodeToString(mid)) as Record<string, unknown>;
 }
 
-describe("intercomIdentityHash", () => {
-	it("matches openssl HMAC-SHA256 hex for UTF-8 user id", async () => {
-		// printf 'user123' | openssl dgst -sha256 -hmac 'testsecret' -hex
-		const expected =
-			"8e9c6e4d334aef1d1b18f6222aa1b72ce9d3066a7425f3c7187564e246457163";
-		await expect(intercomIdentityHash("user123", "testsecret")).resolves.toBe(
-			expected,
-		);
-	});
-});
+function parseJwtHeader(token: string): Record<string, unknown> {
+	const parts = token.split(".");
+	const first = parts[0];
+	if (parts.length !== 3 || first === undefined) {
+		throw new Error("invalid JWT shape");
+	}
+	return JSON.parse(base64UrlDecodeToString(first)) as Record<string, unknown>;
+}
 
 describe("signIntercomJwt", () => {
 	const secret = "test-messenger-secret";
@@ -96,6 +94,9 @@ describe("signIntercomJwt", () => {
 		expect(token).not.toBeNull();
 		if (token === null) return;
 		expect(token.split(".")).toHaveLength(3);
+		const header = parseJwtHeader(token);
+		expect(header.alg).toBe("HS256");
+		expect(header.typ).toBe("JWT");
 		await expect(verifyJwtHs256(token, secret)).resolves.toBe(true);
 	});
 
@@ -114,6 +115,8 @@ describe("signIntercomJwt", () => {
 		expect(payload.email).toBe("e@mail.com");
 		expect(payload.exp).toBe(nowSeconds + 300);
 		expect(payload.company_id).toBeUndefined();
+		expect(payload.user_hash).toBeUndefined();
+		expect(Object.keys(payload).sort()).toEqual(["email", "exp", "user_id"]);
 	});
 
 	it("omits email when blank", async () => {

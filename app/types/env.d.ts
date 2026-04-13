@@ -32,10 +32,5 @@ declare namespace Cloudflare {
 		INTERCOM_APP_ID?: string;
 		/** Intercom Messenger Security — HS256 JWT signing secret. `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET` */
 		INTERCOM_MESSENGER_JWT_SECRET?: string;
-		/**
-		 * Deprecated: legacy HMAC `user_hash` identity verification. Replaced by
-		 * `INTERCOM_MESSENGER_JWT_SECRET` and `intercom_user_jwt`. Remove after migration.
-		 */
-		INTERCOM_IDENTITY_VERIFICATION_SECRET?: string;
 	}
 }

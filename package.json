@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.2.1",
+	"version": "1.2.2",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -29,7 +29,6 @@
 		"deploy:mcp": "wrangler deploy --config wrangler.mcp.jsonc --env=''"
 	},
 	"dependencies": {
-		"@better-auth/cli": "1.4.21",
 		"@fontsource/space-mono": "^5.2.9",
 		"@intercom/messenger-js-sdk": "^0.0.19",
 		"@modelcontextprotocol/sdk": "^1.29.0",
@@ -38,7 +37,7 @@
 		"@stripe/stripe-js": "^8.11.0",
 		"@types/react-syntax-highlighter": "^15.5.13",
 		"agents": "^0.7.9",
-		"better-auth": "1.4.21",
+		"better-auth": "1.6.7",
 		"drizzle-orm": "^0.45.2",
 		"gray-matter": "^4.0.3",
 		"isbot": "^5.1.39",
@@ -68,5 +67,21 @@
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "^4.1.5",
 		"wrangler": "^4.84.1"
+	},
+	"overrides": {
+		"@hono/node-server": "1.19.14",
+		"defu": "6.1.7",
+		"effect": "^3.20.0",
+		"esbuild": "^0.27.2",
+		"express-rate-limit": "8.2.2",
+		"hono": "4.12.14",
+		"kysely": "0.28.16",
+		"lodash": "4.18.1",
+		"path-to-regexp": "8.4.0",
+		"picomatch": "4.0.4",
+		"qs": "6.14.2",
+		"rollup": "^4.60.2",
+		"undici": "^7.25.0",
+		"vite": "7.3.2"
 	}
 }

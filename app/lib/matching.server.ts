@@ -17,7 +17,8 @@ import {
 	SIMILARITY_THRESHOLDS,
 	type SimilarCargoMatch,
 } from "./vector.server";
-export { normalizeForMatch, normalizeForCargoDedup };
+
+export { normalizeForCargoDedup, normalizeForMatch };
 
 /**
  * Type definitions for meal matching

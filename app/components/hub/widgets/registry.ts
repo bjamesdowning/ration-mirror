@@ -14,7 +14,7 @@ import { MealsReadyWidget } from "./MealsReadyWidget";
 import { SnacksReadyWidget } from "./SnacksReadyWidget";
 import { SupplyPreviewWidget } from "./SupplyPreviewWidget";
 
-export type { HubWidgetId, HubProfile, HubWidgetLayout, HubWidgetProps };
+export type { HubProfile, HubWidgetId, HubWidgetLayout, HubWidgetProps };
 
 export interface HubWidgetDefinition {
 	id: HubWidgetId;

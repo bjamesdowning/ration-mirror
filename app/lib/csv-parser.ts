@@ -61,7 +61,7 @@ const COLUMN_ALIASES: Record<string, string> = {
 const UUID_REGEX =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function parseOptionalId(value?: string | null): string | undefined {
-	if (!value || !value.trim()) return undefined;
+	if (!value?.trim()) return undefined;
 	const trimmed = value.trim();
 	return UUID_REGEX.test(trimmed) ? trimmed : undefined;
 }
@@ -148,7 +148,7 @@ function isHeaderRow(cells: string[]) {
 }
 
 function parseQuantity(value?: string | null) {
-	if (!value || !value.trim()) return 1;
+	if (!value?.trim()) return 1;
 	const parsed = Number(value.replace(/,/g, "."));
 	return Number.isFinite(parsed) ? parsed : NaN;
 }

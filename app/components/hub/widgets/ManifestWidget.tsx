@@ -340,7 +340,7 @@ function ManifestEmpty({ size: _size }: { size: "sm" | "md" | "lg" }) {
 export function ManifestWidget({ data, size = "md" }: HubWidgetProps) {
 	const preview = data.manifestPreview as ManifestPreviewData | null;
 
-	if (!preview || !preview.planId) {
+	if (!preview?.planId) {
 		return <ManifestEmpty size={size} />;
 	}
 

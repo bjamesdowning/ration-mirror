@@ -17,7 +17,6 @@ import {
 	softwareAppSchema,
 	websiteSchema,
 } from "~/lib/structured-data";
-import { TIER_LIMITS } from "~/lib/tiers.server";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const auth = createAuth(context.cloudflare.env);
@@ -31,6 +30,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		"~/lib/stripe.server"
 	);
 	const { getRecentPosts } = await import("~/lib/blog.server");
+	const { TIER_LIMITS } = await import("~/lib/tiers.server");
 
 	return {
 		tierLimits: TIER_LIMITS,
@@ -601,7 +601,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					name: "Free",
 					price: "0",
 					priceCurrency: "USD",
-					description: `Up to ${TIER_LIMITS.free.maxInventoryItems} pantry items, ${TIER_LIMITS.free.maxMeals} recipes, ${TIER_LIMITS.free.maxGroceryLists} supply lists.`,
+					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists.`,
 				},
 				{
 					name: "Crew Member",

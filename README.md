@@ -1223,7 +1223,18 @@ flowchart TB
 | `requireAdmin()` | `user` (with isAdmin) | Redirect `→ /` |
 | `requireApiKey()` | `{ organizationId, scopes }` | 401 / 403 JSON response |
 
-**SEO & Discovery** — Public indexable pages (`/`, `/legal/*`, `/blog`, `/blog/:slug`, `/tools/*`) include canonical URLs plus Open Graph and Twitter Card meta tags for social sharing. `robots.txt` allows crawlers for `/`, `/legal/`, `/blog/`, and `/tools/`; `sitemap.xml` lists indexable URLs including blog posts. Blog posts use `BlogPosting` JSON-LD plus article-specific Open Graph metadata. Blog frontmatter should include `title`, `description`, `date`, `dateModified`, `authorName`, optional `authorUrl`, optional `image`, and optional `tags` so new posts automatically inherit sitemap, social, and structured-data coverage. Hub, API, admin, and shared routes are disallowed from indexing.
+**SEO & Discovery** — Public indexable pages (`/`, `/about`, `/legal/*`, `/blog`, `/blog/:slug`, `/tools/*`) include canonical URLs, Open Graph and Twitter Card meta tags, and JSON-LD structured data via [`app/lib/structured-data.ts`](app/lib/structured-data.ts) (`Organization`, `WebSite`, `SoftwareApplication`, `FAQPage`, `BreadcrumbList`, `Blog`, `BlogPosting`, `WebApplication`, `WebPage`, `Person`).
+
+The discovery surface comprises:
+
+- [`/robots.txt`](app/routes/robots-txt.ts) — explicit `Allow` rules for major AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.). Cloudflare's managed AI bot block must also be set to **Allow** for these bots in the dashboard; see [`docs/seo/ai-crawlers.md`](docs/seo/ai-crawlers.md).
+- [`/sitemap.xml`](app/routes/sitemap.xml.ts) — every public route plus all blog posts with `<lastmod>` derived from each post's `dateModified`.
+- [`/llms.txt`](app/routes/llms-txt.ts) and [`/llms-full.txt`](app/routes/llms-full-txt.ts) — markdown index and full-content companion per the [llmstxt.org](https://llmstxt.org) spec, used by AI answer engines for grounding.
+- [`/blog/rss.xml`](app/routes/blog.rss.xml.ts) — RSS 2.0 feed of all blog posts. Surfaced from the blog index head as `<link rel="alternate" type="application/rss+xml">`.
+
+Blog frontmatter should include `title`, `description`, `date`, `dateModified`, `authorName`, optional `authorUrl`, optional `image` (1200x630 PNG/WebP under `public/static/og/<slug>.png`; see [`public/static/og/README.md`](public/static/og/README.md)), and optional `tags` so new posts automatically inherit sitemap, social, structured-data, RSS, and llms-full.txt coverage. Hub, API, admin, auth, and shared routes are disallowed from indexing for all crawlers (including AI).
+
+Manual operator follow-ups (Search Console, Bing Webmaster, IndexNow, OG image generation) are tracked in [`docs/seo/checklist.md`](docs/seo/checklist.md).
 
 ---
 

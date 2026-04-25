@@ -107,3 +107,40 @@ export function getPostBySlug(slug: string): BlogPost | null {
 export function getAllSlugs(): string[] {
 	return getAllPosts().map((p) => p.slug);
 }
+
+/**
+ * Returns up to `count` posts most relevant to the given slug, ranked by
+ * tag overlap (descending), then recency (descending). The source post is
+ * never included. If fewer than `count` posts exist, returns whatever is
+ * available — callers should treat the result as "best effort".
+ *
+ * Pure function (no I/O); the underlying `getAllPosts()` cache is only hit
+ * once per worker isolate.
+ */
+export function getRelatedPosts(slug: string, count: number): BlogPost[] {
+	if (count <= 0) return [];
+	const all = getAllPosts();
+	const source = all.find((p) => p.slug === slug);
+	if (!source) return [];
+
+	const sourceTags = new Set(source.tags);
+	const candidates = all.filter((p) => p.slug !== slug);
+
+	const ranked = candidates
+		.map((p) => ({
+			post: p,
+			overlap: p.tags.reduce((n, t) => (sourceTags.has(t) ? n + 1 : n), 0),
+		}))
+		.sort((a, b) => {
+			if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+			return a.post.date > b.post.date ? -1 : 1;
+		});
+
+	return ranked.slice(0, count).map((r) => r.post);
+}
+
+/** Returns the N most recent posts. Used for the homepage "latest posts" rail. */
+export function getRecentPosts(count: number): BlogPost[] {
+	if (count <= 0) return [];
+	return getAllPosts().slice(0, count);
+}

@@ -1,22 +1,20 @@
 import { Link } from "react-router";
 import { BlogCTA } from "~/components/blog/BlogCTA";
 import { BlogMarkdown } from "~/components/blog/BlogMarkdown";
-import { JsonLd } from "~/components/blog/JsonLd";
+import { RelatedPosts } from "~/components/blog/RelatedPosts";
+import { JsonLd } from "~/components/seo/JsonLd";
+import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
-import {
-	absoluteSiteUrl,
-	canonicalMeta,
-	OG_IMAGE,
-	ogMeta,
-	SITE_ORIGIN,
-} from "~/lib/seo";
+import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { articleSchema, breadcrumbSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/blog.$slug";
 
 export async function loader({ params }: Route.LoaderArgs) {
-	const { getPostBySlug } = await import("~/lib/blog.server");
+	const { getPostBySlug, getRelatedPosts } = await import("~/lib/blog.server");
 	const post = getPostBySlug(params.slug);
 	if (!post) throw new Response("Not Found", { status: 404 });
-	return { post };
+	const related = getRelatedPosts(params.slug, 3);
+	return { post, related };
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -58,43 +56,32 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 }
 
 export default function BlogPost({ loaderData }: Route.ComponentProps) {
-	const { post } = loaderData;
-	const authorSchema = post.authorUrl
-		? {
-				"@type": "Person",
-				name: post.authorName,
-				url: post.authorUrl,
-			}
-		: {
-				"@type": "Person",
-				name: post.authorName,
-			};
+	const { post, related } = loaderData;
 
-	const articleSchema = {
-		"@context": "https://schema.org",
-		"@type": "BlogPosting",
-		headline: post.title,
-		description: post.description,
-		datePublished: post.date,
-		dateModified: post.dateModified,
-		url: `${SITE_ORIGIN}/blog/${post.slug}`,
-		mainEntityOfPage: `${SITE_ORIGIN}/blog/${post.slug}`,
-		image: [absoluteSiteUrl(post.image)],
-		author: authorSchema,
-		publisher: {
-			"@type": "Organization",
-			name: "Ration",
-			logo: {
-				"@type": "ImageObject",
-				url: OG_IMAGE,
+	const schemas = [
+		breadcrumbSchema([
+			{ name: "Home", path: "/" },
+			{ name: "Blog", path: "/blog" },
+			{ name: post.title, path: `/blog/${post.slug}` },
+		]),
+		articleSchema({
+			slug: post.slug,
+			title: post.title,
+			description: post.description,
+			datePublished: post.date,
+			dateModified: post.dateModified,
+			image: post.image,
+			tags: post.tags,
+			author: {
+				name: post.authorName,
+				url: post.authorUrl ?? `${SITE_ORIGIN}/about`,
 			},
-		},
-		keywords: post.tags,
-	};
+		}),
+	];
 
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
-			<JsonLd data={articleSchema} />
+			<JsonLd data={schemas} />
 
 			{/* Ambient gradient */}
 			<div
@@ -141,7 +128,15 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 									day: "numeric",
 								})}
 							</time>
-							<span>By {post.authorName}</span>
+							<span>
+								By{" "}
+								<Link
+									to="/about"
+									className="text-carbon/70 hover:text-hyper-green transition-colors"
+								>
+									{post.authorName}
+								</Link>
+							</span>
 						</div>
 					</div>
 				</div>
@@ -151,6 +146,32 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 					<article className="prose-article max-w-none">
 						<BlogMarkdown content={post.content} />
 					</article>
+
+					{/* Author card — E-E-A-T signal for Google + AI answer engines */}
+					<aside
+						className="mt-12 pt-8 border-t border-carbon/10 flex items-start gap-4"
+						aria-label="About the author"
+					>
+						<div
+							className="w-12 h-12 shrink-0 rounded-full bg-hyper-green/15 border border-hyper-green/30 flex items-center justify-center text-hyper-green font-bold text-lg"
+							aria-hidden
+						>
+							{post.authorName.charAt(0)}
+						</div>
+						<div className="text-sm text-muted leading-relaxed">
+							<p className="text-carbon font-bold mb-1">{post.authorName}</p>
+							<p>
+								Founder of Ration. Writing about AI-native kitchen software,
+								MCP, and the boring infrastructure that makes meal planning
+								actually work.{" "}
+								<Link to="/about" className="text-hyper-green hover:underline">
+									More about the team →
+								</Link>
+							</p>
+						</div>
+					</aside>
+
+					<RelatedPosts posts={related} />
 
 					<div className="mt-12 pt-8 border-t border-carbon/10">
 						<BlogCTA
@@ -163,14 +184,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 				</div>
 			</main>
 
-			<footer className="relative z-20 border-t border-carbon/10 py-8 bg-ceramic">
-				<div className="max-w-5xl mx-auto px-6 flex justify-between items-center text-xs text-muted">
-					<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
-					<Link to="/blog" className="hover:text-hyper-green transition-colors">
-						← Back to Blog
-					</Link>
-				</div>
-			</footer>
+			<PublicFooter />
 		</div>
 	);
 }

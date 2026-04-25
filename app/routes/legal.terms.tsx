@@ -1,4 +1,6 @@
+import { JsonLd } from "~/components/seo/JsonLd";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/legal.terms";
 
 export const meta: Route.MetaFunction = () => {
@@ -12,9 +14,24 @@ export const meta: Route.MetaFunction = () => {
 	];
 };
 
+const schemas = [
+	webPageSchema({
+		name: "Terms of Service",
+		description: "Terms of Service for the Ration platform.",
+		path: "/legal/terms",
+		dateModified: "2026-03-11",
+	}),
+	breadcrumbSchema([
+		{ name: "Home", path: "/" },
+		{ name: "Legal", path: "/legal/terms" },
+		{ name: "Terms of Service", path: "/legal/terms" },
+	]),
+];
+
 export default function TermsOfService() {
 	return (
 		<>
+			<JsonLd data={schemas} />
 			<h1>Terms of Service</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
 				Last Updated: March 11, 2026

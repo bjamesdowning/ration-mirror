@@ -4,6 +4,16 @@
  */
 export const SITE_ORIGIN = "https://ration.mayutic.com";
 
+/**
+ * Sitewide default Open Graph image. Many social previewers and AI answer
+ * cards do not reliably render SVG, so the long-term target is a 1200x630
+ * PNG at `/static/og/og-default.png`. Until that asset is generated and
+ * dropped in (see `public/static/og/README.md`), `OG_IMAGE` continues to
+ * point at the existing SVG logo so previews still resolve.
+ *
+ * Switch this constant to `OG_IMAGE_PNG` once the PNG ships.
+ */
+export const OG_IMAGE_PNG = `${SITE_ORIGIN}/static/og/og-default.png`;
 export const OG_IMAGE = `${SITE_ORIGIN}/static/ration-logo.svg`;
 
 export type SeoMeta = {

@@ -1,4 +1,6 @@
+import { JsonLd } from "~/components/seo/JsonLd";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
@@ -12,9 +14,24 @@ export const meta: Route.MetaFunction = () => {
 	];
 };
 
+const schemas = [
+	webPageSchema({
+		name: "Privacy Policy",
+		description: "Privacy Policy for the Ration platform.",
+		path: "/legal/privacy",
+		dateModified: "2026-04-08",
+	}),
+	breadcrumbSchema([
+		{ name: "Home", path: "/" },
+		{ name: "Legal", path: "/legal/privacy" },
+		{ name: "Privacy Policy", path: "/legal/privacy" },
+	]),
+];
+
 export default function PrivacyPolicy() {
 	return (
 		<>
+			<JsonLd data={schemas} />
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
 				Last Updated: April 8, 2026

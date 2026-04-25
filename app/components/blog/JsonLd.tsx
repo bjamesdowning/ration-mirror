@@ -1,12 +1,3 @@
-/**
- * Renders JSON-LD structured data for SEO. Uses dangerouslySetInnerHTML
- * with JSON.stringify of controlled schema objects — safe, no user input.
- */
-export function JsonLd({ data }: { data: object }) {
-	return (
-		<script
-			type="application/ld+json"
-			dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-		/>
-	);
-}
+// Re-export for backwards compatibility. The canonical location is
+// `app/components/seo/JsonLd.tsx` since structured data is not blog-specific.
+export { JsonLd } from "~/components/seo/JsonLd";

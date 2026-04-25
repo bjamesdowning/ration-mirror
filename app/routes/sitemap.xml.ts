@@ -1,24 +1,24 @@
 import type { Route } from "./+types/sitemap.xml";
 
-const STATIC_PATHS = [
-	"/",
-	"/legal/terms",
-	"/legal/privacy",
-	"/blog",
-	"/tools",
-	"/tools/unit-converter",
-] as const;
-
-function priorityForPath(path: string): string {
-	if (path === "/") return "1.0";
-	if (path === "/blog" || path === "/tools") return "0.9";
-	if (path === "/tools/unit-converter") return "0.85";
-	return "0.8";
-}
-
 /**
  * sitemap.xml — Serves indexable URLs for crawler discovery.
+ *
+ * Per Google's current guidance we only emit <loc> and <lastmod>;
+ * <priority> and <changefreq> are ignored and have been removed.
  */
+
+// Static pages with their last-modified date. Bump these when the page
+// content changes meaningfully so crawlers know to revisit.
+const STATIC_PAGES: ReadonlyArray<{ path: string; lastmod: string }> = [
+	{ path: "/", lastmod: "2026-04-25" },
+	{ path: "/about", lastmod: "2026-04-25" },
+	{ path: "/blog", lastmod: "2026-04-25" },
+	{ path: "/tools", lastmod: "2026-04-25" },
+	{ path: "/tools/unit-converter", lastmod: "2026-04-25" },
+	{ path: "/legal/terms", lastmod: "2026-04-25" },
+	{ path: "/legal/privacy", lastmod: "2026-04-25" },
+];
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const origin = url.origin;
@@ -26,14 +26,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const { getAllPosts } = await import("~/lib/blog.server");
 	const posts = getAllPosts();
 
-	const staticEntries = STATIC_PATHS.map(
-		(path) =>
-			`  <url><loc>${origin}${path}</loc><changefreq>weekly</changefreq><priority>${priorityForPath(path)}</priority></url>`,
+	const staticEntries = STATIC_PAGES.map(
+		({ path, lastmod }) =>
+			`  <url><loc>${origin}${path}</loc><lastmod>${lastmod}</lastmod></url>`,
 	);
 
 	const blogEntries = posts.map(
 		(post) =>
-			`  <url><loc>${origin}/blog/${post.slug}</loc><lastmod>${post.date}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
+			`  <url><loc>${origin}/blog/${post.slug}</loc><lastmod>${post.dateModified}</lastmod></url>`,
 	);
 
 	const urls = [...staticEntries, ...blogEntries].join("\n");

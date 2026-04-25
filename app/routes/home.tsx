@@ -3,15 +3,21 @@ import "../../load-context";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
-import { JsonLd } from "~/components/blog/JsonLd";
 import { CheckIcon, CodeIcon } from "~/components/icons/PageIcons";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
+import { JsonLd } from "~/components/seo/JsonLd";
+import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
 import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import {
+	faqSchema,
+	organizationSchema,
+	softwareAppSchema,
+	websiteSchema,
+} from "~/lib/structured-data";
 import { TIER_LIMITS } from "~/lib/tiers.server";
-import { APP_VERSION } from "~/lib/version";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const auth = createAuth(context.cloudflare.env);
@@ -24,11 +30,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const { CREDIT_PACKS, SUBSCRIPTION_PRODUCTS } = await import(
 		"~/lib/stripe.server"
 	);
+	const { getRecentPosts } = await import("~/lib/blog.server");
 
 	return {
 		tierLimits: TIER_LIMITS,
 		creditPacks: CREDIT_PACKS,
 		subscriptionProducts: SUBSCRIPTION_PRODUCTS,
+		recentPosts: getRecentPosts(3),
 	};
 }
 
@@ -575,18 +583,77 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		localStorage.setItem("ration:currency", currency);
 	}, [currency]);
 
-	const websiteSchema = {
-		"@context": "https://schema.org",
-		"@type": "WebSite",
-		name: "Ration",
-		url: SITE_ORIGIN,
-		description:
-			"AI-native kitchen management for pantry inventory, meal planning, shopping lists, and MCP agent control.",
-	};
+	const homeSchemas = [
+		organizationSchema({
+			founder: {
+				name: "Billy Downing",
+				url: `${SITE_ORIGIN}/about`,
+				jobTitle: "Founder",
+			},
+		}),
+		websiteSchema(),
+		softwareAppSchema({
+			name: "Ration",
+			description:
+				"AI-native pantry inventory, meal planning, supply lists, and MCP agent control. Manage your kitchen through Claude, ChatGPT, or any MCP-compatible assistant.",
+			offers: [
+				{
+					name: "Free",
+					price: "0",
+					priceCurrency: "USD",
+					description: `Up to ${TIER_LIMITS.free.maxInventoryItems} pantry items, ${TIER_LIMITS.free.maxMeals} recipes, ${TIER_LIMITS.free.maxGroceryLists} supply lists.`,
+				},
+				{
+					name: "Crew Member",
+					price: "5",
+					priceCurrency: "USD",
+					description:
+						"Unlimited inventory, recipes, supply lists; group sharing; MCP access.",
+				},
+			],
+		}),
+		faqSchema([
+			{
+				question: "What is Ration?",
+				answer:
+					"Ration is an AI-native kitchen management system that tracks pantry inventory, plans meals, and generates supply lists. It exposes an MCP server so Claude, ChatGPT, Cursor, and other AI assistants can read and operate your kitchen directly.",
+			},
+			{
+				question: "How does Ration work with AI assistants?",
+				answer:
+					"Ration ships an MCP (Model Context Protocol) server that any MCP-compatible client — Claude Desktop, Cursor, Zed, ChatGPT desktop — can connect to. The assistant can list your inventory, find cookable meals, plan a week of dinners, generate supply lists, and consume ingredients after cooking, all using natural language.",
+			},
+			{
+				question: "Is Ration free?",
+				answer:
+					"Yes. The Free tier supports up to 35 pantry items, 15 recipes, and 3 supply lists with no credit card required. The Crew Member tier ($5/mo or $50/yr) removes those limits and enables group sharing, member invitations, and MCP access.",
+			},
+			{
+				question: "What is Cargo, Galley, Manifest, and Supply?",
+				answer:
+					"Cargo is your live pantry inventory. Galley is your recipe library. Manifest is your weekly meal plan. Supply is your shopping list. Each surface is queryable by your AI agent through the MCP server.",
+			},
+			{
+				question: "Does Ration work offline?",
+				answer:
+					"Yes — Ration is a Progressive Web App. Read access to your inventory, recipes, plan, and supply list works without a network connection. Writes sync when you reconnect.",
+			},
+			{
+				question: "Where is my data stored?",
+				answer:
+					"Your data is stored in Cloudflare D1 (SQLite at the edge), Cloudflare R2 (for images), and Cloudflare Vectorize (for semantic search embeddings). All scoped to your group and only accessible by you and your invited members.",
+			},
+			{
+				question: "Can I export my data?",
+				answer:
+					"Yes. Every Ration account can export full inventory, recipes, supply lists, and meal plans as JSON or CSV from the dashboard or via the v1 REST API.",
+			},
+		]),
+	];
 
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative overflow-hidden">
-			<JsonLd data={websiteSchema} />
+			<JsonLd data={homeSchemas} />
 			<div className="absolute inset-0 pointer-events-none opacity-40">
 				<div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-hyper-green/10 blur-3xl" />
 				<div className="absolute right-[-12rem] top-[36rem] h-[30rem] w-[30rem] rounded-full bg-carbon/5 blur-3xl" />
@@ -688,6 +755,59 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						</div>
 					</section>
 
+					{loaderData.recentPosts.length > 0 && (
+						<section aria-label="Latest from the blog" className="space-y-6">
+							<div className="flex items-end justify-between flex-wrap gap-4">
+								<div>
+									<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
+										Mission Log
+									</span>
+									<h2 className="text-display text-2xl md:text-3xl text-carbon mt-2">
+										Latest from the blog
+									</h2>
+									<p className="text-muted text-sm max-w-xl mt-2 leading-relaxed">
+										Guides, workflows, and field notes on running an AI-native
+										kitchen.
+									</p>
+								</div>
+								<Link
+									to="/blog"
+									className="text-xs font-bold uppercase tracking-widest text-hyper-green hover:translate-x-0.5 transition-transform"
+								>
+									All posts →
+								</Link>
+							</div>
+							<ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+								{loaderData.recentPosts.map((post) => (
+									<li key={post.slug}>
+										<Link
+											to={`/blog/${post.slug}`}
+											className="group block glass-panel rounded-2xl p-6 hover:border-hyper-green/30 hover:shadow-glow-sm transition-all duration-200 h-full"
+										>
+											<div className="w-8 h-[3px] bg-hyper-green rounded-full mb-4 group-hover:w-12 transition-all duration-300" />
+											<h3 className="text-display text-lg text-carbon group-hover:text-hyper-green transition-colors leading-snug mb-3">
+												{post.title}
+											</h3>
+											<p className="text-sm text-muted leading-relaxed mb-4 line-clamp-3">
+												{post.description}
+											</p>
+											<time
+												dateTime={post.date}
+												className="text-xs text-carbon/50 font-mono"
+											>
+												{new Date(post.date).toLocaleDateString("en-US", {
+													year: "numeric",
+													month: "long",
+													day: "numeric",
+												})}
+											</time>
+										</Link>
+									</li>
+								))}
+							</ul>
+						</section>
+					)}
+
 					<PricingSection
 						loaderData={loaderData}
 						currency={currency}
@@ -731,49 +851,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				</div>
 			</main>
 
-			<footer className="relative z-20 border-t border-carbon/10 bg-ceramic/90 backdrop-blur p-4 mt-12">
-				<div className="flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto text-xs text-muted gap-4">
-					<div className="flex flex-wrap gap-6">
-						<span>Build v{APP_VERSION}</span>
-						<Link
-							to="/blog"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Blog
-						</Link>
-						<Link
-							to="/tools"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Tools
-						</Link>
-						<Link
-							to="/legal/privacy"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Privacy Policy
-						</Link>
-						<Link
-							to="/legal/terms"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Terms of Service
-						</Link>
-					</div>
-					<div className="hidden md:block">
-						By{" "}
-						<a
-							href="https://www.mayutic.com"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Mayutic
-						</a>{" "}
-						— Est 2025
-					</div>
-				</div>
-			</footer>
+			<PublicFooter showVersion />
 		</div>
 	);
 }

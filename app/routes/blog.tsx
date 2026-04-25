@@ -1,6 +1,9 @@
 import { Link } from "react-router";
+import { JsonLd } from "~/components/seo/JsonLd";
+import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { blogCollectionSchema, breadcrumbSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/blog";
 
 export async function loader() {
@@ -17,6 +20,13 @@ export function meta(_: Route.MetaArgs) {
 		{ title },
 		{ name: "description", content: description },
 		canonicalMeta("/blog"),
+		{
+			tagName: "link" as const,
+			rel: "alternate",
+			type: "application/rss+xml",
+			title: "Ration Blog RSS",
+			href: "https://ration.mayutic.com/blog/rss.xml",
+		},
 		...ogMeta({ title, description, path: "/blog" }),
 	];
 }
@@ -24,8 +34,18 @@ export function meta(_: Route.MetaArgs) {
 export default function BlogIndex({ loaderData }: Route.ComponentProps) {
 	const { posts } = loaderData;
 
+	const schemas = [
+		breadcrumbSchema([
+			{ name: "Home", path: "/" },
+			{ name: "Blog", path: "/blog" },
+		]),
+		blogCollectionSchema({ posts }),
+	];
+
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
+			<JsonLd data={schemas} />
+
 			{/* Ambient gradient */}
 			<div
 				className="absolute inset-0 pointer-events-none opacity-30"
@@ -95,14 +115,7 @@ export default function BlogIndex({ loaderData }: Route.ComponentProps) {
 				)}
 			</main>
 
-			<footer className="relative z-20 border-t border-carbon/10 py-8 bg-ceramic">
-				<div className="max-w-5xl mx-auto px-6 flex justify-between items-center text-xs text-muted">
-					<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
-					<Link to="/" className="hover:text-hyper-green transition-colors">
-						← Back to Home
-					</Link>
-				</div>
-			</footer>
+			<PublicFooter />
 		</div>
 	);
 }

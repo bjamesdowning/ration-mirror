@@ -129,14 +129,11 @@ export function PublicHeader({
 					<Link to="/tools" className={desktopLinkClass}>
 						Tools
 					</Link>
+					<Link to="/about" className={desktopLinkClass}>
+						About
+					</Link>
 					<Link to="/#pricing" className={desktopLinkClass}>
 						Pricing
-					</Link>
-					<Link to="/legal/terms" className={desktopLinkClass}>
-						Terms
-					</Link>
-					<Link to="/legal/privacy" className={desktopLinkClass}>
-						Privacy
 					</Link>
 					<Link
 						to="/#signup"
@@ -211,25 +208,18 @@ export function PublicHeader({
 											Tools
 										</Link>
 										<Link
+											to="/about"
+											className={linkClass}
+											onClick={() => setOpen(false)}
+										>
+											About
+										</Link>
+										<Link
 											to="/#pricing"
 											className={linkClass}
 											onClick={() => setOpen(false)}
 										>
 											Pricing
-										</Link>
-										<Link
-											to="/legal/terms"
-											className={linkClass}
-											onClick={() => setOpen(false)}
-										>
-											Terms
-										</Link>
-										<Link
-											to="/legal/privacy"
-											className={linkClass}
-											onClick={() => setOpen(false)}
-										>
-											Privacy
 										</Link>
 										<Link
 											to="/#signup"

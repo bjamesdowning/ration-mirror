@@ -1,7 +1,9 @@
 import { Link } from "react-router";
-import { JsonLd } from "~/components/blog/JsonLd";
+import { JsonLd } from "~/components/seo/JsonLd";
+import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
-import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { breadcrumbSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/tools";
 
 export function meta(_: Route.MetaArgs) {
@@ -28,24 +30,15 @@ const TOOLS = [
 	},
 ];
 
-const breadcrumbSchema = {
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
-		{
-			"@type": "ListItem",
-			position: 2,
-			name: "Tools",
-			item: `${SITE_ORIGIN}/tools`,
-		},
-	],
-};
+const toolsBreadcrumb = breadcrumbSchema([
+	{ name: "Home", path: "/" },
+	{ name: "Tools", path: "/tools" },
+]);
 
 export default function ToolsIndex() {
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
-			<JsonLd data={breadcrumbSchema} />
+			<JsonLd data={toolsBreadcrumb} />
 
 			{/* Ambient gradient */}
 			<div
@@ -128,14 +121,7 @@ export default function ToolsIndex() {
 				</div>
 			</main>
 
-			<footer className="relative z-20 border-t border-carbon/10 py-8 bg-ceramic">
-				<div className="max-w-5xl mx-auto px-6 flex justify-between items-center text-xs text-muted">
-					<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
-					<Link to="/" className="hover:text-hyper-green transition-colors">
-						← Back to Home
-					</Link>
-				</div>
-			</footer>
+			<PublicFooter />
 		</div>
 	);
 }

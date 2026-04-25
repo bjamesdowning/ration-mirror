@@ -3,6 +3,8 @@ import { index, type RouteConfig, route } from "@react-router/dev/routes";
 export default [
 	route("robots.txt", "routes/robots-txt.ts"),
 	route("sitemap.xml", "routes/sitemap.xml.ts"),
+	route("llms.txt", "routes/llms-txt.ts"),
+	route("llms-full.txt", "routes/llms-full-txt.ts"),
 	route(".well-known/api-catalog", "routes/well-known.api-catalog.ts"),
 	route(
 		".well-known/oauth-protected-resource",
@@ -56,8 +58,12 @@ export default [
 	// Admin
 	route("admin", "routes/admin.tsx"),
 
+	// About
+	route("about", "routes/about.tsx"),
+
 	// Blog
 	route("blog", "routes/blog.tsx"),
+	route("blog/rss.xml", "routes/blog.rss.xml.ts"),
 	route("blog/:slug", "routes/blog.$slug.tsx"),
 
 	// Shared (public) routes

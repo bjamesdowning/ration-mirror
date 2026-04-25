@@ -1,9 +1,11 @@
 import { Link } from "react-router";
-import { JsonLd } from "~/components/blog/JsonLd";
+import { JsonLd } from "~/components/seo/JsonLd";
+import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { MeasurementReference } from "~/components/tools/MeasurementReference";
 import { UnitConverterForm } from "~/components/tools/UnitConverterForm";
-import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { breadcrumbSchema, webAppSchema } from "~/lib/structured-data";
 import type { Route } from "./+types/tools.unit-converter";
 
 export function meta(_: Route.MetaArgs) {
@@ -24,43 +26,24 @@ export function meta(_: Route.MetaArgs) {
 	];
 }
 
-const toolSchema = {
-	"@context": "https://schema.org",
-	"@type": "SoftwareApplication",
-	name: "Ration Cooking Unit Converter",
-	applicationCategory: "UtilitiesApplication",
-	operatingSystem: "Web",
-	description:
-		"Convert cooking measurements between volume and weight with ingredient-specific density for flour, sugar, butter, and 200+ baking ingredients.",
-	url: `${SITE_ORIGIN}/tools/unit-converter`,
-	offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-};
-
-const breadcrumbSchema = {
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN },
-		{
-			"@type": "ListItem",
-			position: 2,
-			name: "Tools",
-			item: `${SITE_ORIGIN}/tools`,
-		},
-		{
-			"@type": "ListItem",
-			position: 3,
-			name: "Unit Converter",
-			item: `${SITE_ORIGIN}/tools/unit-converter`,
-		},
-	],
-};
+const unitConverterSchemas = [
+	webAppSchema({
+		name: "Ration Cooking Unit Converter",
+		description:
+			"Convert cooking measurements between volume and weight with ingredient-specific density for flour, sugar, butter, and 200+ baking ingredients.",
+		path: "/tools/unit-converter",
+	}),
+	breadcrumbSchema([
+		{ name: "Home", path: "/" },
+		{ name: "Tools", path: "/tools" },
+		{ name: "Unit Converter", path: "/tools/unit-converter" },
+	]),
+];
 
 export default function UnitConverterPage() {
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative">
-			<JsonLd data={toolSchema} />
-			<JsonLd data={breadcrumbSchema} />
+			<JsonLd data={unitConverterSchemas} />
 
 			{/* Ambient gradient */}
 			<div
@@ -149,17 +132,7 @@ export default function UnitConverterPage() {
 				</div>
 			</main>
 
-			<footer className="relative z-20 border-t border-carbon/10 py-8 bg-ceramic">
-				<div className="max-w-5xl mx-auto px-6 flex justify-between items-center text-xs text-muted">
-					<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
-					<Link
-						to="/tools"
-						className="hover:text-hyper-green transition-colors"
-					>
-						← Back to Tools
-					</Link>
-				</div>
-			</footer>
+			<PublicFooter />
 		</div>
 	);
 }

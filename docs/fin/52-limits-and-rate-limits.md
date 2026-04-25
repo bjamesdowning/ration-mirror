@@ -23,7 +23,9 @@ Ration throttles expensive or abuse-prone routes **per user** or **per IP** over
 
 Exact numbers can change; when the API returns a **rate limit** response, **wait and retry** slower.
 
-## MCP rate limits (per organization)
+## MCP rate limits
+
+**Per organization** (shared by all keys for that org):
 
 | Bucket | Typical max per 60s |
 |--------|---------------------|
@@ -31,6 +33,14 @@ Exact numbers can change; when the API returns a **rate limit** response, **wait
 | `mcp_search` | 20 |
 | `mcp_write` | 15 |
 | `mcp_supply_sync` | 8 |
+
+**Per API key** (write tools only):
+
+| Bucket | Typical max per 60s |
+|--------|---------------------|
+| `mcp_write_per_key` | 15 |
+
+Heavy supply rebuilds use `mcp_supply_sync`, separate from ordinary `mcp_write`. Exact numbers can change; MCP tool responses may include structured rate-limit hints in the JSON envelope when limited.
 
 ## CSV / JSON import caps
 

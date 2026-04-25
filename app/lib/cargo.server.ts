@@ -108,6 +108,55 @@ export async function getCargo(
 }
 
 /**
+ * Cursor-paginated cargo fetch using `(createdAt desc, id asc)` ordering.
+ *
+ * Returns up to `limit` rows strictly after the supplied cursor. Pass
+ * `cursor` from a previous page to continue. The caller is expected to
+ * encode/decode the cursor (see `app/lib/mcp/envelope.ts`).
+ */
+export async function getCargoPage(
+	db: D1Database,
+	organizationId: string,
+	options: {
+		limit: number;
+		cursor?: { createdAt: Date; id: string } | null;
+		domain?: (typeof ITEM_DOMAINS)[number];
+	},
+) {
+	const d1 = drizzle(db);
+	const conditions = [eq(cargo.organizationId, organizationId)];
+	if (options.domain) {
+		conditions.push(eq(cargo.domain, options.domain));
+	}
+	if (options.cursor) {
+		// Page after the cursor: rows with (createdAt < cursor.createdAt) OR
+		// (createdAt = cursor.createdAt AND id > cursor.id) — matches DESC ordering.
+		const cursorClause = or(
+			lt(cargo.createdAt, options.cursor.createdAt),
+			and(
+				eq(cargo.createdAt, options.cursor.createdAt),
+				gt(cargo.id, options.cursor.id),
+			),
+		);
+		if (cursorClause) conditions.push(cursorClause);
+	}
+
+	const rows = await d1
+		.select()
+		.from(cargo)
+		.where(and(...conditions))
+		.orderBy(desc(cargo.createdAt), asc(cargo.id))
+		.limit(options.limit + 1);
+
+	const hasMore = rows.length > options.limit;
+	const items = hasMore ? rows.slice(0, options.limit) : rows;
+	const last = items[items.length - 1];
+	const nextCursor =
+		hasMore && last ? { createdAt: last.createdAt, id: last.id } : null;
+	return { items, nextCursor };
+}
+
+/**
  * Narrow tag-index fetch: returns only `id`, `name`, and `tags` for every
  * cargo item belonging to the organisation. Used by Supply's tag filter which
  * needs to cross-reference cargo item names against their tags but has no

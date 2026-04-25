@@ -25,7 +25,7 @@ Use this table for Intercom tagging, Fin source configuration, and **golden-ques
 | [31-mcp-connection-setup.md](./31-mcp-connection-setup.md) | Connecting to MCP | Support | MCP connection closed? Bearer token format? Hostname? |
 | [32-mcp-tools-reference.md](./32-mcp-tools-reference.md) | MCP tools reference | Support | List all MCP tools. Rate limits for MCP. What does sync_supply do? |
 | [33-mcp-vs-web-app.md](./33-mcp-vs-web-app.md) | MCP vs web app capabilities | Support | Can I scan receipts via MCP? Is plan week in MCP? |
-| [34-rest-api-v1-overview.md](./34-rest-api-v1-overview.md) | REST API (v1) overview | Support | Export inventory CSV? Galley JSON import limits? Scopes? |
+| [34-rest-api-v1-overview.md](./34-rest-api-v1-overview.md) | REST API (v1) overview | Support | Export inventory CSV? Galley JSON import limits? REST vs MCP scopes? `mcp:read` vs `mcp`? |
 | [40-security-overview.md](./40-security-overview.md) | Security overview | Both | How is Ration secured? Sessions? Rate limits? Multi-tenant isolation? |
 | [41-data-and-privacy.md](./41-data-and-privacy.md) | Data, privacy, and deletion | Both | Where is privacy policy? What happens when I delete my account? |
 | [42-api-key-safety.md](./42-api-key-safety.md) | API key safety | Support | Are API keys stored in plain text? How do I rotate a key? |

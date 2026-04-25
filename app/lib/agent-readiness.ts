@@ -16,6 +16,12 @@ export const AGENT_API_SCOPES = [
 	"galley",
 	"supply",
 	"mcp",
+	"mcp:read",
+	"mcp:inventory:write",
+	"mcp:galley:write",
+	"mcp:manifest:write",
+	"mcp:supply:write",
+	"mcp:preferences:write",
 ] as const;
 
 export const MCP_TOOL_GROUPS = [
@@ -24,10 +30,15 @@ export const MCP_TOOL_GROUPS = [
 		tools: [
 			"search_ingredients",
 			"list_inventory",
+			"get_cargo_item",
 			"add_cargo_item",
 			"update_cargo_item",
 			"remove_cargo_item",
 			"get_expiring_items",
+			"inventory_import_schema",
+			"preview_inventory_import",
+			"apply_inventory_import",
+			"import_inventory_csv",
 		],
 	},
 	{
@@ -37,6 +48,9 @@ export const MCP_TOOL_GROUPS = [
 			"match_meals",
 			"create_meal",
 			"update_meal",
+			"delete_meal",
+			"toggle_meal_active",
+			"clear_active_meals",
 			"consume_meal",
 		],
 	},
@@ -45,6 +59,7 @@ export const MCP_TOOL_GROUPS = [
 		tools: [
 			"get_meal_plan",
 			"add_meal_plan_entry",
+			"bulk_add_meal_plan_entries",
 			"update_meal_plan_entry",
 			"remove_meal_plan_entry",
 		],
@@ -58,11 +73,12 @@ export const MCP_TOOL_GROUPS = [
 			"remove_supply_item",
 			"mark_supply_purchased",
 			"sync_supply_from_selected_meals",
+			"complete_supply_list",
 		],
 	},
 	{
 		name: "Account",
-		tools: ["get_credit_balance"],
+		tools: ["get_context", "get_user_preferences", "update_user_preferences"],
 	},
 ] as const;
 

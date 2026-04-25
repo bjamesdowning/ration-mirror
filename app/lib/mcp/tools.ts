@@ -3,16 +3,22 @@ import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { cargo, mealPlanEntry } from "../../db/schema";
+import { getUserSettings, patchUserSettings } from "../auth.server";
 import {
-	getCargo,
 	getCargoByIds,
+	getCargoItem,
+	getCargoPage,
 	ingestCargoItems,
 	jettisonItem,
 	updateItem,
 } from "../cargo.server";
-import { publicErrorMessageForTool } from "../error-handler";
-import { checkBalance } from "../ledger.server";
-import { log } from "../logging.server";
+import {
+	applyInventoryImport,
+	getInventoryImportSchema,
+	type InventoryImportItem,
+	importInventoryCsv,
+	previewInventoryImport,
+} from "../inventory-import.server";
 import {
 	addEntry,
 	deleteEntry,
@@ -24,11 +30,24 @@ import {
 } from "../manifest.server";
 import { addDays } from "../manifest-dates";
 import { matchMeals } from "../matching.server";
-import { cookMeal, createMeal, getMeals, updateMeal } from "../meals.server";
+import {
+	clearMealSelections,
+	getActiveMealSelections,
+	upsertMealSelection,
+	validateMealOwnership,
+} from "../meal-selection.server";
+import {
+	cookMeal,
+	createMeal,
+	deleteMeal,
+	getMealsPage,
+	updateMeal,
+} from "../meals.server";
 import { checkRateLimit } from "../rate-limiter.server";
 import { McpCreateMealSchema, MealUpdateSchema } from "../schemas/meal";
 import {
 	addSupplyItem,
+	completeSupplyList,
 	createSupplyListFromSelectedMeals,
 	deleteSupplyItem,
 	ensureSupplyList,
@@ -38,15 +57,170 @@ import {
 } from "../supply.server";
 import { toSupportedUnit } from "../units";
 import { findSimilarCargoBatch } from "../vector.server";
+import { auditMcpWrite } from "./audit";
+import type { McpToolContext } from "./auth";
+import {
+	decodeCursor,
+	encodeCursor,
+	err,
+	mapErrorToEnvelope,
+	ok,
+	rateLimited,
+	type ToolEnvelope,
+	toolReply,
+} from "./envelope";
+import { registerResourcesAndPrompts } from "./resources";
+import { hasScope, McpScopeError, requireScope } from "./scopes";
+
+const MAX_PAGE_LIMIT = 200;
+
+/**
+ * Wrap a tool handler to enforce scope, rate limit, audit logging, and the
+ * standard error envelope. Read-tools and write-tools both go through this.
+ */
+function makeTool<TArgs, TData>(opts: {
+	name: string;
+	scopes: Parameters<typeof requireScope>[1];
+	rateLimitCategory:
+		| "mcp_list"
+		| "mcp_search"
+		| "mcp_write"
+		| "mcp_supply_sync"
+		| null;
+	audit: boolean;
+	handler: (ctx: McpToolContext, args: TArgs) => Promise<ToolEnvelope<TData>>;
+}): (
+	env: Cloudflare.Env & { __mcp: McpToolContext },
+	args: TArgs,
+) => Promise<{ content: Array<{ type: "text"; text: string }> }> {
+	return async (env, args) => {
+		const ctx = env.__mcp;
+		const startedAt = Date.now();
+
+		try {
+			requireScope(ctx, opts.scopes);
+		} catch (e) {
+			if (e instanceof McpScopeError) {
+				return toolReply(
+					opts.name,
+					err(opts.name, "insufficient_scope", e.message, {
+						details: { required: e.required },
+					}),
+				);
+			}
+			throw e;
+		}
+
+		if (opts.rateLimitCategory) {
+			const orgRl = await checkRateLimit(
+				env.RATION_KV,
+				opts.rateLimitCategory,
+				ctx.organizationId,
+			);
+			if (!orgRl.allowed) {
+				if (opts.audit) {
+					auditMcpWrite(ctx, {
+						tool: opts.name,
+						outcome: "error",
+						errorCode: "rate_limited",
+						durationMs: Date.now() - startedAt,
+					});
+				}
+				return toolReply(
+					opts.name,
+					rateLimited(opts.name, orgRl.retryAfter ?? 60),
+				);
+			}
+			// Per-API-key cap on write categories — defends against a stolen key.
+			if (opts.rateLimitCategory === "mcp_write") {
+				const keyRl = await checkRateLimit(
+					env.RATION_KV,
+					"mcp_write_per_key",
+					ctx.apiKeyId,
+				);
+				if (!keyRl.allowed) {
+					if (opts.audit) {
+						auditMcpWrite(ctx, {
+							tool: opts.name,
+							outcome: "error",
+							errorCode: "rate_limited",
+							durationMs: Date.now() - startedAt,
+						});
+					}
+					return toolReply(
+						opts.name,
+						rateLimited(opts.name, keyRl.retryAfter ?? 60),
+					);
+				}
+			}
+		}
+
+		try {
+			const envelope = await opts.handler(ctx, args);
+			if (opts.audit) {
+				auditMcpWrite(ctx, {
+					tool: opts.name,
+					outcome: envelope.ok ? "ok" : "error",
+					errorCode: envelope.ok ? undefined : envelope.error.code,
+					durationMs: Date.now() - startedAt,
+				});
+			}
+			return toolReply(opts.name, envelope);
+		} catch (e) {
+			const envelope = mapErrorToEnvelope(opts.name, e);
+			if (opts.audit) {
+				auditMcpWrite(ctx, {
+					tool: opts.name,
+					outcome: "error",
+					errorCode: envelope.ok ? undefined : envelope.error.code,
+					durationMs: Date.now() - startedAt,
+				});
+			}
+			return toolReply(opts.name, envelope);
+		}
+	};
+}
 
 export function registerTools(
 	server: McpServer,
-	env: Cloudflare.Env & { __orgId: string },
+	env: Cloudflare.Env & { __mcp: McpToolContext; __orgId: string },
 ): void {
-	/**
-	 * Tool: search_ingredients
-	 * Uses Vectorize semantic search to find items matching the query.
-	 */
+	// Register read-only resources and prompts (no auth context needed —
+	// reference data is the same for every key).
+	registerResourcesAndPrompts(server);
+
+	// ─── Read Tools ──────────────────────────────────────────────────────────
+
+	server.tool(
+		"get_context",
+		"Return the calling agent's organization id, API key id (prefix), authorized scopes, and tool capabilities. Always safe to call first to introspect what the key can do.",
+		{},
+		async () =>
+			makeTool({
+				name: "get_context",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx) =>
+					ok("get_context", {
+						organizationId: ctx.organizationId,
+						apiKeyId: ctx.apiKeyId,
+						keyName: ctx.keyName,
+						keyPrefix: ctx.keyPrefix,
+						scopes: ctx.scopes,
+						capabilities: {
+							canRead: hasScope(ctx, "mcp:read"),
+							canWriteInventory: hasScope(ctx, "mcp:inventory:write"),
+							canWriteGalley: hasScope(ctx, "mcp:galley:write"),
+							canWriteManifest: hasScope(ctx, "mcp:manifest:write"),
+							canWriteSupply: hasScope(ctx, "mcp:supply:write"),
+							canWritePreferences: hasScope(ctx, "mcp:preferences:write"),
+						},
+						versions: { mcp: "1.1.0" },
+					}),
+			})(env, {}),
+	);
+
 	server.tool(
 		"search_ingredients",
 		"Semantic search for ingredients in the pantry using vector similarity. Useful for finding available ingredients without knowing the exact name.",
@@ -60,181 +234,178 @@ export function registerTools(
 				.optional()
 				.describe("Maximum number of results to return (default 5, max 20)"),
 		},
-		async (args: { query: string; topK?: number }) => {
-			const { query, topK } = args;
-
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_search",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			const results = await findSimilarCargoBatch(
-				env,
-				env.__orgId,
-				[query],
-				{ topK: topK ?? 5, threshold: 0.6 }, // Lowering threshold slightly for agent search
-			);
-
-			const matches = results.get(query) || [];
-			if (matches.length === 0) {
-				return {
-					content: [
-						{ type: "text", text: `No ingredients found matching "${query}"` },
-					],
-				};
-			}
-
-			// Fetch only the matched IDs — never a full table scan
-			const matchedIds = matches.map((m) => m.itemId);
-			const cargoRows = await getCargoByIds(env.DB, env.__orgId, matchedIds);
-			const scoreByItemId = new Map(matches.map((m) => [m.itemId, m.score]));
-			const fullItems = cargoRows.map((c) => ({
-				...c,
-				matchScore: scoreByItemId.get(c.id) ?? 0,
-			}));
-
-			return {
-				content: [{ type: "text", text: JSON.stringify(fullItems, null, 2) }],
-			};
-		},
+		async (args: { query: string; topK?: number }) =>
+			makeTool({
+				name: "search_ingredients",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_search",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const results = await findSimilarCargoBatch(
+						env,
+						ctx.organizationId,
+						[a.query],
+						{ topK: a.topK ?? 5, threshold: 0.6 },
+					);
+					const matches = results.get(a.query) || [];
+					if (matches.length === 0) {
+						return ok("search_ingredients", { matches: [] });
+					}
+					const matchedIds = matches.map((m) => m.itemId);
+					const cargoRows = await getCargoByIds(
+						env.DB,
+						ctx.organizationId,
+						matchedIds,
+					);
+					const scoreByItemId = new Map(
+						matches.map((m) => [m.itemId, m.score]),
+					);
+					const items = cargoRows.map((c) => ({
+						...c,
+						matchScore: scoreByItemId.get(c.id) ?? 0,
+					}));
+					return ok("search_ingredients", { matches: items });
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: list_inventory
-	 * Lists all items currently in the user's pantry/cargo.
-	 */
 	server.tool(
 		"list_inventory",
-		"Retrieve all ingredients currently in the user's pantry.",
+		"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200.",
 		{
 			domain: z
 				.enum(["food", "household", "alcohol"])
 				.optional()
-				.describe("Filter by domain (e.g., 'food', 'household')"),
+				.describe("Filter by domain"),
+			limit: z
+				.number()
+				.int()
+				.min(1)
+				.max(MAX_PAGE_LIMIT)
+				.optional()
+				.describe(`Page size (default 100, max ${MAX_PAGE_LIMIT})`),
+			cursor: z
+				.string()
+				.optional()
+				.describe("Cursor from a previous response's meta.nextCursor"),
 		},
-		async (args: { domain?: "food" | "household" | "alcohol" }) => {
-			const { domain } = args;
-
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+		async (args: {
+			domain?: "food" | "household" | "alcohol";
+			limit?: number;
+			cursor?: string;
+		}) =>
+			makeTool({
+				name: "list_inventory",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const limit = a.limit ?? 100;
+					const decoded = a.cursor ? decodeCursor(a.cursor) : null;
+					if (a.cursor && !decoded) {
+						return err(
+							"list_inventory",
+							"invalid_input",
+							"Malformed cursor; omit it to start from the first page.",
+						);
+					}
+					const cursor = decoded
+						? { createdAt: new Date(decoded.createdAt), id: decoded.id }
+						: null;
+					const { items, nextCursor } = await getCargoPage(
+						env.DB,
+						ctx.organizationId,
+						{ limit, cursor, domain: a.domain },
+					);
+					const mapped = items.map((c) => ({
+						id: c.id,
+						name: c.name,
+						quantity: c.quantity,
+						unit: c.unit,
+						domain: c.domain,
+						tags: c.tags,
+						expiresAt: c.expiresAt,
+					}));
+					return ok("list_inventory", mapped, {
+						meta: {
+							nextCursor: nextCursor
+								? encodeCursor({
+										createdAt: nextCursor.createdAt.toISOString(),
+										id: nextCursor.id,
+									})
+								: null,
 						},
-					],
-				};
-			}
-
-			// Intentional full-table scan: agents need the complete inventory to plan
-			// meals/shopping. This endpoint is read-only and scoped to the org via RLS.
-			const cargo = await getCargo(env.DB, env.__orgId, domain);
-
-			const mapped = cargo.map((c) => ({
-				id: c.id,
-				name: c.name,
-				quantity: c.quantity,
-				unit: c.unit,
-				domain: c.domain,
-				tags: c.tags,
-				expiresAt: c.expiresAt,
-			}));
-
-			const MAX_LIST_INVENTORY = 500;
-			const truncated = mapped.length > MAX_LIST_INVENTORY;
-			const items = truncated ? mapped.slice(0, MAX_LIST_INVENTORY) : mapped;
-			const note = truncated
-				? `\n\n[Results truncated: showing ${MAX_LIST_INVENTORY} of ${mapped.length} items. Use search_ingredients for targeted lookup.]`
-				: "";
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify(items, null, 2) + note,
-					},
-				],
-			};
-		},
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: get_supply_list
-	 * Gets the items currently on the supply list (shopping list).
-	 */
+	server.tool(
+		"get_cargo_item",
+		"Fetch one pantry item by id with all fields (tags, expiresAt, customFields). Useful before update_cargo_item.",
+		{
+			itemId: z.string().uuid().describe("Cargo item id"),
+		},
+		async (args: { itemId: string }) =>
+			makeTool({
+				name: "get_cargo_item",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const item = await getCargoItem(env.DB, ctx.organizationId, a.itemId);
+					if (!item) {
+						return err(
+							"get_cargo_item",
+							"not_found",
+							`Cargo item ${a.itemId} not found.`,
+						);
+					}
+					return ok("get_cargo_item", item);
+				},
+			})(env, args),
+	);
+
 	server.tool(
 		"get_supply_list",
-		"Retrieve the user's active supply list (shopping list).",
+		"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased, and remove_supply_item.",
 		{},
-		async () => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			const list = await getSupplyList(env.DB, env.__orgId);
-			if (!list) {
-				return {
-					content: [{ type: "text", text: "No active supply list found." }],
-				};
-			}
-
-			const fullList = await getSupplyListById(env.DB, env.__orgId, list.id);
-			if (!fullList) {
-				return {
-					content: [{ type: "text", text: "Supply list not found." }],
-				};
-			}
-
-			const mapped = {
-				name: fullList.name,
-				items: fullList.items.map((i) => ({
-					name: i.name,
-					quantity: i.quantity,
-					unit: i.unit,
-					domain: i.domain,
-					isPurchased: i.isPurchased,
-					sourceMeals: i.sourceMealNames,
-				})),
-			};
-
-			return {
-				content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
-			};
-		},
+		async () =>
+			makeTool({
+				name: "get_supply_list",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx) => {
+					const list = await getSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return ok("get_supply_list", null);
+					}
+					const fullList = await getSupplyListById(
+						env.DB,
+						ctx.organizationId,
+						list.id,
+					);
+					if (!fullList) {
+						return ok("get_supply_list", null);
+					}
+					return ok("get_supply_list", {
+						id: fullList.id,
+						name: fullList.name,
+						items: fullList.items.map((i) => ({
+							id: i.id,
+							name: i.name,
+							quantity: i.quantity,
+							unit: i.unit,
+							domain: i.domain,
+							isPurchased: i.isPurchased,
+							sourceMeals: i.sourceMealNames,
+						})),
+					});
+				},
+			})(env, {}),
 	);
 
-	/**
-	 * Tool: get_meal_plan
-	 * Retrieves the user's weekly meal plan entries for a date range.
-	 */
 	server.tool(
 		"get_meal_plan",
 		"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack).",
@@ -242,522 +413,241 @@ export function registerTools(
 			startDate: z
 				.string()
 				.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
-				.optional()
-				.describe("Start date for the range (default: today)"),
-			days: z
-				.number()
-				.int()
-				.min(1)
-				.max(14)
-				.optional()
-				.default(7)
-				.describe(
-					"Number of days from startDate to include (default 7, max 14)",
-				),
+				.optional(),
+			days: z.number().int().min(1).max(14).optional().default(7),
 		},
-		async (args: { startDate?: string; days?: number }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			const plan = await getMealPlan(env.DB, env.__orgId);
-			if (!plan) {
-				return {
-					content: [{ type: "text", text: "No active meal plan found." }],
-				};
-			}
-
-			const startDate = args.startDate ?? getTodayISO();
-			const days = args.days ?? 7;
-			const endDate = addDays(startDate, days - 1);
-
-			const entries = await getWeekEntries(env.DB, plan.id, startDate, endDate);
-
-			const mapped = {
-				planId: plan.id,
-				planName: plan.name,
-				startDate,
-				endDate,
-				entries: entries.map((e) => ({
-					id: e.id,
-					date: e.date,
-					slotType: e.slotType,
-					mealId: e.mealId,
-					mealName: e.mealName,
-					servings: e.servingsOverride ?? e.mealServings,
-					notes: e.notes,
-					consumedAt: e.consumedAt,
-				})),
-			};
-
-			return {
-				content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
-			};
-		},
+		async (args: { startDate?: string; days?: number }) =>
+			makeTool({
+				name: "get_meal_plan",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const plan = await getMealPlan(env.DB, ctx.organizationId);
+					if (!plan) {
+						return ok("get_meal_plan", null);
+					}
+					const startDate = a.startDate ?? getTodayISO();
+					const days = a.days ?? 7;
+					const endDate = addDays(startDate, days - 1);
+					const entries = await getWeekEntries(
+						env.DB,
+						plan.id,
+						startDate,
+						endDate,
+					);
+					return ok("get_meal_plan", {
+						planId: plan.id,
+						planName: plan.name,
+						startDate,
+						endDate,
+						entries: entries.map((e) => ({
+							id: e.id,
+							date: e.date,
+							slotType: e.slotType,
+							mealId: e.mealId,
+							mealName: e.mealName,
+							servings: e.servingsOverride ?? e.mealServings,
+							notes: e.notes,
+							consumedAt: e.consumedAt,
+						})),
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: list_meals
-	 * Retrieves the user's recipes/meals and their required ingredients.
-	 */
 	server.tool(
 		"list_meals",
-		"List available meals/recipes, including their required ingredients and servings.",
+		"List meals/recipes (cursor-paginated, default limit 100, max 200). Pass includeIngredients:false to skip ingredient fan-out — useful when scanning the index.",
 		{
-			tag: z.string().optional().describe("Filter meals by an exact tag"),
-		},
-		async (args: { tag?: string }) => {
-			const { tag } = args;
-
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			const meals = await getMeals(env.DB, env.__orgId, tag);
-
-			const mapped = meals.map((m) => ({
-				id: m.id,
-				name: m.name,
-				domain: m.domain,
-				description: m.description ?? undefined,
-				directions: m.directions ?? undefined,
-				equipment: m.equipment ?? [],
-				servings: m.servings ?? 1,
-				prepTime: m.prepTime ?? undefined,
-				cookTime: m.cookTime ?? undefined,
-				customFields: m.customFields ?? {},
-				type: m.type,
-				tags: m.tags,
-				ingredients: m.ingredients.map((i) => ({
-					ingredientName: i.ingredientName,
-					quantity: i.quantity,
-					unit: i.unit,
-					cargoId: i.cargoId ?? undefined,
-					isOptional: i.isOptional ?? false,
-					orderIndex: i.orderIndex ?? 0,
-				})),
-			}));
-
-			const MAX_LIST_MEALS = 200;
-			const truncated = mapped.length > MAX_LIST_MEALS;
-			const items = truncated ? mapped.slice(0, MAX_LIST_MEALS) : mapped;
-			const note = truncated
-				? `\n\n[Results truncated: showing ${MAX_LIST_MEALS} of ${mapped.length} meals.]`
-				: "";
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify(items, null, 2) + note,
-					},
-				],
-			};
-		},
-	);
-
-	// ─── Write Tools ─────────────────────────────────────────────────────────
-
-	/**
-	 * Tool: add_supply_item
-	 * Adds an item to the active shopping/supply list.
-	 */
-	server.tool(
-		"add_supply_item",
-		"Add an item to the active supply/shopping list. Use this when the user wants to add something to buy.",
-		{
-			name: z.string().min(1).describe("Name of the item to add"),
-			quantity: z.number().positive().optional().describe("Quantity to add"),
-			unit: z
-				.string()
-				.optional()
-				.describe("Unit of measurement (e.g. 'kg', 'l', 'piece')"),
-			domain: z
-				.enum(["food", "household", "alcohol"])
-				.optional()
-				.default("food")
-				.describe("Item domain (default: food)"),
+			tag: z.string().optional(),
+			domain: z.enum(["food", "household", "alcohol"]).optional(),
+			limit: z.number().int().min(1).max(MAX_PAGE_LIMIT).optional(),
+			cursor: z.string().optional(),
+			includeIngredients: z.boolean().optional(),
 		},
 		async (args: {
-			name: string;
-			quantity?: number;
-			unit?: string;
+			tag?: string;
 			domain?: "food" | "household" | "alcohol";
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
+			limit?: number;
+			cursor?: string;
+			includeIngredients?: boolean;
+		}) =>
+			makeTool({
+				name: "list_meals",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const limit = a.limit ?? 100;
+					const decoded = a.cursor ? decodeCursor(a.cursor) : null;
+					if (a.cursor && !decoded) {
+						return err(
+							"list_meals",
+							"invalid_input",
+							"Malformed cursor; omit it to start from the first page.",
+						);
+					}
+					const cursor = decoded
+						? { createdAt: new Date(decoded.createdAt), id: decoded.id }
+						: null;
+					const { items, nextCursor } = await getMealsPage(
+						env.DB,
+						ctx.organizationId,
 						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+							limit,
+							cursor,
+							tag: a.tag,
+							domain: a.domain,
+							includeIngredients: a.includeIngredients ?? true,
 						},
-					],
-				};
-			}
-
-			try {
-				const list = await ensureSupplyList(env.DB, env.__orgId);
-				if (!list) {
-					return {
-						content: [
-							{ type: "text", text: "Could not locate or create supply list." },
-						],
-					};
-				}
-				const item = await addSupplyItem(env.DB, env.__orgId, list.id, {
-					name: args.name,
-					quantity: args.quantity,
-					unit: args.unit,
-					domain: args.domain ?? "food",
-				});
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									added: {
-										id: item.id,
-										name: item.name,
-										quantity: item.quantity,
-										unit: item.unit,
-									},
-								},
-								null,
-								2,
-							),
+					);
+					const mapped = items.map((m) => ({
+						id: m.id,
+						name: m.name,
+						domain: m.domain,
+						description: m.description ?? undefined,
+						directions: m.directions ?? undefined,
+						equipment: m.equipment ?? [],
+						servings: m.servings ?? 1,
+						prepTime: m.prepTime ?? undefined,
+						cookTime: m.cookTime ?? undefined,
+						customFields: m.customFields ?? {},
+						type: m.type,
+						tags: m.tags,
+						ingredients: m.ingredients.map((i) => ({
+							ingredientName: i.ingredientName,
+							quantity: i.quantity,
+							unit: i.unit,
+							cargoId: i.cargoId ?? undefined,
+							isOptional: i.isOptional ?? false,
+							orderIndex: i.orderIndex ?? 0,
+						})),
+					}));
+					return ok("list_meals", mapped, {
+						meta: {
+							nextCursor: nextCursor
+								? encodeCursor({
+										createdAt: nextCursor.createdAt.toISOString(),
+										id: nextCursor.id,
+									})
+								: null,
 						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: update_supply_item
-	 * Updates an existing supply list item's name, quantity, or unit.
-	 */
 	server.tool(
-		"update_supply_item",
-		"Update an existing item on the supply list. Provide the itemId (from get_supply_list) and any fields to change.",
+		"match_meals",
+		"Find meals that can be made with the current pantry. Use 'strict' for fully cookable, 'delta' to see partial matches with what's missing.",
 		{
-			itemId: z
-				.string()
-				.uuid()
-				.describe("ID of the supply list item to update"),
-			name: z.string().min(1).optional().describe("New name for the item"),
-			quantity: z.number().positive().optional().describe("New quantity"),
-			unit: z.string().optional().describe("New unit of measurement"),
+			mode: z.enum(["strict", "delta"]).optional().default("strict"),
+			minMatch: z.number().min(0).max(100).optional().default(50),
+			limit: z.number().int().positive().optional().default(10),
+			tags: z.string().optional(),
 		},
 		async (args: {
-			itemId: string;
-			name?: string;
-			quantity?: number;
-			unit?: string;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const list = await ensureSupplyList(env.DB, env.__orgId);
-				if (!list) {
-					return {
-						content: [
-							{ type: "text", text: "Could not locate or create supply list." },
-						],
-					};
-				}
-				const item = await updateSupplyItem(
-					env.DB,
-					env.__orgId,
-					list.id,
-					args.itemId,
-					{
-						name: args.name,
-						quantity: args.quantity,
-						unit: args.unit,
-					},
-				);
-				if (!item) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Item ${args.itemId} not found on supply list.`,
-							},
-						],
-					};
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									updated: {
-										id: item.id,
-										name: item.name,
-										quantity: item.quantity,
-										unit: item.unit,
-									},
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+			mode?: "strict" | "delta";
+			minMatch?: number;
+			limit?: number;
+			tags?: string;
+		}) =>
+			makeTool({
+				name: "match_meals",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_search",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const results = await matchMeals(env, ctx.organizationId, {
+						mode: a.mode ?? "strict",
+						minMatch: a.minMatch ?? 50,
+						limit: a.limit ?? 10,
+						tags: a.tags,
+					});
+					const mapped = results.map((r) => ({
+						mealId: r.meal.id,
+						mealName: r.meal.name,
+						matchPercentage: Math.round(r.matchPercentage),
+						canMake: r.canMake,
+						missingIngredients: r.missingIngredients.map((m) => ({
+							name: m.name,
+							needed: `${m.requiredQuantity} ${m.unit}`,
+							optional: m.isOptional,
+						})),
+					}));
+					return ok("match_meals", mapped);
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: remove_supply_item
-	 * Removes an item from the supply list permanently.
-	 */
 	server.tool(
-		"remove_supply_item",
-		"Remove an item from the supply list. Provide the itemId from get_supply_list.",
+		"get_expiring_items",
+		"List pantry items that are expiring soon. Useful for reducing food waste and planning rescue meals.",
 		{
-			itemId: z
-				.string()
-				.uuid()
-				.describe("ID of the supply list item to remove"),
+			days: z.number().int().positive().optional().default(7),
 		},
-		async (args: { itemId: string }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const list = await ensureSupplyList(env.DB, env.__orgId);
-				if (!list) {
-					return {
-						content: [
-							{ type: "text", text: "Could not locate or create supply list." },
-						],
-					};
-				}
-				await deleteSupplyItem(env.DB, env.__orgId, list.id, args.itemId);
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{ removed: true, itemId: args.itemId },
-								null,
-								2,
+		async (args: { days?: number }) =>
+			makeTool({
+				name: "get_expiring_items",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx, a: typeof args) => {
+					const d1 = drizzle(env.DB);
+					const lookaheadDays = a.days ?? 7;
+					const now = new Date();
+					const cutoff = new Date(
+						now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000,
+					);
+					const expiringItems = await d1
+						.select()
+						.from(cargo)
+						.where(
+							and(
+								eq(cargo.organizationId, ctx.organizationId),
+								isNotNull(cargo.expiresAt),
+								gte(cargo.expiresAt, now),
+								lte(cargo.expiresAt, cutoff),
 							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+						)
+						.orderBy(cargo.expiresAt);
+					const mapped = expiringItems.map((item) => {
+						const expiresAt = item.expiresAt ? new Date(item.expiresAt) : null;
+						const daysUntilExpiry = expiresAt
+							? Math.ceil(
+									(expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+								)
+							: null;
+						return {
+							id: item.id,
+							name: item.name,
+							quantity: item.quantity,
+							unit: item.unit,
+							expiresAt: item.expiresAt,
+							daysUntilExpiry,
+						};
+					});
+					return ok("get_expiring_items", mapped);
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: mark_supply_purchased
-	 * Marks a supply list item as purchased or unpurchased.
-	 */
-	server.tool(
-		"mark_supply_purchased",
-		"Mark a supply list item as purchased or not purchased. Use after buying an item at the store.",
-		{
-			itemId: z.string().uuid().describe("ID of the supply list item"),
-			purchased: z
-				.boolean()
-				.describe("true to mark as purchased, false to unmark"),
-		},
-		async (args: { itemId: string; purchased: boolean }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
+	// ─── Inventory Write Tools ───────────────────────────────────────────────
 
-			try {
-				const list = await ensureSupplyList(env.DB, env.__orgId);
-				if (!list) {
-					return {
-						content: [
-							{ type: "text", text: "Could not locate or create supply list." },
-						],
-					};
-				}
-				const item = await updateSupplyItem(
-					env.DB,
-					env.__orgId,
-					list.id,
-					args.itemId,
-					{
-						isPurchased: args.purchased,
-					},
-				);
-				if (!item) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Item ${args.itemId} not found on supply list.`,
-							},
-						],
-					};
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									itemId: item.id,
-									name: item.name,
-									isPurchased: item.isPurchased,
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
-	);
-
-	/**
-	 * Tool: add_cargo_item
-	 * Adds a new item to the pantry (Cargo inventory).
-	 */
 	server.tool(
 		"add_cargo_item",
-		"Add a new item to the pantry inventory. Use when the user says they bought something or wants to log a new pantry item.",
+		"Add a new item to the pantry inventory. Skips AI vector embedding (no credits charged). Vectors are backfilled asynchronously.",
 		{
-			name: z.string().min(1).describe("Name of the item"),
-			quantity: z.number().positive().describe("Quantity in stock"),
-			unit: z
-				.string()
-				.describe(
-					"Unit of measurement (e.g. 'kg', 'g', 'l', 'ml', 'piece', 'pack')",
-				),
+			name: z.string().min(1),
+			quantity: z.number().positive(),
+			unit: z.string(),
 			domain: z
 				.enum(["food", "household", "alcohol"])
 				.optional()
-				.default("food")
-				.describe("Item domain"),
-			tags: z
-				.array(z.string())
-				.optional()
-				.default([])
-				.describe("Optional tags (e.g. ['dairy', 'frozen'])"),
-			expiresAt: z
-				.string()
-				.optional()
-				.describe(
-					"Optional expiry date in ISO 8601 format (e.g. '2026-03-15')",
-				),
+				.default("food"),
+			tags: z.array(z.string()).optional().default([]),
+			expiresAt: z.string().optional(),
 		},
 		async (args: {
 			name: string;
@@ -766,254 +656,493 @@ export function registerTools(
 			domain?: "food" | "household" | "alcohol";
 			tags?: string[];
 			expiresAt?: string;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const unit = toSupportedUnit(args.unit);
-				const results = await ingestCargoItems(
-					env,
-					env.__orgId,
-					[
-						{
-							name: args.name,
-							quantity: args.quantity,
-							unit,
-							domain: args.domain ?? "food",
-							tags: args.tags ?? [],
-							expiresAt: args.expiresAt ? new Date(args.expiresAt) : undefined,
-						},
-					],
-					// Skip vector embedding via MCP to avoid AI credits cost.
-					// Vectors are backfilled asynchronously by the main app indexer.
-					{ skipVectorPhase: true },
-				);
-
-				const result = results[0];
-				if (!result || result.status === "error") {
-					return {
-						content: [
+		}) =>
+			makeTool({
+				name: "add_cargo_item",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const unit = toSupportedUnit(a.unit);
+					const results = await ingestCargoItems(
+						env,
+						ctx.organizationId,
+						[
 							{
-								type: "text",
-								text: `Error adding item: ${result?.error ?? "Unknown error"}`,
+								name: a.name,
+								quantity: a.quantity,
+								unit,
+								domain: a.domain ?? "food",
+								tags: a.tags ?? [],
+								expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
 							},
 						],
-					};
-				}
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									status: result.status,
-									item: result.item
-										? {
-												id: result.item.id,
-												name: result.item.name,
-												quantity: result.item.quantity,
-												unit: result.item.unit,
-											}
-										: undefined,
-									mergedInto: result.mergedInto,
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+						{ skipVectorPhase: true },
+					);
+					const result = results[0];
+					if (!result || result.status === "error") {
+						return err(
+							"add_cargo_item",
+							"internal_error",
+							result?.error ?? "Unknown ingest error",
+						);
+					}
+					if (result.status === "capacity_exceeded") {
+						return err(
+							"add_cargo_item",
+							"capacity_exceeded",
+							"Tier limit reached. Upgrade or remove items.",
+						);
+					}
+					return ok("add_cargo_item", {
+						status: result.status,
+						item: result.item
+							? {
+									id: result.item.id,
+									name: result.item.name,
+									quantity: result.item.quantity,
+									unit: result.item.unit,
+								}
+							: undefined,
+						mergedInto: result.mergedInto,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: remove_cargo_item
-	 * Removes an item from the pantry inventory entirely.
-	 */
+	server.tool(
+		"update_cargo_item",
+		"Update a pantry item's name, quantity, unit, expiry, domain, or tags. Vectors are re-upserted asynchronously when name changes.",
+		{
+			itemId: z.string().uuid(),
+			name: z.string().min(1).optional(),
+			quantity: z.number().positive().optional(),
+			unit: z.string().optional(),
+			domain: z.enum(["food", "household", "alcohol"]).optional(),
+			tags: z.array(z.string()).optional(),
+			expiresAt: z.string().optional(),
+		},
+		async (args: {
+			itemId: string;
+			name?: string;
+			quantity?: number;
+			unit?: string;
+			domain?: "food" | "household" | "alcohol";
+			tags?: string[];
+			expiresAt?: string;
+		}) =>
+			makeTool({
+				name: "update_cargo_item",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const unit = a.unit ? toSupportedUnit(a.unit) : undefined;
+					const updated = await updateItem(env, ctx.organizationId, a.itemId, {
+						name: a.name,
+						quantity: a.quantity,
+						unit,
+						domain: a.domain,
+						tags: a.tags,
+						expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
+					});
+					if (!updated) {
+						return err(
+							"update_cargo_item",
+							"not_found",
+							`Cargo item ${a.itemId} not found.`,
+						);
+					}
+					return ok("update_cargo_item", {
+						id: updated.id,
+						name: updated.name,
+						quantity: updated.quantity,
+						unit: updated.unit,
+						domain: updated.domain,
+						expiresAt: updated.expiresAt,
+					});
+				},
+			})(env, args),
+	);
+
 	server.tool(
 		"remove_cargo_item",
-		"Remove an item from the pantry inventory. Use the item ID from list_inventory or search_ingredients.",
+		"Remove an item from the pantry inventory. Destructive — pass confirm:true. Use itemId from list_inventory or search_ingredients.",
 		{
-			itemId: z.string().uuid().describe("ID of the cargo item to remove"),
+			itemId: z.string().uuid(),
+			confirm: z.boolean().describe("Set true to confirm permanent removal."),
 		},
-		async (args: { itemId: string }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				await jettisonItem(env, env.__orgId, args.itemId);
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{ removed: true, itemId: args.itemId },
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		async (args: { itemId: string; confirm: boolean }) =>
+			makeTool({
+				name: "remove_cargo_item",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					if (!a.confirm) {
+						return err(
+							"remove_cargo_item",
+							"invalid_input",
+							"Pass confirm:true to permanently remove this cargo item.",
+						);
+					}
+					await jettisonItem(env, ctx.organizationId, a.itemId);
+					return ok("remove_cargo_item", { removed: true, itemId: a.itemId });
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: consume_meal
-	 * Cooks a meal, automatically deducting its ingredients from the pantry.
-	 */
+	// ─── Inventory Import (Receipt → Pantry) ─────────────────────────────────
+
+	server.tool(
+		"inventory_import_schema",
+		"Return the JSON schema (item shape, allowed units, max rows) for preview_inventory_import / apply_inventory_import. Call before constructing items so the LLM can match field names exactly.",
+		{},
+		async () =>
+			makeTool({
+				name: "inventory_import_schema",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async () =>
+					ok("inventory_import_schema", getInventoryImportSchema()),
+			})(env, {}),
+	);
+
+	server.tool(
+		"preview_inventory_import",
+		"Dry-run a bulk inventory import (e.g. from a parsed receipt). Returns a previewToken plus per-row create/merge/error classification. No DB writes happen here. Pass the previewToken to apply_inventory_import within 15 minutes.",
+		{
+			items: z
+				.array(
+					z.object({
+						id: z.string().uuid().optional(),
+						name: z.string().min(1),
+						quantity: z.number().positive(),
+						unit: z.string(),
+						domain: z
+							.enum(["food", "household", "alcohol"])
+							.optional()
+							.default("food"),
+						tags: z.array(z.string()).optional().default([]),
+						expiresAt: z.string().optional(),
+					}),
+				)
+				.min(1)
+				.max(500),
+		},
+		async (args: { items: InventoryImportItem[] }) =>
+			makeTool({
+				name: "preview_inventory_import",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const result = await previewInventoryImport(
+						env,
+						ctx.organizationId,
+						a.items,
+					);
+					return ok("preview_inventory_import", result);
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"apply_inventory_import",
+		"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent: replaying the same idempotencyKey within 24h returns the original outcome with meta.replayed:true.",
+		{
+			previewToken: z.string().min(8),
+			idempotencyKey: z.string().min(8).max(128),
+		},
+		async (args: { previewToken: string; idempotencyKey: string }) =>
+			makeTool({
+				name: "apply_inventory_import",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const result = await applyInventoryImport(env, ctx.organizationId, {
+						previewToken: a.previewToken,
+						idempotencyKey: a.idempotencyKey,
+						apiKeyId: ctx.apiKeyId,
+					});
+					return ok("apply_inventory_import", result, {
+						meta: result.replayed ? { replayed: true } : undefined,
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"import_inventory_csv",
+		"Import inventory from a raw CSV string (max 1 MB). Convenience wrapper that parses the CSV and applies the result in one call. For large or untrusted inputs, prefer preview_inventory_import + apply_inventory_import.",
+		{
+			csv: z
+				.string()
+				.min(1)
+				.max(1024 * 1024),
+			idempotencyKey: z.string().min(8).max(128),
+		},
+		async (args: { csv: string; idempotencyKey: string }) =>
+			makeTool({
+				name: "import_inventory_csv",
+				scopes: ["mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const result = await importInventoryCsv(env, ctx.organizationId, {
+						csv: a.csv,
+						idempotencyKey: a.idempotencyKey,
+						apiKeyId: ctx.apiKeyId,
+					});
+					return ok("import_inventory_csv", result, {
+						meta: result.replayed ? { replayed: true } : undefined,
+						warnings:
+							result.warnings && result.warnings.length > 0
+								? result.warnings
+								: undefined,
+					});
+				},
+			})(env, args),
+	);
+
+	// ─── Galley (Recipes) Write Tools ────────────────────────────────────────
+
+	server.tool(
+		"create_meal",
+		"Create a new recipe in the Galley. For bulk import use REST POST /api/v1/galley/import (galley scope). AI generation stays in the Ration UI.",
+		{
+			meal: McpCreateMealSchema,
+		},
+		async (args: { meal: z.infer<typeof McpCreateMealSchema> }) =>
+			makeTool({
+				name: "create_meal",
+				scopes: ["mcp:galley:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const parsed = McpCreateMealSchema.parse(a.meal);
+					const created = await createMeal(
+						env.DB,
+						ctx.organizationId,
+						parsed,
+						env,
+					);
+					return ok("create_meal", {
+						id: created?.id,
+						name: created?.name,
+						servings: created?.servings,
+						ingredientCount: created?.ingredients.length ?? 0,
+						tags: created?.tags ?? [],
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"update_meal",
+		"Update a recipe in the Galley. Round-trip: list_meals → modify → pass complete object including id.",
+		{
+			meal: MealUpdateSchema,
+		},
+		async (args: { meal: z.infer<typeof MealUpdateSchema> }) =>
+			makeTool({
+				name: "update_meal",
+				scopes: ["mcp:galley:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const parsed = MealUpdateSchema.parse(a.meal);
+					const { id, ...mealInput } = parsed;
+					const updated = await updateMeal(
+						env.DB,
+						ctx.organizationId,
+						id,
+						mealInput,
+					);
+					if (!updated) {
+						return err("update_meal", "not_found", "Meal not found.");
+					}
+					return ok("update_meal", {
+						id: updated.id,
+						name: updated.name,
+						domain: updated.domain,
+						description: updated.description,
+						servings: updated.servings,
+						ingredients: updated.ingredients.map((i) => ({
+							ingredientName: i.ingredientName,
+							quantity: i.quantity,
+							unit: i.unit,
+						})),
+						tags: updated.tags,
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"delete_meal",
+		"Delete a recipe from the Galley. Destructive — pass confirm:true. Cascades to ingredients/tags but does not delete plan entries.",
+		{
+			mealId: z.string().uuid(),
+			confirm: z.boolean(),
+		},
+		async (args: { mealId: string; confirm: boolean }) =>
+			makeTool({
+				name: "delete_meal",
+				scopes: ["mcp:galley:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					if (!a.confirm) {
+						return err(
+							"delete_meal",
+							"invalid_input",
+							"Pass confirm:true to permanently delete this meal.",
+						);
+					}
+					await deleteMeal(env.DB, ctx.organizationId, a.mealId);
+					return ok("delete_meal", { deleted: true, mealId: a.mealId });
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"toggle_meal_active",
+		"Toggle a meal's selection in the Galley active list. The active list drives sync_supply_from_selected_meals. Pass servingsOverride to set/clear the per-selection servings count.",
+		{
+			mealId: z.string().uuid(),
+			active: z.boolean(),
+			servingsOverride: z.number().int().positive().nullable().optional(),
+		},
+		async (args: {
+			mealId: string;
+			active: boolean;
+			servingsOverride?: number | null;
+		}) =>
+			makeTool({
+				name: "toggle_meal_active",
+				scopes: ["mcp:galley:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const owns = await validateMealOwnership(
+						env.DB,
+						ctx.organizationId,
+						a.mealId,
+					);
+					if (!owns) {
+						return err(
+							"toggle_meal_active",
+							"not_found",
+							`Meal ${a.mealId} not found.`,
+						);
+					}
+					if (a.active) {
+						const result = await upsertMealSelection(
+							env.DB,
+							ctx.organizationId,
+							a.mealId,
+							a.servingsOverride ?? null,
+						);
+						return ok("toggle_meal_active", {
+							mealId: a.mealId,
+							isActive: result.isActive,
+							servingsOverride: result.servingsOverride,
+						});
+					}
+					// Clear by toggling: read current, delete if exists.
+					const selections = await getActiveMealSelections(
+						env.DB,
+						ctx.organizationId,
+					);
+					const existing = selections.find((s) => s.mealId === a.mealId);
+					if (!existing) {
+						return ok("toggle_meal_active", {
+							mealId: a.mealId,
+							isActive: false,
+						});
+					}
+					const d1 = drizzle(env.DB);
+					await d1
+						.delete((await import("../../db/schema")).activeMealSelection)
+						.where(
+							eq(
+								(await import("../../db/schema")).activeMealSelection.id,
+								existing.id,
+							),
+						);
+					return ok("toggle_meal_active", {
+						mealId: a.mealId,
+						isActive: false,
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"clear_active_meals",
+		"Clear all active meal selections in the Galley. Destructive — pass confirm:true.",
+		{ confirm: z.boolean() },
+		async (args: { confirm: boolean }) =>
+			makeTool({
+				name: "clear_active_meals",
+				scopes: ["mcp:galley:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					if (!a.confirm) {
+						return err(
+							"clear_active_meals",
+							"invalid_input",
+							"Pass confirm:true to clear all active meal selections.",
+						);
+					}
+					const result = await clearMealSelections(env.DB, ctx.organizationId);
+					return ok("clear_active_meals", result);
+				},
+			})(env, args),
+	);
+
 	server.tool(
 		"consume_meal",
-		"Mark a meal as cooked and automatically deduct its ingredients from the pantry inventory. Use when the user says they made or ate a meal. Use list_meals to get meal IDs.",
+		"Mark a meal as cooked and deduct ingredients from the pantry. Use after the user reports cooking/eating a meal.",
 		{
-			mealId: z
-				.string()
-				.uuid()
-				.describe("ID of the meal to cook (from list_meals)"),
-			servings: z
-				.number()
-				.int()
-				.positive()
-				.optional()
-				.describe(
-					"Number of servings cooked (defaults to the meal's base servings)",
-				),
+			mealId: z.string().uuid(),
+			servings: z.number().int().positive().optional(),
 		},
-		async (args: { mealId: string; servings?: number }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				await cookMeal(env, env.__orgId, args.mealId, {
-					servings: args.servings,
-				});
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									consumed: true,
-									mealId: args.mealId,
-									servings: args.servings ?? "default",
-									note: "Ingredients have been deducted from your pantry inventory.",
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				const message = e instanceof Error ? e.message : String(e);
-				const isInsufficient = message.startsWith("Insufficient Cargo");
-				return {
-					content: [
-						{
-							type: "text",
-							text: isInsufficient
-								? `Cannot cook meal: ${message}. Check inventory with list_inventory or search_ingredients.`
-								: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		async (args: { mealId: string; servings?: number }) =>
+			makeTool({
+				name: "consume_meal",
+				scopes: ["mcp:galley:write", "mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					await cookMeal(env, ctx.organizationId, a.mealId, {
+						servings: a.servings,
+					});
+					return ok("consume_meal", {
+						consumed: true,
+						mealId: a.mealId,
+						servings: a.servings ?? "default",
+						note: "Ingredients have been deducted from your pantry inventory.",
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: add_meal_plan_entry
-	 * Adds a meal to the active weekly meal plan on a specific date and slot.
-	 */
+	// ─── Manifest (Meal Plan) Write Tools ────────────────────────────────────
+
 	server.tool(
 		"add_meal_plan_entry",
-		"Add a meal to the weekly meal plan for a specific date and meal slot. Use list_meals to find meal IDs.",
+		"Add a meal to the weekly meal plan for a specific date and slot.",
 		{
-			mealId: z
-				.string()
-				.uuid()
-				.describe("ID of the meal to add (from list_meals)"),
-			date: z
-				.string()
-				.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-				.describe("Date for the meal plan entry (YYYY-MM-DD format)"),
-			slotType: z
-				.enum(["breakfast", "lunch", "dinner", "snack"])
-				.describe("Meal slot: breakfast, lunch, dinner, or snack"),
-			servingsOverride: z
-				.number()
-				.int()
-				.positive()
-				.optional()
-				.describe("Override the default number of servings for this entry"),
-			notes: z
-				.string()
-				.max(500)
-				.optional()
-				.describe("Optional notes for this meal plan entry"),
+			mealId: z.string().uuid(),
+			date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+			slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+			servingsOverride: z.number().int().positive().optional(),
+			notes: z.string().max(500).optional(),
 		},
 		async (args: {
 			mealId: string;
@@ -1021,189 +1150,125 @@ export function registerTools(
 			slotType: "breakfast" | "lunch" | "dinner" | "snack";
 			servingsOverride?: number;
 			notes?: string;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const plan = await ensureMealPlan(env.DB, env.__orgId);
-				const entry = await addEntry(env.DB, env.__orgId, plan.id, {
-					mealId: args.mealId,
-					date: args.date,
-					slotType: args.slotType,
-					servingsOverride: args.servingsOverride ?? null,
-					notes: args.notes ?? null,
-				});
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									added: {
-										entryId: entry.id,
-										mealName: entry.mealName,
-										date: entry.date,
-										slotType: entry.slotType,
-										servings: entry.servingsOverride ?? entry.mealServings,
-									},
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		}) =>
+			makeTool({
+				name: "add_meal_plan_entry",
+				scopes: ["mcp:manifest:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+					const entry = await addEntry(env.DB, ctx.organizationId, plan.id, {
+						mealId: a.mealId,
+						date: a.date,
+						slotType: a.slotType,
+						servingsOverride: a.servingsOverride ?? null,
+						notes: a.notes ?? null,
+					});
+					return ok("add_meal_plan_entry", {
+						entryId: entry.id,
+						mealName: entry.mealName,
+						date: entry.date,
+						slotType: entry.slotType,
+						servings: entry.servingsOverride ?? entry.mealServings,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: remove_meal_plan_entry
-	 * Deletes a scheduled meal from the plan. Use entry id from get_meal_plan.
-	 */
 	server.tool(
-		"remove_meal_plan_entry",
-		"Remove a meal from the weekly plan. Provide entryId from get_meal_plan entries[].id.",
+		"bulk_add_meal_plan_entries",
+		"Add multiple meal plan entries in one call (max 50). All-or-nothing: validation runs first, then entries are batched.",
 		{
-			entryId: z
-				.string()
-				.uuid()
-				.describe("Meal plan entry ID from get_meal_plan"),
+			entries: z
+				.array(
+					z.object({
+						mealId: z.string().uuid(),
+						date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+						slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+						servingsOverride: z.number().int().positive().nullable().optional(),
+						notes: z.string().max(500).nullable().optional(),
+					}),
+				)
+				.min(1)
+				.max(50),
 		},
-		async (args: { entryId: string }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const plan = await ensureMealPlan(env.DB, env.__orgId);
-				const removed = await deleteEntry(
-					env.DB,
-					env.__orgId,
-					plan.id,
-					args.entryId,
-				);
-				if (!removed) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(
-									{
-										removed: false,
-										reason: "Entry not found on your active meal plan.",
-									},
-									null,
-									2,
-								),
-							},
-						],
-					};
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{ removed: true, entryId: args.entryId },
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		async (args: {
+			entries: Array<{
+				mealId: string;
+				date: string;
+				slotType: "breakfast" | "lunch" | "dinner" | "snack";
+				servingsOverride?: number | null;
+				notes?: string | null;
+			}>;
+		}) =>
+			makeTool({
+				name: "bulk_add_meal_plan_entries",
+				scopes: ["mcp:manifest:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+					const created: Array<{
+						entryId: string;
+						mealId: string;
+						date: string;
+						slotType: string;
+					}> = [];
+					const errors: Array<{ index: number; error: string }> = [];
+					// addEntry validates ownership per row; we serialize to surface row-level errors.
+					for (let i = 0; i < a.entries.length; i++) {
+						const e = a.entries[i];
+						if (!e) continue;
+						try {
+							const entry = await addEntry(
+								env.DB,
+								ctx.organizationId,
+								plan.id,
+								{
+									mealId: e.mealId,
+									date: e.date,
+									slotType: e.slotType,
+									servingsOverride: e.servingsOverride ?? null,
+									notes: e.notes ?? null,
+								},
+							);
+							created.push({
+								entryId: entry.id,
+								mealId: entry.mealId,
+								date: entry.date,
+								slotType: entry.slotType,
+							});
+						} catch (err2) {
+							errors.push({
+								index: i,
+								error: err2 instanceof Error ? err2.message : String(err2),
+							});
+						}
+					}
+					return ok("bulk_add_meal_plan_entries", {
+						created,
+						errorCount: errors.length,
+						errors: errors.length > 0 ? errors : undefined,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: update_meal_plan_entry
-	 * Patch date, slot, servings override, notes, or order for a plan entry.
-	 */
 	server.tool(
 		"update_meal_plan_entry",
-		"Update an existing meal plan entry (date, slot, servings, notes). Get entryId from get_meal_plan. Cannot change consumed entries. For servings: omit both servingsOverride and clearServingsOverride to leave unchanged; pass a positive int to set override; pass clearServingsOverride: true to revert to recipe default.",
+		"Update an existing meal plan entry (date, slot, servings, notes). Cannot change consumed entries.",
 		{
-			entryId: z
-				.string()
-				.uuid()
-				.describe("Meal plan entry ID from get_meal_plan"),
+			entryId: z.string().uuid(),
 			date: z
 				.string()
 				.regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-				.optional()
-				.describe("New date for this entry"),
-			slotType: z
-				.enum(["breakfast", "lunch", "dinner", "snack"])
-				.optional()
-				.describe("Meal slot"),
-			servingsOverride: z
-				.number()
-				.int()
-				.positive()
-				.optional()
-				.describe(
-					"Set override for servings on this occurrence. Omit to leave unchanged; use clearServingsOverride: true to revert to recipe default.",
-				),
-			clearServingsOverride: z
-				.boolean()
-				.optional()
-				.describe(
-					"Set true to clear servingsOverride and use the recipe default. Omit to leave servings as-is.",
-				),
-			notes: z.string().max(500).optional().describe("Notes for this entry"),
-			orderIndex: z
-				.number()
-				.int()
-				.nonnegative()
-				.optional()
-				.describe("Sort order within the same day and slot"),
+				.optional(),
+			slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+			servingsOverride: z.number().int().positive().optional(),
+			clearServingsOverride: z.boolean().optional(),
+			notes: z.string().max(500).optional(),
+			orderIndex: z.number().int().nonnegative().optional(),
 		},
 		async (args: {
 			entryId: string;
@@ -1213,791 +1278,440 @@ export function registerTools(
 			clearServingsOverride?: boolean;
 			notes?: string;
 			orderIndex?: number;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			const hasPatch =
-				args.date !== undefined ||
-				args.slotType !== undefined ||
-				args.servingsOverride !== undefined ||
-				args.clearServingsOverride === true ||
-				args.notes !== undefined ||
-				args.orderIndex !== undefined;
-			if (!hasPatch) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Provide at least one of: date, slotType, servingsOverride, clearServingsOverride, notes, orderIndex.",
-						},
-					],
-				};
-			}
-
-			try {
-				const plan = await ensureMealPlan(env.DB, env.__orgId);
-				const d1 = drizzle(env.DB);
-				const [existing] = await d1
-					.select({ consumedAt: mealPlanEntry.consumedAt })
-					.from(mealPlanEntry)
-					.where(
-						and(
-							eq(mealPlanEntry.id, args.entryId),
-							eq(mealPlanEntry.planId, plan.id),
-						),
-					)
-					.limit(1);
-
-				if (!existing) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(
-									{
-										updated: false,
-										reason: "Entry not found on your active meal plan.",
-									},
-									null,
-									2,
-								),
-							},
-						],
-					};
-				}
-				if (existing.consumedAt != null) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(
-									{
-										updated: false,
-										reason:
-											"This entry is already marked consumed; remove it or edit unconsumed entries only.",
-									},
-									null,
-									2,
-								),
-							},
-						],
-					};
-				}
-
-				const input: {
-					date?: string;
-					slotType?: string;
-					orderIndex?: number;
-					servingsOverride?: number | null;
-					notes?: string | null;
-				} = {};
-				if (args.date !== undefined) input.date = args.date;
-				if (args.slotType !== undefined) input.slotType = args.slotType;
-				if (args.orderIndex !== undefined) input.orderIndex = args.orderIndex;
-				if (args.clearServingsOverride === true) {
-					input.servingsOverride = null;
-				} else if (args.servingsOverride !== undefined) {
-					input.servingsOverride = args.servingsOverride;
-				}
-				if (args.notes !== undefined) input.notes = args.notes;
-
-				const updated = await updateEntry(
-					env.DB,
-					env.__orgId,
-					plan.id,
-					args.entryId,
-					input,
-				);
-
-				if (!updated) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(
-									{ updated: false, reason: "Update failed." },
-									null,
-									2,
-								),
-							},
-						],
-					};
-				}
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									updated: {
-										entryId: updated.id,
-										date: updated.date,
-										slotType: updated.slotType,
-										mealName: updated.mealName,
-										servings: updated.servingsOverride ?? updated.mealServings,
-										notes: updated.notes,
-										orderIndex: updated.orderIndex,
-									},
-								},
-								null,
-								2,
+		}) =>
+			makeTool({
+				name: "update_meal_plan_entry",
+				scopes: ["mcp:manifest:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const hasPatch =
+						a.date !== undefined ||
+						a.slotType !== undefined ||
+						a.servingsOverride !== undefined ||
+						a.clearServingsOverride === true ||
+						a.notes !== undefined ||
+						a.orderIndex !== undefined;
+					if (!hasPatch) {
+						return err(
+							"update_meal_plan_entry",
+							"invalid_input",
+							"Provide at least one of: date, slotType, servingsOverride, clearServingsOverride, notes, orderIndex.",
+						);
+					}
+					const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+					const d1 = drizzle(env.DB);
+					const [existing] = await d1
+						.select({ consumedAt: mealPlanEntry.consumedAt })
+						.from(mealPlanEntry)
+						.where(
+							and(
+								eq(mealPlanEntry.id, a.entryId),
+								eq(mealPlanEntry.planId, plan.id),
 							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+						)
+						.limit(1);
+					if (!existing) {
+						return err(
+							"update_meal_plan_entry",
+							"not_found",
+							"Entry not found on your active meal plan.",
+						);
+					}
+					if (existing.consumedAt != null) {
+						return err(
+							"update_meal_plan_entry",
+							"conflict",
+							"This entry is already marked consumed; remove it or edit unconsumed entries only.",
+						);
+					}
+					const input: {
+						date?: string;
+						slotType?: string;
+						orderIndex?: number;
+						servingsOverride?: number | null;
+						notes?: string | null;
+					} = {};
+					if (a.date !== undefined) input.date = a.date;
+					if (a.slotType !== undefined) input.slotType = a.slotType;
+					if (a.orderIndex !== undefined) input.orderIndex = a.orderIndex;
+					if (a.clearServingsOverride === true) {
+						input.servingsOverride = null;
+					} else if (a.servingsOverride !== undefined) {
+						input.servingsOverride = a.servingsOverride;
+					}
+					if (a.notes !== undefined) input.notes = a.notes;
+					const updated = await updateEntry(
+						env.DB,
+						ctx.organizationId,
+						plan.id,
+						a.entryId,
+						input,
+					);
+					if (!updated) {
+						return err(
+							"update_meal_plan_entry",
+							"internal_error",
+							"Update failed.",
+						);
+					}
+					return ok("update_meal_plan_entry", {
+						entryId: updated.id,
+						date: updated.date,
+						slotType: updated.slotType,
+						mealName: updated.mealName,
+						servings: updated.servingsOverride ?? updated.mealServings,
+						notes: updated.notes,
+						orderIndex: updated.orderIndex,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: sync_supply_from_selected_meals
-	 * Rebuilds the active supply list from Manifest (current week) + Galley selections — same as the Supply page “Update list”.
-	 */
 	server.tool(
-		"sync_supply_from_selected_meals",
-		"Rebuild the shopping list from this week's meal plan entries plus Galley active selections (same as Supply → Update list). Uses semantic matching vs pantry for gaps; may call Vectorize. For one-off items use add_supply_item. unitMode defaults to metric (web uses per-user supply preference).",
-		{
-			unitMode: z
-				.enum(["metric", "imperial"])
-				.optional()
-				.describe("Shopping list units (default: metric)"),
-		},
-		async (args: { unitMode?: "metric" | "imperial" }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_supply_sync",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const result = await createSupplyListFromSelectedMeals(
-					env,
-					env.__orgId,
-					undefined,
-					{
-						trigger: "mcp_sync_supply",
-						organizationId: env.__orgId,
-					},
-					args.unitMode ?? "metric",
-				);
-
-				const list = result.list;
-				if (!list) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Error: supply sync did not return a list.",
-							},
-						],
-					};
-				}
-
-				const fullList = await getSupplyListById(env.DB, env.__orgId, list.id);
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									listId: list.id,
-									summary: result.summary,
-									itemCount: fullList?.items.length ?? 0,
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		"remove_meal_plan_entry",
+		"Remove a meal from the weekly plan.",
+		{ entryId: z.string().uuid() },
+		async (args: { entryId: string }) =>
+			makeTool({
+				name: "remove_meal_plan_entry",
+				scopes: ["mcp:manifest:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+					const removed = await deleteEntry(
+						env.DB,
+						ctx.organizationId,
+						plan.id,
+						a.entryId,
+					);
+					if (!removed) {
+						return err(
+							"remove_meal_plan_entry",
+							"not_found",
+							"Entry not found on your active meal plan.",
+						);
+					}
+					return ok("remove_meal_plan_entry", {
+						removed: true,
+						entryId: a.entryId,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: create_meal
-	 * Creates a new Galley recipe (not AI-generated). Respects org meal capacity limits.
-	 */
+	// ─── Supply Write Tools ──────────────────────────────────────────────────
+
 	server.tool(
-		"create_meal",
-		"Create a new recipe in the Galley. Same fields as list_meals output shape (without id). For bulk import use REST POST /api/v1/galley/import with galley scope. AI recipe generation stays in the Ration app only.",
+		"add_supply_item",
+		"Add an item to the active supply/shopping list.",
 		{
-			meal: McpCreateMealSchema.describe(
-				"New meal: name, domain, servings, ingredients, optional tags/directions/equipment.",
-			),
-		},
-		async (args: { meal: z.infer<typeof McpCreateMealSchema> }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const parsed = McpCreateMealSchema.parse(args.meal);
-				const created = await createMeal(env.DB, env.__orgId, parsed, env);
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									created: {
-										id: created?.id,
-										name: created?.name,
-										servings: created?.servings,
-										ingredientCount: created?.ingredients.length ?? 0,
-										tags: created?.tags ?? [],
-									},
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				const message = e instanceof Error ? e.message : String(e);
-				if (message.startsWith("capacity_exceeded")) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(
-									{
-										error: "capacity_exceeded",
-										detail: message,
-										hint: "Upgrade tier or remove recipes in Settings.",
-									},
-									null,
-									2,
-								),
-							},
-						],
-					};
-				}
-				return {
-					content: [{ type: "text", text: publicErrorMessageForTool(e) }],
-				};
-			}
-		},
-	);
-
-	// ─── Additional Read Tools ────────────────────────────────────────────────
-
-	/**
-	 * Tool: match_meals
-	 * Finds meals that can be made with the current pantry inventory.
-	 */
-	server.tool(
-		"match_meals",
-		"Find meals that can be made with current pantry inventory. Use 'strict' mode for meals with all ingredients available, 'delta' mode for partial matches showing what's missing.",
-		{
-			mode: z
-				.enum(["strict", "delta"])
+			name: z.string().min(1),
+			quantity: z.number().positive().optional(),
+			unit: z.string().optional(),
+			domain: z
+				.enum(["food", "household", "alcohol"])
 				.optional()
-				.default("strict")
-				.describe(
-					"strict = only fully cookable meals; delta = all meals with % match and missing ingredients",
-				),
-			minMatch: z
-				.number()
-				.min(0)
-				.max(100)
-				.optional()
-				.default(50)
-				.describe(
-					"Minimum match percentage for delta mode (0–100, default 50)",
-				),
-			limit: z
-				.number()
-				.int()
-				.positive()
-				.optional()
-				.default(10)
-				.describe("Maximum number of results to return"),
-			tags: z
-				.string()
-				.optional()
-				.describe("Filter by meal tag (e.g. 'vegetarian', 'breakfast')"),
+				.default("food"),
 		},
 		async (args: {
-			mode?: "strict" | "delta";
-			minMatch?: number;
-			limit?: number;
-			tags?: string;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_search",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
+			name: string;
+			quantity?: number;
+			unit?: string;
+			domain?: "food" | "household" | "alcohol";
+		}) =>
+			makeTool({
+				name: "add_supply_item",
+				scopes: ["mcp:supply:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const list = await ensureSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return err(
+							"add_supply_item",
+							"internal_error",
+							"Could not locate or create supply list.",
+						);
+					}
+					const item = await addSupplyItem(
+						env.DB,
+						ctx.organizationId,
+						list.id,
 						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
+							name: a.name,
+							quantity: a.quantity,
+							unit: a.unit,
+							domain: a.domain ?? "food",
 						},
-					],
-				};
-			}
-
-			try {
-				const results = await matchMeals(env, env.__orgId, {
-					mode: args.mode ?? "strict",
-					minMatch: args.minMatch ?? 50,
-					limit: args.limit ?? 10,
-					tags: args.tags,
-				});
-
-				const mapped = results.map((r) => ({
-					mealId: r.meal.id,
-					mealName: r.meal.name,
-					matchPercentage: Math.round(r.matchPercentage),
-					canMake: r.canMake,
-					missingIngredients: r.missingIngredients.map((m) => ({
-						name: m.name,
-						needed: `${m.requiredQuantity} ${m.unit}`,
-						optional: m.isOptional,
-					})),
-				}));
-
-				if (mapped.length === 0) {
-					const hint =
-						args.mode === "strict"
-							? " Try mode='delta' to see partial matches."
-							: "";
-					return {
-						content: [
-							{
-								type: "text",
-								text: `No meals match the current pantry inventory.${hint}`,
-							},
-						],
-					};
-				}
-
-				return {
-					content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
-	);
-
-	/**
-	 * Tool: get_expiring_items
-	 * Returns pantry items expiring within a given number of days.
-	 */
-	server.tool(
-		"get_expiring_items",
-		"List pantry items that are expiring soon. Useful for reducing food waste and planning rescue meals.",
-		{
-			days: z
-				.number()
-				.int()
-				.positive()
-				.optional()
-				.default(7)
-				.describe("Number of days to look ahead (default: 7)"),
-		},
-		async (args: { days?: number }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const d1 = drizzle(env.DB);
-				const lookaheadDays = args.days ?? 7;
-				const now = new Date();
-				const cutoff = new Date(
-					now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000,
-				);
-
-				// Bounded query: items with expiresAt in [now, cutoff]. Rate-limited (mcp_list).
-				const expiringItems = await d1
-					.select()
-					.from(cargo)
-					.where(
-						and(
-							eq(cargo.organizationId, env.__orgId),
-							isNotNull(cargo.expiresAt),
-							gte(cargo.expiresAt, now),
-							lte(cargo.expiresAt, cutoff),
-						),
-					)
-					.orderBy(cargo.expiresAt);
-
-				if (expiringItems.length === 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `No items expiring in the next ${lookaheadDays} day${lookaheadDays === 1 ? "" : "s"}.`,
-							},
-						],
-					};
-				}
-
-				const mapped = expiringItems.map((item) => {
-					const expiresAt = item.expiresAt ? new Date(item.expiresAt) : null;
-					const daysUntilExpiry = expiresAt
-						? Math.ceil(
-								(expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-							)
-						: null;
-					return {
+					);
+					return ok("add_supply_item", {
 						id: item.id,
 						name: item.name,
 						quantity: item.quantity,
 						unit: item.unit,
-						expiresAt: item.expiresAt,
-						daysUntilExpiry,
-					};
-				});
-
-				return {
-					content: [{ type: "text", text: JSON.stringify(mapped, null, 2) }],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+					});
+				},
+			})(env, args),
 	);
 
-	// ─── Credit Tools ─────────────────────────────────────────────────────────
-
-	/**
-	 * Tool: get_credit_balance
-	 * Returns the organization's current AI credit balance.
-	 */
 	server.tool(
-		"get_credit_balance",
-		"Check how many AI credits remain for your organization. Credits are used for AI features like recipe importing and visual scanning.",
-		{},
-		async () => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_list",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const balance = await checkBalance(env, env.__orgId);
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({ balance, currency: "credits" }, null, 2),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
-	);
-
-	/**
-	 * Tool: update_cargo_item
-	 * Updates any field on an existing pantry item. RLS-scoped by orgId.
-	 * Automatically re-upserts the vector embedding when name changes.
-	 */
-	server.tool(
-		"update_cargo_item",
-		"Update a pantry item's name, quantity, unit, expiry date, domain, or tags. Use item IDs from list_inventory or search_ingredients.",
+		"update_supply_item",
+		"Update an existing supply list item.",
 		{
-			itemId: z
-				.string()
-				.uuid()
-				.describe("ID of the cargo item to update (from list_inventory)"),
-			name: z.string().min(1).optional().describe("New name for the item"),
-			quantity: z
-				.number()
-				.positive()
-				.optional()
-				.describe("New quantity (e.g. 0.4 for 400ml remaining)"),
-			unit: z
-				.string()
-				.optional()
-				.describe(
-					"New unit of measurement (e.g. 'kg', 'g', 'l', 'ml', 'piece')",
-				),
-			domain: z
-				.enum(["food", "household", "alcohol"])
-				.optional()
-				.describe("Item domain"),
-			tags: z
-				.array(z.string())
-				.optional()
-				.describe("New tags — replaces existing tags entirely"),
-			expiresAt: z
-				.string()
-				.optional()
-				.describe("New expiry date in ISO 8601 format (e.g. '2026-04-01')"),
+			itemId: z.string().uuid(),
+			name: z.string().min(1).optional(),
+			quantity: z.number().positive().optional(),
+			unit: z.string().optional(),
 		},
 		async (args: {
 			itemId: string;
 			name?: string;
 			quantity?: number;
 			unit?: string;
-			domain?: "food" | "household" | "alcohol";
-			tags?: string[];
-			expiresAt?: string;
-		}) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
-
-			try {
-				const unit = args.unit ? toSupportedUnit(args.unit) : undefined;
-				const updated = await updateItem(env, env.__orgId, args.itemId, {
-					name: args.name,
-					quantity: args.quantity,
-					unit,
-					domain: args.domain,
-					tags: args.tags,
-					expiresAt: args.expiresAt ? new Date(args.expiresAt) : undefined,
-				});
-
-				if (!updated) {
-					return {
-						content: [
-							{ type: "text", text: `Cargo item ${args.itemId} not found.` },
-						],
-					};
-				}
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									updated: {
-										id: updated.id,
-										name: updated.name,
-										quantity: updated.quantity,
-										unit: updated.unit,
-										domain: updated.domain,
-										expiresAt: updated.expiresAt,
-									},
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
-		},
+		}) =>
+			makeTool({
+				name: "update_supply_item",
+				scopes: ["mcp:supply:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const list = await ensureSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return err(
+							"update_supply_item",
+							"internal_error",
+							"Could not locate or create supply list.",
+						);
+					}
+					const item = await updateSupplyItem(
+						env.DB,
+						ctx.organizationId,
+						list.id,
+						a.itemId,
+						{ name: a.name, quantity: a.quantity, unit: a.unit },
+					);
+					if (!item) {
+						return err(
+							"update_supply_item",
+							"not_found",
+							`Item ${a.itemId} not found on supply list.`,
+						);
+					}
+					return ok("update_supply_item", {
+						id: item.id,
+						name: item.name,
+						quantity: item.quantity,
+						unit: item.unit,
+					});
+				},
+			})(env, args),
 	);
 
-	/**
-	 * Tool: update_meal
-	 * Updates any aspect of a Galley recipe. Full round-trip: fetch via list_meals,
-	 * modify fields, pass complete meal object (including id).
-	 */
 	server.tool(
-		"update_meal",
-		"Update any aspect of a Galley recipe. Use list_meals to fetch the full meal, modify the fields you need to change, then pass the complete meal object (including id). Can update name, description, directions, ingredients, tags, servings, prep time, cook time, and more.",
-		{
-			meal: MealUpdateSchema.describe(
-				"Full meal object from list_meals with desired modifications. Must include id.",
-			),
-		},
-		async (args: { meal: z.infer<typeof MealUpdateSchema> }) => {
-			const rateLimit = await checkRateLimit(
-				env.RATION_KV,
-				"mcp_write",
-				env.__orgId,
-			);
-			if (!rateLimit.allowed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rate limit exceeded. Retry after ${rateLimit.retryAfter ?? 60} seconds.`,
-						},
-					],
-				};
-			}
+		"remove_supply_item",
+		"Remove an item from the supply list.",
+		{ itemId: z.string().uuid() },
+		async (args: { itemId: string }) =>
+			makeTool({
+				name: "remove_supply_item",
+				scopes: ["mcp:supply:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const list = await ensureSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return err(
+							"remove_supply_item",
+							"internal_error",
+							"Could not locate or create supply list.",
+						);
+					}
+					await deleteSupplyItem(env.DB, ctx.organizationId, list.id, a.itemId);
+					return ok("remove_supply_item", { removed: true, itemId: a.itemId });
+				},
+			})(env, args),
+	);
 
-			try {
-				const parsed = MealUpdateSchema.parse(args.meal);
-				const { id, ...mealInput } = parsed;
-				const updated = await updateMeal(env.DB, env.__orgId, id, mealInput);
-				if (!updated) {
-					return {
-						content: [
-							{ type: "text", text: "Meal not found or unauthorized." },
-						],
-					};
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									updated: {
-										id: updated.id,
-										name: updated.name,
-										domain: updated.domain,
-										description: updated.description,
-										servings: updated.servings,
-										ingredients: updated.ingredients.map((i) => ({
-											ingredientName: i.ingredientName,
-											quantity: i.quantity,
-											unit: i.unit,
-										})),
-										tags: updated.tags,
-									},
-								},
-								null,
-								2,
-							),
-						},
-					],
-				};
-			} catch (e) {
-				log.error("[MCP] Tool error", e);
-				return {
-					content: [
-						{
-							type: "text",
-							text: publicErrorMessageForTool(e),
-						},
-					],
-				};
-			}
+	server.tool(
+		"mark_supply_purchased",
+		"Mark a supply list item as purchased or unpurchased.",
+		{
+			itemId: z.string().uuid(),
+			purchased: z.boolean(),
 		},
+		async (args: { itemId: string; purchased: boolean }) =>
+			makeTool({
+				name: "mark_supply_purchased",
+				scopes: ["mcp:supply:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const list = await ensureSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return err(
+							"mark_supply_purchased",
+							"internal_error",
+							"Could not locate or create supply list.",
+						);
+					}
+					const item = await updateSupplyItem(
+						env.DB,
+						ctx.organizationId,
+						list.id,
+						a.itemId,
+						{ isPurchased: a.purchased },
+					);
+					if (!item) {
+						return err(
+							"mark_supply_purchased",
+							"not_found",
+							`Item ${a.itemId} not found on supply list.`,
+						);
+					}
+					return ok("mark_supply_purchased", {
+						itemId: item.id,
+						name: item.name,
+						isPurchased: item.isPurchased,
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"sync_supply_from_selected_meals",
+		"Rebuild the shopping list from this week's meal plan + Galley active selections (same as Supply → Update list). Uses semantic matching vs pantry; may call Vectorize. Rate-limited separately from regular writes.",
+		{
+			unitMode: z.enum(["metric", "imperial"]).optional(),
+		},
+		async (args: { unitMode?: "metric" | "imperial" }) =>
+			makeTool({
+				name: "sync_supply_from_selected_meals",
+				scopes: ["mcp:supply:write"],
+				rateLimitCategory: "mcp_supply_sync",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const result = await createSupplyListFromSelectedMeals(
+						env,
+						ctx.organizationId,
+						undefined,
+						{ trigger: "mcp_sync_supply", organizationId: ctx.organizationId },
+						a.unitMode ?? "metric",
+					);
+					const list = result.list;
+					if (!list) {
+						return err(
+							"sync_supply_from_selected_meals",
+							"internal_error",
+							"Supply sync did not return a list.",
+						);
+					}
+					const fullList = await getSupplyListById(
+						env.DB,
+						ctx.organizationId,
+						list.id,
+					);
+					return ok("sync_supply_from_selected_meals", {
+						listId: list.id,
+						summary: result.summary,
+						itemCount: fullList?.items.length ?? 0,
+					});
+				},
+			})(env, args),
+	);
+
+	server.tool(
+		"complete_supply_list",
+		"Dock all purchased items from the active supply list into pantry inventory and remove them from the list. Destructive — pass confirm:true.",
+		{ confirm: z.boolean() },
+		async (args: { confirm: boolean }) =>
+			makeTool({
+				name: "complete_supply_list",
+				scopes: ["mcp:supply:write", "mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					if (!a.confirm) {
+						return err(
+							"complete_supply_list",
+							"invalid_input",
+							"Pass confirm:true to dock purchased items into the pantry.",
+						);
+					}
+					const list = await ensureSupplyList(env.DB, ctx.organizationId);
+					if (!list) {
+						return err(
+							"complete_supply_list",
+							"internal_error",
+							"Could not locate supply list.",
+						);
+					}
+					const result = await completeSupplyList(
+						env,
+						ctx.organizationId,
+						list.id,
+					);
+					return ok("complete_supply_list", result);
+				},
+			})(env, args),
+	);
+
+	// ─── User Preferences ────────────────────────────────────────────────────
+
+	server.tool(
+		"get_user_preferences",
+		"Return the calling user's allergens, expirationAlertDays, theme, manifest defaults, and other settings stored in user.settings.",
+		{},
+		async () =>
+			makeTool({
+				name: "get_user_preferences",
+				scopes: ["mcp:read"],
+				rateLimitCategory: "mcp_list",
+				audit: false,
+				handler: async (ctx) => {
+					const settings = await getUserSettings(env.DB, ctx.userId);
+					return ok("get_user_preferences", settings);
+				},
+			})(env, {}),
+	);
+
+	server.tool(
+		"update_user_preferences",
+		"Patch the calling user's settings (allergens, expirationAlertDays, theme, manifestSettings). Only provided fields are updated.",
+		{
+			allergens: z.array(z.string()).optional(),
+			expirationAlertDays: z.number().int().min(0).max(365).optional(),
+			theme: z.enum(["light", "dark"]).optional(),
+		},
+		async (args: {
+			allergens?: string[];
+			expirationAlertDays?: number;
+			theme?: "light" | "dark";
+		}) =>
+			makeTool({
+				name: "update_user_preferences",
+				scopes: ["mcp:preferences:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					// We trust types but cast allergens for compatibility with AllergenSlug.
+					const patch: Record<string, unknown> = {};
+					if (a.allergens !== undefined) patch.allergens = a.allergens;
+					if (a.expirationAlertDays !== undefined)
+						patch.expirationAlertDays = a.expirationAlertDays;
+					if (a.theme !== undefined) patch.theme = a.theme;
+					if (Object.keys(patch).length === 0) {
+						return err(
+							"update_user_preferences",
+							"invalid_input",
+							"Provide at least one of: allergens, expirationAlertDays, theme.",
+						);
+					}
+					await patchUserSettings(env.DB, ctx.userId, patch as never);
+					const settings = await getUserSettings(env.DB, ctx.userId);
+					return ok("update_user_preferences", settings);
+				},
+			})(env, args),
 	);
 }

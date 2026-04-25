@@ -102,13 +102,27 @@ export async function verifyApiKey(
 	};
 }
 
-/** Supported API key scopes for programmatic access. */
+/**
+ * Supported API key scopes for programmatic access.
+ *
+ * Legacy `mcp` implies all `mcp:*` scopes — keys created before fine-grained
+ * scopes existed continue to work as full-access MCP keys. New keys can be
+ * created with one or more narrow `mcp:*` scopes for least-privilege access.
+ */
 export const API_SCOPES = {
 	inventory: "inventory",
 	galley: "galley",
 	supply: "supply",
 	mcp: "mcp",
+	"mcp:read": "mcp:read",
+	"mcp:inventory:write": "mcp:inventory:write",
+	"mcp:galley:write": "mcp:galley:write",
+	"mcp:manifest:write": "mcp:manifest:write",
+	"mcp:supply:write": "mcp:supply:write",
+	"mcp:preferences:write": "mcp:preferences:write",
 } as const;
+
+export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];
 
 const INVENTORY_SCOPE = API_SCOPES.inventory;
 

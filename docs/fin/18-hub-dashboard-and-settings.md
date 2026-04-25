@@ -23,7 +23,7 @@ Paths match the live app routing; if URLs change, follow navigation inside the p
 
 - **Display name and avatar**
 - **Allergens and units** (where shown)
-- **API keys** for REST and MCP—see *API key safety* and *MCP overview*
+- **API keys** for REST and MCP (including fine-grained **`mcp:*`** scopes)—see *API key safety*, *MCP overview*, and *REST API (v1) overview*
 - **Group management**: roles, invitations (when tier allows), ownership transfer, credit transfer (owner-only flows as labeled)
 - **Billing portal** link when available from pricing or settings actions
 - **Purge account** (irreversible)—read warnings carefully

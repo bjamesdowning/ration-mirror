@@ -151,6 +151,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 8,
 		keyPrefix: "rate:mcp_supply_sync",
 	},
+	mcp_write_per_key: {
+		windowMs: 60_000, // 1 minute — per-API-key cap (defends against stolen keys)
+		maxRequests: 15,
+		keyPrefix: "rate:mcp_write_key",
+	},
 	credits_transfer: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

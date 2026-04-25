@@ -215,6 +215,136 @@ export async function getMeals(
 }
 
 /**
+ * Cursor-paginated meal fetch using `(createdAt desc, id asc)` ordering.
+ *
+ * Mirrors `getMeals` filters (tag, domain) but returns at most `limit` rows
+ * and a `nextCursor` if more remain. The caller encodes/decodes the cursor
+ * (see `app/lib/mcp/envelope.ts`).
+ *
+ * Set `includeIngredients: false` to skip the ingredient fan-out — useful for
+ * agents that only need the index of meal names/ids.
+ */
+export async function getMealsPage(
+	db: D1Database,
+	organizationId: string,
+	options: {
+		limit: number;
+		cursor?: { createdAt: Date; id: string } | null;
+		tag?: string;
+		domain?: (typeof meal.$inferSelect)["domain"];
+		includeIngredients?: boolean;
+	},
+) {
+	const d1 = drizzle(db);
+	const includeIngredients = options.includeIngredients ?? true;
+	const conditions = [eq(meal.organizationId, organizationId)];
+	if (options.tag) conditions.push(eq(mealTag.tag, options.tag));
+	if (options.domain) conditions.push(eq(meal.domain, options.domain));
+	if (options.cursor) {
+		const cursorClause = or(
+			lt(meal.createdAt, options.cursor.createdAt),
+			and(
+				eq(meal.createdAt, options.cursor.createdAt),
+				gt(meal.id, options.cursor.id),
+			),
+		);
+		if (cursorClause) conditions.push(cursorClause);
+	}
+
+	const projection = {
+		id: meal.id,
+		organizationId: meal.organizationId,
+		name: meal.name,
+		domain: meal.domain,
+		type: meal.type,
+		description: meal.description,
+		directions: meal.directions,
+		equipment: meal.equipment,
+		servings: meal.servings,
+		prepTime: meal.prepTime,
+		cookTime: meal.cookTime,
+		customFields: meal.customFields,
+		createdAt: meal.createdAt,
+		updatedAt: meal.updatedAt,
+	} as const;
+
+	const rows = options.tag
+		? await d1
+				.select(projection)
+				.from(meal)
+				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+				.where(and(...conditions))
+				.orderBy(desc(meal.createdAt), asc(meal.id))
+				.limit(options.limit + 1)
+		: await d1
+				.select(projection)
+				.from(meal)
+				.where(and(...conditions))
+				.orderBy(desc(meal.createdAt), asc(meal.id))
+				.limit(options.limit + 1);
+
+	const hasMore = rows.length > options.limit;
+	const meals = hasMore ? rows.slice(0, options.limit) : rows;
+	const last = meals[meals.length - 1];
+	const nextCursor =
+		hasMore && last ? { createdAt: last.createdAt, id: last.id } : null;
+
+	if (meals.length === 0) {
+		return {
+			items: [] as Array<
+				(typeof meals)[number] & {
+					tags: string[];
+					ingredients: (typeof mealIngredient.$inferSelect)[];
+				}
+			>,
+			nextCursor,
+		};
+	}
+
+	const mealIds = meals.map((m) => m.id);
+	const [allTags, allIngredients] = await Promise.all([
+		chunkedQuery(mealIds, (chunk) =>
+			d1
+				.select({ mealId: mealTag.mealId, tag: mealTag.tag })
+				.from(mealTag)
+				.where(inArray(mealTag.mealId, chunk)),
+		),
+		includeIngredients
+			? chunkedQuery(mealIds, (chunk) =>
+					d1
+						.select()
+						.from(mealIngredient)
+						.where(inArray(mealIngredient.mealId, chunk))
+						.orderBy(mealIngredient.orderIndex),
+				)
+			: Promise.resolve([] as (typeof mealIngredient.$inferSelect)[]),
+	]);
+
+	const tagsByMealId = new Map<string, string[]>();
+	for (const t of allTags) {
+		const existing = tagsByMealId.get(t.mealId) || [];
+		existing.push(t.tag);
+		tagsByMealId.set(t.mealId, existing);
+	}
+	const ingredientsByMealId = new Map<
+		string,
+		(typeof mealIngredient.$inferSelect)[]
+	>();
+	for (const ing of allIngredients) {
+		const existing = ingredientsByMealId.get(ing.mealId) || [];
+		existing.push(ing);
+		ingredientsByMealId.set(ing.mealId, existing);
+	}
+
+	const items = meals.map((m) => ({
+		...m,
+		tags: tagsByMealId.get(m.id) || [],
+		ingredients: includeIngredients ? ingredientsByMealId.get(m.id) || [] : [],
+	}));
+	return { items, nextCursor };
+}
+
+/**
  * Retrieves a single meal by ID, including its ingredients and tags.
  * Uses a batch query to avoid N+1 issues and reduce round-trips.
  */

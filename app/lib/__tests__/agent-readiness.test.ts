@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Mock cloudflare:workers used by api-key.server (transitively imported below).
+vi.mock("cloudflare:workers", () => ({ waitUntil: vi.fn() }));
+
 import {
+	AGENT_API_SCOPES,
 	AGENT_DISCOVERY_LINK_HEADER,
 	buildAgentSkillMarkdown,
 	buildAgentSkillsIndex,
@@ -8,9 +13,11 @@ import {
 	buildOpenApiDocument,
 	buildProtectedResourceMetadata,
 	getPublicMarkdownForPath,
+	MCP_TOOL_GROUPS,
 	markdownResponse,
 	wantsMarkdown,
 } from "../agent-readiness";
+import { API_SCOPES } from "../api-key.server";
 
 const request = new Request("https://ration.mayutic.com/");
 
@@ -99,6 +106,37 @@ describe("agent readiness metadata", () => {
 		expect(card.capabilities.tools[3].tools).toContain(
 			"sync_supply_from_selected_meals",
 		);
+	});
+
+	it("AGENT_API_SCOPES is in sync with API_SCOPES (no drift)", () => {
+		// Every advertised scope must exist in the canonical scope list.
+		for (const scope of AGENT_API_SCOPES) {
+			expect(Object.values(API_SCOPES)).toContain(scope);
+		}
+		// And every API scope must be advertised in discovery (so agents
+		// requesting a key via UI can pick the right one).
+		for (const scope of Object.values(API_SCOPES)) {
+			expect(AGENT_API_SCOPES).toContain(scope);
+		}
+	});
+
+	it("MCP_TOOL_GROUPS lists every tool exactly once", () => {
+		const seen = new Set<string>();
+		const dupes: string[] = [];
+		for (const group of MCP_TOOL_GROUPS) {
+			for (const tool of group.tools) {
+				if (seen.has(tool)) dupes.push(tool);
+				seen.add(tool);
+			}
+		}
+		expect(dupes).toEqual([]);
+	});
+
+	it("MCP_TOOL_GROUPS does not advertise the no-credit-banned tools", () => {
+		const allTools = MCP_TOOL_GROUPS.flatMap((g) => [...g.tools]);
+		expect(allTools).not.toContain("get_credit_balance");
+		expect(allTools).not.toContain("scan_receipt");
+		expect(allTools).not.toContain("generate_meals");
 	});
 
 	it("publishes agent skills with matching sha256 digests", async () => {

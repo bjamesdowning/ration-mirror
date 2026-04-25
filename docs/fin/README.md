@@ -20,7 +20,7 @@ Map article groups to Intercom collections for navigation and Fin grounding:
 ## Authoring rules
 
 - Prefer **Settings** and **screen names** over repository file paths in article bodies. Reserve file paths for advanced MCP/API articles if needed.
-- Keep **credit costs**, **tier limits**, and **MCP tool names** in small tables so retrieval stays precise.
+- Keep **credit costs**, **tier limits**, **API scopes** (`inventory` / `galley` / `supply` / `mcp` / `mcp:*`), and **MCP tool names** in small tables so retrieval stays precise.
 - When user-visible behavior changes, update the relevant `docs/fin/*.md` in the same change as README or product updates when possible.
 - **Do not** paste internal-only paths or secrets to customers during support unless troubleshooting with a technical user.
 

@@ -21,7 +21,7 @@ Deductions are applied safely at the database layer so you cannot go **negative*
 
 ## What does **not** use AI credits
 
-- **MCP tool calls** (read and write) **do not** debit AI credits. MCP has its own **rate limits** per organization.
+- **MCP tool calls** (read and write) **do not** debit AI credits. MCP uses **rate limits** instead (per organization and, for writes, an additional cap **per API key**) — see *Limits and rate limits*.
 - Ordinary CRUD in the hub (manual cargo, manual recipes) does not spend credits unless tied to an AI feature above.
 
 ## Buying more

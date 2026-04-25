@@ -1,14 +1,36 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MCP_TOOL_GROUPS } from "~/lib/agent-readiness";
 import { createMockEnv } from "~/test/helpers/mock-env";
 import { registerTools } from "../tools";
 
 vi.mock("~/lib/cargo.server", () => ({
 	getCargo: vi.fn(),
 	getCargoByIds: vi.fn(),
+	getCargoItem: vi.fn(),
+	getCargoPage: vi.fn(),
 	ingestCargoItems: vi.fn(),
 	jettisonItem: vi.fn(),
 	updateItem: vi.fn(),
+}));
+
+vi.mock("~/lib/auth.server", () => ({
+	getUserSettings: vi.fn().mockResolvedValue({}),
+	patchUserSettings: vi.fn(),
+}));
+
+vi.mock("~/lib/inventory-import.server", () => ({
+	previewInventoryImport: vi.fn(),
+	applyInventoryImport: vi.fn(),
+	importInventoryCsv: vi.fn(),
+	getInventoryImportSchema: vi.fn(() => ({ maxRows: 500, fields: {} })),
+}));
+
+vi.mock("~/lib/meal-selection.server", () => ({
+	clearMealSelections: vi.fn(),
+	getActiveMealSelections: vi.fn().mockResolvedValue([]),
+	upsertMealSelection: vi.fn(),
+	validateMealOwnership: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("~/lib/manifest.server", () => ({
@@ -27,9 +49,11 @@ vi.mock("~/lib/matching.server", () => ({
 
 vi.mock("~/lib/meals.server", () => ({
 	getMeals: vi.fn(),
+	getMealsPage: vi.fn(),
 	cookMeal: vi.fn(),
 	updateMeal: vi.fn(),
 	createMeal: vi.fn(),
+	deleteMeal: vi.fn(),
 }));
 
 vi.mock("~/lib/ledger.server", () => ({
@@ -48,6 +72,7 @@ vi.mock("~/lib/supply.server", () => ({
 	updateSupplyItem: vi.fn(),
 	deleteSupplyItem: vi.fn(),
 	createSupplyListFromSelectedMeals: vi.fn(),
+	completeSupplyList: vi.fn(),
 }));
 
 vi.mock("~/lib/vector.server", () => ({
@@ -65,9 +90,8 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
-const { getCargo, ingestCargoItems, jettisonItem, updateItem } = await import(
-	"~/lib/cargo.server"
-);
+const { getCargoPage, ingestCargoItems, jettisonItem, updateItem } =
+	await import("~/lib/cargo.server");
 const { checkBalance } = await import("~/lib/ledger.server");
 const {
 	ensureMealPlan,
@@ -78,7 +102,7 @@ const {
 	getWeekEntries,
 } = await import("~/lib/manifest.server");
 const { matchMeals } = await import("~/lib/matching.server");
-const { getMeals, cookMeal, updateMeal, createMeal } = await import(
+const { getMealsPage, cookMeal, updateMeal, createMeal } = await import(
 	"~/lib/meals.server"
 );
 const { checkRateLimit } = await import("~/lib/rate-limiter.server");
@@ -93,6 +117,28 @@ const {
 } = await import("~/lib/supply.server");
 const { drizzle } = await import("drizzle-orm/d1");
 const { findSimilarCargoBatch } = await import("~/lib/vector.server");
+
+/**
+ * Parses the MCP envelope from a tool response. Returns `data` on success,
+ * throws on `ok: false` so tests can use `.toThrow()` for error paths.
+ */
+function parseOk(result: { content: Array<{ type: string; text: string }> }) {
+	const text = result.content[0]?.text ?? "{}";
+	const parsed = JSON.parse(text);
+	if (parsed?.ok === false) {
+		throw new Error(
+			`Envelope ok=false: ${parsed.error?.code} ${parsed.error?.message}`,
+		);
+	}
+	return parsed?.data;
+}
+
+function parseEnvelope(result: {
+	content: Array<{ type: string; text: string }>;
+}) {
+	const text = result.content[0]?.text ?? "{}";
+	return JSON.parse(text);
+}
 
 function getToolHandler(
 	server: McpServer,
@@ -121,9 +167,23 @@ function getToolHandler(
 
 /** Returns a fresh server with all tools registered */
 function makeServer(orgId = "org-test-123") {
-	const mockEnv = { ...createMockEnv(), __orgId: orgId };
+	const mockEnv = {
+		...createMockEnv(),
+		__orgId: orgId,
+		__mcp: {
+			organizationId: orgId,
+			apiKeyId: "key-test-123",
+			userId: "user-test-123",
+			keyName: "Test Key",
+			keyPrefix: "ration_test",
+			scopes: ["mcp"], // legacy full scope
+		},
+	};
 	const server = new McpServer({ name: "test", version: "1.0.0" });
-	registerTools(server, mockEnv);
+	registerTools(
+		server,
+		mockEnv as unknown as Parameters<typeof registerTools>[1],
+	);
 	return server;
 }
 
@@ -159,27 +219,59 @@ describe("MCP tools", () => {
 			expect(findSimilarCargoBatch).not.toHaveBeenCalled();
 		});
 
-		it("returns no-ingredients message when no Vectorize matches", async () => {
+		it("returns empty matches when no Vectorize matches", async () => {
 			vi.mocked(findSimilarCargoBatch).mockResolvedValue(new Map());
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
 				"search_ingredients",
 			)({ query: "unicorn dust" });
-			expect(result.content[0]?.text).toBe(
-				'No ingredients found matching "unicorn dust"',
-			);
+			const data = parseOk(result);
+			expect(data.matches).toEqual([]);
 		});
 	});
 
 	describe("list_inventory", () => {
-		it("returns JSON for normal inventory", async () => {
-			vi.mocked(getCargo).mockResolvedValueOnce([
-				{
-					id: "c1",
-					name: "flour",
-					quantity: 500,
-					unit: "g",
+		it("returns envelope with items and nextCursor=null for small page", async () => {
+			vi.mocked(getCargoPage).mockResolvedValueOnce({
+				items: [
+					{
+						id: "c1",
+						name: "flour",
+						quantity: 500,
+						unit: "g",
+						domain: "food",
+						tags: [],
+						status: "stable",
+						expiresAt: null,
+						organizationId: "org-test-123",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				],
+				nextCursor: null,
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(server, "list_inventory")({});
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(true);
+			expect(env.data).toHaveLength(1);
+			expect(env.data[0]).toMatchObject({
+				id: "c1",
+				name: "flour",
+				quantity: 500,
+				unit: "g",
+			});
+			expect(env.meta?.nextCursor).toBeNull();
+		});
+
+		it("returns nextCursor when more pages remain", async () => {
+			vi.mocked(getCargoPage).mockResolvedValueOnce({
+				items: Array.from({ length: 100 }, (_, i) => ({
+					id: `c${i}`,
+					name: `item-${i}`,
+					quantity: 1,
+					unit: "pc",
 					domain: "food",
 					tags: [],
 					status: "stable",
@@ -187,55 +279,26 @@ describe("MCP tools", () => {
 					organizationId: "org-test-123",
 					createdAt: new Date(),
 					updatedAt: new Date(),
-				},
-			]);
+				})),
+				nextCursor: { createdAt: new Date("2026-01-01"), id: "c99" },
+			} as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "list_inventory")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "[]");
-			expect(parsed).toHaveLength(1);
-			expect(parsed[0]).toMatchObject({
-				id: "c1",
-				name: "flour",
-				quantity: 500,
-				unit: "g",
-			});
-			expect(result.content[0]?.text).not.toContain("truncated");
-		});
-
-		it("truncates at 501 items and appends note", async () => {
-			const manyItems = Array.from({ length: 501 }, (_, i) => ({
-				id: `c${i}`,
-				name: `item-${i}`,
-				quantity: 1,
-				unit: "pc",
-				domain: "food" as const,
-				tags: [] as string[],
-				status: "stable" as const,
-				expiresAt: null as Date | null,
-				organizationId: "org-test-123",
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			}));
-			vi.mocked(getCargo).mockResolvedValueOnce(manyItems);
-			const server = makeServer();
-			const result = await getToolHandler(server, "list_inventory")({});
-			const rawText = result.content[0]?.text ?? "[]";
-			const parsed = JSON.parse(
-				rawText.replace(/\n\n\[Results truncated:.*\]$/, ""),
-			);
-			expect(parsed).toHaveLength(500);
-			expect(result.content[0]?.text).toContain(
-				"[Results truncated: showing 500 of 501 items",
-			);
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(true);
+			expect(env.data).toHaveLength(100);
+			expect(env.meta?.nextCursor).toBeTruthy();
 		});
 	});
 
 	describe("get_supply_list", () => {
-		it("returns no-active-supply-list when getSupplyList returns null", async () => {
+		it("returns null data when getSupplyList returns null", async () => {
 			vi.mocked(getSupplyList).mockResolvedValueOnce(null);
 			const server = makeServer();
 			const result = await getToolHandler(server, "get_supply_list")({});
-			expect(result.content[0]?.text).toBe("No active supply list found.");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(true);
+			expect(env.data).toBeNull();
 			expect(getSupplyListById).not.toHaveBeenCalled();
 		});
 	});
@@ -249,11 +312,13 @@ describe("MCP tools", () => {
 			expect(getMealPlan).not.toHaveBeenCalled();
 		});
 
-		it("returns no-active-meal-plan when getMealPlan returns null", async () => {
+		it("returns null data when getMealPlan returns null", async () => {
 			vi.mocked(getMealPlan).mockResolvedValueOnce(null);
 			const server = makeServer();
 			const result = await getToolHandler(server, "get_meal_plan")({});
-			expect(result.content[0]?.text).toBe("No active meal plan found.");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(true);
+			expect(env.data).toBeNull();
 			expect(getWeekEntries).not.toHaveBeenCalled();
 		});
 
@@ -287,11 +352,11 @@ describe("MCP tools", () => {
 
 			const server = makeServer();
 			const result = await getToolHandler(server, "get_meal_plan")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.planId).toBe("plan-1");
-			expect(parsed.planName).toBe("Meal Plan");
-			expect(parsed.entries).toHaveLength(1);
-			expect(parsed.entries[0]).toMatchObject({
+			const data = parseOk(result);
+			expect(data.planId).toBe("plan-1");
+			expect(data.planName).toBe("Meal Plan");
+			expect(data.entries).toHaveLength(1);
+			expect(data.entries[0]).toMatchObject({
 				mealName: "Oatmeal",
 				slotType: "breakfast",
 				servings: 2,
@@ -328,13 +393,14 @@ describe("MCP tools", () => {
 
 	describe("list_meals", () => {
 		it("returns empty array when no meals", async () => {
-			vi.mocked(getMeals).mockResolvedValueOnce([]);
+			vi.mocked(getMealsPage).mockResolvedValueOnce({
+				items: [],
+				nextCursor: null,
+			} as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "list_meals")({});
-			const text = result.content[0]?.text ?? "[]";
-			const parsed = JSON.parse(text);
-			expect(parsed).toEqual([]);
-			expect(result.content[0]?.text).not.toContain("truncated");
+			const data = parseOk(result);
+			expect(data).toEqual([]);
 		});
 
 		it("returns full meal shape with directions, equipment, ingredientName", async () => {
@@ -365,12 +431,15 @@ describe("MCP tools", () => {
 					],
 				},
 			];
-			vi.mocked(getMeals).mockResolvedValueOnce(mockMeals as never);
+			vi.mocked(getMealsPage).mockResolvedValueOnce({
+				items: mockMeals,
+				nextCursor: null,
+			} as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "list_meals")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "[]");
-			expect(parsed).toHaveLength(1);
-			expect(parsed[0]).toMatchObject({
+			const data = parseOk(result);
+			expect(data).toHaveLength(1);
+			expect(data[0]).toMatchObject({
 				id: "meal-1",
 				name: "pancakes",
 				domain: "food",
@@ -379,7 +448,7 @@ describe("MCP tools", () => {
 				prepTime: 5,
 				cookTime: 10,
 			});
-			expect(parsed[0].ingredients[0]).toMatchObject({
+			expect(data[0].ingredients[0]).toMatchObject({
 				ingredientName: "flour",
 				quantity: 200,
 				unit: "g",
@@ -420,8 +489,8 @@ describe("MCP tools", () => {
 				server,
 				"add_supply_item",
 			)({ name: "milk", quantity: 2, unit: "l" });
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.added).toMatchObject({
+			const data = parseOk(result);
+			expect(data).toMatchObject({
 				id: "item-1",
 				name: "milk",
 				quantity: 2,
@@ -504,8 +573,8 @@ describe("MCP tools", () => {
 			)({
 				itemId: "00000000-0000-0000-0000-000000000001",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.removed).toBe(true);
+			const data = parseOk(result);
+			expect(data.removed).toBe(true);
 		});
 	});
 
@@ -537,8 +606,8 @@ describe("MCP tools", () => {
 				itemId: "00000000-0000-0000-0000-000000000001",
 				purchased: true,
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.isPurchased).toBe(true);
+			const data = parseOk(result);
+			expect(data.isPurchased).toBe(true);
 		});
 	});
 
@@ -568,9 +637,9 @@ describe("MCP tools", () => {
 				server,
 				"add_cargo_item",
 			)({ name: "oat milk", quantity: 1, unit: "l" });
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.status).toBe("created");
-			expect(parsed.item?.name).toBe("oat milk");
+			const data = parseOk(result);
+			expect(data.status).toBe("created");
+			expect(data.item?.name).toBe("oat milk");
 			expect(ingestCargoItems).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
@@ -594,8 +663,7 @@ describe("MCP tools", () => {
 			expect(jettisonItem).not.toHaveBeenCalled();
 		});
 
-		it("removes item and returns confirmation", async () => {
-			vi.mocked(jettisonItem).mockResolvedValueOnce(undefined as never);
+		it("requires confirm:true to actually delete", async () => {
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -603,8 +671,24 @@ describe("MCP tools", () => {
 			)({
 				itemId: "00000000-0000-0000-0000-000000000001",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.removed).toBe(true);
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("invalid_input");
+			expect(jettisonItem).not.toHaveBeenCalled();
+		});
+
+		it("removes item and returns confirmation when confirm:true", async () => {
+			vi.mocked(jettisonItem).mockResolvedValueOnce(undefined as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"remove_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				confirm: true,
+			});
+			const data = parseOk(result);
+			expect(data.removed).toBe(true);
 		});
 	});
 
@@ -631,12 +715,12 @@ describe("MCP tools", () => {
 			)({
 				mealId: "00000000-0000-0000-0000-000000000001",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.consumed).toBe(true);
-			expect(parsed.note).toContain("deducted");
+			const data = parseOk(result);
+			expect(data.consumed).toBe(true);
+			expect(data.note).toContain("deducted");
 		});
 
-		it("surfaces insufficient-cargo errors clearly", async () => {
+		it("surfaces insufficient-cargo errors via envelope", async () => {
 			vi.mocked(cookMeal).mockRejectedValueOnce(
 				new Error("Insufficient Cargo for: potatoes, bacon lardons"),
 			);
@@ -647,8 +731,10 @@ describe("MCP tools", () => {
 			)({
 				mealId: "00000000-0000-0000-0000-000000000001",
 			});
-			expect(result.content[0]?.text).toContain("Cannot cook meal");
-			expect(result.content[0]?.text).toContain("potatoes");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("insufficient_cargo");
+			expect(env.error.message).toContain("potatoes");
 		});
 	});
 
@@ -690,10 +776,10 @@ describe("MCP tools", () => {
 				date: "2026-03-10",
 				slotType: "dinner",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.added.entryId).toBe("entry-1");
-			expect(parsed.added.mealName).toBe("Beef Burritos");
-			expect(parsed.added.date).toBe("2026-03-10");
+			const data = parseOk(result);
+			expect(data.entryId).toBe("entry-1");
+			expect(data.mealName).toBe("Beef Burritos");
+			expect(data.date).toBe("2026-03-10");
 		});
 	});
 
@@ -723,8 +809,8 @@ describe("MCP tools", () => {
 			)({
 				entryId: "00000000-0000-0000-0000-000000000001",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.removed).toBe(true);
+			const data = parseOk(result);
+			expect(data.removed).toBe(true);
 			expect(deleteEntry).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
@@ -733,7 +819,7 @@ describe("MCP tools", () => {
 			);
 		});
 
-		it("returns removed false when entry missing", async () => {
+		it("returns not_found error when entry missing", async () => {
 			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
 				id: "plan-1",
 			} as never);
@@ -745,8 +831,9 @@ describe("MCP tools", () => {
 			)({
 				entryId: "00000000-0000-0000-0000-000000000001",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.removed).toBe(false);
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("not_found");
 		});
 	});
 
@@ -776,7 +863,7 @@ describe("MCP tools", () => {
 			expect(result.content[0]?.text).toContain("Provide at least one");
 		});
 
-		it("returns not found when no matching entry", async () => {
+		it("returns not_found error when no matching entry", async () => {
 			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
 				id: "plan-1",
 			} as never);
@@ -788,12 +875,12 @@ describe("MCP tools", () => {
 				entryId: "00000000-0000-0000-0000-000000000001",
 				date: "2026-03-12",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.updated).toBe(false);
-			expect(parsed.reason).toContain("not found");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("not_found");
 		});
 
-		it("returns updated false when entry is already consumed", async () => {
+		it("returns conflict when entry is already consumed", async () => {
 			vi.mocked(ensureMealPlan).mockResolvedValueOnce({
 				id: "plan-1",
 			} as never);
@@ -814,9 +901,9 @@ describe("MCP tools", () => {
 				entryId: "00000000-0000-0000-0000-000000000001",
 				date: "2026-03-12",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.updated).toBe(false);
-			expect(parsed.reason).toContain("consumed");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("conflict");
 			expect(updateEntry).not.toHaveBeenCalled();
 		});
 
@@ -851,8 +938,8 @@ describe("MCP tools", () => {
 				entryId: "00000000-0000-0000-0000-000000000001",
 				date: "2026-03-12",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.updated.entryId).toBe("entry-1");
+			const data = parseOk(result);
+			expect(data.entryId).toBe("entry-1");
 			expect(updateEntry).toHaveBeenCalled();
 		});
 	});
@@ -888,9 +975,9 @@ describe("MCP tools", () => {
 				server,
 				"sync_supply_from_selected_meals",
 			)({ unitMode: "metric" });
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.summary.addedItems).toBe(3);
-			expect(parsed.itemCount).toBe(3);
+			const data = parseOk(result);
+			expect(data.summary.addedItems).toBe(3);
+			expect(data.itemCount).toBe(3);
 			expect(createSupplyListFromSelectedMeals).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
@@ -942,8 +1029,8 @@ describe("MCP tools", () => {
 					],
 				},
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.created.id).toBe("new-meal-id");
+			const data = parseOk(result);
+			expect(data.id).toBe("new-meal-id");
 			expect(createMeal).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
@@ -975,21 +1062,21 @@ describe("MCP tools", () => {
 			] as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "match_meals")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "[]");
-			expect(parsed).toHaveLength(1);
-			expect(parsed[0]?.mealName).toBe("Bacon Skillet");
-			expect(parsed[0]?.canMake).toBe(true);
+			const data = parseOk(result);
+			expect(data).toHaveLength(1);
+			expect(data[0]?.mealName).toBe("Bacon Skillet");
+			expect(data[0]?.canMake).toBe(true);
 		});
 
-		it("suggests delta mode when no strict matches", async () => {
+		it("returns empty array when no strict matches", async () => {
 			vi.mocked(matchMeals).mockResolvedValueOnce([] as never);
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
 				"match_meals",
 			)({ mode: "strict" });
-			expect(result.content[0]?.text).toContain("No meals match");
-			expect(result.content[0]?.text).toContain("mode='delta'");
+			const data = parseOk(result);
+			expect(data).toEqual([]);
 		});
 	});
 
@@ -1001,43 +1088,27 @@ describe("MCP tools", () => {
 			expect(result.content[0]?.text).toContain("Rate limit exceeded");
 		});
 
-		it("returns no-expiring message when list empty", async () => {
+		it("returns empty array when no expiring items", async () => {
 			// drizzle mock returns [] by default via vi.mock("drizzle-orm/d1") above
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
 				"get_expiring_items",
 			)({ days: 7 });
-			expect(result.content[0]?.text).toContain("No items expiring");
+			const data = parseOk(result);
+			expect(data).toEqual([]);
 		});
 	});
 
-	// ── New Credit / Cargo Tools ─────────────────────────────────────────────
-
-	describe("get_credit_balance", () => {
-		it("blocks when rate limited", async () => {
-			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
+	// get_credit_balance was intentionally removed: MCP must not surface
+	// UI-only credit/AI features. See plan Phase 1 (defects) and Phase 7.
+	describe("get_credit_balance (removed)", () => {
+		it("is no longer registered as an MCP tool", () => {
 			const server = makeServer();
-			const result = await getToolHandler(server, "get_credit_balance")({});
-			expect(result.content[0]?.text).toContain("Rate limit exceeded");
-			expect(checkBalance).not.toHaveBeenCalled();
-		});
-
-		it("returns balance and currency", async () => {
-			vi.mocked(checkBalance).mockResolvedValueOnce(42);
-			const server = makeServer();
-			const result = await getToolHandler(server, "get_credit_balance")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.balance).toBe(42);
-			expect(parsed.currency).toBe("credits");
-		});
-
-		it("returns 0 when org has no credits", async () => {
-			vi.mocked(checkBalance).mockResolvedValueOnce(0);
-			const server = makeServer();
-			const result = await getToolHandler(server, "get_credit_balance")({});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.balance).toBe(0);
+			const s = server as unknown as {
+				_registeredTools: Record<string, unknown>;
+			};
+			expect(s._registeredTools.get_credit_balance).toBeUndefined();
 		});
 	});
 
@@ -1075,8 +1146,8 @@ describe("MCP tools", () => {
 				quantity: 0.4,
 				unit: "l",
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.updated).toMatchObject({
+			const data = parseOk(result);
+			expect(data).toMatchObject({
 				id: "c1",
 				quantity: 0.4,
 				unit: "l",
@@ -1089,7 +1160,7 @@ describe("MCP tools", () => {
 			);
 		});
 
-		it("returns not-found when updateItem returns null", async () => {
+		it("returns not_found error when updateItem returns null", async () => {
 			vi.mocked(updateItem).mockResolvedValueOnce(null as never);
 			const server = makeServer();
 			const result = await getToolHandler(
@@ -1099,7 +1170,9 @@ describe("MCP tools", () => {
 				itemId: "00000000-0000-0000-0000-000000000001",
 				quantity: 1,
 			});
-			expect(result.content[0]?.text).toContain("not found");
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("not_found");
 		});
 	});
 
@@ -1193,13 +1266,13 @@ describe("MCP tools", () => {
 			)({
 				meal: mealPayload,
 			});
-			const parsed = JSON.parse(result.content[0]?.text ?? "{}");
-			expect(parsed.updated).toMatchObject({
+			const data = parseOk(result);
+			expect(data).toMatchObject({
 				id: mealId,
 				name: "pancakes",
 				servings: 4,
 			});
-			expect(parsed.updated.ingredients[0]).toMatchObject({
+			expect(data.ingredients[0]).toMatchObject({
 				ingredientName: "flour",
 				quantity: 250,
 			});
@@ -1211,6 +1284,75 @@ describe("MCP tools", () => {
 					name: "pancakes",
 					ingredients: expect.any(Array),
 				}),
+			);
+		});
+	});
+
+	// ── No-Credit Boundary (regression) ──────────────────────────────────────
+	// MCP must NOT surface credit-consuming AI features. Receipt parsing
+	// happens in the agent's LLM; Ration only ingests pre-parsed structured
+	// items. Vector embeddings for cargo are skipped (skipVectorPhase: true).
+	describe("no-credit boundary", () => {
+		it("does not register get_credit_balance, scan, or generate tools", () => {
+			const server = makeServer();
+			const s = server as unknown as {
+				_registeredTools: Record<string, unknown>;
+			};
+			const banned = [
+				"get_credit_balance",
+				"scan_receipt",
+				"generate_meals",
+				"ai_meal_generate",
+			];
+			for (const name of banned) {
+				expect(s._registeredTools[name]).toBeUndefined();
+			}
+		});
+
+		it("checkBalance is never invoked from any registered tool path", async () => {
+			vi.mocked(checkBalance).mockClear();
+			const server = makeServer();
+			const tools = (
+				server as unknown as {
+					_registeredTools: Record<string, { handler: unknown }>;
+				}
+			)._registeredTools;
+			expect(Object.keys(tools).length).toBeGreaterThan(0);
+			expect(checkBalance).not.toHaveBeenCalled();
+		});
+
+		it("registered tools exactly match MCP_TOOL_GROUPS (no drift)", () => {
+			const server = makeServer();
+			const registered = Object.keys(
+				(
+					server as unknown as {
+						_registeredTools: Record<string, unknown>;
+					}
+				)._registeredTools,
+			).sort();
+			const advertised = MCP_TOOL_GROUPS.flatMap((g) => [...g.tools]).sort();
+			// Drift is bidirectional: agents should not see ghost tools, and
+			// real tools should be discoverable via /.well-known.
+			expect(registered).toEqual(advertised);
+		});
+
+		it("add_cargo_item passes skipVectorPhase:true to ingestCargoItems", async () => {
+			vi.mocked(ingestCargoItems).mockResolvedValueOnce([
+				{
+					status: "created",
+					item: { id: "c1", name: "x", quantity: 1, unit: "pc" },
+				} as never,
+			]);
+			const server = makeServer();
+			await getToolHandler(
+				server,
+				"add_cargo_item",
+			)({ name: "x", quantity: 1, unit: "pc" });
+			expect(ingestCargoItems).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				expect.any(Array),
+				expect.objectContaining({ skipVectorPhase: true }),
 			);
 		});
 	});

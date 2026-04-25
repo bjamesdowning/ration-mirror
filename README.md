@@ -1436,8 +1436,9 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | Meal mutations | userId | 60s | 30 | Write storm protection |
 | Supply list mutations | userId | 60s | 60 | Write storm protection (Hub Supply → Update list, REST) |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
-| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_credit_balance) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
+| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, inventory_import_schema, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
+| MCP write tools, per-key | apiKeyId | 60s | 15 | Compromised-key cap (mcp_write_per_key) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
@@ -1447,48 +1448,86 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 
 A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agents via the **Model Context Protocol (MCP)**. It runs at `mcp.ration.mayutic.com` and shares all storage bindings with the main Worker.
 
-**Authentication:** The MCP Worker accepts requests authenticated with a Ration API key (scope: `mcp`). The `authenticateMcp()` function in `app/lib/mcp/auth.ts` verifies the key via `requireApiKey()` and injects `__orgId` into the environment for all tool handlers. Internal errors are masked as `500 Internal Server Error`; auth errors surface their message to the caller.
+**Authentication:** The MCP Worker accepts requests authenticated with a Ration API key whose scopes include the legacy `mcp` scope **or** any of the fine-grained `mcp:*` scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`). The `authenticateMcp()` function in `app/lib/mcp/auth.ts` verifies the key via `verifyApiKey()` and injects an `McpToolContext` (organizationId, apiKeyId, userId, keyName, keyPrefix, scopes) into `env.__mcp` for all tool handlers. Internal errors are masked as `500 Internal Server Error`; auth errors surface their message to the caller.
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
-**Available tools:**
+**Tool envelope:** Every tool returns one `text` content item containing a uniform JSON envelope. Success: `{ ok: true, tool, data, warnings?, meta? }`. Error: `{ ok: false, tool, error: { code, message, details?, retryAfter? } }`. Error codes: `rate_limited`, `invalid_input`, `not_found`, `unauthorized`, `insufficient_scope`, `capacity_exceeded`, `conflict`, `idempotency_replay`, `internal_error`, `insufficient_cargo`. List tools support cursor pagination via `args.cursor` and `meta.nextCursor`.
 
-| Tool | Type | Description | Rate Category |
-|------|------|-------------|---------------|
-| `search_ingredients` | Read | Semantic vector search against the org's cargo (Vectorize, threshold 0.60 for agent-friendly recall) | mcp_search (20/min) |
-| `list_inventory` | Read | Full cargo listing, optionally filtered by `domain` (food/household/alcohol) | mcp_list (30/min) |
-| `get_supply_list` | Read | Active supply list with item names, quantities, units, and source meal names | mcp_list (30/min) |
-| `get_meal_plan` | Read | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
-| `list_meals` | Read | All meals/recipes with full data (ingredients, directions, equipment, etc.) for editing; optionally filtered by `tag` | mcp_list (30/min) |
-| `match_meals` | Read | Meals cookable from pantry (strict or delta mode, with missing-ingredient details) | mcp_search (20/min) |
-| `get_expiring_items` | Read | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
-| `get_credit_balance` | Read | Current AI credits for the organization | mcp_list (30/min) |
-| `add_supply_item` | Write | Add item to the active supply/shopping list | mcp_write (15/min) |
-| `update_supply_item` | Write | Update a supply list item (name, quantity, unit) | mcp_write (15/min) |
-| `remove_supply_item` | Write | Remove item from the supply list | mcp_write (15/min) |
-| `mark_supply_purchased` | Write | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
-| `add_cargo_item` | Write | Add item to the pantry (uses `skipVectorPhase` to avoid AI cost) | mcp_write (15/min) |
-| `update_cargo_item` | Write | Update pantry item (name, quantity, unit, expiry, domain, tags) | mcp_write (15/min) |
-| `update_meal` | Write | Update any aspect of a Galley recipe; pass full meal from list_meals with modifications | mcp_write (15/min) |
-| `remove_cargo_item` | Write | Remove item from the pantry | mcp_write (15/min) |
-| `consume_meal` | Write | Cook a meal and deduct its ingredients from cargo | mcp_write (15/min) |
-| `add_meal_plan_entry` | Write | Add a meal to the weekly plan for a date and slot | mcp_write (15/min) |
-| `remove_meal_plan_entry` | Write | Remove a meal plan entry by id (from `get_meal_plan`) | mcp_write (15/min) |
-| `update_meal_plan_entry` | Write | Patch date, slot, servings override (set int or clearServingsOverride: true), notes, or order on a plan entry; omit servings fields to leave unchanged | mcp_write (15/min) |
-| `sync_supply_from_selected_meals` | Write | Rebuild the supply list from the current week’s manifest plus Galley selections (same as Supply → Update list); may query Vectorize for ingredient resolution | mcp_supply_sync (8/min) |
-| `create_meal` | Write | Create a new Galley recipe (structured data); respects meal capacity limits | mcp_write (15/min) |
+**Audit logging:** Every mutating tool call emits a structured `mcp_audit` log line (`organizationId`, `userId`, `apiKeyId`, `keyPrefix`, `tool`, `outcome`, `durationMs`, `errorCode?`) for security review.
 
-**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
+**Available tools (grouped by domain):**
 
-**AI features (scan, meal generation, plan week, URL import)** are only available in the Ration app and use the credit ledger — they are **not** exposed as MCP tools.
+| Tool | Type | Scope | Description | Rate Category |
+|------|------|-------|-------------|---------------|
+| `search_ingredients` | Read | `mcp:read` | Semantic vector search against the org's cargo (Vectorize, threshold 0.60) | mcp_search (20/min) |
+| `list_inventory` | Read | `mcp:read` | Cursor-paginated cargo list (default 100, max 200), `meta.nextCursor` for next page | mcp_list (30/min) |
+| `get_cargo_item` | Read | `mcp:read` | Full single-item view (tags, expiresAt, customFields) | mcp_list (30/min) |
+| `get_supply_list` | Read | `mcp:read` | Active supply list with item names, quantities, units, and source meal names | mcp_list (30/min) |
+| `get_meal_plan` | Read | `mcp:read` | Weekly meal plan entries for a date range (default: next 7 days) | mcp_list (30/min) |
+| `list_meals` | Read | `mcp:read` | Cursor-paginated recipes; pass `includeIngredients:false` to skip fan-out | mcp_list (30/min) |
+| `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta mode) | mcp_search (20/min) |
+| `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
+| `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
+| `get_context` | Read | `mcp:read` | Returns the org/key context the request is operating under | mcp_list (30/min) |
+| `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
+| `preview_inventory_import` | Read | `mcp:read` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_list (30/min) |
+| `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
+| `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
+| `add_cargo_item` | Write | `mcp:inventory:write` | Add pantry stock (skips embedding generation, no credit cost) | mcp_write (15/min) |
+| `update_cargo_item` | Write | `mcp:inventory:write` | Update pantry item (name, quantity, unit, expiry, domain, tags) | mcp_write (15/min) |
+| `remove_cargo_item` | Write | `mcp:inventory:write` | Remove a pantry item (requires `confirm: true`) | mcp_write (15/min) |
+| `create_meal` | Write | `mcp:galley:write` | Create a new Galley recipe (structured data) | mcp_write (15/min) |
+| `update_meal` | Write | `mcp:galley:write` | Update any aspect of a Galley recipe | mcp_write (15/min) |
+| `delete_meal` | Write | `mcp:galley:write` | Delete a recipe (requires `confirm: true`) | mcp_write (15/min) |
+| `consume_meal` | Write | `mcp:galley:write` + `mcp:inventory:write` | Cook a meal and deduct ingredients | mcp_write (15/min) |
+| `toggle_meal_active` | Write | `mcp:galley:write` | Mark a meal active/inactive in the current selection | mcp_write (15/min) |
+| `clear_active_meals` | Write | `mcp:galley:write` | Clear all active meal selections (requires `confirm: true`) | mcp_write (15/min) |
+| `add_meal_plan_entry` | Write | `mcp:manifest:write` | Schedule a meal on a date/slot | mcp_write (15/min) |
+| `bulk_add_meal_plan_entries` | Write | `mcp:manifest:write` | Add multiple meal plan entries in one call (idempotent) | mcp_write (15/min) |
+| `update_meal_plan_entry` | Write | `mcp:manifest:write` | Patch date/slot/servings/notes/order; cannot edit consumed | mcp_write (15/min) |
+| `remove_meal_plan_entry` | Write | `mcp:manifest:write` | Remove a meal plan entry by id | mcp_write (15/min) |
+| `add_supply_item` | Write | `mcp:supply:write` | Add item to the active supply/shopping list | mcp_write (15/min) |
+| `update_supply_item` | Write | `mcp:supply:write` | Update a supply list item (name, quantity, unit) | mcp_write (15/min) |
+| `remove_supply_item` | Write | `mcp:supply:write` | Remove item from the supply list | mcp_write (15/min) |
+| `mark_supply_purchased` | Write | `mcp:supply:write` | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
+| `sync_supply_from_selected_meals` | Write | `mcp:supply:write` | Rebuild supply from manifest + Galley selections | mcp_supply_sync (8/min) |
+| `complete_supply_list` | Write | `mcp:supply:write` | Archive the current list and start a fresh one | mcp_write (15/min) |
+| `update_user_preferences` | Write | `mcp:preferences:write` | Patch allergens, expiration alert days, theme | mcp_write (15/min) |
 
-**Integration example:**
+**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). A separate `mcp_write_per_key` (15/min per API key) caps writes from any single compromised key. Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
 
-```bash
-# Connect with any MCP-compatible client using an API key with "mcp" scope
-Host: mcp.ration.mayutic.com
-Authorization: Bearer rtn_live_<your-api-key>
+**MCP resources & prompts:** The server also publishes static resources (`ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`, `connection_guide`) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
+
+**No-credit boundary:** AI features that would charge credits (receipt scan, AI meal generation, AI plan week, URL recipe import) are **not** exposed as MCP tools. The agent's own LLM does any parsing locally, and the deterministic data path is the only thing that touches Ration. Cargo writes via MCP set `skipVectorPhase: true`, so adding pantry items costs zero credits. The `get_credit_balance` tool was intentionally removed.
+
+**Integration example (Cursor `~/.cursor/mcp.json`):**
+
+```json
+{
+  "mcpServers": {
+    "ration": {
+      "url": "https://mcp.ration.mayutic.com/mcp",
+      "headers": { "Authorization": "Bearer rtn_live_<your-key>" }
+    }
+  }
+}
 ```
+
+**Integration example (Claude Desktop `claude_desktop_config.json`):**
+
+```json
+{
+  "mcpServers": {
+    "ration": {
+      "url": "https://mcp.ration.mayutic.com/mcp",
+      "headers": { "Authorization": "Bearer rtn_live_<your-key>" }
+    }
+  }
+}
+```
+
+The same `Bearer rtn_live_...` header works with `curl` or any other MCP-compatible client. Only `/mcp` requires authentication; the discovery endpoints under `/.well-known/...` are intentionally public.
 
 **Troubleshooting MCP connections:**
 
@@ -1525,7 +1564,13 @@ Ration exposes a programmatic REST API for external integrations, authenticated 
 | `inventory` | `GET /api/v1/inventory/export`, `POST /api/v1/inventory/import` |
 | `galley` | `GET /api/v1/galley/export`, `POST /api/v1/galley/import` |
 | `supply` | `GET /api/v1/supply/export` |
-| `mcp` | MCP Worker tools |
+| `mcp` | All MCP Worker tools (legacy/full access) |
+| `mcp:read` | All MCP read tools (no mutation) |
+| `mcp:inventory:write` | MCP cargo writes + receipt import |
+| `mcp:galley:write` | MCP recipe and meal-selection writes |
+| `mcp:manifest:write` | MCP meal-plan writes |
+| `mcp:supply:write` | MCP supply list writes |
+| `mcp:preferences:write` | MCP `update_user_preferences` |
 
 **Endpoints:**
 

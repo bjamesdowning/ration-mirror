@@ -28,7 +28,8 @@ That recipe **URL was already imported** for this org. Open the existing meal or
 ## MCP “connection closed” or 401
 
 - Header must be **`Authorization: Bearer rtn_live_...`** (include `Bearer `).
-- Key needs **`mcp`** scope and must not be revoked.
+- Key must include the legacy **`mcp`** scope **or** at least one **`mcp:`** scope (for example `mcp:read`). Key must not be revoked.
+- If the client connects but a **specific tool** fails with “insufficient scope”, the key is missing the narrow scope that tool requires — add the matching `mcp:*` scope or use legacy `mcp`.
 
 ## Rate limited
 

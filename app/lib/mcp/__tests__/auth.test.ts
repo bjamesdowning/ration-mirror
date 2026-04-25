@@ -82,7 +82,14 @@ describe("authenticateMcp", () => {
 			{ DB: {} as D1Database } as Cloudflare.Env,
 			request,
 		);
-		expect(result).toBe("org-abc-123");
+		expect(result).toMatchObject({
+			organizationId: "org-abc-123",
+			apiKeyId: "key-1",
+			userId: "user-1",
+			keyName: "Test Key",
+			keyPrefix: "rtn_live_abcd1234",
+			scopes: ["mcp", "inventory"],
+		});
 		expect(verifyApiKey).toHaveBeenCalledWith(
 			expect.anything(),
 			"rtn_live_abcdef123456789012345678901234",
@@ -110,11 +117,36 @@ describe("authenticateMcp", () => {
 			{ DB: {} as D1Database } as Cloudflare.Env,
 			request,
 		);
-		expect(result).toBe("org-x-api-key");
+		expect(result).toMatchObject({
+			organizationId: "org-x-api-key",
+			scopes: ["mcp"],
+		});
 		expect(verifyApiKey).toHaveBeenCalledWith(
 			expect.anything(),
 			"rtn_live_abcdef123456789012345678901234",
 		);
+	});
+
+	it("accepts a narrow mcp:read scope without legacy 'mcp'", async () => {
+		vi.mocked(verifyApiKey).mockResolvedValueOnce({
+			id: "key-1",
+			organizationId: "org-narrow",
+			userId: "user-1",
+			keyHash: "hash",
+			keyPrefix: "rtn_live_abcd1234",
+			name: "Read Only",
+			scopes: JSON.stringify(["mcp:read"]),
+			lastUsedAt: null,
+			createdAt: new Date(),
+		});
+		const request = makeRequest({
+			Authorization: "Bearer rtn_live_abcdef123456789012345678901234",
+		});
+		const result = await authenticateMcp(
+			{ DB: {} as D1Database } as Cloudflare.Env,
+			request,
+		);
+		expect(result.scopes).toEqual(["mcp:read"]);
 	});
 
 	it("handles malformed scopes JSON (treats as empty, fails scope check)", async () => {

@@ -12,10 +12,18 @@ The service stores a **one-way hash** of the key, not the plaintext. Validation 
 
 Enable only the scopes you need:
 
-- **`inventory`** — CSV cargo export/import
-- **`galley`** — JSON recipe export/import
-- **`supply`** — supply CSV export
-- **`mcp`** — MCP assistant tools
+- **`inventory`** — CSV cargo export/import (REST)
+- **`galley`** — JSON recipe export/import (REST)
+- **`supply`** — supply CSV export (REST)
+- **`mcp`** — all MCP tools on the MCP worker (legacy “full MCP” key)
+- **`mcp:read`** — MCP read-only tools
+- **`mcp:inventory:write`** — MCP pantry + structured import apply
+- **`mcp:galley:write`** — MCP recipes + meal selection + cook
+- **`mcp:manifest:write`** — MCP meal plan mutations
+- **`mcp:supply:write`** — MCP shopping list mutations
+- **`mcp:preferences:write`** — MCP user preference patches
+
+For assistants, prefer **least privilege**: e.g. a read-only agent only needs `mcp:read`. See *MCP overview* for which tools each scope unlocks.
 
 ## Rotation
 

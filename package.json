@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.2.2",
+	"version": "1.2.3",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -61,6 +61,7 @@
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"drizzle-kit": "^0.31.10",
+		"pathe": "^2.0.3",
 		"tailwindcss": "^4.2.4",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.2",

@@ -1492,9 +1492,23 @@ Authorization: Bearer rtn_live_<your-api-key>
 
 **Troubleshooting MCP connections:**
 
-- **ServerError / Connection closed:** Ensure `RATION_AUTH_HEADER` in your Cursor/Claude config is set to the full value including the `Bearer ` prefix (e.g. `Bearer rtn_live_xxxxx`). Only `/mcp` requires auth; OAuth discovery paths return 404 so mcp-remote can use custom headers.
+- **ServerError / Connection closed:** Ensure `RATION_AUTH_HEADER` in your Cursor/Claude config is set to the full value including the `Bearer ` prefix (e.g. `Bearer rtn_live_xxxxx`). Only `/mcp` requires auth; discovery paths are public so agents can inspect connection metadata before sending credentials.
 - **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
 - **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.
+
+**Agent discovery endpoints:** The main Worker publishes RFC-style discovery surfaces so AI agents can find the REST API, MCP server, auth metadata, and markdown content without scraping the HTML UI.
+
+| Path | Content Type | Purpose |
+|------|--------------|---------|
+| `/.well-known/api-catalog` | `application/linkset+json` | RFC 9727 API catalog with REST and MCP anchors. |
+| `/api/openapi.json` | `application/vnd.oai.openapi+json` | OpenAPI description for v1 import/export endpoints. |
+| `/.well-known/oauth-protected-resource` | `application/json` | Protected resource metadata that accurately describes current API-key authentication and supported scopes. |
+| `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport and tool capability groups. |
+| `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
+| `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |
+| `/` and `/docs/api` with `Accept: text/markdown` | `text/markdown` | Markdown versions of the splash page and API docs for agents. |
+
+Ration does **not** currently publish OAuth/OIDC authorization-server metadata because the public REST API and MCP server use Ration API keys, not OAuth access tokens. Add `/.well-known/openid-configuration` or `/.well-known/oauth-authorization-server` only if a real OAuth/OIDC issuer and token exchange are implemented.
 
 ---
 

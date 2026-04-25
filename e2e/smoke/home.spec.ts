@@ -4,12 +4,19 @@ test.describe("home", () => {
 	test("home page loads with hero and key links", async ({ page }) => {
 		await page.goto("/");
 		await expect(
-			page.getByRole("heading", { name: /Ration\.app/i }),
+			page.getByRole("heading", {
+				name: /Manage your kitchen through your AI agent/i,
+			}),
 		).toBeVisible({ timeout: 5000 });
 		await expect(
-			page
-				.getByText("Cargo → Galley → Manifest → Supply → Dock → Repeat.")
-				.first(),
+			page.getByText("MCP-first kitchen intelligence").first(),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: /View pricing/i }),
+		).toBeVisible();
+		await expect(page.getByRole("link", { name: /Agent docs/i })).toBeVisible();
+		await expect(
+			page.getByText("Agent-ready by design.").first(),
 		).toBeVisible();
 		// Key footer/header links
 		await expect(

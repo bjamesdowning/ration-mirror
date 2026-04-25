@@ -15,6 +15,8 @@ import "@fontsource/space-mono/700.css";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { WebMcpProvider } from "./components/agent/WebMcpProvider";
+import { AGENT_DISCOVERY_LINK_HEADER } from "./lib/agent-readiness";
 import { createAuth } from "./lib/auth.server";
 import { signIntercomJwt } from "./lib/intercom.server";
 
@@ -87,6 +89,8 @@ export const headers: Route.HeadersFunction = () => ({
 	"X-Frame-Options": "DENY",
 	"X-Content-Type-Options": "nosniff",
 	"Referrer-Policy": "strict-origin-when-cross-origin",
+	Link: AGENT_DISCOVERY_LINK_HEADER,
+	Vary: "Accept",
 });
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -103,6 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 			</head>
 			<body className="bg-ceramic text-carbon">
 				{children}
+				<WebMcpProvider />
 				<ScrollRestoration />
 				<Scripts />
 				<script

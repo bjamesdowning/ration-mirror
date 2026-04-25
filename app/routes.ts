@@ -3,7 +3,25 @@ import { index, type RouteConfig, route } from "@react-router/dev/routes";
 export default [
 	route("robots.txt", "routes/robots-txt.ts"),
 	route("sitemap.xml", "routes/sitemap.xml.ts"),
+	route(".well-known/api-catalog", "routes/well-known.api-catalog.ts"),
+	route(
+		".well-known/oauth-protected-resource",
+		"routes/well-known.oauth-protected-resource.ts",
+	),
+	route(
+		".well-known/mcp/server-card.json",
+		"routes/well-known.mcp.server-card.ts",
+	),
+	route(
+		".well-known/agent-skills/index.json",
+		"routes/well-known.agent-skills.index.ts",
+	),
+	route(
+		".well-known/agent-skills/:skillName/SKILL.md",
+		"routes/well-known.agent-skills.$skillName.SKILL.ts",
+	),
 	index("routes/home.tsx"),
+	route("docs/api", "routes/docs.api.tsx"),
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
 	route("auth/verify", "routes/auth.verify.tsx"),
@@ -166,6 +184,8 @@ export default [
 		"routes/api/organization/avatar.$orgId.tsx",
 	),
 	route("api/user/purge", "routes/api/user/purge.tsx"),
+	route("api/openapi.json", "routes/api.openapi.ts"),
+	route("api/status", "routes/api.status.ts"),
 	route("api/automation/trigger", "routes/api/automation/trigger.ts"),
 	route("api/groups/create", "routes/api/groups.create.ts"),
 	route("api/groups/delete", "routes/api/groups.delete.ts"),

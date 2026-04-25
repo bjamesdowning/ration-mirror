@@ -3,6 +3,7 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import type { AppLoadContext, EntryContext } from "react-router";
 import { ServerRouter } from "react-router";
+import { getMarkdownResponseForRequest } from "./lib/agent-readiness";
 import { log } from "./lib/logging.server";
 
 export default async function handleRequest(
@@ -12,6 +13,9 @@ export default async function handleRequest(
 	routerContext: EntryContext,
 	_loadContext: AppLoadContext,
 ) {
+	const markdownResponse = getMarkdownResponseForRequest(request);
+	if (markdownResponse) return markdownResponse;
+
 	let shellRendered = false;
 	const userAgent = request.headers.get("user-agent");
 

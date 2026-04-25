@@ -61,6 +61,23 @@ describe("agent readiness metadata", () => {
 		);
 	});
 
+	it("builds RFC 9727 linkset entries with anchor, service-desc, service-doc, and status", () => {
+		const catalog = buildApiCatalog(request);
+		expect(Array.isArray(catalog.linkset)).toBe(true);
+		const absUrl = /^https:\/\/.+\//;
+		for (const entry of catalog.linkset) {
+			expect(typeof entry.anchor).toBe("string");
+			expect(entry.anchor).toMatch(/^https:\/\//);
+			expect(entry["service-desc"]?.[0]?.href).toMatch(absUrl);
+			expect(entry["service-doc"]?.[0]?.href).toMatch(absUrl);
+			expect(entry.status?.[0]?.href).toMatch(absUrl);
+		}
+		expect(catalog.linkset[0].anchor).toBe("https://ration.mayutic.com/api/v1");
+		expect(catalog.linkset[1].anchor).toBe(
+			"https://mcp.ration.mayutic.com/mcp",
+		);
+	});
+
 	it("builds OpenAPI and protected resource metadata", () => {
 		const openApi = buildOpenApiDocument(request);
 		expect(openApi.openapi).toBe("3.1.0");

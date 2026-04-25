@@ -41,14 +41,30 @@ function applySecurityHeaders(response: Response): Response {
 	});
 }
 
+/** Paths registered in app/routes.ts — must not be short-circuited below. */
+const WELL_KNOWN_ALLOW_EXACT = new Set([
+	"/.well-known/api-catalog",
+	"/.well-known/oauth-protected-resource",
+	"/.well-known/mcp/server-card.json",
+]);
+
+function isRegisteredWellKnownPath(pathname: string): boolean {
+	if (WELL_KNOWN_ALLOW_EXACT.has(pathname)) return true;
+	if (pathname.startsWith("/.well-known/agent-skills/")) return true;
+	return false;
+}
+
 export default {
 	async fetch(request, env, ctx) {
 		const url = new URL(request.url);
 
-		// Browser and tooling probes for well-known paths (e.g. Chrome DevTools,
-		// iOS browser detection) are not routed through React Router to avoid
-		// "No route matches URL" errors surfacing as visible error pages.
-		if (url.pathname.startsWith("/.well-known/")) {
+		// Browser and tooling probes for unknown well-known paths (e.g. Chrome
+		// DevTools, iOS browser detection) are not routed through React Router to
+		// avoid "No route matches URL" errors surfacing as visible error pages.
+		if (
+			url.pathname.startsWith("/.well-known/") &&
+			!isRegisteredWellKnownPath(url.pathname)
+		) {
 			return new Response(null, { status: 404 });
 		}
 

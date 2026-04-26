@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	RATION_INTERCOM_LAUNCHER_CLASS,
 	RATION_INTERCOM_LAUNCHER_ID,
 	RATION_INTERCOM_LAUNCHER_SELECTOR,
 	withHubIntercomLauncher,
 } from "../intercom-hub-settings";
 
 describe("withHubIntercomLauncher", () => {
-	it("adds hide_default_launcher and selector matching launcher id", () => {
+	it("adds hide_default_launcher and class-based custom_launcher_selector", () => {
 		const boot = withHubIntercomLauncher({ app_id: "abc" });
 		expect(boot).toEqual({
 			app_id: "abc",
@@ -14,8 +15,9 @@ describe("withHubIntercomLauncher", () => {
 			custom_launcher_selector: RATION_INTERCOM_LAUNCHER_SELECTOR,
 		});
 		expect(RATION_INTERCOM_LAUNCHER_SELECTOR).toBe(
-			`#${RATION_INTERCOM_LAUNCHER_ID}`,
+			`.${RATION_INTERCOM_LAUNCHER_CLASS}`,
 		);
+		expect(RATION_INTERCOM_LAUNCHER_ID).toBe("ration-intercom-launcher");
 	});
 
 	it("preserves existing keys", () => {

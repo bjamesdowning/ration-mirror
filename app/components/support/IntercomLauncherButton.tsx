@@ -1,6 +1,9 @@
 import { MessageCircle } from "lucide-react";
 import { useRouteLoaderData } from "react-router";
-import { RATION_INTERCOM_LAUNCHER_ID } from "~/lib/intercom-hub-settings";
+import {
+	RATION_INTERCOM_LAUNCHER_CLASS,
+	RATION_INTERCOM_LAUNCHER_ID,
+} from "~/lib/intercom-hub-settings";
 import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
 import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 
@@ -28,6 +31,7 @@ export function IntercomLauncherButton() {
 			type="button"
 			id={RATION_INTERCOM_LAUNCHER_ID}
 			className={[
+				RATION_INTERCOM_LAUNCHER_CLASS,
 				"group relative inline-flex min-h-[44px] max-w-[11rem] shrink-0 items-center justify-center gap-1.5",
 				"rounded-lg px-2.5 md:px-3.5 text-sm font-semibold whitespace-nowrap transition-colors",
 				"border border-hyper-green/80 bg-hyper-green text-carbon shadow-sm",

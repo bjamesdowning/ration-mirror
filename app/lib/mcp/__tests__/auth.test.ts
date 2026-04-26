@@ -58,7 +58,9 @@ describe("authenticateMcp", () => {
 
 		await expect(
 			authenticateMcp({ DB: {} as D1Database } as Cloudflare.Env, request),
-		).rejects.toThrow("Insufficient scope: API key must have 'mcp' scope");
+		).rejects.toThrow(
+			"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+		);
 	});
 
 	it("returns organizationId when key is valid and has mcp scope", async () => {
@@ -168,7 +170,9 @@ describe("authenticateMcp", () => {
 
 		await expect(
 			authenticateMcp({ DB: {} as D1Database } as Cloudflare.Env, request),
-		).rejects.toThrow("Insufficient scope: API key must have 'mcp' scope");
+		).rejects.toThrow(
+			"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+		);
 	});
 });
 
@@ -181,7 +185,9 @@ describe("MCP_AUTH_ERRORS", () => {
 		).toBe(true);
 		expect(MCP_AUTH_ERRORS.has("Invalid API key")).toBe(true);
 		expect(
-			MCP_AUTH_ERRORS.has("Insufficient scope: API key must have 'mcp' scope"),
+			MCP_AUTH_ERRORS.has(
+				"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+			),
 		).toBe(true);
 		expect(MCP_AUTH_ERRORS.size).toBe(3);
 	});

@@ -8,7 +8,7 @@ import { verifyApiKey } from "../api-key.server";
 export const MCP_AUTH_ERRORS = new Set([
 	"Missing API key - provide via Authorization Bearer token",
 	"Invalid API key",
-	"Insufficient scope: API key must have 'mcp' scope",
+	"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
 ]);
 
 /**
@@ -66,7 +66,9 @@ export async function authenticateMcp(
 		(s) => s === "mcp" || s.startsWith("mcp:"),
 	);
 	if (!hasAnyMcpScope) {
-		throw new Error("Insufficient scope: API key must have 'mcp' scope");
+		throw new Error(
+			"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+		);
 	}
 
 	return {

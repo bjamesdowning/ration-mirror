@@ -116,7 +116,7 @@ flowchart TB
 flowchart TB
     subgraph McpWorker["Cloudflare Worker: ration-mcp"]
         McpHandler["workers/mcp.ts"]
-        McpAuth["API Key Auth — mcp scope"]
+        McpAuth["API Key Auth — mcp or mcp:* scopes"]
         McpTools["MCP Tools — search, list, supply, match, write"]
         McpHandler --> McpAuth
         McpHandler --> McpTools

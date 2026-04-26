@@ -2127,13 +2127,53 @@ const SCOPE_META: Record<
 		color: "bg-platinum text-carbon",
 	},
 	mcp: {
-		label: "MCP",
-		description: "Agent access via Model Context Protocol",
+		label: "MCP Legacy Full Access",
+		description: "Legacy broad scope that grants all MCP permissions",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:read": {
+		label: "MCP Read",
+		description: "Read-only access across MCP tools",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:inventory:write": {
+		label: "MCP Inventory Write",
+		description: "Create/update/remove pantry items via MCP",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:galley:write": {
+		label: "MCP Galley Write",
+		description: "Create/update meals and cook flows via MCP",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:manifest:write": {
+		label: "MCP Manifest Write",
+		description: "Update meal plan entries via MCP",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:supply:write": {
+		label: "MCP Supply Write",
+		description: "Manage shopping list items via MCP",
+		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
+	},
+	"mcp:preferences:write": {
+		label: "MCP Preferences Write",
+		description: "Update preferences and related settings via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 };
 
 const DEFAULT_SCOPES: ApiScope[] = ["inventory", "galley", "supply"];
+const REST_SCOPE_ORDER: ApiScope[] = ["inventory", "galley", "supply"];
+const MCP_SCOPE_ORDER: ApiScope[] = [
+	"mcp:read",
+	"mcp:inventory:write",
+	"mcp:galley:write",
+	"mcp:manifest:write",
+	"mcp:supply:write",
+	"mcp:preferences:write",
+	"mcp",
+];
 
 type ApiKeyRow = {
 	id: string;
@@ -2287,45 +2327,98 @@ function ApiKeysSection({
 					<p className="text-xs text-muted mb-2 font-medium uppercase tracking-wide">
 						Scopes
 					</p>
-					<div className="flex flex-wrap gap-2">
-						{VALID_API_SCOPES.map((scope) => {
-							const meta = SCOPE_META[scope];
-							const active = selectedScopes.includes(scope);
-							return (
-								<button
-									key={scope}
-									type="button"
-									onClick={() => toggleScope(scope)}
-									title={meta.description}
-									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-										active
-											? scope === "mcp"
-												? "bg-hyper-green/20 text-hyper-green border-hyper-green/40"
-												: "bg-carbon text-ceramic border-carbon"
-											: "bg-platinum/30 text-muted border-carbon/10 hover:border-carbon/30"
-									}`}
-								>
-									{active && (
-										<svg
-											className="w-3 h-3 shrink-0"
-											viewBox="0 0 12 12"
-											fill="currentColor"
-											role="presentation"
-										>
-											<path
-												d="M10 3L5 8.5 2 5.5"
-												stroke="currentColor"
-												strokeWidth="1.5"
-												fill="none"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-											/>
-										</svg>
-									)}
-									{meta.label}
-								</button>
-							);
-						})}
+					<div className="mb-2">
+						<p className="text-[11px] text-muted mb-1 uppercase tracking-wide">
+							REST API
+						</p>
+						<div className="flex flex-wrap gap-2">
+							{REST_SCOPE_ORDER.map((scope) => {
+								const meta = SCOPE_META[scope];
+								const active = selectedScopes.includes(scope);
+								return (
+									<button
+										key={scope}
+										type="button"
+										onClick={() => toggleScope(scope)}
+										title={meta.description}
+										className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+											active
+												? "bg-carbon text-ceramic border-carbon"
+												: "bg-platinum/30 text-muted border-carbon/10 hover:border-carbon/30"
+										}`}
+									>
+										{active && (
+											<svg
+												className="w-3 h-3 shrink-0"
+												viewBox="0 0 12 12"
+												fill="currentColor"
+												role="presentation"
+											>
+												<path
+													d="M10 3L5 8.5 2 5.5"
+													stroke="currentColor"
+													strokeWidth="1.5"
+													fill="none"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												/>
+											</svg>
+										)}
+										{meta.label}
+									</button>
+								);
+							})}
+						</div>
+					</div>
+					<div>
+						<p className="text-[11px] text-muted mb-1 uppercase tracking-wide">
+							MCP (Least Privilege)
+						</p>
+						<div className="flex flex-wrap gap-2">
+							{MCP_SCOPE_ORDER.map((scope) => {
+								const meta = SCOPE_META[scope];
+								const active = selectedScopes.includes(scope);
+								return (
+									<button
+										key={scope}
+										type="button"
+										onClick={() => toggleScope(scope)}
+										title={meta.description}
+										className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+											active
+												? scope.startsWith("mcp")
+													? "bg-hyper-green/20 text-hyper-green border-hyper-green/40"
+													: "bg-carbon text-ceramic border-carbon"
+												: "bg-platinum/30 text-muted border-carbon/10 hover:border-carbon/30"
+										}`}
+									>
+										{active && (
+											<svg
+												className="w-3 h-3 shrink-0"
+												viewBox="0 0 12 12"
+												fill="currentColor"
+												role="presentation"
+											>
+												<path
+													d="M10 3L5 8.5 2 5.5"
+													stroke="currentColor"
+													strokeWidth="1.5"
+													fill="none"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												/>
+											</svg>
+										)}
+										{meta.label}
+									</button>
+								);
+							})}
+						</div>
+						<p className="text-xs text-muted mt-2">
+							Prefer granular <code className="font-mono">mcp:*</code> scopes.
+							Use <code className="font-mono">mcp</code> only for legacy full
+							access.
+						</p>
 					</div>
 					{selectedScopes.length === 0 && (
 						<p className="text-xs text-danger mt-1">
@@ -2709,9 +2802,10 @@ function McpReferencePanel({
 					<div>
 						<h4 className="font-semibold text-carbon mb-2">Authentication</h4>
 						<p className="text-muted mb-1">
-							Generate a key with the{" "}
-							<span className="font-medium text-hyper-green">MCP</span> scope
-							above, then pass it as a Bearer token.
+							Generate a key with one or more{" "}
+							<span className="font-medium text-hyper-green">MCP</span> scopes
+							above (prefer granular <code>mcp:*</code>; legacy <code>mcp</code>{" "}
+							still works), then pass it as a Bearer token.
 						</p>
 					</div>
 

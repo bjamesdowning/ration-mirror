@@ -5,6 +5,12 @@ export const VALID_API_SCOPES = [
 	"galley",
 	"supply",
 	"mcp",
+	"mcp:read",
+	"mcp:inventory:write",
+	"mcp:galley:write",
+	"mcp:manifest:write",
+	"mcp:supply:write",
+	"mcp:preferences:write",
 ] as const;
 
 export type ApiScope = (typeof VALID_API_SCOPES)[number];

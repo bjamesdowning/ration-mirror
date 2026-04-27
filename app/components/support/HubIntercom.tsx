@@ -17,31 +17,26 @@ type RootLoaderSlice = {
 	activeOrganizationId: string | null;
 };
 
-export type HubIntercomContext = {
-	tier: string;
-	isTierExpired: boolean;
-	balance: number;
-};
-
 type HubIntercomProps = {
 	user: NonNullable<RootLoaderSlice["user"]>;
 	intercomAppId: string;
 	intercomUserJwt: string | null;
 	activeOrganizationId: string | null;
-	hub: HubIntercomContext;
 };
 
 /**
  * Loads Intercom only while the hub layout is mounted (`/hub/*`).
  * Uses a header-bound custom launcher so the default bubble does not cover mobile Supply.
  * Calls `shutdown` on unmount to avoid leaking identity on shared devices.
+ *
+ * Tier, billing, and other user attributes are signed into `intercomUserJwt` in the
+ * root loader — Intercom trusts the JWT values over any unsigned JS attributes.
  */
 export function HubIntercom({
 	user,
 	intercomAppId,
 	intercomUserJwt,
 	activeOrganizationId,
-	hub,
 }: HubIntercomProps) {
 	const { setHasUnread, resetUnread } = useIntercomLauncher();
 
@@ -70,11 +65,6 @@ export function HubIntercom({
 				...(activeOrganizationId
 					? { company: { company_id: activeOrganizationId } }
 					: {}),
-				custom_attributes: {
-					ration_tier: hub.tier,
-					ration_tier_expired: hub.isTierExpired,
-					ration_credit_balance: hub.balance,
-				},
 			};
 
 			initIntercom(withHubIntercomLauncher(base));
@@ -105,9 +95,6 @@ export function HubIntercom({
 		intercomAppId,
 		intercomUserJwt,
 		activeOrganizationId,
-		hub.tier,
-		hub.isTierExpired,
-		hub.balance,
 		setHasUnread,
 		resetUnread,
 	]);
@@ -115,7 +102,7 @@ export function HubIntercom({
 	return null;
 }
 
-export function HubIntercomFromRoot(hub: HubIntercomContext) {
+export function HubIntercomFromRoot() {
 	const data = useRouteLoaderData("root") as RootLoaderSlice | undefined;
 	if (!data?.user || !data.intercomAppId) return null;
 
@@ -125,7 +112,6 @@ export function HubIntercomFromRoot(hub: HubIntercomContext) {
 			intercomAppId={data.intercomAppId}
 			intercomUserJwt={data.intercomUserJwt}
 			activeOrganizationId={data.activeOrganizationId}
-			hub={hub}
 		/>
 	);
 }

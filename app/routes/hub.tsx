@@ -167,13 +167,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
-	const {
-		onboardingCompletedAt,
-		onboardingStep,
-		balance,
-		tier,
-		isTierExpired,
-	} = loaderData;
+	const { onboardingCompletedAt, onboardingStep } = loaderData;
 
 	const root = useRouteLoaderData("root") as RootLoaderHeaderSlice | undefined;
 	const showIntercomLauncher = Boolean(root?.user?.id && root?.intercomAppId);
@@ -181,11 +175,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	return (
 		<ConfirmProvider>
 			<IntercomLauncherProvider>
-				<HubIntercomFromRoot
-					tier={tier}
-					isTierExpired={isTierExpired}
-					balance={balance}
-				/>
+				<HubIntercomFromRoot />
 				<div className="flex min-h-screen bg-ceramic">
 					{/* Desktop Rail Sidebar */}
 					<RailSidebar />

@@ -13,12 +13,16 @@ import {
 import "@fontsource/space-mono/400.css";
 import "@fontsource/space-mono/700.css";
 
+import { drizzle } from "drizzle-orm/d1";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { WebMcpProvider } from "./components/agent/WebMcpProvider";
+import * as schema from "./db/schema";
 import { AGENT_DISCOVERY_LINK_HEADER } from "./lib/agent-readiness";
 import { createAuth } from "./lib/auth.server";
 import { signIntercomJwt } from "./lib/intercom.server";
+import { buildIntercomAttributes } from "./lib/intercom-attributes.server";
+import { checkBalance } from "./lib/ledger.server";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
@@ -48,13 +52,27 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 
 	let intercomUserJwt: string | null = null;
 	const jwtSecret = env.INTERCOM_MESSENGER_JWT_SECRET?.trim();
-	if (session?.user?.id && jwtSecret) {
-		intercomUserJwt = await signIntercomJwt(
-			session.user.id,
-			session.user.email ?? "",
+	if (session?.user?.id && jwtSecret && intercomAppId) {
+		const db = drizzle(env.DB, { schema });
+		const creditBalance = activeOrganizationId
+			? await checkBalance(env, activeOrganizationId)
+			: undefined;
+		const attributes = await buildIntercomAttributes(
+			db,
+			session.user,
 			activeOrganizationId,
-			jwtSecret,
+			{
+				theme: cookieTheme ?? sessionTheme ?? "dark",
+				creditBalance,
+			},
 		);
+		intercomUserJwt = await signIntercomJwt({
+			userId: session.user.id,
+			email: session.user.email ?? "",
+			companyId: activeOrganizationId,
+			secret: jwtSecret,
+			attributes,
+		});
 	}
 
 	const url = new URL(request.url);

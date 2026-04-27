@@ -19,7 +19,7 @@ const schemas = [
 		name: "Privacy Policy",
 		description: "Privacy Policy for the Ration platform.",
 		path: "/legal/privacy",
-		dateModified: "2026-04-08",
+		dateModified: "2026-04-27",
 	}),
 	breadcrumbSchema([
 		{ name: "Home", path: "/" },
@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
 			<JsonLd data={schemas} />
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: April 8, 2026
+				Last Updated: April 27, 2026
 			</p>
 
 			<h2>1. Introduction</h2>
@@ -297,9 +297,13 @@ export default function PrivacyPolicy() {
 					workspace. We share identifiers and profile data with Intercom to
 					recognise your account in the messenger, such as your user id, email
 					address, name, account creation time, and (for workspace context) your
-					active group identifier and product attributes we configure (e.g.
-					subscription tier label, credit balance). Support conversations you
-					start are processed by Intercom under their terms. See{" "}
+					active group identifier and product attributes we configure, including
+					effective subscription tier, tier status and expiry, credit balance,
+					stripe customer identifier, cancellation status, first paid date,
+					welcome voucher redemption status, admin flag, active organization
+					role, accepted terms version, and theme preference. Support
+					conversations you start are processed by Intercom under their terms.
+					See{" "}
 					<a
 						href="https://www.intercom.com/legal/privacy"
 						target="_blank"

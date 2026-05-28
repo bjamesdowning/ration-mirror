@@ -32,14 +32,17 @@ async function fetchJwksJson(
 	return res.json();
 }
 
-async function getJwksSet(
+async function loadJwksSet(
 	kv: KVNamespace,
 	authServerUrl: string,
+	forceRefresh: boolean,
 ): Promise<ReturnType<typeof createLocalJWKSet>> {
-	const cached = await kv.get(JWKS_KV_KEY);
-	if (cached) {
-		const parsed = JSON.parse(cached) as { keys: Record<string, unknown>[] };
-		return createLocalJWKSet(parsed);
+	if (!forceRefresh) {
+		const cached = await kv.get(JWKS_KV_KEY);
+		if (cached) {
+			const parsed = JSON.parse(cached) as { keys: Record<string, unknown>[] };
+			return createLocalJWKSet(parsed);
+		}
 	}
 
 	const jwks = await fetchJwksJson(authServerUrl);
@@ -47,6 +50,17 @@ async function getJwksSet(
 		expirationTtl: JWKS_CACHE_TTL_SEC,
 	});
 	return createLocalJWKSet(jwks);
+}
+
+/**
+ * `true` when jose could not find a key matching the token's `kid` — the signal
+ * that the cached JWKS is stale (signing-key rotation), not that the token is bad.
+ */
+function isNoMatchingKeyError(err: unknown): boolean {
+	return (
+		err instanceof Error &&
+		(err as { code?: string }).code === "ERR_JWKS_NO_MATCHING_KEY"
+	);
 }
 
 function extractScopes(payload: JWTPayload): string[] {
@@ -83,6 +97,29 @@ async function validateOrgMembership(
 }
 
 /**
+ * Whether the user still has an active OAuth consent for this client + household.
+ * Revoking a grant deletes the consent row, so this makes revocation effective
+ * immediately rather than waiting out the access-token TTL.
+ */
+async function hasActiveConsent(
+	db: D1Database,
+	userId: string,
+	clientId: string,
+	organizationId: string,
+): Promise<boolean> {
+	const d1 = drizzle(db, { schema });
+	const consent = await d1.query.oauthConsent.findFirst({
+		where: and(
+			eq(schema.oauthConsent.userId, userId),
+			eq(schema.oauthConsent.clientId, clientId),
+			eq(schema.oauthConsent.referenceId, organizationId),
+		),
+		columns: { id: true },
+	});
+	return !!consent;
+}
+
+/**
  * Verify a Better Auth JWT access token for MCP resource access.
  */
 export async function verifyMcpOAuthToken(
@@ -95,17 +132,24 @@ export async function verifyMcpOAuthToken(
 
 	const issuer = resolveAuthorizationServerUrl(env);
 	const audience = resolveMcpResourceAudience(env);
-	const jwks = await getJwksSet(env.RATION_KV, issuer);
 
 	let payload: JWTPayload;
 	try {
-		const result = await jwtVerify(rawToken, jwks, {
-			issuer,
-			audience,
-		});
-		payload = result.payload;
-	} catch {
-		throw new Error("Invalid OAuth access token");
+		const jwks = await loadJwksSet(env.RATION_KV, issuer, false);
+		payload = (await jwtVerify(rawToken, jwks, { issuer, audience })).payload;
+	} catch (err) {
+		// A missing `kid` means the cached JWKS predates a key rotation. Refetch
+		// once with a fresh set before rejecting; any other failure is terminal.
+		if (!isNoMatchingKeyError(err)) {
+			throw new Error("Invalid OAuth access token");
+		}
+		try {
+			const fresh = await loadJwksSet(env.RATION_KV, issuer, true);
+			payload = (await jwtVerify(rawToken, fresh, { issuer, audience }))
+				.payload;
+		} catch {
+			throw new Error("Invalid OAuth access token");
+		}
 	}
 
 	const userId = typeof payload.sub === "string" ? payload.sub : null;
@@ -146,6 +190,19 @@ export async function verifyMcpOAuthToken(
 			: typeof payload.azp === "string"
 				? payload.azp
 				: undefined;
+
+	// Enforce that the user hasn't revoked this grant since the token was issued.
+	if (clientId) {
+		const consentActive = await hasActiveConsent(
+			env.DB,
+			userId,
+			clientId,
+			organizationId,
+		);
+		if (!consentActive) {
+			throw new Error("OAuth grant revoked");
+		}
+	}
 
 	return { userId, organizationId, scopes, clientId };
 }

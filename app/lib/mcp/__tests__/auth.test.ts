@@ -177,19 +177,21 @@ describe("authenticateMcp", () => {
 });
 
 describe("MCP_AUTH_ERRORS", () => {
-	it("contains core error messages thrown by authenticateMcp", () => {
-		expect(
-			MCP_AUTH_ERRORS.has(
-				"Missing credentials - provide OAuth Bearer token or API key",
-			),
-		).toBe(true);
-		expect(MCP_AUTH_ERRORS.has("Invalid API key")).toBe(true);
-		expect(
-			MCP_AUTH_ERRORS.has(
-				"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
-			),
-		).toBe(true);
-		expect(MCP_AUTH_ERRORS.has("Invalid OAuth access token")).toBe(true);
-		expect(MCP_AUTH_ERRORS.size).toBeGreaterThanOrEqual(8);
+	it("contains exactly the error messages thrown by auth (api key + oauth)", () => {
+		const expected = [
+			"Missing credentials - provide OAuth Bearer token or API key",
+			"Invalid API key",
+			"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+			"Invalid OAuth access token",
+			"OAuth token audience mismatch",
+			"OAuth token missing organization binding",
+			"OAuth token organization access revoked",
+			"OAuth token missing MCP scopes",
+			"OAuth grant revoked",
+		];
+		for (const message of expected) {
+			expect(MCP_AUTH_ERRORS.has(message)).toBe(true);
+		}
+		expect(MCP_AUTH_ERRORS.size).toBe(expected.length);
 	});
 });

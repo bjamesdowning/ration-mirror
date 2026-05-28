@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { data, Form, redirect } from "react-router";
 import type { AppLoadContext } from "react-router";
+import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 
@@ -36,7 +36,8 @@ export async function loader({
 	const url = new URL(request.url);
 	return {
 		memberships,
-		oauthQuery: url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, ""),
+		oauthQuery:
+			url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, ""),
 		clientId: url.searchParams.get("client_id") ?? "",
 	};
 }

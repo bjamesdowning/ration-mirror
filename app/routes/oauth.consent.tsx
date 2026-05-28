@@ -1,5 +1,5 @@
-import { data, Form, redirect } from "react-router";
 import type { AppLoadContext } from "react-router";
+import { data, Form, redirect } from "react-router";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import {
 	OAUTH_MCP_SCOPES,
@@ -114,7 +114,11 @@ export default function OAuthConsentPage({
 				)}
 
 				<Form method="post" className="space-y-4">
-					<input type="hidden" name="oauth_query" value={loaderData.oauthQuery} />
+					<input
+						type="hidden"
+						name="oauth_query"
+						value={loaderData.oauthQuery}
+					/>
 					<fieldset className="space-y-2">
 						<legend className="text-sm font-medium text-carbon mb-2">
 							Permissions

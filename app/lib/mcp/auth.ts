@@ -1,5 +1,5 @@
 import { verifyApiKey } from "../api-key.server";
-import { isApiKeyCredential, isLikelyJwt } from "../oauth.constants";
+import { isApiKeyCredential } from "../oauth.constants";
 import { verifyMcpOAuthToken } from "./oauth-token.server";
 
 /**
@@ -16,6 +16,7 @@ export const MCP_AUTH_ERRORS = new Set([
 	"OAuth token missing organization binding",
 	"OAuth token organization access revoked",
 	"OAuth token missing MCP scopes",
+	"OAuth grant revoked",
 ]);
 
 export type McpAuthMethod = "api_key" | "oauth";
@@ -126,10 +127,8 @@ export async function authenticateMcp(
 		return authenticateApiKey(env, bearer);
 	}
 
-	if (isOAuthEnabled(env) && isLikelyJwt(bearer)) {
-		return authenticateOAuthToken(env, bearer);
-	}
-
+	// Any non-API-key credential is treated as an OAuth bearer token when the
+	// delegated flow is enabled; `verifyMcpOAuthToken` rejects non-JWT input.
 	if (isOAuthEnabled(env)) {
 		return authenticateOAuthToken(env, bearer);
 	}

@@ -1,5 +1,5 @@
-import { data } from "react-router";
 import type { AppLoadContext } from "react-router";
+import { data } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
 import {
 	listConnectedAgentGrants,

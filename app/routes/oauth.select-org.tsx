@@ -4,6 +4,7 @@ import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
+import { log, redactId } from "~/lib/logging.server";
 
 type MembershipRow = {
 	organizationId: string;
@@ -80,15 +81,33 @@ export async function action({
 		.where(eq(schema.session.id, session.session.id));
 
 	const auth = getAuth(context.cloudflare.env);
-	const continueResult = await auth.api.oauth2Continue({
-		headers: request.headers,
-		body: {
-			postLogin: true,
-			...(typeof oauthQuery === "string" && oauthQuery
-				? { oauth_query: oauthQuery }
-				: {}),
-		},
-	});
+	let continueResult: Awaited<ReturnType<typeof auth.api.oauth2Continue>>;
+	try {
+		continueResult = await auth.api.oauth2Continue({
+			headers: request.headers,
+			body: {
+				postLogin: true,
+				...(typeof oauthQuery === "string" && oauthQuery
+					? { oauth_query: oauthQuery }
+					: {}),
+			},
+		});
+	} catch (error) {
+		log.error("OAuth continue (org selection) failed", error, {
+			clientId: redactId(
+				typeof oauthQuery === "string"
+					? new URLSearchParams(oauthQuery).get("client_id")
+					: null,
+			),
+		});
+		return data(
+			{
+				error:
+					"This authorization request could not be completed — it may have expired. Please restart the connection from your AI client and try again.",
+			},
+			{ status: 400 },
+		);
+	}
 
 	if (
 		continueResult &&

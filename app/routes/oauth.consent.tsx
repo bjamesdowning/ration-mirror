@@ -1,6 +1,7 @@
 import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import { getAuth, requireAuth } from "~/lib/auth.server";
+import { log, redactId } from "~/lib/logging.server";
 import {
 	OAUTH_MCP_SCOPES,
 	OAUTH_SCOPE_LABELS,
@@ -57,16 +58,33 @@ export async function action({
 	}
 
 	const auth = getAuth(context.cloudflare.env);
-	const result = await auth.api.oauth2Consent({
-		headers: request.headers,
-		body: {
-			accept,
-			oauth_query: oauthQuery,
-			...(accept && selectedScopes.length > 0
-				? { scope: selectedScopes.join(" ") }
-				: {}),
-		},
-	});
+	let result: Awaited<ReturnType<typeof auth.api.oauth2Consent>>;
+	try {
+		result = await auth.api.oauth2Consent({
+			headers: request.headers,
+			body: {
+				accept,
+				oauth_query: oauthQuery,
+				...(accept && selectedScopes.length > 0
+					? { scope: selectedScopes.join(" ") }
+					: {}),
+			},
+		});
+	} catch (error) {
+		// Better Auth throws an APIError when the signed consent session is
+		// invalid or expired (`codeExpiresIn`, default 10 min). Surface a clear,
+		// non-fatal message instead of crashing into the generic error page.
+		log.error("OAuth consent submission failed", error, {
+			clientId: redactId(new URLSearchParams(oauthQuery).get("client_id")),
+		});
+		return data(
+			{
+				error:
+					"This authorization request could not be completed — it may have expired. Please restart the connection from your AI client and try again.",
+			},
+			{ status: 400 },
+		);
+	}
 
 	if (
 		result &&

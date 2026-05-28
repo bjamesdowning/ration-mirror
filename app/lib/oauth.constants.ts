@@ -74,6 +74,17 @@ export function resolveAuthorizationServerUrl(env: Cloudflare.Env): string {
 	return getAuthorizationServerIssuer(env.BETTER_AUTH_URL);
 }
 
+/**
+ * The OAuth issuer identifier as advertised in the authorization-server
+ * metadata and embedded in the JWT `iss` claim. Better Auth mounts under the
+ * `/api/auth` basePath, so the issuer is the origin plus that path — NOT the
+ * bare origin. This must match the `iss` claim exactly or `jwtVerify` rejects
+ * every token.
+ */
+export function resolveAuthorizationServerIssuer(env: Cloudflare.Env): string {
+	return `${getAuthorizationServerIssuer(env.BETTER_AUTH_URL)}/api/auth`;
+}
+
 /** Human-readable labels for consent UI. */
 export const OAUTH_SCOPE_LABELS: Record<OAuthMcpScope, string> = {
 	"mcp:read": "Read kitchen data (inventory, meals, plans, supply lists)",

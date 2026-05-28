@@ -9,9 +9,12 @@
 		"worker-configuration.d.ts",
 		"load-context.ts"
 	],
+	"exclude": ["node_modules", "node_modules.nosync"],
 	"compilerOptions": {
 		"composite": true,
 		"strict": true,
+		"allowJs": false,
+		"checkJs": false,
 		"lib": ["DOM", "DOM.Iterable", "ES2022"],
 		"types": ["@cloudflare/workers-types", "vite/client"],
 		"target": "ES2022",

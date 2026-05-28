@@ -6,9 +6,12 @@
 		"react-router.config.ts",
 		"vitest.config.ts"
 	],
+	"exclude": ["node_modules", "node_modules.nosync"],
 	"compilerOptions": {
 		"composite": true,
 		"strict": true,
+		"allowJs": false,
+		"checkJs": false,
 		"types": ["node"],
 		"lib": ["ES2022"],
 		"target": "ES2022",

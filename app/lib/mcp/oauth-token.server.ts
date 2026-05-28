@@ -5,6 +5,7 @@ import * as schema from "../../db/schema";
 import {
 	isLikelyJwt,
 	RATION_ORG_CLAIM,
+	resolveAuthorizationServerIssuer,
 	resolveAuthorizationServerUrl,
 	resolveMcpResourceAudience,
 } from "../oauth.constants";
@@ -130,12 +131,16 @@ export async function verifyMcpOAuthToken(
 		throw new Error("Invalid OAuth access token");
 	}
 
-	const issuer = resolveAuthorizationServerUrl(env);
+	// `issuer` must equal the JWT `iss` claim, which Better Auth sets to the
+	// origin plus its `/api/auth` basePath. `authServerBase` is the bare origin
+	// used to build the JWKS fetch URL (it appends `/api/auth/jwks`).
+	const issuer = resolveAuthorizationServerIssuer(env);
+	const authServerBase = resolveAuthorizationServerUrl(env);
 	const audience = resolveMcpResourceAudience(env);
 
 	let payload: JWTPayload;
 	try {
-		const jwks = await loadJwksSet(env.RATION_KV, issuer, false);
+		const jwks = await loadJwksSet(env.RATION_KV, authServerBase, false);
 		payload = (await jwtVerify(rawToken, jwks, { issuer, audience })).payload;
 	} catch (err) {
 		// A missing `kid` means the cached JWKS predates a key rotation. Refetch
@@ -144,7 +149,7 @@ export async function verifyMcpOAuthToken(
 			throw new Error("Invalid OAuth access token");
 		}
 		try {
-			const fresh = await loadJwksSet(env.RATION_KV, issuer, true);
+			const fresh = await loadJwksSet(env.RATION_KV, authServerBase, true);
 			payload = (await jwtVerify(rawToken, fresh, { issuer, audience }))
 				.payload;
 		} catch {

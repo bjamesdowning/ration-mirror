@@ -92,6 +92,19 @@ describe("verifyMcpOAuthToken", () => {
 		});
 	});
 
+	it("verifies against the issuer including the /api/auth basePath (matches the JWT `iss`)", async () => {
+		await verifyMcpOAuthToken(makeEnv(), "a.b.c");
+
+		expect(jwtVerifyMock).toHaveBeenCalledWith(
+			"a.b.c",
+			"jwks-fn",
+			expect.objectContaining({
+				issuer: "https://ration.mayutic.com/api/auth",
+				audience: AUDIENCE,
+			}),
+		);
+	});
+
 	it("rejects a credential that is not JWT-shaped without touching jose", async () => {
 		await expect(verifyMcpOAuthToken(makeEnv(), "rtn_live_x")).rejects.toThrow(
 			"Invalid OAuth access token",

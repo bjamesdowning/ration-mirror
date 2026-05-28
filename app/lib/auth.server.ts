@@ -1,7 +1,8 @@
 import { waitUntil } from "cloudflare:workers";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink, organization } from "better-auth/plugins";
+import { jwt, magicLink, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
 	adminAc,
@@ -16,6 +17,16 @@ import { redirect } from "react-router";
 import * as schema from "../db/schema";
 import { buildMagicLinkEmail, sendEmail } from "./email.server";
 import { log, redactId } from "./logging.server";
+import {
+	OAUTH_ACCESS_TOKEN_TTL_SEC,
+	OAUTH_REGISTRATION_DEFAULT_SCOPES,
+	OAUTH_REGISTRATION_SCOPES,
+	resolveMcpResourceAudience,
+} from "./oauth.constants";
+import {
+	buildOAuthAccessTokenClaims,
+	requiresOAuthOrgSelection,
+} from "./oauth.server";
 import type { UserSettings } from "./types";
 
 const statement = {
@@ -64,6 +75,7 @@ export function createAuth(env: Cloudflare.Env) {
 		...(isDev && {
 			emailAndPassword: { enabled: true },
 		}),
+		disabledPaths: ["/token"],
 		database: drizzleAdapter(db, {
 			provider: "sqlite",
 			schema: {
@@ -74,6 +86,11 @@ export function createAuth(env: Cloudflare.Env) {
 				organization: schema.organization,
 				member: schema.member,
 				invitation: schema.invitation,
+				jwks: schema.jwks,
+				oauthClient: schema.oauthClient,
+				oauthConsent: schema.oauthConsent,
+				oauthAccessToken: schema.oauthAccessToken,
+				oauthRefreshToken: schema.oauthRefreshToken,
 			},
 		}),
 		user: {
@@ -123,6 +140,33 @@ export function createAuth(env: Cloudflare.Env) {
 			},
 		},
 		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/oauth/sign-in",
+				consentPage: "/oauth/consent",
+				validAudiences: [resolveMcpResourceAudience(env)],
+				accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_TTL_SEC,
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				scopes: [...OAUTH_REGISTRATION_SCOPES],
+				clientRegistrationDefaultScopes: [...OAUTH_REGISTRATION_DEFAULT_SCOPES],
+				clientRegistrationAllowedScopes: [...OAUTH_REGISTRATION_SCOPES],
+				postLogin: {
+					page: "/oauth/select-org",
+					consentReferenceId: async ({ session }) => {
+						const orgId = session?.activeOrganizationId;
+						return typeof orgId === "string" ? orgId : undefined;
+					},
+					shouldRedirect: async ({ session, scopes }) => {
+						if (!requiresOAuthOrgSelection(scopes)) return false;
+						return !session?.activeOrganizationId;
+					},
+				},
+				customAccessTokenClaims: async ({ referenceId, user }) => ({
+					...buildOAuthAccessTokenClaims(referenceId),
+					...(user?.id ? { sub: user.id } : {}),
+				}),
+			}),
 			organization({
 				ac,
 				roles: {

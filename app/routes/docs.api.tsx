@@ -53,8 +53,26 @@ export default function ApiDocs() {
 						<h2 className="text-display text-2xl text-carbon">MCP Server</h2>
 						<p className="text-sm text-muted leading-relaxed">
 							Connect an MCP-compatible AI client to{" "}
-							<code>https://mcp.ration.mayutic.com/mcp</code> using a Ration API
-							key with the <code>mcp</code> scope.
+							<code>https://mcp.ration.mayutic.com/mcp</code>. Preferred auth:
+							OAuth (browser sign-in and scoped consent). API keys with the{" "}
+							<code>mcp</code> scope remain supported for manual setup.
+						</p>
+						<p className="text-sm text-muted leading-relaxed">
+							Discovery:{" "}
+							<Link
+								to="/.well-known/oauth-protected-resource"
+								className="text-hyper-green"
+							>
+								protected resource metadata
+							</Link>
+							,{" "}
+							<Link
+								to="/.well-known/oauth-authorization-server"
+								className="text-hyper-green"
+							>
+								authorization server metadata
+							</Link>
+							.
 						</p>
 					</section>
 

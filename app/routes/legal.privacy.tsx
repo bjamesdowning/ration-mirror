@@ -256,6 +256,16 @@ export default function PrivacyPolicy() {
 				perform Service-related services or to assist us in analyzing how our
 				Service is used.
 			</p>
+			<h3>9.1 AI Agents and MCP Connections</h3>
+			<p>
+				When you connect an MCP-compatible AI client (for example Claude,
+				ChatGPT, or Cursor) via OAuth, you authorize that client to access your
+				Ration kitchen data within the scopes you approve. The client vendor may
+				process prompts and tool results on their systems; Ration does not
+				control third-party retention. You can revoke access in Hub Settings →
+				Connected Agents. OAuth grants are bound to a single household you
+				select at authorization time.
+			</p>
 			<p>
 				These third parties have access to your Personal Data only to perform
 				these tasks on our behalf and are obligated not to disclose or use it

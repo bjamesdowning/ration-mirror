@@ -1,4 +1,6 @@
 import { verifyApiKey } from "../api-key.server";
+import { isApiKeyCredential, isLikelyJwt } from "../oauth.constants";
+import { verifyMcpOAuthToken } from "./oauth-token.server";
 
 /**
  * Exhaustive set of all error messages thrown by authenticateMcp.
@@ -6,10 +8,17 @@ import { verifyApiKey } from "../api-key.server";
  * without leaking implementation details back to the caller.
  */
 export const MCP_AUTH_ERRORS = new Set([
-	"Missing API key - provide via Authorization Bearer token",
+	"Missing credentials - provide OAuth Bearer token or API key",
 	"Invalid API key",
 	"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
+	"Invalid OAuth access token",
+	"OAuth token audience mismatch",
+	"OAuth token missing organization binding",
+	"OAuth token organization access revoked",
+	"OAuth token missing MCP scopes",
 ]);
+
+export type McpAuthMethod = "api_key" | "oauth";
 
 /**
  * Rich per-request context for MCP tool handlers.
@@ -20,33 +29,26 @@ export const MCP_AUTH_ERRORS = new Set([
  */
 export interface McpToolContext {
 	organizationId: string;
-	apiKeyId: string;
 	userId: string;
-	keyName: string;
-	keyPrefix: string;
 	/** Parsed once; safe to consult multiple times within a request. */
 	scopes: string[];
+	authMethod: McpAuthMethod;
+	/** Present for API-key auth; OAuth client id for delegated tokens. */
+	apiKeyId: string;
+	keyName: string;
+	keyPrefix: string;
+	oauthClientId?: string;
 }
 
-/**
- * Authenticate an MCP request and return the rich tool context.
- * Throws when the key is missing/invalid or lacks any MCP scope.
- *
- * Accepts the legacy broad `mcp` scope **or** any narrow `mcp:*` scope.
- * Per-tool scope enforcement is delegated to `requireScope` from `./scopes`.
- */
-export async function authenticateMcp(
+function isOAuthEnabled(env: Cloudflare.Env): boolean {
+	const flag = env.MCP_OAUTH_ENABLED;
+	return flag === undefined || flag === "true";
+}
+
+async function authenticateApiKey(
 	env: Cloudflare.Env,
-	request: Request,
+	rawKey: string,
 ): Promise<McpToolContext> {
-	const authHeader = request.headers.get("Authorization");
-	const xApiKey = request.headers.get("X-Api-Key");
-	const rawKey = xApiKey ?? authHeader?.replace(/^Bearer\s+/i, "").trim();
-
-	if (!rawKey) {
-		throw new Error("Missing API key - provide via Authorization Bearer token");
-	}
-
 	const record = await verifyApiKey(env.DB, rawKey);
 	if (!record) {
 		throw new Error("Invalid API key");
@@ -78,5 +80,59 @@ export async function authenticateMcp(
 		keyName: record.name,
 		keyPrefix: record.keyPrefix,
 		scopes,
+		authMethod: "api_key",
 	};
+}
+
+async function authenticateOAuthToken(
+	env: Cloudflare.Env,
+	rawToken: string,
+): Promise<McpToolContext> {
+	const verified = await verifyMcpOAuthToken(env, rawToken);
+	const clientLabel = verified.clientId ?? "oauth-agent";
+	return {
+		organizationId: verified.organizationId,
+		apiKeyId: verified.clientId ?? `oauth:${verified.userId}`,
+		userId: verified.userId,
+		keyName: clientLabel,
+		keyPrefix: "oauth_",
+		scopes: verified.scopes,
+		authMethod: "oauth",
+		oauthClientId: verified.clientId,
+	};
+}
+
+/**
+ * Authenticate an MCP request and return the rich tool context.
+ * Supports OAuth JWT bearer tokens (preferred) and organization API keys (fallback).
+ */
+export async function authenticateMcp(
+	env: Cloudflare.Env,
+	request: Request,
+): Promise<McpToolContext> {
+	const authHeader = request.headers.get("Authorization");
+	const xApiKey = request.headers.get("X-Api-Key");
+	const bearer =
+		authHeader?.replace(/^Bearer\s+/i, "").trim() ??
+		(!authHeader && xApiKey ? xApiKey : undefined);
+
+	if (!bearer) {
+		throw new Error(
+			"Missing credentials - provide OAuth Bearer token or API key",
+		);
+	}
+
+	if (isApiKeyCredential(bearer)) {
+		return authenticateApiKey(env, bearer);
+	}
+
+	if (isOAuthEnabled(env) && isLikelyJwt(bearer)) {
+		return authenticateOAuthToken(env, bearer);
+	}
+
+	if (isOAuthEnabled(env)) {
+		return authenticateOAuthToken(env, bearer);
+	}
+
+	throw new Error("Invalid API key");
 }

@@ -9,6 +9,8 @@ type AuthMode = "signUp" | "signIn";
 interface AuthWidgetProps {
 	/** Default mode to display. Defaults to signUp for homepage. */
 	defaultMode?: AuthMode;
+	/** Post-auth redirect (magic link / OAuth flows). Defaults to /hub. */
+	callbackURL?: string;
 	/** Show the logo above the auth widget (used in standalone pages) */
 	showLogo?: boolean;
 	/** Show footer links below the widget (used in standalone pages) */
@@ -19,6 +21,7 @@ interface AuthWidgetProps {
 
 export function AuthWidget({
 	defaultMode = "signUp",
+	callbackURL = "/hub",
 	showLogo = false,
 	showFooterLinks = false,
 	intentMessage,
@@ -56,8 +59,8 @@ export function AuthWidget({
 		try {
 			const { error } = await authClient.signIn.magicLink({
 				email: trimmed,
-				callbackURL: "/hub",
-				newUserCallbackURL: "/hub",
+				callbackURL,
+				newUserCallbackURL: callbackURL,
 				errorCallbackURL: "/auth/verify",
 			});
 
@@ -84,7 +87,7 @@ export function AuthWidget({
 		try {
 			await authClient.signIn.social({
 				provider: "google",
-				callbackURL: "/hub",
+				callbackURL,
 			});
 		} catch {
 			setErrorMsg("Google sign-in failed. Please try again.");
@@ -100,7 +103,7 @@ export function AuthWidget({
 			const { error } = await authClient.signIn.email({
 				email: "dev@ration.app",
 				password: "ration-dev",
-				callbackURL: "/hub",
+				callbackURL,
 			});
 			if (error) {
 				// Dev user may not exist yet — try signup
@@ -108,7 +111,7 @@ export function AuthWidget({
 					name: "Dev User",
 					email: "dev@ration.app",
 					password: "ration-dev",
-					callbackURL: "/hub",
+					callbackURL,
 				});
 				if (signUpResult.error) {
 					setErrorMsg(

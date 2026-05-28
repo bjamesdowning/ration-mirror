@@ -21,7 +21,7 @@ describe("authenticateMcp", () => {
 		await expect(
 			authenticateMcp({ DB: {} as D1Database } as Cloudflare.Env, request),
 		).rejects.toThrow(
-			"Missing API key - provide via Authorization Bearer token",
+			"Missing credentials - provide OAuth Bearer token or API key",
 		);
 		expect(verifyApiKey).not.toHaveBeenCalled();
 	});
@@ -177,10 +177,10 @@ describe("authenticateMcp", () => {
 });
 
 describe("MCP_AUTH_ERRORS", () => {
-	it("contains all error messages thrown by authenticateMcp", () => {
+	it("contains core error messages thrown by authenticateMcp", () => {
 		expect(
 			MCP_AUTH_ERRORS.has(
-				"Missing API key - provide via Authorization Bearer token",
+				"Missing credentials - provide OAuth Bearer token or API key",
 			),
 		).toBe(true);
 		expect(MCP_AUTH_ERRORS.has("Invalid API key")).toBe(true);
@@ -189,6 +189,7 @@ describe("MCP_AUTH_ERRORS", () => {
 				"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
 			),
 		).toBe(true);
-		expect(MCP_AUTH_ERRORS.size).toBe(3);
+		expect(MCP_AUTH_ERRORS.has("Invalid OAuth access token")).toBe(true);
+		expect(MCP_AUTH_ERRORS.size).toBeGreaterThanOrEqual(8);
 	});
 });

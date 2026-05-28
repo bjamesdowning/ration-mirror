@@ -13,6 +13,7 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
 		"BETTER_AUTH_URL": "https://ration.mayutic.com",
+		"MCP_OAUTH_ENABLED": "true",
 		"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
 		"AI_GATEWAY_ID": "ration-gateway",
 		"STRIPE_PRICE_TASTE_TEST_usd": "price_1T7CWTFXiYOz9MqXhza8grZQ",

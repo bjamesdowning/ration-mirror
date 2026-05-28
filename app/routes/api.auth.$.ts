@@ -11,12 +11,24 @@ function getClientIp(request: Request) {
 	);
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
-	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
-		"auth_public",
-		getClientIp(request),
-	);
+function oauthRateLimitCategory(pathname: string): string | null {
+	if (pathname.includes("/oauth2/authorize")) return "oauth_authorize";
+	if (pathname.includes("/oauth2/token")) return "oauth_token";
+	if (pathname.includes("/register")) return "oauth_register";
+	if (pathname.includes("/oauth2/introspect")) return "oauth_introspect";
+	if (pathname.includes("/oauth2/revoke")) return "oauth_revoke";
+	return null;
+}
+
+async function enforceAuthRateLimit(
+	request: Request,
+	env: Cloudflare.Env,
+): Promise<void> {
+	const ip = getClientIp(request);
+	const url = new URL(request.url);
+	const oauthCategory = oauthRateLimitCategory(url.pathname);
+	const category = oauthCategory ?? "auth_public";
+	const rateLimitResult = await checkRateLimit(env.RATION_KV, category, ip);
 	if (!rateLimitResult.allowed) {
 		throw data(
 			{ error: "Too many requests" },
@@ -30,31 +42,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			},
 		);
 	}
+}
 
+export async function loader({ request, context }: Route.LoaderArgs) {
+	await enforceAuthRateLimit(request, context.cloudflare.env);
 	const auth = getAuth(context.cloudflare.env);
 	return auth.handler(request);
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
-		"auth_public",
-		getClientIp(request),
-	);
-	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
-		);
-	}
-
+	await enforceAuthRateLimit(request, context.cloudflare.env);
 	const auth = getAuth(context.cloudflare.env);
 	return auth.handler(request);
 }

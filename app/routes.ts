@@ -11,6 +11,14 @@ export default [
 		"routes/well-known.oauth-protected-resource.ts",
 	),
 	route(
+		".well-known/oauth-authorization-server",
+		"routes/well-known.oauth-authorization-server.ts",
+	),
+	route(
+		".well-known/oauth-authorization-server/api/auth",
+		"routes/well-known.oauth-authorization-server.api-auth.ts",
+	),
+	route(
 		".well-known/mcp/server-card.json",
 		"routes/well-known.mcp.server-card.ts",
 	),
@@ -27,6 +35,9 @@ export default [
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
 	route("auth/verify", "routes/auth.verify.tsx"),
+	route("oauth/sign-in", "routes/oauth.sign-in.tsx"),
+	route("oauth/consent", "routes/oauth.consent.tsx"),
+	route("oauth/select-org", "routes/oauth.select-org.tsx"),
 
 	// Hub
 	route("hub", "routes/hub.tsx", [
@@ -210,6 +221,7 @@ export default [
 	),
 	route("api/api-keys", "routes/api/api-keys.ts"),
 	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),
+	route("api/oauth/grants", "routes/api.oauth.grants.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
 	// Tools (public, no auth)

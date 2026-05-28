@@ -39,6 +39,10 @@ import { RATION_INTERCOM_LAUNCHER_CLASS } from "~/lib/intercom-hub-settings";
 import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
 import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { log } from "~/lib/logging.server";
+import {
+	type ConnectedAgentGrant,
+	listConnectedAgentGrants,
+} from "~/lib/oauth.server";
 import { type ApiScope, VALID_API_SCOPES } from "~/lib/schemas/api-keys";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import type { UserSettings } from "~/lib/types";
@@ -260,6 +264,8 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
+		const connectedAgents = await listConnectedAgentGrants(env, userId);
+
 		// Groups the user owns with no other members (will be deleted on account purge)
 		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
 		const ownedGroupsWithNoOtherMembers: string[] = [];
@@ -292,6 +298,7 @@ export async function loader(args: Route.LoaderArgs) {
 			subscriptionCancelAtPeriodEnd:
 				user.subscriptionCancelAtPeriodEnd ?? false,
 			apiKeys,
+			connectedAgents,
 			origin: url.origin,
 			ownedGroupsWithNoOtherMembers,
 		};
@@ -650,6 +657,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 					{activeSection === "developer" && (
 						<DeveloperSection
 							apiKeys={loaderData.apiKeys ?? []}
+							connectedAgents={loaderData.connectedAgents ?? []}
 							organizationName={loaderData.organizationName}
 							origin={loaderData.origin ?? ""}
 						/>
@@ -1512,22 +1520,78 @@ function ManifestCalendarSection({ settings }: { settings: UserSettings }) {
 
 function DeveloperSection({
 	apiKeys,
+	connectedAgents,
 	organizationName,
 	origin,
 }: {
 	apiKeys: ApiKeyRow[];
+	connectedAgents: ConnectedAgentGrant[];
 	organizationName: string;
 	origin: string;
 }) {
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Developer</SectionHeading>
+			<ConnectedAgentsSection grants={connectedAgents} />
 			<ApiKeysSection
 				apiKeys={apiKeys}
 				organizationName={organizationName}
 				origin={origin}
 			/>
 		</div>
+	);
+}
+
+function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
+	const revokeFetcher = useFetcher();
+
+	return (
+		<section className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Connected Agents</h3>
+			<p className="text-sm text-muted mb-4">
+				AI clients you authorized via OAuth (browser sign-in). Revoke access
+				here without affecting API keys below. Paste{" "}
+				<code className="text-xs bg-platinum/50 px-1 rounded">
+					https://mcp.ration.mayutic.com/mcp
+				</code>{" "}
+				into a compatible MCP client to connect.
+			</p>
+			{grants.length === 0 ? (
+				<p className="text-sm text-muted">No connected agents.</p>
+			) : (
+				<ul className="space-y-3">
+					{grants.map((grant) => (
+						<li
+							key={grant.consentId}
+							className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-platinum p-4"
+						>
+							<div>
+								<p className="font-medium text-carbon">
+									{grant.clientName ?? grant.clientId}
+								</p>
+								<p className="text-xs text-muted mt-1">
+									Household: {grant.organizationName ?? "—"}
+								</p>
+								<p className="text-xs text-muted mt-1">
+									Scopes: {grant.scopes.join(", ")}
+								</p>
+							</div>
+							<revokeFetcher.Form method="post" action="/api/oauth/grants">
+								<input type="hidden" name="intent" value="revoke" />
+								<input type="hidden" name="consentId" value={grant.consentId} />
+								<button
+									type="submit"
+									className="px-3 py-1.5 text-xs font-semibold rounded border border-carbon/20 text-carbon hover:bg-platinum/50"
+									disabled={revokeFetcher.state !== "idle"}
+								>
+									Revoke
+								</button>
+							</revokeFetcher.Form>
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
 	);
 }
 

@@ -176,6 +176,36 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 20,
 		keyPrefix: "rate:auth_public",
 	},
+	oauth_authorize: {
+		windowMs: 60_000,
+		maxRequests: 30,
+		keyPrefix: "rate:oauth_authorize",
+	},
+	oauth_token: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:oauth_token",
+	},
+	oauth_register: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:oauth_register",
+	},
+	oauth_introspect: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:oauth_introspect",
+	},
+	oauth_revoke: {
+		windowMs: 60_000,
+		maxRequests: 30,
+		keyPrefix: "rate:oauth_revoke",
+	},
+	mcp_http: {
+		windowMs: 60_000,
+		maxRequests: 120,
+		keyPrefix: "rate:mcp_http",
+	},
 	shared_public: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,

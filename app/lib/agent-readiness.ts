@@ -1,3 +1,7 @@
+import {
+	OAUTH_MCP_SCOPES,
+	resolveAuthorizationServerUrl,
+} from "./oauth.constants";
 import { APP_VERSION } from "./version";
 
 export const AGENT_DISCOVERY_LINK_HEADER = [
@@ -273,7 +277,32 @@ export function buildProtectedResourceMetadata(request: Request) {
 		api_key_methods_supported: ["x-api-key", "authorization_bearer"],
 		scopes_supported: AGENT_API_SCOPES,
 		resource_documentation: `${origin}/docs/api`,
-		note: "Ration's current programmatic API and MCP server use organization-scoped API keys, not OAuth access tokens.",
+		note: "Ration REST API v1 uses organization-scoped API keys. MCP supports OAuth delegated access — see MCP protected resource metadata.",
+	};
+}
+
+/** RFC 9728 metadata for the MCP resource server (mcp.* domain). */
+export function buildMcpProtectedResourceMetadata(
+	request: Request,
+	authServerUrl?: string,
+) {
+	const url = new URL(request.url);
+	const mcpOrigin = url.hostname.startsWith("mcp.")
+		? url.origin
+		: `${url.protocol}//mcp.${url.hostname}`;
+	const issuer =
+		authServerUrl ??
+		resolveAuthorizationServerUrl({
+			BETTER_AUTH_URL: `${url.protocol}//${url.hostname.replace(/^mcp\./, "")}`,
+		} as Cloudflare.Env);
+
+	return {
+		resource: `${mcpOrigin}/mcp`,
+		resource_name: "Ration MCP",
+		authorization_servers: [issuer],
+		bearer_methods_supported: ["header"],
+		scopes_supported: [...OAUTH_MCP_SCOPES],
+		resource_documentation: `${url.protocol}//${url.hostname.replace(/^mcp\./, "")}/docs/api#mcp-server`,
 	};
 }
 
@@ -292,7 +321,7 @@ export function buildMcpServerCard(request: Request) {
 			type: "streamable-http",
 			url: `${mcpBase}/mcp`,
 			authentication: {
-				type: "bearer",
+				type: "oauth2",
 				resourceMetadata: `${mcpBase}/.well-known/oauth-protected-resource`,
 			},
 		},

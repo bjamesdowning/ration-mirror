@@ -676,3 +676,11 @@ export const interestSignup = sqliteTable(
 		unique("interest_signup_email_unique").on(table.email),
 	],
 );
+
+export {
+	jwks,
+	oauthAccessToken,
+	oauthClient,
+	oauthConsent,
+	oauthRefreshToken,
+} from "./oauth-schema";

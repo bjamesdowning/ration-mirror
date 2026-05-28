@@ -76,6 +76,14 @@ export default function TermsOfService() {
 				occur under your account. You must notify us immediately upon becoming
 				aware of any breach of security or unauthorized use of your account.
 			</p>
+			<p>
+				<strong>Connected AI agents:</strong> When you authorize an
+				MCP-compatible client via OAuth, you delegate access within the scopes
+				and household you approve. You remain responsible for actions the agent
+				takes on your behalf until you revoke the grant in Settings. API keys
+				you create manually are separate credentials and should be protected
+				accordingly.
+			</p>
 
 			<h2>5. User Conduct</h2>
 			<p>You agree not to use the Service:</p>

@@ -1459,7 +1459,9 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 
 A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agents via the **Model Context Protocol (MCP)**. It runs at `mcp.ration.mayutic.com` and shares all storage bindings with the main Worker.
 
-**Authentication:** The MCP Worker accepts requests authenticated with a Ration API key whose scopes include the legacy `mcp` scope **or** any of the fine-grained `mcp:*` scopes (`mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`). The `authenticateMcp()` function in `app/lib/mcp/auth.ts` verifies the key via `verifyApiKey()` and injects an `McpToolContext` (organizationId, apiKeyId, userId, keyName, keyPrefix, scopes) into `env.__mcp` for all tool handlers. Internal errors are masked as `500 Internal Server Error`; auth errors surface their message to the caller.
+**Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV) and re-checks org membership on every request. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
+
+**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org`, and consent at `/oauth/consent`. Revoke grants in Hub → Settings → Connected Agents.
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 

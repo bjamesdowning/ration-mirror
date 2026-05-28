@@ -16,6 +16,10 @@
 	"placement": {
 		"mode": "smart"
 	},
+	"vars": {
+		"BETTER_AUTH_URL": "https://ration.mayutic.com",
+		"MCP_OAUTH_ENABLED": "true"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

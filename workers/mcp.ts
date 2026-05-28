@@ -1,14 +1,24 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler } from "agents/mcp";
-import { AGENT_DISCOVERY_LINK_HEADER } from "../app/lib/agent-readiness";
+import {
+	AGENT_DISCOVERY_LINK_HEADER,
+	buildMcpProtectedResourceMetadata,
+} from "../app/lib/agent-readiness";
 import type { McpToolContext } from "../app/lib/mcp/auth";
 import { authenticateMcp, MCP_AUTH_ERRORS } from "../app/lib/mcp/auth";
 import { registerTools } from "../app/lib/mcp/tools";
+import { resolveAuthorizationServerUrl } from "../app/lib/oauth.constants";
+import { checkRateLimit } from "../app/lib/rate-limiter.server";
 
 const PROTECTED_RESOURCE_PATHS = new Set([
 	"/.well-known/oauth-protected-resource",
 	"/.well-known/oauth-protected-resource/mcp",
 ]);
+
+const MCP_CORS_HEADERS: Record<string, string> = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Expose-Headers": "WWW-Authenticate",
+};
 
 /** Build RFC 9728 metadata and WWW-Authenticate values from request origin. */
 function getMcpResourceUrls(request: Request): {
@@ -18,8 +28,20 @@ function getMcpResourceUrls(request: Request): {
 	const url = new URL(request.url);
 	const mcpBaseUrl = url.origin;
 	const appHost = url.hostname.replace(/^mcp\./, "") || url.hostname;
-	const resourceDocumentation = `${url.protocol}//${appHost}/hub/settings`;
+	const resourceDocumentation = `${url.protocol}//${appHost}/docs/api#mcp-server`;
 	return { mcpBaseUrl, resourceDocumentation };
+}
+
+function withMcpCors(response: Response): Response {
+	const headers = new Headers(response.headers);
+	for (const [key, value] of Object.entries(MCP_CORS_HEADERS)) {
+		headers.set(key, value);
+	}
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 /**
@@ -67,20 +89,15 @@ export default {
 		const url = new URL(request.url);
 
 		if (PROTECTED_RESOURCE_PATHS.has(url.pathname)) {
-			const { mcpBaseUrl, resourceDocumentation } = getMcpResourceUrls(request);
-			return Response.json(
-				{
-					resource: mcpBaseUrl,
-					resource_name: "Ration MCP",
-					bearer_methods_supported: ["header"],
-					resource_documentation: resourceDocumentation,
-				},
-				{
+			const authServer = resolveAuthorizationServerUrl(env);
+			const metadata = buildMcpProtectedResourceMetadata(request, authServer);
+			return withMcpCors(
+				Response.json(metadata, {
 					headers: {
-						"Access-Control-Allow-Origin": "*",
+						...MCP_CORS_HEADERS,
 						"Cache-Control": "public, max-age=3600",
 					},
-				},
+				}),
 			);
 		}
 
@@ -89,19 +106,40 @@ export default {
 		}
 
 		if (request.method === "OPTIONS") {
-			return new Response(null, {
-				status: 204,
-				headers: {
-					"Access-Control-Allow-Origin": "*",
-					"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-					"Access-Control-Allow-Headers":
-						"Content-Type, Accept, Authorization, mcp-session-id, MCP-Protocol-Version",
-					"Access-Control-Max-Age": "86400",
-				},
-			});
+			return withMcpCors(
+				new Response(null, {
+					status: 204,
+					headers: {
+						...MCP_CORS_HEADERS,
+						"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+						"Access-Control-Allow-Headers":
+							"Content-Type, Accept, Authorization, mcp-session-id, MCP-Protocol-Version",
+						"Access-Control-Max-Age": "86400",
+					},
+				}),
+			);
 		}
 
 		try {
+			const clientIp =
+				request.headers.get("CF-Connecting-IP") ??
+				request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
+				"unknown";
+			const httpRl = await checkRateLimit(env.RATION_KV, "mcp_http", clientIp);
+			if (!httpRl.allowed) {
+				return withMcpCors(
+					Response.json(
+						{ error: "Too many requests" },
+						{
+							status: 429,
+							headers: {
+								"Retry-After": String(httpRl.retryAfter ?? 60),
+							},
+						},
+					),
+				);
+			}
+
 			const mcpCtx = await authenticateMcp(env, request);
 
 			// Inject rich context AND legacy __orgId for one minor version of compat.
@@ -129,6 +167,9 @@ export default {
 			// resource metadata.
 			const newHeaders = new Headers(response.headers);
 			newHeaders.set("Link", AGENT_DISCOVERY_LINK_HEADER);
+			for (const [key, value] of Object.entries(MCP_CORS_HEADERS)) {
+				newHeaders.set(key, value);
+			}
 			return new Response(response.body, {
 				status: response.status,
 				statusText: response.statusText,
@@ -141,11 +182,13 @@ export default {
 			const message = isAuthError ? error.message : "Internal Server Error";
 			const { mcpBaseUrl } = getMcpResourceUrls(request);
 			const wwwAuth = `Bearer realm="Ration MCP", resource_metadata="${mcpBaseUrl}/.well-known/oauth-protected-resource"`;
-			return Response.json(
-				{ error: message },
-				isAuthError
-					? { status, headers: { "WWW-Authenticate": wwwAuth } }
-					: { status },
+			return withMcpCors(
+				Response.json(
+					{ error: message },
+					isAuthError
+						? { status, headers: { "WWW-Authenticate": wwwAuth } }
+						: { status },
+				),
 			);
 		}
 	},

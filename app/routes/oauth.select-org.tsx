@@ -5,6 +5,9 @@ import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import {
+	buildOAuthPageUrl,
+	decodeOAuthQueryFromForm,
+	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
 	mergeSessionCookies,
 } from "~/lib/oauth-query.server";
@@ -40,10 +43,14 @@ export async function loader({
 	if (!signed) {
 		return {
 			memberships: [] as MembershipRow[],
-			oauthQuery: "",
+			oauthQueryB64: "",
 			clientId: "",
 			flowError: oauthUserMessage("missing_oauth_query"),
 		};
+	}
+
+	if (!url.searchParams.has("oauth_query")) {
+		throw redirect(buildOAuthPageUrl("/oauth/select-org", signed));
 	}
 
 	const db = drizzle(env.DB, { schema });
@@ -62,7 +69,7 @@ export async function loader({
 
 	return {
 		memberships,
-		oauthQuery: signed,
+		oauthQueryB64: encodeOAuthQueryForForm(signed),
 		clientId:
 			url.searchParams.get("client_id") ??
 			new URLSearchParams(signed).get("client_id") ??
@@ -81,7 +88,11 @@ export async function action({
 	const env = context.cloudflare.env;
 	const form = await request.formData();
 	const organizationId = form.get("organizationId");
-	const oauthQuery = form.get("oauth_query");
+	const oauthQueryB64 = form.get("oauth_query_b64");
+	const oauthQuery =
+		typeof oauthQueryB64 === "string"
+			? decodeOAuthQueryFromForm(oauthQueryB64)
+			: null;
 
 	if (typeof organizationId !== "string" || !organizationId) {
 		return data(
@@ -93,7 +104,7 @@ export async function action({
 		);
 	}
 
-	if (typeof oauthQuery !== "string" || !oauthQuery) {
+	if (!oauthQuery) {
 		return oauthErrorResponse("missing_oauth_query", { step: "select_org" });
 	}
 
@@ -124,6 +135,11 @@ export async function action({
 				{ status: 403 },
 			);
 		}
+
+		await db
+			.update(schema.session)
+			.set({ activeOrganizationId: organizationId })
+			.where(eq(schema.session.id, session.session.id));
 
 		const auth = getAuth(env);
 		const setActiveResult = await auth.api.setActiveOrganization({
@@ -194,8 +210,8 @@ export default function OAuthSelectOrgPage({
 				<Form method="post" className="space-y-3">
 					<input
 						type="hidden"
-						name="oauth_query"
-						value={loaderData.oauthQuery}
+						name="oauth_query_b64"
+						value={loaderData.oauthQueryB64}
 					/>
 					{loaderData.memberships.map((m: MembershipRow) => (
 						<label

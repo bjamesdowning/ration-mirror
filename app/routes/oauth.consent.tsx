@@ -9,6 +9,8 @@ import {
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
+	decodeOAuthQueryFromForm,
+	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
 	parseScopesFromSignedQuery,
 } from "~/lib/oauth-query.server";
@@ -34,6 +36,10 @@ export async function loader({
 		throw redirect(`/oauth/sign-in${url.search}`);
 	}
 
+	if (!url.searchParams.has("oauth_query")) {
+		throw redirect(buildOAuthPageUrl("/oauth/consent", signed));
+	}
+
 	const scopeParam =
 		url.searchParams.get("scope") ??
 		parseScopesFromSignedQuery(signed).join(" ");
@@ -50,7 +56,7 @@ export async function loader({
 
 	return {
 		clientId,
-		oauthQuery: signed,
+		oauthQueryB64: encodeOAuthQueryForForm(signed),
 		selectOrgHref: buildOAuthPageUrl("/oauth/select-org", signed),
 		requestedScopes:
 			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
@@ -68,7 +74,11 @@ export async function action({
 	const env = context.cloudflare.env;
 	const form = await request.formData();
 	const accept = form.get("accept") === "true";
-	const oauthQuery = form.get("oauth_query");
+	const oauthQueryB64 = form.get("oauth_query_b64");
+	const oauthQuery =
+		typeof oauthQueryB64 === "string"
+			? decodeOAuthQueryFromForm(oauthQueryB64)
+			: null;
 	const selectedScopes = form
 		.getAll("scopes")
 		.map(String)
@@ -76,7 +86,7 @@ export async function action({
 			(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
 		);
 
-	if (typeof oauthQuery !== "string" || !oauthQuery) {
+	if (!oauthQuery) {
 		return oauthErrorResponse("missing_oauth_query", { step: "consent" });
 	}
 
@@ -167,8 +177,8 @@ export default function OAuthConsentPage({
 				<Form method="post" className="space-y-4">
 					<input
 						type="hidden"
-						name="oauth_query"
-						value={loaderData.oauthQuery}
+						name="oauth_query_b64"
+						value={loaderData.oauthQueryB64}
 					/>
 					<fieldset className="space-y-2">
 						<legend className="text-sm font-medium text-carbon mb-2">

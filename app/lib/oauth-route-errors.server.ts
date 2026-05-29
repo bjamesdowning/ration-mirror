@@ -56,6 +56,7 @@ export function mapBetterAuthConsentError(error: unknown): ConsentErrorMapping {
 	}
 
 	if (
+		detail.includes("missing parameters") ||
 		detail.includes("scope not originally requested") ||
 		detail.includes("invalid_request")
 	) {

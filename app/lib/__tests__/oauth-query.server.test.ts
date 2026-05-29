@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
+	decodeOAuthQueryFromForm,
+	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
+	mergeSessionCookies,
 	parseScopesFromSignedQuery,
 } from "../oauth-query.server";
 
@@ -45,6 +48,30 @@ describe("parseScopesFromSignedQuery", () => {
 				"client_id=abc&scope=mcp%3Aread+offline_access&state=xyz",
 			),
 		).toEqual(["mcp:read", "offline_access"]);
+	});
+});
+
+describe("encodeOAuthQueryForForm", () => {
+	it("round-trips scopes with plus signs (form POST safe)", () => {
+		const query = "scope=mcp:read+offline_access&sig=abc";
+		const encoded = encodeOAuthQueryForForm(query);
+		expect(decodeOAuthQueryFromForm(encoded)).toBe(query);
+	});
+});
+
+describe("mergeSessionCookies", () => {
+	it("merges Set-Cookie into Cookie header for follow-up auth.api calls", () => {
+		const request = new Request("https://ration.mayutic.com/oauth/select-org", {
+			headers: { cookie: "better-auth.session_token=old" },
+		});
+		const authHeaders = new Headers();
+		authHeaders.append(
+			"set-cookie",
+			"better-auth.session_token=new; Path=/; HttpOnly",
+		);
+		const merged = mergeSessionCookies(request, { headers: authHeaders });
+		expect(merged.get("cookie")).toContain("better-auth.session_token=new");
+		expect(merged.get("cookie")).not.toContain("=old");
 	});
 });
 

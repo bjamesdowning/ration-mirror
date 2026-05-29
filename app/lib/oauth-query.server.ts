@@ -56,24 +56,109 @@ export function buildConsentScopeForSubmit(
 	return [...new Set([...mcp, ...nonMcp])].join(" ");
 }
 
-/** Merge Set-Cookie from an auth.api response into request headers for follow-up calls. */
+/**
+ * Base64-wrap signed oauth_query for HTML forms so `application/x-www-form-urlencoded`
+ * POST does not turn `+` into spaces and break Better Auth signature verification.
+ */
+export function encodeOAuthQueryForForm(signedQuery: string): string {
+	return btoa(signedQuery);
+}
+
+export function decodeOAuthQueryFromForm(encoded: string): string | null {
+	try {
+		return atob(encoded);
+	} catch {
+		return null;
+	}
+}
+
+function parseCookieHeader(cookieHeader: string): Map<string, string> {
+	const cookieMap = new Map<string, string>();
+	for (const part of cookieHeader.split(";")) {
+		const trimmed = part.trim();
+		if (!trimmed) continue;
+		const eq = trimmed.indexOf("=");
+		if (eq === -1) continue;
+		const name = trimmed.slice(0, eq);
+		const value = trimmed.slice(eq + 1);
+		if (name) cookieMap.set(name, value);
+	}
+	return cookieMap;
+}
+
+function parseSetCookieLine(
+	setCookie: string,
+): { name: string; value: string } | null {
+	const [nameValue] = setCookie.split(";");
+	const trimmed = nameValue?.trim();
+	if (!trimmed) return null;
+	const eq = trimmed.indexOf("=");
+	if (eq === -1) return null;
+	const name = trimmed.slice(0, eq);
+	const value = trimmed.slice(eq + 1);
+	if (!name || value === undefined) return null;
+	return {
+		name,
+		value: value.includes("%") ? decodeURIComponent(value) : value,
+	};
+}
+
+/** Merge Set-Cookie from auth.api into the Cookie header for the next auth.api call. */
 export function mergeSessionCookies(
 	request: Request,
 	authResult: { headers: Headers },
 ): Headers {
 	const headers = new Headers(request.headers);
-	authResult.headers.forEach((value, key) => {
-		if (key.toLowerCase() === "set-cookie") {
-			headers.append("set-cookie", value);
+	const cookieMap = parseCookieHeader(headers.get("cookie") ?? "");
+
+	const setCookies =
+		typeof authResult.headers.getSetCookie === "function"
+			? authResult.headers.getSetCookie()
+			: [];
+	if (setCookies.length === 0) {
+		authResult.headers.forEach((value, key) => {
+			if (key.toLowerCase() === "set-cookie") {
+				const parsed = parseSetCookieLine(value);
+				if (parsed) cookieMap.set(parsed.name, parsed.value);
+			}
+		});
+	} else {
+		for (const line of setCookies) {
+			const parsed = parseSetCookieLine(line);
+			if (parsed) cookieMap.set(parsed.name, parsed.value);
 		}
-	});
+	}
+
+	const merged = Array.from(cookieMap.entries())
+		.map(([name, value]) => `${name}=${value}`)
+		.join("; ");
+	if (merged) {
+		headers.set("cookie", merged);
+	}
 	return headers;
 }
 
 /** Safe detail string for logs (no secrets). */
 export function oauthErrorDetail(error: unknown): string {
 	if (error instanceof Error) {
-		return error.message.slice(0, 200);
+		const parts = [error.message];
+		const body = (error as { body?: unknown }).body;
+		if (body && typeof body === "object") {
+			const record = body as Record<string, unknown>;
+			if (typeof record.error_description === "string") {
+				parts.push(record.error_description);
+			}
+			if (typeof record.message === "string") {
+				parts.push(record.message);
+			}
+		}
+		return parts.join(" ").slice(0, 200);
+	}
+	if (error && typeof error === "object") {
+		const record = error as Record<string, unknown>;
+		if (typeof record.error_description === "string") {
+			return record.error_description.slice(0, 200);
+		}
 	}
 	return String(error).slice(0, 200);
 }

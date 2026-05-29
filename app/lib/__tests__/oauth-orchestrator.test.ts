@@ -94,15 +94,16 @@ describe("ensureFlowForRequest", () => {
 		expect(flow.step).toBe("initiated");
 	});
 
-	it("rejects digest mismatch on existing flow", async () => {
+	it("uses oauth_query from URL when flow_id is present (digest is telemetry-only)", async () => {
 		const kv = makeKv();
 		const created = await createFlow(kv, OAUTH_QUERY);
+		const other = "client_id=other&scope=mcp%3Aread&sig=x";
 		const url = new URL(
-			`https://ration.mayutic.com/oauth/consent?flow_id=${created.flowId}&oauth_query=${encodeURIComponent("client_id=other&scope=mcp%3Aread")}`,
+			`https://ration.mayutic.com/oauth/consent?flow_id=${created.flowId}&oauth_query=${encodeURIComponent(other)}`,
 		);
-		await expect(ensureFlowForRequest(kv, url)).rejects.toBeInstanceOf(
-			OAuthFlowError,
-		);
+		const { flow, oauthQuery } = await ensureFlowForRequest(kv, url);
+		expect(flow.flowId).toBe(created.flowId);
+		expect(oauthQuery).toBe(other);
 	});
 });
 

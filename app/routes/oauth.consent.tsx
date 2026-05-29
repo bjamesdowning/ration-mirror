@@ -11,6 +11,7 @@ import {
 	buildConsentScopeForSubmit,
 	oauthErrorDetail,
 	parseScopesFromOAuthQuery,
+	sanitizeOAuthQueryForBetterAuth,
 } from "~/lib/oauth-flow";
 import {
 	advanceFlow,
@@ -112,6 +113,11 @@ export async function action({
 		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
 	}
 
+	const signedOAuthQuery = sanitizeOAuthQueryForBetterAuth(oauthQuery);
+	if (!signedOAuthQuery || !new URLSearchParams(signedOAuthQuery).get("sig")) {
+		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
+	}
+
 	const started = Date.now();
 	const clientId =
 		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
@@ -120,17 +126,19 @@ export async function action({
 
 	try {
 		const auth = getAuth(env);
-		const consentScope =
-			accept && typeof oauthQuery === "string"
-				? buildConsentScopeForSubmit(selectedScopes, oauthQuery)
-				: undefined;
-
 		const result = await auth.api.oauth2Consent({
 			headers: request.headers,
 			body: {
 				accept,
-				oauth_query: oauthQuery,
-				...(accept && consentScope ? { scope: consentScope } : {}),
+				oauth_query: signedOAuthQuery,
+				...(accept
+					? {
+							scope: buildConsentScopeForSubmit(
+								selectedScopes,
+								signedOAuthQuery,
+							),
+						}
+					: {}),
 			},
 		});
 

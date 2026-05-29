@@ -1,5 +1,9 @@
 import { requiresOAuthOrgSelection } from "./oauth.server";
-import { parseScopesFromOAuthQuery } from "./oauth-flow";
+import {
+	extractSignedOAuthQueryParams,
+	parseScopesFromOAuthQuery,
+	sanitizeOAuthQueryForBetterAuth,
+} from "./oauth-flow";
 import {
 	OAUTH_FLOW_RECORD_VERSION,
 	OAUTH_FLOW_TTL_SEC,
@@ -74,22 +78,14 @@ function parseClientIdFromOAuthQuery(oauthQuery: string): string {
 }
 
 export function extractOAuthQueryFromRequest(url: URL): string | null {
-	const fromParam = url.searchParams.get("oauth_query");
-	if (fromParam?.trim()) {
-		return fromParam;
-	}
-	const search = url.search.replace(/^\?/, "").trim();
-	if (search?.includes("client_id=")) {
-		return search;
-	}
-	return null;
+	return extractSignedOAuthQueryParams(url.searchParams);
 }
 
 export async function createFlow(
 	kv: KVNamespace,
 	oauthQuery: string,
 ): Promise<OAuthFlowRecord> {
-	const trimmed = oauthQuery.trim();
+	const trimmed = sanitizeOAuthQueryForBetterAuth(oauthQuery.trim());
 	if (!trimmed) {
 		throw new OAuthFlowError("missing_oauth_query");
 	}
@@ -231,13 +227,6 @@ export async function ensureFlowForRequest(
 	const existingId = url.searchParams.get("flow_id");
 	if (existingId) {
 		const flow = await requireFlow(kv, existingId);
-		const digestOk = await verifyOAuthQueryDigestAsync(
-			oauthQuery,
-			flow.oauthQueryDigest,
-		);
-		if (!digestOk) {
-			throw new OAuthFlowError("flow_invalid");
-		}
 		return { flow, oauthQuery };
 	}
 
@@ -268,7 +257,7 @@ export function buildOAuthPath(
  */
 export function buildConsentUrl(flowId: string, oauthQuery: string): string {
 	const params = new URLSearchParams();
-	params.set("oauth_query", oauthQuery);
+	params.set("oauth_query", sanitizeOAuthQueryForBetterAuth(oauthQuery));
 	params.set("flow_id", flowId);
 	const clientId = new URLSearchParams(oauthQuery).get("client_id");
 	if (clientId) {
@@ -283,7 +272,7 @@ export function buildConsentUrl(flowId: string, oauthQuery: string): string {
 
 export function buildSelectOrgUrl(flowId: string, oauthQuery: string): string {
 	const params = new URLSearchParams();
-	params.set("oauth_query", oauthQuery);
+	params.set("oauth_query", sanitizeOAuthQueryForBetterAuth(oauthQuery));
 	params.set("flow_id", flowId);
 	params.set("post_login", "true");
 	const clientId = new URLSearchParams(oauthQuery).get("client_id");

@@ -4,7 +4,11 @@ import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
-import { oauthErrorDetail } from "~/lib/oauth-flow";
+import {
+	mergeAuthRequestHeaders,
+	oauthErrorDetail,
+	sanitizeOAuthQueryForBetterAuth,
+} from "~/lib/oauth-flow";
 import {
 	advanceFlow,
 	ensureFlowForRequest,
@@ -117,6 +121,11 @@ export async function action({
 		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
 	}
 
+	const signedOAuthQuery = sanitizeOAuthQueryForBetterAuth(oauthQuery);
+	if (!signedOAuthQuery || !new URLSearchParams(signedOAuthQuery).get("sig")) {
+		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
+	}
+
 	const started = Date.now();
 	const telemetryFlowId =
 		typeof flowId === "string" && flowId.length > 0 ? flowId : undefined;
@@ -142,10 +151,15 @@ export async function action({
 		}
 
 		const auth = getAuth(env);
-		await auth.api.setActiveOrganization({
+		const setActiveResult = await auth.api.setActiveOrganization({
 			headers: request.headers,
 			body: { organizationId },
+			returnHeaders: true,
 		});
+		const headersWithSession = mergeAuthRequestHeaders(
+			request,
+			setActiveResult,
+		);
 
 		if (telemetryFlowId) {
 			try {
@@ -158,10 +172,10 @@ export async function action({
 		}
 
 		const continueResult = await auth.api.oauth2Continue({
-			headers: request.headers,
+			headers: headersWithSession,
 			body: {
 				postLogin: true,
-				oauth_query: oauthQuery,
+				oauth_query: signedOAuthQuery,
 			},
 		});
 
@@ -169,7 +183,7 @@ export async function action({
 		const redirectUrl = resolveOAuthFlowRedirectUrl(
 			authRedirect,
 			telemetryFlowId ?? crypto.randomUUID(),
-			oauthQuery,
+			signedOAuthQuery,
 		);
 
 		if (telemetryFlowId) {

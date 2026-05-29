@@ -1,3 +1,4 @@
+import { extractSignedOAuthQueryParams } from "./oauth-flow";
 import {
 	buildConsentUrl,
 	isOAuthConsentRedirect,
@@ -95,12 +96,11 @@ export function resolveOAuthFlowRedirectUrl(
 	}
 	try {
 		const parsed = new URL(url, "https://ration.mayutic.com");
-		parsed.searchParams.set("flow_id", flowId);
-		if (!parsed.searchParams.get("oauth_query")?.trim()) {
-			parsed.searchParams.set("oauth_query", oauthQuery);
-		}
-		parsed.searchParams.set("household_selected", "1");
-		return `${parsed.pathname}${parsed.search}`;
+		const signedFromRedirect =
+			extractSignedOAuthQueryParams(parsed.searchParams) ?? oauthQuery;
+		return markConsentUrlHouseholdSelected(
+			buildConsentUrl(flowId, signedFromRedirect),
+		);
 	} catch {
 		return markConsentUrlHouseholdSelected(buildConsentUrl(flowId, oauthQuery));
 	}

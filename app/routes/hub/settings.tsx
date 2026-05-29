@@ -1634,7 +1634,10 @@ function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 									{grant.clientName ?? grant.clientId}
 								</p>
 								<p className="text-xs text-muted mt-1">
-									Household: {grant.organizationName ?? "—"}
+									Household:{" "}
+									{grant.organizationId
+										? (grant.organizationName ?? "—")
+										: "Not linked — revoke and reconnect"}
 								</p>
 								<p className="text-xs text-muted mt-1">
 									Scopes: {formatOAuthScopesDisplay(grant.scopes)}

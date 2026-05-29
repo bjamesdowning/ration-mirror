@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 import { AuthWidget } from "~/components/auth/AuthWidget";
 import { getAuth } from "~/lib/auth.server";
+import { resolveOAuthPostAuthPath } from "~/lib/oauth-flow";
 
 export async function loader({
 	request,
@@ -14,10 +15,12 @@ export async function loader({
 	const url = new URL(request.url);
 
 	if (session) {
-		const next =
-			url.searchParams.get("post_login") === "true"
-				? "/oauth/select-org"
-				: "/oauth/consent";
+		const oauthQuery = url.searchParams.get("oauth_query");
+		const next = resolveOAuthPostAuthPath(
+			url.searchParams,
+			oauthQuery,
+			session.session.activeOrganizationId,
+		);
 		const qs = url.searchParams.toString();
 		throw redirect(qs ? `${next}?${qs}` : next);
 	}

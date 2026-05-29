@@ -7,6 +7,11 @@ import {
 	OAUTH_SCOPE_LABELS,
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
+import {
+	buildConsentScopeForSubmit,
+	oauthErrorDetail,
+	parseScopesFromOAuthQuery,
+} from "~/lib/oauth-flow";
 
 export async function loader({
 	request,
@@ -20,7 +25,11 @@ export async function loader({
 	const clientId = url.searchParams.get("client_id") ?? "Unknown client";
 	const oauthQuery =
 		url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, "");
-	const scopeParam = url.searchParams.get("scope") ?? "";
+	const oauthQueryFromUrl =
+		url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, "");
+	const scopeParam =
+		url.searchParams.get("scope") ??
+		parseScopesFromOAuthQuery(oauthQueryFromUrl).join(" ");
 	const requestedScopes = scopeParam
 		.split(/\s+/)
 		.filter((s): s is OAuthMcpScope =>
@@ -58,6 +67,11 @@ export async function action({
 	}
 
 	const auth = getAuth(context.cloudflare.env);
+	const consentScope =
+		accept && typeof oauthQuery === "string"
+			? buildConsentScopeForSubmit(selectedScopes, oauthQuery)
+			: undefined;
+
 	let result: Awaited<ReturnType<typeof auth.api.oauth2Consent>>;
 	try {
 		result = await auth.api.oauth2Consent({
@@ -65,9 +79,7 @@ export async function action({
 			body: {
 				accept,
 				oauth_query: oauthQuery,
-				...(accept && selectedScopes.length > 0
-					? { scope: selectedScopes.join(" ") }
-					: {}),
+				...(accept && consentScope ? { scope: consentScope } : {}),
 			},
 		});
 	} catch (error) {
@@ -76,6 +88,8 @@ export async function action({
 		// non-fatal message instead of crashing into the generic error page.
 		log.error("OAuth consent submission failed", error, {
 			clientId: redactId(new URLSearchParams(oauthQuery).get("client_id")),
+			detail: oauthErrorDetail(error),
+			consentScope: consentScope ? redactId(consentScope) : undefined,
 		});
 		return data(
 			{

@@ -5,6 +5,7 @@ import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import { log, redactId } from "~/lib/logging.server";
+import { oauthErrorDetail } from "~/lib/oauth-flow";
 
 type MembershipRow = {
 	organizationId: string;
@@ -99,6 +100,7 @@ export async function action({
 					? new URLSearchParams(oauthQuery).get("client_id")
 					: null,
 			),
+			detail: oauthErrorDetail(error),
 		});
 		return data(
 			{

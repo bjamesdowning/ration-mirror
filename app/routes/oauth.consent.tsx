@@ -51,6 +51,7 @@ export async function loader({
 	return {
 		clientId,
 		oauthQuery: signed,
+		selectOrgHref: buildOAuthPageUrl("/oauth/select-org", signed),
 		requestedScopes:
 			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
 	};
@@ -135,11 +136,6 @@ export default function OAuthConsentPage({
 	loaderData: Awaited<ReturnType<typeof loader>>;
 	actionData?: { error?: string; errorCode?: string };
 }) {
-	const selectOrgHref = buildOAuthPageUrl(
-		"/oauth/select-org",
-		loaderData.oauthQuery,
-	);
-
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
 			<div className="w-full max-w-lg rounded-2xl border border-platinum bg-white p-8 shadow-sm">
@@ -159,7 +155,7 @@ export default function OAuthConsentPage({
 				actionData?.errorCode === "missing_oauth_query" ? (
 					<p className="mb-4 text-sm text-carbon/70">
 						<a
-							href={selectOrgHref}
+							href={loaderData.selectOrgHref}
 							className="text-hyper-green font-medium underline"
 						>
 							Restart from household selection

@@ -7,7 +7,6 @@ import {
 	getSignedOAuthQuery,
 	parseScopesFromSignedQuery,
 } from "~/lib/oauth-query.server";
-import { oauthUserMessage } from "~/lib/oauth-telemetry.server";
 
 export async function loader({
 	request,
@@ -50,8 +49,8 @@ export default function OAuthSignInPage({
 			<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
 				<div className="w-full max-w-md">
 					<p className="mb-4 text-sm text-red-600 text-center">
-						{oauthUserMessage("missing_oauth_query")} Start the connection from
-						your AI client (paste the MCP URL), not this page directly.
+						Missing authorization session. Start the connection from your AI
+						client (paste the MCP URL), not this page directly.
 					</p>
 				</div>
 			</div>

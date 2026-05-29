@@ -150,4 +150,30 @@ describe("agent readiness metadata", () => {
 			"Ration MCP",
 		);
 	});
+
+	it("positions OAuth before API keys in agent-facing markdown", () => {
+		const skill = buildAgentSkillMarkdown("connect-ration-mcp");
+		const home = getPublicMarkdownForPath("/");
+		const apiDocsRaw = getPublicMarkdownForPath("/docs/api");
+		expect(apiDocsRaw).not.toBeNull();
+		const apiDocs = apiDocsRaw as string;
+
+		expect(skill).toContain("OAuth");
+		expect(home).toContain("OAuth");
+		expect(apiDocs).toContain("OAuth");
+
+		const skillOAuthIdx = skill.indexOf("OAuth");
+		const skillKeyIdx = skill.indexOf("API key");
+		expect(skillOAuthIdx).toBeGreaterThan(-1);
+		expect(skillKeyIdx).toBeGreaterThan(skillOAuthIdx);
+
+		expect(home).toContain("Connect Your Agent");
+		expect(home).toMatch(/mcp\.ration\.mayutic\.com\/mcp/);
+
+		const mcpSection = apiDocs.slice(apiDocs.indexOf("## MCP Server"));
+		const mcpOAuthIdx = mcpSection.indexOf("OAuth");
+		const mcpKeyIdx = mcpSection.indexOf("Organization API keys");
+		expect(mcpOAuthIdx).toBeGreaterThan(-1);
+		expect(mcpKeyIdx).toBeGreaterThan(mcpOAuthIdx);
+	});
 });

@@ -40,6 +40,13 @@ import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
 import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { log } from "~/lib/logging.server";
 import {
+	MCP_AGENT_READY_TAGLINE,
+	MCP_API_KEY_CONFIG_SNIPPET,
+	MCP_CONNECT_STEPS,
+	MCP_ENDPOINT_URL,
+	MCP_SUPPORTED_CLIENTS,
+} from "~/lib/mcp/connect-copy";
+import {
 	type ConnectedAgentGrant,
 	listConnectedAgentGrants,
 } from "~/lib/oauth.server";
@@ -1544,22 +1551,77 @@ function DeveloperSection({
 
 function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 	const revokeFetcher = useFetcher();
+	const copyToast = useToast({ duration: 3000 });
+	const [mcpRefExpanded, setMcpRefExpanded] = useState(false);
 
 	return (
-		<section className="glass-panel rounded-xl p-6">
+		<section id="connected-agents" className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">Connected Agents</h3>
-			<p className="text-sm text-muted mb-4">
-				AI clients you authorized via OAuth (browser sign-in). Revoke access
-				here without affecting API keys below. Paste{" "}
-				<code className="text-xs bg-platinum/50 px-1 rounded">
-					https://mcp.ration.mayutic.com/mcp
-				</code>{" "}
-				into a compatible MCP client to connect.
+			<p className="text-sm text-muted mb-4">{MCP_AGENT_READY_TAGLINE}</p>
+
+			<ol className="list-decimal list-inside space-y-2 text-sm text-carbon mb-4">
+				{MCP_CONNECT_STEPS.map((step) => (
+					<li key={step}>{step}</li>
+				))}
+			</ol>
+
+			<div className="mb-4">
+				<h4 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+					MCP server URL
+				</h4>
+				<div className="flex gap-2">
+					<code className="flex-1 text-xs bg-platinum/50 px-3 py-2 rounded-lg font-mono text-carbon break-all">
+						{MCP_ENDPOINT_URL}
+					</code>
+					<button
+						type="button"
+						onClick={() => {
+							navigator.clipboard.writeText(MCP_ENDPOINT_URL);
+							copyToast.show();
+						}}
+						className="px-3 py-2 bg-hyper-green text-carbon text-xs font-semibold rounded-lg hover:bg-hyper-green/90 shrink-0"
+					>
+						Copy URL
+					</button>
+				</div>
+			</div>
+
+			<div className="mb-4 text-sm text-muted">
+				<p className="font-medium text-carbon mb-1">Supported clients</p>
+				<p>{MCP_SUPPORTED_CLIENTS.join(", ")}.</p>
+				<p className="mt-2">
+					Cursor: open MCP settings and add a remote server with the URL above.
+					Claude Desktop and similar clients follow the same paste-URL flow —
+					your browser opens for sign-in automatically.
+				</p>
+			</div>
+
+			<div className="flex flex-wrap gap-3 mb-6">
+				<Link
+					to="/docs/api#mcp"
+					className="text-sm font-medium text-hyper-green hover:underline"
+				>
+					Full MCP documentation
+				</Link>
+				<Link
+					to="/blog/mcp-kitchen-assistant"
+					className="text-sm font-medium text-hyper-green hover:underline"
+				>
+					Setup guide
+				</Link>
+			</div>
+
+			<h4 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+				Active grants
+			</h4>
+			<p className="text-sm text-muted mb-3">
+				AI clients you authorized via OAuth. Revoking a grant takes effect
+				immediately and does not affect API keys below.
 			</p>
 			{grants.length === 0 ? (
-				<p className="text-sm text-muted">No connected agents.</p>
+				<p className="text-sm text-muted mb-4">No connected agents yet.</p>
 			) : (
-				<ul className="space-y-3">
+				<ul className="space-y-3 mb-4">
 					{grants.map((grant) => (
 						<li
 							key={grant.consentId}
@@ -1590,6 +1652,21 @@ function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 						</li>
 					))}
 				</ul>
+			)}
+
+			<McpReferencePanel
+				expanded={mcpRefExpanded}
+				onToggle={() => setMcpRefExpanded((v) => !v)}
+				onClose={() => setMcpRefExpanded(false)}
+			/>
+
+			{copyToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Copied"
+					description="MCP URL copied to clipboard"
+					onDismiss={copyToast.hide}
+				/>
 			)}
 		</section>
 	);
@@ -1710,6 +1787,22 @@ function HelpSection() {
 							Request a feature
 						</a>
 					</div>
+				</div>
+
+				<div>
+					<h3 className="text-xs text-label text-muted mb-1">
+						Connect an AI agent
+					</h3>
+					<p className="text-sm text-muted mb-3">
+						Paste the MCP URL into Cursor, Claude Desktop, or any compatible
+						client — authorize once in your browser.
+					</p>
+					<Link
+						to="/hub/settings#connected-agents"
+						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+					>
+						Connected Agents setup
+					</Link>
 				</div>
 
 				<div>
@@ -2196,33 +2289,34 @@ const SCOPE_META: Record<
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:read": {
-		label: "MCP Read",
-		description: "Read-only access across MCP tools",
+		label: "MCP Read (advanced)",
+		description: "Manual MCP auth: read-only access across MCP tools",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:inventory:write": {
-		label: "MCP Inventory Write",
-		description: "Create/update/remove pantry items via MCP",
+		label: "MCP Inventory Write (advanced)",
+		description: "Manual MCP auth: create/update/remove pantry items via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:galley:write": {
-		label: "MCP Galley Write",
-		description: "Create/update meals and cook flows via MCP",
+		label: "MCP Galley Write (advanced)",
+		description: "Manual MCP auth: create/update meals and cook flows via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:manifest:write": {
-		label: "MCP Manifest Write",
-		description: "Update meal plan entries via MCP",
+		label: "MCP Manifest Write (advanced)",
+		description: "Manual MCP auth: update meal plan entries via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:supply:write": {
-		label: "MCP Supply Write",
-		description: "Manage shopping list items via MCP",
+		label: "MCP Supply Write (advanced)",
+		description: "Manual MCP auth: manage shopping list items via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 	"mcp:preferences:write": {
-		label: "MCP Preferences Write",
-		description: "Update preferences and related settings via MCP",
+		label: "MCP Preferences Write (advanced)",
+		description:
+			"Manual MCP auth: update preferences and related settings via MCP",
 		color: "bg-hyper-green/20 text-hyper-green border border-hyper-green/30",
 	},
 };
@@ -2258,7 +2352,6 @@ function ApiKeysSection({
 	origin: string;
 }) {
 	const [apiRefExpanded, setApiRefExpanded] = useState(false);
-	const [mcpRefExpanded, setMcpRefExpanded] = useState(false);
 	const apiRefRef = useRef<HTMLDivElement>(null);
 	const copyToast = useToast({ duration: 3000 });
 
@@ -2314,13 +2407,23 @@ function ApiKeysSection({
 		<section className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">API Keys</h3>
 			<p className="text-sm text-muted mb-4">
-				Create keys with configurable access scopes for{" "}
-				<span className="font-medium text-carbon">{organizationName}</span>. Use
-				the key in the{" "}
+				Organization-scoped keys for the{" "}
+				<span className="font-medium text-carbon">REST v1 API</span> and{" "}
+				<span className="font-medium text-carbon">advanced MCP</span> setups
+				(CI, custom headers, legacy clients) for{" "}
+				<span className="font-medium text-carbon">{organizationName}</span>. For
+				standard AI clients, use{" "}
+				<Link
+					to="/hub/settings#connected-agents"
+					className="text-hyper-green font-medium hover:underline"
+				>
+					Connected Agents
+				</Link>{" "}
+				(OAuth) above instead. Send keys as{" "}
 				<code className="text-xs bg-platinum/50 px-1 rounded">
 					Authorization: Bearer &lt;key&gt;
 				</code>{" "}
-				header or{" "}
+				or{" "}
 				<code className="text-xs bg-platinum/50 px-1 rounded">X-Api-Key</code>.
 			</p>
 
@@ -2436,7 +2539,7 @@ function ApiKeysSection({
 					</div>
 					<div>
 						<p className="text-[11px] text-muted mb-1 uppercase tracking-wide">
-							MCP (Least Privilege)
+							Advanced MCP (manual auth)
 						</p>
 						<div className="flex flex-wrap gap-2">
 							{MCP_SCOPE_ORDER.map((scope) => {
@@ -2633,12 +2736,6 @@ function ApiKeysSection({
 					</div>
 				)}
 			</div>
-
-			<McpReferencePanel
-				expanded={mcpRefExpanded}
-				onToggle={() => setMcpRefExpanded((v) => !v)}
-				onClose={() => setMcpRefExpanded(false)}
-			/>
 		</section>
 	);
 }
@@ -2788,22 +2885,7 @@ const MCP_TOOLS = [
 	},
 ] as const;
 
-const MCP_CONFIG_SNIPPET = `{
-  "mcpServers": {
-    "ration": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.ration.mayutic.com/mcp",
-        "--header",
-        "Authorization:\${RATION_AUTH_HEADER}"
-      ],
-      "env": {
-        "RATION_AUTH_HEADER": "Bearer <your-mcp-scoped-key>"
-      }
-    }
-  }
-}`;
+const MCP_CONFIG_SNIPPET = MCP_API_KEY_CONFIG_SNIPPET;
 
 function McpReferencePanel({
 	expanded,
@@ -2815,8 +2897,9 @@ function McpReferencePanel({
 	onClose: () => void;
 }) {
 	const copyToast = useToast({ duration: 3000 });
+	const [advancedExpanded, setAdvancedExpanded] = useState(false);
 	return (
-		<div className="mt-6 pt-6 border-t border-platinum">
+		<div className="pt-4 border-t border-platinum">
 			<button
 				type="button"
 				onClick={onToggle}
@@ -2843,88 +2926,98 @@ function McpReferencePanel({
 				>
 					MCP
 				</span>
-				{expanded ? "Hide MCP reference" : "View MCP reference"}
+				{expanded ? "Hide tools & advanced auth" : "View tools & advanced auth"}
 			</button>
 
 			{expanded && (
 				<div className="mt-4 space-y-5 text-sm">
 					<p className="text-muted">
-						Connect any MCP-compatible AI client to your Ration data in real
-						time. Query inventory, meals, and shopping lists, or add items,
-						update pantry quantities, cook meals, and manage meal plans from
-						Claude, Cursor, or any agent that supports the Model Context
-						Protocol.
+						Standard clients authenticate via OAuth when you paste the MCP URL
+						above. The reference below covers available tools and manual API-key
+						setup for legacy or headless clients.
 					</p>
+
+					<div>
+						<h4 className="font-semibold text-carbon mb-2">
+							Recommended: OAuth
+						</h4>
+						<p className="text-muted">
+							No config file or API key required. Add{" "}
+							<code className="text-xs bg-platinum/50 px-1 rounded font-mono">
+								{MCP_ENDPOINT_URL}
+							</code>{" "}
+							to your MCP client — browser sign-in handles authentication and
+							scoped consent automatically.
+						</p>
+					</div>
+
+					<div>
+						<button
+							type="button"
+							onClick={() => setAdvancedExpanded((v) => !v)}
+							className="flex items-center gap-2 text-sm font-medium text-carbon hover:text-hyper-green transition-colors"
+						>
+							<svg
+								className={`w-4 h-4 transition-transform ${advancedExpanded ? "rotate-90" : ""}`}
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								aria-hidden
+							>
+								<title>Expand advanced</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M9 5l7 7-7 7"
+								/>
+							</svg>
+							Advanced: manual API key auth
+						</button>
+						{advancedExpanded && (
+							<div className="mt-3 space-y-3">
+								<p className="text-muted">
+									Create a key with{" "}
+									<span className="font-medium text-hyper-green">mcp:*</span>{" "}
+									scopes in API Keys below, then pass it as a Bearer token via{" "}
+									<code className="font-mono text-xs">mcp-remote</code>.
+								</p>
+								<div className="relative group">
+									<pre className="text-xs bg-carbon text-platinum p-4 rounded-lg overflow-x-auto font-mono leading-relaxed">
+										{MCP_CONFIG_SNIPPET}
+									</pre>
+									<button
+										type="button"
+										onClick={() => {
+											navigator.clipboard.writeText(MCP_CONFIG_SNIPPET);
+											copyToast.show();
+										}}
+										className="absolute top-2 right-2 px-2 py-1 bg-platinum/10 text-platinum text-[10px] font-semibold rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-platinum/20"
+									>
+										Copy
+									</button>
+								</div>
+								<p className="text-xs text-muted">
+									Replace{" "}
+									<code className="bg-platinum/50 px-1 rounded font-mono">
+										&lt;your-mcp-scoped-key&gt;
+									</code>{" "}
+									with your key.{" "}
+									<code className="bg-platinum/50 px-1 rounded font-mono">
+										RATION_AUTH_HEADER
+									</code>{" "}
+									must include the <code className="font-mono">Bearer </code>
+									prefix.
+								</p>
+							</div>
+						)}
+					</div>
 
 					<div>
 						<h4 className="font-semibold text-carbon mb-2">Endpoint</h4>
 						<code className="block text-xs bg-platinum/50 px-3 py-2 rounded-lg font-mono text-carbon break-all">
-							https://mcp.ration.mayutic.com/mcp
+							{MCP_ENDPOINT_URL}
 						</code>
-					</div>
-
-					<div>
-						<h4 className="font-semibold text-carbon mb-2">Authentication</h4>
-						<p className="text-muted mb-1">
-							Generate a key with one or more{" "}
-							<span className="font-medium text-hyper-green">MCP</span> scopes
-							above (prefer granular <code>mcp:*</code>; legacy <code>mcp</code>{" "}
-							still works), then pass it as a Bearer token.
-						</p>
-					</div>
-
-					<div>
-						<h4 className="font-semibold text-carbon mb-2">
-							Claude Desktop / Cursor config
-						</h4>
-						<div className="relative group">
-							<pre className="text-xs bg-carbon text-platinum p-4 rounded-lg overflow-x-auto font-mono leading-relaxed">
-								{MCP_CONFIG_SNIPPET}
-							</pre>
-							<button
-								type="button"
-								onClick={() => {
-									navigator.clipboard.writeText(MCP_CONFIG_SNIPPET);
-									copyToast.show();
-								}}
-								className="absolute top-2 right-2 px-2 py-1 bg-platinum/10 text-platinum text-[10px] font-semibold rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-platinum/20"
-							>
-								Copy
-							</button>
-						</div>
-						<p className="text-xs text-muted mt-2">
-							Replace{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								&lt;your-mcp-scoped-key&gt;
-							</code>{" "}
-							with the actual API key you generated above. The{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								RATION_AUTH_HEADER
-							</code>{" "}
-							env var must be the full value including the{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								Bearer{" "}
-							</code>{" "}
-							prefix (e.g.{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								Bearer rtn_live_...
-							</code>
-							). It is read by{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								mcp-remote
-							</code>{" "}
-							at runtime — your key is never hardcoded.
-						</p>
-						<p className="text-xs text-muted mt-1">
-							<strong className="text-carbon">Connection fails?</strong> Verify{" "}
-							<code className="bg-platinum/50 px-1 rounded font-mono">
-								RATION_AUTH_HEADER
-							</code>{" "}
-							is set correctly in your Cursor/Claude config (full{" "}
-							<code className="font-mono">Bearer </code>
-							prefix), and try <code className="font-mono">--debug</code> in the
-							args for mcp-remote to inspect logs.
-						</p>
 					</div>
 
 					<div>

@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const body = `# Ration
 
-> AI-native kitchen management. Pantry inventory, recipes, weekly meal plans, supply lists, and an MCP server that lets Claude, ChatGPT, Cursor, or any MCP-compatible AI client operate the kitchen with natural language.
+> AI-native kitchen management. Pantry inventory, recipes, weekly meal plans, supply lists, and an OAuth MCP server — paste one URL into Claude, ChatGPT, or Cursor and authorize in your browser.
 
 Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ships an open MCP server, a public REST API, and a free tier suitable for getting started.
 
@@ -37,8 +37,9 @@ Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ship
 
 ## For developers and AI agents
 
-- [API documentation](${origin}/docs/api): REST API reference for programmatic access to inventory, recipes, meal plans, and supply lists.
-- [MCP server card](${origin}/.well-known/mcp/server-card.json): MCP server metadata for AI clients.
+- [API documentation](${origin}/docs/api): REST API and OAuth MCP connection guide.
+- [MCP server card](${origin}/.well-known/mcp/server-card.json): MCP server metadata (oauth2 transport).
+- [OAuth authorization server](${origin}/.well-known/oauth-authorization-server): OAuth 2.1 metadata for MCP clients.
 - [Agent skills index](${origin}/.well-known/agent-skills/index.json): Available agent skills exposed by Ration.
 - [OpenAPI spec](${origin}/api/openapi.json): Full machine-readable API specification.
 

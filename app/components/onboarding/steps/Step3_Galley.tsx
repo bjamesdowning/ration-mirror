@@ -51,7 +51,8 @@ export function Step3_Galley({ step, onNext, onBack, onSkip }: StepProps) {
 				shopping.
 			</TechInsight>
 			<TechInsight>
-				Import from URL, paste JSON, or manage meals via MCP.
+				Import from URL, paste JSON, or manage meals via MCP (Settings →
+				Connected Agents).
 			</TechInsight>
 		</TourCard>
 	);

@@ -2,7 +2,7 @@
  * Centralized AI model and generation config for Gemini via AI Gateway.
  * Thinking levels are applied per feature (scan, meal-generate, import-url, plan-week).
  */
-export const AI_MODEL = "gemini-3.1-flash-lite-preview";
+export const AI_MODEL = "gemini-3.5-flash";
 
 export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 

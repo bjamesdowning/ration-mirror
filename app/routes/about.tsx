@@ -213,8 +213,9 @@ export default function AboutPage() {
 						Try Ration with your AI assistant
 					</h2>
 					<p className="text-muted text-sm max-w-md mx-auto mb-6 leading-relaxed">
-						Free to start. Connect Claude, ChatGPT, Cursor, or any
-						MCP-compatible client and let it operate your kitchen.
+						Free to start. Paste the MCP URL into Claude, ChatGPT, or Cursor —
+						authorize once in your browser and let your agent operate your
+						kitchen.
 					</p>
 					<Link
 						to="/"

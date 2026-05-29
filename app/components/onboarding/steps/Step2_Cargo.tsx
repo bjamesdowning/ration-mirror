@@ -48,7 +48,8 @@ export function Step2_Cargo({ step, onNext, onBack, onSkip }: StepProps) {
 			</TechInsight>
 			<TechInsight>Import CSV for bulk spreadsheet upload.</TechInsight>
 			<TechInsight>
-				Control Cargo from any MCP-compatible AI client (Claude, Cursor).
+				Control Cargo from any MCP client — connect in Settings → Connected
+				Agents.
 			</TechInsight>
 		</TourCard>
 	);

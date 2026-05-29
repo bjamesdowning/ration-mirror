@@ -2,6 +2,7 @@
 
 ## Use MCP for
 
+- Connecting an AI assistant via **OAuth** (recommended) or API key — see *Connecting to MCP*.
 - Scripted or assistant-driven **pantry**, **supply**, **meal plan**, and **Galley** edits.
 - **Semantic search** and **`match_meals`** from an AI IDE.
 - **Receipt → pantry** ingestion when the agent's own LLM has done the parsing (`preview_inventory_import` → `apply_inventory_import`).
@@ -27,7 +28,7 @@ There are **no MCP tools** that replace those flows. The principle is: if the ag
 | CSV inventory export/import | REST **`inventory`** scope |
 | Galley JSON export/import | REST **`galley`** scope |
 | Supply CSV export | REST **`supply`** scope |
-| Interactive agent tools | MCP host + legacy **`mcp`** scope *or* fine-grained **`mcp:*`** scopes (see *REST API (v1) overview* scope table) |
+| Interactive agent tools | MCP host — **OAuth** (recommended) or API key with **`mcp:*`** scopes (see *REST API (v1) overview* scope table) |
 
 ## Credits reminder
 

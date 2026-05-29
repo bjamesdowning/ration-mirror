@@ -6,8 +6,8 @@ import {
 } from "~/lib/ai-config.server";
 
 describe("ai-config.server", () => {
-	it("AI_MODEL is gemini-3.1-flash-lite-preview", () => {
-		expect(AI_MODEL).toBe("gemini-3.1-flash-lite-preview");
+	it("AI_MODEL is gemini-3.5-flash", () => {
+		expect(AI_MODEL).toBe("gemini-3.5-flash");
 	});
 
 	it.each<ThinkingLevel>([

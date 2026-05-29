@@ -22,7 +22,7 @@ other MCP-compatible AI client can operate the kitchen with natural language.
 - **Database:** Cloudflare D1 (SQLite at the edge) + Drizzle ORM
 - **Object store:** Cloudflare R2
 - **Vector search:** Cloudflare Vectorize (semantic recipe and ingredient search)
-- **Image AI:** Cloudflare Workers AI with Llama 3 Vision for receipt parsing
+- **Image AI:** Google Gemini 3.5 Flash via Cloudflare AI Gateway for receipt parsing and recipe generation
 - **Auth:** Better Auth (edge-compatible)
 - **Payments:** Stripe (Crew Member subscription tier + credit packs)
 
@@ -55,10 +55,13 @@ Stripe) so usage costs are bounded.
 
 ## MCP integration
 
-Ration exposes an MCP server at \`https://mcp.ration.mayutic.com\`. Connect any
-MCP-compatible client (Claude Desktop, Cursor, Zed, ChatGPT desktop, OpenAI's
-Agent SDK) to read inventory, find cookable meals, plan a week, generate supply
-lists, and consume ingredients after cooking — all in natural language.
+Ration exposes an OAuth-first MCP server at \`https://mcp.ration.mayutic.com/mcp\`.
+
+1. Paste the URL into an MCP-compatible client (Claude Desktop, Cursor, ChatGPT desktop, Zed).
+2. Complete browser sign-in, select your household, and approve scoped permissions.
+3. Revoke access anytime in Hub → Settings → Connected Agents.
+
+Advanced: organization API keys with \`mcp:*\` scopes for manual header auth and REST v1 import/export.
 `;
 
 export async function loader(_args: Route.LoaderArgs) {

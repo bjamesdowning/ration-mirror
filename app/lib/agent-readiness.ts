@@ -1,3 +1,4 @@
+import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_MCP_SCOPES,
 	resolveAuthorizationServerUrl,
@@ -368,8 +369,13 @@ Use this skill when an AI agent needs to work with a user's Ration kitchen data 
 ## Connection
 
 - App: https://ration.mayutic.com
-- MCP endpoint: https://mcp.ration.mayutic.com/mcp
-- Auth: Ration API key with the required scope
+- MCP endpoint: ${MCP_ENDPOINT_URL}
+- Auth (recommended): OAuth 2.1 — paste the MCP URL into a compatible client, complete browser sign-in, select household, and approve scopes. Revoke grants in Hub → Settings → Connected Agents.
+- Auth (advanced): Organization API key with \`mcp:*\` scopes for manual header auth or REST v1.
+
+## Connect Steps
+
+${formatMcpConnectMarkdown()}
 
 ## Relevant Tools
 
@@ -393,7 +399,13 @@ export const HOME_MARKDOWN = `# Ration
 
 ${SITE_DESCRIPTION}
 
-Ration lets you manage an entire kitchen through an AI agent. Connect Claude, Cursor, or any MCP-compatible client to search Cargo, match meals, plan a Manifest, generate Supply lists, and update inventory with user-authorized tools.
+Ration lets you manage an entire kitchen through an AI agent. Paste the MCP URL into Claude, Cursor, or any compatible client — OAuth browser sign-in grants scoped access to search Cargo, match meals, plan a Manifest, generate Supply lists, and update inventory.
+
+## Connect Your Agent
+
+${formatMcpConnectMarkdown()}
+
+The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/server-card.json\`.
 
 ## Core Loop
 
@@ -405,7 +417,7 @@ Ration lets you manage an entire kitchen through an AI agent. Connect Claude, Cu
 
 ## Agent-Ready Surfaces
 
-- MCP server: https://mcp.ration.mayutic.com/mcp
+- MCP server: ${MCP_ENDPOINT_URL} (OAuth 2.1 primary)
 - API catalog: /.well-known/api-catalog
 - MCP server card: /.well-known/mcp/server-card.json
 - Agent skills: /.well-known/agent-skills/index.json
@@ -432,15 +444,21 @@ The v1 API uses organization-scoped API keys. Send keys with \`X-Api-Key\` or \`
 
 ## MCP Server
 
-Endpoint: \`https://mcp.ration.mayutic.com/mcp\`
+Endpoint: \`${MCP_ENDPOINT_URL}\`
 
-Use an API key with the \`mcp\` scope. The MCP server exposes tools for inventory search, meal matching, meal planning, supply list management, cooking/consumption deduction, and credit checks.
+**Recommended:** OAuth 2.1 delegated access. Paste the URL into an MCP client — the user completes browser sign-in, selects a household, and approves granular \`mcp:*\` scopes. Revoke grants in Hub → Settings → Connected Agents.
+
+**Advanced:** Organization API keys with \`mcp:*\` scopes for manual Bearer header auth (CI, legacy clients).
+
+The MCP server exposes tools for inventory search, meal matching, meal planning, supply list management, cooking/consumption deduction, and credit checks.
 
 ## Discovery
 
 - API catalog: \`/.well-known/api-catalog\`
 - OpenAPI description: \`/api/openapi.json\`
-- API-key protected resource metadata: \`/.well-known/oauth-protected-resource\`
+- OAuth authorization server: \`/.well-known/oauth-authorization-server\`
+- MCP protected resource metadata: \`/.well-known/oauth-protected-resource\` (on MCP host)
+- REST protected resource metadata: \`/.well-known/oauth-protected-resource\` (on app domain; API keys)
 - MCP server card: \`/.well-known/mcp/server-card.json\`
 - Agent skills index: \`/.well-known/agent-skills/index.json\`
 `;

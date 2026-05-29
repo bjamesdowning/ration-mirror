@@ -18,7 +18,7 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
   - [3.5 Supply Sync (D1 + Vectorize)](#35-supply-sync-d1--vectorize)
   - [3.6 Meal Plan Consume Flow (D1 + Vectorize)](#36-meal-plan-consume-flow-d1--vectorize)
   - [3.7 Plan Week (Queue + AI Gateway)](#37-plan-week-queue--ai-gateway)
-  - [3.8 Import URL (Queue + Workers AI + Browser Rendering)](#38-import-url-queue--workers-ai--browser-rendering)
+  - [3.8 Import URL (Queue + AI Gateway + Browser Rendering)](#38-import-url-queue--ai-gateway--browser-rendering)
 - [4. Feature Reference](#4-feature-reference)
   - [4.1 Cargo (Inventory)](#41-cargo-inventory)
   - [4.2 Galley (Recipes & Provisions)](#42-galley-recipes--provisions)
@@ -46,7 +46,8 @@ A pantry management and meal-planning application built as a Cloudflare Worker w
 - [10. MCP Server](#10-mcp-server)
 - [11. Public REST API (v1)](#11-public-rest-api-v1)
 - [12. Testing](#12-testing)
-- [13. Fin knowledge hub (support)](#13-fin-knowledge-hub-support)
+- [13. Local Development & Deployment](#13-local-development--deployment)
+- [14. Fin knowledge hub (support)](#14-fin-knowledge-hub-support)
 
 ---
 
@@ -116,7 +117,7 @@ flowchart TB
 flowchart TB
     subgraph McpWorker["Cloudflare Worker: ration-mcp"]
         McpHandler["workers/mcp.ts"]
-        McpAuth["API Key Auth — mcp or mcp:* scopes"]
+        McpAuth["OAuth 2.1 + API Key fallback — mcp:* scopes"]
         McpTools["MCP Tools — search, list, supply, match, write"]
         McpHandler --> McpAuth
         McpHandler --> McpTools
@@ -171,11 +172,11 @@ flowchart TB
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
 | `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
-| AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3-flash-preview` for scan, generate, plan |
+| AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash` for scan, generate, plan, import |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
 | `PLAN_WEEK_QUEUE` | Queue producer | Enqueue plan-week jobs; consumer runs Gemini for weekly meal schedule |
-| `IMPORT_URL_QUEUE` | Queue producer | Enqueue URL import jobs; consumer fetches page, runs Llama 3.3 extraction, creates meal |
+| `IMPORT_URL_QUEUE` | Queue producer | Enqueue URL import jobs; consumer fetches page, runs Gemini extraction, creates meal |
 
 **Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
 
@@ -300,7 +301,7 @@ sequenceDiagram
     rect rgb(227, 242, 253)
         Note over Consumer,AIGateway: Consumer (async)
         Consumer->>R2: get(imageKey)
-        Consumer->>AIGateway: POST gemini-3-flash-preview (vision)
+        Consumer->>AIGateway: POST gemini-3.5-flash (vision)
         AIGateway-->>Consumer: { items: [...] }
         Consumer->>Consumer: Zod validate + ingest to D1 + Vectorize
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
@@ -317,7 +318,7 @@ sequenceDiagram
 **AI Gateway routing:**
 ```
 https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/google-ai-studio
-  → /v1beta/models/gemini-3-flash-preview:generateContent
+  → /v1beta/models/gemini-3.5-flash:generateContent
 ```
 
 ---
@@ -434,7 +435,7 @@ sequenceDiagram
     rect rgb(232, 245, 233)
         Note over Consumer,Vectorize: Consumer (async)
         Consumer->>D1: Fetch cargo names + user allergens
-        Consumer->>AIGateway: POST gemini-3-flash-preview (pantry + allergen prompt)
+        Consumer->>AIGateway: POST gemini-3.5-flash (pantry + allergen prompt)
         AIGateway-->>Consumer: { recipes: [3 AI-generated meals] }
         Consumer->>Consumer: Zod validate + INJECTION_PATTERNS check
         loop For each recipe
@@ -551,7 +552,7 @@ sequenceDiagram
     rect rgb(232, 245, 233)
         Note over Consumer,AIGateway: Consumer (async)
         Consumer->>D1: Fetch meals, user allergens
-        Consumer->>AIGateway: POST gemini-3-flash (week plan prompt)
+        Consumer->>AIGateway: POST gemini-3.5-flash (week plan prompt)
         AIGateway-->>Consumer: { schedule: [...] }
         Consumer->>Consumer: Validate mealIds against org whitelist
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
@@ -562,9 +563,9 @@ User confirms the preview → bulk add via `POST /api/meal-plans/:id/entries/bul
 
 ---
 
-### 3.8 Import URL (Queue + Workers AI + Browser Rendering)
+### 3.8 Import URL (Queue + AI Gateway + Browser Rendering)
 
-URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Llama 3.3, creates the meal in D1.
+URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Gemini via AI Gateway, creates the meal in D1.
 
 ```mermaid
 sequenceDiagram
@@ -574,7 +575,7 @@ sequenceDiagram
     participant Queue as IMPORT_URL_QUEUE
     participant Consumer as Queue Consumer
     participant Fetch as Plain Fetch / BR
-    participant AI as Workers AI
+    participant AIGateway as AI Gateway
 
     User->>Worker: POST /api/meals/import { url }
     Worker->>Worker: requireActiveGroup + SSRF check + duplicate check
@@ -591,11 +592,11 @@ sequenceDiagram
     end
 
     rect rgb(232, 245, 233)
-        Note over Consumer,AI: Consumer (async)
+        Note over Consumer,AIGateway: Consumer (async)
         Consumer->>Fetch: fetch(url) or fetchPageAsMarkdown (BR fallback)
         Fetch-->>Consumer: page content
-        Consumer->>AI: Llama 3.3 70B — JSON extraction
-        AI-->>Consumer: { title, ingredients, steps, ... }
+        Consumer->>AIGateway: POST gemini-3.5-flash — JSON extraction
+        AIGateway-->>Consumer: { title, ingredients, steps, ... }
         Consumer->>Consumer: NOT_A_RECIPE? Retry with BR
         Consumer->>D1: createMeal() — insert meal + ingredients
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
@@ -631,7 +632,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (1 credit) returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch or Browser Rendering fallback), runs Llama 3.3 70B for extraction, creates the meal in D1. On success the client redirects to the meal. Duplicate URLs return `DUPLICATE_URL` synchronously (409) or from the poll. HTTPS-only URLs are enforced (SSRF guard). Browser Rendering is used when plain fetch yields 429/403, insufficient content, or AI returns `NOT_A_RECIPE`. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only.
+- **URL import** — `POST /api/meals/import` (1 credit) returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch or Browser Rendering fallback), runs Gemini 3.5 Flash via AI Gateway for extraction, creates the meal in D1. On success the client redirects to the meal. Duplicate URLs return `DUPLICATE_URL` synchronously (409) or from the poll. HTTPS-only URLs are enforced (SSRF guard). Browser Rendering is used when plain fetch yields 429/403, insufficient content, or AI returns `NOT_A_RECIPE`. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Stored in a separate `meal_tag` join table (unique per meal+tag). Used for filtering in the Galley view and the MCP `list_meals` tool.
@@ -788,10 +789,10 @@ Credits belong to the **organization**, not the user. All members of a group dra
 
 | Operation | Cost | Route | AI Service |
 |-----------|------|-------|------------|
-| Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3 Flash |
-| Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3 Flash |
-| URL Recipe Import | 1 cr | `POST /api/meals/import` | Workers AI → Llama 3.3 70B |
-| Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3 Flash |
+| Receipt Scan | 2 cr | `POST /api/scan` | AI Gateway → Gemini 3.5 Flash |
+| Meal Generate | 2 cr | `POST /api/meals/generate` | AI Gateway → Gemini 3.5 Flash |
+| URL Recipe Import | 1 cr | `POST /api/meals/import` | AI Gateway → Gemini 3.5 Flash |
+| Weekly Meal Plan | 3 cr | `POST /api/meal-plans/:id/plan-week` | AI Gateway → Gemini 3.5 Flash |
 | Organize Cargo | 2 cr | *(reserved — not yet implemented)* | — |
 
 **Queue pattern (Scan, Meal Generate, Plan Week, Import URL):** All four AI features use the same queue + D1 status pattern. Producer: `withCreditGate` → enqueue → `insertQueueJobPending` → return `requestId`. Client polls `getQueueJob` until `completed` or `failed`. Consumer runs the AI and calls `updateQueueJobResult`. Credit costs unchanged; timeouts avoided.
@@ -812,10 +813,10 @@ All AI-heavy operations use Cloudflare Queues with a central **registry** in `ap
 
 | Queue | Job Type | Consumer | AI Service |
 |-------|----------|----------|------------|
-| `ration-scan` | `scan` | `runScanConsumerJob` | AI Gateway → Gemini 3 Flash |
-| `ration-meal-generate` | `meal_generate` | `runMealGenerateConsumerJob` | AI Gateway → Gemini 3 Flash |
-| `ration-plan-week` | `plan_week` | `runPlanWeekConsumerJob` | AI Gateway → Gemini 3 Flash |
-| `ration-import-url` | `import_url` | `runImportUrlConsumerJob` | Workers AI → Llama 3.3 70B |
+| `ration-scan` | `scan` | `runScanConsumerJob` | AI Gateway → Gemini 3.5 Flash |
+| `ration-meal-generate` | `meal_generate` | `runMealGenerateConsumerJob` | AI Gateway → Gemini 3.5 Flash |
+| `ration-plan-week` | `plan_week` | `runPlanWeekConsumerJob` | AI Gateway → Gemini 3.5 Flash |
+| `ration-import-url` | `import_url` | `runImportUrlConsumerJob` | AI Gateway → Gemini 3.5 Flash |
 
 **Flow:** Producer → enqueue + `insertQueueJobPending(DB, requestId, jobType, orgId)` → return `requestId`. Client polls `GET /api/.../status/:requestId` which calls `getQueueJob(DB, requestId)`. Consumer runs the AI, writes `updateQueueJobResult(DB, requestId, status, result)`. D1 provides strong read-after-write consistency for status; no KV eventual consistency.
 
@@ -1514,7 +1515,17 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **No-credit boundary:** AI features that would charge credits (receipt scan, AI meal generation, AI plan week, URL recipe import) are **not** exposed as MCP tools. The agent's own LLM does any parsing locally, and the deterministic data path is the only thing that touches Ration. Cargo writes via MCP set `skipVectorPhase: true`, so adding pantry items costs zero credits. The `get_credit_balance` tool was intentionally removed.
 
-**Integration example (Cursor `~/.cursor/mcp.json`):**
+**Integration example (OAuth — recommended):**
+
+Paste the MCP URL into Cursor, Claude Desktop, ChatGPT desktop, or any client with OAuth 2.1 discovery. No config snippet required — the client discovers auth via the MCP server card and protected-resource metadata:
+
+```
+https://mcp.ration.mayutic.com/mcp
+```
+
+Complete browser sign-in, select your household, and approve scopes. Manage or revoke grants in **Hub → Settings → Connected Agents**.
+
+**Integration example (Advanced — API key, Cursor `~/.cursor/mcp.json`):**
 
 ```json
 {
@@ -1527,24 +1538,33 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 }
 ```
 
-**Integration example (Claude Desktop `claude_desktop_config.json`):**
+**Integration example (Advanced — mcp-remote bridge):**
 
 ```json
 {
   "mcpServers": {
     "ration": {
-      "url": "https://mcp.ration.mayutic.com/mcp",
-      "headers": { "Authorization": "Bearer rtn_live_<your-key>" }
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.ration.mayutic.com/mcp",
+        "--header",
+        "Authorization:${RATION_AUTH_HEADER}"
+      ],
+      "env": {
+        "RATION_AUTH_HEADER": "Bearer rtn_live_<your-key>"
+      }
     }
   }
 }
 ```
 
-The same `Bearer rtn_live_...` header works with `curl` or any other MCP-compatible client. Only `/mcp` requires authentication; the discovery endpoints under `/.well-known/...` are intentionally public.
+Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...` are intentionally public.
 
 **Troubleshooting MCP connections:**
 
-- **ServerError / Connection closed:** Ensure `RATION_AUTH_HEADER` in your Cursor/Claude config is set to the full value including the `Bearer ` prefix (e.g. `Bearer rtn_live_xxxxx`). Only `/mcp` requires auth; discovery paths are public so agents can inspect connection metadata before sending credentials.
+- **OAuth reconnect loop:** Ensure the client supports OAuth 2.1 / protected-resource discovery; check the MCP server card auth type is `oauth2`.
+- **ServerError / Connection closed (API key):** Ensure `Authorization` is exactly `Bearer ` + your full key (e.g. `Bearer rtn_live_xxxxx`).
 - **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
 - **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.
 
@@ -1554,8 +1574,8 @@ The same `Bearer rtn_live_...` header works with `curl` or any other MCP-compati
 |------|--------------|---------|
 | `/.well-known/api-catalog` | `application/linkset+json` | RFC 9727 API catalog with REST and MCP anchors. |
 | `/api/openapi.json` | `application/vnd.oai.openapi+json` | OpenAPI description for v1 import/export endpoints. |
-| `/.well-known/oauth-protected-resource` | `application/json` | Protected resource metadata that accurately describes current API-key authentication and supported scopes. |
-| `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport and tool capability groups. |
+| `/.well-known/oauth-protected-resource` | `application/json` | MCP host: OAuth protected-resource metadata with authorization servers and `mcp:*` scopes. App domain metadata documents API-key auth for REST. |
+| `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport (auth: `oauth2`) and tool capability groups. |
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
 | `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |
 | `/` and `/docs/api` with `Accept: text/markdown` | `text/markdown` | Markdown versions of the splash page and API docs for agents. |
@@ -1640,6 +1660,48 @@ bun run lint:fix      # Biome v2 auto-fix
 
 ---
 
-## 13. Fin knowledge hub (support)
+## 13. Local Development & Deployment
+
+### Local development (iCloud Drive)
+
+If the project lives in an iCloud-synced directory, keep dependencies out of sync to avoid symlink corruption:
+
+```bash
+bun install
+mv node_modules node_modules.nosync
+ln -s node_modules.nosync node_modules
+```
+
+After `bun install` breaks the symlink, run `bun run ensure-deps` to restore it. E2E runs this automatically via `pretest:e2e`. Standard installs (CI, Cloudflare Builds, non-iCloud machines) use a real `node_modules/` directory and do not need this setup.
+
+### Cloudflare Workers Builds
+
+Both Workers share this repo and `package.json`. Configure build commands in the Cloudflare dashboard (Workers Builds has no repo-side config file):
+
+**Main HTTP worker (`ration`, [`wrangler.jsonc`](wrangler.jsonc)):**
+
+```bash
+bun install --frozen-lockfile && bun run build && bunx wrangler deploy
+```
+
+**MCP worker (`ration-mcp`, [`wrangler.mcp.jsonc`](wrangler.mcp.jsonc)):**
+
+```bash
+bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.mcp.jsonc
+```
+
+`postinstall` runs `cf-typegen` only (generates gitignored `worker-configuration.d.ts`). The MCP worker does not need `bun run build` — Wrangler bundles `workers/mcp.ts` directly.
+
+**Manual deploy (local):**
+
+```bash
+bun run db:migrate:prod   # run before schema-dependent releases
+bun run deploy            # main worker
+bun run deploy:mcp        # MCP worker
+```
+
+---
+
+## 14. Fin knowledge hub (support)
 
 Customer-facing Markdown for **Intercom Fin** (and similar) lives in [`docs/fin/`](docs/fin/). See [`docs/fin/README.md`](docs/fin/README.md) for collection mapping, [`docs/fin/INDEX.md`](docs/fin/INDEX.md) for article titles and example questions, and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md) for post-import golden questions. Keep articles aligned with sections 3–11 of this README when user-visible behavior changes.

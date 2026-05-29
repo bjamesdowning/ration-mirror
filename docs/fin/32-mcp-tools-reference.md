@@ -1,6 +1,6 @@
 # MCP tools reference
 
-All tools are scoped to the **API key's organization**. **MCP calls do not consume AI credits**; they use **rate limits** instead. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, meta? }` or `{ ok: false, tool, error }`) so agents can parse responses deterministically.
+All tools are scoped to the **authorized household** (OAuth grant or API key organization). **MCP calls do not consume AI credits**; they use **rate limits** instead. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, meta? }` or `{ ok: false, tool, error }`) so agents can parse responses deterministically.
 
 ## Rate limit categories
 

@@ -64,7 +64,11 @@ Important boundary: MCP is for structured operations. Credit-consuming AI featur
 
 ## Auth model and least privilege
 
-Ration uses API keys with MCP scopes.
+Ration uses **OAuth 2.1 delegated access** as the primary MCP auth path. Users paste the MCP URL, complete browser sign-in, select a household, and approve granular scopes. Grants are revocable instantly in Hub → Settings → Connected Agents.
+
+The MCP host acts as an OAuth **resource server** (`/.well-known/oauth-protected-resource`); the app domain hosts the **authorization server** (`/.well-known/oauth-authorization-server`, issuer `https://<app-domain>/api/auth`).
+
+**Organization API keys** remain available for REST v1 and advanced MCP (CI, manual Bearer headers, legacy clients).
 
 Current scope model supports:
 
@@ -74,9 +78,9 @@ Current scope model supports:
 - `mcp:manifest:write`
 - `mcp:supply:write`
 - `mcp:preferences:write`
-- plus legacy broad `mcp`
+- plus legacy broad `mcp` (API key only)
 
-This lets teams issue narrow keys for task-specific agents instead of giving full write access by default.
+OAuth consent and API keys both enforce least privilege — teams can issue narrow grants for task-specific agents instead of giving full write access by default.
 
 The server can expose a `get_context` tool so agents can inspect their own capabilities first, then adapt behavior to available scopes.
 

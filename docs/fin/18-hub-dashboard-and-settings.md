@@ -9,7 +9,7 @@ The **hub dashboard** shows configurable **widgets**: inventory stats, cookable 
 | Area | Typical path | Purpose |
 |------|----------------|---------|
 | Dashboard | `/hub` | At-a-glance widgets |
-| Settings | `/hub/settings` | Profile, group, API keys, danger zone |
+| Settings | `/hub/settings` | Profile, group, Connected Agents, API keys, danger zone |
 | Pricing | `/hub/pricing` | Credits, subscription, checkout return |
 | Cargo | `/hub/cargo` | Pantry |
 | Galley | `/hub/galley` | Recipes and provisions |
@@ -21,9 +21,10 @@ Paths match the live app routing; if URLs change, follow navigation inside the p
 
 ## Settings highlights
 
+- **Connected Agents** — connect AI assistants via OAuth MCP; view and revoke active grants (recommended for Cursor, Claude Desktop, ChatGPT desktop)
 - **Display name and avatar**
 - **Allergens and units** (where shown)
-- **API keys** for REST and MCP (including fine-grained **`mcp:*`** scopes)—see *API key safety*, *MCP overview*, and *REST API (v1) overview*
+- **API keys** for REST v1 and advanced MCP (including fine-grained **`mcp:*`** scopes)—see *API key safety*, *MCP overview*, and *REST API (v1) overview*
 - **Group management**: roles, invitations (when tier allows), ownership transfer, credit transfer (owner-only flows as labeled)
 - **Billing portal** link when available from pricing or settings actions
 - **Purge account** (irreversible)—read warnings carefully

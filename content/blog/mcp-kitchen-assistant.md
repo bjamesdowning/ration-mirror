@@ -38,11 +38,25 @@ It's not a separate system or a sync. Same pantry. Same recipes. Same meal plan.
 
 ## Getting connected
 
-You need two things: a Ration account and an API key with the `mcp` scope. Generate one from **Settings → Developer → API Keys** in the dashboard.
+You need a Ration account — that's it. No API key required for standard MCP clients.
+
+### OAuth (recommended)
+
+1. In your MCP client, add server URL **`https://mcp.ration.mayutic.com/mcp`**
+2. Complete browser sign-in, pick your household, and approve permissions
+3. Manage or revoke access anytime in **Hub → Settings → Connected Agents**
 
 ### Claude Desktop
 
-Add this to your `claude_desktop_config.json`:
+Add the MCP URL in your Claude MCP configuration. On first connect, your browser opens for OAuth automatically. After authorization, ask Claude: *"List my Ration pantry."*
+
+### Cursor
+
+Open MCP settings → add a **remote** server → paste `https://mcp.ration.mayutic.com/mcp`. Ration tools appear in the agent tool list after you authorize. If you want a public example of Ration's kitchen tooling before connecting MCP, the [unit converter](https://ration.mayutic.com/tools/unit-converter) shows the same measurement system the app uses internally.
+
+### Alternative: manual API key setup
+
+If your client does not support OAuth discovery, create an API key with **`mcp:*`** scopes in **Hub → Settings → API Keys**, then configure a Bearer header:
 
 ```json
 {
@@ -63,9 +77,7 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-### Cursor
-
-Add the same server block under your MCP settings panel. Once connected, the tools show up automatically. No SDK to install, nothing to build. If you want a public example of Ration's kitchen tooling before connecting MCP, the [unit converter](https://ration.mayutic.com/tools/unit-converter) shows the same measurement system the app uses internally.
+See [Connecting to MCP](/docs/api#mcp) for full details.
 
 ---
 
@@ -236,7 +248,7 @@ Reads are capped at 30 per minute. Writes at 15 per minute. That's plenty for co
 
 Anyone who already uses Claude or Cursor and wants faster pantry tracking, meal planning, and shopping list management.
 
-The setup takes two minutes. After that, your kitchen becomes part of your existing AI workflow instead of a separate app you have to remember to open.
+The setup takes two minutes — paste one URL, authorize in your browser, and your kitchen becomes part of your existing AI workflow instead of a separate app you have to remember to open.
 
 It's especially useful if you:
 

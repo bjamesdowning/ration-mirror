@@ -509,7 +509,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 								free
 								crew
 							/>
-							<FeatureRow label="MCP Server (AI agent access)" free crew />
+							<FeatureRow label="MCP Server (OAuth agent access)" free crew />
 						</tbody>
 					</table>
 				</div>

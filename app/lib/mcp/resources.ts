@@ -14,6 +14,7 @@ import { ITEM_DOMAINS } from "../domain";
 import { getInventoryImportSchema } from "../inventory-import.server";
 import { SUPPORTED_UNITS } from "../units";
 import { APP_VERSION } from "../version";
+import { formatMcpConnectPlainText } from "./connect-copy";
 import { MCP_SCOPES } from "./scopes";
 
 interface ResourceBody {
@@ -135,19 +136,9 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 			contents: [
 				markdownResource(
 					"ration://guides/connect",
-					`# Connect an MCP Client to Ration\n\n` +
-						`1. Go to Settings → API Keys in the Ration app and create a key.\n` +
-						`2. Choose scopes:\n` +
-						`   - \`mcp:read\` for read-only agents.\n` +
-						`   - \`mcp:inventory:write\` to add/update/remove pantry items.\n` +
-						`   - \`mcp:galley:write\` to manage recipes.\n` +
-						`   - \`mcp:manifest:write\` to schedule meals.\n` +
-						`   - \`mcp:supply:write\` to edit shopping lists.\n` +
-						`   - \`mcp:preferences:write\` to update allergens / settings.\n` +
-						`   - Legacy \`mcp\` grants all of the above.\n` +
-						`3. Configure your client to send the key as \`Authorization: Bearer <key>\` to \`https://mcp.ration.app/mcp\`.\n` +
-						`4. Call \`get_context\` first to confirm which scopes the key has.\n` +
-						`5. For receipts, follow the \`parse_receipt\` prompt.\n`,
+					`# Connect an MCP Client to Ration\n\n${formatMcpConnectPlainText()}\n\n` +
+						`After connecting, call \`get_context\` first to confirm active scopes.\n` +
+						`For receipts, follow the \`parse_receipt\` prompt.\n`,
 				),
 			],
 		}),

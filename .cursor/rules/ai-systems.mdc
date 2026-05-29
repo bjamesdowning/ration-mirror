@@ -7,7 +7,7 @@ description: AI systems patterns for LLM integration, vector embeddings, semanti
 ## Visual Processing
 
 - **Input:** Process raw image buffers from the Scanner component
-- **Model:** Use `gemini-3-flash-preview` (fallback `gemini-2.5-flash`) for pantry image recognition
+- **Model:** Use `gemini-3.5-flash` (via `AI_MODEL` in `ai-config.server.ts`) for pantry image recognition, meal generation, plan-week, and URL import
 - **Output:** Return structured JSON (strictly typed to `InventoryItem` schema). Use response schema + JSON mode
 - **Integration:** Cloudflare AI Gateway proxies to Google AI Studio with Authenticated Gateway enabled
 
@@ -34,7 +34,6 @@ description: AI systems patterns for LLM integration, vector embeddings, semanti
 
 ## Models & Tools
 
-- **Vision:** Gemini 3 Flash (Agentic Vision) via AI Gateway + Google AI Studio
-- **Audio:** Whisper (if needed) for audio transcription
-- **Embeddings:** Cloudflare Vectorize, OpenAI text-embedding-3 (or BGE)
+- **Vision:** Gemini 3.5 Flash via AI Gateway + Google AI Studio
+- **Embeddings:** `@cf/google/embeddinggemma-300m` via Workers AI + Cloudflare Vectorize
 - **Techniques:** RAG (Retrieval Augmented Generation), Prompt Engineering, Chain-of-Thought

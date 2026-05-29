@@ -2,17 +2,26 @@
 
 ## What MCP is
 
-**Model Context Protocol (MCP)** lets desktop AI tools (for example **Cursor**, **Claude Desktop**) call Ration on your behalf: list pantry items, update supply, plan meals, and more. Ration exposes a dedicated MCP endpoint on a separate Cloudflare Worker that shares the same database and search stack as the web app.
+**Model Context Protocol (MCP)** lets desktop AI tools (for example **Cursor**, **Claude Desktop**, **ChatGPT desktop**) call Ration on your behalf: list pantry items, update supply, plan meals, and more. Ration exposes a dedicated MCP endpoint on a separate Cloudflare Worker that shares the same database and search stack as the web app.
 
 ## Host and authentication
 
-- **Host:** `mcp.ration.mayutic.com` (production).
-- **Auth:** HTTP **Bearer** token using a Ration **API key** whose scope includes **`mcp`** *or* one or more fine-grained **`mcp:*`** scopes.
-- **Data scope:** All tools operate on **one organization**—the org bound to that API key.
+- **Endpoint:** `https://mcp.ration.mayutic.com/mcp` (production).
+- **Recommended auth:** **OAuth 2.1** delegated access — paste the MCP URL into your client, complete browser sign-in, select your household, and approve scoped permissions. Manage or revoke grants in **Hub → Settings → Connected Agents**.
+- **Advanced auth:** Organization **API keys** with **`mcp:*`** scopes (manual Bearer header for CI, legacy clients, or `mcp-remote` bridges).
+- **Data scope:** OAuth grants and API keys operate on **one organization** — the household you select at consent (OAuth) or the org bound to the key (API key).
+
+## Connecting (OAuth — recommended)
+
+1. In your MCP client, add server URL `https://mcp.ration.mayutic.com/mcp`.
+2. Complete browser sign-in, pick your household, and approve permissions.
+3. Manage or revoke access anytime in **Hub → Settings → Connected Agents**.
+
+Supported clients include Cursor, Claude Desktop, ChatGPT desktop, Zed, and any MCP client with OAuth 2.1 discovery.
 
 ## Scopes (least privilege)
 
-Legacy keys with the `mcp` scope continue to work as full-access. New keys can use narrow scopes for least-privilege agents:
+OAuth consent and API keys can use granular **`mcp:*`** scopes:
 
 - **`mcp:read`** — list/search inventory, meals, plan, expiring items, user preferences (no mutation).
 - **`mcp:inventory:write`** — `add_cargo_item`, `update_cargo_item`, `remove_cargo_item`, `apply_inventory_import`, `import_inventory_csv`.
@@ -23,9 +32,7 @@ Legacy keys with the `mcp` scope continue to work as full-access. New keys can u
 
 Pick the smallest set that covers the agent's job. A read-only research agent only needs `mcp:read`; a receipt-import agent only needs `mcp:read` + `mcp:inventory:write`.
 
-## Creating a key
-
-In **Hub → Settings**, create an API key and enable one or more MCP scopes. The raw key is shown **once**—store it in a password manager.
+Legacy API keys with the blanket **`mcp`** scope still work for manual auth but OAuth uses granular scopes only.
 
 ## What MCP will and will not do
 
@@ -39,10 +46,10 @@ If you want these AI capabilities, use the web app. If you want to drive everyth
 
 ## Security expectation
 
-Treat MCP keys like passwords. Anyone with the key can read and mutate org data allowed by the granted scopes — revoke keys you no longer use. Destructive tools (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) require an explicit `confirm: true` argument as a guardrail against agent slips.
+OAuth grants can be revoked instantly in Connected Agents. API keys should be treated like passwords — revoke keys you no longer use. Destructive tools (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) require an explicit `confirm: true` argument as a guardrail against agent slips.
 
 ## Next steps
 
-- *Connecting to MCP* — header format and client config.
+- *Connecting to MCP* — OAuth setup and advanced API key config.
 - *MCP tools reference* — full tool list and rate limits.
 - *MCP vs web app* — what MCP cannot do.

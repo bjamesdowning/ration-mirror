@@ -1,4 +1,8 @@
-import { buildConsentUrl } from "./oauth-orchestrator.server";
+import {
+	buildConsentUrl,
+	isOAuthConsentRedirect,
+	markConsentUrlHouseholdSelected,
+} from "./oauth-orchestrator.server";
 
 /**
  * Parse Better Auth oauth2Continue / oauth2Consent responses.
@@ -72,17 +76,11 @@ export function isOAuthSelectOrgRedirect(url: string): boolean {
 	}
 }
 
-export function isOAuthConsentRedirect(url: string): boolean {
-	try {
-		return new URL(url).pathname === "/oauth/consent";
-	} catch {
-		return false;
-	}
-}
+export { isOAuthConsentRedirect } from "./oauth-orchestrator.server";
 
 /**
- * Better Auth often returns `/oauth/consent` without `flow_id`. Merge orchestrator
- * params so KV state stays bound; fall back to a full consent URL when needed.
+ * Normalize post-continue redirect: attach flow_id, oauth_query, and
+ * household_selected so consent knows select-org + oauth2Continue completed.
  */
 export function resolveOAuthFlowRedirectUrl(
 	url: string | null,
@@ -90,19 +88,20 @@ export function resolveOAuthFlowRedirectUrl(
 	oauthQuery: string,
 ): string {
 	if (!url || isOAuthSelectOrgRedirect(url)) {
-		return buildConsentUrl(flowId, oauthQuery);
+		return markConsentUrlHouseholdSelected(buildConsentUrl(flowId, oauthQuery));
 	}
 	if (!isOAuthConsentRedirect(url)) {
 		return url;
 	}
 	try {
-		const parsed = new URL(url);
+		const parsed = new URL(url, "https://ration.mayutic.com");
 		parsed.searchParams.set("flow_id", flowId);
 		if (!parsed.searchParams.get("oauth_query")?.trim()) {
 			parsed.searchParams.set("oauth_query", oauthQuery);
 		}
-		return parsed.toString();
+		parsed.searchParams.set("household_selected", "1");
+		return `${parsed.pathname}${parsed.search}`;
 	} catch {
-		return buildConsentUrl(flowId, oauthQuery);
+		return markConsentUrlHouseholdSelected(buildConsentUrl(flowId, oauthQuery));
 	}
 }

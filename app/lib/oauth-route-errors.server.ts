@@ -25,25 +25,81 @@ export function oauthFlowErrorResponse(
 	);
 }
 
+type ConsentErrorMapping = {
+	error: string;
+	errorCode: OAuthFlowErrorCode;
+};
+
+/** Map Better Auth / oauth2Consent failures to actionable UI messages. */
+export function mapBetterAuthConsentError(error: unknown): ConsentErrorMapping {
+	const detail = oauthErrorDetail(error).toLowerCase();
+
+	if (
+		detail.includes("invalid_signature") ||
+		detail.includes("invalid signature") ||
+		detail.includes("unauthorized")
+	) {
+		return {
+			error:
+				"This authorization link expired or is invalid. Restart the connection from your AI client.",
+			errorCode: "flow_invalid",
+		};
+	}
+
+	if (
+		detail.includes("missing oauth query") ||
+		detail.includes("missing oauth_query")
+	) {
+		return {
+			error: oauthUserMessage("missing_oauth_query"),
+			errorCode: "missing_oauth_query",
+		};
+	}
+
+	if (
+		detail.includes("scope not originally requested") ||
+		detail.includes("invalid_request")
+	) {
+		return {
+			error:
+				"Permission selection did not match the original request. Restart the connection from your AI client.",
+			errorCode: "flow_invalid",
+		};
+	}
+
+	if (detail.includes("redirect") && detail.includes("invalid")) {
+		return {
+			error: oauthUserMessage("redirect_missing"),
+			errorCode: "redirect_missing",
+		};
+	}
+
+	return {
+		error: oauthUserMessage("consent_rejected"),
+		errorCode: "consent_rejected",
+	};
+}
+
 export function mapUnknownConsentError(
 	error: unknown,
 	context: { flowId?: string; clientId?: string },
 ): ReturnType<typeof data> {
+	const mapped = mapBetterAuthConsentError(error);
 	const detail = oauthErrorDetail(error);
 	if (context.flowId) {
 		logOAuthFlowEvent({
 			oauthFlowId: context.flowId,
 			step: "consent_presented",
 			outcome: "error",
-			errorCode: "consent_rejected",
+			errorCode: mapped.errorCode,
 			clientId: context.clientId,
 			detail,
 		});
 	}
 	return data(
 		{
-			error: oauthUserMessage("consent_rejected"),
-			errorCode: "consent_rejected" satisfies OAuthFlowErrorCode,
+			error: mapped.error,
+			errorCode: mapped.errorCode,
 		},
 		{ status: 400 },
 	);

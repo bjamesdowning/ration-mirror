@@ -1,13 +1,12 @@
-import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { Form, redirect } from "react-router";
-import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import {
 	OAUTH_MCP_SCOPES,
 	OAUTH_SCOPE_LABELS,
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
+import { requiresOAuthOrgSelection } from "~/lib/oauth.server";
 import {
 	buildConsentScopeForSubmit,
 	oauthErrorDetail,
@@ -15,12 +14,11 @@ import {
 } from "~/lib/oauth-flow";
 import {
 	advanceFlow,
-	deleteFlow,
-	ensureFlowForRequest,
+	buildSelectOrgUrl,
+	createFlow,
+	extractOAuthQueryFromRequest,
+	OAUTH_HOUSEHOLD_SELECTED_PARAM,
 	OAuthFlowError,
-	requireFlow,
-	syncOrgSelectionForConsent,
-	verifyOAuthQueryDigestAsync,
 } from "~/lib/oauth-orchestrator.server";
 import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
 import {
@@ -28,6 +26,7 @@ import {
 	oauthFlowErrorResponse,
 } from "~/lib/oauth-route-errors.server";
 import { logOAuthFlowEvent } from "~/lib/oauth-telemetry.server";
+
 export async function loader({
 	request,
 	context,
@@ -35,92 +34,58 @@ export async function loader({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuth(context, request);
+	await requireAuth(context, request);
 	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 
-	try {
-		const { flow: initialFlow, oauthQuery } = await ensureFlowForRequest(
-			env.RATION_KV,
-			url,
-		);
-		const db = drizzle(env.DB, { schema });
-		const flow = await syncOrgSelectionForConsent(env.RATION_KV, {
-			flow: initialFlow,
-			oauthQuery,
-			userId: session.user.id,
-			activeOrganizationId: session.session.activeOrganizationId,
-			isMemberOfOrg: async (userId, organizationId) => {
-				const membership = await db.query.member.findFirst({
-					where: (member, { and, eq: eqOp }) =>
-						and(
-							eqOp(member.userId, userId),
-							eqOp(member.organizationId, organizationId),
-						),
-				});
-				return membership !== undefined;
-			},
-		});
-
-		await requireFlow(env.RATION_KV, flow.flowId, {
-			minStep: "org_selected",
-			userId: session.user.id,
-		});
-
-		const digestOk = await verifyOAuthQueryDigestAsync(
-			oauthQuery,
-			flow.oauthQueryDigest,
-		);
-		if (!digestOk) {
-			throw new OAuthFlowError("flow_invalid");
-		}
-
-		if (flow.step !== "consent_presented") {
-			await advanceFlow(env.RATION_KV, flow.flowId, "consent_presented", {
-				userId: session.user.id,
-			});
-		}
-
-		const scopeParam =
-			url.searchParams.get("scope") ??
-			parseScopesFromOAuthQuery(oauthQuery).join(" ");
-		const requestedScopes = scopeParam
-			.split(/\s+/)
-			.filter((s): s is OAuthMcpScope =>
-				(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
-			);
-
-		const clientId =
-			url.searchParams.get("client_id") ??
-			new URLSearchParams(oauthQuery).get("client_id") ??
-			"Unknown client";
-
-		return {
-			clientId,
-			oauthQuery,
-			flowId: flow.flowId,
-			requestedScopes:
-				requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
-		};
-	} catch (error) {
-		if (error instanceof Response) {
-			throw error;
-		}
-		if (error instanceof OAuthFlowError) {
-			const flowId = url.searchParams.get("flow_id") ?? undefined;
-			if (error.code === "flow_step_mismatch") {
-				throw oauthFlowErrorResponse(
-					new OAuthFlowError(
-						"org_required",
-						"Select a household before authorizing.",
-					),
-					flowId,
-				);
-			}
-			throw oauthFlowErrorResponse(error, flowId);
-		}
-		throw error;
+	const oauthQuery = extractOAuthQueryFromRequest(url);
+	if (!oauthQuery) {
+		throw redirect(`/oauth/sign-in${url.search}`);
 	}
+
+	const scopes = parseScopesFromOAuthQuery(oauthQuery);
+	if (
+		requiresOAuthOrgSelection(scopes) &&
+		url.searchParams.get(OAUTH_HOUSEHOLD_SELECTED_PARAM) !== "1"
+	) {
+		let flowId = url.searchParams.get("flow_id");
+		if (!flowId) {
+			const flow = await createFlow(env.RATION_KV, oauthQuery);
+			flowId = flow.flowId;
+		}
+		throw redirect(buildSelectOrgUrl(flowId, oauthQuery));
+	}
+
+	const flowId = url.searchParams.get("flow_id");
+	if (flowId) {
+		try {
+			await advanceFlow(env.RATION_KV, flowId, "consent_presented");
+		} catch {
+			// Telemetry only — Better Auth owns authorization state.
+		}
+	}
+
+	const scopeParam =
+		url.searchParams.get("scope") ??
+		parseScopesFromOAuthQuery(oauthQuery).join(" ");
+	const requestedScopes = scopeParam
+		.split(/\s+/)
+		.filter((s): s is OAuthMcpScope =>
+			(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
+		);
+
+	const clientId =
+		url.searchParams.get("client_id") ??
+		new URLSearchParams(oauthQuery).get("client_id") ??
+		"Unknown client";
+
+	return {
+		clientId,
+		oauthQuery,
+		flowId: flowId ?? "",
+		requestedScopes:
+			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
+	};
 }
 
 export async function action({
@@ -130,7 +95,7 @@ export async function action({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuth(context, request);
+	await requireAuth(context, request);
 	const env = context.cloudflare.env;
 	const form = await request.formData();
 	const accept = form.get("accept") === "true";
@@ -147,28 +112,13 @@ export async function action({
 		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
 	}
 
-	if (typeof flowId !== "string" || !flowId) {
-		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
-	}
-
 	const started = Date.now();
 	const clientId =
 		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
+	const telemetryFlowId =
+		typeof flowId === "string" && flowId.length > 0 ? flowId : undefined;
 
 	try {
-		const flow = await requireFlow(env.RATION_KV, flowId, {
-			minStep: "org_selected",
-			userId: session.user.id,
-		});
-
-		const digestOk = await verifyOAuthQueryDigestAsync(
-			oauthQuery,
-			flow.oauthQueryDigest,
-		);
-		if (!digestOk) {
-			throw new OAuthFlowError("flow_invalid");
-		}
-
 		const auth = getAuth(env);
 		const consentScope =
 			accept && typeof oauthQuery === "string"
@@ -189,25 +139,31 @@ export async function action({
 			throw new OAuthFlowError("redirect_missing");
 		}
 
-		await advanceFlow(env.RATION_KV, flowId, "completed");
-		await deleteFlow(env.RATION_KV, flowId);
-		logOAuthFlowEvent({
-			oauthFlowId: flowId,
-			step: "completed",
-			outcome: "success",
-			clientId,
-			durationMs: Date.now() - started,
-		});
+		if (telemetryFlowId) {
+			try {
+				await advanceFlow(env.RATION_KV, telemetryFlowId, "completed");
+			} catch {
+				// Telemetry only
+			}
+			logOAuthFlowEvent({
+				oauthFlowId: telemetryFlowId,
+				step: "completed",
+				outcome: "success",
+				clientId,
+				durationMs: Date.now() - started,
+			});
+		}
+
 		throw redirect(redirectUrl);
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;
 		}
 		if (error instanceof OAuthFlowError) {
-			return oauthFlowErrorResponse(error, flowId);
+			return oauthFlowErrorResponse(error, telemetryFlowId);
 		}
 		logOAuthFlowEvent({
-			oauthFlowId: flowId,
+			oauthFlowId: telemetryFlowId ?? "unknown",
 			step: "consent_presented",
 			outcome: "error",
 			errorCode: "consent_rejected",
@@ -215,7 +171,10 @@ export async function action({
 			detail: oauthErrorDetail(error),
 			durationMs: Date.now() - started,
 		});
-		return mapUnknownConsentError(error, { flowId, clientId });
+		return mapUnknownConsentError(error, {
+			flowId: telemetryFlowId,
+			clientId,
+		});
 	}
 }
 
@@ -226,6 +185,11 @@ export default function OAuthConsentPage({
 	loaderData: Awaited<ReturnType<typeof loader>>;
 	actionData?: { error?: string; errorCode?: string };
 }) {
+	const selectOrgHref =
+		loaderData.flowId.length > 0
+			? `/oauth/select-org?flow_id=${loaderData.flowId}&oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`
+			: `/oauth/select-org?oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`;
+
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
 			<div className="w-full max-w-lg rounded-2xl border border-platinum bg-white p-8 shadow-sm">
@@ -241,17 +205,18 @@ export default function OAuthConsentPage({
 					<p className="mb-4 text-sm text-red-600">{actionData.error}</p>
 				)}
 
-				{actionData?.errorCode === "org_required" && (
+				{actionData?.errorCode === "flow_invalid" ||
+				actionData?.errorCode === "missing_oauth_query" ? (
 					<p className="mb-4 text-sm text-carbon/70">
 						<a
-							href={`/oauth/select-org?flow_id=${loaderData.flowId}&oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`}
+							href={selectOrgHref}
 							className="text-hyper-green font-medium underline"
 						>
-							Select a household
+							Restart from household selection
 						</a>{" "}
-						first, then return here.
+						or remove and re-add the MCP server in your AI client.
 					</p>
-				)}
+				) : null}
 
 				<Form method="post" className="space-y-4">
 					<input
@@ -259,7 +224,9 @@ export default function OAuthConsentPage({
 						name="oauth_query"
 						value={loaderData.oauthQuery}
 					/>
-					<input type="hidden" name="flow_id" value={loaderData.flowId} />
+					{loaderData.flowId ? (
+						<input type="hidden" name="flow_id" value={loaderData.flowId} />
+					) : null}
 					<fieldset className="space-y-2">
 						<legend className="text-sm font-medium text-carbon mb-2">
 							Permissions

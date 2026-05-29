@@ -30,18 +30,15 @@ export function requiresOAuthOrgSelection(scopes: readonly string[]): boolean {
 }
 
 /**
- * Better Auth `postLogin.shouldRedirect`: MCP flows need select-org only when
- * the session has no active household yet. The orchestrator still routes first
- * entry to `/oauth/select-org`; after selection, oauth2Continue must reach consent.
+ * Better Auth `postLogin.shouldRedirect`: MCP grants always require the
+ * post-login household page before consent. `oauth2Continue({ postLogin: true })`
+ * runs authorize with `postLogin` set, so this does not loop after Continue.
  */
 export function shouldOAuthPostLoginRedirect(
 	scopes: readonly string[],
-	activeOrganizationId: string | null | undefined,
+	_activeOrganizationId?: string | null,
 ): boolean {
-	if (!requiresOAuthOrgSelection(scopes)) {
-		return false;
-	}
-	return !activeOrganizationId;
+	return requiresOAuthOrgSelection(scopes);
 }
 
 /**

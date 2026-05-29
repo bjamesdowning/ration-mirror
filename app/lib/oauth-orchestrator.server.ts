@@ -1,4 +1,3 @@
-import { redirect } from "react-router";
 import { requiresOAuthOrgSelection } from "./oauth.server";
 import { parseScopesFromOAuthQuery } from "./oauth-flow";
 import {
@@ -316,37 +315,28 @@ export function isTerminalFlowStep(step: OAuthFlowStep): boolean {
 	return step === "completed" || step === "failed" || step === "expired";
 }
 
-/**
- * Advance KV flow to org_selected when the session already has a household, or
- * send the browser to select-org (never a 400 error page).
- */
-export async function syncOrgSelectionForConsent(
-	kv: KVNamespace,
-	options: {
-		flow: OAuthFlowRecord;
-		oauthQuery: string;
-		userId: string;
-		activeOrganizationId: string | null | undefined;
-		isMemberOfOrg: (userId: string, organizationId: string) => Promise<boolean>;
-	},
-): Promise<OAuthFlowRecord> {
-	const { flow, oauthQuery, userId, activeOrganizationId, isMemberOfOrg } =
-		options;
+/** Set on consent URL after select-org + oauth2Continue (not used to gate tokens). */
+export const OAUTH_HOUSEHOLD_SELECTED_PARAM = "household_selected";
 
-	if (isStepAtLeast(flow.step, "org_selected")) {
-		return flow;
+export function isOAuthConsentRedirect(url: string): boolean {
+	try {
+		return (
+			new URL(url, "https://ration.mayutic.com").pathname === "/oauth/consent"
+		);
+	} catch {
+		return false;
 	}
+}
 
-	if (
-		activeOrganizationId &&
-		requiresOAuthOrgSelection(flow.requestedScopes) &&
-		(await isMemberOfOrg(userId, activeOrganizationId))
-	) {
-		return advanceFlow(kv, flow.flowId, "org_selected", {
-			userId,
-			organizationId: activeOrganizationId,
-		});
+export function markConsentUrlHouseholdSelected(
+	consentPathOrUrl: string,
+): string {
+	try {
+		const parsed = new URL(consentPathOrUrl, "https://ration.mayutic.com");
+		parsed.searchParams.set(OAUTH_HOUSEHOLD_SELECTED_PARAM, "1");
+		return `${parsed.pathname}${parsed.search}`;
+	} catch {
+		const separator = consentPathOrUrl.includes("?") ? "&" : "?";
+		return `${consentPathOrUrl}${separator}${OAUTH_HOUSEHOLD_SELECTED_PARAM}=1`;
 	}
-
-	throw redirect(buildSelectOrgUrl(flow.flowId, oauthQuery));
 }

@@ -4,8 +4,6 @@ import {
 	getAuthRedirectUrl,
 	getSafeAuthRedirectUrl,
 	isAllowedOAuthRedirectUrl,
-	isOAuthSelectOrgRedirect,
-	resolveOAuthFlowRedirectUrl,
 } from "../oauth-redirect.server";
 
 describe("getAuthRedirectUrl", () => {
@@ -51,55 +49,9 @@ describe("getSafeAuthRedirectUrl", () => {
 			null,
 		);
 	});
-});
 
-describe("isOAuthSelectOrgRedirect", () => {
-	it("detects select-org post-login loops", () => {
-		expect(
-			isOAuthSelectOrgRedirect(
-				"https://ration.mayutic.com/oauth/select-org?flow_id=abc",
-			),
-		).toBe(true);
-		expect(
-			isOAuthSelectOrgRedirect(
-				"https://ration.mayutic.com/oauth/consent?flow_id=abc",
-			),
-		).toBe(false);
-	});
-});
-
-describe("resolveOAuthFlowRedirectUrl", () => {
-	const flowId = "00000000-0000-4000-8000-000000000001";
-	const oauthQuery =
-		"client_id=test&scope=mcp%3Aread&response_type=code&state=s1";
-
-	it("merges flow_id into Better Auth consent URLs", () => {
-		const resolved = resolveOAuthFlowRedirectUrl(
-			"https://ration.mayutic.com/oauth/consent?oauth_query=client_id%3Dtest",
-			flowId,
-			oauthQuery,
-		);
-		expect(resolved).toContain("flow_id=");
-		expect(resolved).toContain(flowId);
-	});
-
-	it("falls back to consent when continue returns select-org", () => {
-		const resolved = resolveOAuthFlowRedirectUrl(
-			"https://ration.mayutic.com/oauth/select-org",
-			flowId,
-			oauthQuery,
-		);
-		expect(resolved).toContain("/oauth/consent");
-		expect(resolved).toContain("flow_id=");
-		expect(resolved).toContain("household_selected=1");
-	});
-
-	it("marks household_selected on Better Auth consent URLs", () => {
-		const resolved = resolveOAuthFlowRedirectUrl(
-			"https://ration.mayutic.com/oauth/consent?oauth_query=client_id%3Dtest",
-			flowId,
-			oauthQuery,
-		);
-		expect(resolved).toContain("household_selected=1");
+	it("returns Better Auth redirect URLs verbatim", () => {
+		const url = getSafeAuthRedirectUrl(fixtures.oauth2Continue_success);
+		expect(url).toContain("/oauth/consent");
 	});
 });

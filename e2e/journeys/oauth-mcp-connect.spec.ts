@@ -13,8 +13,9 @@ test.describe("MCP OAuth routes", () => {
 		).toBeVisible();
 	});
 
-	test("consent without flow_id is rejected", async ({ page }) => {
-		// Unauthenticated users redirect to login; authenticated dev users see error
+	test("consent without signed oauth_query redirects safely", async ({
+		page,
+	}) => {
 		const res = await page.goto(
 			"/oauth/consent?oauth_query=client_id%3Dtest%26scope%3Dmcp%3Aread",
 		);

@@ -1,5 +1,5 @@
 import { log, redactId } from "./logging.server";
-import type { OAuthFlowErrorCode, OAuthFlowStep } from "./schemas/oauth-flow";
+import type { OAuthFlowErrorCode } from "./schemas/oauth-flow";
 
 export const OAUTH_USER_MESSAGES: Record<OAuthFlowErrorCode, string> = {
 	flow_expired:
@@ -26,11 +26,12 @@ export function oauthUserMessage(code: OAuthFlowErrorCode): string {
 	return OAUTH_USER_MESSAGES[code];
 }
 
+export type OAuthFlowLogStep = "sign_in" | "select_org" | "consent" | "failed";
+
 export type OAuthFlowLogOutcome = "success" | "error";
 
 export function logOAuthFlowEvent(input: {
-	oauthFlowId: string;
-	step: OAuthFlowStep;
+	step: OAuthFlowLogStep;
 	outcome: OAuthFlowLogOutcome;
 	errorCode?: OAuthFlowErrorCode;
 	clientId?: string;
@@ -39,7 +40,6 @@ export function logOAuthFlowEvent(input: {
 }): void {
 	log.info("oauth_flow", {
 		event: "oauth_flow",
-		oauth_flow_id: input.oauthFlowId,
 		step: input.step,
 		outcome: input.outcome,
 		...(input.errorCode ? { error_code: input.errorCode } : {}),

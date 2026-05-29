@@ -1,22 +1,22 @@
-# OAuth flow security review (Option C)
+# OAuth flow security review (Better Auth-native)
 
 **Date:** 2026-05-29  
-**Scope:** MCP delegated OAuth browser orchestrator + existing RS validation
+**Scope:** MCP delegated OAuth browser pages + existing RS validation
 
 ## Checklist
 
 | # | Area | Result | Notes |
 |---|------|--------|-------|
-| 1 | Token handling | **Pass** | KV stores no bearer/refresh tokens; only flow metadata + digest |
+| 1 | Token handling | **Pass** | No OAuth state in KV; tokens only issued by Better Auth at consent |
 | 2 | PII in logs | **Pass** | `oauth_flow` logs use `redactId` for client_id; no `oauth_query`, email, or tokens |
-| 3 | CSRF / session | **Pass** | OAuth routes use `requireAuth`; flow bound to `userId` after authentication |
-| 4 | IDOR on flow_id | **Pass** | `requireFlow` checks `userId` when set; digest mismatch rejects tampered `oauth_query` |
+| 3 | CSRF / session | **Pass** | OAuth routes use `requireAuth`; household via `setActiveOrganization` + session cookie |
+| 4 | Signed query tampering | **Pass** | Better Auth `verifyOAuthQueryParams` on continue/consent; routes forward blob verbatim |
 | 5 | Open redirect | **Pass** | `getSafeAuthRedirectUrl` allows https/http and `cursor:` only |
 | 6 | Org binding | **Pass** | MCP flows require select-org; `referenceId` on consent; RS `hasActiveConsent` |
 | 7 | DCR abuse | **Pass** | Existing `oauth_register` rate limits on `/api/auth` |
 | 8 | RS JWT validation | **Pass** | issuer, audience, JWKS rotation refetch, membership + consent per request |
 | 9 | GDPR revoke | **Pass** | `revokeConnectedAgentGrant` deletes consent + revokes refresh tokens |
-| 10 | TTL / replay | **Pass** | KV TTL 600s; completed flows deleted; access token 10 min |
+| 10 | TTL / replay | **Pass** | Signed `oauth_query` ~600s; access token 10 min |
 
 ## Findings
 

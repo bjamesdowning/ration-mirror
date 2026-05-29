@@ -1462,7 +1462,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
 
-**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. Better Auth holds authorization state; optional KV `oauth:flow:{id}` is for telemetry only. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
+**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. Better Auth holds authorization state via the signed `oauth_query` and session. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
@@ -1561,12 +1561,12 @@ Complete browser sign-in, select your household, and approve scopes. Manage or r
 
 Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...` are intentionally public.
 
-**Deploy (OAuth orchestrator v1.2.23+):** Deploy the main `ration` worker first, then `ration-mcp`. After deploy, users with stuck grants should revoke in Connected Agents and reconnect from the MCP client.
+**Deploy (MCP OAuth):** Deploy the main `ration` worker first, then `ration-mcp`. After deploy, users with stuck grants should revoke in Connected Agents and reconnect from the MCP client.
 
 **Troubleshooting MCP connections:**
 
 - **OAuth authorization failed / reconnect loop:** Revoke the grant in Hub → Settings → Connected Agents, remove and re-add the MCP server in your client, then complete **sign-in → select household → authorize** in a single browser tab within ~10 minutes. Ensure the client supports OAuth 2.1 / protected-resource discovery (`oauth2` on the server card).
-- **Observability:** Production Worker logs emit structured `oauth_flow` events (`oauth_flow_id`, `step`, `error_code`) — no tokens or `oauth_query` payloads.
+- **Observability:** Production Worker logs emit structured `oauth_flow` events (`step`, `outcome`, `error_code`) — no tokens or `oauth_query` payloads.
 - **ServerError / Connection closed (API key):** Ensure `Authorization` is exactly `Bearer ` + your full key (e.g. `Bearer rtn_live_xxxxx`).
 - **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
 - **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.

@@ -1,10 +1,3 @@
-import { extractSignedOAuthQueryParams } from "./oauth-flow";
-import {
-	buildConsentUrl,
-	isOAuthConsentRedirect,
-	markConsentUrlHouseholdSelected,
-} from "./oauth-orchestrator.server";
-
 /**
  * Parse Better Auth oauth2Continue / oauth2Consent responses.
  * Never construct OAuth redirect URLs by hand in routes.
@@ -66,42 +59,4 @@ export function getSafeAuthRedirectUrl(result: unknown): string | null {
 		return null;
 	}
 	return url;
-}
-
-/** True when Better Auth sent the user back to household selection (post-login loop). */
-export function isOAuthSelectOrgRedirect(url: string): boolean {
-	try {
-		return new URL(url).pathname === "/oauth/select-org";
-	} catch {
-		return false;
-	}
-}
-
-export { isOAuthConsentRedirect } from "./oauth-orchestrator.server";
-
-/**
- * Normalize post-continue redirect: attach flow_id, oauth_query, and
- * household_selected so consent knows select-org + oauth2Continue completed.
- */
-export function resolveOAuthFlowRedirectUrl(
-	url: string | null,
-	flowId: string,
-	oauthQuery: string,
-): string {
-	if (!url || isOAuthSelectOrgRedirect(url)) {
-		return markConsentUrlHouseholdSelected(buildConsentUrl(flowId, oauthQuery));
-	}
-	if (!isOAuthConsentRedirect(url)) {
-		return url;
-	}
-	try {
-		const parsed = new URL(url, "https://ration.mayutic.com");
-		const signedFromRedirect =
-			extractSignedOAuthQueryParams(parsed.searchParams) ?? oauthQuery;
-		return markConsentUrlHouseholdSelected(
-			buildConsentUrl(flowId, signedFromRedirect),
-		);
-	} catch {
-		return markConsentUrlHouseholdSelected(buildConsentUrl(flowId, oauthQuery));
-	}
 }

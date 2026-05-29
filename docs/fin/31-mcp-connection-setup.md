@@ -29,7 +29,7 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 | Wrong pantry data | Revoke and reconnect; pick the correct household at selection |
 | Client reconnect loop | Client must support OAuth 2.1 / protected-resource discovery; restart connection from client (not an old browser tab) |
 
-Orchestrated browser flows use KV state (`oauth:flow:{id}`). Support can correlate failures via Worker logs: `event=oauth_flow`, fields `oauth_flow_id`, `step`, `error_code`.
+Support can correlate OAuth failures via Worker logs: `event=oauth_flow`, fields `step`, `outcome`, `error_code` (no tokens or signed query payloads).
 
 ---
 

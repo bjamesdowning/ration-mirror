@@ -5,22 +5,13 @@ import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import {
-	mergeAuthRequestHeaders,
-	oauthErrorDetail,
-	sanitizeOAuthQueryForBetterAuth,
-} from "~/lib/oauth-flow";
-import {
-	advanceFlow,
-	ensureFlowForRequest,
-	OAuthFlowError,
-} from "~/lib/oauth-orchestrator.server";
-import {
-	getSafeAuthRedirectUrl,
-	resolveOAuthFlowRedirectUrl,
-} from "~/lib/oauth-redirect.server";
+	getSignedOAuthQuery,
+	mergeSessionCookies,
+} from "~/lib/oauth-query.server";
+import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
-	oauthFlowErrorResponse,
+	oauthErrorResponse,
 } from "~/lib/oauth-route-errors.server";
 import {
 	logOAuthFlowEvent,
@@ -44,53 +35,39 @@ export async function loader({
 	const session = await requireAuth(context, request);
 	const env = context.cloudflare.env;
 	const url = new URL(request.url);
+	const signed = getSignedOAuthQuery(url);
 
-	try {
-		const { flow, oauthQuery } = await ensureFlowForRequest(env.RATION_KV, url);
-
-		try {
-			await advanceFlow(env.RATION_KV, flow.flowId, "authenticated", {
-				userId: session.user.id,
-			});
-		} catch {
-			// Telemetry only
-		}
-
-		const db = drizzle(env.DB, { schema });
-		const memberships = await db
-			.select({
-				organizationId: schema.organization.id,
-				name: schema.organization.name,
-				role: schema.member.role,
-			})
-			.from(schema.member)
-			.innerJoin(
-				schema.organization,
-				eq(schema.member.organizationId, schema.organization.id),
-			)
-			.where(eq(schema.member.userId, session.user.id));
-
+	if (!signed) {
 		return {
-			memberships,
-			oauthQuery,
-			flowId: flow.flowId,
-			clientId:
-				url.searchParams.get("client_id") ??
-				new URLSearchParams(oauthQuery).get("client_id") ??
-				"",
+			memberships: [] as MembershipRow[],
+			oauthQuery: "",
+			clientId: "",
+			flowError: oauthUserMessage("missing_oauth_query"),
 		};
-	} catch (error) {
-		if (error instanceof OAuthFlowError) {
-			return {
-				memberships: [],
-				oauthQuery: url.searchParams.get("oauth_query") ?? "",
-				flowId: url.searchParams.get("flow_id") ?? "",
-				clientId: url.searchParams.get("client_id") ?? "",
-				flowError: oauthUserMessage(error.code),
-			};
-		}
-		throw error;
 	}
+
+	const db = drizzle(env.DB, { schema });
+	const memberships = await db
+		.select({
+			organizationId: schema.organization.id,
+			name: schema.organization.name,
+			role: schema.member.role,
+		})
+		.from(schema.member)
+		.innerJoin(
+			schema.organization,
+			eq(schema.member.organizationId, schema.organization.id),
+		)
+		.where(eq(schema.member.userId, session.user.id));
+
+	return {
+		memberships,
+		oauthQuery: signed,
+		clientId:
+			url.searchParams.get("client_id") ??
+			new URLSearchParams(signed).get("client_id") ??
+			"",
+	};
 }
 
 export async function action({
@@ -105,7 +82,6 @@ export async function action({
 	const form = await request.formData();
 	const organizationId = form.get("organizationId");
 	const oauthQuery = form.get("oauth_query");
-	const flowId = form.get("flow_id");
 
 	if (typeof organizationId !== "string" || !organizationId) {
 		return data(
@@ -118,17 +94,16 @@ export async function action({
 	}
 
 	if (typeof oauthQuery !== "string" || !oauthQuery) {
-		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
+		return oauthErrorResponse("missing_oauth_query", { step: "select_org" });
 	}
 
-	const signedOAuthQuery = sanitizeOAuthQueryForBetterAuth(oauthQuery);
-	if (!signedOAuthQuery || !new URLSearchParams(signedOAuthQuery).get("sig")) {
-		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
+	if (!new URLSearchParams(oauthQuery).get("sig")) {
+		return oauthErrorResponse("flow_invalid", { step: "select_org" });
 	}
 
 	const started = Date.now();
-	const telemetryFlowId =
-		typeof flowId === "string" && flowId.length > 0 ? flowId : undefined;
+	const clientId =
+		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
 
 	try {
 		const db = drizzle(env.DB, { schema });
@@ -156,66 +131,38 @@ export async function action({
 			body: { organizationId },
 			returnHeaders: true,
 		});
-		const headersWithSession = mergeAuthRequestHeaders(
-			request,
-			setActiveResult,
-		);
-
-		if (telemetryFlowId) {
-			try {
-				await advanceFlow(env.RATION_KV, telemetryFlowId, "org_selected", {
-					organizationId,
-				});
-			} catch {
-				// Telemetry only
-			}
-		}
+		const headersWithSession = mergeSessionCookies(request, setActiveResult);
 
 		const continueResult = await auth.api.oauth2Continue({
 			headers: headersWithSession,
 			body: {
 				postLogin: true,
-				oauth_query: signedOAuthQuery,
+				oauth_query: oauthQuery,
 			},
 		});
 
-		const authRedirect = getSafeAuthRedirectUrl(continueResult);
-		const redirectUrl = resolveOAuthFlowRedirectUrl(
-			authRedirect,
-			telemetryFlowId ?? crypto.randomUUID(),
-			signedOAuthQuery,
-		);
-
-		if (telemetryFlowId) {
-			logOAuthFlowEvent({
-				oauthFlowId: telemetryFlowId,
-				step: "org_selected",
-				outcome: "success",
-				clientId: new URLSearchParams(oauthQuery).get("client_id") ?? undefined,
-				durationMs: Date.now() - started,
+		const redirectUrl = getSafeAuthRedirectUrl(continueResult);
+		if (!redirectUrl) {
+			return oauthErrorResponse("redirect_missing", {
+				step: "select_org",
+				clientId,
 			});
 		}
+
+		logOAuthFlowEvent({
+			step: "select_org",
+			outcome: "success",
+			clientId,
+			durationMs: Date.now() - started,
+		});
 		throw redirect(redirectUrl);
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;
 		}
-		if (error instanceof OAuthFlowError) {
-			return oauthFlowErrorResponse(error, telemetryFlowId);
-		}
-		if (telemetryFlowId) {
-			logOAuthFlowEvent({
-				oauthFlowId: telemetryFlowId,
-				step: "org_selected",
-				outcome: "error",
-				errorCode: "consent_rejected",
-				detail: oauthErrorDetail(error),
-				durationMs: Date.now() - started,
-			});
-		}
 		return mapUnknownConsentError(error, {
-			flowId: telemetryFlowId,
-			clientId: new URLSearchParams(oauthQuery).get("client_id") ?? undefined,
+			step: "select_org",
+			clientId,
 		});
 	}
 }
@@ -250,7 +197,6 @@ export default function OAuthSelectOrgPage({
 						name="oauth_query"
 						value={loaderData.oauthQuery}
 					/>
-					<input type="hidden" name="flow_id" value={loaderData.flowId} />
 					{loaderData.memberships.map((m: MembershipRow) => (
 						<label
 							key={m.organizationId}

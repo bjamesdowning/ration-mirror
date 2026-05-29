@@ -1,25 +1,24 @@
 import { data } from "react-router";
-import { oauthErrorDetail } from "./oauth-flow";
-import type { OAuthFlowError } from "./oauth-orchestrator.server";
+import { oauthErrorDetail } from "./oauth-query.server";
 import { logOAuthFlowEvent, oauthUserMessage } from "./oauth-telemetry.server";
 import type { OAuthFlowErrorCode } from "./schemas/oauth-flow";
 
-export function oauthFlowErrorResponse(
-	error: OAuthFlowError,
-	flowId?: string,
+export function oauthErrorResponse(
+	errorCode: OAuthFlowErrorCode,
+	options?: { step?: "sign_in" | "select_org" | "consent"; clientId?: string },
 ): ReturnType<typeof data> {
-	if (flowId) {
+	if (options?.step) {
 		logOAuthFlowEvent({
-			oauthFlowId: flowId,
-			step: "failed",
+			step: options.step,
 			outcome: "error",
-			errorCode: error.code,
+			errorCode,
+			clientId: options.clientId,
 		});
 	}
 	return data(
 		{
-			error: oauthUserMessage(error.code),
-			errorCode: error.code,
+			error: oauthUserMessage(errorCode),
+			errorCode,
 		},
 		{ status: 400 },
 	);
@@ -82,14 +81,13 @@ export function mapBetterAuthConsentError(error: unknown): ConsentErrorMapping {
 
 export function mapUnknownConsentError(
 	error: unknown,
-	context: { flowId?: string; clientId?: string },
+	context: { step?: "select_org" | "consent"; clientId?: string },
 ): ReturnType<typeof data> {
 	const mapped = mapBetterAuthConsentError(error);
 	const detail = oauthErrorDetail(error);
-	if (context.flowId) {
+	if (context.step) {
 		logOAuthFlowEvent({
-			oauthFlowId: context.flowId,
-			step: "consent_presented",
+			step: context.step,
 			outcome: "error",
 			errorCode: mapped.errorCode,
 			clientId: context.clientId,

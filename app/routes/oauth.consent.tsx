@@ -6,25 +6,16 @@ import {
 	OAUTH_SCOPE_LABELS,
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
-import { requiresOAuthOrgSelection } from "~/lib/oauth.server";
 import {
 	buildConsentScopeForSubmit,
-	oauthErrorDetail,
-	parseScopesFromOAuthQuery,
-	sanitizeOAuthQueryForBetterAuth,
-} from "~/lib/oauth-flow";
-import {
-	advanceFlow,
-	buildSelectOrgUrl,
-	createFlow,
-	extractOAuthQueryFromRequest,
-	OAUTH_HOUSEHOLD_SELECTED_PARAM,
-	OAuthFlowError,
-} from "~/lib/oauth-orchestrator.server";
+	buildOAuthPageUrl,
+	getSignedOAuthQuery,
+	parseScopesFromSignedQuery,
+} from "~/lib/oauth-query.server";
 import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
-	oauthFlowErrorResponse,
+	oauthErrorResponse,
 } from "~/lib/oauth-route-errors.server";
 import { logOAuthFlowEvent } from "~/lib/oauth-telemetry.server";
 
@@ -36,39 +27,16 @@ export async function loader({
 	context: AppLoadContext;
 }) {
 	await requireAuth(context, request);
-	const env = context.cloudflare.env;
 	const url = new URL(request.url);
+	const signed = getSignedOAuthQuery(url);
 
-	const oauthQuery = extractOAuthQueryFromRequest(url);
-	if (!oauthQuery) {
+	if (!signed) {
 		throw redirect(`/oauth/sign-in${url.search}`);
-	}
-
-	const scopes = parseScopesFromOAuthQuery(oauthQuery);
-	if (
-		requiresOAuthOrgSelection(scopes) &&
-		url.searchParams.get(OAUTH_HOUSEHOLD_SELECTED_PARAM) !== "1"
-	) {
-		let flowId = url.searchParams.get("flow_id");
-		if (!flowId) {
-			const flow = await createFlow(env.RATION_KV, oauthQuery);
-			flowId = flow.flowId;
-		}
-		throw redirect(buildSelectOrgUrl(flowId, oauthQuery));
-	}
-
-	const flowId = url.searchParams.get("flow_id");
-	if (flowId) {
-		try {
-			await advanceFlow(env.RATION_KV, flowId, "consent_presented");
-		} catch {
-			// Telemetry only — Better Auth owns authorization state.
-		}
 	}
 
 	const scopeParam =
 		url.searchParams.get("scope") ??
-		parseScopesFromOAuthQuery(oauthQuery).join(" ");
+		parseScopesFromSignedQuery(signed).join(" ");
 	const requestedScopes = scopeParam
 		.split(/\s+/)
 		.filter((s): s is OAuthMcpScope =>
@@ -77,13 +45,12 @@ export async function loader({
 
 	const clientId =
 		url.searchParams.get("client_id") ??
-		new URLSearchParams(oauthQuery).get("client_id") ??
+		new URLSearchParams(signed).get("client_id") ??
 		"Unknown client";
 
 	return {
 		clientId,
-		oauthQuery,
-		flowId: flowId ?? "",
+		oauthQuery: signed,
 		requestedScopes:
 			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
 	};
@@ -101,7 +68,6 @@ export async function action({
 	const form = await request.formData();
 	const accept = form.get("accept") === "true";
 	const oauthQuery = form.get("oauth_query");
-	const flowId = form.get("flow_id");
 	const selectedScopes = form
 		.getAll("scopes")
 		.map(String)
@@ -110,19 +76,16 @@ export async function action({
 		);
 
 	if (typeof oauthQuery !== "string" || !oauthQuery) {
-		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
+		return oauthErrorResponse("missing_oauth_query", { step: "consent" });
 	}
 
-	const signedOAuthQuery = sanitizeOAuthQueryForBetterAuth(oauthQuery);
-	if (!signedOAuthQuery || !new URLSearchParams(signedOAuthQuery).get("sig")) {
-		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
+	if (!new URLSearchParams(oauthQuery).get("sig")) {
+		return oauthErrorResponse("flow_invalid", { step: "consent" });
 	}
 
 	const started = Date.now();
 	const clientId =
 		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
-	const telemetryFlowId =
-		typeof flowId === "string" && flowId.length > 0 ? flowId : undefined;
 
 	try {
 		const auth = getAuth(env);
@@ -130,13 +93,10 @@ export async function action({
 			headers: request.headers,
 			body: {
 				accept,
-				oauth_query: signedOAuthQuery,
+				oauth_query: oauthQuery,
 				...(accept
 					? {
-							scope: buildConsentScopeForSubmit(
-								selectedScopes,
-								signedOAuthQuery,
-							),
+							scope: buildConsentScopeForSubmit(selectedScopes, oauthQuery),
 						}
 					: {}),
 			},
@@ -144,43 +104,25 @@ export async function action({
 
 		const redirectUrl = getSafeAuthRedirectUrl(result);
 		if (!redirectUrl) {
-			throw new OAuthFlowError("redirect_missing");
-		}
-
-		if (telemetryFlowId) {
-			try {
-				await advanceFlow(env.RATION_KV, telemetryFlowId, "completed");
-			} catch {
-				// Telemetry only
-			}
-			logOAuthFlowEvent({
-				oauthFlowId: telemetryFlowId,
-				step: "completed",
-				outcome: "success",
+			return oauthErrorResponse("redirect_missing", {
+				step: "consent",
 				clientId,
-				durationMs: Date.now() - started,
 			});
 		}
 
+		logOAuthFlowEvent({
+			step: "consent",
+			outcome: "success",
+			clientId,
+			durationMs: Date.now() - started,
+		});
 		throw redirect(redirectUrl);
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;
 		}
-		if (error instanceof OAuthFlowError) {
-			return oauthFlowErrorResponse(error, telemetryFlowId);
-		}
-		logOAuthFlowEvent({
-			oauthFlowId: telemetryFlowId ?? "unknown",
-			step: "consent_presented",
-			outcome: "error",
-			errorCode: "consent_rejected",
-			clientId,
-			detail: oauthErrorDetail(error),
-			durationMs: Date.now() - started,
-		});
 		return mapUnknownConsentError(error, {
-			flowId: telemetryFlowId,
+			step: "consent",
 			clientId,
 		});
 	}
@@ -193,10 +135,10 @@ export default function OAuthConsentPage({
 	loaderData: Awaited<ReturnType<typeof loader>>;
 	actionData?: { error?: string; errorCode?: string };
 }) {
-	const selectOrgHref =
-		loaderData.flowId.length > 0
-			? `/oauth/select-org?flow_id=${loaderData.flowId}&oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`
-			: `/oauth/select-org?oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`;
+	const selectOrgHref = buildOAuthPageUrl(
+		"/oauth/select-org",
+		loaderData.oauthQuery,
+	);
 
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
@@ -232,9 +174,6 @@ export default function OAuthConsentPage({
 						name="oauth_query"
 						value={loaderData.oauthQuery}
 					/>
-					{loaderData.flowId ? (
-						<input type="hidden" name="flow_id" value={loaderData.flowId} />
-					) : null}
 					<fieldset className="space-y-2">
 						<legend className="text-sm font-medium text-carbon mb-2">
 							Permissions

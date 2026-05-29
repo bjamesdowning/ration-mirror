@@ -60,3 +60,12 @@ export function getSafeAuthRedirectUrl(result: unknown): string | null {
 	}
 	return url;
 }
+
+/** True when Better Auth sent the user back to household selection (post-login loop). */
+export function isOAuthSelectOrgRedirect(url: string): boolean {
+	try {
+		return new URL(url).pathname === "/oauth/select-org";
+	} catch {
+		return false;
+	}
+}

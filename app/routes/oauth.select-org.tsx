@@ -12,7 +12,10 @@ import {
 	OAuthFlowError,
 	requireFlow,
 } from "~/lib/oauth-orchestrator.server";
-import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
+import {
+	getSafeAuthRedirectUrl,
+	isOAuthSelectOrgRedirect,
+} from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
 	oauthFlowErrorResponse,
@@ -154,16 +157,16 @@ export async function action({
 			);
 		}
 
-		await db
-			.update(schema.session)
-			.set({ activeOrganizationId: organizationId })
-			.where(eq(schema.session.id, session.session.id));
+		const auth = getAuth(env);
+		await auth.api.setActiveOrganization({
+			headers: request.headers,
+			body: { organizationId },
+		});
 
 		await advanceFlow(env.RATION_KV, flowId, "org_selected", {
 			organizationId,
 		});
 
-		const auth = getAuth(env);
 		const continueResult = await auth.api.oauth2Continue({
 			headers: request.headers,
 			body: {
@@ -172,7 +175,10 @@ export async function action({
 			},
 		});
 
-		const redirectUrl = getSafeAuthRedirectUrl(continueResult);
+		let redirectUrl = getSafeAuthRedirectUrl(continueResult);
+		if (redirectUrl && isOAuthSelectOrgRedirect(redirectUrl)) {
+			redirectUrl = null;
+		}
 		if (redirectUrl) {
 			await advanceFlow(env.RATION_KV, flowId, "consent_presented");
 			logOAuthFlowEvent({

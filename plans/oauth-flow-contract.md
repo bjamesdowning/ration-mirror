@@ -43,6 +43,6 @@ Routes must use `getAuthRedirectUrl()` only — never hand-build `/oauth/consent
 
 ## MCP household rule
 
-All requests including `mcp:*` scopes **must** pass through `/oauth/select-org` before consent, regardless of `session.activeOrganizationId`.
+MCP flows **must** pass through `/oauth/select-org` before consent. The orchestrator routes authenticated users there on first entry. Better Auth `postLogin.shouldRedirect` only fires when `session.activeOrganizationId` is unset — after Continue, `oauth2Continue` must reach consent (not loop back to select-org).
 
 Fixtures: `app/test/fixtures/oauth/better-auth-redirects.json`

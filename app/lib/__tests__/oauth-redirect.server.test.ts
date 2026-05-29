@@ -4,6 +4,7 @@ import {
 	getAuthRedirectUrl,
 	getSafeAuthRedirectUrl,
 	isAllowedOAuthRedirectUrl,
+	isOAuthSelectOrgRedirect,
 } from "../oauth-redirect.server";
 
 describe("getAuthRedirectUrl", () => {
@@ -48,5 +49,20 @@ describe("getSafeAuthRedirectUrl", () => {
 		expect(getSafeAuthRedirectUrl({ redirect_uri: "javascript:void(0)" })).toBe(
 			null,
 		);
+	});
+});
+
+describe("isOAuthSelectOrgRedirect", () => {
+	it("detects select-org post-login loops", () => {
+		expect(
+			isOAuthSelectOrgRedirect(
+				"https://ration.mayutic.com/oauth/select-org?flow_id=abc",
+			),
+		).toBe(true);
+		expect(
+			isOAuthSelectOrgRedirect(
+				"https://ration.mayutic.com/oauth/consent?flow_id=abc",
+			),
+		).toBe(false);
 	});
 });

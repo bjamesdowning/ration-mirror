@@ -16,6 +16,7 @@ const {
 	listConnectedAgentGrants,
 	revokeConnectedAgentGrant,
 	requiresOAuthOrgSelection,
+	shouldOAuthPostLoginRedirect,
 	buildOAuthAccessTokenClaims,
 	getJwksUrl,
 } = await import("../oauth.server");
@@ -51,6 +52,21 @@ describe("requiresOAuthOrgSelection", () => {
 			false,
 		);
 		expect(requiresOAuthOrgSelection([])).toBe(false);
+	});
+});
+
+describe("shouldOAuthPostLoginRedirect", () => {
+	it("requires select-org for MCP when session has no active household", () => {
+		expect(shouldOAuthPostLoginRedirect(["mcp:read"], null)).toBe(true);
+		expect(shouldOAuthPostLoginRedirect(["mcp:read"], undefined)).toBe(true);
+	});
+
+	it("skips select-org after household is bound on the session", () => {
+		expect(shouldOAuthPostLoginRedirect(["mcp:read"], "org-1")).toBe(false);
+	});
+
+	it("is false for non-MCP scopes", () => {
+		expect(shouldOAuthPostLoginRedirect(["profile"], null)).toBe(false);
 	});
 });
 

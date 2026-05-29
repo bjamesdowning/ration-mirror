@@ -25,7 +25,7 @@ import {
 } from "./oauth.constants";
 import {
 	buildOAuthAccessTokenClaims,
-	requiresOAuthOrgSelection,
+	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
 import type { UserSettings } from "./types";
 
@@ -157,8 +157,13 @@ export function createAuth(env: Cloudflare.Env) {
 						const orgId = session?.activeOrganizationId;
 						return typeof orgId === "string" ? orgId : undefined;
 					},
-					shouldRedirect: async ({ scopes }) =>
-						requiresOAuthOrgSelection(scopes),
+					shouldRedirect: async ({ session, scopes }) => {
+						const orgId = session?.activeOrganizationId;
+						return shouldOAuthPostLoginRedirect(
+							scopes,
+							typeof orgId === "string" ? orgId : null,
+						);
+					},
 				},
 				customAccessTokenClaims: async ({ referenceId, user }) => ({
 					...buildOAuthAccessTokenClaims(referenceId),

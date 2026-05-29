@@ -50,6 +50,7 @@ import {
 	type ConnectedAgentGrant,
 	listConnectedAgentGrants,
 } from "~/lib/oauth.server";
+import { formatOAuthScopesDisplay } from "~/lib/oauth-scopes";
 import { type ApiScope, VALID_API_SCOPES } from "~/lib/schemas/api-keys";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import type { UserSettings } from "~/lib/types";
@@ -519,7 +520,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 	const getInitialSection = (): SectionId => {
 		if (typeof window !== "undefined") {
 			const hash = window.location.hash.replace("#", "");
-			if (hash === "api") return "developer";
+			if (hash === "api" || hash === "connected-agents") return "developer";
 			const valid: SectionId[] = [
 				"account",
 				"group",
@@ -1551,6 +1552,7 @@ function DeveloperSection({
 
 function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 	const revokeFetcher = useFetcher();
+	const RevokeGrantForm = revokeFetcher.Form;
 	const copyToast = useToast({ duration: 3000 });
 	const [mcpRefExpanded, setMcpRefExpanded] = useState(false);
 
@@ -1635,10 +1637,10 @@ function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 									Household: {grant.organizationName ?? "—"}
 								</p>
 								<p className="text-xs text-muted mt-1">
-									Scopes: {grant.scopes.join(", ")}
+									Scopes: {formatOAuthScopesDisplay(grant.scopes)}
 								</p>
 							</div>
-							<revokeFetcher.Form method="post" action="/api/oauth/grants">
+							<RevokeGrantForm method="post" action="/api/oauth/grants">
 								<input type="hidden" name="intent" value="revoke" />
 								<input type="hidden" name="consentId" value={grant.consentId} />
 								<button
@@ -1648,7 +1650,7 @@ function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 								>
 									Revoke
 								</button>
-							</revokeFetcher.Form>
+							</RevokeGrantForm>
 						</li>
 					))}
 				</ul>
@@ -2374,6 +2376,7 @@ function ApiKeysSection({
 		createdAt?: string;
 		error?: string;
 	}>();
+	const CreateKeyForm = createFetcher.Form;
 	const [newKeyDisplay, setNewKeyDisplay] = useState<string | null>(null);
 	const [createName, setCreateName] = useState("");
 	const [selectedScopes, setSelectedScopes] =
@@ -2461,7 +2464,7 @@ function ApiKeysSection({
 				</div>
 			)}
 
-			<createFetcher.Form
+			<CreateKeyForm
 				method="post"
 				action="/api/api-keys"
 				onSubmit={handleCreate}
@@ -2598,7 +2601,7 @@ function ApiKeysSection({
 				{selectedScopes.map((scope) => (
 					<input key={scope} type="hidden" name="scopes" value={scope} />
 				))}
-			</createFetcher.Form>
+			</CreateKeyForm>
 
 			{createFetcher.data?.error && (
 				<p className="text-sm text-danger mb-4">{createFetcher.data.error}</p>

@@ -139,6 +139,28 @@ describe("listConnectedAgentGrants", () => {
 		// No referenceId means no org lookup is attempted.
 		expect(organizationFindFirst).not.toHaveBeenCalled();
 	});
+
+	it("normalizes space-separated scope strings from consent rows", async () => {
+		const consent = {
+			id: "consent-str",
+			clientId: "client-str",
+			referenceId: null,
+			scopes: "mcp:read mcp:galley:write",
+			createdAt: new Date("2026-03-01T00:00:00Z"),
+			updatedAt: new Date("2026-03-01T00:00:00Z"),
+		};
+		currentDb = {
+			query: {
+				oauthConsent: { findMany: vi.fn().mockResolvedValue([consent]) },
+				organization: { findFirst: vi.fn() },
+			},
+			select: vi.fn(() => selectChain([{ name: "Cursor" }])),
+		};
+
+		const grants = await listConnectedAgentGrants(env, "user-1");
+
+		expect(grants[0]?.scopes).toEqual(["mcp:read", "mcp:galley:write"]);
+	});
 });
 
 describe("revokeConnectedAgentGrant", () => {

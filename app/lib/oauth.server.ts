@@ -7,6 +7,7 @@ import {
 	RATION_ORG_CLAIM,
 	resolveAuthorizationServerUrl,
 } from "./oauth.constants";
+import { normalizeOAuthScopes } from "./oauth-scopes";
 
 export interface ConnectedAgentGrant {
 	consentId: string;
@@ -65,7 +66,7 @@ export async function listConnectedAgentGrants(
 			clientName: client?.name ?? null,
 			organizationId: consent.referenceId ?? null,
 			organizationName,
-			scopes: consent.scopes ?? [],
+			scopes: normalizeOAuthScopes(consent.scopes),
 			createdAt: consent.createdAt,
 			updatedAt: consent.updatedAt,
 		});

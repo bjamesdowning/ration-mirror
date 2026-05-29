@@ -1,8 +1,6 @@
 .DS_Store
 .env*
-# Matches both a real dir and the iCloud-excluded symlink (see node_modules.nosync)
 /node_modules
-# Real dependency store kept out of iCloud Drive sync (symlinked from node_modules)
 /node_modules.nosync/
 *.tsbuildinfo
 

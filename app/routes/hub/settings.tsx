@@ -44,6 +44,7 @@ import {
 	MCP_API_KEY_CONFIG_SNIPPET,
 	MCP_CONNECT_STEPS,
 	MCP_ENDPOINT_URL,
+	MCP_OAUTH_TROUBLESHOOTING,
 	MCP_SUPPORTED_CLIENTS,
 } from "~/lib/mcp/connect-copy";
 import {
@@ -1612,6 +1613,24 @@ function ConnectedAgentsSection({ grants }: { grants: ConnectedAgentGrant[] }) {
 					Setup guide
 				</Link>
 			</div>
+
+			<details className="mb-6 rounded-lg border border-platinum bg-platinum/20 p-4">
+				<summary className="cursor-pointer text-sm font-medium text-carbon">
+					OAuth troubleshooting
+				</summary>
+				<ul className="mt-3 space-y-3 text-sm text-carbon/80">
+					{MCP_OAUTH_TROUBLESHOOTING.map((row) => (
+						<li key={row.symptom}>
+							<p className="font-medium text-carbon">{row.symptom}</p>
+							<p className="mt-1">{row.fix}</p>
+						</li>
+					))}
+				</ul>
+				<p className="mt-3 text-xs text-muted">
+					Flows are short-lived (~10 minutes). If authorization expired, always
+					restart from your AI client — do not reuse an old browser tab.
+				</p>
+			</details>
 
 			<h4 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
 				Active grants

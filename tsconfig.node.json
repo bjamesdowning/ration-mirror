@@ -6,7 +6,7 @@
 		"react-router.config.ts",
 		"vitest.config.ts"
 	],
-	"exclude": ["node_modules", "node_modules.nosync"],
+	"exclude": ["node_modules"],
 	"compilerOptions": {
 		"composite": true,
 		"strict": true,

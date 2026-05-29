@@ -1462,7 +1462,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
 
-**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org`, and consent at `/oauth/consent`. Revoke grants in Hub → Settings → Connected Agents.
+**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, **mandatory** household selection at `/oauth/select-org`, and consent at `/oauth/consent`. Ephemeral flow state is tracked in KV (`oauth:flow:{id}`, 600s TTL) so retries and logged-in users cannot skip household binding. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
@@ -1561,9 +1561,12 @@ Complete browser sign-in, select your household, and approve scopes. Manage or r
 
 Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...` are intentionally public.
 
+**Deploy (OAuth orchestrator v1.2.23+):** Deploy the main `ration` worker first, then `ration-mcp`. After deploy, users with stuck grants should revoke in Connected Agents and reconnect from the MCP client.
+
 **Troubleshooting MCP connections:**
 
-- **OAuth reconnect loop:** Ensure the client supports OAuth 2.1 / protected-resource discovery; check the MCP server card auth type is `oauth2`.
+- **OAuth authorization failed / reconnect loop:** Revoke the grant in Hub → Settings → Connected Agents, remove and re-add the MCP server in your client, then complete **sign-in → select household → authorize** in a single browser tab within ~10 minutes. Ensure the client supports OAuth 2.1 / protected-resource discovery (`oauth2` on the server card).
+- **Observability:** Production Worker logs emit structured `oauth_flow` events (`oauth_flow_id`, `step`, `error_code`) — no tokens or `oauth_query` payloads.
 - **ServerError / Connection closed (API key):** Ensure `Authorization` is exactly `Bearer ` + your full key (e.g. `Bearer rtn_live_xxxxx`).
 - **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
 - **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.
@@ -1636,7 +1639,9 @@ bun run lint          # Biome v2 lint check
 bun run lint:fix      # Biome v2 auto-fix
 ```
 
-**E2E testing:** After upgrading `@playwright/test`, run `bunx playwright install` (or `bunx playwright install chromium`) so browser binaries match the installed version; otherwise tests fail with “Executable doesn't exist”. Playwright uses `bun run dev:local` (local D1/KV/R2, fast startup). `pretest:e2e` runs automatically before `bun run test:e2e` to restore the `node_modules` symlink (if iCloud renamed it) and apply pending local D1 migrations — required after schema changes such as OAuth tables (`0030`). If a dev server is already running on port 5173, Playwright reuses it. Dev Login (`dev@ration.app`). Auth state saved in `e2e/.auth/user.json`. Public smoke tests run without auth state; journeys reuse the saved authenticated session. To scale local runs, set workers explicitly (for example `PLAYWRIGHT_WORKERS=4 bun run test:e2e`). Fixtures: `e2e/fixtures/avatar.png`, `e2e/fixtures/sample-scan.png`. Scan tests mock the API to avoid AI/credits. **Stability:** use `CI=true bun run test:e2e` to match CI retries/reporter, and `bun x playwright test --repeat-each=3` to hunt flakes. Spec inventory and triage notes live in [`plans/e2e-review.md`](plans/e2e-review.md). Magic-link UI tests mock **POST** `/api/auth/sign-in/magic-link` (Better Auth 1.6), not a `magic-link/send` path.
+**Vitest startup errors (`Cannot find package .../esbuild/lib/main.js` or similar):** Usually a corrupted or incomplete `node_modules` tree. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest. If tests still fail to start, see [Dependency install issues](#dependency-install-issues) below.
+
+**E2E testing:** After upgrading `@playwright/test`, run `bunx playwright install` (or `bunx playwright install chromium`) so browser binaries match the installed version; otherwise tests fail with “Executable doesn't exist”. Playwright uses `bun run dev:local` (local D1/KV/R2, fast startup). `pretest:e2e` applies pending local D1 migrations automatically; run `bun run db:migrate:local` manually if you skip the npm lifecycle hook. If a dev server is already running on port 5173, Playwright reuses it. Dev Login (`dev@ration.app`). Auth state saved in `e2e/.auth/user.json`. Public smoke tests run without auth state; journeys reuse the saved authenticated session. To scale local runs, set workers explicitly (for example `PLAYWRIGHT_WORKERS=4 bun run test:e2e`). Fixtures: `e2e/fixtures/avatar.png`, `e2e/fixtures/sample-scan.png`. Scan tests mock the API to avoid AI/credits. **Stability:** use `CI=true bun run test:e2e` to match CI retries/reporter, and `bun x playwright test --repeat-each=3` to hunt flakes. Spec inventory and triage notes live in [`plans/e2e-review.md`](plans/e2e-review.md). Magic-link UI tests mock **POST** `/api/auth/sign-in/magic-link` (Better Auth 1.6), not a `magic-link/send` path.
 
 **What is tested:**
 
@@ -1662,17 +1667,22 @@ bun run lint:fix      # Biome v2 auto-fix
 
 ## 13. Local Development & Deployment
 
-### Local development (iCloud Drive)
+### Dependency install issues
 
-If the project lives in an iCloud-synced directory, keep dependencies out of sync to avoid symlink corruption:
+Symptoms: `bun install` fails in postinstall, or `bun run test:unit` fails at startup with `MODULE_NOT_FOUND` for packages such as **esbuild**, **undici**, or **obug** (often `Cannot find module './lib/dispatcher/client'` from undici).
+
+This usually means `node_modules` is corrupted or incomplete.
+
+**Recovery:**
 
 ```bash
-bun install
-mv node_modules node_modules.nosync
-ln -s node_modules.nosync node_modules
+rm -rf node_modules
+bun install --ignore-scripts
+bun run cf-typegen
+bun run test:unit
 ```
 
-After `bun install` breaks the symlink, run `bun run ensure-deps` to restore it. E2E runs this automatically via `pretest:e2e`. Standard installs (CI, Cloudflare Builds, non-iCloud machines) use a real `node_modules/` directory and do not need this setup.
+`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts): it skips `cf-typegen` with recovery instructions if Wrangler dependencies are incomplete (so install can still finish), and runs `wrangler types` when the tree is healthy. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest.
 
 ### Cloudflare Workers Builds
 
@@ -1690,7 +1700,7 @@ bun install --frozen-lockfile && bun run build && bunx wrangler deploy
 bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.mcp.jsonc
 ```
 
-`postinstall` runs `cf-typegen` only (generates gitignored `worker-configuration.d.ts`). The MCP worker does not need `bun run build` — Wrangler bundles `workers/mcp.ts` directly.
+`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts) (cf-typegen via `wrangler types` when dependencies are intact). The MCP worker does not need `bun run build` — Wrangler bundles `workers/mcp.ts` directly.
 
 **Manual deploy (local):**
 

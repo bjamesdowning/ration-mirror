@@ -12,8 +12,24 @@ export const CONNECTED_AGENTS_SETTINGS_PATH = "/hub/settings#connected-agents";
 /** OAuth-first connection steps (plain strings for markdown/docs). */
 export const MCP_CONNECT_STEPS = [
 	`In your MCP client, add server URL \`${MCP_ENDPOINT_URL}\``,
-	"Complete browser sign-in, pick your household, and approve permissions",
+	"Complete browser sign-in, select your household, and approve permissions (in that order)",
 	"Manage or revoke access anytime in Hub → Settings → Connected Agents",
+] as const;
+
+/** OAuth troubleshooting rows for Hub Settings and docs. */
+export const MCP_OAUTH_TROUBLESHOOTING = [
+	{
+		symptom: "Browser opens repeatedly or authorization fails",
+		fix: "Revoke the grant below, remove the MCP server in your client, re-add the URL, and finish sign-in → household → authorize in one tab within a few minutes.",
+	},
+	{
+		symptom: "Agent listed here but tools fail",
+		fix: 'Revoke and reconnect — the grant may be incomplete (shows "Not linked"). Household selection is required for every new connection.',
+	},
+	{
+		symptom: "Wrong pantry data",
+		fix: "Revoke and reconnect, choosing the correct household at the selection step.",
+	},
 ] as const;
 
 /** Short positioning line for marketing surfaces. */

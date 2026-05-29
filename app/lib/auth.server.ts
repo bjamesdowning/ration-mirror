@@ -157,10 +157,8 @@ export function createAuth(env: Cloudflare.Env) {
 						const orgId = session?.activeOrganizationId;
 						return typeof orgId === "string" ? orgId : undefined;
 					},
-					shouldRedirect: async ({ session, scopes }) => {
-						if (!requiresOAuthOrgSelection(scopes)) return false;
-						return !session?.activeOrganizationId;
-					},
+					shouldRedirect: async ({ scopes }) =>
+						requiresOAuthOrgSelection(scopes),
 				},
 				customAccessTokenClaims: async ({ referenceId, user }) => ({
 					...buildOAuthAccessTokenClaims(referenceId),

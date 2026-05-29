@@ -24,9 +24,12 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 
 | Symptom | Check |
 |---------|--------|
-| Browser opens but consent fails | Grant may have expired — restart the connection from your MCP client |
-| Wrong pantry data | You selected a different household at consent — revoke and reconnect, picking the correct org |
-| Client reconnect loop | Ensure the client supports OAuth 2.1 / protected-resource discovery; see MCP server card |
+| Browser opens but consent fails | Authorization window ~10 minutes — revoke grant, remove MCP server in client, re-add URL, complete **sign-in → household → authorize** in one tab |
+| Agent listed in Settings but tools fail | Incomplete grant (household not linked) — revoke and reconnect; you must pass **Select household** before consent |
+| Wrong pantry data | Revoke and reconnect; pick the correct household at selection |
+| Client reconnect loop | Client must support OAuth 2.1 / protected-resource discovery; restart connection from client (not an old browser tab) |
+
+Orchestrated browser flows use KV state (`oauth:flow:{id}`). Support can correlate failures via Worker logs: `event=oauth_flow`, fields `oauth_flow_id`, `step`, `error_code`.
 
 ---
 

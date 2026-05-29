@@ -1,0 +1,16 @@
+{
+	"oauth2Continue_success": {
+		"redirect": true,
+		"url": "https://ration.mayutic.com/oauth/consent?oauth_query=client_id%3Dabc&flow_id=00000000-0000-4000-8000-000000000001"
+	},
+	"oauth2Continue_redirect_uri": {
+		"redirect_uri": "https://ration.mayutic.com/oauth/consent?oauth_query=client_id%3Dabc"
+	},
+	"oauth2Consent_success": {
+		"redirect": true,
+		"url": "cursor://anysphere.cursor-mcp/oauth/callback?code=example&state=xyz"
+	},
+	"oauth2Consent_redirect_uri": {
+		"redirect_uri": "cursor://anysphere.cursor-mcp/oauth/callback?code=example&state=xyz"
+	}
+}

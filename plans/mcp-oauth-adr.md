@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-05-28
+Accepted — 2026-05-28; amended 2026-05-29 (Option C orchestrator)
 
 ## Context
 
@@ -13,7 +13,8 @@ Ration exposes an MCP server for AI agents. Current auth is API-key only. MCP sp
 - **Authorization Server (AS):** main app worker (`ration.mayutic.com`), Better Auth `@better-auth/oauth-provider` + `jwt` plugins.
 - **Resource Server (RS):** `ration-mcp` worker (`mcp.ration.mayutic.com`). Validates JWT access tokens via JWKS (cached in `RATION_KV`); does not issue tokens.
 - **Audience (RFC 8707):** `https://mcp.ration.mayutic.com/mcp` (dev: derived from request origin).
-- **Org binding:** single org per grant, selected at consent/post-login; `org` claim in access token; RS re-validates `member` on every request.
+- **Org binding:** single org per grant, selected at consent/post-login; `org` claim in access token; RS re-validates `member` on every request. **MCP flows always pass through `/oauth/select-org`** (even when the user already has `activeOrganizationId` in Hub).
+- **Browser flow orchestration:** ephemeral KV records (`oauth:flow:{id}`, TTL **600s**) track step state; Better Auth remains token issuer; redirects follow API responses only (see [oauth-flow-contract.md](./oauth-flow-contract.md)).
 - **Scopes:** granular `mcp:*` only (no legacy `mcp` via OAuth).
 - **DCR:** enabled with unauthenticated public-client registration; PKCE S256 mandatory; rate-limited.
 - **Token TTL:** access 10 minutes; refresh 30 days with rotation.

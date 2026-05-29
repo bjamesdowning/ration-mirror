@@ -9,7 +9,7 @@
 		"worker-configuration.d.ts",
 		"load-context.ts"
 	],
-	"exclude": ["node_modules", "node_modules.nosync"],
+	"exclude": ["node_modules"],
 	"compilerOptions": {
 		"composite": true,
 		"strict": true,

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	buildConsentScopeForSubmit,
 	parseScopesFromOAuthQuery,
-	resolveOAuthPostAuthPath,
 } from "../oauth-flow";
 
 describe("parseScopesFromOAuthQuery", () => {
@@ -28,35 +27,6 @@ describe("buildConsentScopeForSubmit", () => {
 		const oauthQuery = "scope=mcp%3Aread+mcp%3Asupply%3Awrite+offline_access";
 		expect(buildConsentScopeForSubmit([], oauthQuery)).toEqual(
 			"mcp:read mcp:supply:write offline_access",
-		);
-	});
-});
-
-describe("resolveOAuthPostAuthPath", () => {
-	const oauthQuery = "client_id=x&scope=mcp%3Aread+offline_access";
-
-	it("routes post_login to select-org", () => {
-		const params = new URLSearchParams("post_login=true");
-		expect(resolveOAuthPostAuthPath(params, oauthQuery, null)).toBe(
-			"/oauth/select-org",
-		);
-	});
-
-	it("routes MCP requests without active org to select-org", () => {
-		const params = new URLSearchParams(
-			`oauth_query=${encodeURIComponent(oauthQuery)}`,
-		);
-		expect(resolveOAuthPostAuthPath(params, oauthQuery, null)).toBe(
-			"/oauth/select-org",
-		);
-	});
-
-	it("routes to consent when org is already active", () => {
-		const params = new URLSearchParams(
-			`oauth_query=${encodeURIComponent(oauthQuery)}`,
-		);
-		expect(resolveOAuthPostAuthPath(params, oauthQuery, "org-1")).toBe(
-			"/oauth/consent",
 		);
 	});
 });

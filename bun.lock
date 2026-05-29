@@ -38,6 +38,8 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "drizzle-kit": "^0.31.10",
+        "esbuild": "^0.27.2",
+        "obug": "2.1.1",
         "pathe": "^2.0.3",
         "tailwindcss": "^4.2.4",
         "typescript": "^5.9.3",

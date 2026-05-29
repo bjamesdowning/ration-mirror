@@ -1,7 +1,6 @@
 import type { AppLoadContext } from "react-router";
-import { data, Form, redirect } from "react-router";
+import { Form, redirect } from "react-router";
 import { getAuth, requireAuth } from "~/lib/auth.server";
-import { log, redactId } from "~/lib/logging.server";
 import {
 	OAUTH_MCP_SCOPES,
 	OAUTH_SCOPE_LABELS,
@@ -12,7 +11,20 @@ import {
 	oauthErrorDetail,
 	parseScopesFromOAuthQuery,
 } from "~/lib/oauth-flow";
-
+import {
+	advanceFlow,
+	deleteFlow,
+	ensureFlowForRequest,
+	OAuthFlowError,
+	requireFlow,
+	verifyOAuthQueryDigestAsync,
+} from "~/lib/oauth-orchestrator.server";
+import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
+import {
+	mapUnknownConsentError,
+	oauthFlowErrorResponse,
+} from "~/lib/oauth-route-errors.server";
+import { logOAuthFlowEvent } from "~/lib/oauth-telemetry.server";
 export async function loader({
 	request,
 	context,
@@ -20,28 +32,73 @@ export async function loader({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	await requireAuth(context, request);
+	const session = await requireAuth(context, request);
+	const env = context.cloudflare.env;
 	const url = new URL(request.url);
-	const clientId = url.searchParams.get("client_id") ?? "Unknown client";
-	const oauthQuery =
-		url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, "");
-	const oauthQueryFromUrl =
-		url.searchParams.get("oauth_query") ?? url.search.replace(/^\?/, "");
-	const scopeParam =
-		url.searchParams.get("scope") ??
-		parseScopesFromOAuthQuery(oauthQueryFromUrl).join(" ");
-	const requestedScopes = scopeParam
-		.split(/\s+/)
-		.filter((s): s is OAuthMcpScope =>
-			(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
-		);
 
-	return {
-		clientId,
-		oauthQuery,
-		requestedScopes:
-			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
-	};
+	try {
+		const { flow, oauthQuery } = await ensureFlowForRequest(env.RATION_KV, url);
+
+		if (flow.step === "initiated" || flow.step === "authenticated") {
+			throw new OAuthFlowError("org_required");
+		}
+
+		await requireFlow(env.RATION_KV, flow.flowId, {
+			minStep: "org_selected",
+			userId: session.user.id,
+		});
+
+		const digestOk = await verifyOAuthQueryDigestAsync(
+			oauthQuery,
+			flow.oauthQueryDigest,
+		);
+		if (!digestOk) {
+			throw new OAuthFlowError("flow_invalid");
+		}
+
+		if (flow.step !== "consent_presented") {
+			await advanceFlow(env.RATION_KV, flow.flowId, "consent_presented", {
+				userId: session.user.id,
+			});
+		}
+
+		const scopeParam =
+			url.searchParams.get("scope") ??
+			parseScopesFromOAuthQuery(oauthQuery).join(" ");
+		const requestedScopes = scopeParam
+			.split(/\s+/)
+			.filter((s): s is OAuthMcpScope =>
+				(OAUTH_MCP_SCOPES as readonly string[]).includes(s),
+			);
+
+		const clientId =
+			url.searchParams.get("client_id") ??
+			new URLSearchParams(oauthQuery).get("client_id") ??
+			"Unknown client";
+
+		return {
+			clientId,
+			oauthQuery,
+			flowId: flow.flowId,
+			requestedScopes:
+				requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
+		};
+	} catch (error) {
+		if (error instanceof OAuthFlowError) {
+			const flowId = url.searchParams.get("flow_id") ?? undefined;
+			if (error.code === "flow_step_mismatch") {
+				throw oauthFlowErrorResponse(
+					new OAuthFlowError(
+						"org_required",
+						"Select a household before authorizing.",
+					),
+					flowId,
+				);
+			}
+			throw oauthFlowErrorResponse(error, flowId);
+		}
+		throw error;
+	}
 }
 
 export async function action({
@@ -51,10 +108,12 @@ export async function action({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	await requireAuth(context, request);
+	const session = await requireAuth(context, request);
+	const env = context.cloudflare.env;
 	const form = await request.formData();
 	const accept = form.get("accept") === "true";
 	const oauthQuery = form.get("oauth_query");
+	const flowId = form.get("flow_id");
 	const selectedScopes = form
 		.getAll("scopes")
 		.map(String)
@@ -63,18 +122,38 @@ export async function action({
 		);
 
 	if (typeof oauthQuery !== "string" || !oauthQuery) {
-		return data({ error: "Missing consent session." }, { status: 400 });
+		return oauthFlowErrorResponse(new OAuthFlowError("missing_oauth_query"));
 	}
 
-	const auth = getAuth(context.cloudflare.env);
-	const consentScope =
-		accept && typeof oauthQuery === "string"
-			? buildConsentScopeForSubmit(selectedScopes, oauthQuery)
-			: undefined;
+	if (typeof flowId !== "string" || !flowId) {
+		return oauthFlowErrorResponse(new OAuthFlowError("flow_invalid"));
+	}
 
-	let result: Awaited<ReturnType<typeof auth.api.oauth2Consent>>;
+	const started = Date.now();
+	const clientId =
+		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
+
 	try {
-		result = await auth.api.oauth2Consent({
+		const flow = await requireFlow(env.RATION_KV, flowId, {
+			minStep: "org_selected",
+			userId: session.user.id,
+		});
+
+		const digestOk = await verifyOAuthQueryDigestAsync(
+			oauthQuery,
+			flow.oauthQueryDigest,
+		);
+		if (!digestOk) {
+			throw new OAuthFlowError("flow_invalid");
+		}
+
+		const auth = getAuth(env);
+		const consentScope =
+			accept && typeof oauthQuery === "string"
+				? buildConsentScopeForSubmit(selectedScopes, oauthQuery)
+				: undefined;
+
+		const result = await auth.api.oauth2Consent({
 			headers: request.headers,
 			body: {
 				accept,
@@ -82,45 +161,40 @@ export async function action({
 				...(accept && consentScope ? { scope: consentScope } : {}),
 			},
 		});
-	} catch (error) {
-		// Better Auth throws an APIError when the signed consent session is
-		// invalid or expired (`codeExpiresIn`, default 10 min). Surface a clear,
-		// non-fatal message instead of crashing into the generic error page.
-		log.error("OAuth consent submission failed", error, {
-			clientId: redactId(new URLSearchParams(oauthQuery).get("client_id")),
-			detail: oauthErrorDetail(error),
-			consentScope: consentScope ? redactId(consentScope) : undefined,
+
+		const redirectUrl = getSafeAuthRedirectUrl(result);
+		if (!redirectUrl) {
+			throw new OAuthFlowError("redirect_missing");
+		}
+
+		await advanceFlow(env.RATION_KV, flowId, "completed");
+		await deleteFlow(env.RATION_KV, flowId);
+		logOAuthFlowEvent({
+			oauthFlowId: flowId,
+			step: "completed",
+			outcome: "success",
+			clientId,
+			durationMs: Date.now() - started,
 		});
-		return data(
-			{
-				error:
-					"This authorization request could not be completed — it may have expired. Please restart the connection from your AI client and try again.",
-			},
-			{ status: 400 },
-		);
+		throw redirect(redirectUrl);
+	} catch (error) {
+		if (error instanceof Response) {
+			throw error;
+		}
+		if (error instanceof OAuthFlowError) {
+			return oauthFlowErrorResponse(error, flowId);
+		}
+		logOAuthFlowEvent({
+			oauthFlowId: flowId,
+			step: "consent_presented",
+			outcome: "error",
+			errorCode: "consent_rejected",
+			clientId,
+			detail: oauthErrorDetail(error),
+			durationMs: Date.now() - started,
+		});
+		return mapUnknownConsentError(error, { flowId, clientId });
 	}
-
-	if (
-		result &&
-		typeof result === "object" &&
-		"redirect" in result &&
-		result.redirect &&
-		"url" in result &&
-		typeof result.url === "string"
-	) {
-		throw redirect(result.url);
-	}
-
-	if (
-		result &&
-		typeof result === "object" &&
-		"redirect_uri" in result &&
-		typeof result.redirect_uri === "string"
-	) {
-		throw redirect(result.redirect_uri);
-	}
-
-	return data({ error: "Unable to complete authorization." }, { status: 500 });
 }
 
 export default function OAuthConsentPage({
@@ -128,7 +202,7 @@ export default function OAuthConsentPage({
 	actionData,
 }: {
 	loaderData: Awaited<ReturnType<typeof loader>>;
-	actionData?: { error?: string };
+	actionData?: { error?: string; errorCode?: string };
 }) {
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
@@ -145,12 +219,25 @@ export default function OAuthConsentPage({
 					<p className="mb-4 text-sm text-red-600">{actionData.error}</p>
 				)}
 
+				{actionData?.errorCode === "org_required" && (
+					<p className="mb-4 text-sm text-carbon/70">
+						<a
+							href={`/oauth/select-org?flow_id=${loaderData.flowId}&oauth_query=${encodeURIComponent(loaderData.oauthQuery)}`}
+							className="text-hyper-green font-medium underline"
+						>
+							Select a household
+						</a>{" "}
+						first, then return here.
+					</p>
+				)}
+
 				<Form method="post" className="space-y-4">
 					<input
 						type="hidden"
 						name="oauth_query"
 						value={loaderData.oauthQuery}
 					/>
+					<input type="hidden" name="flow_id" value={loaderData.flowId} />
 					<fieldset className="space-y-2">
 						<legend className="text-sm font-medium text-carbon mb-2">
 							Permissions

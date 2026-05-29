@@ -38,6 +38,17 @@ describe("isAllowedOAuthRedirectUrl", () => {
 		).toBe(true);
 	});
 
+	it("allows root-relative same-origin paths (Better Auth page redirects)", () => {
+		expect(isAllowedOAuthRedirectUrl("/oauth/consent?oauth_query=abc")).toBe(
+			true,
+		);
+		expect(isAllowedOAuthRedirectUrl("/oauth/select-org")).toBe(true);
+	});
+
+	it("rejects protocol-relative URLs to prevent open redirects", () => {
+		expect(isAllowedOAuthRedirectUrl("//evil.com/oauth/consent")).toBe(false);
+	});
+
 	it("rejects javascript URLs", () => {
 		expect(isAllowedOAuthRedirectUrl("javascript:alert(1)")).toBe(false);
 	});

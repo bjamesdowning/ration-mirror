@@ -36,9 +36,16 @@ export function getAuthRedirectUrl(result: unknown): string | null {
 }
 
 /**
- * Reject open redirects: only allow http(s) and cursor:// callback schemes used by MCP clients.
+ * Reject open redirects while allowing the redirect shapes Better Auth emits:
+ * - Root-relative, same-origin paths (its internal page redirects, e.g.
+ *   "/oauth/consent?..."). Protocol-relative "//host" is rejected as it can
+ *   escape our origin.
+ * - Absolute http(s) and cursor:// schemes (the final MCP client callback).
  */
 export function isAllowedOAuthRedirectUrl(url: string): boolean {
+	if (url.startsWith("/") && !url.startsWith("//")) {
+		return true;
+	}
 	try {
 		const parsed = new URL(url);
 		if (parsed.protocol === "https:" || parsed.protocol === "http:") {

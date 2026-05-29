@@ -1,6 +1,7 @@
 import { getAuth } from "./auth.server";
 import {
 	authApiUrl,
+	internalAuthOrigin,
 	readAuthHandlerJson,
 	throwIfAuthHandlerFailed,
 } from "./oauth-auth-http.server";
@@ -50,6 +51,7 @@ export async function invokeOAuth2ContinuePostLogin(
 	const headers = options?.headers ?? new Headers(request.headers);
 	headers.set("content-type", "application/json");
 	headers.set("accept", "application/json");
+	headers.set("origin", internalAuthOrigin(request));
 
 	const continueRequest = new Request(authApiUrl(request, "/oauth2/continue"), {
 		method: "POST",
@@ -77,6 +79,7 @@ export async function invokeOAuth2Consent(
 	const headers = new Headers(request.headers);
 	headers.set("content-type", "application/json");
 	headers.set("accept", "application/json");
+	headers.set("origin", internalAuthOrigin(request));
 
 	const consentRequest = new Request(authApiUrl(request, "/oauth2/consent"), {
 		method: "POST",
@@ -100,6 +103,7 @@ export async function setActiveOrganizationViaHandler(
 			method: "POST",
 			headers: {
 				cookie: request.headers.get("cookie") ?? "",
+				origin: internalAuthOrigin(request),
 				"content-type": "application/json",
 				accept: "application/json",
 			},

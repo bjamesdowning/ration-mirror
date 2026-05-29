@@ -7,6 +7,19 @@ export function authApiUrl(request: Request, path: string): string {
 	return new URL(`${AUTH_API_PREFIX}${path}`, base).toString();
 }
 
+/**
+ * Origin to attach to server-to-server auth.handler() sub-requests.
+ *
+ * Better Auth runs a CSRF origin check on every state-changing POST and rejects
+ * requests with no Origin header ("Missing or null Origin"). Internally
+ * constructed Request objects do not inherit the browser's Origin, so we must
+ * set it explicitly to the worker's own origin, which is the default
+ * trustedOrigin (baseURL).
+ */
+export function internalAuthOrigin(request: Request): string {
+	return new URL(request.url).origin;
+}
+
 export async function readAuthHandlerJson<T>(response: Response): Promise<T> {
 	const text = await response.text();
 	if (!text) {

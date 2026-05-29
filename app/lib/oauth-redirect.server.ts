@@ -1,3 +1,5 @@
+import { buildConsentUrl } from "./oauth-orchestrator.server";
+
 /**
  * Parse Better Auth oauth2Continue / oauth2Consent responses.
  * Never construct OAuth redirect URLs by hand in routes.
@@ -67,5 +69,40 @@ export function isOAuthSelectOrgRedirect(url: string): boolean {
 		return new URL(url).pathname === "/oauth/select-org";
 	} catch {
 		return false;
+	}
+}
+
+export function isOAuthConsentRedirect(url: string): boolean {
+	try {
+		return new URL(url).pathname === "/oauth/consent";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Better Auth often returns `/oauth/consent` without `flow_id`. Merge orchestrator
+ * params so KV state stays bound; fall back to a full consent URL when needed.
+ */
+export function resolveOAuthFlowRedirectUrl(
+	url: string | null,
+	flowId: string,
+	oauthQuery: string,
+): string {
+	if (!url || isOAuthSelectOrgRedirect(url)) {
+		return buildConsentUrl(flowId, oauthQuery);
+	}
+	if (!isOAuthConsentRedirect(url)) {
+		return url;
+	}
+	try {
+		const parsed = new URL(url);
+		parsed.searchParams.set("flow_id", flowId);
+		if (!parsed.searchParams.get("oauth_query")?.trim()) {
+			parsed.searchParams.set("oauth_query", oauthQuery);
+		}
+		return parsed.toString();
+	} catch {
+		return buildConsentUrl(flowId, oauthQuery);
 	}
 }

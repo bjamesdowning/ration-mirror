@@ -10,6 +10,7 @@ import {
 	isStepAtLeast,
 	OAuthFlowError,
 	requireFlow,
+	syncOrgSelectionForConsent,
 	verifyOAuthQueryDigestAsync,
 } from "../oauth-orchestrator.server";
 
@@ -146,5 +147,26 @@ describe("isStepAtLeast", () => {
 	it("orders steps correctly", () => {
 		expect(isStepAtLeast("org_selected", "authenticated")).toBe(true);
 		expect(isStepAtLeast("initiated", "consent_presented")).toBe(false);
+	});
+});
+
+describe("syncOrgSelectionForConsent", () => {
+	it("advances to org_selected when session household is valid", async () => {
+		const kv = makeKv();
+		const flow = await createFlow(kv, OAUTH_QUERY);
+		await advanceFlow(kv, flow.flowId, "authenticated", {
+			userId: "user-a",
+		});
+
+		const updated = await syncOrgSelectionForConsent(kv, {
+			flow,
+			oauthQuery: OAUTH_QUERY,
+			userId: "user-a",
+			activeOrganizationId: "org-1",
+			isMemberOfOrg: async () => true,
+		});
+
+		expect(updated.step).toBe("org_selected");
+		expect(updated.organizationId).toBe("org-1");
 	});
 });

@@ -1,5 +1,7 @@
+import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { Form, redirect } from "react-router";
+import * as schema from "~/db/schema";
 import { getAuth, requireAuth } from "~/lib/auth.server";
 import {
 	OAUTH_MCP_SCOPES,
@@ -17,6 +19,7 @@ import {
 	ensureFlowForRequest,
 	OAuthFlowError,
 	requireFlow,
+	syncOrgSelectionForConsent,
 	verifyOAuthQueryDigestAsync,
 } from "~/lib/oauth-orchestrator.server";
 import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
@@ -37,11 +40,27 @@ export async function loader({
 	const url = new URL(request.url);
 
 	try {
-		const { flow, oauthQuery } = await ensureFlowForRequest(env.RATION_KV, url);
-
-		if (flow.step === "initiated" || flow.step === "authenticated") {
-			throw new OAuthFlowError("org_required");
-		}
+		const { flow: initialFlow, oauthQuery } = await ensureFlowForRequest(
+			env.RATION_KV,
+			url,
+		);
+		const db = drizzle(env.DB, { schema });
+		const flow = await syncOrgSelectionForConsent(env.RATION_KV, {
+			flow: initialFlow,
+			oauthQuery,
+			userId: session.user.id,
+			activeOrganizationId: session.session.activeOrganizationId,
+			isMemberOfOrg: async (userId, organizationId) => {
+				const membership = await db.query.member.findFirst({
+					where: (member, { and, eq: eqOp }) =>
+						and(
+							eqOp(member.userId, userId),
+							eqOp(member.organizationId, organizationId),
+						),
+				});
+				return membership !== undefined;
+			},
+		});
 
 		await requireFlow(env.RATION_KV, flow.flowId, {
 			minStep: "org_selected",
@@ -84,6 +103,9 @@ export async function loader({
 				requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
 		};
 	} catch (error) {
+		if (error instanceof Response) {
+			throw error;
+		}
 		if (error instanceof OAuthFlowError) {
 			const flowId = url.searchParams.get("flow_id") ?? undefined;
 			if (error.code === "flow_step_mismatch") {

@@ -7,14 +7,13 @@ import { getAuth, requireAuth } from "~/lib/auth.server";
 import { oauthErrorDetail } from "~/lib/oauth-flow";
 import {
 	advanceFlow,
-	buildConsentUrl,
 	ensureFlowForRequest,
 	OAuthFlowError,
 	requireFlow,
 } from "~/lib/oauth-orchestrator.server";
 import {
 	getSafeAuthRedirectUrl,
-	isOAuthSelectOrgRedirect,
+	resolveOAuthFlowRedirectUrl,
 } from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
@@ -175,21 +174,12 @@ export async function action({
 			},
 		});
 
-		let redirectUrl = getSafeAuthRedirectUrl(continueResult);
-		if (redirectUrl && isOAuthSelectOrgRedirect(redirectUrl)) {
-			redirectUrl = null;
-		}
-		if (redirectUrl) {
-			await advanceFlow(env.RATION_KV, flowId, "consent_presented");
-			logOAuthFlowEvent({
-				oauthFlowId: flowId,
-				step: "org_selected",
-				outcome: "success",
-				clientId: new URLSearchParams(oauthQuery).get("client_id") ?? undefined,
-				durationMs: Date.now() - started,
-			});
-			throw redirect(redirectUrl);
-		}
+		const authRedirect = getSafeAuthRedirectUrl(continueResult);
+		const redirectUrl = resolveOAuthFlowRedirectUrl(
+			authRedirect,
+			flowId,
+			oauthQuery,
+		);
 
 		await advanceFlow(env.RATION_KV, flowId, "consent_presented");
 		logOAuthFlowEvent({
@@ -199,7 +189,7 @@ export async function action({
 			clientId: new URLSearchParams(oauthQuery).get("client_id") ?? undefined,
 			durationMs: Date.now() - started,
 		});
-		throw redirect(buildConsentUrl(flowId, oauthQuery));
+		throw redirect(redirectUrl);
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;

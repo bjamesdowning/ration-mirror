@@ -4,7 +4,9 @@ import {
 	getAuthRedirectUrl,
 	getSafeAuthRedirectUrl,
 	isAllowedOAuthRedirectUrl,
+	isOAuthConsentRedirect,
 	isOAuthSelectOrgRedirect,
+	resolveOAuthFlowRedirectUrl,
 } from "../oauth-redirect.server";
 
 describe("getAuthRedirectUrl", () => {
@@ -64,5 +66,31 @@ describe("isOAuthSelectOrgRedirect", () => {
 				"https://ration.mayutic.com/oauth/consent?flow_id=abc",
 			),
 		).toBe(false);
+	});
+});
+
+describe("resolveOAuthFlowRedirectUrl", () => {
+	const flowId = "00000000-0000-4000-8000-000000000001";
+	const oauthQuery =
+		"client_id=test&scope=mcp%3Aread&response_type=code&state=s1";
+
+	it("merges flow_id into Better Auth consent URLs", () => {
+		const resolved = resolveOAuthFlowRedirectUrl(
+			"https://ration.mayutic.com/oauth/consent?oauth_query=client_id%3Dtest",
+			flowId,
+			oauthQuery,
+		);
+		expect(resolved).toContain("flow_id=");
+		expect(resolved).toContain(flowId);
+	});
+
+	it("replaces select-org redirects with orchestrator consent URL", () => {
+		const resolved = resolveOAuthFlowRedirectUrl(
+			"https://ration.mayutic.com/oauth/select-org",
+			flowId,
+			oauthQuery,
+		);
+		expect(resolved).toContain("/oauth/consent");
+		expect(resolved).toContain("flow_id=");
 	});
 });

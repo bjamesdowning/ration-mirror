@@ -3,13 +3,16 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import * as schema from "~/db/schema";
-import { getAuth, requireAuth } from "~/lib/auth.server";
+import { requireAuth } from "~/lib/auth.server";
+import {
+	invokeOAuth2ContinuePostLogin,
+	setActiveOrganizationViaHandler,
+} from "~/lib/oauth-auth-api.server";
 import {
 	buildOAuthPageUrl,
 	decodeOAuthQueryFromForm,
 	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
-	mergeSessionCookies,
 } from "~/lib/oauth-query.server";
 import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
 import {
@@ -141,21 +144,18 @@ export async function action({
 			.set({ activeOrganizationId: organizationId })
 			.where(eq(schema.session.id, session.session.id));
 
-		const auth = getAuth(env);
-		const setActiveResult = await auth.api.setActiveOrganization({
-			headers: request.headers,
-			body: { organizationId },
-			returnHeaders: true,
-		});
-		const headersWithSession = mergeSessionCookies(request, setActiveResult);
+		const headersWithSession = await setActiveOrganizationViaHandler(
+			env,
+			request,
+			organizationId,
+		);
 
-		const continueResult = await auth.api.oauth2Continue({
-			headers: headersWithSession,
-			body: {
-				postLogin: true,
-				oauth_query: oauthQuery,
-			},
-		});
+		const continueResult = await invokeOAuth2ContinuePostLogin(
+			env,
+			request,
+			oauthQuery,
+			{ headers: headersWithSession },
+		);
 
 		const redirectUrl = getSafeAuthRedirectUrl(continueResult);
 		if (!redirectUrl) {

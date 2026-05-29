@@ -1,11 +1,12 @@
 import type { AppLoadContext } from "react-router";
 import { Form, redirect } from "react-router";
-import { getAuth, requireAuth } from "~/lib/auth.server";
+import { requireAuth } from "~/lib/auth.server";
 import {
 	OAUTH_MCP_SCOPES,
 	OAUTH_SCOPE_LABELS,
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
+import { invokeOAuth2Consent } from "~/lib/oauth-auth-api.server";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
@@ -99,18 +100,12 @@ export async function action({
 		new URLSearchParams(oauthQuery).get("client_id") ?? undefined;
 
 	try {
-		const auth = getAuth(env);
-		const result = await auth.api.oauth2Consent({
-			headers: request.headers,
-			body: {
-				accept,
-				oauth_query: oauthQuery,
-				...(accept
-					? {
-							scope: buildConsentScopeForSubmit(selectedScopes, oauthQuery),
-						}
-					: {}),
-			},
+		const result = await invokeOAuth2Consent(env, request, {
+			accept,
+			oauth_query: oauthQuery,
+			...(accept
+				? { scope: buildConsentScopeForSubmit(selectedScopes, oauthQuery) }
+				: {}),
 		});
 
 		const redirectUrl = getSafeAuthRedirectUrl(result);

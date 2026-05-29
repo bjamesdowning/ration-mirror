@@ -36,7 +36,8 @@ export function mapBetterAuthConsentError(error: unknown): ConsentErrorMapping {
 	if (
 		detail.includes("invalid_signature") ||
 		detail.includes("invalid signature") ||
-		detail.includes("unauthorized")
+		detail.includes("unauthorized") ||
+		detail.includes("forbidden")
 	) {
 		return {
 			error:

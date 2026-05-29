@@ -1,12 +1,12 @@
 import { redirect } from "react-router";
 import { AuthWidget } from "~/components/auth/AuthWidget";
 import { getAuth } from "~/lib/auth.server";
-import { requiresOAuthOrgSelection } from "~/lib/oauth.server";
+import { resumeOAuthAuthorizeAfterSession } from "~/lib/oauth-auth-api.server";
 import {
 	buildOAuthPageUrl,
 	getSignedOAuthQuery,
-	parseScopesFromSignedQuery,
 } from "~/lib/oauth-query.server";
+import { mapBetterAuthConsentError } from "~/lib/oauth-route-errors.server";
 
 export async function loader({
 	request,
@@ -27,11 +27,19 @@ export async function loader({
 	const session = await auth.api.getSession({ headers: request.headers });
 
 	if (session) {
-		const scopes = parseScopesFromSignedQuery(signed);
-		const next = requiresOAuthOrgSelection(scopes)
-			? buildOAuthPageUrl("/oauth/select-org", signed)
-			: buildOAuthPageUrl("/oauth/consent", signed);
-		throw redirect(next);
+		try {
+			const next = await resumeOAuthAuthorizeAfterSession(env, request, signed);
+			throw redirect(next);
+		} catch (error) {
+			if (error instanceof Response) {
+				throw error;
+			}
+			const mapped = mapBetterAuthConsentError(error);
+			return {
+				callbackURL: buildOAuthPageUrl("/oauth/sign-in", signed),
+				flowError: mapped.error,
+			};
+		}
 	}
 
 	return {
@@ -60,6 +68,11 @@ export default function OAuthSignInPage({
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
 			<div className="w-full max-w-md">
+				{"flowError" in loaderData && loaderData.flowError ? (
+					<p className="mb-4 text-sm text-red-600 text-center">
+						{loaderData.flowError}
+					</p>
+				) : null}
 				<AuthWidget
 					showLogo
 					defaultMode="signIn"

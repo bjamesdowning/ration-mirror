@@ -1452,6 +1452,8 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-key | apiKeyId | 60s | 15 | Compromised-key cap (mcp_write_per_key) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
+| MCP delegated read (Fin `actor_token`) | subjectUserId | 60s | 20 | Per end-user cap (mcp_delegated_read) |
+| MCP delegated write (Fin `actor_token`) | subjectUserId | 60s | 6 | Per end-user cap (mcp_delegated_write) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---
@@ -1461,6 +1463,8 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agents via the **Model Context Protocol (MCP)**. It runs at `mcp.ration.mayutic.com` and shares all storage bindings with the main Worker.
 
 **Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
+
+**Fin delegated access:** Intercom Fin uses one workspace-level OAuth grant (`mcp:delegate` on an allowlisted client). End-user pantry data requires a signed **`actor_token`** (delegation JWT shipped as `ration_mcp_delegation` in the Intercom Messenger JWT). Secrets: `FIN_MCP_DELEGATION_SECRET` (both workers), `FIN_DELEGATION_CLIENT_IDS` (MCP worker). See [plans/fin-mcp-delegation-runbook.md](plans/fin-mcp-delegation-runbook.md).
 
 **OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. Better Auth holds authorization state via the signed `oauth_query` and session. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
@@ -1683,6 +1687,15 @@ bun run test:unit
 ```
 
 `postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts): it skips `cf-typegen` with recovery instructions if Wrangler dependencies are incomplete (so install can still finish), and runs `wrangler types` when the tree is healthy. `pretest:unit` runs [`scripts/verify-test-deps.ts`](scripts/verify-test-deps.ts) before Vitest.
+
+### Local dev server
+
+| Command | Config | Bindings |
+|---------|--------|----------|
+| `bun run dev:local` | [`wrangler.local.jsonc`](wrangler.local.jsonc) via `RATION_DEV_MODE=local` | Local Miniflare (D1/KV/R2/queues). AI and Vectorize are unavailable — use `dev:remote` for scan/semantic search. |
+| `bun run dev:remote` | [`wrangler.dev.jsonc`](wrangler.dev.jsonc) | Remote Cloudflare resources (`remote: true` on D1/KV/R2/AI/Vectorize). |
+
+`dev:local` sets `remoteBindings: false` in [`vite.config.ts`](vite.config.ts) so Wrangler does not open an edge-preview proxy (required for remote AI). Do **not** set `CLOUDFLARE_ENV=local` for local dev — the Cloudflare Vite plugin maps that variable to `wrangler --env local`, which expects an `env.local` section and duplicates binding config.
 
 ### Cloudflare Workers Builds
 

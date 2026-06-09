@@ -206,6 +206,16 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 120,
 		keyPrefix: "rate:mcp_http",
 	},
+	mcp_delegated_read: {
+		windowMs: 60_000,
+		maxRequests: 20,
+		keyPrefix: "rate:mcp_delegated_read",
+	},
+	mcp_delegated_write: {
+		windowMs: 60_000,
+		maxRequests: 6,
+		keyPrefix: "rate:mcp_delegated_write",
+	},
 	shared_public: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,

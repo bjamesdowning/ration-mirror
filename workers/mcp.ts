@@ -7,8 +7,15 @@ import {
 import type { McpToolContext } from "../app/lib/mcp/auth";
 import { authenticateMcp, MCP_AUTH_ERRORS } from "../app/lib/mcp/auth";
 import { registerTools } from "../app/lib/mcp/tools";
-import { resolveAuthorizationServerUrl } from "../app/lib/oauth.constants";
+import {
+	resolveAuthorizationServerUrl,
+	resolveMcpResourceAudience,
+} from "../app/lib/oauth.constants";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
+
+/** Align with agents DO handler body cap. */
+const MCP_MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MCP_MAX_JSONRPC_BATCH = 10;
 
 const PROTECTED_RESOURCE_PATHS = new Set([
 	"/.well-known/oauth-protected-resource",
@@ -17,19 +24,95 @@ const PROTECTED_RESOURCE_PATHS = new Set([
 
 const MCP_CORS_HEADERS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Expose-Headers": "WWW-Authenticate",
+	"Access-Control-Expose-Headers": "WWW-Authenticate, mcp-session-id",
 };
 
-/** Build RFC 9728 metadata and WWW-Authenticate values from request origin. */
-function getMcpResourceUrls(request: Request): {
-	mcpBaseUrl: string;
-	resourceDocumentation: string;
-} {
-	const url = new URL(request.url);
-	const mcpBaseUrl = url.origin;
-	const appHost = url.hostname.replace(/^mcp\./, "") || url.hostname;
-	const resourceDocumentation = `${url.protocol}//${appHost}/docs/api#mcp-server`;
-	return { mcpBaseUrl, resourceDocumentation };
+async function sanitizeMcpHandlerResponse(
+	response: Response,
+): Promise<Response> {
+	if (response.status < 500) {
+		return response;
+	}
+	const contentType = response.headers.get("Content-Type") ?? "";
+	if (!contentType.includes("application/json")) {
+		return response;
+	}
+
+	const body = await response.text();
+	try {
+		const parsed = JSON.parse(body) as {
+			jsonrpc?: string;
+			error?: { code?: number; message?: string };
+			id?: unknown;
+		};
+		if (parsed?.error?.message) {
+			parsed.error.message = "Internal server error";
+			return new Response(JSON.stringify(parsed), {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers,
+			});
+		}
+	} catch {
+		// Fall through to generic body replacement.
+	}
+
+	return new Response(
+		JSON.stringify({
+			jsonrpc: "2.0",
+			error: { code: -32603, message: "Internal server error" },
+			id: null,
+		}),
+		{
+			status: response.status,
+			statusText: response.statusText,
+			headers: response.headers,
+		},
+	);
+}
+
+async function enforceMcpRequestLimits(
+	request: Request,
+): Promise<Response | null> {
+	if (request.method !== "POST") {
+		return null;
+	}
+
+	const contentLength = request.headers.get("Content-Length");
+	if (contentLength) {
+		const size = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(size) && size > MCP_MAX_BODY_BYTES) {
+			return Response.json(
+				{ error: "Request body too large" },
+				{ status: 413 },
+			);
+		}
+	}
+
+	if (!contentLength) {
+		return null;
+	}
+
+	try {
+		const bodyText = await request.clone().text();
+		if (bodyText.length > MCP_MAX_BODY_BYTES) {
+			return Response.json(
+				{ error: "Request body too large" },
+				{ status: 413 },
+			);
+		}
+		const parsed = JSON.parse(bodyText) as unknown;
+		if (Array.isArray(parsed) && parsed.length > MCP_MAX_JSONRPC_BATCH) {
+			return Response.json(
+				{ error: `JSON-RPC batch exceeds maximum of ${MCP_MAX_JSONRPC_BATCH}` },
+				{ status: 400 },
+			);
+		}
+	} catch {
+		// Let the MCP handler return a proper JSON-RPC parse error.
+	}
+
+	return null;
 }
 
 function withMcpCors(response: Response): Response {
@@ -125,6 +208,11 @@ export default {
 				request.headers.get("CF-Connecting-IP") ??
 				request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
 				"unknown";
+			const limitResponse = await enforceMcpRequestLimits(request);
+			if (limitResponse) {
+				return withMcpCors(limitResponse);
+			}
+
 			const httpRl = await checkRateLimit(env.RATION_KV, "mcp_http", clientIp);
 			if (!httpRl.allowed) {
 				return withMcpCors(
@@ -161,7 +249,8 @@ export default {
 				{ route: "/mcp" },
 			);
 
-			const response = await handler(request, envWithCtx, ctx);
+			const rawResponse = await handler(request, envWithCtx, ctx);
+			const response = await sanitizeMcpHandlerResponse(rawResponse);
 			// Attach discovery Link header so any client that hits /mcp without
 			// reading discovery first can still find the server card and protected-
 			// resource metadata.
@@ -180,8 +269,9 @@ export default {
 				error instanceof Error && MCP_AUTH_ERRORS.has(error.message);
 			const status = isAuthError ? 401 : 500;
 			const message = isAuthError ? error.message : "Internal Server Error";
-			const { mcpBaseUrl } = getMcpResourceUrls(request);
-			const wwwAuth = `Bearer realm="Ration MCP", resource_metadata="${mcpBaseUrl}/.well-known/oauth-protected-resource"`;
+			const audience = resolveMcpResourceAudience(env);
+			const resourceOrigin = audience.replace(/\/mcp$/, "");
+			const wwwAuth = `Bearer realm="Ration MCP", resource_metadata="${resourceOrigin}/.well-known/oauth-protected-resource"`;
 			return withMcpCors(
 				Response.json(
 					{ error: message },

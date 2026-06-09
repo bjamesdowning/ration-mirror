@@ -110,15 +110,20 @@ export async function revokeConnectedAgentGrant(
 	if (!consent) return false;
 
 	const now = new Date();
+	const refreshTokenFilters = [
+		eq(schema.oauthRefreshToken.userId, userId),
+		eq(schema.oauthRefreshToken.clientId, consent.clientId),
+	];
+	if (consent.referenceId) {
+		refreshTokenFilters.push(
+			eq(schema.oauthRefreshToken.referenceId, consent.referenceId),
+		);
+	}
+
 	await db
 		.update(schema.oauthRefreshToken)
 		.set({ revoked: now })
-		.where(
-			and(
-				eq(schema.oauthRefreshToken.userId, userId),
-				eq(schema.oauthRefreshToken.clientId, consent.clientId),
-			),
-		);
+		.where(and(...refreshTokenFilters));
 
 	await db
 		.delete(schema.oauthConsent)

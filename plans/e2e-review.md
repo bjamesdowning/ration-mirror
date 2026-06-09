@@ -71,7 +71,7 @@ Prior quick-commit session noted:
 
 ## Follow-ups (optional)
 
-- Add `[env.local]` to Wrangler config to silence “No environment found” warnings during E2E webServer.
+- ~~Add `[env.local]` to Wrangler config~~ — fixed by using `RATION_DEV_MODE=local` instead of `CLOUDFLARE_ENV=local` and `remoteBindings: false` in `vite.config.ts` (2026-06-09).
 - GitLab CI currently runs unit tests only ([`.gitlab-ci.yml`](../.gitlab-ci.yml)); adding a Playwright job would require browsers + `db:migrate:local` + secrets strategy.
 
 ## Review run log

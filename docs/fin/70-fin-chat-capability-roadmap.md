@@ -7,6 +7,7 @@ Internal sequencing for **Intercom Fin** data connectors after billing **cancel 
 1. **Billing read** — `GET /api/fin/billing-summary?user_id=…`
 2. **Cancel at period end** — `POST /api/fin/subscription-cancel` with `{ "user_id", "confirm": true }`
 3. **Resume renewal** — `POST /api/fin/subscription-resume` with the same body
+4. **MCP pantry access (delegated)** — Fin Custom MCP at `https://mcp.ration.mayutic.com/mcp` with workspace OAuth + per-user `actor_token` from signed `ration_mcp_delegation` attribute. Runbook: [plans/fin-mcp-delegation-runbook.md](../../plans/fin-mcp-delegation-runbook.md).
 
 ## Recommended next (by value vs risk)
 

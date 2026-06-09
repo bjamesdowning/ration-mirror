@@ -20,6 +20,15 @@ Programmatic keys are stored as **hashes**; you see the plaintext **once** at cr
 
 Sensitive endpoints (AI, search, auth, public share links, MCP) use **rate limits** backed by global counters so abuse cannot silently exhaust your bill or neighbors’ stability. Some layers **fail open** if the counter store is unavailable—availability first, with logging for operators.
 
+## Fin MCP delegation
+
+When Fin is connected to the Ration MCP server, two independent proofs are required on every tool call:
+
+1. **Fin's workspace OAuth token** — must carry `mcp:delegate` and match an allowlisted client ID.
+2. **Per-user `actor_token`** — a Ration-signed delegation JWT (`ration_mcp_delegation`) minted for the signed-in Messenger user.
+
+Fin's service-account identity is never used for pantry data. Delegated calls are audited and rate-limited per end-user.
+
 ## Payments
 
 **Stripe** processes cards; Ration verifies **signed webhooks** and uses **idempotency** so duplicate events do not double-credit.

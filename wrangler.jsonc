@@ -84,6 +84,9 @@
 	 *   - RESEND_API_KEY: Resend transactional email API key (for magic link auth)
 	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
 	 *     (optional; when absent, recipe import uses plain fetch only)
+	 *   - FIN_MCP_DELEGATION_SECRET: HS256 key for Fin per-user MCP delegation JWTs
+	 *   - FIN_INTERCOM_CONNECTOR_SECRET: Fin billing connector auth
+	 *   - INTERCOM_MESSENGER_JWT_SECRET: Intercom Messenger Security JWT
 	 */
 	/*
 	 * Static Assets

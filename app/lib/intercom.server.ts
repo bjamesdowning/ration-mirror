@@ -41,19 +41,27 @@ export type SignedIntercomAttributes = {
 	tos_version?: string;
 	/** UI theme preference: "light" | "dark". */
 	theme?: string;
+	/** Signed delegation JWT for Fin MCP tool calls (ration_mcp_delegation). */
+	ration_mcp_delegation?: string;
 };
 
 /** Max length for any string attribute value — prevents bloated JWT payloads. */
 const STRING_ATTR_MAX_LEN = 128;
+/** Delegation JWTs are larger than scalar attributes but still bounded. */
+const DELEGATION_ATTR_MAX_LEN = 2048;
 
 function sanitizeAttrValue(
 	value: string | number | boolean | undefined,
+	key?: keyof SignedIntercomAttributes,
 ): string | number | boolean | undefined {
 	if (value === undefined || value === null) return undefined;
 	if (typeof value === "string") {
 		const trimmed = value.trim();
-		if (trimmed === "" || trimmed.length > STRING_ATTR_MAX_LEN)
-			return undefined;
+		const maxLen =
+			key === "ration_mcp_delegation"
+				? DELEGATION_ATTR_MAX_LEN
+				: STRING_ATTR_MAX_LEN;
+		if (trimmed === "" || trimmed.length > maxLen) return undefined;
 		return trimmed;
 	}
 	if (typeof value === "number") {
@@ -75,6 +83,7 @@ const ALLOWED_ATTRIBUTE_KEYS = new Set<keyof SignedIntercomAttributes>([
 	"credit_balance",
 	"tos_version",
 	"theme",
+	"ration_mcp_delegation",
 ]);
 
 export type SignIntercomJwtOptions = {
@@ -126,6 +135,7 @@ export async function signIntercomJwt(
 			const raw = attributes[key];
 			const sanitized = sanitizeAttrValue(
 				raw as string | number | boolean | undefined,
+				key,
 			);
 			if (sanitized !== undefined) {
 				payload[key] = sanitized;

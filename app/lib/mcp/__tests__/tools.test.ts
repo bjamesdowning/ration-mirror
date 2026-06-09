@@ -9,6 +9,7 @@ vi.mock("~/lib/cargo.server", () => ({
 	getCargoByIds: vi.fn(),
 	getCargoItem: vi.fn(),
 	getCargoPage: vi.fn(),
+	getExpiringCargo: vi.fn().mockResolvedValue([]),
 	ingestCargoItems: vi.fn(),
 	jettisonItem: vi.fn(),
 	updateItem: vi.fn(),
@@ -90,8 +91,13 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
-const { getCargoPage, ingestCargoItems, jettisonItem, updateItem } =
-	await import("~/lib/cargo.server");
+const {
+	getCargoPage,
+	getExpiringCargo,
+	ingestCargoItems,
+	jettisonItem,
+	updateItem,
+} = await import("~/lib/cargo.server");
 const { checkBalance } = await import("~/lib/ledger.server");
 const {
 	ensureMealPlan,
@@ -1089,7 +1095,7 @@ describe("MCP tools", () => {
 		});
 
 		it("returns empty array when no expiring items", async () => {
-			// drizzle mock returns [] by default via vi.mock("drizzle-orm/d1") above
+			vi.mocked(getExpiringCargo).mockResolvedValueOnce([]);
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -1097,6 +1103,12 @@ describe("MCP tools", () => {
 			)({ days: 7 });
 			const data = parseOk(result);
 			expect(data).toEqual([]);
+			expect(getExpiringCargo).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				7,
+				200,
+			);
 		});
 	});
 

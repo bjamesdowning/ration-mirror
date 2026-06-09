@@ -44,6 +44,16 @@ MCP is the **deterministic** surface for agents. By design it never charges Rati
 
 If you want these AI capabilities, use the web app. If you want to drive everything from your own LLM, MCP is the surface for you.
 
+## Fin (Intercom) delegated access
+
+Intercom Fin uses a **workspace-level** MCP OAuth grant (one service account connects once). Per-end-user pantry access uses a **signed delegation JWT**:
+
+1. Ration signs `ration_mcp_delegation` into the Intercom Messenger JWT on each authenticated page load.
+2. Fin passes that value as the **`actor_token`** tool parameter on every MCP call.
+3. The MCP worker verifies Fin's Bearer token (`mcp:delegate` + allowlisted client) **and** the delegation JWT (live org membership check).
+
+Fin's connecting identity is never used for data — only the delegated end-user subject. See [plans/fin-mcp-delegation-runbook.md](../../plans/fin-mcp-delegation-runbook.md).
+
 ## Security expectation
 
 OAuth grants can be revoked instantly in Connected Agents. API keys should be treated like passwords — revoke keys you no longer use. Destructive tools (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) require an explicit `confirm: true` argument as a guardrail against agent slips.

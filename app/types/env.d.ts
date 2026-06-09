@@ -34,5 +34,11 @@ declare namespace Cloudflare {
 		INTERCOM_MESSENGER_JWT_SECRET?: string;
 		/** Shared secret for Intercom Fin Data Connector -> Ration billing endpoint auth. */
 		FIN_INTERCOM_CONNECTOR_SECRET?: string;
+		/** HS256 secret for Fin MCP per-user delegation JWTs (main + MCP workers). */
+		FIN_MCP_DELEGATION_SECRET?: string;
+		/** Comma-separated OAuth client IDs allowed to use mcp:delegate + actor_token. */
+		FIN_DELEGATION_CLIENT_IDS?: string;
+		/** When "false", MCP worker rejects non-API-key credentials. Default: enabled. */
+		MCP_OAUTH_ENABLED?: string;
 	}
 }

@@ -311,9 +311,11 @@ export default function PrivacyPolicy() {
 					effective subscription tier, tier status and expiry, credit balance,
 					stripe customer identifier, cancellation status, first paid date,
 					welcome voucher redemption status, admin flag, active organization
-					role, accepted terms version, and theme preference. Support
-					conversations you start are processed by Intercom under their terms.
-					See{" "}
+					role, accepted terms version, theme preference, and (where Fin MCP
+					delegation is enabled) a short-lived signed token that lets Fin call
+					our MCP server on your behalf for pantry questions in support chat.
+					Support conversations you start are processed by Intercom under their
+					terms. See{" "}
 					<a
 						href="https://www.intercom.com/legal/privacy"
 						target="_blank"

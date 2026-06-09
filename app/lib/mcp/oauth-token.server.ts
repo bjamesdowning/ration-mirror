@@ -196,17 +196,19 @@ export async function verifyMcpOAuthToken(
 				? payload.azp
 				: undefined;
 
+	if (!clientId) {
+		throw new Error("Invalid OAuth access token");
+	}
+
 	// Enforce that the user hasn't revoked this grant since the token was issued.
-	if (clientId) {
-		const consentActive = await hasActiveConsent(
-			env.DB,
-			userId,
-			clientId,
-			organizationId,
-		);
-		if (!consentActive) {
-			throw new Error("OAuth grant revoked");
-		}
+	const consentActive = await hasActiveConsent(
+		env.DB,
+		userId,
+		clientId,
+		organizationId,
+	);
+	if (!consentActive) {
+		throw new Error("OAuth grant revoked");
 	}
 
 	return { userId, organizationId, scopes, clientId };

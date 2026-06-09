@@ -10,11 +10,13 @@ export const OAUTH_MCP_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	/** Fin service agent — may act on behalf of end-users via signed actor_token. */
+	"mcp:delegate",
 ] as const;
 
 export type OAuthMcpScope = (typeof OAUTH_MCP_SCOPES)[number];
 
-/** Scopes allowed at dynamic client registration. */
+/** Scopes allowed at dynamic client registration (includes delegate for Fin). */
 export const OAUTH_REGISTRATION_SCOPES = [
 	...OAUTH_MCP_SCOPES,
 	"offline_access",
@@ -93,6 +95,8 @@ export const OAUTH_SCOPE_LABELS: Record<OAuthMcpScope, string> = {
 	"mcp:manifest:write": "Manage meal plan entries",
 	"mcp:supply:write": "Manage Supply shopping lists",
 	"mcp:preferences:write": "Update account preferences",
+	"mcp:delegate":
+		"Act on behalf of verified end-users (Fin service agent only)",
 };
 
 export function isApiKeyCredential(raw: string): boolean {

@@ -47,7 +47,11 @@ export type ToolErrorCode =
 	| "conflict"
 	| "idempotency_replay"
 	| "internal_error"
-	| "insufficient_cargo";
+	| "insufficient_cargo"
+	| "delegation_not_allowed"
+	| "actor_token_required"
+	| "invalid_delegation_token"
+	| "delegation_membership_revoked";
 
 /** Wraps an envelope into the MCP `content` array shape that `server.tool` returns. */
 export function toolReply<T>(

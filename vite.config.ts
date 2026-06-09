@@ -4,11 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-const cloudflareEnv = process.env.CLOUDFLARE_ENV;
+// RATION_DEV_MODE selects the wrangler config file. Do not set CLOUDFLARE_ENV=local —
+// the vite-plugin maps CLOUDFLARE_ENV to wrangler --env, which requires env.* sections.
+const devMode = process.env.RATION_DEV_MODE ?? process.env.CLOUDFLARE_ENV;
 const configPath =
-	cloudflareEnv === "local"
+	devMode === "local"
 		? "./wrangler.local.jsonc"
-		: cloudflareEnv === "dev"
+		: devMode === "dev"
 			? "./wrangler.dev.jsonc"
 			: undefined;
 
@@ -17,6 +19,9 @@ export default defineConfig(({ isSsrBuild }) => ({
 		cloudflare({
 			viteEnvironment: { name: "server" },
 			...(configPath && { configPath }),
+			// Local E2E uses Miniflare only — AI/Vectorize are not available without
+			// a Cloudflare edge-preview proxy (see workers/subdomain/edge-preview).
+			...(devMode === "local" && { remoteBindings: false }),
 		}),
 		reactRouter(),
 		tailwindcss(),

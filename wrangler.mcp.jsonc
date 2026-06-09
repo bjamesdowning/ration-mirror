@@ -20,6 +20,9 @@
 		"BETTER_AUTH_URL": "https://ration.mayutic.com",
 		"MCP_OAUTH_ENABLED": "true"
 	},
+	// Secrets (set via `wrangler secret put --config wrangler.mcp.jsonc`):
+	// FIN_MCP_DELEGATION_SECRET — HS256 signing key for per-user delegation JWTs
+	// FIN_DELEGATION_CLIENT_IDS — comma-separated Fin OAuth client IDs (mcp:delegate)
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -80,7 +83,7 @@
 			"vectorize": [
 				{
 					"binding": "VECTORIZE",
-					"index_name": "ration-cargo",
+					"index_name": "ration-cargo-dev",
 					"remote": true
 				}
 			],

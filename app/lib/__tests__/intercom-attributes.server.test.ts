@@ -215,6 +215,24 @@ describe("buildIntercomAttributes", () => {
 		expect(db.query.member.findFirst).not.toHaveBeenCalled();
 	});
 
+	it("includes ration_mcp_delegation when delegation secret is configured", async () => {
+		const db = makeDb({ memberRow: { role: "owner" } });
+		const attrs = await buildIntercomAttributes(db, baseUser, "org-xyz", {
+			delegationSecret: "test-delegation-secret-32chars-min!!",
+			delegationIssuer: "https://ration.mayutic.com",
+		});
+
+		expect(attrs.ration_mcp_delegation).toBeTruthy();
+		expect(typeof attrs.ration_mcp_delegation).toBe("string");
+	});
+
+	it("omits ration_mcp_delegation when delegation secret is absent", async () => {
+		const db = makeDb();
+		const attrs = await buildIntercomAttributes(db, baseUser, "org-xyz");
+
+		expect(attrs.ration_mcp_delegation).toBeUndefined();
+	});
+
 	it("runs user and member queries in parallel", async () => {
 		const callOrder: string[] = [];
 		const userFindFirst = vi.fn().mockImplementation(() => {

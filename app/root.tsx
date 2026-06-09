@@ -23,6 +23,7 @@ import { createAuth } from "./lib/auth.server";
 import { signIntercomJwt } from "./lib/intercom.server";
 import { buildIntercomAttributes } from "./lib/intercom-attributes.server";
 import { checkBalance } from "./lib/ledger.server";
+import { resolveAuthorizationServerUrl } from "./lib/oauth.constants";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
@@ -57,6 +58,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		const creditBalance = activeOrganizationId
 			? await checkBalance(env, activeOrganizationId)
 			: undefined;
+		const delegationSecret = env.FIN_MCP_DELEGATION_SECRET?.trim();
 		const attributes = await buildIntercomAttributes(
 			db,
 			session.user,
@@ -64,6 +66,8 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 			{
 				theme: cookieTheme ?? sessionTheme ?? "dark",
 				creditBalance,
+				delegationSecret,
+				delegationIssuer: resolveAuthorizationServerUrl(env),
 			},
 		);
 		intercomUserJwt = await signIntercomJwt({

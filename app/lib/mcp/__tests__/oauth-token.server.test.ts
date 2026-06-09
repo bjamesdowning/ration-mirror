@@ -160,12 +160,13 @@ describe("verifyMcpOAuthToken", () => {
 		);
 	});
 
-	it("skips the consent check when the token has no client id", async () => {
+	it("rejects when the token has no client id", async () => {
 		jwtVerifyMock.mockResolvedValueOnce({
 			payload: validPayload({ client_id: undefined, azp: undefined }),
 		});
-		const result = await verifyMcpOAuthToken(makeEnv(), "a.b.c");
-		expect(result.clientId).toBeUndefined();
+		await expect(verifyMcpOAuthToken(makeEnv(), "a.b.c")).rejects.toThrow(
+			"Invalid OAuth access token",
+		);
 		expect(consentFindFirst).not.toHaveBeenCalled();
 	});
 

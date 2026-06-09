@@ -1,13 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { cargo, mealPlanEntry } from "../../db/schema";
+import { mealPlanEntry } from "../../db/schema";
 import { getUserSettings, patchUserSettings } from "../auth.server";
 import {
 	getCargoByIds,
 	getCargoItem,
 	getCargoPage,
+	getExpiringCargo,
 	ingestCargoItems,
 	jettisonItem,
 	updateItem,
@@ -60,6 +61,11 @@ import { findSimilarCargoBatch } from "../vector.server";
 import { auditMcpWrite } from "./audit";
 import type { McpToolContext } from "./auth";
 import {
+	isFinDelegationClient,
+	McpDelegationError,
+	verifyDelegationToken,
+} from "./delegation.server";
+import {
 	decodeCursor,
 	encodeCursor,
 	err,
@@ -73,29 +79,103 @@ import { registerResourcesAndPrompts } from "./resources";
 import { hasScope, McpScopeError, requireScope } from "./scopes";
 
 const MAX_PAGE_LIMIT = 200;
+const MAX_MATCH_MEALS_LIMIT = 50;
+const MAX_EXPIRING_DAYS = 90;
+const MAX_EXPIRING_ITEMS = 200;
+
+type McpRateLimitCategory =
+	| "mcp_list"
+	| "mcp_search"
+	| "mcp_write"
+	| "mcp_supply_sync"
+	| "mcp_delegated_read"
+	| "mcp_delegated_write"
+	| null;
+
+type ToolArgsWithActorToken = { actor_token?: string };
+
+function stripActorToken<T extends Record<string, unknown>>(
+	args: T,
+): { actorToken?: string; toolArgs: Omit<T, "actor_token"> } {
+	const { actor_token, ...toolArgs } = args as T & ToolArgsWithActorToken;
+	return {
+		actorToken: typeof actor_token === "string" ? actor_token : undefined,
+		toolArgs: toolArgs as Omit<T, "actor_token">,
+	};
+}
+
+function isDelegateCaller(env: Cloudflare.Env, ctx: McpToolContext): boolean {
+	return (
+		ctx.authMethod === "oauth" &&
+		hasScope(ctx, "mcp:delegate") &&
+		isFinDelegationClient(env, ctx.oauthClientId)
+	);
+}
+
+async function resolveToolContext(
+	env: Cloudflare.Env,
+	baseCtx: McpToolContext,
+	actorToken: string | undefined,
+): Promise<McpToolContext> {
+	const delegateCaller = isDelegateCaller(env, baseCtx);
+
+	if (actorToken && !delegateCaller) {
+		throw new McpDelegationError(
+			"delegation_not_allowed",
+			"Delegation not allowed for this credential",
+		);
+	}
+
+	if (delegateCaller) {
+		if (!actorToken) {
+			throw new McpDelegationError(
+				"actor_token_required",
+				"Actor token required for delegated access",
+			);
+		}
+		const subject = await verifyDelegationToken(env, actorToken);
+		return {
+			...baseCtx,
+			userId: subject.userId,
+			organizationId: subject.organizationId,
+			delegation: {
+				actorClientId: baseCtx.oauthClientId ?? baseCtx.apiKeyId,
+				subjectUserId: subject.userId,
+				subjectOrganizationId: subject.organizationId,
+			},
+		};
+	}
+
+	return baseCtx;
+}
 
 /**
  * Wrap a tool handler to enforce scope, rate limit, audit logging, and the
  * standard error envelope. Read-tools and write-tools both go through this.
  */
-function makeTool<TArgs, TData>(opts: {
+function makeTool<TArgs extends Record<string, unknown>, TData>(opts: {
 	name: string;
 	scopes: Parameters<typeof requireScope>[1];
-	rateLimitCategory:
-		| "mcp_list"
-		| "mcp_search"
-		| "mcp_write"
-		| "mcp_supply_sync"
-		| null;
+	rateLimitCategory: McpRateLimitCategory;
 	audit: boolean;
 	handler: (ctx: McpToolContext, args: TArgs) => Promise<ToolEnvelope<TData>>;
 }): (
 	env: Cloudflare.Env & { __mcp: McpToolContext },
-	args: TArgs,
+	args: TArgs & ToolArgsWithActorToken,
 ) => Promise<{ content: Array<{ type: "text"; text: string }> }> {
 	return async (env, args) => {
-		const ctx = env.__mcp;
 		const startedAt = Date.now();
+		const { actorToken, toolArgs } = stripActorToken(args);
+
+		let ctx: McpToolContext;
+		try {
+			ctx = await resolveToolContext(env, env.__mcp, actorToken);
+		} catch (e) {
+			if (e instanceof McpDelegationError) {
+				return toolReply(opts.name, err(opts.name, e.code, e.message));
+			}
+			throw e;
+		}
 
 		try {
 			requireScope(ctx, opts.scopes);
@@ -131,6 +211,34 @@ function makeTool<TArgs, TData>(opts: {
 					rateLimited(opts.name, orgRl.retryAfter ?? 60),
 				);
 			}
+
+			if (ctx.delegation) {
+				const delegatedCategory =
+					opts.rateLimitCategory === "mcp_write" ||
+					opts.rateLimitCategory === "mcp_supply_sync"
+						? "mcp_delegated_write"
+						: "mcp_delegated_read";
+				const delegatedRl = await checkRateLimit(
+					env.RATION_KV,
+					delegatedCategory,
+					ctx.delegation.subjectUserId,
+				);
+				if (!delegatedRl.allowed) {
+					if (opts.audit) {
+						auditMcpWrite(ctx, {
+							tool: opts.name,
+							outcome: "error",
+							errorCode: "rate_limited",
+							durationMs: Date.now() - startedAt,
+						});
+					}
+					return toolReply(
+						opts.name,
+						rateLimited(opts.name, delegatedRl.retryAfter ?? 60),
+					);
+				}
+			}
+
 			// Per-API-key cap on write categories — defends against a stolen key.
 			if (opts.rateLimitCategory === "mcp_write") {
 				const keyRl = await checkRateLimit(
@@ -156,8 +264,8 @@ function makeTool<TArgs, TData>(opts: {
 		}
 
 		try {
-			const envelope = await opts.handler(ctx, args);
-			if (opts.audit) {
+			const envelope = await opts.handler(ctx, toolArgs as TArgs);
+			if (opts.audit || ctx.delegation) {
 				auditMcpWrite(ctx, {
 					tool: opts.name,
 					outcome: envelope.ok ? "ok" : "error",
@@ -168,7 +276,7 @@ function makeTool<TArgs, TData>(opts: {
 			return toolReply(opts.name, envelope);
 		} catch (e) {
 			const envelope = mapErrorToEnvelope(opts.name, e);
-			if (opts.audit) {
+			if (opts.audit || ctx.delegation) {
 				auditMcpWrite(ctx, {
 					tool: opts.name,
 					outcome: "error",
@@ -188,6 +296,26 @@ export function registerTools(
 	// Register read-only resources and prompts (no auth context needed —
 	// reference data is the same for every key).
 	registerResourcesAndPrompts(server);
+
+	// Every tool accepts an optional actor_token for Fin delegated access.
+	const registerTool = server.tool.bind(server);
+	server.tool = ((
+		name: string,
+		description: string,
+		// biome-ignore lint/suspicious/noExplicitAny: extend MCP SDK tool schemas with actor_token
+		schema: any,
+		// biome-ignore lint/suspicious/noExplicitAny: extend MCP SDK tool schemas with actor_token
+		handler: any,
+	) =>
+		registerTool(
+			name,
+			description,
+			{
+				...schema,
+				actor_token: z.string().optional(),
+			},
+			handler,
+		)) as typeof server.tool;
 
 	// ─── Read Tools ──────────────────────────────────────────────────────────
 
@@ -544,7 +672,13 @@ export function registerTools(
 		{
 			mode: z.enum(["strict", "delta"]).optional().default("strict"),
 			minMatch: z.number().min(0).max(100).optional().default(50),
-			limit: z.number().int().positive().optional().default(10),
+			limit: z
+				.number()
+				.int()
+				.positive()
+				.max(MAX_MATCH_MEALS_LIMIT)
+				.optional()
+				.default(10),
 			tags: z.string().optional(),
 		},
 		async (args: {
@@ -559,10 +693,12 @@ export function registerTools(
 				rateLimitCategory: "mcp_search",
 				audit: false,
 				handler: async (ctx, a: typeof args) => {
+					const limit = Math.min(a.limit ?? 10, MAX_MATCH_MEALS_LIMIT);
 					const results = await matchMeals(env, ctx.organizationId, {
 						mode: a.mode ?? "strict",
 						minMatch: a.minMatch ?? 50,
-						limit: a.limit ?? 10,
+						limit,
+						preLimit: Math.min(limit * 5, 200),
 						tags: a.tags,
 					});
 					const mapped = results.map((r) => ({
@@ -585,7 +721,13 @@ export function registerTools(
 		"get_expiring_items",
 		"List pantry items that are expiring soon. Useful for reducing food waste and planning rescue meals.",
 		{
-			days: z.number().int().positive().optional().default(7),
+			days: z
+				.number()
+				.int()
+				.positive()
+				.max(MAX_EXPIRING_DAYS)
+				.optional()
+				.default(7),
 		},
 		async (args: { days?: number }) =>
 			makeTool({
@@ -594,24 +736,14 @@ export function registerTools(
 				rateLimitCategory: "mcp_list",
 				audit: false,
 				handler: async (ctx, a: typeof args) => {
-					const d1 = drizzle(env.DB);
-					const lookaheadDays = a.days ?? 7;
 					const now = new Date();
-					const cutoff = new Date(
-						now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000,
+					const lookaheadDays = Math.min(a.days ?? 7, MAX_EXPIRING_DAYS);
+					const expiringItems = await getExpiringCargo(
+						env.DB,
+						ctx.organizationId,
+						lookaheadDays,
+						MAX_EXPIRING_ITEMS,
 					);
-					const expiringItems = await d1
-						.select()
-						.from(cargo)
-						.where(
-							and(
-								eq(cargo.organizationId, ctx.organizationId),
-								isNotNull(cargo.expiresAt),
-								gte(cargo.expiresAt, now),
-								lte(cargo.expiresAt, cutoff),
-							),
-						)
-						.orderBy(cargo.expiresAt);
 					const mapped = expiringItems.map((item) => {
 						const expiresAt = item.expiresAt ? new Date(item.expiresAt) : null;
 						const daysUntilExpiry = expiresAt

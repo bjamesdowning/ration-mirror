@@ -16,6 +16,7 @@ export const MCP_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:delegate",
 ] as const;
 
 export type McpScope = (typeof MCP_SCOPES)[number];

@@ -9,7 +9,7 @@
  * Never logs raw request bodies — only stable, low-cardinality fields.
  */
 
-import { log } from "../logging.server";
+import { log, redactId } from "../logging.server";
 import type { McpToolContext } from "./auth";
 
 export interface McpAuditFields {
@@ -27,10 +27,18 @@ export function auditMcpWrite(
 ): void {
 	log.info("mcp_audit", {
 		event: "mcp_audit",
-		organizationId: ctx.organizationId,
-		userId: ctx.userId,
+		organizationId: redactId(ctx.organizationId),
+		userId: redactId(ctx.userId),
 		apiKeyId: ctx.apiKeyId,
 		keyPrefix: ctx.keyPrefix,
+		...(ctx.delegation
+			? {
+					delegated: true,
+					actorClientId: redactId(ctx.delegation.actorClientId),
+					subjectUserId: redactId(ctx.delegation.subjectUserId),
+					subjectOrganizationId: redactId(ctx.delegation.subjectOrganizationId),
+				}
+			: {}),
 		...fields,
 	});
 }

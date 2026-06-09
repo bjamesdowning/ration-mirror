@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { getEffectiveTier } from "~/lib/capacity.server";
+import { signDelegationToken } from "~/lib/fin-delegation.server";
 import type { SignedIntercomAttributes } from "~/lib/intercom.server";
 import { toUnixSeconds } from "~/lib/intercom-utils";
 import type { TierSlug } from "~/lib/tiers.server";
@@ -23,6 +24,10 @@ type Extras = {
 	theme?: string;
 	/** Active organization AI credit balance. */
 	creditBalance?: number;
+	/** HS256 secret for Fin MCP delegation JWTs. */
+	delegationSecret?: string;
+	/** Issuer URL for delegation JWT `iss` claim (BETTER_AUTH_URL origin). */
+	delegationIssuer?: string;
 };
 
 /**
@@ -78,6 +83,23 @@ export async function buildIntercomAttributes(
 		? (toUnixSeconds(extraUser.crewSubscribedAt) ?? undefined)
 		: undefined;
 
+	let rationMcpDelegation: string | undefined;
+	if (
+		activeOrganizationId &&
+		extras?.delegationSecret &&
+		extras.delegationIssuer
+	) {
+		const token = await signDelegationToken({
+			userId: sessionUser.id,
+			organizationId: activeOrganizationId,
+			secret: extras.delegationSecret,
+			issuer: extras.delegationIssuer,
+		});
+		if (token) {
+			rationMcpDelegation = token;
+		}
+	}
+
 	const attrs: SignedIntercomAttributes = {
 		tier,
 		tier_expired: isExpired,
@@ -100,6 +122,9 @@ export async function buildIntercomAttributes(
 			: {}),
 		...(sessionUser.tosVersion ? { tos_version: sessionUser.tosVersion } : {}),
 		...(extras?.theme ? { theme: extras.theme } : {}),
+		...(rationMcpDelegation
+			? { ration_mcp_delegation: rationMcpDelegation }
+			: {}),
 	};
 
 	return attrs;

@@ -24,6 +24,7 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 
 | Symptom | Check |
 |---------|--------|
+| Browser shows **"No authorization code received"** | MCP client callback opened without `?code=` — usually **Deny** clicked, expired flow (~10 min), or stale browser tab. Remove MCP server in Cursor, re-add URL, complete **sign-in → household → Authorize** in one fresh tab. Prefer native URL config (`url` only) over `mcp-remote` in Cursor. |
 | Browser opens but consent fails | Authorization window ~10 minutes — revoke grant, remove MCP server in client, re-add URL, complete **sign-in → household → authorize** in one tab |
 | Agent listed in Settings but tools fail | Incomplete grant (household not linked) — revoke and reconnect; you must pass **Select household** before consent |
 | Wrong pantry data | Revoke and reconnect; pick the correct household at selection |

@@ -11,7 +11,7 @@ export const OAUTH_USER_MESSAGES: Record<OAuthFlowErrorCode, string> = {
 	flow_user_mismatch:
 		"This authorization session belongs to another account. Sign out and try again, or restart from your AI client.",
 	consent_rejected:
-		"This authorization request could not be completed. Restart the connection from your AI client and try again.",
+		"Authorization was not granted. Remove the MCP server in your AI client, re-add the URL, and click Authorize (not Deny) after sign-in and household selection.",
 	org_required: "Select a household before authorizing this agent.",
 	not_member: "You are not a member of that household.",
 	client_unknown:

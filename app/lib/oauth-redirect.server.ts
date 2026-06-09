@@ -67,3 +67,76 @@ export function getSafeAuthRedirectUrl(result: unknown): string | null {
 	}
 	return url;
 }
+
+export type OAuthClientRedirectKind = "internal" | "code" | "error" | "invalid";
+
+export type OAuthClientRedirectClassification = {
+	kind: OAuthClientRedirectKind;
+	error?: string;
+	errorDescription?: string;
+};
+
+function isMcpClientCallbackHost(hostname: string): boolean {
+	return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+/**
+ * Classify Better Auth redirect targets before sending the browser to an MCP
+ * client callback. Cursor and mcp-remote show "No authorization code received"
+ * when the callback URL loads without `code=` — including OAuth error redirects
+ * (`error=access_denied`, etc.) that never include an authorization code.
+ */
+export function classifyOAuthClientRedirect(
+	url: string,
+): OAuthClientRedirectClassification {
+	if (url.startsWith("/") && !url.startsWith("//")) {
+		return { kind: "internal" };
+	}
+
+	try {
+		const parsed = new URL(url);
+		if (parsed.searchParams.has("code")) {
+			return { kind: "code" };
+		}
+		if (parsed.searchParams.has("error")) {
+			return {
+				kind: "error",
+				error: parsed.searchParams.get("error") ?? undefined,
+				errorDescription:
+					parsed.searchParams.get("error_description") ?? undefined,
+			};
+		}
+
+		const isClientCallback =
+			parsed.protocol === "cursor:" ||
+			(parsed.protocol === "http:" && isMcpClientCallbackHost(parsed.hostname));
+
+		if (isClientCallback) {
+			return { kind: "invalid" };
+		}
+
+		if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+			return { kind: "internal" };
+		}
+	} catch {
+		return { kind: "invalid" };
+	}
+
+	return { kind: "invalid" };
+}
+
+/** Map OAuth error redirects to actionable Ration flow error codes. */
+export function mapOAuthCallbackError(
+	error?: string,
+): "consent_rejected" | "flow_invalid" | "flow_expired" {
+	if (error === "access_denied") {
+		return "consent_rejected";
+	}
+	if (error === "invalid_scope" || error === "invalid_request") {
+		return "flow_invalid";
+	}
+	if (error === "server_error" || error === "temporarily_unavailable") {
+		return "flow_expired";
+	}
+	return "flow_invalid";
+}

@@ -15,7 +15,11 @@ import {
 	getSignedOAuthQuery,
 	parseScopesFromSignedQuery,
 } from "~/lib/oauth-query.server";
-import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
+import {
+	classifyOAuthClientRedirect,
+	getSafeAuthRedirectUrl,
+	mapOAuthCallbackError,
+} from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
 	oauthErrorResponse,
@@ -110,6 +114,32 @@ export async function action({
 
 		const redirectUrl = getSafeAuthRedirectUrl(result);
 		if (!redirectUrl) {
+			return oauthErrorResponse("redirect_missing", {
+				step: "consent",
+				clientId,
+			});
+		}
+
+		const classification = classifyOAuthClientRedirect(redirectUrl);
+
+		// Deny and OAuth error redirects (e.g. access_denied) carry no `code=`.
+		// Forwarding them to the MCP client makes Cursor/mcp-remote report
+		// "No authorization code received", so we stop on the consent page instead.
+		if (!accept) {
+			return oauthErrorResponse("consent_rejected", {
+				step: "consent",
+				clientId,
+			});
+		}
+
+		if (classification.kind === "error") {
+			return oauthErrorResponse(mapOAuthCallbackError(classification.error), {
+				step: "consent",
+				clientId,
+			});
+		}
+
+		if (classification.kind !== "code" && classification.kind !== "internal") {
 			return oauthErrorResponse("redirect_missing", {
 				step: "consent",
 				clientId,

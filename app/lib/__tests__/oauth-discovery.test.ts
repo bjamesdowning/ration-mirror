@@ -35,9 +35,11 @@ describe("buildMcpProtectedResourceMetadata", () => {
 		);
 		const meta = buildMcpProtectedResourceMetadata(
 			req,
-			"https://ration.mayutic.com",
+			"https://ration.mayutic.com/api/auth",
 		);
-		expect(meta.authorization_servers).toEqual(["https://ration.mayutic.com"]);
+		expect(meta.authorization_servers).toEqual([
+			"https://ration.mayutic.com/api/auth",
+		]);
 		expect(meta.scopes_supported).toEqual([...OAUTH_MCP_SCOPES]);
 		expect(meta.resource).toBe("https://mcp.ration.mayutic.com/mcp");
 	});

@@ -8,7 +8,7 @@ import type { McpToolContext } from "../app/lib/mcp/auth";
 import { authenticateMcp, MCP_AUTH_ERRORS } from "../app/lib/mcp/auth";
 import { registerTools } from "../app/lib/mcp/tools";
 import {
-	resolveAuthorizationServerUrl,
+	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "../app/lib/oauth.constants";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
@@ -172,8 +172,8 @@ export default {
 		const url = new URL(request.url);
 
 		if (PROTECTED_RESOURCE_PATHS.has(url.pathname)) {
-			const authServer = resolveAuthorizationServerUrl(env);
-			const metadata = buildMcpProtectedResourceMetadata(request, authServer);
+			const issuer = resolveAuthorizationServerIssuer(env);
+			const metadata = buildMcpProtectedResourceMetadata(request, issuer);
 			return withMcpCors(
 				Response.json(metadata, {
 					headers: {

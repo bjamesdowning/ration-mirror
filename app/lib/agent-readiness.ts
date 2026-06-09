@@ -1,7 +1,7 @@
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_MCP_SCOPES,
-	resolveAuthorizationServerUrl,
+	resolveAuthorizationServerIssuer,
 } from "./oauth.constants";
 import { APP_VERSION } from "./version";
 
@@ -285,15 +285,15 @@ export function buildProtectedResourceMetadata(request: Request) {
 /** RFC 9728 metadata for the MCP resource server (mcp.* domain). */
 export function buildMcpProtectedResourceMetadata(
 	request: Request,
-	authServerUrl?: string,
+	authorizationServerIssuer?: string,
 ) {
 	const url = new URL(request.url);
 	const mcpOrigin = url.hostname.startsWith("mcp.")
 		? url.origin
 		: `${url.protocol}//mcp.${url.hostname}`;
 	const issuer =
-		authServerUrl ??
-		resolveAuthorizationServerUrl({
+		authorizationServerIssuer ??
+		resolveAuthorizationServerIssuer({
 			BETTER_AUTH_URL: `${url.protocol}//${url.hostname.replace(/^mcp\./, "")}`,
 		} as Cloudflare.Env);
 

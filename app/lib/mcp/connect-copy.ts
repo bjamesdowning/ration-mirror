@@ -19,6 +19,10 @@ export const MCP_CONNECT_STEPS = [
 /** OAuth troubleshooting rows for Hub Settings and docs. */
 export const MCP_OAUTH_TROUBLESHOOTING = [
 	{
+		symptom: 'Browser shows "No authorization code received"',
+		fix: "Your MCP client reached its OAuth callback without a code — usually Deny was clicked, the flow expired (~10 minutes), or an old browser tab was reused. Remove the MCP server in Cursor, re-add the URL, and complete sign-in → household → Authorize in one fresh tab. Prefer native URL config over mcp-remote when Cursor supports it.",
+	},
+	{
 		symptom: "Browser opens repeatedly or authorization fails",
 		fix: "Revoke the grant below, remove the MCP server in your client, re-add the URL, and finish sign-in → household → authorize in one tab within a few minutes.",
 	},

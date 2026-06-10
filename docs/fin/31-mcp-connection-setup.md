@@ -9,7 +9,7 @@ Ration is AI-agent-ready out of the box. No API key required for Cursor, Claude 
 1. In your MCP client, add server URL **`https://mcp.ration.mayutic.com/mcp`**.
 2. When prompted, sign in to Ration in your browser.
 3. Select the **household** (organization) this agent may access.
-4. Review and **approve** the requested permissions (granular `mcp:*` scopes).
+4. Review and **approve** permissions: **read** is pre-selected; optionally enable write scopes (`mcp:inventory:write`, `mcp:galley:write`, etc.).
 5. Manage or revoke the grant anytime in **Hub → Settings → Connected Agents**.
 
 ### Cursor
@@ -29,6 +29,11 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 | Agent listed in Settings but tools fail | Incomplete grant (household not linked) — revoke and reconnect; you must pass **Select household** before consent |
 | Wrong pantry data | Revoke and reconnect; pick the correct household at selection |
 | Client reconnect loop | Client must support OAuth 2.1 / protected-resource discovery; restart connection from client (not an old browser tab) |
+| **Unable to complete authorization** after household pick | Usually a stale OAuth tab or pre-1.6.10 consent loop — revoke grant, remove MCP server, reconnect in one fresh tab |
+
+### Fin service agent (`mcp:delegate`)
+
+The `mcp:delegate` scope is **not** available via open Dynamic Client Registration. Fin connectors are provisioned as trusted OAuth clients out-of-band.
 
 Support can correlate OAuth failures via Worker logs: `event=oauth_flow`, fields `step`, `outcome`, `error_code` (no tokens or signed query payloads).
 

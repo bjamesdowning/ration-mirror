@@ -35,6 +35,14 @@ function selectChain(rows: unknown[]) {
 	};
 }
 
+function memberSelectChain(rows: unknown[]) {
+	return {
+		from: vi.fn(() => ({
+			where: vi.fn().mockResolvedValue(rows),
+		})),
+	};
+}
+
 beforeEach(() => {
 	vi.clearAllMocks();
 });
@@ -56,13 +64,48 @@ describe("requiresOAuthOrgSelection", () => {
 });
 
 describe("shouldOAuthPostLoginRedirect", () => {
-	it("always requires post-login for MCP scopes", () => {
-		expect(shouldOAuthPostLoginRedirect(["mcp:read"], null)).toBe(true);
-		expect(shouldOAuthPostLoginRedirect(["mcp:read"], "org-1")).toBe(true);
+	it("is false for non-MCP scopes", async () => {
+		currentDb = { select: vi.fn(() => memberSelectChain([])) };
+		expect(
+			await shouldOAuthPostLoginRedirect(env, "user-1", ["profile"], null),
+		).toBe(false);
 	});
 
-	it("is false for non-MCP scopes", () => {
-		expect(shouldOAuthPostLoginRedirect(["profile"], null)).toBe(false);
+	it("skips picker for single-household users with active org set", async () => {
+		currentDb = {
+			select: vi.fn(() => memberSelectChain([{ organizationId: "org-sole" }])),
+		};
+		expect(
+			await shouldOAuthPostLoginRedirect(
+				env,
+				"user-1",
+				["mcp:read"],
+				"org-sole",
+			),
+		).toBe(false);
+	});
+
+	it("requires picker for single-household users without active org", async () => {
+		currentDb = {
+			select: vi.fn(() => memberSelectChain([{ organizationId: "org-sole" }])),
+		};
+		expect(
+			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], null),
+		).toBe(true);
+	});
+
+	it("requires picker when user belongs to multiple households", async () => {
+		currentDb = {
+			select: vi.fn(() =>
+				memberSelectChain([
+					{ organizationId: "org-a" },
+					{ organizationId: "org-b" },
+				]),
+			),
+		};
+		expect(
+			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], "org-a"),
+		).toBe(true);
 	});
 });
 
@@ -106,11 +149,16 @@ describe("listConnectedAgentGrants", () => {
 		currentDb = {
 			query: {
 				oauthConsent: { findMany: vi.fn().mockResolvedValue([older, newer]) },
-				organization: {
-					findFirst: vi.fn().mockResolvedValue({ name: "Household One" }),
-				},
 			},
-			select: vi.fn(() => selectChain([{ name: "Agent A" }])),
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn().mockResolvedValue([
+						{ clientId: "client-a", name: "Agent A" },
+						{ clientId: "client-b", name: "Agent B" },
+						{ id: "org-1", name: "Household One" },
+					]),
+				})),
+			})),
 		};
 
 		const grants = await listConnectedAgentGrants(env, "user-1");
@@ -134,13 +182,15 @@ describe("listConnectedAgentGrants", () => {
 			createdAt: new Date("2026-02-01T00:00:00Z"),
 			updatedAt: new Date("2026-02-01T00:00:00Z"),
 		};
-		const organizationFindFirst = vi.fn();
 		currentDb = {
 			query: {
 				oauthConsent: { findMany: vi.fn().mockResolvedValue([consent]) },
-				organization: { findFirst: organizationFindFirst },
 			},
-			select: vi.fn(() => selectChain([])),
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi.fn().mockResolvedValue([]),
+				})),
+			})),
 		};
 
 		const grants = await listConnectedAgentGrants(env, "user-1");
@@ -148,8 +198,6 @@ describe("listConnectedAgentGrants", () => {
 		expect(grants).toHaveLength(1);
 		expect(grants[0].clientName).toBeNull();
 		expect(grants[0].organizationName).toBeNull();
-		// No referenceId means no org lookup is attempted.
-		expect(organizationFindFirst).not.toHaveBeenCalled();
 	});
 
 	it("normalizes space-separated scope strings from consent rows", async () => {
@@ -164,9 +212,14 @@ describe("listConnectedAgentGrants", () => {
 		currentDb = {
 			query: {
 				oauthConsent: { findMany: vi.fn().mockResolvedValue([consent]) },
-				organization: { findFirst: vi.fn() },
 			},
-			select: vi.fn(() => selectChain([{ name: "Cursor" }])),
+			select: vi.fn(() => ({
+				from: vi.fn(() => ({
+					where: vi
+						.fn()
+						.mockResolvedValue([{ clientId: "client-str", name: "Cursor" }]),
+				})),
+			})),
 		};
 
 		const grants = await listConnectedAgentGrants(env, "user-1");

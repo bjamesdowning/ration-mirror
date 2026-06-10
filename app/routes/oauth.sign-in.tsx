@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import { AuthWidget } from "~/components/auth/AuthWidget";
+import { OAuthCard } from "~/components/oauth/OAuthCard";
 import { getAuth } from "~/lib/auth.server";
 import { resumeOAuthAuthorizeAfterSession } from "~/lib/oauth-auth-api.server";
 import {
@@ -54,35 +55,29 @@ export default function OAuthSignInPage({
 }) {
 	if ("missingOAuth" in loaderData && loaderData.missingOAuth) {
 		return (
-			<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
-				<div className="w-full max-w-md">
-					<p className="mb-4 text-sm text-red-600 text-center">
-						Missing authorization session. Start the connection from your AI
-						client (paste the MCP URL), not this page directly.
-					</p>
-				</div>
-			</div>
+			<OAuthCard
+				maxWidth="md"
+				title="Connect AI agent"
+				error="Missing authorization session. Start the connection from your AI client (paste the MCP URL), not this page directly."
+			/>
 		);
 	}
 
 	return (
-		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
-			<div className="w-full max-w-md">
-				{"flowError" in loaderData && loaderData.flowError ? (
-					<p className="mb-4 text-sm text-red-600 text-center">
-						{loaderData.flowError}
-					</p>
-				) : null}
-				<AuthWidget
-					showLogo
-					defaultMode="signIn"
-					callbackURL={loaderData.callbackURL}
-					intentMessage="Sign in to connect an AI agent to your Ration kitchen."
-				/>
-				<p className="mt-4 text-center text-sm text-carbon/60">
-					After signing in you will choose a household and grant permissions.
-				</p>
-			</div>
-		</div>
+		<OAuthCard
+			maxWidth="md"
+			title="Connect AI agent"
+			error={"flowError" in loaderData ? loaderData.flowError : undefined}
+		>
+			<AuthWidget
+				showLogo
+				defaultMode="signIn"
+				callbackURL={loaderData.callbackURL}
+				intentMessage="Sign in to connect an AI agent to your Ration kitchen."
+			/>
+			<p className="mt-4 text-center text-sm text-muted">
+				After signing in you will choose a household and grant permissions.
+			</p>
+		</OAuthCard>
 	);
 }

@@ -103,6 +103,25 @@ function parseSetCookieLine(
 	};
 }
 
+/** Collect Set-Cookie lines from an auth.handler response for browser forwarding. */
+export function collectSetCookieHeaders(source: Headers): Headers {
+	const out = new Headers();
+	const lines =
+		typeof source.getSetCookie === "function" ? source.getSetCookie() : [];
+	if (lines.length > 0) {
+		for (const line of lines) {
+			out.append("set-cookie", line);
+		}
+		return out;
+	}
+	source.forEach((value, key) => {
+		if (key.toLowerCase() === "set-cookie") {
+			out.append("set-cookie", value);
+		}
+	});
+	return out;
+}
+
 /** Merge Set-Cookie from auth.api into the Cookie header for the next auth.api call. */
 export function mergeSessionCookies(
 	request: Request,

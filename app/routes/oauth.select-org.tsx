@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
+import { OAuthCard } from "~/components/oauth/OAuthCard";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import {
@@ -139,16 +140,8 @@ export async function action({
 			);
 		}
 
-		await db
-			.update(schema.session)
-			.set({ activeOrganizationId: organizationId })
-			.where(eq(schema.session.id, session.session.id));
-
-		const headersWithSession = await setActiveOrganizationViaHandler(
-			env,
-			request,
-			organizationId,
-		);
+		const { headers: headersWithSession, setCookieHeaders } =
+			await setActiveOrganizationViaHandler(env, request, organizationId);
 
 		const continueResult = await invokeOAuth2ContinuePostLogin(
 			env,
@@ -171,7 +164,7 @@ export async function action({
 			clientId,
 			durationMs: Date.now() - started,
 		});
-		throw redirect(redirectUrl);
+		throw redirect(redirectUrl, { headers: setCookieHeaders });
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;
@@ -191,57 +184,43 @@ export default function OAuthSelectOrgPage({
 	actionData?: { error?: string; errorCode?: string };
 }) {
 	return (
-		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
-			<div className="w-full max-w-lg rounded-2xl border border-platinum bg-white p-8 shadow-sm">
-				<h1 className="font-mono text-xl font-bold text-carbon mb-2">
-					Select household
-				</h1>
-				<p className="text-sm text-carbon/70 mb-6">
-					Choose which Ration group this AI agent may access. One grant applies
-					to a single household.
-				</p>
-
-				{(loaderData.flowError || actionData?.error) && (
-					<p className="mb-4 text-sm text-red-600">
-						{loaderData.flowError ?? actionData?.error}
-					</p>
-				)}
-
-				<Form method="post" className="space-y-3">
-					<input
-						type="hidden"
-						name="oauth_query_b64"
-						value={loaderData.oauthQueryB64}
-					/>
-					{loaderData.memberships.map((m: MembershipRow) => (
-						<label
-							key={m.organizationId}
-							className="flex cursor-pointer items-center gap-3 rounded-xl border border-platinum p-4 hover:border-hyper-green/50"
-						>
-							<input
-								type="radio"
-								name="organizationId"
-								value={m.organizationId}
-								required
-								className="accent-hyper-green"
-							/>
-							<span>
-								<span className="block font-medium text-carbon">{m.name}</span>
-								<span className="text-xs text-carbon/50 capitalize">
-									{m.role}
-								</span>
-							</span>
-						</label>
-					))}
-
-					<button
-						type="submit"
-						className="mt-4 w-full rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-carbon"
+		<OAuthCard
+			title="Select household"
+			description="Choose which Ration group this AI agent may access. One grant applies to a single household."
+			error={loaderData.flowError ?? actionData?.error}
+		>
+			<Form method="post" className="space-y-3">
+				<input
+					type="hidden"
+					name="oauth_query_b64"
+					value={loaderData.oauthQueryB64}
+				/>
+				{loaderData.memberships.map((m: MembershipRow) => (
+					<label
+						key={m.organizationId}
+						className="flex cursor-pointer items-center gap-3 rounded-xl border border-platinum/50 p-4 hover:border-hyper-green/50 transition-colors"
 					>
-						Continue
-					</button>
-				</Form>
-			</div>
-		</div>
+						<input
+							type="radio"
+							name="organizationId"
+							value={m.organizationId}
+							required
+							className="accent-hyper-green"
+						/>
+						<span>
+							<span className="block font-medium text-carbon">{m.name}</span>
+							<span className="text-xs text-muted capitalize">{m.role}</span>
+						</span>
+					</label>
+				))}
+
+				<button
+					type="submit"
+					className="mt-4 w-full rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-carbon"
+				>
+					Continue
+				</button>
+			</Form>
+		</OAuthCard>
 	);
 }

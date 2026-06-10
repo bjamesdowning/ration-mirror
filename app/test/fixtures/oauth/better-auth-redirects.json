@@ -1,7 +1,7 @@
 {
 	"oauth2Continue_success": {
 		"redirect": true,
-		"url": "/oauth/consent?oauth_query=client_id%3Dabc%26exp%3D1780097104%26sig%3Dabc123"
+		"url": "/oauth/consent?oauth_query=client_id%3Dabc%26ba_pl%3Dsession-1%26exp%3D1780097104%26sig%3Dabc123"
 	},
 	"oauth2Continue_redirect_uri": {
 		"redirect_uri": "/oauth/consent?oauth_query=client_id%3Dabc"

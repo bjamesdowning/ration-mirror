@@ -16,17 +16,31 @@ export const OAUTH_MCP_SCOPES = [
 
 export type OAuthMcpScope = (typeof OAUTH_MCP_SCOPES)[number];
 
-/** Scopes allowed at dynamic client registration (includes delegate for Fin). */
+/** Granular MCP scopes available via open DCR (excludes Fin-only `mcp:delegate`). */
+export const OAUTH_DCR_MCP_SCOPES = OAUTH_MCP_SCOPES.filter(
+	(s): s is Exclude<OAuthMcpScope, "mcp:delegate"> => s !== "mcp:delegate",
+);
+
+/** Scopes allowed at dynamic client registration (no `mcp:delegate`). */
 export const OAUTH_REGISTRATION_SCOPES = [
+	...OAUTH_DCR_MCP_SCOPES,
+	"offline_access",
+] as const;
+
+/** Default scopes for newly registered MCP clients (read + optional write at consent). */
+export const OAUTH_REGISTRATION_DEFAULT_SCOPES = [
+	...OAUTH_DCR_MCP_SCOPES,
+	"offline_access",
+] as const;
+
+/** Full OAuth provider vocabulary (includes Fin `mcp:delegate` for trusted clients). */
+export const OAUTH_PROVIDER_SCOPES = [
 	...OAUTH_MCP_SCOPES,
 	"offline_access",
 ] as const;
 
-/** Default scopes for newly registered MCP clients. */
-export const OAUTH_REGISTRATION_DEFAULT_SCOPES = [
-	"mcp:read",
-	"offline_access",
-] as const;
+/** MCP scope pre-checked on the consent screen. */
+export const OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES = ["mcp:read"] as const;
 
 /** JWT claim namespace for Ration-specific org binding. */
 export const RATION_ORG_CLAIM = "https://ration.mayutic.com/org";

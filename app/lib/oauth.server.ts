@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { log, redactId } from "./logging.server";
@@ -8,6 +8,7 @@ import {
 	resolveAuthorizationServerUrl,
 } from "./oauth.constants";
 import { normalizeOAuthScopes } from "./oauth-scopes";
+import { chunkedQuery } from "./query-utils.server";
 
 export interface ConnectedAgentGrant {
 	consentId: string;
@@ -30,15 +31,37 @@ export function requiresOAuthOrgSelection(scopes: readonly string[]): boolean {
 }
 
 /**
- * Better Auth `postLogin.shouldRedirect`: MCP grants always require the
- * post-login household page before consent. `oauth2Continue({ postLogin: true })`
- * runs authorize with `postLogin` set, so this does not loop after Continue.
+ * Better Auth `postLogin.shouldRedirect`: MCP grants require household selection
+ * when the user belongs to multiple groups, or has one group that is not yet the
+ * active session org. Single-household users with an already-active org skip the
+ * picker (Better Auth docs pattern).
  */
-export function shouldOAuthPostLoginRedirect(
+export async function shouldOAuthPostLoginRedirect(
+	env: Cloudflare.Env,
+	userId: string,
 	scopes: readonly string[],
-	_activeOrganizationId?: string | null,
-): boolean {
-	return requiresOAuthOrgSelection(scopes);
+	activeOrganizationId?: string | null,
+): Promise<boolean> {
+	if (!requiresOAuthOrgSelection(scopes)) {
+		return false;
+	}
+
+	const db = drizzle(env.DB, { schema });
+	const memberships = await db
+		.select({ organizationId: schema.member.organizationId })
+		.from(schema.member)
+		.where(eq(schema.member.userId, userId));
+
+	if (memberships.length === 0) {
+		return true;
+	}
+
+	if (memberships.length === 1) {
+		const soleOrgId = memberships[0]?.organizationId;
+		return soleOrgId !== activeOrganizationId;
+	}
+
+	return true;
 }
 
 /**
@@ -53,36 +76,60 @@ export async function listConnectedAgentGrants(
 		where: eq(schema.oauthConsent.userId, userId),
 	});
 
-	const results: ConnectedAgentGrant[] = [];
-	for (const consent of consents) {
-		const [client] = await db
+	if (consents.length === 0) {
+		return [];
+	}
+
+	const clientIds = [...new Set(consents.map((c) => c.clientId))];
+	const orgIds = [
+		...new Set(
+			consents
+				.map((c) => c.referenceId)
+				.filter((id): id is string => typeof id === "string"),
+		),
+	];
+
+	const clientRows = await chunkedQuery(clientIds, (chunk) =>
+		db
 			.select({
+				clientId: schema.oauthClient.clientId,
 				name: schema.oauthClient.name,
 			})
 			.from(schema.oauthClient)
-			.where(eq(schema.oauthClient.clientId, consent.clientId))
-			.limit(1);
+			.where(inArray(schema.oauthClient.clientId, chunk)),
+	);
+	const clientNameById = new Map(
+		clientRows.map((row) => [row.clientId, row.name] as const),
+	);
 
-		let organizationName: string | null = null;
-		if (consent.referenceId) {
-			const org = await db.query.organization.findFirst({
-				where: eq(schema.organization.id, consent.referenceId),
-				columns: { name: true },
-			});
-			organizationName = org?.name ?? null;
-		}
+	const orgRows =
+		orgIds.length > 0
+			? await chunkedQuery(orgIds, (chunk) =>
+					db
+						.select({
+							id: schema.organization.id,
+							name: schema.organization.name,
+						})
+						.from(schema.organization)
+						.where(inArray(schema.organization.id, chunk)),
+				)
+			: [];
+	const orgNameById = new Map(
+		orgRows.map((row) => [row.id, row.name] as const),
+	);
 
-		results.push({
-			consentId: consent.id,
-			clientId: consent.clientId,
-			clientName: client?.name ?? null,
-			organizationId: consent.referenceId ?? null,
-			organizationName,
-			scopes: normalizeOAuthScopes(consent.scopes),
-			createdAt: consent.createdAt,
-			updatedAt: consent.updatedAt,
-		});
-	}
+	const results: ConnectedAgentGrant[] = consents.map((consent) => ({
+		consentId: consent.id,
+		clientId: consent.clientId,
+		clientName: clientNameById.get(consent.clientId) ?? null,
+		organizationId: consent.referenceId ?? null,
+		organizationName: consent.referenceId
+			? (orgNameById.get(consent.referenceId) ?? null)
+			: null,
+		scopes: normalizeOAuthScopes(consent.scopes),
+		createdAt: consent.createdAt,
+		updatedAt: consent.updatedAt,
+	}));
 
 	return results.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }

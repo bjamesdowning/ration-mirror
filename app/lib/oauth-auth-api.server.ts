@@ -5,7 +5,10 @@ import {
 	readAuthHandlerJson,
 	throwIfAuthHandlerFailed,
 } from "./oauth-auth-http.server";
-import { mergeSessionCookies } from "./oauth-query.server";
+import {
+	collectSetCookieHeaders,
+	mergeSessionCookies,
+} from "./oauth-query.server";
 import { getAuthRedirectUrl } from "./oauth-redirect.server";
 
 /**
@@ -91,11 +94,18 @@ export async function invokeOAuth2Consent(
 	return readAuthHandlerJson(response);
 }
 
+export type SetActiveOrganizationResult = {
+	/** Cookie header for the next internal auth.handler call. */
+	headers: Headers;
+	/** Set-Cookie lines to forward to the browser on redirect. */
+	setCookieHeaders: Headers;
+};
+
 export async function setActiveOrganizationViaHandler(
 	env: Cloudflare.Env,
 	request: Request,
 	organizationId: string,
-): Promise<Headers> {
+): Promise<SetActiveOrganizationResult> {
 	const auth = getAuth(env);
 	const setActiveRequest = new Request(
 		authApiUrl(request, "/organization/set-active"),
@@ -112,5 +122,8 @@ export async function setActiveOrganizationViaHandler(
 	);
 	const response = await auth.handler(setActiveRequest);
 	await throwIfAuthHandlerFailed(response);
-	return mergeSessionCookies(request, { headers: response.headers });
+	return {
+		headers: mergeSessionCookies(request, { headers: response.headers }),
+		setCookieHeaders: collectSetCookieHeaders(response.headers),
+	};
 }

@@ -1,7 +1,9 @@
 import type { AppLoadContext } from "react-router";
 import { Form, redirect } from "react-router";
+import { OAuthCard } from "~/components/oauth/OAuthCard";
 import { requireAuth } from "~/lib/auth.server";
 import {
+	OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES,
 	OAUTH_MCP_SCOPES,
 	OAUTH_SCOPE_LABELS,
 	type OAuthMcpScope,
@@ -25,6 +27,8 @@ import {
 	oauthErrorResponse,
 } from "~/lib/oauth-route-errors.server";
 import { logOAuthFlowEvent } from "~/lib/oauth-telemetry.server";
+
+const DEFAULT_CHECKED = new Set<string>(OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES);
 
 export async function loader({
 	request,
@@ -63,8 +67,8 @@ export async function loader({
 		clientId,
 		oauthQueryB64: encodeOAuthQueryForForm(signed),
 		selectOrgHref: buildOAuthPageUrl("/oauth/select-org", signed),
-		requestedScopes:
-			requestedScopes.length > 0 ? requestedScopes : [...OAUTH_MCP_SCOPES],
+		requestedScopes,
+		hasRequestedScopes: requestedScopes.length > 0,
 	};
 }
 
@@ -122,9 +126,6 @@ export async function action({
 
 		const classification = classifyOAuthClientRedirect(redirectUrl);
 
-		// Deny and OAuth error redirects (e.g. access_denied) carry no `code=`.
-		// Forwarding them to the MCP client makes Cursor/mcp-remote report
-		// "No authorization code received", so we stop on the consent page instead.
 		if (!accept) {
 			return oauthErrorResponse("consent_rejected", {
 				step: "consent",
@@ -172,33 +173,36 @@ export default function OAuthConsentPage({
 	actionData?: { error?: string; errorCode?: string };
 }) {
 	return (
-		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
-			<div className="w-full max-w-lg rounded-2xl border border-platinum bg-white p-8 shadow-sm">
-				<h1 className="font-mono text-xl font-bold text-carbon mb-2">
-					Authorize AI agent
-				</h1>
-				<p className="text-sm text-carbon/70 mb-6">
+		<OAuthCard
+			title="Authorize AI agent"
+			description={
+				<>
 					<strong>{loaderData.clientId}</strong> is requesting access to your
-					Ration kitchen. You can reduce permissions below.
+					Ration kitchen. Read access is enabled by default; you may add write
+					permissions below.
+				</>
+			}
+			error={actionData?.error}
+		>
+			{actionData?.errorCode === "flow_invalid" ||
+			actionData?.errorCode === "missing_oauth_query" ? (
+				<p className="mb-4 text-sm text-muted">
+					<a
+						href={loaderData.selectOrgHref}
+						className="text-hyper-green font-medium underline"
+					>
+						Restart from household selection
+					</a>{" "}
+					or remove and re-add the MCP server in your AI client.
 				</p>
+			) : null}
 
-				{actionData?.error && (
-					<p className="mb-4 text-sm text-red-600">{actionData.error}</p>
-				)}
-
-				{actionData?.errorCode === "flow_invalid" ||
-				actionData?.errorCode === "missing_oauth_query" ? (
-					<p className="mb-4 text-sm text-carbon/70">
-						<a
-							href={loaderData.selectOrgHref}
-							className="text-hyper-green font-medium underline"
-						>
-							Restart from household selection
-						</a>{" "}
-						or remove and re-add the MCP server in your AI client.
-					</p>
-				) : null}
-
+			{!loaderData.hasRequestedScopes ? (
+				<p className="text-sm text-muted">
+					This authorization request did not include MCP permissions. Restart
+					the connection from your AI client.
+				</p>
+			) : (
 				<Form method="post" className="space-y-4">
 					<input
 						type="hidden"
@@ -212,13 +216,13 @@ export default function OAuthConsentPage({
 						{loaderData.requestedScopes.map((scope: OAuthMcpScope) => (
 							<label
 								key={scope}
-								className="flex items-start gap-3 rounded-lg border border-platinum p-3"
+								className="flex items-start gap-3 rounded-lg border border-platinum/50 p-3"
 							>
 								<input
 									type="checkbox"
 									name="scopes"
 									value={scope}
-									defaultChecked
+									defaultChecked={DEFAULT_CHECKED.has(scope)}
 									className="mt-1 accent-hyper-green"
 								/>
 								<span className="text-sm text-carbon">
@@ -228,7 +232,7 @@ export default function OAuthConsentPage({
 						))}
 					</fieldset>
 
-					<p className="text-xs text-carbon/50">
+					<p className="text-xs text-muted">
 						By authorizing, you allow this agent to act on your behalf within
 						the selected permissions. Revoke access anytime in Hub Settings →
 						Connected Agents.
@@ -247,13 +251,13 @@ export default function OAuthConsentPage({
 							type="submit"
 							name="accept"
 							value="false"
-							className="flex-1 rounded-xl border border-platinum py-3 font-mono text-sm text-carbon"
+							className="flex-1 rounded-xl border border-platinum/50 py-3 font-mono text-sm text-carbon"
 						>
 							Deny
 						</button>
 					</div>
 				</Form>
-			</div>
-		</div>
+			)}
+		</OAuthCard>
 	);
 }

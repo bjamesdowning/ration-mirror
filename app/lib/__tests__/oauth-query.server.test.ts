@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
+	collectSetCookieHeaders,
 	decodeOAuthQueryFromForm,
 	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
@@ -56,6 +57,20 @@ describe("encodeOAuthQueryForForm", () => {
 		const query = "scope=mcp:read+offline_access&sig=abc";
 		const encoded = encodeOAuthQueryForForm(query);
 		expect(decodeOAuthQueryFromForm(encoded)).toBe(query);
+	});
+});
+
+describe("collectSetCookieHeaders", () => {
+	it("copies Set-Cookie lines for browser redirect forwarding", () => {
+		const source = new Headers();
+		source.append(
+			"set-cookie",
+			"better-auth.session_token=new; Path=/; HttpOnly",
+		);
+		const collected = collectSetCookieHeaders(source);
+		expect(collected.getSetCookie()).toEqual([
+			"better-auth.session_token=new; Path=/; HttpOnly",
+		]);
 	});
 });
 

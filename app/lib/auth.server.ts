@@ -19,6 +19,7 @@ import { buildMagicLinkEmail, sendEmail } from "./email.server";
 import { log, redactId } from "./logging.server";
 import {
 	OAUTH_ACCESS_TOKEN_TTL_SEC,
+	OAUTH_PROVIDER_SCOPES,
 	OAUTH_REGISTRATION_DEFAULT_SCOPES,
 	OAUTH_REGISTRATION_SCOPES,
 	resolveMcpResourceAudience,
@@ -148,7 +149,7 @@ export function createAuth(env: Cloudflare.Env) {
 				accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_TTL_SEC,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				scopes: [...OAUTH_REGISTRATION_SCOPES],
+				scopes: [...OAUTH_PROVIDER_SCOPES],
 				clientRegistrationDefaultScopes: [...OAUTH_REGISTRATION_DEFAULT_SCOPES],
 				clientRegistrationAllowedScopes: [...OAUTH_REGISTRATION_SCOPES],
 				postLogin: {
@@ -157,8 +158,15 @@ export function createAuth(env: Cloudflare.Env) {
 						const orgId = session?.activeOrganizationId;
 						return typeof orgId === "string" ? orgId : undefined;
 					},
-					shouldRedirect: async ({ scopes }) =>
-						shouldOAuthPostLoginRedirect(scopes),
+					shouldRedirect: async ({ scopes, session, user }) => {
+						const activeOrgId = session?.activeOrganizationId;
+						return shouldOAuthPostLoginRedirect(
+							env,
+							user.id,
+							scopes,
+							typeof activeOrgId === "string" ? activeOrgId : null,
+						);
+					},
 				},
 				customAccessTokenClaims: async ({ referenceId, user }) => ({
 					...buildOAuthAccessTokenClaims(referenceId),

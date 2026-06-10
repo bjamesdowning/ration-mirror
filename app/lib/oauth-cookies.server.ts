@@ -18,6 +18,28 @@ export function hasOAuthOrgSelectedCookie(
 	return false;
 }
 
+/** Remove the org-selected marker so a fresh authorize cannot skip household pick. */
+export function stripOAuthOrgSelectedFromCookieHeader(
+	cookieHeader: string,
+): string {
+	const parts = cookieHeader
+		.split(";")
+		.map((part) => part.trim())
+		.filter(
+			(part) =>
+				part.length > 0 && !part.startsWith(`${OAUTH_ORG_SELECTED_COOKIE}=`),
+		);
+	return parts.join("; ");
+}
+
+/** Attach org-selected to Cookie for internal Better Auth oauth2/continue calls. */
+export function mergeOAuthOrgSelectedIntoHeaders(headers: Headers): void {
+	const existing = headers.get("cookie") ?? "";
+	const marker = `${OAUTH_ORG_SELECTED_COOKIE}=1`;
+	const merged = existing ? `${existing}; ${marker}` : marker;
+	headers.set("cookie", merged);
+}
+
 function cookieSuffix(secure: boolean): string {
 	const secureFlag = secure ? "; Secure" : "";
 	return `; Path=/; HttpOnly; SameSite=Lax${secureFlag}`;

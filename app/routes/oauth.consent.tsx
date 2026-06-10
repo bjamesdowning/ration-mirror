@@ -10,6 +10,7 @@ import {
 } from "~/lib/oauth.constants";
 import { invokeOAuth2Consent } from "~/lib/oauth-auth-api.server";
 import { appendClearOAuthOrgSelectedCookie } from "~/lib/oauth-cookies.server";
+import { buildNativeCallbackHandoffPath } from "~/lib/oauth-native-handoff.server";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
@@ -21,6 +22,7 @@ import {
 import {
 	classifyOAuthClientRedirect,
 	getSafeAuthRedirectUrl,
+	isNativeMcpClientRedirectUrl,
 	mapOAuthCallbackError,
 } from "~/lib/oauth-redirect.server";
 import {
@@ -156,7 +158,10 @@ export async function action({
 		});
 		const redirectHeaders = new Headers();
 		appendClearOAuthOrgSelectedCookie(redirectHeaders, request);
-		throw redirect(redirectUrl, { headers: redirectHeaders });
+		const destination = isNativeMcpClientRedirectUrl(redirectUrl)
+			? buildNativeCallbackHandoffPath(redirectUrl)
+			: redirectUrl;
+		throw redirect(destination, { headers: redirectHeaders });
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;

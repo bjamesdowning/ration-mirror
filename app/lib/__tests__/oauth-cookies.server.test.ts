@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	appendOAuthOrgSelectedCookie,
 	hasOAuthOrgSelectedCookie,
+	mergeOAuthOrgSelectedIntoHeaders,
+	stripOAuthOrgSelectedFromCookieHeader,
 } from "../oauth-cookies.server";
 
 describe("hasOAuthOrgSelectedCookie", () => {
@@ -18,6 +20,26 @@ describe("hasOAuthOrgSelectedCookie", () => {
 				"better-auth.session_token=abc; ration_oauth_org_selected=1",
 			),
 		).toBe(true);
+	});
+});
+
+describe("stripOAuthOrgSelectedFromCookieHeader", () => {
+	it("removes only the org-selected marker", () => {
+		expect(
+			stripOAuthOrgSelectedFromCookieHeader(
+				"better-auth.session_token=abc; ration_oauth_org_selected=1; other=1",
+			),
+		).toBe("better-auth.session_token=abc; other=1");
+	});
+});
+
+describe("mergeOAuthOrgSelectedIntoHeaders", () => {
+	it("adds org-selected to the Cookie header for internal auth calls", () => {
+		const headers = new Headers({
+			cookie: "better-auth.session_token=abc",
+		});
+		mergeOAuthOrgSelectedIntoHeaders(headers);
+		expect(headers.get("cookie")).toContain("ration_oauth_org_selected=1");
 	});
 });
 

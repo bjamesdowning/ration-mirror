@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { getAuth } from "../lib/auth.server";
+import { stripOAuthOrgSelectedFromCookieHeader } from "../lib/oauth-cookies.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
 import type { Route } from "./+types/api.auth.$";
 
@@ -44,10 +45,33 @@ async function enforceAuthRateLimit(
 	}
 }
 
+/**
+ * Fresh browser authorize requests must not reuse a prior org-selected cookie;
+ * otherwise multi-household users skip household pick and may auto-complete via
+ * stored consent (Cursor shows only the native app handoff dialog).
+ */
+function prepareAuthHandlerRequest(request: Request): Request {
+	const url = new URL(request.url);
+	if (request.method !== "GET" || !url.pathname.includes("/oauth2/authorize")) {
+		return request;
+	}
+
+	const stripped = stripOAuthOrgSelectedFromCookieHeader(
+		request.headers.get("cookie") ?? "",
+	);
+	const headers = new Headers(request.headers);
+	if (stripped) {
+		headers.set("cookie", stripped);
+	} else {
+		headers.delete("cookie");
+	}
+	return new Request(request, { headers });
+}
+
 export async function loader({ request, context }: Route.LoaderArgs) {
 	await enforceAuthRateLimit(request, context.cloudflare.env);
 	const auth = getAuth(context.cloudflare.env);
-	return auth.handler(request);
+	return auth.handler(prepareAuthHandlerRequest(request));
 }
 
 export async function action({ request, context }: Route.ActionArgs) {

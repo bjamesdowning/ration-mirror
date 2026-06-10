@@ -68,6 +68,14 @@ export function isAllowedOAuthRedirectUrl(url: string): boolean {
 	}
 }
 
+export function isNativeMcpClientRedirectUrl(url: string): boolean {
+	try {
+		return isNativeMcpClientProtocol(new URL(url).protocol);
+	} catch {
+		return false;
+	}
+}
+
 export function getSafeAuthRedirectUrl(result: unknown): string | null {
 	const url = getAuthRedirectUrl(result);
 	if (!url || !isAllowedOAuthRedirectUrl(url)) {

@@ -38,6 +38,7 @@ export default [
 	route("oauth/sign-in", "routes/oauth.sign-in.tsx"),
 	route("oauth/consent", "routes/oauth.consent.tsx"),
 	route("oauth/select-org", "routes/oauth.select-org.tsx"),
+	route("oauth/return", "routes/oauth.return.tsx"),
 
 	// Hub
 	route("hub", "routes/hub.tsx", [

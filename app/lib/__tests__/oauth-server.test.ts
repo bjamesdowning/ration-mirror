@@ -71,7 +71,7 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		).toBe(false);
 	});
 
-	it("skips picker for single-household users with active org set", async () => {
+	it("skips picker when session active org is a membership", async () => {
 		currentDb = {
 			select: vi.fn(() => memberSelectChain([{ organizationId: "org-sole" }])),
 		};
@@ -85,7 +85,7 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		).toBe(false);
 	});
 
-	it("requires picker for single-household users without active org", async () => {
+	it("requires picker when session has no active org", async () => {
 		currentDb = {
 			select: vi.fn(() => memberSelectChain([{ organizationId: "org-sole" }])),
 		};
@@ -94,7 +94,7 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		).toBe(true);
 	});
 
-	it("requires picker when user belongs to multiple households", async () => {
+	it("skips picker after multi-household selection binds active org", async () => {
 		currentDb = {
 			select: vi.fn(() =>
 				memberSelectChain([
@@ -105,6 +105,20 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		};
 		expect(
 			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], "org-a"),
+		).toBe(false);
+	});
+
+	it("requires picker for multi-household users without active org", async () => {
+		currentDb = {
+			select: vi.fn(() =>
+				memberSelectChain([
+					{ organizationId: "org-a" },
+					{ organizationId: "org-b" },
+				]),
+			),
+		};
+		expect(
+			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], null),
 		).toBe(true);
 	});
 });

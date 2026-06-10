@@ -429,6 +429,21 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	return updatedSession;
 }
 
+/** OAuth browser steps must not auto-activate a default household before pick. */
+export async function requireAuthForOAuthFlow(
+	context: AppLoadContext,
+	request: Request,
+) {
+	const auth = getAuth(context.cloudflare.env);
+	const session = await auth.api.getSession({ headers: request.headers });
+
+	if (!session) {
+		throw redirect("/");
+	}
+
+	return session;
+}
+
 export async function requireAdmin(context: AppLoadContext, request: Request) {
 	const session = await requireAuth(context, request);
 

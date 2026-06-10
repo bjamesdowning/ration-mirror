@@ -4,7 +4,7 @@ import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import { OAuthCard } from "~/components/oauth/OAuthCard";
 import * as schema from "~/db/schema";
-import { requireAuth } from "~/lib/auth.server";
+import { requireAuthForOAuthFlow } from "~/lib/auth.server";
 import {
 	invokeOAuth2ContinuePostLogin,
 	setActiveOrganizationViaHandler,
@@ -39,7 +39,7 @@ export async function loader({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuth(context, request);
+	const session = await requireAuthForOAuthFlow(context, request);
 	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 	const signed = getSignedOAuthQuery(url);
@@ -88,7 +88,7 @@ export async function action({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuth(context, request);
+	const session = await requireAuthForOAuthFlow(context, request);
 	const env = context.cloudflare.env;
 	const form = await request.formData();
 	const organizationId = form.get("organizationId");
@@ -140,6 +140,11 @@ export async function action({
 			);
 		}
 
+		await db
+			.update(schema.session)
+			.set({ activeOrganizationId: organizationId })
+			.where(eq(schema.session.id, session.session.id));
+
 		const { headers: headersWithSession, setCookieHeaders } =
 			await setActiveOrganizationViaHandler(env, request, organizationId);
 
@@ -189,7 +194,7 @@ export default function OAuthSelectOrgPage({
 			description="Choose which Ration group this AI agent may access. One grant applies to a single household."
 			error={loaderData.flowError ?? actionData?.error}
 		>
-			<Form method="post" className="space-y-3">
+			<Form method="post" reloadDocument className="space-y-3">
 				<input
 					type="hidden"
 					name="oauth_query_b64"

@@ -31,10 +31,13 @@ export function requiresOAuthOrgSelection(scopes: readonly string[]): boolean {
 }
 
 /**
- * Better Auth `postLogin.shouldRedirect`: MCP grants require household selection
- * when the user belongs to multiple groups, or has one group that is not yet the
- * active session org. Single-household users with an already-active org skip the
- * picker (Better Auth docs pattern).
+ * Better Auth `postLogin.shouldRedirect`: show the household picker until the
+ * session has a valid `activeOrganizationId` for one of the user's memberships.
+ *
+ * Better Auth 1.6.16+ no longer passes `postLogin: true` into authorize on
+ * `oauth2Continue` — it only skips this gate when `ba_pl` matches (set at
+ * consent). After the user picks a household we must return false here so
+ * continue advances to consent instead of looping back to select-org.
  */
 export async function shouldOAuthPostLoginRedirect(
 	env: Cloudflare.Env,
@@ -56,9 +59,11 @@ export async function shouldOAuthPostLoginRedirect(
 		return true;
 	}
 
-	if (memberships.length === 1) {
-		const soleOrgId = memberships[0]?.organizationId;
-		return soleOrgId !== activeOrganizationId;
+	if (
+		typeof activeOrganizationId === "string" &&
+		memberships.some((m) => m.organizationId === activeOrganizationId)
+	) {
+		return false;
 	}
 
 	return true;

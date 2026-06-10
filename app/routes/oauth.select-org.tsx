@@ -9,6 +9,7 @@ import {
 	invokeOAuth2ContinuePostLogin,
 	setActiveOrganizationViaHandler,
 } from "~/lib/oauth-auth-api.server";
+import { appendOAuthOrgSelectedCookie } from "~/lib/oauth-cookies.server";
 import {
 	buildOAuthPageUrl,
 	decodeOAuthQueryFromForm,
@@ -162,6 +163,8 @@ export async function action({
 				clientId,
 			});
 		}
+
+		appendOAuthOrgSelectedCookie(setCookieHeaders, request);
 
 		logOAuthFlowEvent({
 			step: "select_org",

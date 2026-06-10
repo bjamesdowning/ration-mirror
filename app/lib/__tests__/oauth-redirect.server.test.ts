@@ -25,11 +25,14 @@ describe("getAuthRedirectUrl", () => {
 		expect(getAuthRedirectUrl(fixtures.oauth2Consent_success)).toMatch(
 			/^cursor:/,
 		);
+		expect(getAuthRedirectUrl(fixtures.oauth2Consent_warp_success)).toMatch(
+			/^warp:/,
+		);
 	});
 });
 
 describe("isAllowedOAuthRedirectUrl", () => {
-	it("allows https app and cursor callbacks", () => {
+	it("allows https app and native MCP client callbacks", () => {
 		expect(
 			isAllowedOAuthRedirectUrl("https://ration.mayutic.com/oauth/consent"),
 		).toBe(true);
@@ -37,6 +40,9 @@ describe("isAllowedOAuthRedirectUrl", () => {
 			isAllowedOAuthRedirectUrl(
 				"cursor://anysphere.cursor-mcp/oauth/callback?code=x",
 			),
+		).toBe(true);
+		expect(
+			isAllowedOAuthRedirectUrl("warp://mcp/oauth2callback?code=x&state=y"),
 		).toBe(true);
 	});
 
@@ -80,6 +86,14 @@ describe("classifyOAuthClientRedirect", () => {
 		expect(
 			classifyOAuthClientRedirect(
 				"cursor://anysphere.cursor-mcp/oauth/callback?code=abc&state=xyz",
+			),
+		).toEqual({ kind: "code" });
+	});
+
+	it("accepts warp callbacks with authorization codes", () => {
+		expect(
+			classifyOAuthClientRedirect(
+				"warp://mcp/oauth2callback?code=abc&state=xyz",
 			),
 		).toEqual({ kind: "code" });
 	});

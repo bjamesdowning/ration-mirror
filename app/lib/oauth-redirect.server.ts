@@ -1,7 +1,15 @@
+import { NATIVE_MCP_CALLBACK_PROTOCOLS } from "./oauth.constants";
+
 /**
  * Parse Better Auth oauth2Continue / oauth2Consent responses.
  * Never construct OAuth redirect URLs by hand in routes.
  */
+
+function isNativeMcpClientProtocol(protocol: string): boolean {
+	return (NATIVE_MCP_CALLBACK_PROTOCOLS as readonly string[]).includes(
+		protocol,
+	);
+}
 
 export type BetterAuthRedirectPayload = {
 	redirect?: boolean;
@@ -40,7 +48,7 @@ export function getAuthRedirectUrl(result: unknown): string | null {
  * - Root-relative, same-origin paths (its internal page redirects, e.g.
  *   "/oauth/consent?..."). Protocol-relative "//host" is rejected as it can
  *   escape our origin.
- * - Absolute http(s) and cursor:// schemes (the final MCP client callback).
+ * - Absolute http(s) and native MCP client schemes (cursor://, warp://, etc.).
  */
 export function isAllowedOAuthRedirectUrl(url: string): boolean {
 	if (url.startsWith("/") && !url.startsWith("//")) {
@@ -51,7 +59,7 @@ export function isAllowedOAuthRedirectUrl(url: string): boolean {
 		if (parsed.protocol === "https:" || parsed.protocol === "http:") {
 			return true;
 		}
-		if (parsed.protocol === "cursor:") {
+		if (isNativeMcpClientProtocol(parsed.protocol)) {
 			return true;
 		}
 		return false;
@@ -108,7 +116,7 @@ export function classifyOAuthClientRedirect(
 		}
 
 		const isClientCallback =
-			parsed.protocol === "cursor:" ||
+			isNativeMcpClientProtocol(parsed.protocol) ||
 			(parsed.protocol === "http:" && isMcpClientCallbackHost(parsed.hostname));
 
 		if (isClientCallback) {

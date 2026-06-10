@@ -158,13 +158,14 @@ export function createAuth(env: Cloudflare.Env) {
 						const orgId = session?.activeOrganizationId;
 						return typeof orgId === "string" ? orgId : undefined;
 					},
-					shouldRedirect: async ({ scopes, session, user }) => {
+					shouldRedirect: async ({ scopes, session, user, headers }) => {
 						const activeOrgId = session?.activeOrganizationId;
 						return shouldOAuthPostLoginRedirect(
 							env,
 							user.id,
 							scopes,
 							typeof activeOrgId === "string" ? activeOrgId : null,
+							headers,
 						);
 					},
 				},

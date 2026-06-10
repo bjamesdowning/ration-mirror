@@ -10,6 +10,10 @@
 		"redirect": true,
 		"url": "cursor://anysphere.cursor-mcp/oauth/callback?code=example&state=xyz"
 	},
+	"oauth2Consent_warp_success": {
+		"redirect": true,
+		"url": "warp://mcp/oauth2callback?code=example&state=xyz"
+	},
 	"oauth2Consent_redirect_uri": {
 		"redirect_uri": "cursor://anysphere.cursor-mcp/oauth/callback?code=example&state=xyz"
 	}

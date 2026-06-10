@@ -9,6 +9,7 @@ import {
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
 import { invokeOAuth2Consent } from "~/lib/oauth-auth-api.server";
+import { appendClearOAuthOrgSelectedCookie } from "~/lib/oauth-cookies.server";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
@@ -153,7 +154,9 @@ export async function action({
 			clientId,
 			durationMs: Date.now() - started,
 		});
-		throw redirect(redirectUrl);
+		const redirectHeaders = new Headers();
+		appendClearOAuthOrgSelectedCookie(redirectHeaders, request);
+		throw redirect(redirectUrl, { headers: redirectHeaders });
 	} catch (error) {
 		if (error instanceof Response) {
 			throw error;
@@ -203,7 +206,7 @@ export default function OAuthConsentPage({
 					the connection from your AI client.
 				</p>
 			) : (
-				<Form method="post" className="space-y-4">
+				<Form method="post" reloadDocument className="space-y-4">
 					<input
 						type="hidden"
 						name="oauth_query_b64"

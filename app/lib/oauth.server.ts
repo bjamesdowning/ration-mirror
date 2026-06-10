@@ -7,6 +7,7 @@ import {
 	RATION_ORG_CLAIM,
 	resolveAuthorizationServerUrl,
 } from "./oauth.constants";
+import { hasOAuthOrgSelectedCookie } from "./oauth-cookies.server";
 import { normalizeOAuthScopes } from "./oauth-scopes";
 import { chunkedQuery } from "./query-utils.server";
 
@@ -35,15 +36,17 @@ export function requiresOAuthOrgSelection(scopes: readonly string[]): boolean {
  * session has a valid `activeOrganizationId` for one of the user's memberships.
  *
  * Better Auth 1.6.16+ no longer passes `postLogin: true` into authorize on
- * `oauth2Continue` — it only skips this gate when `ba_pl` matches (set at
- * consent). After the user picks a household we must return false here so
- * continue advances to consent instead of looping back to select-org.
+ * `oauth2Continue` — after household pick we return false so continue advances
+ * to consent. Multi-household users must confirm on `/oauth/select-org` even
+ * when the hub session already has a default `activeOrganizationId`; a
+ * short-lived `ration_oauth_org_selected` cookie marks that confirmation.
  */
 export async function shouldOAuthPostLoginRedirect(
 	env: Cloudflare.Env,
 	userId: string,
 	scopes: readonly string[],
 	activeOrganizationId?: string | null,
+	requestHeaders?: Headers,
 ): Promise<boolean> {
 	if (!requiresOAuthOrgSelection(scopes)) {
 		return false;
@@ -59,14 +62,19 @@ export async function shouldOAuthPostLoginRedirect(
 		return true;
 	}
 
-	if (
+	const orgSelectedThisFlow = hasOAuthOrgSelectedCookie(
+		requestHeaders?.get("cookie"),
+	);
+
+	const activeOrgIsMembership =
 		typeof activeOrganizationId === "string" &&
-		memberships.some((m) => m.organizationId === activeOrganizationId)
-	) {
-		return false;
+		memberships.some((m) => m.organizationId === activeOrganizationId);
+
+	if (memberships.length > 1) {
+		return !(orgSelectedThisFlow && activeOrgIsMembership);
 	}
 
-	return true;
+	return !activeOrgIsMembership;
 }
 
 /**

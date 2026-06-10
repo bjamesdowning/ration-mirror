@@ -10,6 +10,7 @@ import {
 	resolveMcpResourceAudience,
 } from "../oauth.constants";
 import { getJwksUrl } from "../oauth.server";
+import { hashOAuthStoredToken } from "../oauth-token-hash.server";
 
 const JWKS_KV_KEY = "oauth:jwks";
 const JWKS_CACHE_TTL_SEC = 3600;
@@ -81,6 +82,10 @@ function extractAudience(payload: JWTPayload): string[] {
 	return Array.isArray(aud) ? aud.map(String) : [String(aud)];
 }
 
+function extractMcpScopes(scopes: string[]): string[] {
+	return scopes.filter((s) => s.startsWith("mcp:"));
+}
+
 async function validateOrgMembership(
 	db: D1Database,
 	userId: string,
@@ -120,20 +125,98 @@ async function hasActiveConsent(
 	return !!consent;
 }
 
-/**
- * Verify a Better Auth JWT access token for MCP resource access.
- */
-export async function verifyMcpOAuthToken(
+async function finalizeVerifiedToken(
 	env: Cloudflare.Env,
-	rawToken: string,
+	params: {
+		userId: string;
+		organizationId: string | null | undefined;
+		scopes: string[];
+		clientId: string | null | undefined;
+	},
 ): Promise<VerifiedMcpToken> {
-	if (!isLikelyJwt(rawToken)) {
+	const organizationId = params.organizationId;
+	if (!organizationId) {
+		throw new Error("OAuth token missing organization binding");
+	}
+
+	const isMember = await validateOrgMembership(
+		env.DB,
+		params.userId,
+		organizationId,
+	);
+	if (!isMember) {
+		throw new Error("OAuth token organization access revoked");
+	}
+
+	const mcpScopes = extractMcpScopes(params.scopes);
+	if (mcpScopes.length === 0) {
+		throw new Error("OAuth token missing MCP scopes");
+	}
+
+	const clientId = params.clientId ?? undefined;
+	if (!clientId) {
 		throw new Error("Invalid OAuth access token");
 	}
 
-	// `issuer` must equal the JWT `iss` claim, which Better Auth sets to the
-	// origin plus its `/api/auth` basePath. `authServerBase` is the bare origin
-	// used to build the JWKS fetch URL (it appends `/api/auth/jwks`).
+	const consentActive = await hasActiveConsent(
+		env.DB,
+		params.userId,
+		clientId,
+		organizationId,
+	);
+	if (!consentActive) {
+		throw new Error("OAuth grant revoked");
+	}
+
+	return {
+		userId: params.userId,
+		organizationId,
+		scopes: mcpScopes,
+		clientId,
+	};
+}
+
+/**
+ * Better Auth issues opaque (non-JWT) access tokens when the token exchange
+ * omits RFC 8707 `resource`. Some MCP clients (e.g. Warp) do this; validate
+ * against the hashed row in oauthAccessToken instead.
+ */
+async function verifyOpaqueMcpAccessToken(
+	env: Cloudflare.Env,
+	rawToken: string,
+): Promise<VerifiedMcpToken> {
+	const tokenHash = await hashOAuthStoredToken(rawToken);
+	const d1 = drizzle(env.DB, { schema });
+	const row = await d1.query.oauthAccessToken.findFirst({
+		where: eq(schema.oauthAccessToken.token, tokenHash),
+	});
+
+	if (!row?.userId || !row.expiresAt || row.expiresAt < new Date()) {
+		throw new Error("Invalid OAuth access token");
+	}
+
+	if (row.sessionId) {
+		const session = await d1.query.session.findFirst({
+			where: eq(schema.session.id, row.sessionId),
+			columns: { expiresAt: true },
+		});
+		if (!session || session.expiresAt < new Date()) {
+			throw new Error("Invalid OAuth access token");
+		}
+	}
+
+	return finalizeVerifiedToken(env, {
+		userId: row.userId,
+		organizationId: row.referenceId,
+		scopes: row.scopes,
+		clientId: row.clientId,
+	});
+}
+
+async function verifyJwtMcpAccessToken(
+	env: Cloudflare.Env,
+	rawToken: string,
+): Promise<VerifiedMcpToken> {
 	const issuer = resolveAuthorizationServerIssuer(env);
 	const authServerBase = resolveAuthorizationServerUrl(env);
 	const audience = resolveMcpResourceAudience(env);
@@ -143,8 +226,6 @@ export async function verifyMcpOAuthToken(
 		const jwks = await loadJwksSet(env.RATION_KV, authServerBase, false);
 		payload = (await jwtVerify(rawToken, jwks, { issuer, audience })).payload;
 	} catch (err) {
-		// A missing `kid` means the cached JWKS predates a key rotation. Refetch
-		// once with a fresh set before rejecting; any other failure is terminal.
 		if (!isNoMatchingKeyError(err)) {
 			throw new Error("Invalid OAuth access token");
 		}
@@ -175,43 +256,44 @@ export async function verifyMcpOAuthToken(
 				? payload.referenceId
 				: null;
 
-	if (!organizationId) {
-		throw new Error("OAuth token missing organization binding");
-	}
-
-	const isMember = await validateOrgMembership(env.DB, userId, organizationId);
-	if (!isMember) {
-		throw new Error("OAuth token organization access revoked");
-	}
-
-	const scopes = extractScopes(payload).filter((s) => s.startsWith("mcp:"));
-	if (scopes.length === 0) {
-		throw new Error("OAuth token missing MCP scopes");
-	}
-
 	const clientId =
 		typeof payload.client_id === "string"
 			? payload.client_id
 			: typeof payload.azp === "string"
 				? payload.azp
-				: undefined;
+				: null;
 
-	if (!clientId) {
-		throw new Error("Invalid OAuth access token");
-	}
-
-	// Enforce that the user hasn't revoked this grant since the token was issued.
-	const consentActive = await hasActiveConsent(
-		env.DB,
+	return finalizeVerifiedToken(env, {
 		userId,
-		clientId,
 		organizationId,
-	);
-	if (!consentActive) {
-		throw new Error("OAuth grant revoked");
+		scopes: extractScopes(payload),
+		clientId,
+	});
+}
+
+/**
+ * Verify a Better Auth access token for MCP resource access (JWT or opaque).
+ */
+export async function verifyMcpOAuthToken(
+	env: Cloudflare.Env,
+	rawToken: string,
+): Promise<VerifiedMcpToken> {
+	if (isLikelyJwt(rawToken)) {
+		try {
+			return await verifyJwtMcpAccessToken(env, rawToken);
+		} catch (jwtError) {
+			// A JWT-shaped string may still be an opaque token in edge cases.
+			if (
+				jwtError instanceof Error &&
+				jwtError.message === "Invalid OAuth access token"
+			) {
+				return verifyOpaqueMcpAccessToken(env, rawToken);
+			}
+			throw jwtError;
+		}
 	}
 
-	return { userId, organizationId, scopes, clientId };
+	return verifyOpaqueMcpAccessToken(env, rawToken);
 }
 
 /** Invalidate cached JWKS (call after key rotation). */

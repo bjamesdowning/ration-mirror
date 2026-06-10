@@ -6,11 +6,15 @@ const {
 	createLocalJWKSetMock,
 	memberFindFirst,
 	consentFindFirst,
+	accessTokenFindFirst,
+	sessionFindFirst,
 } = vi.hoisted(() => ({
 	jwtVerifyMock: vi.fn(),
 	createLocalJWKSetMock: vi.fn(() => "jwks-fn"),
 	memberFindFirst: vi.fn(),
 	consentFindFirst: vi.fn(),
+	accessTokenFindFirst: vi.fn(),
+	sessionFindFirst: vi.fn(),
 }));
 
 vi.mock("jose", () => ({
@@ -23,6 +27,8 @@ vi.mock("drizzle-orm/d1", () => ({
 		query: {
 			member: { findFirst: memberFindFirst },
 			oauthConsent: { findFirst: consentFindFirst },
+			oauthAccessToken: { findFirst: accessTokenFindFirst },
+			session: { findFirst: sessionFindFirst },
 		},
 	})),
 }));
@@ -64,6 +70,10 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	memberFindFirst.mockResolvedValue({ id: "member-1" });
 	consentFindFirst.mockResolvedValue({ id: "consent-1" });
+	accessTokenFindFirst.mockResolvedValue(undefined);
+	sessionFindFirst.mockResolvedValue({
+		expiresAt: new Date(Date.now() + 60_000),
+	});
 	jwtVerifyMock.mockResolvedValue({ payload: validPayload() });
 	vi.stubGlobal(
 		"fetch",
@@ -105,10 +115,32 @@ describe("verifyMcpOAuthToken", () => {
 		);
 	});
 
-	it("rejects a credential that is not JWT-shaped without touching jose", async () => {
+	it("rejects a credential that is not JWT-shaped when no opaque row exists", async () => {
 		await expect(verifyMcpOAuthToken(makeEnv(), "rtn_live_x")).rejects.toThrow(
 			"Invalid OAuth access token",
 		);
+		expect(jwtVerifyMock).not.toHaveBeenCalled();
+		expect(accessTokenFindFirst).toHaveBeenCalled();
+	});
+
+	it("accepts opaque access tokens stored hashed in oauthAccessToken", async () => {
+		accessTokenFindFirst.mockResolvedValueOnce({
+			userId: "user-1",
+			clientId: "client-1",
+			referenceId: "org-1",
+			scopes: ["mcp:read", "offline_access"],
+			expiresAt: new Date(Date.now() + 60_000),
+			sessionId: "session-1",
+		});
+
+		const result = await verifyMcpOAuthToken(makeEnv(), "opaque-token-abc");
+
+		expect(result).toEqual({
+			userId: "user-1",
+			organizationId: "org-1",
+			scopes: ["mcp:read"],
+			clientId: "client-1",
+		});
 		expect(jwtVerifyMock).not.toHaveBeenCalled();
 	});
 

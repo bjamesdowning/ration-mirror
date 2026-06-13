@@ -151,6 +151,15 @@ describe("verifyMcpOAuthToken", () => {
 		);
 	});
 
+	it("rejects when the token audience is the MCP origin without the /mcp path", async () => {
+		jwtVerifyMock.mockResolvedValueOnce({
+			payload: validPayload({ aud: "https://mcp.ration.mayutic.com" }),
+		});
+		await expect(verifyMcpOAuthToken(makeEnv(), "a.b.c")).rejects.toThrow(
+			"OAuth token audience mismatch",
+		);
+	});
+
 	it("rejects when the token audience does not match the MCP resource", async () => {
 		jwtVerifyMock.mockResolvedValueOnce({
 			payload: validPayload({ aud: "https://evil.example.com/mcp" }),

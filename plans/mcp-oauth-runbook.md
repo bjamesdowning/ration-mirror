@@ -26,8 +26,9 @@
 ## Consent loop / redirect_missing
 
 - Requires `@better-auth/oauth-provider` >= 1.6.10 (Ration pins 1.6.16+) so consent-accept honors the `ba_pl` postLogin marker.
+- Sign-in resume must use a **browser navigation** to `/api/auth/oauth2/authorize?{signed}` — do not replay authorize via internal `auth.handler()` sub-requests.
 - If users still loop: revoke grant, remove MCP server in client, reconnect in a fresh tab within ~10 minutes.
-- Check Worker logs for `event=oauth_flow` with `error_code=redirect_missing` at `step=select_org` or `step=consent`.
+- Check Worker logs for `event=oauth_flow` with `error_code=redirect_missing` at `step=select_org` or `step=consent`, or `event=mcp_oauth_verify_failed` on the MCP worker.
 
 ## Never log
 

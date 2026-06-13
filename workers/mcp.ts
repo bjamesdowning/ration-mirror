@@ -11,6 +11,7 @@ import {
 	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "../app/lib/oauth.constants";
+import { logMcpOAuthVerifyFailure } from "../app/lib/oauth-telemetry.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 
 /** Align with agents DO handler body cap. */
@@ -269,6 +270,9 @@ export default {
 				error instanceof Error && MCP_AUTH_ERRORS.has(error.message);
 			const status = isAuthError ? 401 : 500;
 			const message = isAuthError ? error.message : "Internal Server Error";
+			if (isAuthError) {
+				logMcpOAuthVerifyFailure({ errorCode: message });
+			}
 			const audience = resolveMcpResourceAudience(env);
 			const resourceOrigin = audience.replace(/\/mcp$/, "");
 			const wwwAuth = `Bearer realm="Ration MCP", resource_metadata="${resourceOrigin}/.well-known/oauth-protected-resource"`;

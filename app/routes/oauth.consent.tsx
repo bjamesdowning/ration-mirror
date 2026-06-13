@@ -1,7 +1,7 @@
 import type { AppLoadContext } from "react-router";
 import { Form, redirect } from "react-router";
 import { OAuthCard } from "~/components/oauth/OAuthCard";
-import { requireAuth } from "~/lib/auth.server";
+import { getSessionForOAuthFlow } from "~/lib/auth.server";
 import {
 	OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES,
 	OAUTH_MCP_SCOPES,
@@ -9,7 +9,10 @@ import {
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
 import { invokeOAuth2Consent } from "~/lib/oauth-auth-api.server";
-import { appendClearOAuthOrgSelectedCookie } from "~/lib/oauth-cookies.server";
+import {
+	clearOAuthCorrelationCookie,
+	getOAuthCorrelationId,
+} from "~/lib/oauth-correlation.server";
 import { buildNativeCallbackHandoffPath } from "~/lib/oauth-native-handoff.server";
 import {
 	buildConsentScopeForSubmit,
@@ -40,12 +43,16 @@ export async function loader({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	await requireAuth(context, request);
 	const url = new URL(request.url);
 	const signed = getSignedOAuthQuery(url);
 
 	if (!signed) {
 		throw redirect(`/oauth/sign-in${url.search}`);
+	}
+
+	const session = await getSessionForOAuthFlow(context, request);
+	if (!session) {
+		throw redirect(buildOAuthPageUrl("/oauth/sign-in", signed));
 	}
 
 	if (!url.searchParams.has("oauth_query")) {
@@ -72,6 +79,7 @@ export async function loader({
 		selectOrgHref: buildOAuthPageUrl("/oauth/select-org", signed),
 		requestedScopes,
 		hasRequestedScopes: requestedScopes.length > 0,
+		correlationId: getOAuthCorrelationId(request),
 	};
 }
 
@@ -82,8 +90,14 @@ export async function action({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	await requireAuth(context, request);
+	const session = await getSessionForOAuthFlow(context, request);
 	const env = context.cloudflare.env;
+	const correlationId = getOAuthCorrelationId(request);
+
+	if (!session) {
+		return oauthErrorResponse("flow_invalid", { step: "consent" });
+	}
+
 	const form = await request.formData();
 	const accept = form.get("accept") === "true";
 	const oauthQueryB64 = form.get("oauth_query_b64");
@@ -154,10 +168,11 @@ export async function action({
 			step: "consent",
 			outcome: "success",
 			clientId,
+			correlationId,
 			durationMs: Date.now() - started,
 		});
 		const redirectHeaders = new Headers();
-		appendClearOAuthOrgSelectedCookie(redirectHeaders, request);
+		clearOAuthCorrelationCookie(redirectHeaders, request);
 		const destination = isNativeMcpClientRedirectUrl(redirectUrl)
 			? buildNativeCallbackHandoffPath(redirectUrl)
 			: redirectUrl;

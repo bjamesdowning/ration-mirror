@@ -1,6 +1,7 @@
 import { getAuth } from "~/lib/auth.server";
 import { createOAuthDiscoveryHandler } from "~/lib/oauth-discovery.server";
 
+/** OIDC-compatible alias for OAuth authorization-server metadata. */
 export async function loader({
 	request,
 	context,

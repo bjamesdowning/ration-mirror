@@ -1,6 +1,7 @@
 import { getAuth } from "~/lib/auth.server";
 import { createOAuthDiscoveryHandler } from "~/lib/oauth-discovery.server";
 
+/** Issuer-path OIDC discovery alias for clients probing /api/auth. */
 export async function loader({
 	request,
 	context,

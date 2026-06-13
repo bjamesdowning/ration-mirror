@@ -8,6 +8,19 @@ export function authApiUrl(request: Request, path: string): string {
 }
 
 /**
+ * Browser URL for resuming OAuth after sign-in. Uses Better Auth's native
+ * `/oauth2/authorize` endpoint with the signed query so session cookies are
+ * sent on navigation instead of fragile internal handler replays.
+ */
+export function buildOAuthAuthorizeResumeUrl(
+	request: Request,
+	signedQuery: string,
+): string {
+	const params = new URLSearchParams(signedQuery);
+	return authApiUrl(request, `/oauth2/authorize?${params.toString()}`);
+}
+
+/**
  * Origin to attach to server-to-server auth.handler() sub-requests.
  *
  * Better Auth runs a CSRF origin check on every state-changing POST and rejects

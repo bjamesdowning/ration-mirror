@@ -19,6 +19,14 @@ export default [
 		"routes/well-known.oauth-authorization-server.api-auth.ts",
 	),
 	route(
+		".well-known/openid-configuration",
+		"routes/well-known.openid-configuration.ts",
+	),
+	route(
+		".well-known/openid-configuration/api/auth",
+		"routes/well-known.openid-configuration.api-auth.ts",
+	),
+	route(
 		".well-known/mcp/server-card.json",
 		"routes/well-known.mcp.server-card.ts",
 	),

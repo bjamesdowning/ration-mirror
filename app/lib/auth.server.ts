@@ -430,13 +430,25 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	return updatedSession;
 }
 
-/** OAuth browser steps must not auto-activate a default household before pick. */
-export async function requireAuthForOAuthFlow(
+/**
+ * Read the session for OAuth browser pages without redirecting to the app shell.
+ * Callers must preserve `oauth_query` and send the user to `/oauth/sign-in` when
+ * this returns null.
+ */
+export async function getSessionForOAuthFlow(
 	context: AppLoadContext,
 	request: Request,
 ) {
 	const auth = getAuth(context.cloudflare.env);
-	const session = await auth.api.getSession({ headers: request.headers });
+	return auth.api.getSession({ headers: request.headers });
+}
+
+/** @deprecated Prefer getSessionForOAuthFlow and preserve oauth_query on miss. */
+export async function requireAuthForOAuthFlow(
+	context: AppLoadContext,
+	request: Request,
+) {
+	const session = await getSessionForOAuthFlow(context, request);
 
 	if (!session) {
 		throw redirect("/");

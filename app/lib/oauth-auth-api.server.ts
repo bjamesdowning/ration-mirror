@@ -1,6 +1,7 @@
 import { getAuth } from "./auth.server";
 import {
 	authApiUrl,
+	buildOAuthAuthorizeResumeUrl,
 	internalAuthOrigin,
 	readAuthHandlerJson,
 	throwIfAuthHandlerFailed,
@@ -9,40 +10,8 @@ import {
 	collectSetCookieHeaders,
 	mergeSessionCookies,
 } from "./oauth-query.server";
-import { getAuthRedirectUrl } from "./oauth-redirect.server";
 
-/**
- * Re-run OAuth authorize with an existing session so Better Auth returns a
- * fresh signed redirect (select-org or consent). Avoids stale oauth_query from
- * the initial login page URL after magic-link sign-in.
- */
-export async function resumeOAuthAuthorizeAfterSession(
-	env: Cloudflare.Env,
-	request: Request,
-	signedQuery: string,
-): Promise<string> {
-	const auth = getAuth(env);
-	const params = new URLSearchParams(signedQuery);
-	const authorizeUrl = authApiUrl(
-		request,
-		`/oauth2/authorize?${params.toString()}`,
-	);
-	const authorizeRequest = new Request(authorizeUrl, {
-		method: "GET",
-		headers: {
-			cookie: request.headers.get("cookie") ?? "",
-			accept: "application/json",
-		},
-	});
-	const response = await auth.handler(authorizeRequest);
-	await throwIfAuthHandlerFailed(response);
-	const payload = await readAuthHandlerJson<unknown>(response);
-	const redirectUrl = getAuthRedirectUrl(payload);
-	if (!redirectUrl) {
-		throw new Error("Authorize resume did not return a redirect URL");
-	}
-	return redirectUrl;
-}
+export { buildOAuthAuthorizeResumeUrl };
 
 export async function invokeOAuth2ContinuePostLogin(
 	env: Cloudflare.Env,

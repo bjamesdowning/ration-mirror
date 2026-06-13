@@ -1,50 +1,52 @@
 import { redirect } from "react-router";
+import type { AppLoadContext } from "react-router";
 import { AuthWidget } from "~/components/auth/AuthWidget";
 import { OAuthCard } from "~/components/oauth/OAuthCard";
-import { getAuth } from "~/lib/auth.server";
-import { resumeOAuthAuthorizeAfterSession } from "~/lib/oauth-auth-api.server";
+import { getSessionForOAuthFlow } from "~/lib/auth.server";
+import { buildOAuthAuthorizeResumeUrl } from "~/lib/oauth-auth-http.server";
+import {
+	appendOAuthCorrelationCookie,
+	getOAuthCorrelationId,
+} from "~/lib/oauth-correlation.server";
 import {
 	buildOAuthPageUrl,
 	getSignedOAuthQuery,
 } from "~/lib/oauth-query.server";
-import { mapBetterAuthConsentError } from "~/lib/oauth-route-errors.server";
+import { logOAuthFlowEvent } from "~/lib/oauth-telemetry.server";
 
 export async function loader({
 	request,
 	context,
 }: {
 	request: Request;
-	context: { cloudflare: { env: Cloudflare.Env } };
+	context: AppLoadContext;
 }) {
-	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 	const signed = getSignedOAuthQuery(url);
+	const correlationId = getOAuthCorrelationId(request);
 
 	if (!signed) {
 		return { missingOAuth: true as const };
 	}
 
-	const auth = getAuth(env);
-	const session = await auth.api.getSession({ headers: request.headers });
+	const session = await getSessionForOAuthFlow(context, request);
 
 	if (session) {
-		try {
-			const next = await resumeOAuthAuthorizeAfterSession(env, request, signed);
-			throw redirect(next);
-		} catch (error) {
-			if (error instanceof Response) {
-				throw error;
-			}
-			const mapped = mapBetterAuthConsentError(error);
-			return {
-				callbackURL: buildOAuthPageUrl("/oauth/sign-in", signed),
-				flowError: mapped.error,
-			};
-		}
+		logOAuthFlowEvent({
+			step: "sign_in",
+			outcome: "success",
+			correlationId,
+			durationMs: 0,
+		});
+		const resumeUrl = buildOAuthAuthorizeResumeUrl(request, signed);
+		const headers = new Headers();
+		appendOAuthCorrelationCookie(headers, request, correlationId);
+		throw redirect(resumeUrl, { headers });
 	}
 
 	return {
 		callbackURL: buildOAuthPageUrl("/oauth/sign-in", signed),
+		correlationId,
 	};
 }
 
@@ -64,11 +66,7 @@ export default function OAuthSignInPage({
 	}
 
 	return (
-		<OAuthCard
-			maxWidth="md"
-			title="Connect AI agent"
-			error={"flowError" in loaderData ? loaderData.flowError : undefined}
-		>
+		<OAuthCard maxWidth="md" title="Connect AI agent">
 			<AuthWidget
 				showLogo
 				defaultMode="signIn"

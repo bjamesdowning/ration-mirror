@@ -35,6 +35,7 @@ export function logOAuthFlowEvent(input: {
 	outcome: OAuthFlowLogOutcome;
 	errorCode?: OAuthFlowErrorCode;
 	clientId?: string;
+	correlationId?: string;
 	durationMs?: number;
 	detail?: string;
 }): void {
@@ -44,9 +45,28 @@ export function logOAuthFlowEvent(input: {
 		outcome: input.outcome,
 		...(input.errorCode ? { error_code: input.errorCode } : {}),
 		...(input.clientId ? { client_id_redacted: redactId(input.clientId) } : {}),
+		...(input.correlationId
+			? { correlation_id: redactId(input.correlationId) }
+			: {}),
 		...(input.durationMs !== undefined
 			? { duration_ms: input.durationMs }
 			: {}),
 		...(input.detail ? { detail: input.detail.slice(0, 200) } : {}),
+	});
+}
+
+/** Structured MCP resource-server token verification failure (no secrets). */
+export function logMcpOAuthVerifyFailure(input: {
+	errorCode: string;
+	correlationId?: string;
+	clientId?: string;
+}): void {
+	log.warn("mcp_oauth_verify_failed", {
+		event: "mcp_oauth_verify_failed",
+		error_code: input.errorCode,
+		...(input.correlationId
+			? { correlation_id: redactId(input.correlationId) }
+			: {}),
+		...(input.clientId ? { client_id_redacted: redactId(input.clientId) } : {}),
 	});
 }

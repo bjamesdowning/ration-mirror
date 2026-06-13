@@ -4,15 +4,15 @@ import type { AppLoadContext } from "react-router";
 import { data, Form, redirect } from "react-router";
 import { OAuthCard } from "~/components/oauth/OAuthCard";
 import * as schema from "~/db/schema";
-import { requireAuthForOAuthFlow } from "~/lib/auth.server";
+import { getSessionForOAuthFlow } from "~/lib/auth.server";
 import {
 	invokeOAuth2ContinuePostLogin,
 	setActiveOrganizationViaHandler,
 } from "~/lib/oauth-auth-api.server";
 import {
-	appendOAuthOrgSelectedCookie,
-	mergeOAuthOrgSelectedIntoHeaders,
-} from "~/lib/oauth-cookies.server";
+	appendOAuthCorrelationCookie,
+	getOAuthCorrelationId,
+} from "~/lib/oauth-correlation.server";
 import {
 	buildOAuthPageUrl,
 	decodeOAuthQueryFromForm,
@@ -43,10 +43,10 @@ export async function loader({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuthForOAuthFlow(context, request);
 	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 	const signed = getSignedOAuthQuery(url);
+	const correlationId = getOAuthCorrelationId(request);
 
 	if (!signed) {
 		return {
@@ -55,6 +55,11 @@ export async function loader({
 			clientId: "",
 			flowError: oauthUserMessage("missing_oauth_query"),
 		};
+	}
+
+	const session = await getSessionForOAuthFlow(context, request);
+	if (!session) {
+		throw redirect(buildOAuthPageUrl("/oauth/sign-in", signed));
 	}
 
 	if (!url.searchParams.has("oauth_query")) {
@@ -82,6 +87,7 @@ export async function loader({
 			url.searchParams.get("client_id") ??
 			new URLSearchParams(signed).get("client_id") ??
 			"",
+		correlationId,
 	};
 }
 
@@ -92,8 +98,14 @@ export async function action({
 	request: Request;
 	context: AppLoadContext;
 }) {
-	const session = await requireAuthForOAuthFlow(context, request);
+	const session = await getSessionForOAuthFlow(context, request);
 	const env = context.cloudflare.env;
+	const correlationId = getOAuthCorrelationId(request);
+
+	if (!session) {
+		return oauthErrorResponse("flow_invalid", { step: "select_org" });
+	}
+
 	const form = await request.formData();
 	const organizationId = form.get("organizationId");
 	const oauthQueryB64 = form.get("oauth_query_b64");
@@ -152,8 +164,6 @@ export async function action({
 		const { headers: headersWithSession, setCookieHeaders } =
 			await setActiveOrganizationViaHandler(env, request, organizationId);
 
-		mergeOAuthOrgSelectedIntoHeaders(headersWithSession);
-
 		const continueResult = await invokeOAuth2ContinuePostLogin(
 			env,
 			request,
@@ -169,12 +179,13 @@ export async function action({
 			});
 		}
 
-		appendOAuthOrgSelectedCookie(setCookieHeaders, request);
+		appendOAuthCorrelationCookie(setCookieHeaders, request, correlationId);
 
 		logOAuthFlowEvent({
 			step: "select_org",
 			outcome: "success",
 			clientId,
+			correlationId,
 			durationMs: Date.now() - started,
 		});
 		throw redirect(redirectUrl, { headers: setCookieHeaders });

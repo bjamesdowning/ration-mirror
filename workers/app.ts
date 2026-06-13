@@ -47,6 +47,8 @@ const WELL_KNOWN_ALLOW_EXACT = new Set([
 	"/.well-known/oauth-protected-resource",
 	"/.well-known/oauth-authorization-server",
 	"/.well-known/oauth-authorization-server/api/auth",
+	"/.well-known/openid-configuration",
+	"/.well-known/openid-configuration/api/auth",
 	"/.well-known/mcp/server-card.json",
 ]);
 

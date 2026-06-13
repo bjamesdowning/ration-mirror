@@ -94,7 +94,7 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		).toBe(true);
 	});
 
-	it("requires picker for multi-household users with hub default org only", async () => {
+	it("requires picker for multi-household users even with hub default org", async () => {
 		currentDb = {
 			select: vi.fn(() =>
 				memberSelectChain([
@@ -106,29 +106,6 @@ describe("shouldOAuthPostLoginRedirect", () => {
 		expect(
 			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], "org-a"),
 		).toBe(true);
-	});
-
-	it("skips picker after multi-household user confirms on select-org", async () => {
-		currentDb = {
-			select: vi.fn(() =>
-				memberSelectChain([
-					{ organizationId: "org-a" },
-					{ organizationId: "org-b" },
-				]),
-			),
-		};
-		const headers = new Headers({
-			cookie: "ration_oauth_org_selected=1",
-		});
-		expect(
-			await shouldOAuthPostLoginRedirect(
-				env,
-				"user-1",
-				["mcp:read"],
-				"org-a",
-				headers,
-			),
-		).toBe(false);
 	});
 
 	it("requires picker for multi-household users without active org", async () => {

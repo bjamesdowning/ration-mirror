@@ -42,9 +42,6 @@ export const OAUTH_PROVIDER_SCOPES = [
 /** MCP scope pre-checked on the consent screen. */
 export const OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES = ["mcp:read"] as const;
 
-/** Short-lived cookie set when the user confirms household on `/oauth/select-org`. */
-export const OAUTH_ORG_SELECTED_COOKIE = "ration_oauth_org_selected";
-
 /** Native MCP client callback URL schemes (custom URI handlers). */
 export const NATIVE_MCP_CALLBACK_PROTOCOLS = [
 	"cursor:",

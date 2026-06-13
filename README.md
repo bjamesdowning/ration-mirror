@@ -1466,7 +1466,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Fin delegated access:** Intercom Fin uses one workspace-level OAuth grant (`mcp:delegate` on an allowlisted client). End-user pantry data requires a signed **`actor_token`** (delegation JWT shipped as `ration_mcp_delegation` in the Intercom Messenger JWT). Secrets: `FIN_MCP_DELEGATION_SECRET` (both workers), `FIN_DELEGATION_CLIENT_IDS` (MCP worker). See [plans/fin-mcp-delegation-runbook.md](plans/fin-mcp-delegation-runbook.md).
 
-**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. Better Auth (`@better-auth/oauth-provider` 1.6.16+) holds authorization state via the signed `oauth_query` and session; consent uses the `ba_pl` postLogin marker to avoid household-picker loops. Dynamic client registration defaults to all granular `mcp:*` scopes except `mcp:delegate` (Fin only); consent pre-checks read, with write scopes optional. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
+**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. After sign-in, the browser resumes via native `/api/auth/oauth2/authorize`. Better Auth (`@better-auth/oauth-provider` 1.6.16+) holds authorization state via the signed `oauth_query`, session, and `ba_pl` postLogin marker — Ration does not mirror that state in KV or parallel cookies. OIDC-compatible discovery aliases live at `/.well-known/openid-configuration` (+ `/api/auth` issuer-path variant). Dynamic client registration defaults to all granular `mcp:*` scopes except `mcp:delegate` (Fin only); consent pre-checks read, with write scopes optional. Revoke grants in Hub → Settings → Connected Agents. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
@@ -1571,7 +1571,7 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 
 - **Browser shows "No authorization code received":** The MCP client callback opened without `?code=` — usually **Deny** was clicked, the flow expired (~10 minutes), or a stale browser tab was reused. Remove and re-add the MCP server in Cursor, then complete **sign-in → select household → Authorize** in one fresh tab. Prefer native URL config (`url` only) over `mcp-remote` when Cursor supports it.
 - **OAuth authorization failed / reconnect loop:** Revoke the grant in Hub → Settings → Connected Agents, remove and re-add the MCP server in your client, then complete **sign-in → select household → authorize** in a single browser tab within ~10 minutes. Ensure the client supports OAuth 2.1 / protected-resource discovery (`oauth2` on the server card).
-- **Observability:** Production Worker logs emit structured `oauth_flow` events (`step`, `outcome`, `error_code`) — no tokens or `oauth_query` payloads.
+- **Observability:** Production Worker logs emit structured `oauth_flow` events (`step`, `outcome`, `error_code`, `correlation_id`) and MCP RS `mcp_oauth_verify_failed` events — no tokens or `oauth_query` payloads.
 - **ServerError / Connection closed (API key):** Ensure `Authorization` is exactly `Bearer ` + your full key (e.g. `Bearer rtn_live_xxxxx`).
 - **Wrong key format:** The env var must be exactly `Bearer ` + your key. Do not pass the key alone.
 - **Debug logging:** Add `--debug` to mcp-remote args; logs are written to `~/.mcp-auth/{server_hash}_debug.log`.
@@ -1583,6 +1583,8 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 | `/.well-known/api-catalog` | `application/linkset+json` | RFC 9727 API catalog with REST and MCP anchors. |
 | `/api/openapi.json` | `application/vnd.oai.openapi+json` | OpenAPI description for v1 import/export endpoints. |
 | `/.well-known/oauth-protected-resource` | `application/json` | MCP host: OAuth protected-resource metadata with authorization servers and `mcp:*` scopes. App domain metadata documents API-key auth for REST. |
+| `/.well-known/oauth-authorization-server` | `application/json` | Better Auth OAuth 2.1 authorization-server metadata (issuer includes `/api/auth`). |
+| `/.well-known/openid-configuration` | `application/json` | OIDC-compatible alias of the authorization-server metadata. |
 | `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport (auth: `oauth2`) and tool capability groups. |
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
 | `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |

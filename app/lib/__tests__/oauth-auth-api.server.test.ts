@@ -1,8 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
+	buildOAuthAuthorizeResumeUrl,
 	internalAuthOrigin,
 	throwIfAuthHandlerFailed,
 } from "../oauth-auth-http.server";
+
+describe("buildOAuthAuthorizeResumeUrl", () => {
+	it("targets the native Better Auth authorize endpoint", () => {
+		const request = new Request("https://ration.mayutic.com/oauth/sign-in");
+		const url = buildOAuthAuthorizeResumeUrl(
+			request,
+			"client_id=c1&redirect_uri=cursor%3A%2F%2Fcb&sig=abc",
+		);
+		expect(url).toBe(
+			"https://ration.mayutic.com/api/auth/oauth2/authorize?client_id=c1&redirect_uri=cursor%3A%2F%2Fcb&sig=abc",
+		);
+	});
+
+	it("preserves localhost dev origins", () => {
+		const request = new Request("http://localhost:5173/oauth/sign-in");
+		const url = buildOAuthAuthorizeResumeUrl(request, "client_id=c1&sig=abc");
+		expect(
+			url.startsWith("http://localhost:5173/api/auth/oauth2/authorize?"),
+		).toBe(true);
+	});
+});
 
 describe("internalAuthOrigin", () => {
 	it("derives the worker origin from a .data action request URL", () => {

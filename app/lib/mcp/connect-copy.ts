@@ -13,8 +13,41 @@ export const CONNECTED_AGENTS_SETTINGS_PATH = "/hub/settings#connected-agents";
 export const MCP_CONNECT_STEPS = [
 	`In your MCP client, add server URL \`${MCP_ENDPOINT_URL}\``,
 	"Complete browser sign-in, select your household, and approve permissions (in that order)",
-	"Manage or revoke access anytime in Hub → Settings → Connected Agents",
+	"Manage or revoke access anytime in Hub → Settings → Developer → MCP",
 ] as const;
+
+/** Compact setup steps for in-app UI (no markdown backticks). */
+export const MCP_SETUP_STEPS_SHORT = [
+	"Add the MCP server URL in your AI client",
+	"Sign in, select your household, and approve scopes",
+	"Manage or revoke access anytime in Settings → Developer → MCP",
+] as const;
+
+/** Developer Overview path cards. */
+export const DEVELOPER_OVERVIEW_PATHS = {
+	mcp: {
+		title: "Connect an AI agent",
+		description:
+			"OAuth MCP for Cursor, Claude Desktop, and compatible clients.",
+		bullets: [
+			"Paste one MCP server URL",
+			"Authorize in your browser with scoped consent",
+			"No API key required for standard clients",
+		],
+		cta: "Open MCP setup",
+	},
+	rest: {
+		title: "REST & automation",
+		description:
+			"API keys for scripts, CI, and bulk CSV/JSON export or import.",
+		bullets: [
+			"Organization-scoped keys with least-privilege scopes",
+			"REST v1 for Cargo, Galley, and Supply",
+			"Advanced MCP header auth when OAuth is unavailable",
+		],
+		cta: "Manage API keys",
+	},
+} as const;
 
 /** OAuth troubleshooting rows for Hub Settings and docs. */
 export const MCP_OAUTH_TROUBLESHOOTING = [
@@ -81,5 +114,5 @@ export function formatMcpConnectPlainText(): string {
 
 ${steps}
 
-Advanced: organization API keys with mcp:* scopes remain supported for REST v1 and manual MCP header auth. Create keys in Hub → Settings → API Keys.`;
+Advanced: organization API keys with mcp:* scopes remain supported for REST v1 and manual MCP header auth. Create keys in Hub → Settings → Developer → API Keys.`;
 }

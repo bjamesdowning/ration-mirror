@@ -45,3 +45,15 @@ export const API_RATE_LIMITS = {
 	export: "30 requests/minute",
 	import: "20 requests/minute",
 } as const;
+
+export const REST_QUICK_REF = {
+	authHeaders: ["X-Api-Key: <key>", "Authorization: Bearer <key>"],
+	formatNote:
+		"Inventory and supply use CSV. Galley uses JSON. See in-app export for format details.",
+} as const;
+
+/** Example curl for inventory export docs and settings quick reference. */
+export function formatInventoryExportCurl(origin: string): string {
+	const base = origin || "https://yoursite.com";
+	return `curl -H "X-Api-Key: YOUR_KEY" ${base}/api/v1/inventory/export`;
+}

@@ -95,7 +95,10 @@ export async function action({
 	const correlationId = getOAuthCorrelationId(request);
 
 	if (!session) {
-		return oauthErrorResponse("flow_invalid", { step: "consent" });
+		return oauthErrorResponse("flow_invalid", {
+			step: "consent",
+			correlationId,
+		});
 	}
 
 	const form = await request.formData();
@@ -113,11 +116,17 @@ export async function action({
 		);
 
 	if (!oauthQuery) {
-		return oauthErrorResponse("missing_oauth_query", { step: "consent" });
+		return oauthErrorResponse("missing_oauth_query", {
+			step: "consent",
+			correlationId,
+		});
 	}
 
 	if (!new URLSearchParams(oauthQuery).get("sig")) {
-		return oauthErrorResponse("flow_invalid", { step: "consent" });
+		return oauthErrorResponse("flow_invalid", {
+			step: "consent",
+			correlationId,
+		});
 	}
 
 	const started = Date.now();
@@ -138,6 +147,7 @@ export async function action({
 			return oauthErrorResponse("redirect_missing", {
 				step: "consent",
 				clientId,
+				correlationId,
 			});
 		}
 
@@ -147,6 +157,7 @@ export async function action({
 			return oauthErrorResponse("consent_rejected", {
 				step: "consent",
 				clientId,
+				correlationId,
 			});
 		}
 
@@ -154,6 +165,7 @@ export async function action({
 			return oauthErrorResponse(mapOAuthCallbackError(classification.error), {
 				step: "consent",
 				clientId,
+				correlationId,
 			});
 		}
 
@@ -161,6 +173,7 @@ export async function action({
 			return oauthErrorResponse("redirect_missing", {
 				step: "consent",
 				clientId,
+				correlationId,
 			});
 		}
 
@@ -184,6 +197,7 @@ export async function action({
 		return mapUnknownConsentError(error, {
 			step: "consent",
 			clientId,
+			correlationId,
 		});
 	}
 }

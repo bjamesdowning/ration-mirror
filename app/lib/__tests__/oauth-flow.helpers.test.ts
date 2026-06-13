@@ -4,7 +4,7 @@ import { getOAuthCorrelationId } from "../oauth-correlation.server";
 import { buildOAuthPageUrl, getSignedOAuthQuery } from "../oauth-query.server";
 import { getSafeAuthRedirectUrl } from "../oauth-redirect.server";
 
-describe("OAuth flow integration helpers", () => {
+describe("OAuth flow helpers", () => {
 	it("preserves signed oauth_query when building page URLs", () => {
 		const signed = "client_id=cursor&scope=mcp%3Aread&sig=abc&exp=999";
 		expect(buildOAuthPageUrl("/oauth/sign-in", signed)).toBe(

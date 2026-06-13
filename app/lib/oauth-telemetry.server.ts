@@ -28,7 +28,7 @@ export function oauthUserMessage(code: OAuthFlowErrorCode): string {
 
 export type OAuthFlowLogStep = "sign_in" | "select_org" | "consent" | "failed";
 
-export type OAuthFlowLogOutcome = "success" | "error";
+export type OAuthFlowLogOutcome = "success" | "error" | "resume";
 
 export function logOAuthFlowEvent(input: {
 	step: OAuthFlowLogStep;

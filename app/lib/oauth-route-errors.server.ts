@@ -5,7 +5,11 @@ import type { OAuthFlowErrorCode } from "./schemas/oauth-flow";
 
 export function oauthErrorResponse(
 	errorCode: OAuthFlowErrorCode,
-	options?: { step?: "sign_in" | "select_org" | "consent"; clientId?: string },
+	options?: {
+		step?: "sign_in" | "select_org" | "consent";
+		clientId?: string;
+		correlationId?: string;
+	},
 ): ReturnType<typeof data> {
 	if (options?.step) {
 		logOAuthFlowEvent({
@@ -13,6 +17,7 @@ export function oauthErrorResponse(
 			outcome: "error",
 			errorCode,
 			clientId: options.clientId,
+			correlationId: options.correlationId,
 		});
 	}
 	return data(
@@ -83,7 +88,11 @@ export function mapBetterAuthConsentError(error: unknown): ConsentErrorMapping {
 
 export function mapUnknownConsentError(
 	error: unknown,
-	context: { step?: "select_org" | "consent"; clientId?: string },
+	context: {
+		step?: "select_org" | "consent";
+		clientId?: string;
+		correlationId?: string;
+	},
 ): ReturnType<typeof data> {
 	const mapped = mapBetterAuthConsentError(error);
 	const detail = oauthErrorDetail(error);
@@ -93,6 +102,7 @@ export function mapUnknownConsentError(
 			outcome: "error",
 			errorCode: mapped.errorCode,
 			clientId: context.clientId,
+			correlationId: context.correlationId,
 			detail,
 		});
 	}

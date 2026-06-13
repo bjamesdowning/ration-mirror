@@ -103,7 +103,10 @@ export async function action({
 	const correlationId = getOAuthCorrelationId(request);
 
 	if (!session) {
-		return oauthErrorResponse("flow_invalid", { step: "select_org" });
+		return oauthErrorResponse("flow_invalid", {
+			step: "select_org",
+			correlationId,
+		});
 	}
 
 	const form = await request.formData();
@@ -125,11 +128,17 @@ export async function action({
 	}
 
 	if (!oauthQuery) {
-		return oauthErrorResponse("missing_oauth_query", { step: "select_org" });
+		return oauthErrorResponse("missing_oauth_query", {
+			step: "select_org",
+			correlationId,
+		});
 	}
 
 	if (!new URLSearchParams(oauthQuery).get("sig")) {
-		return oauthErrorResponse("flow_invalid", { step: "select_org" });
+		return oauthErrorResponse("flow_invalid", {
+			step: "select_org",
+			correlationId,
+		});
 	}
 
 	const started = Date.now();
@@ -176,6 +185,7 @@ export async function action({
 			return oauthErrorResponse("redirect_missing", {
 				step: "select_org",
 				clientId,
+				correlationId,
 			});
 		}
 
@@ -196,6 +206,7 @@ export async function action({
 		return mapUnknownConsentError(error, {
 			step: "select_org",
 			clientId,
+			correlationId,
 		});
 	}
 }

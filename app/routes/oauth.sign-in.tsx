@@ -1,5 +1,5 @@
-import { redirect } from "react-router";
 import type { AppLoadContext } from "react-router";
+import { redirect } from "react-router";
 import { AuthWidget } from "~/components/auth/AuthWidget";
 import { OAuthCard } from "~/components/oauth/OAuthCard";
 import { getSessionForOAuthFlow } from "~/lib/auth.server";
@@ -34,9 +34,8 @@ export async function loader({
 	if (session) {
 		logOAuthFlowEvent({
 			step: "sign_in",
-			outcome: "success",
+			outcome: "resume",
 			correlationId,
-			durationMs: 0,
 		});
 		const resumeUrl = buildOAuthAuthorizeResumeUrl(request, signed);
 		const headers = new Headers();

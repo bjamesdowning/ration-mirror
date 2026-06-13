@@ -31,6 +31,22 @@ describe("logOAuthFlowEvent", () => {
 			}),
 		);
 	});
+
+	it("supports resume outcome for sign-in authorize handoff", () => {
+		logOAuthFlowEvent({
+			step: "sign_in",
+			outcome: "resume",
+			correlationId: "flow-abc-123",
+		});
+
+		expect(log.info).toHaveBeenCalledWith(
+			"oauth_flow",
+			expect.objectContaining({
+				outcome: "resume",
+				correlation_id: "red(flow-abc-123)",
+			}),
+		);
+	});
 });
 
 describe("logMcpOAuthVerifyFailure", () => {

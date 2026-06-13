@@ -443,20 +443,6 @@ export async function getSessionForOAuthFlow(
 	return auth.api.getSession({ headers: request.headers });
 }
 
-/** @deprecated Prefer getSessionForOAuthFlow and preserve oauth_query on miss. */
-export async function requireAuthForOAuthFlow(
-	context: AppLoadContext,
-	request: Request,
-) {
-	const session = await getSessionForOAuthFlow(context, request);
-
-	if (!session) {
-		throw redirect("/");
-	}
-
-	return session;
-}
-
 export async function requireAdmin(context: AppLoadContext, request: Request) {
 	const session = await requireAuth(context, request);
 

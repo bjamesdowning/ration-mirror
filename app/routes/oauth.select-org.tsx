@@ -10,6 +10,10 @@ import {
 	setActiveOrganizationViaHandler,
 } from "~/lib/oauth-auth-api.server";
 import {
+	appendOAuthOrgSelectedCookie,
+	mergeOAuthOrgSelectedIntoHeaders,
+} from "~/lib/oauth-cookies.server";
+import {
 	appendOAuthCorrelationCookie,
 	getOAuthCorrelationId,
 } from "~/lib/oauth-correlation.server";
@@ -19,7 +23,10 @@ import {
 	encodeOAuthQueryForForm,
 	getSignedOAuthQuery,
 } from "~/lib/oauth-query.server";
-import { getSafeAuthRedirectUrl } from "~/lib/oauth-redirect.server";
+import {
+	classifyOAuthInternalRedirect,
+	getSafeAuthRedirectUrl,
+} from "~/lib/oauth-redirect.server";
 import {
 	mapUnknownConsentError,
 	oauthErrorResponse,
@@ -173,6 +180,8 @@ export async function action({
 		const { headers: headersWithSession, setCookieHeaders } =
 			await setActiveOrganizationViaHandler(env, request, organizationId);
 
+		mergeOAuthOrgSelectedIntoHeaders(headersWithSession);
+
 		const continueResult = await invokeOAuth2ContinuePostLogin(
 			env,
 			request,
@@ -189,6 +198,16 @@ export async function action({
 			});
 		}
 
+		const redirectTarget = classifyOAuthInternalRedirect(redirectUrl);
+		if (redirectTarget === "select_org") {
+			return oauthErrorResponse("flow_step_mismatch", {
+				step: "select_org",
+				clientId,
+				correlationId,
+			});
+		}
+
+		appendOAuthOrgSelectedCookie(setCookieHeaders, request);
 		appendOAuthCorrelationCookie(setCookieHeaders, request, correlationId);
 
 		logOAuthFlowEvent({
@@ -197,6 +216,7 @@ export async function action({
 			clientId,
 			correlationId,
 			durationMs: Date.now() - started,
+			detail: `redirect_target=${redirectTarget}`,
 		});
 		throw redirect(redirectUrl, { headers: setCookieHeaders });
 	} catch (error) {

@@ -30,6 +30,13 @@
 - If users still loop: revoke grant, remove MCP server in client, reconnect in a fresh tab within ~10 minutes.
 - Check Worker logs for `event=oauth_flow` with `error_code=redirect_missing` at `step=select_org` or `step=consent`, or `event=mcp_oauth_verify_failed` on the MCP worker.
 
+## Select-org stall (picks org, nothing happens)
+
+- Symptom: sign-in works, user picks a household on `/oauth/select-org`, requests succeed (`step=select_org outcome=success`) but the page never advances to consent.
+- Cause: `shouldOAuthPostLoginRedirect` returning `true` after household pick because Better Auth does not set `ba_pl` on the select-org redirect. Multi-household users need the short-lived `ration_oauth_org_selected` cookie merged into internal `oauth2Continue` so `shouldRedirect` returns `false`.
+- Fix: `/oauth/select-org` sets `ration_oauth_org_selected`, merges it into continue headers, and rejects continue responses that still target `/oauth/select-org` (`error_code=flow_step_mismatch`). Fresh `GET /oauth2/authorize` strips the cookie.
+- Confirm via logs: `event=oauth_flow step=select_org outcome=success detail=redirect_target=consent`. If `redirect_target=select_org` or `error_code=flow_step_mismatch`, the loop is still present.
+
 ## Never log
 
 - Access tokens, refresh tokens, client secrets, or magic link URLs.

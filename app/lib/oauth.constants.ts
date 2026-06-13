@@ -42,6 +42,13 @@ export const OAUTH_PROVIDER_SCOPES = [
 /** MCP scope pre-checked on the consent screen. */
 export const OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES = ["mcp:read"] as const;
 
+/**
+ * Short-lived marker set when the user confirms a household on `/oauth/select-org`.
+ * Read by `postLogin.shouldRedirect` during internal `oauth2Continue` so multi-household
+ * users advance to consent without looping. Stripped on fresh browser authorize GETs.
+ */
+export const OAUTH_ORG_SELECTED_COOKIE = "ration_oauth_org_selected";
+
 /** Native MCP client callback URL schemes (custom URI handlers). */
 export const NATIVE_MCP_CALLBACK_PROTOCOLS = [
 	"cursor:",

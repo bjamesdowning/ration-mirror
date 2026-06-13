@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { getAuth } from "../lib/auth.server";
 import { withDefaultMcpResourceOnTokenExchange } from "../lib/oauth-auth-prepare.server";
+import { stripOAuthOrgSelectedFromCookieHeader } from "../lib/oauth-cookies.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
 import type { Route } from "./+types/api.auth.$";
 
@@ -49,7 +50,32 @@ async function prepareAuthHandlerRequest(
 	request: Request,
 	env: Cloudflare.Env,
 ): Promise<Request> {
-	return withDefaultMcpResourceOnTokenExchange(request, env);
+	let prepared = stripOrgSelectedForAuthorize(request);
+	prepared = await withDefaultMcpResourceOnTokenExchange(prepared, env);
+	return prepared;
+}
+
+/**
+ * Fresh browser authorize requests must not reuse a prior org-selected cookie;
+ * otherwise multi-household users skip household pick and may auto-complete via
+ * stored consent (Cursor shows only the native app handoff dialog).
+ */
+function stripOrgSelectedForAuthorize(request: Request): Request {
+	const url = new URL(request.url);
+	if (request.method !== "GET" || !url.pathname.includes("/oauth2/authorize")) {
+		return request;
+	}
+
+	const stripped = stripOAuthOrgSelectedFromCookieHeader(
+		request.headers.get("cookie") ?? "",
+	);
+	const headers = new Headers(request.headers);
+	if (stripped) {
+		headers.set("cookie", stripped);
+	} else {
+		headers.delete("cookie");
+	}
+	return new Request(request, { headers });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

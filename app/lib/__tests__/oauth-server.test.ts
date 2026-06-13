@@ -104,8 +104,37 @@ describe("shouldOAuthPostLoginRedirect", () => {
 			),
 		};
 		expect(
-			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], "org-a"),
+			await shouldOAuthPostLoginRedirect(
+				env,
+				"user-1",
+				["mcp:read"],
+				"org-a",
+				new Headers(),
+			),
 		).toBe(true);
+	});
+
+	it("advances multi-household users after org-selected cookie and active org", async () => {
+		currentDb = {
+			select: vi.fn(() =>
+				memberSelectChain([
+					{ organizationId: "org-a" },
+					{ organizationId: "org-b" },
+				]),
+			),
+		};
+		const headers = new Headers({
+			cookie: "ration_oauth_org_selected=1",
+		});
+		expect(
+			await shouldOAuthPostLoginRedirect(
+				env,
+				"user-1",
+				["mcp:read"],
+				"org-a",
+				headers,
+			),
+		).toBe(false);
 	});
 
 	it("requires picker for multi-household users without active org", async () => {
@@ -117,6 +146,42 @@ describe("shouldOAuthPostLoginRedirect", () => {
 				]),
 			),
 		};
+		const headers = new Headers({
+			cookie: "ration_oauth_org_selected=1",
+		});
+		expect(
+			await shouldOAuthPostLoginRedirect(
+				env,
+				"user-1",
+				["mcp:read"],
+				null,
+				headers,
+			),
+		).toBe(true);
+	});
+
+	it("requires picker when active org is not one of the memberships", async () => {
+		currentDb = {
+			select: vi.fn(() =>
+				memberSelectChain([
+					{ organizationId: "org-a" },
+					{ organizationId: "org-b" },
+				]),
+			),
+		};
+		expect(
+			await shouldOAuthPostLoginRedirect(
+				env,
+				"user-1",
+				["mcp:read"],
+				"org-stale",
+				new Headers({ cookie: "ration_oauth_org_selected=1" }),
+			),
+		).toBe(true);
+	});
+
+	it("requires picker when the user has no memberships", async () => {
+		currentDb = { select: vi.fn(() => memberSelectChain([])) };
 		expect(
 			await shouldOAuthPostLoginRedirect(env, "user-1", ["mcp:read"], null),
 		).toBe(true);

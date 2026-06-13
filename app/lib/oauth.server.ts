@@ -7,6 +7,7 @@ import {
 	RATION_ORG_CLAIM,
 	resolveAuthorizationServerUrl,
 } from "./oauth.constants";
+import { hasOAuthOrgSelectedCookie } from "./oauth-cookies.server";
 import { normalizeOAuthScopes } from "./oauth-scopes";
 import { chunkedQuery } from "./query-utils.server";
 
@@ -34,17 +35,19 @@ export function requiresOAuthOrgSelection(scopes: readonly string[]): boolean {
  * Better Auth `postLogin.shouldRedirect`: show the household picker until the
  * session has a valid `activeOrganizationId` for one of the user's memberships.
  *
- * Better Auth `oauth2Continue({ postLogin: true })` re-runs authorize with
- * `postLogin` set, which skips this check. Multi-household users always see
- * `/oauth/select-org` on the first authorize pass even when the hub session
- * already has a default `activeOrganizationId`.
+ * Better Auth re-runs authorize on `oauth2Continue({ postLogin: true })` without
+ * setting its native post-login skip marker (`ba_pl`) on the select-org redirect,
+ * so `shouldRedirect` runs again. Multi-household users must confirm on
+ * `/oauth/select-org` even when the hub session already has a default
+ * `activeOrganizationId`; a short-lived `ration_oauth_org_selected` cookie marks
+ * that confirmation for the continue pass so authorize advances to consent.
  */
 export async function shouldOAuthPostLoginRedirect(
 	env: Cloudflare.Env,
 	userId: string,
 	scopes: readonly string[],
 	activeOrganizationId?: string | null,
-	_requestHeaders?: Headers,
+	requestHeaders?: Headers,
 ): Promise<boolean> {
 	if (!requiresOAuthOrgSelection(scopes)) {
 		return false;
@@ -60,13 +63,17 @@ export async function shouldOAuthPostLoginRedirect(
 		return true;
 	}
 
-	if (memberships.length > 1) {
-		return true;
-	}
+	const orgSelectedThisFlow = hasOAuthOrgSelectedCookie(
+		requestHeaders?.get("cookie"),
+	);
 
 	const activeOrgIsMembership =
 		typeof activeOrganizationId === "string" &&
 		memberships.some((m) => m.organizationId === activeOrganizationId);
+
+	if (memberships.length > 1) {
+		return !(orgSelectedThisFlow && activeOrgIsMembership);
+	}
 
 	return !activeOrgIsMembership;
 }

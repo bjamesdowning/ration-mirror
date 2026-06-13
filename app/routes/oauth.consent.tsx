@@ -9,6 +9,7 @@ import {
 	type OAuthMcpScope,
 } from "~/lib/oauth.constants";
 import { invokeOAuth2Consent } from "~/lib/oauth-auth-api.server";
+import { appendClearOAuthOrgSelectedCookie } from "~/lib/oauth-cookies.server";
 import {
 	clearOAuthCorrelationCookie,
 	getOAuthCorrelationId,
@@ -186,6 +187,7 @@ export async function action({
 		});
 		const redirectHeaders = new Headers();
 		clearOAuthCorrelationCookie(redirectHeaders, request);
+		appendClearOAuthOrgSelectedCookie(redirectHeaders, request);
 		const destination = isNativeMcpClientRedirectUrl(redirectUrl)
 			? buildNativeCallbackHandoffPath(redirectUrl)
 			: redirectUrl;

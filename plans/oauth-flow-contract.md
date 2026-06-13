@@ -18,9 +18,10 @@ Better Auth owns the flow:
 - Signed `ba_pl` / postLogin-cleared marker on consent redirects (Better Auth internal)
 - Session cookie (`activeOrganizationId` after household selection)
 - Request-scoped `oAuthState` during `oauth2Continue` / `oauth2Consent` API calls
+- Short-lived `ration_oauth_org_selected` cookie (600s) set on `/oauth/select-org` Continue and read by `postLogin.shouldRedirect` during internal `oauth2Continue` — stripped on fresh browser `GET /oauth2/authorize`
 - Short-lived `ration_oauth_cid` correlation cookie for observability only (not authorization state)
 
-Ration does **not** persist OAuth state in KV and does **not** maintain parallel org-selection cookies.
+Ration does **not** persist OAuth state in KV.
 
 ## Browser flow
 
@@ -55,7 +56,9 @@ Routes must use `getSafeAuthRedirectUrl()` and follow the URL **verbatim** — n
 
 ## MCP household rule
 
-MCP flows with `mcp:*` scopes always show `/oauth/select-org` on the first authorize pass when the user belongs to more than one household, even if the hub session already has a default `activeOrganizationId`. After household pick, `oauth2Continue({ postLogin: true })` re-runs authorize with Better Auth's native post-login flag so consent can proceed without loops.
+For MCP flows with `mcp:*` scopes, multi-household users always see `/oauth/select-org` on the first authorize pass even when the hub session already has a default `activeOrganizationId`. After household pick, `/oauth/select-org` sets a short-lived `ration_oauth_org_selected` cookie and merges it into the internal `oauth2Continue({ postLogin: true })` call so `postLogin.shouldRedirect` returns `false` and authorize advances to consent.
+
+Better Auth only sets its native post-login skip marker (`ba_pl` / `postLoginClearedForSession`) when redirecting to the **consent** page — never on the `post_login` redirect to the picker. Without the org-selected cookie, multi-household users loop `/oauth/select-org` forever after Continue (the "select-org does nothing" stall).
 
 ## Discovery
 

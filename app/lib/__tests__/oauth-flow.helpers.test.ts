@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { buildOAuthAuthorizeResumeUrl } from "../oauth-auth-http.server";
 import { getOAuthCorrelationId } from "../oauth-correlation.server";
 import { buildOAuthPageUrl, getSignedOAuthQuery } from "../oauth-query.server";
-import { getSafeAuthRedirectUrl } from "../oauth-redirect.server";
+import {
+	classifyOAuthInternalRedirect,
+	getSafeAuthRedirectUrl,
+} from "../oauth-redirect.server";
 
 describe("OAuth flow helpers", () => {
 	it("preserves signed oauth_query when building page URLs", () => {
@@ -51,6 +54,18 @@ describe("OAuth flow helpers", () => {
 	it("rejects unsafe redirect targets", () => {
 		expect(getSafeAuthRedirectUrl({ url: "//evil.example/phish" })).toBeNull();
 		expect(getSafeAuthRedirectUrl({ url: "javascript:alert(1)" })).toBeNull();
+	});
+
+	it("classifies internal OAuth redirect targets for telemetry", () => {
+		expect(
+			classifyOAuthInternalRedirect("/oauth/consent?oauth_query=signed"),
+		).toBe("consent");
+		expect(
+			classifyOAuthInternalRedirect("/oauth/select-org?oauth_query=signed"),
+		).toBe("select_org");
+		expect(classifyOAuthInternalRedirect("cursor://cb?code=abc")).toBe(
+			"client_callback",
+		);
 	});
 
 	it("reuses or mints a correlation id without logging secrets", () => {

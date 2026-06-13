@@ -84,6 +84,32 @@ export function getSafeAuthRedirectUrl(result: unknown): string | null {
 	return url;
 }
 
+export type OAuthInternalRedirectTarget =
+	| "consent"
+	| "select_org"
+	| "sign_in"
+	| "client_callback"
+	| "other";
+
+/** Classify Better Auth internal page redirects for OAuth flow telemetry. */
+export function classifyOAuthInternalRedirect(
+	url: string,
+): OAuthInternalRedirectTarget {
+	if (url.startsWith("/oauth/consent")) {
+		return "consent";
+	}
+	if (url.startsWith("/oauth/select-org")) {
+		return "select_org";
+	}
+	if (url.startsWith("/oauth/sign-in")) {
+		return "sign_in";
+	}
+	if (!url.startsWith("/")) {
+		return "client_callback";
+	}
+	return "other";
+}
+
 export type OAuthClientRedirectKind = "internal" | "code" | "error" | "invalid";
 
 export type OAuthClientRedirectClassification = {

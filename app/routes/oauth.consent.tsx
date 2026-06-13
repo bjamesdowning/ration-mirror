@@ -155,10 +155,13 @@ export async function action({
 		const classification = classifyOAuthClientRedirect(redirectUrl);
 
 		if (!accept) {
+			const denyHeaders = new Headers();
+			appendClearOAuthOrgSelectedCookie(denyHeaders, request);
 			return oauthErrorResponse("consent_rejected", {
 				step: "consent",
 				clientId,
 				correlationId,
+				headers: denyHeaders,
 			});
 		}
 

@@ -9,6 +9,7 @@ export function oauthErrorResponse(
 		step?: "sign_in" | "select_org" | "consent";
 		clientId?: string;
 		correlationId?: string;
+		headers?: Headers;
 	},
 ): ReturnType<typeof data> {
 	if (options?.step) {
@@ -25,7 +26,10 @@ export function oauthErrorResponse(
 			error: oauthUserMessage(errorCode),
 			errorCode,
 		},
-		{ status: 400 },
+		{
+			status: 400,
+			...(options?.headers ? { headers: options.headers } : {}),
+		},
 	);
 }
 

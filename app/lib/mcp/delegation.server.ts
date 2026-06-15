@@ -1,11 +1,9 @@
-import { and, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "../../db/schema";
 import {
 	type DelegationTokenClaims,
 	verifyDelegationTokenClaims,
 } from "../fin-delegation.server";
 import { resolveAuthorizationServerUrl } from "../oauth.constants";
+import { hasOrgMembership } from "../org-membership.server";
 
 export class McpDelegationError extends Error {
 	override name = "McpDelegationError" as const;
@@ -43,22 +41,6 @@ export function isFinDelegationClient(
 	return allowlist.has(clientId);
 }
 
-async function validateDelegationMembership(
-	db: D1Database,
-	userId: string,
-	organizationId: string,
-): Promise<boolean> {
-	const d1 = drizzle(db, { schema });
-	const membership = await d1.query.member.findFirst({
-		where: and(
-			eq(schema.member.userId, userId),
-			eq(schema.member.organizationId, organizationId),
-		),
-		columns: { id: true },
-	});
-	return !!membership;
-}
-
 /**
  * Verify a delegation JWT and confirm the subject is still an active org member.
  */
@@ -88,7 +70,7 @@ export async function verifyDelegationToken(
 		);
 	}
 
-	const isMember = await validateDelegationMembership(
+	const isMember = await hasOrgMembership(
 		env.DB,
 		claims.userId,
 		claims.organizationId,

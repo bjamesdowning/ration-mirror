@@ -3,7 +3,7 @@
 ## JWKS key rotation
 
 1. Deploy new Better Auth JWT keys via the `jwt` plugin (automatic on rotation trigger).
-2. Call `invalidateJwksCache` on MCP worker KV (`oauth:jwks` key) or wait for TTL (1 hour).
+2. Call `invalidateJwksCache` on MCP worker KV (`oauth:jwks` key) or wait for TTL (10 minutes).
 3. Verify MCP accepts tokens signed with new keys.
 
 ## Compromised OAuth client

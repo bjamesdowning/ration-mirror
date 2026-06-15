@@ -103,6 +103,21 @@ export function err(
 	return { ok: false, tool, error };
 }
 
+/** Trim Zod failures to field keys and first message per field (no formErrors blob). */
+export function zodValidationDetails(
+	error: z.ZodError,
+): Record<string, string[]> {
+	const flat = error.flatten();
+	const details: Record<string, string[]> = {};
+	for (const [key, messages] of Object.entries(flat.fieldErrors)) {
+		const first = Array.isArray(messages) ? messages[0] : undefined;
+		if (typeof first === "string") {
+			details[key] = [first];
+		}
+	}
+	return details;
+}
+
 /**
  * Map a thrown error into a `ToolEnvelope` failure. Logs via `log.error`
  * server-side. Never leaks raw error details.
@@ -112,15 +127,15 @@ export function mapErrorToEnvelope(
 	error: unknown,
 ): ToolEnvelope<never> {
 	if (error instanceof z.ZodError) {
-		const flat = error.flatten();
-		const fieldKeys = Object.keys(flat.fieldErrors).filter(Boolean);
+		const details = zodValidationDetails(error);
+		const fieldKeys = Object.keys(details);
 		return err(
 			tool,
 			"invalid_input",
 			fieldKeys.length > 0
 				? `Validation failed: ${fieldKeys.join(", ")}`
 				: "Validation failed.",
-			{ details: flat },
+			{ details },
 		);
 	}
 

@@ -1456,7 +1456,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
 | MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, inventory_import_schema, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
-| MCP write tools, per-key | apiKeyId | 60s | 15 | Compromised-key cap (mcp_write_per_key) |
+| MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
 | MCP delegated read (Fin `actor_token`) | subjectUserId | 60s | 20 | Per end-user cap (mcp_delegated_read) |
 | MCP delegated write (Fin `actor_token`) | subjectUserId | 60s | 6 | Per end-user cap (mcp_delegated_write) |
@@ -1468,7 +1468,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 
 A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agents via the **Model Context Protocol (MCP)**. It runs at `mcp.ration.mayutic.com` and shares all storage bindings with the main Worker.
 
-**Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
+**Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV for **10 minutes**, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
 
 **Fin delegated access:** Intercom Fin uses one workspace-level OAuth grant (`mcp:delegate` on an allowlisted client). End-user pantry data requires a signed **`actor_token`** (delegation JWT shipped as `ration_mcp_delegation` in the Intercom Messenger JWT). Secrets: `FIN_MCP_DELEGATION_SECRET` (both workers), `FIN_DELEGATION_CLIENT_IDS` (MCP worker). See [plans/fin-mcp-delegation-runbook.md](plans/fin-mcp-delegation-runbook.md).
 
@@ -1478,9 +1478,15 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
+**Code layout:** [`workers/mcp.ts`](workers/mcp.ts) is the Worker entry. Shared logic lives under [`app/lib/mcp/`](app/lib/mcp/): [`tool-runtime.ts`](app/lib/mcp/tool-runtime.ts) (`makeTool`, `registerMcpTool`, rate limits), domain modules in [`tools/`](app/lib/mcp/tools/) (`read`, `inventory`, `galley`, `manifest`, `supply`, `preferences`), [`transport.server.ts`](app/lib/mcp/transport.server.ts) (body/batch limits), and [`worker-response.server.ts`](app/lib/mcp/worker-response.server.ts) (500 sanitization, CORS). Org membership checks are centralized in [`org-membership.server.ts`](app/lib/org-membership.server.ts).
+
+**Version:** MCP server identity (`McpServer` metadata, `get_context.versions.mcp`, server card) uses `MCP_SERVER_VERSION` from [`app/lib/version.ts`](app/lib/version.ts), which tracks `package.json` — bump both together on every release.
+
+**Transport hardening:** POST bodies are capped at **4 MB**; JSON-RPC batches are capped at **10** requests (enforced even when `Content-Length` is absent). HTTP rate limiting keys on **`CF-Connecting-IP`** only (not spoofable `X-Forwarded-For`).
+
 **Tool envelope:** Every tool returns one `text` content item containing a uniform JSON envelope. Success: `{ ok: true, tool, data, warnings?, meta? }`. Error: `{ ok: false, tool, error: { code, message, details?, retryAfter? } }`. Error codes: `rate_limited`, `invalid_input`, `not_found`, `unauthorized`, `insufficient_scope`, `capacity_exceeded`, `conflict`, `idempotency_replay`, `internal_error`, `insufficient_cargo`. List tools support cursor pagination via `args.cursor` and `meta.nextCursor`.
 
-**Audit logging:** Every mutating tool call emits a structured `mcp_audit` log line (`organizationId`, `userId`, `apiKeyId`, `keyPrefix`, `tool`, `outcome`, `durationMs`, `errorCode?`) for security review.
+**Audit logging:** Every mutating tool call emits a structured `mcp_audit` log line with **redacted** identifiers (`organizationId`, `userId`, `apiKeyId`, `keyPrefix`, delegation subjects), plus `tool`, `outcome`, `durationMs`, and optional `errorCode` — for security review without logging raw IDs.
 
 **Available tools (grouped by domain):**
 
@@ -1497,7 +1503,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state (claimed vs pending), capabilities, and suggested next actions | mcp_list (30/min) |
 | `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
-| `preview_inventory_import` | Read | `mcp:read` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_list (30/min) |
+| `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add pantry stock (skips embedding generation, no credit cost) | mcp_write (15/min) |
@@ -1521,7 +1527,9 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `complete_supply_list` | Write | `mcp:supply:write` | Archive the current list and start a fresh one | mcp_write (15/min) |
 | `update_user_preferences` | Write | `mcp:preferences:write` | Patch allergens, expiration alert days, theme | mcp_write (15/min) |
 
-**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). A separate `mcp_write_per_key` (15/min per API key) caps writes from any single compromised key. Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
+**Rate limits:** Read tools use `mcp_list` (30/min) or `mcp_search` (20/min). Write tools use `mcp_write` (15/min), except `sync_supply_from_selected_meals` which uses `mcp_supply_sync` (8/min) because it is heavier (D1 + Vectorize). A separate `mcp_write_per_key` (15/min per API key or OAuth client) caps **all mutation categories** including `mcp_supply_sync` from any single compromised credential. Writes do not consume **AI credits**. Hub Supply → Update list uses `grocery_mutation` (60/min per user); MCP sync is org-scoped and separate. Bulk recipe import remains `POST /api/v1/galley/import` (galley scope).
+
+**Tests:** MCP security and behavior are covered by unit tests under `app/lib/mcp/__tests__/` (worker fetch, transport, scopes, auth, OAuth RS, delegation, tools). Run `bun run test:unit`.
 
 **MCP resources & prompts:** The server also publishes static resources (`ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`, `connection_guide`) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
 

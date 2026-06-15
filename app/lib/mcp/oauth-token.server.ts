@@ -11,9 +11,11 @@ import {
 } from "../oauth.constants";
 import { getJwksUrl } from "../oauth.server";
 import { hashOAuthStoredToken } from "../oauth-token-hash.server";
+import { hasOrgMembership } from "../org-membership.server";
 
 const JWKS_KV_KEY = "oauth:jwks";
-const JWKS_CACHE_TTL_SEC = 3600;
+/** Shorter TTL limits exposure after signing-key removal (rotation refetch still applies). */
+const JWKS_CACHE_TTL_SEC = 600;
 
 export interface VerifiedMcpToken {
 	userId: string;
@@ -86,22 +88,6 @@ function extractMcpScopes(scopes: string[]): string[] {
 	return scopes.filter((s) => s.startsWith("mcp:"));
 }
 
-async function validateOrgMembership(
-	db: D1Database,
-	userId: string,
-	organizationId: string,
-): Promise<boolean> {
-	const d1 = drizzle(db, { schema });
-	const membership = await d1.query.member.findFirst({
-		where: and(
-			eq(schema.member.userId, userId),
-			eq(schema.member.organizationId, organizationId),
-		),
-		columns: { id: true },
-	});
-	return !!membership;
-}
-
 /**
  * Whether the user still has an active OAuth consent for this client + household.
  * Revoking a grant deletes the consent row, so this makes revocation effective
@@ -139,7 +125,7 @@ async function finalizeVerifiedToken(
 		throw new Error("OAuth token missing organization binding");
 	}
 
-	const isMember = await validateOrgMembership(
+	const isMember = await hasOrgMembership(
 		env.DB,
 		params.userId,
 		organizationId,

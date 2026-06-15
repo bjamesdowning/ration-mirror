@@ -175,7 +175,6 @@ function getToolHandler(
 function makeServer(orgId = "org-test-123") {
 	const mockEnv = {
 		...createMockEnv(),
-		__orgId: orgId,
 		__mcp: {
 			organizationId: orgId,
 			apiKeyId: "key-test-123",

@@ -29,8 +29,8 @@ export function auditMcpWrite(
 		event: "mcp_audit",
 		organizationId: redactId(ctx.organizationId),
 		userId: redactId(ctx.userId),
-		apiKeyId: ctx.apiKeyId,
-		keyPrefix: ctx.keyPrefix,
+		apiKeyId: redactId(ctx.apiKeyId),
+		keyPrefix: redactId(ctx.keyPrefix),
 		...(ctx.delegation
 			? {
 					delegated: true,

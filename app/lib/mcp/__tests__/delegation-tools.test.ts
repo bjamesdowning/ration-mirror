@@ -76,7 +76,6 @@ function makeDelegateServer() {
 		FIN_MCP_DELEGATION_SECRET: SECRET,
 		FIN_DELEGATION_CLIENT_IDS: FIN_CLIENT,
 		BETTER_AUTH_URL: ISSUER,
-		__orgId: orgId,
 		__mcp: {
 			organizationId: orgId,
 			apiKeyId: FIN_CLIENT,
@@ -113,7 +112,6 @@ describe("MCP delegated tool access", () => {
 		const orgId = "org-1";
 		const env = {
 			...createMockEnv(),
-			__orgId: orgId,
 			__mcp: {
 				organizationId: orgId,
 				apiKeyId: "key-1",

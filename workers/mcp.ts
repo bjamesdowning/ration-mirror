@@ -8,125 +8,26 @@ import type { McpToolContext } from "../app/lib/mcp/auth";
 import { authenticateMcp, MCP_AUTH_ERRORS } from "../app/lib/mcp/auth";
 import { registerTools } from "../app/lib/mcp/tools";
 import {
+	enforceMcpRequestLimits,
+	resolveMcpClientIp,
+} from "../app/lib/mcp/transport.server";
+import {
+	MCP_CORS_HEADERS,
+	sanitizeMcpHandlerResponse,
+	withMcpCors,
+} from "../app/lib/mcp/worker-response.server";
+import {
 	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "../app/lib/oauth.constants";
 import { logMcpOAuthVerifyFailure } from "../app/lib/oauth-telemetry.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
-
-/** Align with agents DO handler body cap. */
-const MCP_MAX_BODY_BYTES = 4 * 1024 * 1024;
-const MCP_MAX_JSONRPC_BATCH = 10;
+import { MCP_SERVER_VERSION } from "../app/lib/version";
 
 const PROTECTED_RESOURCE_PATHS = new Set([
 	"/.well-known/oauth-protected-resource",
 	"/.well-known/oauth-protected-resource/mcp",
 ]);
-
-const MCP_CORS_HEADERS: Record<string, string> = {
-	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Expose-Headers": "WWW-Authenticate, mcp-session-id",
-};
-
-async function sanitizeMcpHandlerResponse(
-	response: Response,
-): Promise<Response> {
-	if (response.status < 500) {
-		return response;
-	}
-	const contentType = response.headers.get("Content-Type") ?? "";
-	if (!contentType.includes("application/json")) {
-		return response;
-	}
-
-	const body = await response.text();
-	try {
-		const parsed = JSON.parse(body) as {
-			jsonrpc?: string;
-			error?: { code?: number; message?: string };
-			id?: unknown;
-		};
-		if (parsed?.error?.message) {
-			parsed.error.message = "Internal server error";
-			return new Response(JSON.stringify(parsed), {
-				status: response.status,
-				statusText: response.statusText,
-				headers: response.headers,
-			});
-		}
-	} catch {
-		// Fall through to generic body replacement.
-	}
-
-	return new Response(
-		JSON.stringify({
-			jsonrpc: "2.0",
-			error: { code: -32603, message: "Internal server error" },
-			id: null,
-		}),
-		{
-			status: response.status,
-			statusText: response.statusText,
-			headers: response.headers,
-		},
-	);
-}
-
-async function enforceMcpRequestLimits(
-	request: Request,
-): Promise<Response | null> {
-	if (request.method !== "POST") {
-		return null;
-	}
-
-	const contentLength = request.headers.get("Content-Length");
-	if (contentLength) {
-		const size = Number.parseInt(contentLength, 10);
-		if (Number.isFinite(size) && size > MCP_MAX_BODY_BYTES) {
-			return Response.json(
-				{ error: "Request body too large" },
-				{ status: 413 },
-			);
-		}
-	}
-
-	if (!contentLength) {
-		return null;
-	}
-
-	try {
-		const bodyText = await request.clone().text();
-		if (bodyText.length > MCP_MAX_BODY_BYTES) {
-			return Response.json(
-				{ error: "Request body too large" },
-				{ status: 413 },
-			);
-		}
-		const parsed = JSON.parse(bodyText) as unknown;
-		if (Array.isArray(parsed) && parsed.length > MCP_MAX_JSONRPC_BATCH) {
-			return Response.json(
-				{ error: `JSON-RPC batch exceeds maximum of ${MCP_MAX_JSONRPC_BATCH}` },
-				{ status: 400 },
-			);
-		}
-	} catch {
-		// Let the MCP handler return a proper JSON-RPC parse error.
-	}
-
-	return null;
-}
-
-function withMcpCors(response: Response): Response {
-	const headers = new Headers(response.headers);
-	for (const [key, value] of Object.entries(MCP_CORS_HEADERS)) {
-		headers.set(key, value);
-	}
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers,
-	});
-}
 
 /**
  * Runtime guard against silent SDK incompatibilities. The cast in `createServer`
@@ -150,12 +51,10 @@ function assertCompatibleMcpServer(
 	}
 }
 
-function createServer(
-	env: Cloudflare.Env & { __mcp: McpToolContext; __orgId: string },
-) {
+function createServer(env: Cloudflare.Env & { __mcp: McpToolContext }) {
 	const server = new McpServer({
 		name: "Ration MCP",
-		version: "1.0.0",
+		version: MCP_SERVER_VERSION,
 	});
 
 	assertCompatibleMcpServer(server);
@@ -205,10 +104,7 @@ export default {
 		}
 
 		try {
-			const clientIp =
-				request.headers.get("CF-Connecting-IP") ??
-				request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
-				"unknown";
+			const clientIp = resolveMcpClientIp(request);
 			const limitResponse = await enforceMcpRequestLimits(request);
 			if (limitResponse) {
 				return withMcpCors(limitResponse);
@@ -231,11 +127,9 @@ export default {
 
 			const mcpCtx = await authenticateMcp(env, request);
 
-			// Inject rich context AND legacy __orgId for one minor version of compat.
 			const envWithCtx = {
 				...env,
 				__mcp: mcpCtx,
-				__orgId: mcpCtx.organizationId,
 			};
 
 			// Create a new strict server instance per request (CVE requirement)

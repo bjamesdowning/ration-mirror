@@ -112,11 +112,20 @@ Successful MCP responses include an [RFC 8288 `Link` header](https://datatracker
 - **`service-doc`** → `/docs/api`
 - **`mcp-server-card`** → `/.well-known/mcp/server-card.json` (transport auth: `oauth2`)
 - **`agent-skills`** → `/.well-known/agent-skills/index.json`
+- **`agent-auth`** → `/auth.md` (markdown agent registration discovery)
 
 OAuth metadata:
 
-- **`/.well-known/oauth-authorization-server`** — authorization server (app domain)
-- **`/.well-known/oauth-protected-resource`** — MCP resource metadata (MCP host)
+- **`/.well-known/oauth-authorization-server`** — authorization server (app domain); includes merged **`agent_auth`** block (`skill`, `register_uri`, `claim_uri`, `identity_types_supported`, `anonymous.credential_types_supported`)
+- **`/.well-known/oauth-protected-resource`** — MCP resource metadata (MCP host); app-domain PRM links `agent_auth` → `/auth.md`
+
+Agent self-registration (no human signup):
+
+- **`POST /api/agent/auth`** — `{ "type": "anonymous" }` → pre-claim API key (`mcp:read`) + claim URL
+- **`POST /api/agent/auth/claim`** + **`/claim/complete`** — OTP email claim (Tier 1)
+- Full flow documented at **`/auth.md`**
+
+DNS-AID (optional bootstrap): `_mcp._agents.ration.mayutic.com` HTTPS record points to `mcp.ration.mayutic.com` (DNSSEC-signed `mayutic.com` zone). HTTP Link headers remain the primary discovery path.
 
 MCP **resources**:
 

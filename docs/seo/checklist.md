@@ -82,6 +82,18 @@ without waiting for a crawl. Optional but cheap.
 
 ## AI directories and validators
 
+- [ ] Run [isitagentready.com](https://isitagentready.com/) on
+      `https://ration.mayutic.com` — confirm **authMd** and **dnsAid**
+      checks pass (auth.md H1, `agent_auth` on OAuth AS metadata, DNS-AID
+      HTTPS records + DNSSEC).
+- [ ] Verify DNS-AID records (macOS `dig` uses TYPE65 for HTTPS RR):
+      ```
+      dig -t TYPE65 _mcp._agents.ration.mayutic.com @1.1.1.1 +dnssec
+      dig -t TYPE65 _index._agents.ration.mayutic.com @1.1.1.1 +dnssec
+      dig mayutic.com DS @1.1.1.1 +dnssec +short
+      ```
+      Expect `NOERROR`, `ad` flag, TYPE65 + RRSIG answers for `_agents`
+      names; DS + RRSIG at apex.
 - [ ] Validate structured data: <https://validator.schema.org/> — paste
       each public URL and confirm zero errors.
 - [ ] Validate Open Graph: <https://www.opengraph.xyz/>

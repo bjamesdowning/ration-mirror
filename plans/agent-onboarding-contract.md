@@ -1,4 +1,4 @@
-# Agent Onboarding Contract (v1.3.0)
+# Agent Onboarding Contract (v1.3.6)
 
 Machine-readable contract for Ration agent-first onboarding. Issuer invariant: all discovery surfaces MUST use `resolveAuthorizationServerIssuer(env)` from `app/lib/oauth.constants.ts` — never hardcode.
 
@@ -64,8 +64,39 @@ Content-Type: application/json
 | App PRM | `/.well-known/oauth-protected-resource` | `authorization_servers`, `bearer_methods_supported: ["header"]` |
 | AS metadata | `/.well-known/oauth-authorization-server` | Merged `agent_auth` block (`skill`, `register_uri`, `claim_uri`, `identity_types_supported`, `anonymous.credential_types_supported`) |
 | Connect | `/connect` | Deep links + manual MCP URL |
+| DNS-AID | `_index._agents.ration.mayutic.com`, `_mcp._agents.ration.mayutic.com` | HTTPS (TYPE65) records in Cloudflare `mayutic.com` zone; DNSSEC + AWS registrar DS |
 
 **Advertise-only:** No `identity_assertion` / `id-jag` until Tier 2 is implemented.
+
+### Example `agent_auth` block (OAuth AS metadata)
+
+Merged into `GET /.well-known/oauth-authorization-server`:
+
+```json
+{
+  "skill": "https://ration.mayutic.com/auth.md",
+  "register_uri": "https://ration.mayutic.com/api/agent/auth",
+  "claim_uri": "https://ration.mayutic.com/api/agent/auth/claim",
+  "identity_types_supported": ["anonymous"],
+  "anonymous": {
+    "credential_types_supported": ["api_key"]
+  },
+  "issuer": "https://ration.mayutic.com/api/auth",
+  "protected_resource_metadata": "https://ration.mayutic.com/.well-known/oauth-protected-resource",
+  "mcp_resource": "https://mcp.ration.mayutic.com/mcp"
+}
+```
+
+### DNS-AID (infrastructure)
+
+Not served by Workers — configured in **Cloudflare DNS** for `mayutic.com`:
+
+| Record name | Target | HTTPS value |
+|-------------|--------|-------------|
+| `_index._agents.ration` | `ration.mayutic.com` | `alpn="h2,http/1.1" port=443 mandatory=alpn,port` |
+| `_mcp._agents.ration` | `mcp.ration.mayutic.com` | `alpn="h2,http/1.1" port=443 mandatory=alpn,port` |
+
+Priority `1` on both. DNSSEC: enabled in Cloudflare; DS record at AWS (registrar). Validate: `dig -t TYPE65 _mcp._agents.ration.mayutic.com @1.1.1.1 +dnssec`.
 
 ## Extension seams (out of scope v1.3.0)
 

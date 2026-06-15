@@ -1604,7 +1604,12 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 | `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport (auth: `oauth2`) and tool capability groups. |
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
 | `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |
+| `/auth.md` | `text/markdown` | WorkOS/isitagentready agent registration discovery (Tier 0 anonymous + Tier 1 claim). H1 contains `auth.md`. |
 | `/` and `/docs/api` with `Accept: text/markdown` | `text/markdown` | Markdown versions of the splash page and API docs for agents. |
+
+The OAuth authorization-server metadata at `/.well-known/oauth-authorization-server` merges an **`agent_auth`** block (`skill`, `register_uri`, `claim_uri`, `identity_types_supported`, `anonymous.credential_types_supported`) alongside standard RFC 8414 fields. App-domain PRM links to `/auth.md` via `agent_auth`.
+
+**DNS-AID (DNS discovery):** Production publishes [DNS for AI Discovery](https://datatracker.ietf.org/doc/html/draft-mozleywilliams-dnsop-dnsaid) HTTPS records in the **`mayutic.com`** Cloudflare zone (authoritative DNS). DNSSEC is enabled in Cloudflare with the DS record at the AWS registrar. Records: `_index._agents.ration.mayutic.com` → `ration.mayutic.com`, `_mcp._agents.ration.mayutic.com` → `mcp.ration.mayutic.com` (priority `1`, `alpn="h2,http/1.1"`, port `443`). Verify with `dig -t TYPE65 _mcp._agents.ration.mayutic.com @1.1.1.1 +dnssec`. HTTP discovery (Link headers, api-catalog, MCP card) remains primary; DNS-AID complements it for validating resolvers.
 
 The MCP server now supports OAuth 2.1, so Better Auth publishes real authorization-server metadata at `/.well-known/oauth-authorization-server` (issuer `https://<app-domain>/api/auth`, including the `/api/auth` basePath). The issuer identifier embedded in the JWT `iss` claim therefore also includes `/api/auth`; the MCP resource server must verify tokens against that exact issuer (not the bare origin) while fetching JWKS from `<issuer>/jwks`. The public REST API continues to authenticate with Ration API keys.
 

@@ -39,6 +39,12 @@ export const OAUTH_PROVIDER_SCOPES = [
 	"offline_access",
 ] as const;
 
+/** Scopes advertised in public OAuth/PRM discovery (DCR-safe; no Fin delegate). */
+export const OAUTH_ADVERTISED_MCP_SCOPES = [...OAUTH_DCR_MCP_SCOPES] as const;
+
+/** AS metadata scopes_supported (resource scopes + offline_access). */
+export const OAUTH_ADVERTISED_SCOPES = [...OAUTH_REGISTRATION_SCOPES] as const;
+
 /** MCP scope pre-checked on the consent screen. */
 export const OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES = ["mcp:read"] as const;
 

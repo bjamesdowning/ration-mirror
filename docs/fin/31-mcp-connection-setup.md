@@ -30,6 +30,7 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 | Wrong pantry data | Revoke and reconnect; pick the correct household at selection |
 | Client reconnect loop | Client must support OAuth 2.1 / protected-resource discovery; restart connection from client (not an old browser tab) |
 | **Unable to complete authorization** after household pick | Usually a stale OAuth tab or pre-1.6.10 consent loop — revoke grant, remove MCP server, reconnect in one fresh tab |
+| **Warp / DCR `invalid_scope: mcp:delegate`** | Public discovery must not advertise Fin-only `mcp:delegate` (fixed in v1.3.1+). Remove and re-add the MCP server in Warp after deploy; verify `scopes_supported` on MCP PRM and AS metadata omit `mcp:delegate`. |
 
 ### Fin service agent (`mcp:delegate`)
 

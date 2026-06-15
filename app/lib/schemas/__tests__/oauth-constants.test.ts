@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	OAUTH_ADVERTISED_MCP_SCOPES,
+	OAUTH_ADVERTISED_SCOPES,
 	OAUTH_CONSENT_DEFAULT_CHECKED_SCOPES,
 	OAUTH_DCR_MCP_SCOPES,
 	OAUTH_MCP_SCOPES,
@@ -12,6 +14,20 @@ describe("oauth.constants scope policy", () => {
 	it("excludes mcp:delegate from open DCR scopes", () => {
 		expect(OAUTH_REGISTRATION_SCOPES).not.toContain("mcp:delegate");
 		expect(OAUTH_DCR_MCP_SCOPES).not.toContain("mcp:delegate");
+	});
+
+	it("excludes mcp:delegate from public discovery scopes", () => {
+		expect(OAUTH_ADVERTISED_MCP_SCOPES).not.toContain("mcp:delegate");
+		expect(OAUTH_ADVERTISED_SCOPES).not.toContain("mcp:delegate");
+	});
+
+	it("keeps advertised scopes within DCR-allowed vocabulary", () => {
+		for (const scope of OAUTH_ADVERTISED_SCOPES) {
+			expect(OAUTH_REGISTRATION_SCOPES).toContain(scope);
+		}
+		for (const scope of OAUTH_ADVERTISED_MCP_SCOPES) {
+			expect(OAUTH_DCR_MCP_SCOPES).toContain(scope);
+		}
 	});
 
 	it("includes mcp:delegate in full provider vocabulary", () => {

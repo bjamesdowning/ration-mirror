@@ -1,7 +1,7 @@
 import { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES } from "./agent/scopes";
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
-	OAUTH_MCP_SCOPES,
+	OAUTH_ADVERTISED_MCP_SCOPES,
 	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "./oauth.constants";
@@ -287,7 +287,7 @@ export function buildProtectedResourceMetadata(
 		bearer_methods_supported: ["header"],
 		authentication_methods_supported: ["api_key", "oauth2"],
 		api_key_methods_supported: ["x-api-key", "authorization_bearer"],
-		scopes_supported: [...AGENT_API_SCOPES, ...OAUTH_MCP_SCOPES],
+		scopes_supported: [...AGENT_API_SCOPES, ...OAUTH_ADVERTISED_MCP_SCOPES],
 		resource_documentation: `${origin}/docs/api`,
 		agent_auth: `${origin}/auth.md`,
 		mcp_resource: mcpAudience,
@@ -408,7 +408,7 @@ export function buildMcpProtectedResourceMetadata(
 		resource_name: "Ration MCP",
 		authorization_servers: [issuer],
 		bearer_methods_supported: ["header"],
-		scopes_supported: [...OAUTH_MCP_SCOPES],
+		scopes_supported: [...OAUTH_ADVERTISED_MCP_SCOPES],
 		resource_documentation: `${url.protocol}//${url.hostname.replace(/^mcp\./, "")}/docs/api#mcp-server`,
 	};
 }

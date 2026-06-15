@@ -64,6 +64,18 @@ describe("agent onboarding discovery", () => {
 		expect(prm.bearer_methods_supported).toEqual(["header"]);
 		expect(prm.agent_auth).toBe("https://ration.mayutic.com/auth.md");
 	});
+
+	it("public discovery metadata excludes Fin-only mcp:delegate", () => {
+		const appPrm = buildProtectedResourceMetadata(request, env);
+		const mcpPrm = buildMcpProtectedResourceMetadata(
+			new Request(
+				"https://mcp.ration.mayutic.com/.well-known/oauth-protected-resource",
+			),
+			resolveAuthorizationServerIssuer(env),
+		);
+		expect(appPrm.scopes_supported).not.toContain("mcp:delegate");
+		expect(mcpPrm.scopes_supported).not.toContain("mcp:delegate");
+	});
 });
 
 describe("MCP deep links", () => {

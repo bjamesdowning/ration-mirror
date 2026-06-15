@@ -20,6 +20,7 @@ import { buildMagicLinkEmail, sendEmail } from "./email.server";
 import { log, redactId } from "./logging.server";
 import {
 	OAUTH_ACCESS_TOKEN_TTL_SEC,
+	OAUTH_ADVERTISED_SCOPES,
 	OAUTH_PROVIDER_SCOPES,
 	OAUTH_REGISTRATION_DEFAULT_SCOPES,
 	OAUTH_REGISTRATION_SCOPES,
@@ -153,6 +154,9 @@ export function createAuth(env: Cloudflare.Env) {
 				scopes: [...OAUTH_PROVIDER_SCOPES],
 				clientRegistrationDefaultScopes: [...OAUTH_REGISTRATION_DEFAULT_SCOPES],
 				clientRegistrationAllowedScopes: [...OAUTH_REGISTRATION_SCOPES],
+				advertisedMetadata: {
+					scopes_supported: [...OAUTH_ADVERTISED_SCOPES],
+				},
 				postLogin: {
 					page: "/oauth/select-org",
 					consentReferenceId: async ({ session }) => {

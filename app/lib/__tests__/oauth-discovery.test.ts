@@ -8,7 +8,7 @@ import {
 	isApiKeyCredential,
 	isLikelyJwt,
 	MCP_RESOURCE_AUDIENCE_PROD,
-	OAUTH_MCP_SCOPES,
+	OAUTH_ADVERTISED_MCP_SCOPES,
 } from "../oauth.constants";
 
 describe("oauth.constants", () => {
@@ -40,7 +40,8 @@ describe("buildMcpProtectedResourceMetadata", () => {
 		expect(meta.authorization_servers).toEqual([
 			"https://ration.mayutic.com/api/auth",
 		]);
-		expect(meta.scopes_supported).toEqual([...OAUTH_MCP_SCOPES]);
+		expect(meta.scopes_supported).toEqual([...OAUTH_ADVERTISED_MCP_SCOPES]);
+		expect(meta.scopes_supported).not.toContain("mcp:delegate");
 		expect(meta.resource).toBe("https://mcp.ration.mayutic.com/mcp");
 	});
 });

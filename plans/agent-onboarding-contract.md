@@ -60,16 +60,16 @@ Content-Type: application/json
 
 | Surface | Path | Notes |
 |---------|------|-------|
-| auth.md | `/auth.md` | Markdown; Tier 0 + Tier 1 only |
+| auth.md | `/auth.md` | Markdown; H1 contains `auth.md`; Tier 0 + Tier 1 only |
 | App PRM | `/.well-known/oauth-protected-resource` | `authorization_servers`, `bearer_methods_supported: ["header"]` |
-| AS metadata | `/.well-known/oauth-authorization-server` | Merged `agent_auth` block |
+| AS metadata | `/.well-known/oauth-authorization-server` | Merged `agent_auth` block (`skill`, `register_uri`, `claim_uri`, `identity_types_supported`, `anonymous.credential_types_supported`) |
 | Connect | `/connect` | Deep links + manual MCP URL |
 
 **Advertise-only:** No `identity_assertion` / `id-jag` until Tier 2 is implemented.
 
 ## Extension seams (out of scope v1.3.0)
 
-- **Tier 2 ID-JAG:** Add `flows.identity_assertion` to `agent_auth` when backed.
+- **Tier 2 ID-JAG:** Add `identity_assertion` to `agent_auth.identity_types_supported` when backed.
 - **Agent billing:** `credits:purchase` via separate plan; never on pre-claim keys.
 - **Audit event feed:** `auditMcpWrite` is log-only; D1/Analytics persistence is a follow-up.
 - **Limited pre-claim write:** `agent_registration.preClaim` flag + destructive-tool denylist in `makeTool`.

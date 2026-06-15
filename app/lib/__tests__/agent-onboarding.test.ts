@@ -42,16 +42,26 @@ describe("agent onboarding discovery", () => {
 		expect(mcpPrm.authorization_servers).toEqual([issuer]);
 	});
 
-	it("agent_auth advertises only anonymous and user_claimed flows", () => {
+	it("agent_auth matches isitagentready auth.md schema", () => {
 		const agentAuth = buildAgentAuthMetadata(request, env);
-		const flowKeys = Object.keys(agentAuth.flows);
-		expect(flowKeys).toEqual(["anonymous", "user_claimed"]);
+		expect(agentAuth.skill).toBe("https://ration.mayutic.com/auth.md");
+		expect(agentAuth.register_uri).toBe(
+			"https://ration.mayutic.com/api/agent/auth",
+		);
+		expect(agentAuth.claim_uri).toBe(
+			"https://ration.mayutic.com/api/agent/auth/claim",
+		);
+		expect(agentAuth.identity_types_supported).toEqual(["anonymous"]);
+		expect(agentAuth.anonymous.credential_types_supported).toEqual(["api_key"]);
 		expect(JSON.stringify(agentAuth)).not.toContain("id-jag");
 		expect(JSON.stringify(agentAuth)).not.toContain("identity_assertion");
 	});
 
-	it("auth.md documents implemented flows only", () => {
+	it("auth.md H1 and body document implemented flows only", () => {
 		const md = buildAuthMarkdown(request, env);
+		expect(md.startsWith("# Ration auth.md")).toBe(true);
+		expect(md.toLowerCase()).toContain("auth.md");
+		expect(md).toContain("Registration metadata");
 		expect(md).toContain("Tier 0");
 		expect(md).toContain("Tier 1");
 		expect(md).toContain("/api/agent/auth");

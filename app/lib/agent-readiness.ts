@@ -295,37 +295,23 @@ export function buildProtectedResourceMetadata(
 	};
 }
 
-/** WorkOS auth.md-compatible agent_auth block — advertises only implemented flows. */
+/** WorkOS / isitagentready auth.md-compatible agent_auth block — advertises only implemented flows. */
 export function buildAgentAuthMetadata(request: Request, env?: Cloudflare.Env) {
 	const origin = new URL(request.url).origin;
 	const authEnv = env ?? ({ BETTER_AUTH_URL: origin } as Cloudflare.Env);
 	const issuer = resolveAuthorizationServerIssuer(authEnv);
 
 	return {
+		skill: `${origin}/auth.md`,
+		register_uri: `${origin}/api/agent/auth`,
+		claim_uri: `${origin}/api/agent/auth/claim`,
+		identity_types_supported: ["anonymous"],
+		anonymous: {
+			credential_types_supported: ["api_key"],
+		},
 		issuer,
 		protected_resource_metadata: `${origin}/.well-known/oauth-protected-resource`,
 		mcp_resource: resolveMcpResourceAudience(authEnv),
-		auth_md: `${origin}/auth.md`,
-		flows: {
-			anonymous: {
-				type: "anonymous",
-				endpoint: `${origin}/api/agent/auth`,
-				method: "POST",
-				body: { type: "anonymous", client_hint: "optional string" },
-				description:
-					"Self-register an agent-owned kitchen with a read-only pre-claim API key and claim token.",
-				scopes: [...PRE_CLAIM_API_SCOPES],
-			},
-			user_claimed: {
-				type: "user_claimed",
-				claim_endpoint: `${origin}/api/agent/auth/claim`,
-				claim_complete_endpoint: `${origin}/api/agent/auth/claim/complete`,
-				claim_page: `${origin}/connect/claim`,
-				description:
-					"Verify email via OTP to widen scopes and link the agent kitchen to a human account.",
-				scopes_after_claim: [...POST_CLAIM_API_SCOPES],
-			},
-		},
 	};
 }
 
@@ -336,10 +322,18 @@ export function buildAuthMarkdown(
 ): string {
 	const origin = new URL(request.url).origin;
 	const meta = buildAgentAuthMetadata(request, env);
+	const claimCompleteUri = `${origin}/api/agent/auth/claim/complete`;
+	const claimPage = `${origin}/connect/claim`;
 
-	return `# Ration Agent Authentication
+	return `# Ration auth.md
 
 Ration supports agent-first onboarding for MCP and REST API access. Human signup via Better Auth (Google + magic link) remains the primary path for browser users.
+
+## Registration metadata
+
+- Skill: \`${meta.skill}\`
+- Register: \`${meta.register_uri}\` (POST; credential type: \`api_key\`)
+- Claim: \`${meta.claim_uri}\`
 
 ## Issuer
 
@@ -352,24 +346,24 @@ Ration supports agent-first onboarding for MCP and REST API access. Human signup
 Agents can provision a kitchen without human signup:
 
 \`\`\`http
-POST ${meta.flows.anonymous.endpoint}
+POST ${meta.register_uri}
 Content-Type: application/json
 
 { "type": "anonymous", "client_hint": "cursor" }
 \`\`\`
 
-Returns (once): \`api_key\`, \`claim_token\`, \`claim_url\`, \`organization_id\`, \`mcp_endpoint\`, and \`scopes\` (${meta.flows.anonymous.scopes.join(", ")}).
+Returns (once): \`api_key\`, \`claim_token\`, \`claim_url\`, \`organization_id\`, \`mcp_endpoint\`, and \`scopes\` (${PRE_CLAIM_API_SCOPES.join(", ")}).
 
 ### Tier 1 — User-claimed / verified email
 
 Humans claim an agent kitchen via OTP email:
 
-1. \`POST ${meta.flows.user_claimed.claim_endpoint}\` — send OTP to email
-2. \`POST ${meta.flows.user_claimed.claim_complete_endpoint}\` — verify OTP and widen scopes
+1. \`POST ${meta.claim_uri}\` — send OTP to email
+2. \`POST ${claimCompleteUri}\` — verify OTP and widen scopes
 
-Claim page: ${meta.flows.user_claimed.claim_page}
+Claim page: ${claimPage}
 
-Post-claim scopes: ${meta.flows.user_claimed.scopes_after_claim.join(", ")}.
+Post-claim scopes: ${POST_CLAIM_API_SCOPES.join(", ")}.
 
 ## OAuth (recommended for interactive MCP clients)
 

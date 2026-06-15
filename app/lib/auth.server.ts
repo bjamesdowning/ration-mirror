@@ -15,6 +15,7 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
+import { buildPersonalOrgRecords } from "./agent/org-records.server";
 import { buildMagicLinkEmail, sendEmail } from "./email.server";
 import { log, redactId } from "./logging.server";
 import {
@@ -240,35 +241,24 @@ export function createAuth(env: Cloudflare.Env) {
 					after: async (user) => {
 						try {
 							const db = drizzle(env.DB, { schema });
+							const { orgId, orgValues, memberValues } =
+								buildPersonalOrgRecords(user.id, user.name);
 
-							const personalOrgId = crypto.randomUUID();
-							await db.insert(schema.organization).values({
-								id: personalOrgId,
-								name: `${user.name || "My"}'s Personal Group`,
-								slug: `personal-${user.id}`,
-								metadata: { isPersonal: true },
-								credits: 0,
-								createdAt: new Date(),
-							});
-
-							await db.insert(schema.member).values({
-								id: crypto.randomUUID(),
-								organizationId: personalOrgId,
-								userId: user.id,
-								role: "owner",
-								createdAt: new Date(),
-							});
-
-							await db
-								.update(schema.user)
-								.set({
-									tosAcceptedAt: new Date(),
-									tosVersion: "2026-03-11",
-								})
-								.where(eq(schema.user.id, user.id));
+							await db.batch([
+								db.insert(schema.organization).values(orgValues),
+								db.insert(schema.member).values(memberValues),
+								db
+									.update(schema.user)
+									.set({
+										tosAcceptedAt: new Date(),
+										tosVersion: "2026-03-11",
+									})
+									.where(eq(schema.user.id, user.id)),
+								// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+							] as [any, ...any[]]);
 
 							log.info("[Auth] Created personal group", {
-								orgId: redactId(personalOrgId),
+								orgId: redactId(orgId),
 								userId: redactId(user.id),
 							});
 						} catch (error) {

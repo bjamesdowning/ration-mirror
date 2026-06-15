@@ -8,12 +8,27 @@ import {
 import type { ConnectedAgentGrant } from "~/lib/oauth.server";
 import { formatOAuthScopesDisplay } from "~/lib/oauth-scopes";
 import { CopyField } from "./CopyField";
+import type { AgentKitchenRow, ApiKeyRow } from "./types";
 
 type ConnectedAgentsPanelProps = {
 	grants: ConnectedAgentGrant[];
+	agentKitchens: AgentKitchenRow[];
+	apiKeys: ApiKeyRow[];
 };
 
-export function ConnectedAgentsPanel({ grants }: ConnectedAgentsPanelProps) {
+function formatLastUsed(at: Date | null): string {
+	if (!at) return "Never";
+	return new Intl.DateTimeFormat(undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(at);
+}
+
+export function ConnectedAgentsPanel({
+	grants,
+	agentKitchens,
+	apiKeys,
+}: ConnectedAgentsPanelProps) {
 	const revokeFetcher = useFetcher();
 	const RevokeGrantForm = revokeFetcher.Form;
 
@@ -50,7 +65,52 @@ export function ConnectedAgentsPanel({ grants }: ConnectedAgentsPanelProps) {
 				<p className="text-xs text-muted mt-4">
 					Supported: {MCP_SUPPORTED_CLIENTS.join(", ")}.
 				</p>
+				<p className="text-xs text-muted mt-2">
+					<Link to="/connect" className="text-hyper-green hover:underline">
+						One-click install for Cursor, Claude, and ChatGPT →
+					</Link>
+				</p>
 			</section>
+
+			{agentKitchens.length > 0 ? (
+				<section className="glass-panel rounded-xl p-6">
+					<h3 className="text-xs text-label text-muted mb-1">
+						Agent-registered kitchens
+					</h3>
+					<p className="text-sm text-muted mb-3">
+						Self-registered agent kitchens linked to this household.
+					</p>
+					<ul className="space-y-3">
+						{agentKitchens.map((kitchen) => {
+							const key = apiKeys.find((k) => k.id === kitchen.apiKeyId);
+							return (
+								<li
+									key={kitchen.id}
+									className="rounded-lg border border-platinum p-4"
+								>
+									<p className="font-medium text-carbon">
+										{kitchen.clientHint ?? "Agent kitchen"}
+									</p>
+									<p className="text-xs text-muted mt-1">
+										Status:{" "}
+										{kitchen.status === "claimed"
+											? "Claimed"
+											: "Pending claim (read-only)"}
+									</p>
+									<p className="text-xs text-muted mt-1">
+										Last API use: {formatLastUsed(key?.lastUsedAt ?? null)}
+									</p>
+									{kitchen.claimedAt ? (
+										<p className="text-xs text-muted mt-1">
+											Claimed: {formatLastUsed(kitchen.claimedAt)}
+										</p>
+									) : null}
+								</li>
+							);
+						})}
+					</ul>
+				</section>
+			) : null}
 
 			<section className="glass-panel rounded-xl p-6">
 				<h3 className="text-xs text-label text-muted mb-1">Active grants</h3>

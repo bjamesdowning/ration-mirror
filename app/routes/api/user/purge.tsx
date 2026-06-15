@@ -122,6 +122,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 						.delete(schema.invitation)
 						.where(eq(schema.invitation.organizationId, orgId)),
 					db
+						.delete(schema.agentRegistration)
+						.where(eq(schema.agentRegistration.organizationId, orgId)),
+					db
 						.delete(schema.member)
 						.where(eq(schema.member.organizationId, orgId)),
 					db
@@ -166,6 +169,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			db
 				.delete(schema.invitation)
 				.where(eq(schema.invitation.inviterId, userId)),
+			db
+				.delete(schema.agentRegistration)
+				.where(eq(schema.agentRegistration.userId, userId)),
 			db
 				.update(schema.ledger)
 				.set({ userId: null })

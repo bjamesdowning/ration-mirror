@@ -657,6 +657,67 @@ export const queueJob = sqliteTable(
 	],
 );
 
+/** Agent self-registration lifecycle (Tier 0 anonymous → Tier 1 claimed). */
+export const agentRegistration = sqliteTable(
+	"agent_registration",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		apiKeyId: text("api_key_id")
+			.notNull()
+			.references(() => apiKey.id, { onDelete: "cascade" }),
+		status: text("status", {
+			enum: ["pending_claim", "claimed"],
+		})
+			.notNull()
+			.default("pending_claim"),
+		claimTokenHash: text("claim_token_hash").notNull(),
+		claimTokenExpiresAt: integer("claim_token_expires_at", {
+			mode: "timestamp",
+		}).notNull(),
+		claimedByUserId: text("claimed_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		claimedAt: integer("claimed_at", { mode: "timestamp" }),
+		clientHint: text("client_hint"),
+		/** When true, scopes are capped to pre-claim floor (extension seam for limited write). */
+		preClaim: integer("pre_claim", { mode: "boolean" }).notNull().default(true),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("agent_registration_user_idx").on(table.userId),
+		index("agent_registration_org_idx").on(table.organizationId),
+		index("agent_registration_claim_hash_idx").on(table.claimTokenHash),
+	],
+);
+
+export const agentRegistrationRelations = relations(
+	agentRegistration,
+	({ one }) => ({
+		user: one(user, {
+			fields: [agentRegistration.userId],
+			references: [user.id],
+		}),
+		organization: one(organization, {
+			fields: [agentRegistration.organizationId],
+			references: [organization.id],
+		}),
+		apiKey: one(apiKey, {
+			fields: [agentRegistration.apiKeyId],
+			references: [apiKey.id],
+		}),
+	}),
+);
+
 // Pre-launch interest signup (temporary — remove when no longer needed)
 export const interestSignup = sqliteTable(
 	"interest_signup",

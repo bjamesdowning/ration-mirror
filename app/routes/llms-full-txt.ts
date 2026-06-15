@@ -62,6 +62,15 @@ Ration exposes an OAuth-first MCP server at \`https://mcp.ration.mayutic.com/mcp
 3. Revoke access anytime in Hub → Settings → Connected Agents.
 
 Advanced: organization API keys with \`mcp:*\` scopes for manual header auth and REST v1 import/export.
+
+## Agent-first onboarding
+
+Agents can self-register without human signup:
+
+1. \`POST /api/agent/auth\` with \`{ "type": "anonymous" }\` — returns a read-only API key and claim URL.
+2. Human claims via OTP at \`/connect/claim\` to widen scopes.
+
+See \`/auth.md\` for the full auth discovery document.
 `;
 
 export async function loader(_args: Route.LoaderArgs) {

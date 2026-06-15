@@ -1,0 +1,124 @@
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("cloudflare:workers", () => ({ waitUntil: vi.fn() }));
+
+import {
+	buildGetContextCapabilities,
+	buildSuggestedNextActions,
+} from "../agent/onboarding.server";
+import {
+	buildAgentAuthMetadata,
+	buildAuthMarkdown,
+	buildMcpProtectedResourceMetadata,
+	buildProtectedResourceMetadata,
+} from "../agent-readiness";
+import {
+	buildClaudeDeepLink,
+	buildCursorDeepLink,
+	buildMcpDeepLink,
+} from "../mcp/deep-links";
+import { resolveAuthorizationServerIssuer } from "../oauth.constants";
+
+const env = {
+	BETTER_AUTH_URL: "https://ration.mayutic.com",
+} as Cloudflare.Env;
+
+const request = new Request("https://ration.mayutic.com/");
+
+describe("agent onboarding discovery", () => {
+	it("issuer is byte-identical across app PRM, agent_auth, and MCP PRM", () => {
+		const issuer = resolveAuthorizationServerIssuer(env);
+		const appPrm = buildProtectedResourceMetadata(request, env);
+		const agentAuth = buildAgentAuthMetadata(request, env);
+		const mcpPrm = buildMcpProtectedResourceMetadata(
+			new Request(
+				"https://mcp.ration.mayutic.com/.well-known/oauth-protected-resource",
+			),
+			issuer,
+		);
+
+		expect(appPrm.authorization_servers).toEqual([issuer]);
+		expect(agentAuth.issuer).toBe(issuer);
+		expect(mcpPrm.authorization_servers).toEqual([issuer]);
+	});
+
+	it("agent_auth advertises only anonymous and user_claimed flows", () => {
+		const agentAuth = buildAgentAuthMetadata(request, env);
+		const flowKeys = Object.keys(agentAuth.flows);
+		expect(flowKeys).toEqual(["anonymous", "user_claimed"]);
+		expect(JSON.stringify(agentAuth)).not.toContain("id-jag");
+		expect(JSON.stringify(agentAuth)).not.toContain("identity_assertion");
+	});
+
+	it("auth.md documents implemented flows only", () => {
+		const md = buildAuthMarkdown(request, env);
+		expect(md).toContain("Tier 0");
+		expect(md).toContain("Tier 1");
+		expect(md).toContain("/api/agent/auth");
+		expect(md).not.toContain("id-jag");
+		expect(md).not.toContain("identity_assertion");
+	});
+
+	it("app PRM includes bearer_methods_supported and auth.md link", () => {
+		const prm = buildProtectedResourceMetadata(request, env);
+		expect(prm.bearer_methods_supported).toEqual(["header"]);
+		expect(prm.agent_auth).toBe("https://ration.mayutic.com/auth.md");
+	});
+});
+
+describe("MCP deep links", () => {
+	it("builds client-specific install URLs", () => {
+		expect(buildCursorDeepLink()).toContain("cursor://");
+		expect(buildClaudeDeepLink()).toContain("claude://");
+		expect(buildMcpDeepLink("chatgpt")).toContain("chatgpt://");
+	});
+});
+
+describe("get_context onboarding helpers", () => {
+	it("suggests claim when kitchen is unclaimed", () => {
+		const onboarding = {
+			claimed: false,
+			status: "pending_claim" as const,
+			claimPage: "https://ration.mayutic.com/connect/claim",
+			claimUrlAvailable: false,
+			preClaim: true,
+		};
+		const capabilities = buildGetContextCapabilities(["mcp:read"]);
+		const actions = buildSuggestedNextActions(onboarding, capabilities);
+		expect(actions.some((a) => a.action === "claim_kitchen")).toBe(true);
+	});
+
+	it("suggests write tools when claimed", () => {
+		const onboarding = {
+			claimed: true,
+			status: "claimed" as const,
+			claimUrlAvailable: false,
+			preClaim: false,
+		};
+		const capabilities = buildGetContextCapabilities([
+			"mcp:read",
+			"mcp:inventory:write",
+		]);
+		const actions = buildSuggestedNextActions(onboarding, capabilities);
+		expect(actions.some((a) => a.action === "add_cargo_item")).toBe(true);
+	});
+});
+
+describe("buildPersonalOrgRecords parity (signup hook regression guard)", () => {
+	it("produces exactly one personal org per user with owner role", async () => {
+		const { buildPersonalOrgRecords } = await import(
+			"../agent/org-records.server"
+		);
+		const userId = "crew-member-user-id";
+		const { orgId, orgValues, memberValues } = buildPersonalOrgRecords(
+			userId,
+			"Crew Member",
+		);
+
+		expect(orgValues.slug).toBe(`personal-${userId}`);
+		expect(orgValues.metadata).toEqual({ isPersonal: true });
+		expect(memberValues.role).toBe("owner");
+		expect(memberValues.organizationId).toBe(orgId);
+		expect(memberValues.userId).toBe(userId);
+	});
+});

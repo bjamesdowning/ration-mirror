@@ -92,11 +92,16 @@ describe("agent readiness metadata", () => {
 			"Export Cargo",
 		);
 
-		const resource = buildProtectedResourceMetadata(request);
+		const resource = buildProtectedResourceMetadata(request, {
+			BETTER_AUTH_URL: "https://ration.mayutic.com",
+		} as Cloudflare.Env);
 		expect(resource.resource).toBe("https://ration.mayutic.com");
 		expect(resource.scopes_supported).toContain("mcp");
-		expect(resource.authorization_servers).toEqual([]);
-		expect(resource.authentication_methods_supported).toEqual(["api_key"]);
+		expect(resource.authorization_servers).toEqual([
+			"https://ration.mayutic.com/api/auth",
+		]);
+		expect(resource.bearer_methods_supported).toEqual(["header"]);
+		expect(resource.authentication_methods_supported).toContain("api_key");
 	});
 
 	it("builds an MCP server card from real tool groups", () => {

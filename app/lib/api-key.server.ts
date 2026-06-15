@@ -4,6 +4,9 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { data } from "react-router";
 import { apiKey as apiKeyTable } from "../db/schema";
+import { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES } from "./agent/scopes";
+
+export { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES };
 
 const KEY_PREFIX_LENGTH = 17; // "rtn_live_" (9) + 8 chars for lookup
 const KEY_SECRET_LENGTH = 32; // 32 hex chars after prefix
@@ -32,13 +35,18 @@ export async function hashApiKey(secret: string): Promise<string> {
 /**
  * Constant-time comparison to avoid timing attacks.
  */
-function secureCompare(a: string, b: string): boolean {
+export function constantTimeEqual(a: string, b: string): boolean {
 	if (a.length !== b.length) return false;
 	let result = 0;
 	for (let i = 0; i < a.length; i++) {
 		result |= a.charCodeAt(i) ^ b.charCodeAt(i);
 	}
 	return result === 0;
+}
+
+/** @deprecated Use constantTimeEqual */
+function secureCompare(a: string, b: string): boolean {
+	return constantTimeEqual(a, b);
 }
 
 export interface ApiKeyRecord {
@@ -126,6 +134,22 @@ export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];
 
 const INVENTORY_SCOPE = API_SCOPES.inventory;
 
+function buildApiKeyWwwAuthenticate(origin: string): string {
+	const resourceMetadata = `${origin}/.well-known/oauth-protected-resource`;
+	return `Bearer realm="Ration API", resource_metadata="${resourceMetadata}"`;
+}
+
+function unauthorizedApiKeyResponse(
+	message: string,
+	origin?: string,
+): ReturnType<typeof data> {
+	const headers: Record<string, string> = {};
+	if (origin) {
+		headers["WWW-Authenticate"] = buildApiKeyWwwAuthenticate(origin);
+	}
+	return data({ error: message }, { status: 401, headers });
+}
+
 /**
  * Require API key auth and return organizationId for RLS.
  * Use for programmatic API routes (v1 inventory export/import).
@@ -138,17 +162,18 @@ export async function requireApiKey(
 ): Promise<{ organizationId: string; apiKeyId: string; scopes: string[] }> {
 	const env = (context as { cloudflare: { env: Cloudflare.Env } }).cloudflare
 		.env;
+	const origin = new URL(request.url).origin;
 	const authHeader = request.headers.get("Authorization");
 	const xApiKey = request.headers.get("X-Api-Key");
 	const rawKey = xApiKey ?? authHeader?.replace(/^Bearer\s+/i, "").trim();
 
 	if (!rawKey) {
-		throw data({ error: "Missing API key" }, { status: 401 });
+		throw unauthorizedApiKeyResponse("Missing API key", origin);
 	}
 
 	const record = await verifyApiKey(env.DB, rawKey);
 	if (!record) {
-		throw data({ error: "Invalid API key" }, { status: 401 });
+		throw unauthorizedApiKeyResponse("Invalid API key", origin);
 	}
 
 	let scopes: string[];

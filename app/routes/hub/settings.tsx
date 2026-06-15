@@ -262,6 +262,19 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const connectedAgents = await listConnectedAgentGrants(env, userId);
 
+		const agentKitchens = await db.query.agentRegistration.findMany({
+			where: (row, { eq }) => eq(row.organizationId, groupId),
+			columns: {
+				id: true,
+				status: true,
+				preClaim: true,
+				claimedAt: true,
+				createdAt: true,
+				clientHint: true,
+				apiKeyId: true,
+			},
+		});
+
 		// Groups the user owns with no other members (will be deleted on account purge)
 		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
 		const ownedGroupsWithNoOtherMembers: string[] = [];
@@ -295,6 +308,7 @@ export async function loader(args: Route.LoaderArgs) {
 				user.subscriptionCancelAtPeriodEnd ?? false,
 			apiKeys,
 			connectedAgents,
+			agentKitchens,
 			origin: url.origin,
 			ownedGroupsWithNoOtherMembers,
 		};
@@ -654,6 +668,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<DeveloperSection
 							apiKeys={loaderData.apiKeys ?? []}
 							connectedAgents={loaderData.connectedAgents ?? []}
+							agentKitchens={loaderData.agentKitchens ?? []}
 							organizationName={loaderData.organizationName}
 							origin={loaderData.origin ?? ""}
 						/>

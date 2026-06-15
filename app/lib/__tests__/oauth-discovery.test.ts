@@ -46,12 +46,17 @@ describe("buildMcpProtectedResourceMetadata", () => {
 });
 
 describe("buildProtectedResourceMetadata", () => {
-	it("REST API metadata still documents API keys", () => {
+	it("REST API metadata documents API keys and OAuth AS", () => {
 		const req = new Request(
 			"https://ration.mayutic.com/.well-known/oauth-protected-resource",
 		);
-		const meta = buildProtectedResourceMetadata(req);
+		const meta = buildProtectedResourceMetadata(req, {
+			BETTER_AUTH_URL: "https://ration.mayutic.com",
+		} as Cloudflare.Env);
 		expect(meta.authentication_methods_supported).toContain("api_key");
-		expect(meta.authorization_servers).toEqual([]);
+		expect(meta.authorization_servers).toEqual([
+			"https://ration.mayutic.com/api/auth",
+		]);
+		expect(meta.bearer_methods_supported).toEqual(["header"]);
 	});
 });

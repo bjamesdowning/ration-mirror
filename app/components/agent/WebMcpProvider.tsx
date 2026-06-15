@@ -66,6 +66,8 @@ export function WebMcpProvider() {
 						apiCatalog: "/.well-known/api-catalog",
 						mcpServerCard: "/.well-known/mcp/server-card.json",
 						agentSkills: "/.well-known/agent-skills/index.json",
+						authMd: "/auth.md",
+						connect: "/connect",
 						apiDocs: "/docs/api",
 						mcpEndpoint: "https://mcp.ration.mayutic.com/mcp",
 					}),

@@ -38,6 +38,9 @@ export default [
 		".well-known/agent-skills/:skillName/SKILL.md",
 		"routes/well-known.agent-skills.$skillName.SKILL.ts",
 	),
+	route("auth.md", "routes/auth-md.ts"),
+	route("connect", "routes/connect.tsx"),
+	route("connect/claim", "routes/connect.claim.tsx"),
 	index("routes/home.tsx"),
 	route("docs/api", "routes/docs.api.tsx"),
 	route("invitations/accept", "routes/invitations.accept.tsx"),
@@ -230,6 +233,12 @@ export default [
 	),
 	route("api/api-keys", "routes/api/api-keys.ts"),
 	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),
+	route("api/agent/auth", "routes/api/agent/auth.ts"),
+	route("api/agent/auth/claim", "routes/api/agent/auth.claim.ts"),
+	route(
+		"api/agent/auth/claim/complete",
+		"routes/api/agent/auth.claim.complete.ts",
+	),
 	route("api/oauth/grants", "routes/api.oauth.grants.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 

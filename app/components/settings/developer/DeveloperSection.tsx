@@ -34,6 +34,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 export function DeveloperSection({
 	apiKeys,
 	connectedAgents,
+	agentKitchens,
 	organizationName,
 	origin,
 }: DeveloperSectionProps) {
@@ -78,7 +79,13 @@ export function DeveloperSection({
 					onNavigate={handleTabChange}
 				/>
 			)}
-			{activeTab === "mcp" && <ConnectedAgentsPanel grants={connectedAgents} />}
+			{activeTab === "mcp" && (
+				<ConnectedAgentsPanel
+					grants={connectedAgents}
+					agentKitchens={agentKitchens}
+					apiKeys={apiKeys}
+				/>
+			)}
 			{activeTab === "api-keys" && (
 				<ApiKeysPanel
 					apiKeys={apiKeys}

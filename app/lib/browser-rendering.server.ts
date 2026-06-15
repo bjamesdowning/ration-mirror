@@ -15,7 +15,10 @@ export const MIN_CONTENT_LENGTH = 200;
  */
 export async function fetchPageAsMarkdown(
 	url: string,
-	env: Pick<Env, "AI_GATEWAY_ACCOUNT_ID" | "CF_BROWSER_RENDERING_TOKEN">,
+	env: {
+		AI_GATEWAY_ACCOUNT_ID?: string;
+		CF_BROWSER_RENDERING_TOKEN?: string;
+	},
 ): Promise<string> {
 	const token = env.CF_BROWSER_RENDERING_TOKEN;
 	const accountId = env.AI_GATEWAY_ACCOUNT_ID;

@@ -708,7 +708,7 @@ The Settings page (`/hub/settings`) supports profile identity management across 
 **Developer** (`/hub/settings#developer`) — sub-tabs for agent and API integration:
 
 - **Overview** — path cards for OAuth MCP vs REST/automation, quick MCP URL copy, links to `/docs/api`
-- **MCP** (`#connected-agents`) — connect steps, OAuth grant list, troubleshooting accordion
+- **MCP** (`#connected-agents`) — connect steps, OAuth grant list, agent-registered kitchen status, troubleshooting accordion; public `/connect` landing with one-click install deep links
 - **API Keys** (`#api`) — create/revoke org-scoped keys with scope presets; REST quick reference
 
 Avatars are served via `GET /api/user/avatar/:userId` and updated via `POST /api/user/avatar`.
@@ -1474,6 +1474,8 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. After sign-in, the browser resumes via native `/api/auth/oauth2/authorize`. Better Auth (`@better-auth/oauth-provider` 1.6.16+) holds authorization state via the signed `oauth_query`, session, and `ba_pl` postLogin marker; Ration adds a short-lived `ration_oauth_org_selected` cookie so multi-household users advance past the picker after Continue (stripped on fresh authorize). OIDC-compatible discovery aliases live at `/.well-known/openid-configuration` (+ `/api/auth` issuer-path variant). Dynamic client registration defaults to all granular `mcp:*` scopes except `mcp:delegate` (Fin only); consent pre-checks read, with write scopes optional. Revoke grants in Hub → Settings → Developer → MCP. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
+**Agent-first onboarding (v1.3.0):** Agents can self-register without human signup via `POST /api/agent/auth` (`{ "type": "anonymous" }`), receiving a read-only pre-claim API key (`mcp:read` only) and a human claim URL. Tier 1 claim verifies email via OTP (`/api/agent/auth/claim` + `/claim/complete`) and widens scopes on the same user record; account merge migrates stub org data when the email matches an existing user. Discovery: [`/auth.md`](/auth.md) (markdown), `agent_auth` block merged into OAuth AS metadata, enriched app-domain PRM (`authorization_servers`, `bearer_methods_supported`). Public connect landing: [`/connect`](/connect). Contract: [plans/agent-onboarding-contract.md](plans/agent-onboarding-contract.md). Tier 2 ID-JAG and agent billing are deferred (extension seams only).
+
 **Why a new server instance per request?** MCP server state must be strictly isolated per request to prevent cross-request data leakage (analogous to the CVE consideration for stateful servers). `createMcpHandler` creates a fresh `McpServer` on every fetch.
 
 **Tool envelope:** Every tool returns one `text` content item containing a uniform JSON envelope. Success: `{ ok: true, tool, data, warnings?, meta? }`. Error: `{ ok: false, tool, error: { code, message, details?, retryAfter? } }`. Error codes: `rate_limited`, `invalid_input`, `not_found`, `unauthorized`, `insufficient_scope`, `capacity_exceeded`, `conflict`, `idempotency_replay`, `internal_error`, `insufficient_cargo`. List tools support cursor pagination via `args.cursor` and `meta.nextCursor`.
@@ -1493,7 +1495,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta mode) | mcp_search (20/min) |
 | `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
-| `get_context` | Read | `mcp:read` | Returns the org/key context the request is operating under | mcp_list (30/min) |
+| `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state (claimed vs pending), capabilities, and suggested next actions | mcp_list (30/min) |
 | `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
 | `preview_inventory_import` | Read | `mcp:read` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_list (30/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |

@@ -1,7 +1,9 @@
+import { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES } from "./agent/scopes";
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_MCP_SCOPES,
 	resolveAuthorizationServerIssuer,
+	resolveMcpResourceAudience,
 } from "./oauth.constants";
 import { APP_VERSION } from "./version";
 
@@ -11,6 +13,7 @@ export const AGENT_DISCOVERY_LINK_HEADER = [
 	'</api/openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json"',
 	'</.well-known/mcp/server-card.json>; rel="mcp-server-card"; type="application/json"',
 	'</.well-known/agent-skills/index.json>; rel="agent-skills"; type="application/json"',
+	'</auth.md>; rel="agent-auth"; type="text/markdown"',
 ].join(", ");
 
 const SITE_DESCRIPTION =
@@ -268,18 +271,121 @@ export function buildOpenApiDocument(request: Request) {
 	};
 }
 
-export function buildProtectedResourceMetadata(request: Request) {
+export function buildProtectedResourceMetadata(
+	request: Request,
+	env?: Cloudflare.Env,
+) {
 	const origin = new URL(request.url).origin;
+	const authEnv = env ?? ({ BETTER_AUTH_URL: origin } as Cloudflare.Env);
+	const issuer = resolveAuthorizationServerIssuer(authEnv);
+	const mcpAudience = resolveMcpResourceAudience(authEnv);
+
 	return {
 		resource: origin,
 		resource_name: "Ration API",
-		authorization_servers: [],
-		authentication_methods_supported: ["api_key"],
+		authorization_servers: [issuer],
+		bearer_methods_supported: ["header"],
+		authentication_methods_supported: ["api_key", "oauth2"],
 		api_key_methods_supported: ["x-api-key", "authorization_bearer"],
-		scopes_supported: AGENT_API_SCOPES,
+		scopes_supported: [...AGENT_API_SCOPES, ...OAUTH_MCP_SCOPES],
 		resource_documentation: `${origin}/docs/api`,
-		note: "Ration REST API v1 uses organization-scoped API keys. MCP supports OAuth delegated access — see MCP protected resource metadata.",
+		agent_auth: `${origin}/auth.md`,
+		mcp_resource: mcpAudience,
+		note: "Ration REST API v1 uses organization-scoped API keys. MCP supports OAuth delegated access — see MCP protected resource metadata on the MCP host.",
 	};
+}
+
+/** WorkOS auth.md-compatible agent_auth block — advertises only implemented flows. */
+export function buildAgentAuthMetadata(request: Request, env?: Cloudflare.Env) {
+	const origin = new URL(request.url).origin;
+	const authEnv = env ?? ({ BETTER_AUTH_URL: origin } as Cloudflare.Env);
+	const issuer = resolveAuthorizationServerIssuer(authEnv);
+
+	return {
+		issuer,
+		protected_resource_metadata: `${origin}/.well-known/oauth-protected-resource`,
+		mcp_resource: resolveMcpResourceAudience(authEnv),
+		auth_md: `${origin}/auth.md`,
+		flows: {
+			anonymous: {
+				type: "anonymous",
+				endpoint: `${origin}/api/agent/auth`,
+				method: "POST",
+				body: { type: "anonymous", client_hint: "optional string" },
+				description:
+					"Self-register an agent-owned kitchen with a read-only pre-claim API key and claim token.",
+				scopes: [...PRE_CLAIM_API_SCOPES],
+			},
+			user_claimed: {
+				type: "user_claimed",
+				claim_endpoint: `${origin}/api/agent/auth/claim`,
+				claim_complete_endpoint: `${origin}/api/agent/auth/claim/complete`,
+				claim_page: `${origin}/connect/claim`,
+				description:
+					"Verify email via OTP to widen scopes and link the agent kitchen to a human account.",
+				scopes_after_claim: [...POST_CLAIM_API_SCOPES],
+			},
+		},
+	};
+}
+
+/** Markdown auth discovery document served at /auth.md. */
+export function buildAuthMarkdown(
+	request: Request,
+	env?: Cloudflare.Env,
+): string {
+	const origin = new URL(request.url).origin;
+	const meta = buildAgentAuthMetadata(request, env);
+
+	return `# Ration Agent Authentication
+
+Ration supports agent-first onboarding for MCP and REST API access. Human signup via Better Auth (Google + magic link) remains the primary path for browser users.
+
+## Issuer
+
+\`${meta.issuer}\`
+
+## Flows
+
+### Tier 0 — Anonymous self-registration
+
+Agents can provision a kitchen without human signup:
+
+\`\`\`http
+POST ${meta.flows.anonymous.endpoint}
+Content-Type: application/json
+
+{ "type": "anonymous", "client_hint": "cursor" }
+\`\`\`
+
+Returns (once): \`api_key\`, \`claim_token\`, \`claim_url\`, \`organization_id\`, \`mcp_endpoint\`, and \`scopes\` (${meta.flows.anonymous.scopes.join(", ")}).
+
+### Tier 1 — User-claimed / verified email
+
+Humans claim an agent kitchen via OTP email:
+
+1. \`POST ${meta.flows.user_claimed.claim_endpoint}\` — send OTP to email
+2. \`POST ${meta.flows.user_claimed.claim_complete_endpoint}\` — verify OTP and widen scopes
+
+Claim page: ${meta.flows.user_claimed.claim_page}
+
+Post-claim scopes: ${meta.flows.user_claimed.scopes_after_claim.join(", ")}.
+
+## OAuth (recommended for interactive MCP clients)
+
+Paste \`${MCP_ENDPOINT_URL}\` into a compatible client and complete browser OAuth sign-in.
+
+- Authorization server metadata: \`${origin}/.well-known/oauth-authorization-server\`
+- MCP protected resource: \`${meta.mcp_resource}\` (see MCP host PRM)
+- REST protected resource: \`${meta.protected_resource_metadata}\`
+
+## Discovery
+
+- API catalog: \`${origin}/.well-known/api-catalog\`
+- MCP server card: \`${origin}/.well-known/mcp/server-card.json\`
+- Agent skills: \`${origin}/.well-known/agent-skills/index.json\`
+- API docs: \`${origin}/docs/api\`
+`;
 }
 
 /** RFC 9728 metadata for the MCP resource server (mcp.* domain). */
@@ -418,6 +524,8 @@ The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/s
 ## Agent-Ready Surfaces
 
 - MCP server: ${MCP_ENDPOINT_URL} (OAuth 2.1 primary)
+- Agent auth discovery: /auth.md
+- Connect landing: /connect
 - API catalog: /.well-known/api-catalog
 - MCP server card: /.well-known/mcp/server-card.json
 - Agent skills: /.well-known/agent-skills/index.json
@@ -454,6 +562,8 @@ The MCP server exposes tools for inventory search, meal matching, meal planning,
 
 ## Discovery
 
+- Agent auth discovery: \`/auth.md\`
+- Connect landing: \`/connect\`
 - API catalog: \`/.well-known/api-catalog\`
 - OpenAPI description: \`/api/openapi.json\`
 - OAuth authorization server: \`/.well-known/oauth-authorization-server\`

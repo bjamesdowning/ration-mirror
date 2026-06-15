@@ -302,6 +302,21 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60,
 		keyPrefix: "rate:status_poll",
 	},
+	agent_auth_register: {
+		windowMs: 60_000,
+		maxRequests: 5,
+		keyPrefix: "rate:agent_auth_register",
+	},
+	agent_auth_claim: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:agent_auth_claim",
+	},
+	agent_auth_claim_complete: {
+		windowMs: 300_000, // 5 minutes — OTP attempt window
+		maxRequests: 5,
+		keyPrefix: "rate:agent_auth_claim_complete",
+	},
 };
 
 // ─── Edge Cache TTL ───────────────────────────────────────────────────────────

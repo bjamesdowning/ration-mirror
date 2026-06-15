@@ -135,3 +135,49 @@ If you didn't request this link, you can safely ignore this email.`;
 
 	return { html, text };
 }
+
+/**
+ * Build a branded HTML email for agent claim OTP verification.
+ */
+export function buildClaimOtpEmail(
+	otp: string,
+): Pick<EmailPayload, "html" | "text"> {
+	const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Claim your Ration agent kitchen</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8F9FA;font-family:'Space Mono',Courier,monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8F9FA;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:480px;background-color:#FFFFFF;border-radius:16px;border:1px solid #E6E6E6;">
+          <tr>
+            <td style="padding:32px 40px;">
+              <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111111;">
+                Claim your agent kitchen
+              </h1>
+              <p style="margin:0 0 28px;font-size:14px;color:#666666;line-height:1.6;">
+                Enter this code to verify your email and link your AI agent to your Ration account. Expires in 10 minutes.
+              </p>
+              <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:8px;color:#00E088;">
+                ${otp}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+	const text = `Claim your Ration agent kitchen
+
+Your verification code: ${otp}
+
+This code expires in 10 minutes.`;
+
+	return { html, text };
+}

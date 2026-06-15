@@ -9,6 +9,6 @@ export async function loader({
 	context: { cloudflare: { env: Cloudflare.Env } };
 }) {
 	const auth = getAuth(context.cloudflare.env);
-	const handler = createOAuthDiscoveryHandler(auth);
+	const handler = createOAuthDiscoveryHandler(auth, context.cloudflare.env);
 	return handler(request);
 }

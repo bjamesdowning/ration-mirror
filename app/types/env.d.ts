@@ -42,3 +42,5 @@ declare namespace Cloudflare {
 		MCP_OAUTH_ENABLED?: string;
 	}
 }
+
+interface Env extends Cloudflare.Env {}

@@ -41,7 +41,8 @@ Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ship
 - [MCP server card](${origin}/.well-known/mcp/server-card.json): MCP server metadata (oauth2 transport).
 - [OAuth authorization server](${origin}/.well-known/oauth-authorization-server): OAuth 2.1 metadata for MCP clients.
 - [Agent skills index](${origin}/.well-known/agent-skills/index.json): Available agent skills exposed by Ration.
-- [OpenAPI spec](${origin}/api/openapi.json): Full machine-readable API specification.
+- [Auth discovery (auth.md)](${origin}/auth.md): Agent-first onboarding flows (anonymous + user-claimed).
+- [Connect agents](${origin}/connect): One-click MCP setup for Cursor, Claude, and ChatGPT.
 
 ## Blog
 

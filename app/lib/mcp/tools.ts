@@ -329,23 +329,36 @@ export function registerTools(
 				scopes: ["mcp:read"],
 				rateLimitCategory: "mcp_list",
 				audit: false,
-				handler: async (ctx) =>
-					ok("get_context", {
+				handler: async (ctx) => {
+					const origin = (env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
+					const {
+						getAgentOnboardingState,
+						buildGetContextCapabilities,
+						buildSuggestedNextActions,
+					} = await import("../agent/onboarding.server");
+					const onboarding = await getAgentOnboardingState(
+						env,
+						ctx.organizationId,
+						origin,
+					);
+					const capabilities = buildGetContextCapabilities(ctx.scopes);
+					const suggestedNextActions = buildSuggestedNextActions(
+						onboarding,
+						capabilities,
+					);
+					return ok("get_context", {
 						organizationId: ctx.organizationId,
 						apiKeyId: ctx.apiKeyId,
 						keyName: ctx.keyName,
 						keyPrefix: ctx.keyPrefix,
 						scopes: ctx.scopes,
-						capabilities: {
-							canRead: hasScope(ctx, "mcp:read"),
-							canWriteInventory: hasScope(ctx, "mcp:inventory:write"),
-							canWriteGalley: hasScope(ctx, "mcp:galley:write"),
-							canWriteManifest: hasScope(ctx, "mcp:manifest:write"),
-							canWriteSupply: hasScope(ctx, "mcp:supply:write"),
-							canWritePreferences: hasScope(ctx, "mcp:preferences:write"),
-						},
-						versions: { mcp: "1.1.0" },
-					}),
+						authMethod: ctx.authMethod,
+						onboarding,
+						capabilities,
+						suggestedNextActions,
+						versions: { mcp: "1.3.0" },
+					});
+				},
 			})(env, {}),
 	);
 

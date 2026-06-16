@@ -4,20 +4,10 @@ import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { log, redactId } from "~/lib/logging.server";
+import { deleteR2Prefix } from "~/lib/r2-cleanup.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { deleteCargoVectors } from "~/lib/vector.server";
 import type { Route } from "./+types/purge";
-
-async function deleteR2Prefix(bucket: R2Bucket, prefix: string) {
-	let cursor: string | undefined;
-	do {
-		const list = await bucket.list({ prefix, cursor });
-		if (list.objects.length > 0) {
-			await bucket.delete(list.objects.map((obj) => obj.key));
-		}
-		cursor = list.truncated ? list.cursor : undefined;
-	} while (cursor);
-}
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);

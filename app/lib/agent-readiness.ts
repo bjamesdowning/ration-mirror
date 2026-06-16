@@ -1,4 +1,11 @@
-import { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES } from "./agent/scopes";
+import {
+	AGENT_CLAIM_REISSUE_PATH,
+	AGENT_ORPHAN_INACTIVITY_MS,
+	CLAIM_OTP_MAX_ATTEMPTS,
+	CLAIM_OTP_TTL_SEC,
+	CLAIM_TOKEN_SLIDE_MS,
+} from "./agent/claim.constants";
+import { AGENT_API_KEY_SCOPES } from "./agent/scopes";
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_ADVERTISED_MCP_SCOPES,
@@ -305,6 +312,7 @@ export function buildAgentAuthMetadata(request: Request, env?: Cloudflare.Env) {
 		skill: `${origin}/auth.md`,
 		register_uri: `${origin}/api/agent/auth`,
 		claim_uri: `${origin}/api/agent/auth/claim`,
+		reissue_uri: `${origin}${AGENT_CLAIM_REISSUE_PATH}`,
 		identity_types_supported: ["anonymous"],
 		anonymous: {
 			credential_types_supported: ["api_key"],
@@ -324,6 +332,12 @@ export function buildAuthMarkdown(
 	const meta = buildAgentAuthMetadata(request, env);
 	const claimCompleteUri = `${origin}/api/agent/auth/claim/complete`;
 	const claimPage = `${origin}/connect/claim`;
+	const reissueUri = `${origin}${AGENT_CLAIM_REISSUE_PATH}`;
+	const scopesList = AGENT_API_KEY_SCOPES.join(", ");
+	const slideDays = Math.round(CLAIM_TOKEN_SLIDE_MS / (24 * 60 * 60 * 1000));
+	const orphanDays = Math.round(
+		AGENT_ORPHAN_INACTIVITY_MS / (24 * 60 * 60 * 1000),
+	);
 
 	return `# Ration auth.md
 
@@ -334,6 +348,7 @@ Ration supports agent-first onboarding for MCP and REST API access. Human signup
 - Skill: \`${meta.skill}\`
 - Register: \`${meta.register_uri}\` (POST; credential type: \`api_key\`)
 - Claim: \`${meta.claim_uri}\`
+- Reissue claim link: \`${reissueUri}\` (POST; Bearer agent API key)
 
 ## Issuer
 
@@ -352,18 +367,44 @@ Content-Type: application/json
 { "type": "anonymous", "client_hint": "cursor" }
 \`\`\`
 
-Returns (once): \`api_key\`, \`claim_token\`, \`claim_url\`, \`organization_id\`, \`mcp_endpoint\`, and \`scopes\` (${PRE_CLAIM_API_SCOPES.join(", ")}).
+Returns (once): \`api_key\`, \`claim_token\`, \`claim_url\`, \`organization_id\`, \`mcp_endpoint\`, and \`scopes\` (${scopesList}).
+
+Tier 0 keys have **full MCP write scopes** immediately. Claiming transfers ownership to a verified human — it does **not** widen scopes or unlock tier capacity.
 
 ### Tier 1 — User-claimed / verified email
 
-Humans claim an agent kitchen via OTP email:
+Humans claim an agent kitchen via OTP email and Terms of Service acceptance:
 
 1. \`POST ${meta.claim_uri}\` — send OTP to email
-2. \`POST ${claimCompleteUri}\` — verify OTP and widen scopes
+2. \`POST ${claimCompleteUri}\` — verify OTP, accept ToS (\`tos_accepted: true\`, \`tos_version\`), complete claim
 
 Claim page: ${claimPage}
 
-Post-claim scopes: ${POST_CLAIM_API_SCOPES.join(", ")}.
+Scopes after claim: ${scopesList} (unchanged from Tier 0).
+
+### Claim recovery
+
+Users must always be able to claim an active unclaimed kitchen:
+
+- **Option B (passive):** Each API/MCP authentication slides \`claimTokenExpiresAt\` forward by ${slideDays} days while \`pending_claim\`.
+- **Option A (active):** \`POST ${reissueUri}\` with \`Authorization: Bearer <agent-api-key>\` returns a new \`claim_token\` and \`claim_url\` (invalidates the prior token).
+
+If both the API key and claim URL are lost, recovery requires support contact.
+
+## Time limits & retention
+
+| Policy | Duration | Applies to |
+|--------|----------|------------|
+| Initial claim token validity | ${slideDays} days from registration | \`pending_claim\` only |
+| Claim token slide (Option B) | Resets to ${slideDays} days from last auth | \`pending_claim\` only |
+| Claim reissue (Option A) | Bearer agent API key; 3/hour per key | \`pending_claim\` only |
+| Claim OTP validity | ${CLAIM_OTP_TTL_SEC / 60} minutes | Per OTP send |
+| Claim OTP max attempts | ${CLAIM_OTP_MAX_ATTEMPTS} per OTP | Per registration |
+| Orphan kitchen deletion | ${orphanDays} days idle (last auth or \`createdAt\`) | \`pending_claim\` only |
+| Pre-claim MCP write rate limit | 10/min org + per key | \`preClaim: true\` |
+| Agent registration rate limit | 5/min per IP | Registration |
+
+Claimed kitchens are never purged by the orphan job.
 
 ## OAuth (recommended for interactive MCP clients)
 

@@ -51,13 +51,16 @@ describe("agent onboarding discovery", () => {
 		expect(agentAuth.claim_uri).toBe(
 			"https://ration.mayutic.com/api/agent/auth/claim",
 		);
+		expect(agentAuth.reissue_uri).toBe(
+			"https://ration.mayutic.com/api/agent/auth/claim/reissue",
+		);
 		expect(agentAuth.identity_types_supported).toEqual(["anonymous"]);
 		expect(agentAuth.anonymous.credential_types_supported).toEqual(["api_key"]);
 		expect(JSON.stringify(agentAuth)).not.toContain("id-jag");
 		expect(JSON.stringify(agentAuth)).not.toContain("identity_assertion");
 	});
 
-	it("auth.md H1 and body document implemented flows only", () => {
+	it("auth.md documents full-write Tier 0 and retention", () => {
 		const md = buildAuthMarkdown(request, env);
 		expect(md.startsWith("# Ration auth.md")).toBe(true);
 		expect(md.toLowerCase()).toContain("auth.md");
@@ -65,6 +68,9 @@ describe("agent onboarding discovery", () => {
 		expect(md).toContain("Tier 0");
 		expect(md).toContain("Tier 1");
 		expect(md).toContain("/api/agent/auth");
+		expect(md).toContain("claim/reissue");
+		expect(md).toContain("Time limits & retention");
+		expect(md).toContain("full MCP write");
 		expect(md).not.toContain("id-jag");
 		expect(md).not.toContain("identity_assertion");
 	});
@@ -97,17 +103,20 @@ describe("MCP deep links", () => {
 });
 
 describe("get_context onboarding helpers", () => {
-	it("suggests claim when kitchen is unclaimed", () => {
+	it("suggests reissue when preClaim", () => {
 		const onboarding = {
 			claimed: false,
 			status: "pending_claim" as const,
 			claimPage: "https://ration.mayutic.com/connect/claim",
+			reissueClaimUri:
+				"https://ration.mayutic.com/api/agent/auth/claim/reissue",
 			claimUrlAvailable: false,
 			preClaim: true,
 		};
 		const capabilities = buildGetContextCapabilities(["mcp:read"]);
 		const actions = buildSuggestedNextActions(onboarding, capabilities);
-		expect(actions.some((a) => a.action === "claim_kitchen")).toBe(true);
+		expect(actions[0]?.action).toBe("claim_kitchen");
+		expect(actions.some((a) => a.action === "reissue_claim_url")).toBe(true);
 	});
 
 	it("suggests write tools when claimed", () => {

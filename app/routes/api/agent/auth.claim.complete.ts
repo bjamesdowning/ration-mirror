@@ -9,7 +9,7 @@ import {
 	mergeAgentIntoUser,
 	verifyClaimOtp,
 } from "~/lib/agent/claim.server";
-import { POST_CLAIM_API_SCOPES } from "~/lib/api-key.server";
+import { AGENT_API_KEY_SCOPES } from "~/lib/agent/scopes";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -99,7 +99,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			stage: "claim_complete" as const,
 			merged: result.merged,
 			organization_id: result.organizationId,
-			scopes: [...POST_CLAIM_API_SCOPES],
+			scopes: [...AGENT_API_KEY_SCOPES],
 		};
 	} catch (error) {
 		return handleApiError(error);

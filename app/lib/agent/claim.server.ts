@@ -1,18 +1,30 @@
 import { and, eq, like, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../../db/schema";
-import { POST_CLAIM_API_SCOPES } from "../agent/scopes";
 import { constantTimeEqual } from "../api-key.server";
 import { invalidateTierCache } from "../capacity.server";
 import { log, redactId } from "../logging.server";
-import {
-	CLAIM_OTP_MAX_ATTEMPTS,
-	CLAIM_OTP_TTL_SEC,
-	claimOtpKvKey,
-	generateOtp,
-	hashToken,
-} from "./claim-crypto.server";
+import { CURRENT_TOS_VERSION } from "../tos.constants";
+import { CLAIM_OTP_MAX_ATTEMPTS, CLAIM_OTP_TTL_SEC } from "./claim.constants";
+import { claimOtpKvKey, generateOtp, hashToken } from "./claim-crypto.server";
 import { buildPersonalOrgRecords } from "./org-records.server";
+
+function resolveTosOnClaim(
+	existingAcceptedAt: Date | null | undefined,
+	claimAt: Date,
+	existingVersion: string | null | undefined,
+): { tosAcceptedAt: Date; tosVersion: string } {
+	if (
+		!existingAcceptedAt ||
+		claimAt.getTime() >= existingAcceptedAt.getTime()
+	) {
+		return { tosAcceptedAt: claimAt, tosVersion: CURRENT_TOS_VERSION };
+	}
+	return {
+		tosAcceptedAt: existingAcceptedAt,
+		tosVersion: existingVersion ?? CURRENT_TOS_VERSION,
+	};
+}
 
 type OtpKvPayload = {
 	hash: string;
@@ -155,11 +167,12 @@ export async function mergeAgentIntoUser(
 
 	let canonicalOrgId = canonicalPersonal?.id;
 	const batchStatements = [];
+	const canonicalUser = await db.query.user.findFirst({
+		where: eq(schema.user.id, params.canonicalUserId),
+		columns: { name: true, tosAcceptedAt: true, tosVersion: true },
+	});
+
 	if (!canonicalOrgId) {
-		const canonicalUser = await db.query.user.findFirst({
-			where: eq(schema.user.id, params.canonicalUserId),
-			columns: { name: true },
-		});
 		const { orgId, orgValues, memberValues } = buildPersonalOrgRecords(
 			params.canonicalUserId,
 			canonicalUser?.name ?? "My",
@@ -175,15 +188,22 @@ export async function mergeAgentIntoUser(
 		...buildOrgDataMigrationStatements(db, params.stubOrgId, canonicalOrgId),
 	);
 
-	const scopesJson = JSON.stringify([...POST_CLAIM_API_SCOPES]);
+	const { tosAcceptedAt, tosVersion } = resolveTosOnClaim(
+		canonicalUser?.tosAcceptedAt,
+		now,
+		canonicalUser?.tosVersion,
+	);
 
 	batchStatements.push(
+		db
+			.update(schema.user)
+			.set({ tosAcceptedAt, tosVersion, updatedAt: now })
+			.where(eq(schema.user.id, params.canonicalUserId)),
 		db
 			.update(schema.apiKey)
 			.set({
 				organizationId: canonicalOrgId,
 				userId: params.canonicalUserId,
-				scopes: scopesJson,
 				name: "Agent (claimed)",
 			})
 			.where(eq(schema.apiKey.id, params.registration.apiKeyId)),
@@ -245,7 +265,6 @@ export async function claimOnStubUser(
 ): Promise<{ organizationId: string; merged: false }> {
 	const db = drizzle(env.DB, { schema });
 	const now = params.now ?? new Date();
-	const scopesJson = JSON.stringify([...POST_CLAIM_API_SCOPES]);
 
 	await db.batch([
 		db
@@ -254,12 +273,13 @@ export async function claimOnStubUser(
 				email: params.email.toLowerCase(),
 				emailVerified: true,
 				updatedAt: now,
+				tosAcceptedAt: now,
+				tosVersion: CURRENT_TOS_VERSION,
 			})
 			.where(eq(schema.user.id, params.stubUserId)),
 		db
 			.update(schema.apiKey)
 			.set({
-				scopes: scopesJson,
 				name: "Agent (claimed)",
 			})
 			.where(eq(schema.apiKey.id, params.registration.apiKeyId)),

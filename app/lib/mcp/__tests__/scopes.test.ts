@@ -11,6 +11,7 @@ function ctx(scopes: string[]): McpToolContext {
 		apiKeyId: "key-1",
 		keyName: "Test",
 		keyPrefix: "rtn_test",
+		preClaim: false,
 	};
 }
 

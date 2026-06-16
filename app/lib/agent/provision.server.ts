@@ -1,13 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../../db/schema";
-import { PRE_CLAIM_API_SCOPES } from "../agent/scopes";
+import { AGENT_API_KEY_SCOPES } from "../agent/scopes";
 import { hashApiKey } from "../api-key.server";
 import { MCP_ENDPOINT_URL } from "../mcp/connect-copy";
-import {
-	CLAIM_TOKEN_TTL_MS,
-	generateClaimToken,
-	hashToken,
-} from "./claim-crypto.server";
+import { CURRENT_TOS_VERSION } from "../tos.constants";
+import { CLAIM_TOKEN_SLIDE_MS } from "./claim.constants";
+import { generateClaimToken, hashToken } from "./claim-crypto.server";
 import { buildPersonalOrgRecords } from "./org-records.server";
 
 const KEY_PREFIX_LENGTH = 17; // "rtn_live_" (9) + 8 chars
@@ -65,13 +63,13 @@ export async function provisionAgentUser(
 
 	const claimToken = generateClaimToken();
 	const claimTokenHash = await hashToken(claimToken);
-	const claimTokenExpiresAt = new Date(now.getTime() + CLAIM_TOKEN_TTL_MS);
+	const claimTokenExpiresAt = new Date(now.getTime() + CLAIM_TOKEN_SLIDE_MS);
 
 	const secret = generateSecureRandomHex(KEY_SECRET_LENGTH);
 	const rawKey = `${KEY_PREFIX}${secret}`;
 	const keyPrefix = rawKey.slice(0, KEY_PREFIX_LENGTH);
 	const keyHash = await hashApiKey(rawKey);
-	const scopesJson = JSON.stringify([...PRE_CLAIM_API_SCOPES]);
+	const scopesJson = JSON.stringify([...AGENT_API_KEY_SCOPES]);
 
 	const origin = new URL(input.request.url).origin;
 	const claimUrl = `${origin}/connect/claim?token=${encodeURIComponent(claimToken)}`;
@@ -84,7 +82,7 @@ export async function provisionAgentUser(
 			emailVerified: false,
 			createdAt: now,
 			tosAcceptedAt: now,
-			tosVersion: "2026-03-11",
+			tosVersion: CURRENT_TOS_VERSION,
 			tier: "free",
 		}),
 		db.insert(schema.organization).values(orgValues),
@@ -122,6 +120,6 @@ export async function provisionAgentUser(
 		claimToken,
 		claimUrl,
 		mcpEndpoint: MCP_ENDPOINT_URL,
-		scopes: PRE_CLAIM_API_SCOPES,
+		scopes: AGENT_API_KEY_SCOPES,
 	};
 }

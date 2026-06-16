@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { buildClaimRecoveryPaths } from "../agent/claim.constants";
 import { checkRateLimit } from "../rate-limiter.server";
 import { auditMcpWrite } from "./audit";
 import type { McpToolContext } from "./auth";
@@ -33,6 +34,20 @@ const MCP_MUTATION_RATE_LIMIT_CATEGORIES = new Set<string>([
 	"mcp_write",
 	"mcp_supply_sync",
 ]);
+
+function resolveOrgRateLimitCategory(
+	category: NonNullable<McpRateLimitCategory>,
+	preClaim: boolean,
+): string {
+	if (preClaim && MCP_MUTATION_RATE_LIMIT_CATEGORIES.has(category)) {
+		return "mcp_write_preclaim";
+	}
+	return category;
+}
+
+function resolvePerKeyRateLimitCategory(preClaim: boolean): string {
+	return preClaim ? "mcp_write_preclaim_per_key" : "mcp_write_per_key";
+}
 
 type ToolArgsWithActorToken = { actor_token?: string };
 
@@ -138,9 +153,13 @@ export function makeTool<TArgs extends Record<string, unknown>, TData>(
 		}
 
 		if (opts.rateLimitCategory) {
+			const orgCategory = resolveOrgRateLimitCategory(
+				opts.rateLimitCategory,
+				ctx.preClaim,
+			);
 			const orgRl = await checkRateLimit(
 				env.RATION_KV,
-				opts.rateLimitCategory,
+				orgCategory as Parameters<typeof checkRateLimit>[1],
 				ctx.organizationId,
 			);
 			if (!orgRl.allowed) {
@@ -189,9 +208,10 @@ export function makeTool<TArgs extends Record<string, unknown>, TData>(
 				opts.rateLimitCategory &&
 				MCP_MUTATION_RATE_LIMIT_CATEGORIES.has(opts.rateLimitCategory)
 			) {
+				const keyCategory = resolvePerKeyRateLimitCategory(ctx.preClaim);
 				const keyRl = await checkRateLimit(
 					env.RATION_KV,
-					"mcp_write_per_key",
+					keyCategory as Parameters<typeof checkRateLimit>[1],
 					ctx.apiKeyId,
 				);
 				if (!keyRl.allowed) {
@@ -213,6 +233,18 @@ export function makeTool<TArgs extends Record<string, unknown>, TData>(
 
 		try {
 			const envelope = await opts.handler(ctx, toolArgs as TArgs);
+			if (envelope.ok && opts.audit && ctx.preClaim && env.BETTER_AUTH_URL) {
+				const origin = env.BETTER_AUTH_URL.replace(/\/$/, "");
+				const recovery = buildClaimRecoveryPaths(origin);
+				envelope.meta = {
+					...envelope.meta,
+					claimNudge: {
+						claimPage: recovery.claimPage,
+						reissueClaimUri: recovery.reissueClaimUri,
+						claimRequiredForOwnership: true,
+					},
+				};
+			}
 			if (opts.audit || ctx.delegation) {
 				auditMcpWrite(ctx, {
 					tool: opts.name,
@@ -223,7 +255,12 @@ export function makeTool<TArgs extends Record<string, unknown>, TData>(
 			}
 			return toolReply(opts.name, envelope);
 		} catch (e) {
-			const envelope = mapErrorToEnvelope(opts.name, e);
+			const origin =
+				(env.BETTER_AUTH_URL ?? "").replace(/\/$/, "") || undefined;
+			const envelope = mapErrorToEnvelope(opts.name, e, {
+				preClaim: ctx.preClaim,
+				origin,
+			});
 			if (opts.audit || ctx.delegation) {
 				auditMcpWrite(ctx, {
 					tool: opts.name,

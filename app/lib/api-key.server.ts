@@ -4,9 +4,10 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppLoadContext } from "react-router";
 import { data } from "react-router";
 import { apiKey as apiKeyTable } from "../db/schema";
-import { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES } from "./agent/scopes";
+import { slideClaimTokenExpiry } from "./agent/claim-slide.server";
+import { AGENT_API_KEY_SCOPES } from "./agent/scopes";
 
-export { POST_CLAIM_API_SCOPES, PRE_CLAIM_API_SCOPES };
+export { AGENT_API_KEY_SCOPES };
 
 const KEY_PREFIX_LENGTH = 17; // "rtn_live_" (9) + 8 chars for lookup
 const KEY_SECRET_LENGTH = 32; // 32 hex chars after prefix
@@ -91,10 +92,13 @@ export async function verifyApiKey(
 	// waitUntil guarantees the write completes even after the response is sent.
 	const now = new Date();
 	waitUntil(
-		d1
-			.update(apiKeyTable)
-			.set({ lastUsedAt: now })
-			.where(eq(apiKeyTable.id, row.id)),
+		Promise.all([
+			d1
+				.update(apiKeyTable)
+				.set({ lastUsedAt: now })
+				.where(eq(apiKeyTable.id, row.id)),
+			slideClaimTokenExpiry(db, row.organizationId, now),
+		]),
 	);
 
 	return {

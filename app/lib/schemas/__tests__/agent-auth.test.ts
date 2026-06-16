@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CURRENT_TOS_VERSION } from "../../tos.constants";
 import {
 	agentAnonRegisterSchema,
 	agentClaimCompleteSchema,
@@ -44,13 +45,25 @@ describe("agentClaimStartSchema", () => {
 });
 
 describe("agentClaimCompleteSchema", () => {
-	it("accepts valid OTP", () => {
+	it("accepts valid OTP with ToS", () => {
 		const parsed = agentClaimCompleteSchema.parse({
 			claim_token: "a".repeat(32),
 			email: "user@example.com",
 			otp: "123456",
+			tos_accepted: true,
+			tos_version: CURRENT_TOS_VERSION,
 		});
 		expect(parsed.otp).toBe("123456");
+		expect(parsed.tos_accepted).toBe(true);
+	});
+
+	it("rejects claim without ToS acceptance", () => {
+		const result = agentClaimCompleteSchema.safeParse({
+			claim_token: "a".repeat(32),
+			email: "user@example.com",
+			otp: "123456",
+		});
+		expect(result.success).toBe(false);
 	});
 
 	it("rejects non-numeric OTP", () => {

@@ -1,5 +1,6 @@
 import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
+import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
 
@@ -119,6 +120,8 @@ export default {
 	 * Scheduled handler — runs on the CRON trigger configured in wrangler.jsonc.
 	 * Currently performs:
 	 *   - Session table cleanup: deletes expired sessions to prevent unbounded growth.
+	 *   - Queue job cleanup: deletes expired queue_job rows.
+	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
@@ -129,6 +132,7 @@ export default {
 	) {
 		ctx.waitUntil(purgeExpiredSessions(env));
 		ctx.waitUntil(purgeExpiredQueueJobs(env));
+		ctx.waitUntil(purgeOrphanAgentKitchens(env));
 	},
 } satisfies ExportedHandler<Env>;
 

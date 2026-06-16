@@ -5,6 +5,10 @@ vi.mock("~/lib/api-key.server", () => ({
 	verifyApiKey: vi.fn(),
 }));
 
+vi.mock("~/lib/agent/onboarding.server", () => ({
+	resolvePreClaimForOrg: vi.fn().mockResolvedValue(false),
+}));
+
 const { verifyApiKey } = await import("~/lib/api-key.server");
 
 function makeRequest(headers: Record<string, string>): Request {
@@ -91,6 +95,7 @@ describe("authenticateMcp", () => {
 			keyName: "Test Key",
 			keyPrefix: "rtn_live_abcd1234",
 			scopes: ["mcp", "inventory"],
+			preClaim: false,
 		});
 		expect(verifyApiKey).toHaveBeenCalledWith(
 			expect.anything(),

@@ -27,7 +27,3 @@ export function generateOtp(): string {
 	const n = crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
 	return String(100_000 + (n % 900_000));
 }
-
-export const CLAIM_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-export const CLAIM_OTP_TTL_SEC = 600; // 10 minutes
-export const CLAIM_OTP_MAX_ATTEMPTS = 5;

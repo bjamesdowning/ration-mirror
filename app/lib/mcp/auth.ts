@@ -1,3 +1,4 @@
+import { resolvePreClaimForOrg } from "../agent/onboarding.server";
 import { verifyApiKey } from "../api-key.server";
 import { isApiKeyCredential } from "../oauth.constants";
 import { verifyMcpOAuthToken } from "./oauth-token.server";
@@ -45,6 +46,8 @@ export interface McpToolContext {
 	keyName: string;
 	keyPrefix: string;
 	oauthClientId?: string;
+	/** Unclaimed agent kitchen — tighter write rate limits and claim nudges. */
+	preClaim: boolean;
 	/** Set when a Fin delegate-scoped call acts on behalf of an end-user. */
 	delegation?: McpDelegationContext;
 }
@@ -90,6 +93,7 @@ async function authenticateApiKey(
 		keyPrefix: record.keyPrefix,
 		scopes,
 		authMethod: "api_key",
+		preClaim: await resolvePreClaimForOrg(env, record.organizationId),
 	};
 }
 
@@ -108,6 +112,7 @@ async function authenticateOAuthToken(
 		scopes: verified.scopes,
 		authMethod: "oauth",
 		oauthClientId: verified.clientId,
+		preClaim: await resolvePreClaimForOrg(env, verified.organizationId),
 	};
 }
 

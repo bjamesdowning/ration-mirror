@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { AGENT_CLAIM_REISSUE_PATH } from "../../agent/claim.constants";
+import { CapacityExceededError } from "../../capacity.server";
 import { mapErrorToEnvelope, zodValidationDetails } from "../envelope";
 
 describe("zodValidationDetails", () => {
@@ -36,5 +38,54 @@ describe("mapErrorToEnvelope", () => {
 			query: [expect.any(String)],
 		});
 		expect(envelope.error.details).not.toHaveProperty("formErrors");
+	});
+
+	it("adds claim recovery paths on capacity_exceeded when preClaim", () => {
+		const error = new CapacityExceededError({
+			resource: "cargo",
+			current: 35,
+			limit: 35,
+			tier: "free",
+			isExpired: false,
+			canAdd: 0,
+		});
+
+		const envelope = mapErrorToEnvelope("add_cargo_item", error, {
+			preClaim: true,
+			origin: "https://ration.mayutic.com",
+		});
+
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+
+		expect(envelope.error.code).toBe("capacity_exceeded");
+		expect(envelope.error.details).toMatchObject({
+			resource: "cargo",
+			claimPage: "https://ration.mayutic.com/connect/claim",
+			reissueClaimUri: `https://ration.mayutic.com${AGENT_CLAIM_REISSUE_PATH}`,
+			claimRequiredForOwnership: true,
+		});
+	});
+
+	it("omits claim recovery paths on capacity_exceeded when not preClaim", () => {
+		const error = new CapacityExceededError({
+			resource: "meals",
+			current: 15,
+			limit: 15,
+			tier: "free",
+			isExpired: false,
+			canAdd: 0,
+		});
+
+		const envelope = mapErrorToEnvelope("create_meal", error, {
+			preClaim: false,
+			origin: "https://ration.mayutic.com",
+		});
+
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+
+		expect(envelope.error.details).not.toHaveProperty("claimPage");
+		expect(envelope.error.details).not.toHaveProperty("reissueClaimUri");
 	});
 });

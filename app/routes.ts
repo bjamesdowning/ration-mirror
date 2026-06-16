@@ -239,6 +239,10 @@ export default [
 		"api/agent/auth/claim/complete",
 		"routes/api/agent/auth.claim.complete.ts",
 	),
+	route(
+		"api/agent/auth/claim/reissue",
+		"routes/api/agent/auth.claim.reissue.ts",
+	),
 	route("api/oauth/grants", "routes/api.oauth.grants.ts"),
 	route("api/auth/*", "routes/api.auth.$.ts"),
 

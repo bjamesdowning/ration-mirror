@@ -19,6 +19,7 @@ function makeCtx(overrides: Partial<McpToolContext> = {}): McpToolContext {
 		apiKeyId: "key-abcdefghijklmnop",
 		keyName: "Test Key",
 		keyPrefix: "rtn_live_abcd1234",
+		preClaim: false,
 		...overrides,
 	};
 }

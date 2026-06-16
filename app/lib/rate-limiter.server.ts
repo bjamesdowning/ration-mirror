@@ -317,6 +317,21 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 5,
 		keyPrefix: "rate:agent_auth_claim_complete",
 	},
+	agent_auth_claim_reissue: {
+		windowMs: 3_600_000, // 1 hour
+		maxRequests: 3,
+		keyPrefix: "rate:agent_auth_claim_reissue",
+	},
+	mcp_write_preclaim: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:mcp_write_preclaim",
+	},
+	mcp_write_preclaim_per_key: {
+		windowMs: 60_000,
+		maxRequests: 10,
+		keyPrefix: "rate:mcp_write_preclaim_key",
+	},
 };
 
 // ─── Edge Cache TTL ───────────────────────────────────────────────────────────

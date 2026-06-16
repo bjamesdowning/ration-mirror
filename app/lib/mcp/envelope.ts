@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { buildClaimRecoveryPaths } from "../agent/claim.constants";
 import { CapacityExceededError } from "../capacity.server";
 import { isD1ContentionError } from "../error-handler";
 import { log } from "../logging.server";
@@ -16,6 +17,12 @@ export interface ToolMeta {
 	nextCursor?: string | null;
 	total?: number;
 	replayed?: boolean;
+	/** Soft nudge for unclaimed agent kitchens on write tool success. */
+	claimNudge?: {
+		claimPage: string;
+		reissueClaimUri: string;
+		claimRequiredForOwnership: boolean;
+	};
 }
 
 export type ToolEnvelope<T = unknown> =
@@ -125,6 +132,7 @@ export function zodValidationDetails(
 export function mapErrorToEnvelope(
 	tool: string,
 	error: unknown,
+	options?: { preClaim?: boolean; origin?: string },
 ): ToolEnvelope<never> {
 	if (error instanceof z.ZodError) {
 		const details = zodValidationDetails(error);
@@ -140,14 +148,19 @@ export function mapErrorToEnvelope(
 	}
 
 	if (error instanceof CapacityExceededError) {
-		return err(tool, "capacity_exceeded", error.message, {
-			details: {
-				resource: error.resource,
-				current: error.current,
-				limit: error.limit,
-				tier: error.tier,
-			},
-		});
+		const details: Record<string, unknown> = {
+			resource: error.resource,
+			current: error.current,
+			limit: error.limit,
+			tier: error.tier,
+		};
+		if (options?.preClaim && options.origin) {
+			const recovery = buildClaimRecoveryPaths(options.origin);
+			details.claimPage = recovery.claimPage;
+			details.reissueClaimUri = recovery.reissueClaimUri;
+			details.claimRequiredForOwnership = true;
+		}
+		return err(tool, "capacity_exceeded", error.message, { details });
 	}
 
 	if (error instanceof Error) {

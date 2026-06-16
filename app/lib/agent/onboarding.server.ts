@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../../db/schema";
 import type { McpScope } from "../mcp/scopes";
+import { buildClaimRecoveryPaths } from "./claim.constants";
 
 export interface AgentOnboardingState {
 	claimed: boolean;
@@ -9,12 +10,16 @@ export interface AgentOnboardingState {
 	claimPage?: string;
 	claimUrlAvailable: boolean;
 	preClaim: boolean;
+	claimRequiredForOwnership?: boolean;
+	reissueClaimUri?: string;
 }
 
 export interface SuggestedNextAction {
 	action: string;
 	description: string;
 }
+
+export { buildClaimRecoveryPaths } from "./claim.constants";
 
 export function buildSuggestedNextActions(
 	onboarding: AgentOnboardingState,
@@ -28,6 +33,13 @@ export function buildSuggestedNextActions(
 			description:
 				"Share the one-time claim URL returned during registration, or open the claim page and paste the claim token.",
 		});
+		if (onboarding.preClaim) {
+			actions.push({
+				action: "reissue_claim_url",
+				description:
+					"If the human lost the claim link, call POST /api/agent/auth/claim/reissue with Authorization: Bearer <agent-api-key> to receive a new claim_url.",
+			});
+		}
 	}
 
 	if (capabilities.canRead) {
@@ -35,6 +47,20 @@ export function buildSuggestedNextActions(
 			action: "get_context",
 			description:
 				"You already have context — try search_ingredients or list_inventory.",
+		});
+	}
+
+	if (!onboarding.claimed && capabilities.canWriteInventory) {
+		actions.push({
+			action: "add_cargo_item",
+			description: "Add items to Cargo inventory.",
+		});
+	}
+
+	if (!onboarding.claimed && capabilities.canWriteGalley) {
+		actions.push({
+			action: "list_meals",
+			description: "Browse Galley meals and match against pantry stock.",
 		});
 	}
 
@@ -70,6 +96,8 @@ export async function getAgentOnboardingState(
 		},
 	});
 
+	const recovery = buildClaimRecoveryPaths(origin);
+
 	if (!registration) {
 		return {
 			claimed: true,
@@ -85,8 +113,27 @@ export async function getAgentOnboardingState(
 		status: registration.status,
 		preClaim: registration.preClaim,
 		claimUrlAvailable: false,
-		...(claimed ? {} : { claimPage: `${origin}/connect/claim` }),
+		...(claimed
+			? {}
+			: {
+					claimPage: recovery.claimPage,
+					reissueClaimUri: recovery.reissueClaimUri,
+					claimRequiredForOwnership: true,
+				}),
 	};
+}
+
+export async function resolvePreClaimForOrg(
+	env: Cloudflare.Env,
+	organizationId: string,
+): Promise<boolean> {
+	const db = drizzle(env.DB, { schema });
+	const registration = await db.query.agentRegistration.findFirst({
+		where: eq(schema.agentRegistration.organizationId, organizationId),
+		columns: { preClaim: true, status: true },
+	});
+	if (!registration) return false;
+	return registration.status === "pending_claim" && registration.preClaim;
 }
 
 export function buildGetContextCapabilities(scopes: string[]) {

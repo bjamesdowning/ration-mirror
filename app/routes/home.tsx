@@ -43,7 +43,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export function meta(_: Route.MetaArgs) {
 	const title = "Ration — AI-Native Kitchen Management";
 	const description =
-		"Manage your entire kitchen through an AI agent. Ration connects Cargo, Galley, Manifest, Supply, credits, and MCP into one elegant meal-planning system.";
+		"Manage your entire kitchen through an AI agent. Agents can autonomously provision a kitchen via MCP — no human signup required to start. Ration connects Cargo, Galley, Manifest, Supply, credits, and agent control into one elegant meal-planning system.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -109,7 +109,7 @@ const experienceChapters = [
 	{
 		kicker: "02 / Ask",
 		title: "Your agent can reason over meals, stock, and preferences.",
-		copy: "Ask what to cook, what expires soon, what to buy, or whether a recipe is possible. Ration answers from live inventory and Galley data.",
+		copy: "Ask what to cook, what expires soon, what to buy, or whether a recipe is possible. MCP-connected agents — including those that self-registered — answer from live inventory and Galley data.",
 		image: "/static/mcp-server-chat.webp",
 	},
 	{
@@ -123,7 +123,7 @@ const experienceChapters = [
 const capabilities = [
 	{
 		title: "OAuth MCP control",
-		copy: "Paste one URL into Cursor or Claude Desktop — browser sign-in grants scoped access to inventory, meals, plans, and supply lists.",
+		copy: "Agents can self-register and receive a full-write kitchen instantly — or humans paste one URL into Cursor or Claude Desktop for OAuth-scoped access to inventory, meals, plans, and supply lists.",
 		chip: "16+ tools",
 		accent: true,
 	},
@@ -144,7 +144,7 @@ const capabilities = [
 	},
 	{
 		title: "Agent-ready discovery",
-		copy: "Ration publishes Link headers, markdown negotiation, API catalog, OAuth server card, MCP protected-resource metadata, and agent skills.",
+		copy: "Ration publishes auth.md, anonymous agent registration, Link headers, API catalog, OAuth server card, MCP protected-resource metadata, and agent skills — so clients can provision and connect without manual setup.",
 		chip: "Well-known",
 		accent: true,
 	},
@@ -228,7 +228,7 @@ function AgentCommandDeck() {
 						</span>
 					</div>
 					<span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-						MCP / Live Context
+						MCP / Autonomous Provision
 					</span>
 				</div>
 				<div className="grid lg:grid-cols-5">
@@ -253,9 +253,10 @@ function AgentCommandDeck() {
 								Your pantry, inside your AI.
 							</h3>
 							<p className="text-sm text-muted leading-relaxed">
-								Ration gives agents OAuth-authorized read/write tools for
-								inventory, meals, meal plans, shopping lists, and credits — no
-								manual API key setup for standard clients.
+								Ration gives agents OAuth-authorized read/write tools — or
+								autonomous self-registration that spins up a kitchen with full
+								MCP access before a human claims ownership. No manual API key
+								choreography for standard clients.
 							</p>
 						</div>
 						<div className="flex flex-wrap gap-2">
@@ -287,7 +288,7 @@ function LifecycleStory() {
 				centered
 				eyebrow="Closed Loop"
 				title="One kitchen lifecycle, available to humans and agents."
-				subtitle="The web UI is a control room. MCP is the conversational interface. Both move through the same Cargo, Galley, Manifest, Supply, and Dock loop."
+				subtitle="The web UI is a control room. MCP is the conversational interface — agents can also provision their own kitchen autonomously. Both move through the same Cargo, Galley, Manifest, Supply, and Dock loop."
 			/>
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
 				{lifecycle.map((stage, index) => (
@@ -402,8 +403,8 @@ function CapabilityMatrix() {
 						Agent-ready by design.
 					</h3>
 					<p className="text-sm text-muted leading-relaxed">
-						Agents can discover Ration through Link headers, request markdown
-						content, read an API catalog, inspect OAuth authorization-server
+						Agents can discover Ration through Link headers, read auth.md for
+						anonymous self-registration, inspect OAuth authorization-server
 						metadata, fetch the MCP server card, and load skill instructions.
 					</p>
 				</div>
@@ -465,7 +466,7 @@ function PricingSection({
 						<li>{loaderData.tierLimits.free.maxMeals} meals in Galley</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} Supply lists</li>
 						<li>AI credits available as one-time packs</li>
-						<li>AI agent access (OAuth MCP) + REST API</li>
+						<li>AI agent access (autonomous MCP registration + OAuth)</li>
 					</ul>
 					<a
 						href="#signup"
@@ -556,7 +557,11 @@ function PricingSection({
 							/>
 							<FeatureRow label="Semantic search and Match Mode" free crew />
 							<FeatureRow label="AI weekly meal planning" free crew />
-							<FeatureRow label="MCP Server (OAuth agent access)" free crew />
+							<FeatureRow
+								label="MCP Server (autonomous registration + OAuth)"
+								free
+								crew
+							/>
 							<FeatureRow label="REST API import/export" free crew />
 							<FeatureRow label="Member invites" crew />
 							<FeatureRow label="Shared Manifest/Supply links" crew />
@@ -596,7 +601,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		softwareAppSchema({
 			name: "Ration",
 			description:
-				"AI-native pantry inventory, meal planning, supply lists, and MCP agent control. Manage your kitchen through Claude, ChatGPT, or any MCP-compatible assistant.",
+				"AI-native pantry inventory, meal planning, supply lists, and MCP agent control. Agents can autonomously provision a kitchen or connect via OAuth. Manage your kitchen through Claude, ChatGPT, or any MCP-compatible assistant.",
 			offers: [
 				{
 					name: "Free",
@@ -609,7 +614,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					price: "5",
 					priceCurrency: "USD",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; MCP access.",
+						"Unlimited inventory, recipes, supply lists; group sharing; autonomous MCP registration and OAuth access.",
 				},
 			],
 		}),
@@ -617,22 +622,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			{
 				question: "What is Ration?",
 				answer:
-					"Ration is an AI-native kitchen management system that tracks pantry inventory, plans meals, and generates supply lists. It exposes an MCP server so Claude, ChatGPT, Cursor, and other AI assistants can read and operate your kitchen directly.",
+					"Ration is an AI-native kitchen management system that tracks pantry inventory, plans meals, and generates supply lists. It exposes an MCP server so Claude, ChatGPT, Cursor, and other AI assistants can read and operate your kitchen directly — including autonomous self-registration so agents can provision a kitchen without human signup first.",
 			},
 			{
 				question: "How does Ration work with AI assistants?",
 				answer:
-					"Add https://mcp.ration.mayutic.com/mcp to any MCP-compatible client (Claude Desktop, Cursor, ChatGPT desktop, Zed). Your browser opens for sign-in — pick your household, approve permissions, and the assistant can list inventory, match meals, plan a week, generate supply lists, and consume ingredients after cooking. Revoke access anytime in Hub Settings → Connected Agents.",
+					"Add https://mcp.ration.mayutic.com/mcp to any MCP-compatible client (Claude Desktop, Cursor, ChatGPT desktop, Zed) — or let your agent self-register via auth.md for immediate full-write access. OAuth clients open browser sign-in to pick a household and approve scopes. Either path gives inventory, meal matching, weekly planning, supply lists, and ingredient consumption. Revoke access anytime in Hub Settings → Connected Agents.",
 			},
 			{
 				question: "How do I connect Claude or Cursor?",
 				answer:
-					"Paste https://mcp.ration.mayutic.com/mcp into your MCP client settings. Complete browser sign-in, select your household, and authorize the requested scopes. No API key required for standard clients. Manage grants in Hub → Settings → Connected Agents.",
+					"Paste https://mcp.ration.mayutic.com/mcp into your MCP client settings for OAuth browser sign-in, or point autonomous agents at /auth.md to self-provision a kitchen. Select your household and authorize scopes for OAuth; claim ownership later when a human is ready. Manage grants in Hub → Settings → Connected Agents.",
 			},
 			{
 				question: "Is Ration free?",
 				answer:
-					"Yes. The Free tier supports up to 35 pantry items, 15 recipes, and 3 supply lists with no credit card required. The Crew Member tier ($5/mo or $50/yr) removes those limits and enables group sharing, member invitations, and MCP access.",
+					"Yes. The Free tier supports up to 35 pantry items, 15 recipes, and 3 supply lists with no credit card required. Agents can autonomously self-register via MCP on the same tier. The Crew Member tier ($5/mo or $50/yr) removes those limits and enables group sharing, member invitations, and full agent access.",
 			},
 			{
 				question: "What is Cargo, Galley, Manifest, and Supply?",
@@ -673,16 +678,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						<div className="space-y-8">
 							<div className="inline-flex items-center gap-2 rounded-full border border-hyper-green/30 bg-hyper-green/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-hyper-green">
 								<span className="h-1.5 w-1.5 rounded-full bg-hyper-green shadow-glow-sm" />
-								MCP-first kitchen intelligence
+								MCP-first · agents self-register
 							</div>
 							<div className="space-y-5">
 								<h1 className="text-display text-5xl md:text-7xl text-carbon leading-[0.95] tracking-tight">
 									Manage your kitchen through your AI agent.
 								</h1>
 								<p className="text-lg md:text-xl text-muted leading-relaxed max-w-2xl">
-									Paste one MCP URL, authorize in your browser, and your AI
-									agent operates pantry inventory, recipes, meal plans, shopping
-									lists, and credits with scoped consent.
+									Paste one MCP URL — or let your agent autonomously provision a
+									kitchen with full write access. OAuth sign-in for humans;
+									self-registration for agents. Then operate pantry inventory,
+									recipes, meal plans, shopping lists, and credits with scoped
+									consent.
 								</p>
 							</div>
 							<div className="flex flex-col sm:flex-row gap-3">
@@ -707,7 +714,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</div>
 							<div className="grid grid-cols-3 gap-3 max-w-xl">
 								{[
-									["OAuth MCP", "Paste URL, sign in"],
+									["Agent MCP", "Self-register or OAuth"],
 									["Cargo", "Live pantry context"],
 									["Supply", "Shopping delta"],
 								].map(([label, value]) => (
@@ -828,7 +835,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<SectionHeader
 								eyebrow="Begin"
 								title="Give your agent a kitchen it can actually operate."
-								subtitle="Create an account, configure your group, then paste the MCP URL into your AI client or use the web app."
+								subtitle="Create an account for the web app, or let your MCP agent self-provision a kitchen via auth.md — then paste the MCP URL into your AI client."
 							/>
 							<div className="glass-panel rounded-2xl p-5 space-y-3">
 								<h3 className="text-display text-lg text-carbon">

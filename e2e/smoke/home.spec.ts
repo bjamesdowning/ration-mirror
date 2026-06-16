@@ -9,7 +9,7 @@ test.describe("home", () => {
 			}),
 		).toBeVisible({ timeout: 5000 });
 		await expect(
-			page.getByText("MCP-first kitchen intelligence").first(),
+			page.getByText(/MCP-first.*agents self-register/i).first(),
 		).toBeVisible();
 		await expect(
 			page.getByRole("link", { name: /View pricing/i }),

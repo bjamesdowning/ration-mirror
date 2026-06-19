@@ -3,6 +3,7 @@ import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
+import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
 
 // biome-ignore lint/suspicious/noExplicitAny: Build types are handled by framework
 const handleRequest = createRequestHandler({ build: build as any });
@@ -122,6 +123,7 @@ export default {
 	 *   - Session table cleanup: deletes expired sessions to prevent unbounded growth.
 	 *   - Queue job cleanup: deletes expired queue_job rows.
 	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
+	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
@@ -133,6 +135,7 @@ export default {
 		ctx.waitUntil(purgeExpiredSessions(env));
 		ctx.waitUntil(purgeExpiredQueueJobs(env));
 		ctx.waitUntil(purgeOrphanAgentKitchens(env));
+		ctx.waitUntil(sendReengagementEmails(env));
 	},
 } satisfies ExportedHandler<Env>;
 

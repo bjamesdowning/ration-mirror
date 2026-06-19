@@ -7,6 +7,7 @@ import { CURRENT_TOS_VERSION } from "../tos.constants";
 import { CLAIM_TOKEN_SLIDE_MS } from "./claim.constants";
 import { generateClaimToken, hashToken } from "./claim-crypto.server";
 import { buildPersonalOrgRecords } from "./org-records.server";
+import { buildAgentStubEmail } from "./stub-user";
 
 const KEY_PREFIX_LENGTH = 17; // "rtn_live_" (9) + 8 chars
 const KEY_SECRET_LENGTH = 32;
@@ -18,10 +19,6 @@ function generateSecureRandomHex(length: number): string {
 	return Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
 		.join("")
 		.slice(0, length);
-}
-
-function agentStubEmail(userId: string): string {
-	return `agent+${userId}@agents.ration.mayutic.com`;
 }
 
 export interface ProvisionAgentInput {
@@ -78,7 +75,7 @@ export async function provisionAgentUser(
 		db.insert(schema.user).values({
 			id: userId,
 			name: userName,
-			email: agentStubEmail(userId),
+			email: buildAgentStubEmail(userId),
 			emailVerified: false,
 			createdAt: now,
 			tosAcceptedAt: now,

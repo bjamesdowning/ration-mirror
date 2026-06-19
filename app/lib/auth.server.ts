@@ -36,6 +36,7 @@ import {
 	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
 import type { UserSettings } from "./types";
+import { touchUserLastActive } from "./user-activity.server";
 
 const statement = {
 	...defaultStatements,
@@ -438,6 +439,10 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	const { session: updatedSession } = await ensureActiveOrganization(
 		context.cloudflare.env,
 		session,
+	);
+
+	waitUntil(
+		touchUserLastActive(context.cloudflare.env.DB, updatedSession.user.id),
 	);
 
 	return updatedSession;

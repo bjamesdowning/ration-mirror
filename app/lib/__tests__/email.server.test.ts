@@ -3,6 +3,7 @@ import type { EmailPayload } from "~/lib/email.server";
 import {
 	buildClaimOtpEmail,
 	buildMagicLinkEmail,
+	buildReengagementEmail,
 	buildWelcomeEmail,
 	EMAIL_FROM,
 	sendEmail,
@@ -138,6 +139,51 @@ describe("email.server", () => {
 			expect(result.text).toContain(hubUrl);
 			expect(result.text).toContain("Cargo");
 			expect(result.text).toContain(privacyUrl);
+		});
+	});
+
+	describe("buildReengagementEmail", () => {
+		const hubUrl = "https://ration.mayutic.com/hub";
+		const connectUrl = "https://ration.mayutic.com/connect";
+		const privacyUrl = "https://ration.mayutic.com/legal/privacy";
+		const baseParams = { hubUrl, connectUrl, privacyUrl, inactiveDays: 30 };
+
+		it("returns a compelling subject and inactive-day preheader", () => {
+			const result = buildReengagementEmail(baseParams);
+
+			expect(result.subject).toBe("Time to check your orbital pantry");
+			expect(result.html).toContain("30 days");
+			expect(result.html).toContain("connect Cursor and Claude via MCP");
+		});
+
+		it("includes hub CTA, feature bullets, and MCP setup", () => {
+			const result = buildReengagementEmail(baseParams);
+
+			expect(result.html).toContain("Return to your Hub →");
+			expect(result.html).toContain(hubUrl);
+			expect(result.html).toContain("Cargo");
+			expect(result.html).toContain("Galley");
+			expect(result.html).toContain("Manifest");
+			expect(result.html).toContain(MCP_ENDPOINT_URL);
+			expect(result.html).toContain(connectUrl);
+			expect(result.text).toContain(MCP_ENDPOINT_URL);
+		});
+
+		it("personalizes greeting when userName is provided", () => {
+			const result = buildReengagementEmail({
+				...baseParams,
+				userName: "Billy Downing",
+			});
+
+			expect(result.html).toContain("We miss you, Billy");
+			expect(result.text).toContain("We miss you, Billy");
+		});
+
+		it("uses generic greeting when userName is absent", () => {
+			const result = buildReengagementEmail(baseParams);
+
+			expect(result.html).toContain("Your kitchen misses you");
+			expect(result.text).toContain("Your kitchen misses you");
 		});
 	});
 

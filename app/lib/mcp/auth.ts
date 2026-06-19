@@ -1,6 +1,8 @@
+import { waitUntil } from "cloudflare:workers";
 import { resolvePreClaimForOrg } from "../agent/onboarding.server";
 import { verifyApiKey } from "../api-key.server";
 import { isApiKeyCredential } from "../oauth.constants";
+import { touchUserLastActive } from "../user-activity.server";
 import { verifyMcpOAuthToken } from "./oauth-token.server";
 
 /**
@@ -103,6 +105,7 @@ async function authenticateOAuthToken(
 ): Promise<McpToolContext> {
 	const verified = await verifyMcpOAuthToken(env, rawToken);
 	const clientLabel = verified.clientId ?? "oauth-agent";
+	waitUntil(touchUserLastActive(env.DB, verified.userId));
 	return {
 		organizationId: verified.organizationId,
 		apiKeyId: verified.clientId ?? `oauth:${verified.userId}`,

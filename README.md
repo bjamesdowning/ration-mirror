@@ -1091,7 +1091,7 @@ erDiagram
 
 Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
 
-**Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Transactional emails (magic link, welcome, agent OTP) are skipped locally when the `EMAIL` send binding is unavailable.
+**Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Transactional emails (magic link, welcome, agent OTP, 30-day inactivity re-engagement) are skipped locally when the `EMAIL` send binding is unavailable.
 
 ```mermaid
 sequenceDiagram
@@ -1122,7 +1122,7 @@ sequenceDiagram
     Auth-->>User: Set-Cookie: better-auth.session_token
 ```
 
-*Diagram shows Google OAuth flow. Magic link flow: user enters email → server sends link via Cloudflare Email Service → user clicks link → Better Auth verifies token → session created. New users also receive a welcome email after account creation.*
+*Diagram shows Google OAuth flow. Magic link flow: user enters email → server sends link via Cloudflare Email Service → user clicks link → Better Auth verifies token → session created. New users also receive a welcome email after account creation. Users inactive for 30+ days (no Hub session, API key, or MCP activity) receive a daily cron re-engagement reminder (max 50 per run); verified human accounts only — agent stub kitchens and unverified emails are excluded.*
 
 **Post-signup provisioning** (in [`app/lib/auth.server.ts`](app/lib/auth.server.ts)): Every new user automatically receives a personal organization with `owner` role, and legal acceptance metadata is stamped (`tosAcceptedAt`, `tosVersion`) at account creation. Failures in this hook are non-fatal — the user can manually create a group. This ensures every user always has a valid group context for queries without requiring a separate onboarding step.
 

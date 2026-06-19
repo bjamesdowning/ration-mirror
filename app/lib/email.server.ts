@@ -196,6 +196,59 @@ function formatSupportedClients(): string {
 	return `${clients.join(", ")}, and ${last}`;
 }
 
+const FEATURE_BULLETS_HTML = `<ul style="margin:0 0 24px;padding:0 0 0 20px;font-size:14px;color:#666666;line-height:1.8;">
+                <li><strong style="color:#111111;">Cargo</strong> — track dry and frozen inventory with expiry alerts</li>
+                <li><strong style="color:#111111;">Galley</strong> — build recipes from what you already have on board</li>
+                <li><strong style="color:#111111;">Manifest</strong> — schedule your weekly meal plan in one view</li>
+              </ul>`;
+
+const FEATURE_BULLETS_TEXT_LINES = `- Cargo — track dry and frozen inventory with expiry alerts
+- Galley — build recipes from what you already have on board
+- Manifest — schedule your weekly meal plan in one view`;
+
+const FEATURE_BULLETS_TEXT = `What you can do right now:
+${FEATURE_BULLETS_TEXT_LINES}`;
+
+function buildMcpConnectSectionHtml(connectUrl: string): string {
+	const supportedClients = formatSupportedClients();
+	const mcpStepsHtml = MCP_SETUP_STEPS_SHORT.map(
+		(step) => `<li style="margin-bottom:8px;">${step}</li>`,
+	).join("");
+
+	return `<p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#111111;">
+                Connect your AI assistant
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#666666;line-height:1.6;">
+                Paste one URL into ${supportedClients} — no API key required. Your agent can read and update your pantry with scoped OAuth consent.
+              </p>
+              <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#111111;">
+                MCP server URL
+              </p>
+              <p style="margin:0 0 16px;padding:12px 14px;background-color:#F8F9FA;border:1px solid #E6E6E6;border-radius:8px;font-size:12px;color:#111111;word-break:break-all;">
+                ${MCP_ENDPOINT_URL}
+              </p>
+              <ol style="margin:0 0 20px;padding:0 0 0 20px;font-size:14px;color:#666666;line-height:1.8;">
+                ${mcpStepsHtml}
+              </ol>
+              <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;">
+                <a href="${connectUrl}" style="color:#00E088;font-weight:700;text-decoration:none;">Full MCP setup guide →</a>
+              </p>`;
+}
+
+function buildMcpConnectSectionText(connectUrl: string): string {
+	const supportedClients = formatSupportedClients();
+	const mcpStepsText = MCP_SETUP_STEPS_SHORT.map(
+		(step, i) => `${i + 1}. ${step}`,
+	).join("\n");
+
+	return `Connect your AI assistant (${supportedClients}):
+MCP server URL: ${MCP_ENDPOINT_URL}
+
+${mcpStepsText}
+
+Full setup guide: ${connectUrl}`;
+}
+
 /**
  * Build a post-signup welcome email that drives users to their Hub.
  */
@@ -216,13 +269,6 @@ export function buildWelcomeEmail(params: {
 	const subject = "Your orbital pantry is ready";
 	const preheader =
 		"Open your Hub, connect Cursor or Claude via MCP, and start managing your kitchen.";
-	const supportedClients = formatSupportedClients();
-	const mcpStepsHtml = MCP_SETUP_STEPS_SHORT.map(
-		(step) => `<li style="margin-bottom:8px;">${step}</li>`,
-	).join("");
-	const mcpStepsText = MCP_SETUP_STEPS_SHORT.map(
-		(step, i) => `${i + 1}. ${step}`,
-	).join("\n");
 
 	const bodyHtml = `<h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111111;letter-spacing:-0.5px;">
                 ${greeting}
@@ -234,29 +280,8 @@ export function buildWelcomeEmail(params: {
               <p style="margin:28px 0 12px;font-size:13px;font-weight:700;color:#111111;">
                 What you can do right now:
               </p>
-              <ul style="margin:0 0 24px;padding:0 0 0 20px;font-size:14px;color:#666666;line-height:1.8;">
-                <li><strong style="color:#111111;">Cargo</strong> — track dry and frozen inventory with expiry alerts</li>
-                <li><strong style="color:#111111;">Galley</strong> — build recipes from what you already have on board</li>
-                <li><strong style="color:#111111;">Manifest</strong> — schedule your weekly meal plan in one view</li>
-              </ul>
-              <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#111111;">
-                Connect your AI assistant
-              </p>
-              <p style="margin:0 0 16px;font-size:14px;color:#666666;line-height:1.6;">
-                Paste one URL into ${supportedClients} — no API key required. Your agent can read and update your pantry with scoped OAuth consent.
-              </p>
-              <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#111111;">
-                MCP server URL
-              </p>
-              <p style="margin:0 0 16px;padding:12px 14px;background-color:#F8F9FA;border:1px solid #E6E6E6;border-radius:8px;font-size:12px;color:#111111;word-break:break-all;">
-                ${MCP_ENDPOINT_URL}
-              </p>
-              <ol style="margin:0 0 20px;padding:0 0 0 20px;font-size:14px;color:#666666;line-height:1.8;">
-                ${mcpStepsHtml}
-              </ol>
-              <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;">
-                <a href="${connectUrl}" style="color:#00E088;font-weight:700;text-decoration:none;">Full MCP setup guide →</a>
-              </p>
+              ${FEATURE_BULLETS_HTML}
+              ${buildMcpConnectSectionHtml(connectUrl)}
               <p style="margin:0;font-size:12px;color:#999999;line-height:1.5;">
                 Or copy and paste your Hub link:<br />
                 <a href="${hubUrl}" style="color:#00E088;word-break:break-all;">${hubUrl}</a>
@@ -277,19 +302,76 @@ Your personal supply group is provisioned and waiting. Open your Hub to get star
 
 ${hubUrl}
 
-What you can do right now:
-- Cargo — track dry and frozen inventory with expiry alerts
-- Galley — build recipes from what you already have on board
-- Manifest — schedule your weekly meal plan in one view
+${FEATURE_BULLETS_TEXT}
 
-Connect your AI assistant (${supportedClients}):
-MCP server URL: ${MCP_ENDPOINT_URL}
-
-${mcpStepsText}
-
-Full setup guide: ${connectUrl}
+${buildMcpConnectSectionText(connectUrl)}
 
 You're receiving this because you created a Ration account.
+Privacy policy: ${privacyUrl}
+Built by Mayutic`;
+
+	return { subject, html, text };
+}
+
+/**
+ * Build a re-engagement email for users inactive 30+ days.
+ */
+export function buildReengagementEmail(params: {
+	hubUrl: string;
+	connectUrl: string;
+	privacyUrl: string;
+	userName?: string | null;
+	inactiveDays: number;
+}): Pick<EmailPayload, "html" | "text"> & { subject: string } {
+	const { hubUrl, connectUrl, privacyUrl, userName, inactiveDays } = params;
+	const firstName = firstNameFromUserName(userName);
+	const greeting = firstName
+		? `We miss you, ${escapeHtml(firstName)}`
+		: "Your kitchen misses you";
+	const greetingText = firstName
+		? `We miss you, ${firstName}`
+		: "Your kitchen misses you";
+	const subject = "Time to check your orbital pantry";
+	const preheader = `It's been ${inactiveDays} days — your cargo is waiting. Reopen your Hub or connect Cursor and Claude via MCP.`;
+
+	const bodyHtml = `<h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111111;letter-spacing:-0.5px;">
+                ${greeting}
+              </h1>
+              <p style="margin:0 0 20px;font-size:14px;color:#666666;line-height:1.6;">
+                It has been about ${inactiveDays} days since you last checked in. Your orbital supply chain is still running — inventory, recipes, and meal plans are ready when you are. Pick up where you left off and cut waste before good food expires.
+              </p>
+              ${emailButton(hubUrl, "Return to your Hub →")}
+              <p style="margin:28px 0 12px;font-size:13px;font-weight:700;color:#111111;">
+                Why come back to Ration:
+              </p>
+              ${FEATURE_BULLETS_HTML}
+              ${buildMcpConnectSectionHtml(connectUrl)}
+              <p style="margin:0;font-size:12px;color:#999999;line-height:1.5;">
+                Hub link:<br />
+                <a href="${hubUrl}" style="color:#00E088;word-break:break-all;">${hubUrl}</a>
+              </p>`;
+
+	const footerHtml = `You're receiving this because your Ration account has been inactive for ${inactiveDays} days. <a href="${privacyUrl}" style="color:#00E088;">Privacy policy</a> · Built by Mayutic`;
+
+	const html = wrapEmailLayout({
+		preheader,
+		title: subject,
+		bodyHtml,
+		footerHtml,
+	});
+
+	const text = `${greetingText}
+
+It has been about ${inactiveDays} days since you last checked in on Ration. Your pantry data is still here — reopen your Hub to see what's expiring and plan your next meals:
+
+${hubUrl}
+
+Why come back to Ration:
+${FEATURE_BULLETS_TEXT_LINES}
+
+${buildMcpConnectSectionText(connectUrl)}
+
+You're receiving this because your Ration account has been inactive for ${inactiveDays} days.
 Privacy policy: ${privacyUrl}
 Built by Mayutic`;
 

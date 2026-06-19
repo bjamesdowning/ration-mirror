@@ -6,6 +6,7 @@ import { data } from "react-router";
 import { apiKey as apiKeyTable } from "../db/schema";
 import { slideClaimTokenExpiry } from "./agent/claim-slide.server";
 import { AGENT_API_KEY_SCOPES } from "./agent/scopes";
+import { touchUserLastActive } from "./user-activity.server";
 
 export { AGENT_API_KEY_SCOPES };
 
@@ -98,6 +99,7 @@ export async function verifyApiKey(
 				.set({ lastUsedAt: now })
 				.where(eq(apiKeyTable.id, row.id)),
 			slideClaimTokenExpiry(db, row.organizationId, now),
+			touchUserLastActive(db, row.userId, now),
 		]),
 	);
 

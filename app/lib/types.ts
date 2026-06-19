@@ -41,6 +41,10 @@ export interface UserSettings {
 	};
 	/** Supply list quantity display mode. */
 	supplyUnitMode?: "cooking" | "metric" | "imperial";
+	/** ISO timestamp of last Hub, API, or MCP activity (throttled writes). */
+	lastActiveAt?: string;
+	/** ISO timestamp when the 30-day inactivity re-engagement email was last sent. */
+	reengagementEmailSentAt?: string;
 	[key: string]: unknown; // Index signature for database compatibility
 }
 

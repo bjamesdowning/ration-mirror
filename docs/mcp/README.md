@@ -1,3 +1,5 @@
+**Source:** [gitlab.com/mayutic/ration/application](https://gitlab.com/mayutic/ration/application)
+
 # Ration MCP Server
 
 > **AI-native kitchen management for your assistant** — live pantry inventory, cook-from-stock recipes, weekly meal plans, and shopping lists your agent can read and update through MCP.
@@ -88,19 +90,70 @@ Read [auth.md](https://ration.mayutic.com/auth.md) for anonymous agent registrat
 
 ---
 
-## Tool groups (summary)
+## MCP tools reference
 
-| Group | Tools | Purpose |
-|-------|-------|---------|
-| **Inventory** | `list_inventory`, `search_ingredients`, `get_expiring_items`, `add_cargo_item`, `preview_inventory_import`, `apply_inventory_import`, … | Live pantry (Cargo) |
-| **Galley** | `list_meals`, `match_meals`, `create_meal`, `consume_meal`, … | Recipes and cook-from-stock |
-| **Manifest** | `get_meal_plan`, `add_meal_plan_entry`, `bulk_add_meal_plan_entries`, … | Weekly meal calendar |
-| **Supply** | `get_supply_list`, `sync_supply_from_selected_meals`, `mark_supply_purchased`, … | Shopping list delta |
-| **Account** | `get_context`, `get_user_preferences`, `update_user_preferences` | Allergens, units, alerts |
+All tools are scoped to the authorized household. **MCP calls do not consume Ration credits.** Destructive tools require `confirm: true`.
 
-Full reference: [MCP tools in API docs](https://ration.mayutic.com/docs/api#mcp-tools) · Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json)
+### Read & account
 
-Destructive actions (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) require `confirm: true`.
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `get_context` | `mcp:read` | Return org id, authorized scopes, capabilities, and suggested next actions. Safe to call first. |
+| `search_ingredients` | `mcp:read` | Semantic pantry search by meaning — find items without knowing the exact name. |
+| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter. |
+| `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields). |
+| `get_expiring_items` | `mcp:read` | List items expiring within N days (default 7). Plan rescue meals and reduce waste. |
+| `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
+| `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` (fully cookable) or `delta` (partial + gaps). |
+| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (breakfast, lunch, dinner, snack). |
+| `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
+| `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
+| `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
+
+### Inventory (Cargo)
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `add_cargo_item` | `mcp:inventory:write` | Add pantry stock. No credits charged; vectors backfilled async. |
+| `update_cargo_item` | `mcp:inventory:write` | Update name, quantity, unit, expiry, domain, or tags. |
+| `remove_cargo_item` | `mcp:inventory:write` | Remove a pantry item. **Requires `confirm: true`.** |
+| `inventory_import_schema` | `mcp:read` | JSON schema for bulk import fields, units, and row limits. |
+| `preview_inventory_import` | `mcp:read` | Dry-run receipt/bulk import — returns `previewToken` and per-row match/create/skip. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import. Idempotent via `idempotencyKey`. |
+| `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). |
+
+### Galley (recipes)
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
+| `update_meal` | `mcp:galley:write` | Update a recipe — round-trip via `list_meals` → edit → pass full object. |
+| `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
+| `toggle_meal_active` | `mcp:galley:write` | Toggle a meal in the Galley active selection (drives supply sync). |
+| `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
+| `consume_meal` | `mcp:galley:write` | Mark cooked and deduct ingredients from pantry via semantic matching. |
+
+### Manifest (meal plan)
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `add_meal_plan_entry` | `mcp:manifest:write` | Schedule a meal on a date and slot. |
+| `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Add up to 50 plan entries in one atomic batch. |
+| `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
+| `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
+
+### Supply (shopping list)
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `add_supply_item` | `mcp:supply:write` | Add a line to the active shopping list. |
+| `update_supply_item` | `mcp:supply:write` | Update name, quantity, or unit on a supply line. |
+| `remove_supply_item` | `mcp:supply:write` | Remove a supply list line. |
+| `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased / unpurchased on a supply line. |
+| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |
+| `complete_supply_list` | `mcp:supply:write` | Dock purchased items into pantry and archive the list. **Requires `confirm: true`.** |
+
+Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 
 ---
 
@@ -124,7 +177,8 @@ Destructive actions (`remove_cargo_item`, `delete_meal`, `clear_active_meals`) r
 | **Endpoint** | `https://mcp.ration.mayutic.com/mcp` |
 | **Transport** | Streamable HTTP (OAuth 2.1) |
 | **Category** | Productivity |
-| **Source** | [ration.mayutic.com](https://ration.mayutic.com) |
+| **Source** | [gitlab.com/mayutic/ration/application](https://gitlab.com/mayutic/ration/application) |
+| **Homepage** | [ration.mayutic.com](https://ration.mayutic.com) |
 | **Listing doc** | [ration.mayutic.com/mcp.md](https://ration.mayutic.com/mcp.md) |
 | **Built by** | [Mayutic](https://www.mayutic.com) |
 

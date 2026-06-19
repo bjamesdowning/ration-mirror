@@ -274,21 +274,19 @@ export default function PrivacyPolicy() {
 
 			<ul>
 				<li>
-					<strong>Cloudflare:</strong> Infrastructure, edge computing, and
-					security. Data stored: Application data, images (R2), database (D1).
-				</li>
-				<li>
-					<strong>Resend:</strong> Transactional email delivery. We use Resend
-					to send magic link sign-in emails to your email address. Resend
-					processes your email address and the email content we provide solely
-					for delivery. See{" "}
+					<strong>Cloudflare:</strong> Infrastructure, edge computing, security,
+					and transactional email delivery (Email Service). Data stored:
+					application data, images (R2), database (D1). We use Cloudflare Email
+					Service to send magic link sign-in, welcome, and verification emails.
+					Your email address and message content are processed solely for
+					delivery. See{" "}
 					<a
-						href="https://resend.com/legal/privacy-policy"
+						href="https://www.cloudflare.com/privacypolicy/"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="text-hyper-green hover:underline"
 					>
-						Resend&apos;s Privacy Policy
+						Cloudflare&apos;s Privacy Policy
 					</a>
 					.
 				</li>
@@ -424,17 +422,6 @@ export default function PrivacyPolicy() {
 					<strong>Stripe:</strong>{" "}
 					<a
 						href="https://stripe.com/legal/dpa"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-hyper-green hover:underline"
-					>
-						Data Processing Agreement
-					</a>
-				</li>
-				<li>
-					<strong>Resend:</strong>{" "}
-					<a
-						href="https://resend.com/legal/data-processing-agreement"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="text-hyper-green hover:underline"

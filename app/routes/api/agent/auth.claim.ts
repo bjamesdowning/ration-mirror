@@ -7,7 +7,11 @@ import {
 	isRegistrationClaimable,
 	storeClaimOtp,
 } from "~/lib/agent/claim.server";
-import { buildClaimOtpEmail, sendEmail } from "~/lib/email.server";
+import {
+	buildClaimOtpEmail,
+	sendEmail,
+	shouldSkipEmailSend,
+} from "~/lib/email.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -69,10 +73,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const otp = generateOtp();
 		await storeClaimOtp(env, registration.id, parsed.email, otp);
 
-		const resendKey = env.RESEND_API_KEY;
-		if (resendKey) {
+		if (!shouldSkipEmailSend(env)) {
 			const { html, text } = buildClaimOtpEmail(otp);
-			const emailPromise = sendEmail(resendKey, {
+			const emailPromise = sendEmail(env.EMAIL, {
 				to: parsed.email,
 				subject: "Verify your Ration agent kitchen",
 				html,

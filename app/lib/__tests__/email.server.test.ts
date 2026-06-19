@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EmailPayload } from "~/lib/email.server";
-import { buildMagicLinkEmail } from "~/lib/email.server";
+import {
+	buildClaimOtpEmail,
+	buildMagicLinkEmail,
+	buildWelcomeEmail,
+	EMAIL_FROM,
+	sendEmail,
+} from "~/lib/email.server";
 
 describe("email.server", () => {
 	describe("buildMagicLinkEmail", () => {
@@ -27,7 +33,7 @@ describe("email.server", () => {
 			const result = buildMagicLinkEmail("https://test.com/verify");
 
 			expect(result.html).toContain("Ration");
-			expect(result.html).toContain("Sign in to Ration");
+			expect(result.html).toContain("Your sign-in link");
 			expect(result.html).toContain("5 minutes");
 		});
 
@@ -39,30 +45,96 @@ describe("email.server", () => {
 		});
 	});
 
+	describe("buildClaimOtpEmail", () => {
+		it("includes the OTP in html and text", () => {
+			const result = buildClaimOtpEmail("482910");
+
+			expect(result.html).toContain("482910");
+			expect(result.text).toContain("482910");
+		});
+
+		it("html contains claim kitchen branding", () => {
+			const result = buildClaimOtpEmail("123456");
+
+			expect(result.html).toContain("Claim your agent kitchen");
+			expect(result.html).toContain("10 minutes");
+		});
+	});
+
+	describe("buildWelcomeEmail", () => {
+		const hubUrl = "https://ration.mayutic.com/hub";
+		const privacyUrl = "https://ration.mayutic.com/legal/privacy";
+
+		it("returns a benefit-led subject", () => {
+			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+
+			expect(result.subject).toBe("Your orbital pantry is ready");
+		});
+
+		it("includes hub URL and CTA in html", () => {
+			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+
+			expect(result.html).toContain(hubUrl);
+			expect(result.html).toContain("Open your Hub →");
+			expect(result.html).toContain("Ration");
+		});
+
+		it("includes preheader and feature bullets", () => {
+			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+
+			expect(result.html).toContain("Track cargo, plan meals, and cut waste");
+			expect(result.html).toContain("Cargo");
+			expect(result.html).toContain("Galley");
+			expect(result.html).toContain("Manifest");
+		});
+
+		it("personalizes greeting when userName is provided", () => {
+			const result = buildWelcomeEmail({
+				hubUrl,
+				privacyUrl,
+				userName: "Billy Downing",
+			});
+
+			expect(result.html).toContain("Welcome aboard, Billy");
+			expect(result.text).toContain("Welcome aboard, Billy");
+		});
+
+		it("uses generic greeting when userName is absent", () => {
+			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+
+			expect(result.html).toContain("Welcome aboard");
+			expect(result.html).not.toContain("Welcome aboard,");
+			expect(result.text).toContain("Welcome aboard");
+		});
+
+		it("text version contains hub URL and feature bullets", () => {
+			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+
+			expect(result.text).toContain(hubUrl);
+			expect(result.text).toContain("Cargo");
+			expect(result.text).toContain(privacyUrl);
+		});
+	});
+
 	describe("sendEmail", () => {
-		it("throws on non-ok response", async () => {
-			const { sendEmail } = await import("~/lib/email.server");
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = vi
-				.fn()
-				.mockResolvedValue({ ok: false, status: 500 }) as typeof fetch;
+		it("throws on send failure", async () => {
+			const mockEmail = {
+				send: vi.fn().mockRejectedValue(new Error("E_DELIVERY_FAILED")),
+			} as unknown as SendEmail;
 
 			await expect(
-				sendEmail("test-api-key", {
+				sendEmail(mockEmail, {
 					to: "user@example.com",
 					subject: "Test",
 					html: "<p>Test</p>",
+					text: "Test",
 				}),
-			).rejects.toThrow("Resend API error: HTTP 500");
-
-			globalThis.fetch = originalFetch;
+			).rejects.toThrow("Email send failed: E_DELIVERY_FAILED");
 		});
 
-		it("sends correct Resend API payload when successful", async () => {
-			const { sendEmail } = await import("~/lib/email.server");
-			const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-			const originalFetch = globalThis.fetch;
-			globalThis.fetch = mockFetch as typeof fetch;
+		it("sends correct payload via EMAIL binding when successful", async () => {
+			const mockSend = vi.fn().mockResolvedValue({ messageId: "test-id" });
+			const mockEmail = { send: mockSend } as unknown as SendEmail;
 
 			const payload: EmailPayload = {
 				to: "user@example.com",
@@ -71,24 +143,16 @@ describe("email.server", () => {
 				text: "Click here",
 			};
 
-			await sendEmail("sk_test_123", payload);
+			await sendEmail(mockEmail, payload);
 
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			const [callUrl, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-			const headers = new Headers(init?.headers as HeadersInit);
-			expect(callUrl).toBe("https://api.resend.com/emails");
-			expect(init?.method).toBe("POST");
-			expect(headers.get("Authorization")).toBe("Bearer sk_test_123");
-			expect(headers.get("Content-Type")).toBe("application/json");
-
-			const body = JSON.parse(init?.body as string);
-			expect(body.from).toBe("Ration <noreply@mayutic.com>");
-			expect(body.to).toEqual(["user@example.com"]);
-			expect(body.subject).toBe(payload.subject);
-			expect(body.html).toBe(payload.html);
-			expect(body.text).toBe(payload.text);
-
-			globalThis.fetch = originalFetch;
+			expect(mockSend).toHaveBeenCalledTimes(1);
+			expect(mockSend).toHaveBeenCalledWith({
+				from: EMAIL_FROM,
+				to: payload.to,
+				subject: payload.subject,
+				html: payload.html,
+				text: payload.text,
+			});
 		});
 	});
 });

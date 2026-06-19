@@ -68,6 +68,12 @@
 	"ai": {
 		"binding": "AI"
 	},
+	"send_email": [
+		{
+			"name": "EMAIL",
+			"allowed_sender_addresses": ["noreply@mayutic.com"]
+		}
+	],
 	/**
 	 * KV Namespace Setup Instructions:
 	 * 1. Create production namespace: wrangler kv namespace create "RATION_KV"
@@ -81,7 +87,6 @@
 	 *   - STRIPE_PUBLISHABLE_KEY: Stripe client-side key
 	 *   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
-	 *   - RESEND_API_KEY: Resend transactional email API key (for magic link auth)
 	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
 	 *     (optional; when absent, recipe import uses plain fetch only)
 	 *   - FIN_MCP_DELEGATION_SECRET: HS256 key for Fin per-user MCP delegation JWTs
@@ -231,6 +236,12 @@
 					"binding": "VECTORIZE",
 					"index_name": "ration-cargo-dev",
 					"remote": true
+				}
+			],
+			"send_email": [
+				{
+					"name": "EMAIL",
+					"allowed_sender_addresses": ["noreply@mayutic.com"]
 				}
 			]
 		}

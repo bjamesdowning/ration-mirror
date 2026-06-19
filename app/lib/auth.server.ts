@@ -16,7 +16,12 @@ import type { AppLoadContext } from "react-router";
 import { redirect } from "react-router";
 import * as schema from "../db/schema";
 import { buildPersonalOrgRecords } from "./agent/org-records.server";
-import { buildMagicLinkEmail, sendEmail } from "./email.server";
+import {
+	buildMagicLinkEmail,
+	buildWelcomeEmail,
+	sendEmail,
+	shouldSkipEmailSend,
+} from "./email.server";
 import { log, redactId } from "./logging.server";
 import {
 	OAUTH_ACCESS_TOKEN_TTL_SEC,
@@ -63,7 +68,6 @@ export function createAuth(env: Cloudflare.Env) {
 	const authEnv = env as Cloudflare.Env & {
 		GOOGLE_CLIENT_ID?: string;
 		GOOGLE_CLIENT_SECRET?: string;
-		RESEND_API_KEY?: string;
 	};
 
 	// Google OAuth is optional — falls back to magic-link-only when not configured
@@ -195,24 +199,20 @@ export function createAuth(env: Cloudflare.Env) {
 				expiresIn: 300,
 				disableSignUp: false, // Auto-register new users
 				sendMagicLink: async ({ email, url }) => {
-					const resendApiKey = authEnv.RESEND_API_KEY;
-					if (!resendApiKey) {
-						if (isDev) {
-							// In local dev without RESEND_API_KEY: skip sending. No log of URL/token
-							// (avoids PII/sensitive token exposure per security directive).
-							return;
+					if (shouldSkipEmailSend(env)) {
+						if (!isDev) {
+							log.error(
+								"[Auth] EMAIL binding missing in production — magic link email not sent",
+								{ hasEmail: !!email },
+							);
 						}
-						log.error(
-							"[Auth] RESEND_API_KEY missing in production — magic link email not sent",
-							{ hasEmail: !!email },
-						);
 						return;
 					}
 					const { html, text } = buildMagicLinkEmail(url);
 					// Fire-and-forget: do NOT await — prevents timing attacks that
 					// reveal whether an email address is registered.
-					// waitUntil ensures the Resend fetch completes before isolate teardown.
-					const emailPromise = sendEmail(resendApiKey, {
+					// waitUntil ensures the send completes before isolate teardown.
+					const emailPromise = sendEmail(env.EMAIL, {
 						to: email,
 						subject: "Your Ration sign-in link",
 						html,
@@ -265,6 +265,27 @@ export function createAuth(env: Cloudflare.Env) {
 								orgId: redactId(orgId),
 								userId: redactId(user.id),
 							});
+
+							if (!shouldSkipEmailSend(env)) {
+								const baseUrl = env.BETTER_AUTH_URL.replace(/\/$/, "");
+								const { html, text, subject } = buildWelcomeEmail({
+									hubUrl: `${baseUrl}/hub`,
+									privacyUrl: `${baseUrl}/legal/privacy`,
+									userName: user.name,
+								});
+								const welcomePromise = sendEmail(env.EMAIL, {
+									to: user.email,
+									subject,
+									html,
+									text,
+								}).catch((err) => {
+									log.error("[Auth] Failed to send welcome email", {
+										message: err instanceof Error ? err.message : String(err),
+										userId: redactId(user.id),
+									});
+								});
+								waitUntil(welcomePromise);
+							}
 						} catch (error) {
 							log.error("[Auth] Failed to create personal group", error, {
 								userId: redactId(user.id),

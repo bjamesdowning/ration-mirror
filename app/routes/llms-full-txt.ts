@@ -8,7 +8,14 @@ import type { Route } from "./+types/llms-full-txt";
  * each individual page. Mirrors the llmstxt.org "full" companion spec.
  */
 
-const PRODUCT_BRIEF = `# Ration
+function buildProductBrief(opts: {
+	maxInventoryItems: number;
+	maxMeals: number;
+	maxGroceryLists: number;
+	crewMonthlyPrice: string;
+	crewAnnualPrice: string;
+}): string {
+	return `# Ration
 
 Ration is an AI-native kitchen management system. It tracks pantry inventory ("Cargo"),
 recipes ("Galley"), weekly meal plans ("Manifest"), and shopping lists ("Supply"), and
@@ -46,8 +53,8 @@ the delta. After shopping, items dock back into Cargo.
 
 ## Pricing
 
-- **Free:** 35 inventory items, 15 recipes, 3 supply lists, 1 owned group.
-- **Crew Member ($5/mo or $50/yr):** Unlimited inventory, recipes, supply lists,
+- **Free:** ${opts.maxInventoryItems} inventory items, ${opts.maxMeals} recipes, ${opts.maxGroceryLists} supply lists, 1 owned group.
+- **Crew Member (${opts.crewMonthlyPrice} or ${opts.crewAnnualPrice}):** Unlimited inventory, recipes, supply lists,
   multi-member group sharing, and MCP access.
 
 Visual scanning and AI meal generation use a credit-based ledger (purchasable via
@@ -72,9 +79,19 @@ Agents can self-register without human signup:
 
 See \`/auth.md\` for the full auth discovery document.
 `;
+}
 
 export async function loader(_args: Route.LoaderArgs) {
 	const { getAllPosts } = await import("~/lib/blog.server");
+	const { SUBSCRIPTION_PRODUCTS } = await import("~/lib/stripe.server");
+	const { TIER_LIMITS } = await import("~/lib/tiers.server");
+	const productBrief = buildProductBrief({
+		maxInventoryItems: TIER_LIMITS.free.maxInventoryItems,
+		maxMeals: TIER_LIMITS.free.maxMeals,
+		maxGroceryLists: TIER_LIMITS.free.maxGroceryLists,
+		crewMonthlyPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_MONTHLY.priceUsd,
+		crewAnnualPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.priceUsd,
+	});
 	const posts = getAllPosts();
 
 	const blogContent = posts
@@ -101,7 +118,7 @@ export async function loader(_args: Route.LoaderArgs) {
 		})
 		.join("\n");
 
-	const body = `${PRODUCT_BRIEF}\n\n---\n\n# Blog\n\n${blogContent}`;
+	const body = `${productBrief}\n\n---\n\n# Blog\n\n${blogContent}`;
 
 	return new Response(body, {
 		headers: {

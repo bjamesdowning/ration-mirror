@@ -190,8 +190,9 @@ export default function AboutPage() {
 							<li className="flex gap-3">
 								<span className="text-hyper-green font-bold shrink-0">→</span>
 								<span>
-									<strong className="text-carbon">Offline-first.</strong> Read
-									your pantry on a flight; writes sync when you reconnect.
+									<strong className="text-carbon">Browser-native.</strong> Use
+									Ration on desktop or mobile from any modern browser — no app
+									store install required.
 								</span>
 							</li>
 							<li className="flex gap-3">

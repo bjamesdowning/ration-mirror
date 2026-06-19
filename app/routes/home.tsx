@@ -610,11 +610,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists.`,
 				},
 				{
-					name: "Crew Member",
-					price: "5",
+					name: "Crew Member (Monthly)",
+					price: "2",
 					priceCurrency: "USD",
 					description:
 						"Unlimited inventory, recipes, supply lists; group sharing; autonomous MCP registration and OAuth access.",
+				},
+				{
+					name: "Crew Member (Annual)",
+					price: "12",
+					priceCurrency: "USD",
+					description:
+						"Unlimited inventory, recipes, supply lists; group sharing; 65 yearly credits on renewal.",
 				},
 			],
 		}),
@@ -636,18 +643,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			},
 			{
 				question: "Is Ration free?",
-				answer:
-					"Yes. The Free tier supports up to 35 pantry items, 15 recipes, and 3 supply lists with no credit card required. Agents can autonomously self-register via MCP on the same tier. The Crew Member tier ($5/mo or $50/yr) removes those limits and enables group sharing, member invitations, and full agent access.",
+				answer: `Yes. The Free tier supports up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, and ${loaderData.tierLimits.free.maxGroceryLists} supply lists with no credit card required. Agents can autonomously self-register via MCP on the same tier. The Crew Member tier (${loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.priceUsd} or ${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.priceUsd}) removes those limits and enables group sharing, member invitations, and full agent access.`,
 			},
 			{
 				question: "What is Cargo, Galley, Manifest, and Supply?",
 				answer:
 					"Cargo is your live pantry inventory. Galley is your recipe library. Manifest is your weekly meal plan. Supply is your shopping list. Each surface is queryable by your AI agent through the MCP server.",
-			},
-			{
-				question: "Does Ration work offline?",
-				answer:
-					"Yes — Ration is a Progressive Web App. Read access to your inventory, recipes, plan, and supply list works without a network connection. Writes sync when you reconnect.",
 			},
 			{
 				question: "Where is my data stored?",

@@ -72,6 +72,12 @@ export default function ConnectPage() {
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<Link
+							to="/mcp.md"
+							className="text-sm font-mono text-hyper-green hover:underline"
+						>
+							Read mcp.md →
+						</Link>
+						<Link
 							to="/auth.md"
 							className="text-sm font-mono text-hyper-green hover:underline"
 						>

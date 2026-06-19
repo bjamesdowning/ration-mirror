@@ -43,6 +43,7 @@ Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ship
 - [Agent skills index](${origin}/.well-known/agent-skills/index.json): Available agent skills exposed by Ration.
 - [Auth discovery (auth.md)](${origin}/auth.md): Agent-first onboarding flows (anonymous + user-claimed).
 - [Connect agents](${origin}/connect): One-click MCP setup for Cursor, Claude, and ChatGPT.
+- [MCP listing (mcp.md)](${origin}/mcp.md): Product overview and directory listing for mcpservers.org and similar indexes.
 
 ## Blog
 

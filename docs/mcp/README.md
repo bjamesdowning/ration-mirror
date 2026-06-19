@@ -1,8 +1,8 @@
-**Source:** [gitlab.com/mayutic/ration/application](https://gitlab.com/mayutic/ration/application)
+**Repository:** [gitlab.com/mayutic/ration/application](https://gitlab.com/mayutic/ration/application) — hosts **Ration**, an AI-powered kitchen management app, and its dedicated **MCP server** (`mcp.ration.mayutic.com`).
 
 # Ration MCP Server
 
-> **AI-native kitchen management for your assistant** — live pantry inventory, cook-from-stock recipes, weekly meal plans, and shopping lists your agent can read and update through MCP.
+> **AI-powered kitchen management for your assistant** — live pantry inventory, cook-from-stock recipes, weekly meal plans, and shopping lists. **AI connectivity via MCP** (Model Context Protocol) lets Claude, Cursor, ChatGPT, and other agents read and update your kitchen with scoped OAuth consent — same data as the web app, no shadow copy.
 
 **Homepage:** [ration.mayutic.com](https://ration.mayutic.com) · **Connect:** [ration.mayutic.com/connect](https://ration.mayutic.com/connect) · **Start free** — no credit card required.
 

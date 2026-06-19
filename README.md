@@ -1,8 +1,8 @@
-# Ration — Orbital Supply Chain
+# Ration — AI-Powered Kitchen Management
 
-> **Architecture:** React Router v7 (SSR) + Drizzle ORM + Better Auth | **Platform:** Cloudflare Workers | **Domain:** `ration.mayutic.com`
+> **Architecture:** React Router v7 (SSR) + Drizzle ORM + Better Auth | **Platform:** Cloudflare Workers | **Domain:** `ration.mayutic.com` | **AI connectivity:** MCP server at `mcp.ration.mayutic.com`
 
-A pantry management and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, semantic ingredient matching, meal generation, weekly meal planning, tiered subscriptions, and multi-tenant group sharing. Built for the Cloudflare paid plan — design decisions prioritise correctness, latency, and scale over free-tier frugality.
+An AI-powered pantry and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, semantic ingredient matching, meal generation, weekly meal planning, tiered subscriptions, and multi-tenant group sharing. Agents connect via **MCP** (Model Context Protocol) to operate inventory, recipes, meal plans, and shopping lists from Claude, Cursor, ChatGPT, and other compatible clients. Built for the Cloudflare paid plan — design decisions prioritise correctness, latency, and scale over free-tier frugality.
 
 ---
 

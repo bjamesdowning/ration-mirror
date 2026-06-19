@@ -87,12 +87,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				});
 			});
 			waitUntil(emailPromise);
+			log.info("[AgentClaim] OTP sent", {
+				event: "agent_auth_claim",
+				registrationId: redactId(registration.id),
+			});
 		}
-
-		log.info("[AgentClaim] OTP sent", {
-			event: "agent_auth_claim",
-			registrationId: redactId(registration.id),
-		});
 
 		return GENERIC_OK;
 	} catch (error) {

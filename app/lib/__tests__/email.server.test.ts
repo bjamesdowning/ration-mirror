@@ -7,6 +7,7 @@ import {
 	EMAIL_FROM,
 	sendEmail,
 } from "~/lib/email.server";
+import { MCP_ENDPOINT_URL } from "~/lib/mcp/connect-copy";
 
 describe("email.server", () => {
 	describe("buildMagicLinkEmail", () => {
@@ -63,26 +64,41 @@ describe("email.server", () => {
 
 	describe("buildWelcomeEmail", () => {
 		const hubUrl = "https://ration.mayutic.com/hub";
+		const connectUrl = "https://ration.mayutic.com/connect";
 		const privacyUrl = "https://ration.mayutic.com/legal/privacy";
+		const baseParams = { hubUrl, connectUrl, privacyUrl };
 
 		it("returns a benefit-led subject", () => {
-			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+			const result = buildWelcomeEmail(baseParams);
 
 			expect(result.subject).toBe("Your orbital pantry is ready");
 		});
 
 		it("includes hub URL and CTA in html", () => {
-			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+			const result = buildWelcomeEmail(baseParams);
 
 			expect(result.html).toContain(hubUrl);
 			expect(result.html).toContain("Open your Hub →");
 			expect(result.html).toContain("Ration");
 		});
 
-		it("includes preheader and feature bullets", () => {
-			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+		it("includes MCP connection instructions", () => {
+			const result = buildWelcomeEmail(baseParams);
 
-			expect(result.html).toContain("Track cargo, plan meals, and cut waste");
+			expect(result.html).toContain("Connect your AI assistant");
+			expect(result.html).toContain(MCP_ENDPOINT_URL);
+			expect(result.html).toContain("Cursor");
+			expect(result.html).toContain("Claude Desktop");
+			expect(result.html).toContain(connectUrl);
+			expect(result.html).toContain("Full MCP setup guide");
+			expect(result.text).toContain(MCP_ENDPOINT_URL);
+			expect(result.text).toContain(connectUrl);
+		});
+
+		it("includes preheader and feature bullets", () => {
+			const result = buildWelcomeEmail(baseParams);
+
+			expect(result.html).toContain("connect Cursor or Claude via MCP");
 			expect(result.html).toContain("Cargo");
 			expect(result.html).toContain("Galley");
 			expect(result.html).toContain("Manifest");
@@ -90,8 +106,7 @@ describe("email.server", () => {
 
 		it("personalizes greeting when userName is provided", () => {
 			const result = buildWelcomeEmail({
-				hubUrl,
-				privacyUrl,
+				...baseParams,
 				userName: "Billy Downing",
 			});
 
@@ -99,8 +114,18 @@ describe("email.server", () => {
 			expect(result.text).toContain("Welcome aboard, Billy");
 		});
 
+		it("escapes HTML in user names", () => {
+			const result = buildWelcomeEmail({
+				...baseParams,
+				userName: "<script>alert(1)</script>",
+			});
+
+			expect(result.html).not.toContain("<script>");
+			expect(result.html).toContain("&lt;script&gt;");
+		});
+
 		it("uses generic greeting when userName is absent", () => {
-			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+			const result = buildWelcomeEmail(baseParams);
 
 			expect(result.html).toContain("Welcome aboard");
 			expect(result.html).not.toContain("Welcome aboard,");
@@ -108,7 +133,7 @@ describe("email.server", () => {
 		});
 
 		it("text version contains hub URL and feature bullets", () => {
-			const result = buildWelcomeEmail({ hubUrl, privacyUrl });
+			const result = buildWelcomeEmail(baseParams);
 
 			expect(result.text).toContain(hubUrl);
 			expect(result.text).toContain("Cargo");

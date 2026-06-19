@@ -1,17 +1,12 @@
 /**
  * Email delivery via Cloudflare Email Service Workers binding.
- *
- * Sends transactional emails using `env.EMAIL.send()` — no third-party API
- * keys, no Node.js dependencies.
- *
- * Usage:
- *   await sendEmail(env.EMAIL, {
- *     to: "user@example.com",
- *     subject: "Your sign-in link",
- *     html: "<p>Click <a href='...'>here</a> to sign in</p>",
- *     text: "Click here: ...",
- *   });
  */
+
+import {
+	MCP_ENDPOINT_URL,
+	MCP_SETUP_STEPS_SHORT,
+	MCP_SUPPORTED_CLIENTS,
+} from "./mcp/connect-copy";
 
 export interface EmailPayload {
 	to: string;
@@ -94,8 +89,7 @@ function emailButton(href: string, label: string): string {
 
 /**
  * Send a transactional email using Cloudflare Email Service.
- * Designed to be fire-and-forget in auth flows to prevent timing attacks —
- * the caller should NOT await this when used within `sendMagicLink`.
+ * Callers in auth flows should fire-and-forget via waitUntil (do not await).
  */
 export async function sendEmail(
 	email: SendEmail,
@@ -181,10 +175,25 @@ This code expires in 10 minutes.`;
 	return { html, text };
 }
 
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
+}
+
 function firstNameFromUserName(userName?: string | null): string | null {
 	if (!userName?.trim()) return null;
 	const first = userName.trim().split(/\s+/)[0];
 	return first || null;
+}
+
+function formatSupportedClients(): string {
+	const clients = [...MCP_SUPPORTED_CLIENTS];
+	if (clients.length <= 1) return clients[0] ?? "";
+	const last = clients.pop();
+	return `${clients.join(", ")}, and ${last}`;
 }
 
 /**
@@ -192,17 +201,28 @@ function firstNameFromUserName(userName?: string | null): string | null {
  */
 export function buildWelcomeEmail(params: {
 	hubUrl: string;
+	connectUrl: string;
 	privacyUrl: string;
 	userName?: string | null;
 }): Pick<EmailPayload, "html" | "text"> & { subject: string } {
-	const { hubUrl, privacyUrl, userName } = params;
+	const { hubUrl, connectUrl, privacyUrl, userName } = params;
 	const firstName = firstNameFromUserName(userName);
 	const greeting = firstName
+		? `Welcome aboard, ${escapeHtml(firstName)}`
+		: "Welcome aboard";
+	const greetingText = firstName
 		? `Welcome aboard, ${firstName}`
 		: "Welcome aboard";
 	const subject = "Your orbital pantry is ready";
 	const preheader =
-		"Track cargo, plan meals, and cut waste — open your Hub to get started.";
+		"Open your Hub, connect Cursor or Claude via MCP, and start managing your kitchen.";
+	const supportedClients = formatSupportedClients();
+	const mcpStepsHtml = MCP_SETUP_STEPS_SHORT.map(
+		(step) => `<li style="margin-bottom:8px;">${step}</li>`,
+	).join("");
+	const mcpStepsText = MCP_SETUP_STEPS_SHORT.map(
+		(step, i) => `${i + 1}. ${step}`,
+	).join("\n");
 
 	const bodyHtml = `<h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111111;letter-spacing:-0.5px;">
                 ${greeting}
@@ -219,8 +239,26 @@ export function buildWelcomeEmail(params: {
                 <li><strong style="color:#111111;">Galley</strong> — build recipes from what you already have on board</li>
                 <li><strong style="color:#111111;">Manifest</strong> — schedule your weekly meal plan in one view</li>
               </ul>
+              <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#111111;">
+                Connect your AI assistant
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#666666;line-height:1.6;">
+                Paste one URL into ${supportedClients} — no API key required. Your agent can read and update your pantry with scoped OAuth consent.
+              </p>
+              <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#111111;">
+                MCP server URL
+              </p>
+              <p style="margin:0 0 16px;padding:12px 14px;background-color:#F8F9FA;border:1px solid #E6E6E6;border-radius:8px;font-size:12px;color:#111111;word-break:break-all;">
+                ${MCP_ENDPOINT_URL}
+              </p>
+              <ol style="margin:0 0 20px;padding:0 0 0 20px;font-size:14px;color:#666666;line-height:1.8;">
+                ${mcpStepsHtml}
+              </ol>
+              <p style="margin:0 0 24px;font-size:14px;color:#666666;line-height:1.6;">
+                <a href="${connectUrl}" style="color:#00E088;font-weight:700;text-decoration:none;">Full MCP setup guide →</a>
+              </p>
               <p style="margin:0;font-size:12px;color:#999999;line-height:1.5;">
-                Or copy and paste this link into your browser:<br />
+                Or copy and paste your Hub link:<br />
                 <a href="${hubUrl}" style="color:#00E088;word-break:break-all;">${hubUrl}</a>
               </p>`;
 
@@ -233,7 +271,7 @@ export function buildWelcomeEmail(params: {
 		footerHtml,
 	});
 
-	const text = `${greeting}
+	const text = `${greetingText}
 
 Your personal supply group is provisioned and waiting. Open your Hub to get started:
 
@@ -243,6 +281,13 @@ What you can do right now:
 - Cargo — track dry and frozen inventory with expiry alerts
 - Galley — build recipes from what you already have on board
 - Manifest — schedule your weekly meal plan in one view
+
+Connect your AI assistant (${supportedClients}):
+MCP server URL: ${MCP_ENDPOINT_URL}
+
+${mcpStepsText}
+
+Full setup guide: ${connectUrl}
 
 You're receiving this because you created a Ration account.
 Privacy policy: ${privacyUrl}

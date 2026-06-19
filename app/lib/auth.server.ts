@@ -209,9 +209,6 @@ export function createAuth(env: Cloudflare.Env) {
 						return;
 					}
 					const { html, text } = buildMagicLinkEmail(url);
-					// Fire-and-forget: do NOT await — prevents timing attacks that
-					// reveal whether an email address is registered.
-					// waitUntil ensures the send completes before isolate teardown.
 					const emailPromise = sendEmail(env.EMAIL, {
 						to: email,
 						subject: "Your Ration sign-in link",
@@ -270,6 +267,7 @@ export function createAuth(env: Cloudflare.Env) {
 								const baseUrl = env.BETTER_AUTH_URL.replace(/\/$/, "");
 								const { html, text, subject } = buildWelcomeEmail({
 									hubUrl: `${baseUrl}/hub`,
+									connectUrl: `${baseUrl}/connect`,
 									privacyUrl: `${baseUrl}/legal/privacy`,
 									userName: user.name,
 								});

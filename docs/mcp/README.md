@@ -84,9 +84,16 @@ MCP tool calls are **deterministic and do not consume Ration credits**. Receipt 
 
 Create an organization API key with `mcp:*` scopes in Hub → Settings → API Keys. Use a Bearer header or `mcp-remote` bridge. See [API docs](https://ration.mayutic.com/docs/api#mcp).
 
-### Autonomous agents
+### Autonomous agents (agent-first onboarding)
 
-Read [auth.md](https://ration.mayutic.com/auth.md) for anonymous agent registration and human claim via OTP.
+Your MCP client can provision a kitchen without human signup:
+
+1. Read [auth.md](https://ration.mayutic.com/auth.md) for the registration and claim contract.
+2. `POST /api/agent/auth` with `{ "type": "anonymous" }` — returns a **full-write** API key, claim URL, and MCP endpoint (once).
+3. Configure MCP with the returned key as a Bearer header.
+4. Human claims via OTP at [ration.mayutic.com/connect/claim](https://ration.mayutic.com/connect/claim) whenever ready.
+
+Full walkthrough with client-specific setup (Claude, Cursor, ChatGPT, Goose): [Agent-First MCP Onboarding](https://ration.mayutic.com/blog/agent-first-mcp-onboarding).
 
 ---
 

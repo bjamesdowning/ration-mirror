@@ -33,6 +33,7 @@ be automated and must be done from a human-controlled console.
   - [ ] `https://ration.mayutic.com/blog/meal-planning-loop`
   - [ ] `https://ration.mayutic.com/blog/pantry-data-problem`
   - [ ] `https://ration.mayutic.com/blog/mcp-kitchen-assistant`
+  - [ ] `https://ration.mayutic.com/blog/agent-first-mcp-onboarding`
   - [ ] `https://ration.mayutic.com/tools`
   - [ ] `https://ration.mayutic.com/tools/unit-converter`
   - [ ] `https://ration.mayutic.com/legal/privacy`

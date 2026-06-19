@@ -121,7 +121,7 @@ OAuth metadata:
 
 Agent self-registration (no human signup):
 
-- **`POST /api/agent/auth`** — `{ "type": "anonymous" }` → pre-claim API key (`mcp:read`) + claim URL
+- **`POST /api/agent/auth`** — `{ "type": "anonymous" }` → pre-claim API key (full MCP write scopes) + claim URL
 - **`POST /api/agent/auth/claim`** + **`/claim/complete`** — OTP email claim (Tier 1)
 - Full flow documented at **`/auth.md`**
 

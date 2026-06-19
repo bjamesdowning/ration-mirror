@@ -40,6 +40,8 @@ It's not a separate system or a sync. Same pantry. Same recipes. Same meal plan.
 
 You need a Ration account — that's it. No API key required for standard MCP clients.
 
+**Prefer agent-first onboarding?** Your autonomous agent can self-register via [`auth.md`](https://ration.mayutic.com/auth.md), configure MCP itself, and start managing a kitchen before you sign up — then you claim ownership whenever you want. See [Let Your Agent Connect Itself](/blog/agent-first-mcp-onboarding).
+
 ### OAuth (recommended)
 
 1. In your MCP client, add server URL **`https://mcp.ration.mayutic.com/mcp`**

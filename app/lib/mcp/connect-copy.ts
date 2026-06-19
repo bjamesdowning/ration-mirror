@@ -78,6 +78,7 @@ export const MCP_SUPPORTED_CLIENTS = [
 	"Cursor",
 	"Claude Desktop",
 	"ChatGPT desktop",
+	"Goose",
 	"Zed",
 	"Any MCP client with OAuth 2.1 discovery",
 ] as const;

@@ -74,8 +74,8 @@ Advanced: organization API keys with \`mcp:*\` scopes for manual header auth and
 
 Agents can self-register without human signup:
 
-1. \`POST /api/agent/auth\` with \`{ "type": "anonymous" }\` — returns a read-only API key and claim URL.
-2. Human claims via OTP at \`/connect/claim\` to widen scopes.
+1. \`POST /api/agent/auth\` with \`{ "type": "anonymous" }\` — returns a full-write API key, claim URL, and MCP endpoint (once).
+2. Human claims via OTP at \`/connect/claim\` to transfer ownership (scopes unchanged).
 
 See \`/auth.md\` for the full auth discovery document.
 `;

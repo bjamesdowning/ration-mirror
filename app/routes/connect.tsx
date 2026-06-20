@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { JsonLd } from "~/components/seo/JsonLd";
 import { CopyField } from "~/components/settings/developer/CopyField";
 import {
 	MCP_ENDPOINT_URL,
@@ -6,10 +7,58 @@ import {
 	MCP_SUPPORTED_CLIENTS,
 } from "~/lib/mcp/connect-copy";
 import { MCP_DEEP_LINK_CLIENTS } from "~/lib/mcp/deep-links";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
+import {
+	breadcrumbSchema,
+	howToSchema,
+	webPageSchema,
+} from "~/lib/structured-data";
+import type { Route } from "./+types/connect";
+
+const CONNECT_TITLE = "Connect Your AI Agent to Ration | MCP Setup";
+const CONNECT_DESCRIPTION =
+	"Add Ration to Cursor, Claude, ChatGPT, or any MCP-compatible client. One-click deep links, manual OAuth setup, or agent-first self-registration via auth.md.";
+
+export function meta(_: Route.MetaArgs) {
+	return [
+		{ title: CONNECT_TITLE },
+		{ name: "description", content: CONNECT_DESCRIPTION },
+		canonicalMeta("/connect"),
+		...ogMeta({
+			title: CONNECT_TITLE,
+			description: CONNECT_DESCRIPTION,
+			path: "/connect",
+		}),
+	];
+}
+
+const connectSchemas = [
+	webPageSchema({
+		name: "Connect Your AI Agent to Ration",
+		description: CONNECT_DESCRIPTION,
+		path: "/connect",
+		dateModified: "2026-06-19",
+	}),
+	breadcrumbSchema([
+		{ name: "Home", path: "/" },
+		{ name: "Connect", path: "/connect" },
+	]),
+	howToSchema({
+		name: "Connect an MCP client to Ration",
+		description:
+			"Configure Claude, Cursor, ChatGPT, or another MCP-compatible client to access your Ration kitchen.",
+		path: "/connect",
+		steps: MCP_SETUP_STEPS_SHORT.map((text, index) => ({
+			name: `Step ${index + 1}`,
+			text,
+		})),
+	}),
+];
 
 export default function ConnectPage() {
 	return (
 		<div className="min-h-screen bg-ceramic">
+			<JsonLd data={connectSchemas} />
 			<div className="max-w-2xl mx-auto px-6 py-16">
 				<h1 className="font-mono text-3xl font-bold text-carbon mb-2">
 					Connect your AI agent

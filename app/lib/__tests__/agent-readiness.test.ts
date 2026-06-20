@@ -10,7 +10,6 @@ import {
 	buildAgentSkillsIndex,
 	buildApiCatalog,
 	buildMcpServerCard,
-	buildOpenApiDocument,
 	buildProtectedResourceMetadata,
 	getPublicMarkdownForPath,
 	MCP_TOOL_GROUPS,
@@ -18,6 +17,7 @@ import {
 	wantsMarkdown,
 } from "../agent-readiness";
 import { API_SCOPES } from "../api-key.server";
+import { buildOpenApiDocument } from "../openapi-document.server";
 
 const request = new Request("https://ration.mayutic.com/");
 
@@ -91,6 +91,11 @@ describe("agent readiness metadata", () => {
 		expect(openApi.paths["/api/v1/inventory/export"].get.summary).toContain(
 			"Export Cargo",
 		);
+		expect(openApi.paths["/api/agent/auth"].post.summary).toContain(
+			"Anonymous agent registration",
+		);
+		expect(openApi.components.schemas.AgentAnonRegisterRequest).toBeDefined();
+		expect(openApi.components.schemas.GalleyManifest).toBeDefined();
 
 		const resource = buildProtectedResourceMetadata(request, {
 			BETTER_AUTH_URL: "https://ration.mayutic.com",

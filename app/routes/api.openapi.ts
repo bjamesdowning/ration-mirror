@@ -1,4 +1,4 @@
-import { buildOpenApiDocument } from "~/lib/agent-readiness";
+import { buildOpenApiDocument } from "~/lib/openapi-document.server";
 
 export async function loader({ request }: { request: Request }) {
 	return Response.json(buildOpenApiDocument(request), {

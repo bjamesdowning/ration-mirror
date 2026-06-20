@@ -109,7 +109,7 @@ without waiting for a crawl. Optional but cheap.
 
 - [ ] Generate the per-page Open Graph PNGs called out in
       [`public/static/og/README.md`](../../public/static/og/README.md).
-- [ ] Once `og-default.png` lands, switch the `OG_IMAGE` constant in
+- [x] Once `og-default.png` lands, switch the `OG_IMAGE` constant in
       [`app/lib/seo.ts`](../../app/lib/seo.ts) from the SVG fallback to
       the new PNG (`OG_IMAGE_PNG`).
 - [ ] Update each blog post frontmatter to reference its

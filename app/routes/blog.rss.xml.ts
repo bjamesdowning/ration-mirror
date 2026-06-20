@@ -5,14 +5,15 @@ import type { Route } from "./+types/blog.rss.xml";
  *
  * Surfaced by AI answer engines, RSS readers, and aggregators. Each item
  * uses the post's ISO-8601 dateModified as the pubDate so the feed
- * resorts naturally when posts are updated.
+ * resorts naturally when posts are updated. Full markdown bodies are
+ * included via content:encoded for feed-based AI ingestors.
  */
 
 const SITE_TITLE = "Ration Blog";
 const SITE_DESCRIPTION =
 	"Tips for pantry organization, meal planning, reducing food waste, and using Ration with AI assistants.";
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
 	return value
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
@@ -27,6 +28,11 @@ function toRfc822(isoDate: string): string {
 	return d.toUTCString();
 }
 
+function wrapCdata(markdown: string): string {
+	const safe = markdown.replace(/\]\]>/g, "]]]]><![CDATA[>");
+	return `<![CDATA[${safe}]]>`;
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
 	const url = new URL(request.url);
 	const origin = url.origin;
@@ -37,6 +43,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const items = posts
 		.map((post) => {
 			const link = escapeXml(`${origin}/blog/${post.slug}`);
+			const fullBody = [
+				`# ${post.title}`,
+				"",
+				post.description,
+				"",
+				post.content.trim(),
+			].join("\n");
+
 			return [
 				"    <item>",
 				`      <title>${escapeXml(post.title)}</title>`,
@@ -44,6 +58,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 				`      <guid isPermaLink="true">${link}</guid>`,
 				`      <pubDate>${toRfc822(post.dateModified)}</pubDate>`,
 				`      <description>${escapeXml(post.description)}</description>`,
+				`      <content:encoded>${wrapCdata(fullBody)}</content:encoded>`,
 				`      <author>noreply@mayutic.com (${escapeXml(post.authorName)})</author>`,
 				...post.tags.map(
 					(tag) => `      <category>${escapeXml(tag)}</category>`,
@@ -58,7 +73,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 	);
 
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>${escapeXml(SITE_TITLE)}</title>
     <link>${escapeXml(`${origin}/blog`)}</link>

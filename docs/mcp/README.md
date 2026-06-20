@@ -105,7 +105,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `get_context` | `mcp:read` | Return org id, authorized scopes, capabilities, and suggested next actions. Safe to call first. |
+| `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions. Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search by meaning — find items without knowing the exact name. |
 | `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter. |
 | `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields). |

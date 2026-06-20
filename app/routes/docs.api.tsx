@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { MCP_TOOL_GROUPS } from "~/lib/agent-readiness";
 import {
@@ -13,10 +14,44 @@ import {
 	MCP_OAUTH_TROUBLESHOOTING,
 	MCP_SUPPORTED_CLIENTS,
 } from "~/lib/mcp/connect-copy";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
+import { breadcrumbSchema, webPageSchema } from "~/lib/structured-data";
+import type { Route } from "./+types/docs.api";
+
+const DOCS_TITLE = "Ration API and MCP Documentation";
+const DOCS_DESCRIPTION =
+	"REST API v1 import/export, OAuth MCP server, 37 kitchen tools, agent-first auth via auth.md, and OpenAPI discovery for AI agents.";
+
+export function meta(_: Route.MetaArgs) {
+	return [
+		{ title: DOCS_TITLE },
+		{ name: "description", content: DOCS_DESCRIPTION },
+		canonicalMeta("/docs/api"),
+		...ogMeta({
+			title: DOCS_TITLE,
+			description: DOCS_DESCRIPTION,
+			path: "/docs/api",
+		}),
+	];
+}
+
+const docsSchemas = [
+	webPageSchema({
+		name: DOCS_TITLE,
+		description: DOCS_DESCRIPTION,
+		path: "/docs/api",
+		dateModified: "2026-06-19",
+	}),
+	breadcrumbSchema([
+		{ name: "Home", path: "/" },
+		{ name: "API Docs", path: "/docs/api" },
+	]),
+];
 
 export default function ApiDocs() {
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon">
+			<JsonLd data={docsSchemas} />
 			<PublicHeader breadcrumb="API" breadcrumbHref="/docs/api" />
 			<main className="max-w-4xl mx-auto px-6 py-12">
 				<div className="space-y-10">

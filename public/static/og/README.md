@@ -39,7 +39,7 @@ tags: [mcp, claude, ai-agents]
 The following images are referenced but not yet generated. Drop them in this
 folder when ready:
 
-- [ ] `og-default.png` — sitewide fallback (logo + tagline on Ceramic White
+- [x] `og-default.png` — sitewide fallback (logo + tagline on Ceramic White
       background with Hyper-Green accent)
 - [ ] `meal-planning-loop.png` — for `/blog/meal-planning-loop`
 - [ ] `pantry-data-problem.png` — for `/blog/pantry-data-problem`

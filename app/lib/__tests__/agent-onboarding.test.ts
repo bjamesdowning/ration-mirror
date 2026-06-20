@@ -120,6 +120,9 @@ describe("get_context onboarding helpers", () => {
 	});
 
 	it("suggests write tools when claimed", () => {
+		const kitchen = emptyKitchen();
+		kitchen.capacity.cargo.current = 5;
+		kitchen.credits = 10;
 		const onboarding = {
 			claimed: true,
 			status: "claimed" as const,
@@ -130,10 +133,34 @@ describe("get_context onboarding helpers", () => {
 			"mcp:read",
 			"mcp:inventory:write",
 		]);
-		const actions = buildSuggestedNextActions(onboarding, capabilities);
+		const actions = buildSuggestedNextActions(
+			onboarding,
+			capabilities,
+			kitchen,
+		);
 		expect(actions.some((a) => a.action === "add_cargo_item")).toBe(true);
+		expect(actions.some((a) => a.action === "search_ingredients")).toBe(true);
 	});
 });
+
+function emptyKitchen() {
+	return {
+		tier: "free" as const,
+		tierExpired: false,
+		limits: {
+			maxInventoryItems: 35,
+			maxMeals: 15,
+			maxGroceryLists: 3,
+		},
+		capacity: {
+			cargo: { current: 0, limit: 35, canAdd: 35 },
+			meals: { current: 0, limit: 15, canAdd: 15 },
+			supplyLists: { current: 0, limit: 3, canAdd: 3 },
+		},
+		credits: 0,
+		lastActivityAt: null,
+	};
+}
 
 describe("buildPersonalOrgRecords parity (signup hook regression guard)", () => {
 	it("produces exactly one personal org per user with owner role", async () => {

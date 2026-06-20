@@ -4,6 +4,7 @@ import {
 	blogCollectionSchema,
 	breadcrumbSchema,
 	faqSchema,
+	howToSchema,
 	organizationSchema,
 	personSchema,
 	softwareAppSchema,
@@ -243,6 +244,27 @@ describe("blogCollectionSchema", () => {
 		expect(list).toHaveLength(2);
 		expect(list[0]["@type"]).toBe("BlogPosting");
 		expect(list[0].url).toBe(`${SITE}/blog/a`);
+	});
+});
+
+describe("howToSchema", () => {
+	it("numbers HowToStep entries with absolute URL", () => {
+		const schema = howToSchema({
+			name: "Connect MCP",
+			description: "Configure a client.",
+			path: "/connect",
+			steps: [
+				{ name: "Add URL", text: "Paste the MCP endpoint." },
+				{ name: "Authorize", text: "Complete OAuth sign-in." },
+			],
+		}) as Record<string, unknown>;
+
+		expect(schema["@type"]).toBe("HowTo");
+		expect(schema.url).toBe(`${SITE}/connect`);
+		const steps = schema.step as Array<Record<string, unknown>>;
+		expect(steps).toHaveLength(2);
+		expect(steps[0].position).toBe(1);
+		expect(steps[1].text).toBe("Complete OAuth sign-in.");
 	});
 });
 

@@ -1,3 +1,4 @@
+import { ABOUT_MARKDOWN, HOME_MARKDOWN } from "~/lib/agent-readiness";
 import type { Route } from "./+types/llms-full-txt";
 
 /**
@@ -118,7 +119,20 @@ export async function loader(_args: Route.LoaderArgs) {
 		})
 		.join("\n");
 
-	const body = `${productBrief}\n\n---\n\n# Blog\n\n${blogContent}`;
+	const body = [
+		productBrief,
+		"---",
+		"",
+		HOME_MARKDOWN.trim(),
+		"---",
+		"",
+		ABOUT_MARKDOWN.trim(),
+		"---",
+		"",
+		"# Blog",
+		"",
+		blogContent,
+	].join("\n");
 
 	return new Response(body, {
 		headers: {

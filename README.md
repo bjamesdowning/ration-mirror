@@ -1503,7 +1503,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta mode) | mcp_search (20/min) |
 | `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
-| `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state (claimed vs pending), capabilities, and suggested next actions | mcp_list (30/min) |
+| `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
 | `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
@@ -1599,7 +1599,7 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 | Path | Content Type | Purpose |
 |------|--------------|---------|
 | `/.well-known/api-catalog` | `application/linkset+json` | RFC 9727 API catalog with REST and MCP anchors. |
-| `/api/openapi.json` | `application/vnd.oai.openapi+json` | OpenAPI description for v1 import/export endpoints. |
+| `/api/openapi.json` | `application/vnd.oai.openapi+json` | OpenAPI 3.1 for agent auth, REST v1 import/export (Zod-derived JSON Schema). |
 | `/.well-known/oauth-protected-resource` | `application/json` | MCP host: OAuth protected-resource metadata with authorization servers and `mcp:*` scopes. App domain metadata documents API-key auth for REST. |
 | `/.well-known/oauth-authorization-server` | `application/json` | Better Auth OAuth 2.1 authorization-server metadata (issuer includes `/api/auth`). |
 | `/.well-known/openid-configuration` | `application/json` | OIDC-compatible alias of the authorization-server metadata. |

@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.3.19",
+	"version": "1.3.22",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -52,7 +52,8 @@
 		"react-syntax-highlighter": "^16.1.1",
 		"remark-gfm": "^4.0.1",
 		"stripe": "^20.4.1",
-		"zod": "^4.3.6"
+		"zod": "^4.3.6",
+		"zod-to-json-schema": "^3.25.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.12",

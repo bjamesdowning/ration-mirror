@@ -293,3 +293,27 @@ export function webPageSchema(opts: {
 		publisher: { "@type": "Organization", name: "Ration" },
 	};
 }
+
+export type HowToStep = { name: string; text: string };
+
+/** HowTo schema for procedural agent landing pages (e.g. MCP connect). */
+export function howToSchema(opts: {
+	name: string;
+	description: string;
+	path: string;
+	steps: HowToStep[];
+}) {
+	return {
+		"@context": "https://schema.org",
+		"@type": "HowTo",
+		name: opts.name,
+		description: opts.description,
+		url: absoluteSiteUrl(opts.path),
+		step: opts.steps.map((step, index) => ({
+			"@type": "HowToStep",
+			position: index + 1,
+			name: step.name,
+			text: step.text,
+		})),
+	};
+}

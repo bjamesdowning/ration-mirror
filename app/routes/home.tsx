@@ -10,6 +10,7 @@ import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
+import { buildHomeFaqEntries } from "~/lib/home-faq";
 import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
 import {
 	faqSchema,
@@ -625,43 +626,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				},
 			],
 		}),
-		faqSchema([
-			{
-				question: "What is Ration?",
-				answer:
-					"Ration is an AI-native kitchen management system that tracks pantry inventory, plans meals, and generates supply lists. It exposes an MCP server so Claude, ChatGPT, Cursor, and other AI assistants can read and operate your kitchen directly — including autonomous self-registration so agents can provision a kitchen without human signup first.",
-			},
-			{
-				question: "How does Ration work with AI assistants?",
-				answer:
-					"Add https://mcp.ration.mayutic.com/mcp to any MCP-compatible client (Claude Desktop, Cursor, ChatGPT desktop, Zed) — or let your agent self-register via auth.md for immediate full-write access. OAuth clients open browser sign-in to pick a household and approve scopes. Either path gives inventory, meal matching, weekly planning, supply lists, and ingredient consumption. Revoke access anytime in Hub Settings → Connected Agents.",
-			},
-			{
-				question: "How do I connect Claude or Cursor?",
-				answer:
-					"Paste https://mcp.ration.mayutic.com/mcp into your MCP client settings for OAuth browser sign-in, or point autonomous agents at /auth.md to self-provision a kitchen. Select your household and authorize scopes for OAuth; claim ownership later when a human is ready. Manage grants in Hub → Settings → Connected Agents.",
-			},
-			{
-				question: "Is Ration free?",
-				answer: `Yes. The Free tier supports up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, and ${loaderData.tierLimits.free.maxGroceryLists} supply lists with no credit card required. Agents can autonomously self-register via MCP on the same tier. The Crew Member tier (${loaderData.subscriptionProducts.CREW_MEMBER_MONTHLY.priceUsd} or ${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.priceUsd}) removes those limits and enables group sharing, member invitations, and full agent access.`,
-			},
-			{
-				question: "What is Cargo, Galley, Manifest, and Supply?",
-				answer:
-					"Cargo is your live pantry inventory. Galley is your recipe library. Manifest is your weekly meal plan. Supply is your shopping list. Each surface is queryable by your AI agent through the MCP server.",
-			},
-			{
-				question: "Where is my data stored?",
-				answer:
-					"Your data is stored in Cloudflare D1 (SQLite at the edge), Cloudflare R2 (for images), and Cloudflare Vectorize (for semantic search embeddings). All scoped to your group and only accessible by you and your invited members.",
-			},
-			{
-				question: "Can I export my data?",
-				answer:
-					"Yes. Every Ration account can export full inventory, recipes, supply lists, and meal plans as JSON or CSV from the dashboard or via the v1 REST API.",
-			},
-		]),
+		faqSchema(
+			buildHomeFaqEntries({
+				tierLimits: loaderData.tierLimits,
+				subscriptionProducts: loaderData.subscriptionProducts,
+			}),
+		),
 	];
+
+	const faqEntries = buildHomeFaqEntries({
+		tierLimits: loaderData.tierLimits,
+		subscriptionProducts: loaderData.subscriptionProducts,
+	});
 
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative overflow-hidden">
@@ -821,6 +797,50 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</ul>
 						</section>
 					)}
+
+					<section
+						id="faq"
+						aria-labelledby="faq-heading"
+						className="glass-panel rounded-2xl p-6 md:p-10 space-y-6 scroll-mt-24"
+					>
+						<div>
+							<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
+								FAQ
+							</span>
+							<h2
+								id="faq-heading"
+								className="text-display text-2xl md:text-3xl text-carbon mt-2"
+							>
+								Common questions
+							</h2>
+							<p className="text-muted text-sm max-w-2xl mt-2 leading-relaxed">
+								Direct answers for humans and AI agents researching Ration.
+							</p>
+						</div>
+						<div className="space-y-3">
+							{faqEntries.map((entry) => (
+								<details
+									key={entry.question}
+									className="group rounded-xl border border-platinum bg-ceramic/80 open:border-hyper-green/30"
+								>
+									<summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-carbon marker:content-none [&::-webkit-details-marker]:hidden">
+										<span className="flex items-start justify-between gap-4">
+											{entry.question}
+											<span
+												aria-hidden
+												className="text-hyper-green transition-transform group-open:rotate-45"
+											>
+												+
+											</span>
+										</span>
+									</summary>
+									<div className="px-4 pb-4 text-sm text-muted leading-relaxed border-t border-platinum/80 pt-3">
+										{entry.answer}
+									</div>
+								</details>
+							))}
+						</div>
+					</section>
 
 					<PricingSection
 						loaderData={loaderData}

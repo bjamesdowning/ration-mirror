@@ -10,9 +10,11 @@ import type { Route } from "./+types/sitemap.xml";
 // Static pages with their last-modified date. Bump these when the page
 // content changes meaningfully so crawlers know to revisit.
 const STATIC_PAGES: ReadonlyArray<{ path: string; lastmod: string }> = [
-	{ path: "/", lastmod: "2026-04-25" },
+	{ path: "/", lastmod: "2026-06-19" },
 	{ path: "/about", lastmod: "2026-04-25" },
-	{ path: "/blog", lastmod: "2026-04-25" },
+	{ path: "/blog", lastmod: "2026-06-19" },
+	{ path: "/connect", lastmod: "2026-06-19" },
+	{ path: "/docs/api", lastmod: "2026-06-19" },
 	{ path: "/tools", lastmod: "2026-04-25" },
 	{ path: "/tools/unit-converter", lastmod: "2026-04-25" },
 	{ path: "/legal/terms", lastmod: "2026-04-25" },

@@ -4,6 +4,9 @@ import * as schema from "../../db/schema";
 import type { McpScope } from "../mcp/scopes";
 import { buildClaimRecoveryPaths } from "./claim.constants";
 
+import type { AgentKitchenSnapshot } from "./kitchen-snapshot.server";
+import { buildKitchenAwareSuggestedActions } from "./suggested-actions.server";
+
 export interface AgentOnboardingState {
 	claimed: boolean;
 	status: "pending_claim" | "claimed" | "none";
@@ -24,7 +27,12 @@ export { buildClaimRecoveryPaths } from "./claim.constants";
 export function buildSuggestedNextActions(
 	onboarding: AgentOnboardingState,
 	capabilities: Record<string, boolean>,
+	kitchen?: AgentKitchenSnapshot,
 ): SuggestedNextAction[] {
+	if (kitchen) {
+		return buildKitchenAwareSuggestedActions(onboarding, capabilities, kitchen);
+	}
+
 	const actions: SuggestedNextAction[] = [];
 
 	if (!onboarding.claimed) {
@@ -44,9 +52,8 @@ export function buildSuggestedNextActions(
 
 	if (capabilities.canRead) {
 		actions.push({
-			action: "get_context",
-			description:
-				"You already have context — try search_ingredients or list_inventory.",
+			action: "search_ingredients",
+			description: "Try search_ingredients or list_inventory.",
 		});
 	}
 

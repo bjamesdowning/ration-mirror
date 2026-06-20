@@ -1,3 +1,7 @@
+import {
+	buildLlmsComparisonFacts,
+	formatLlmsComparisonFactsMarkdown,
+} from "~/lib/llms-comparison-facts.server";
 import type { Route } from "./+types/llms-txt";
 
 /**
@@ -13,7 +17,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 	const origin = url.origin;
 
 	const { getAllPosts } = await import("~/lib/blog.server");
+	const { SUBSCRIPTION_PRODUCTS } = await import("~/lib/stripe.server");
+	const { TIER_LIMITS } = await import("~/lib/tiers.server");
 	const posts = getAllPosts();
+
+	const comparisonFacts = formatLlmsComparisonFactsMarkdown(
+		buildLlmsComparisonFacts({
+			origin,
+			maxInventoryItems: TIER_LIMITS.free.maxInventoryItems,
+			maxMeals: TIER_LIMITS.free.maxMeals,
+			maxGroceryLists: TIER_LIMITS.free.maxGroceryLists,
+			crewMonthlyPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_MONTHLY.priceUsd,
+			crewAnnualPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.priceUsd,
+		}),
+	);
 
 	const blogList = posts
 		.map(
@@ -27,6 +44,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 > AI-native kitchen management. Pantry inventory, recipes, weekly meal plans, supply lists, and an OAuth MCP server — paste one URL into Claude, ChatGPT, or Cursor and authorize in your browser.
 
 Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ships an open MCP server, a public REST API, and a free tier suitable for getting started.
+
+${comparisonFacts}
 
 ## Product
 

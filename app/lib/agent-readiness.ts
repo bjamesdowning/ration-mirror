@@ -215,69 +215,6 @@ export function buildApiCatalog(request: Request) {
 	};
 }
 
-export function buildOpenApiDocument(request: Request) {
-	const origin = new URL(request.url).origin;
-	return {
-		openapi: "3.1.0",
-		info: {
-			title: "Ration API",
-			version: APP_VERSION,
-			description:
-				"Programmatic access to Ration inventory, Galley meals, and Supply exports. API keys are scoped per organization.",
-		},
-		servers: [{ url: origin }],
-		components: {
-			securitySchemes: {
-				apiKey: {
-					type: "apiKey",
-					in: "header",
-					name: "X-Api-Key",
-					description:
-						"Ration API key. Use scopes: inventory, galley, supply, or mcp.",
-				},
-			},
-		},
-		security: [{ apiKey: [] }],
-		paths: {
-			"/api/v1/inventory/export": {
-				get: {
-					summary: "Export Cargo inventory as CSV",
-					security: [{ apiKey: [] }],
-					responses: { "200": { description: "CSV inventory export" } },
-				},
-			},
-			"/api/v1/inventory/import": {
-				post: {
-					summary: "Import Cargo inventory from CSV",
-					security: [{ apiKey: [] }],
-					responses: { "200": { description: "Import result" } },
-				},
-			},
-			"/api/v1/galley/export": {
-				get: {
-					summary: "Export Galley meals as JSON",
-					security: [{ apiKey: [] }],
-					responses: { "200": { description: "JSON meal export" } },
-				},
-			},
-			"/api/v1/galley/import": {
-				post: {
-					summary: "Import Galley meals from JSON",
-					security: [{ apiKey: [] }],
-					responses: { "200": { description: "Import result" } },
-				},
-			},
-			"/api/v1/supply/export": {
-				get: {
-					summary: "Export active Supply list as CSV",
-					security: [{ apiKey: [] }],
-					responses: { "200": { description: "CSV supply export" } },
-				},
-			},
-		},
-	};
-}
-
 export function buildProtectedResourceMetadata(
 	request: Request,
 	env?: Cloudflare.Env,
@@ -569,6 +506,28 @@ The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/s
 ## Pricing
 
 Ration has a Free tier with lifecycle access and a Crew Member plan for unlimited capacity, household groups, member invites, credit transfers, and yearly credits. AI features use credits on both tiers.
+`;
+
+export const ABOUT_MARKDOWN = `# About Ration
+
+Ration is built by Billy Downing at Mayutic — an independent product studio focused on AI-native consumer software.
+
+## Mission
+
+Eliminate the everyday cognitive overhead of running a kitchen — what is in stock, what to cook, what to buy — by making the entire workflow operable by an AI agent that has real, current context about your pantry.
+
+## Principles
+
+- **Agent-first.** Every feature ships with an MCP equivalent and an API endpoint.
+- **Edge-native.** Inventory and meal data sit at the edge so AI grounding requests are fast.
+- **Browser-native.** Use Ration on desktop or mobile from any modern browser — no app store install required.
+- **Privacy by default.** Your kitchen data is yours. No selling, no cross-user leaks, and exportable any time.
+
+## Founder
+
+Billy Downing started Ration because pantry trackers assumed humans would do the boring work. MCP and LLMs make it cheap to push that work to the agent; Ration is the structured substrate underneath — D1 inventory, Vectorize semantic search, Workers AI ingestion, and a clean MCP server any compatible client can drive.
+
+Contact: https://www.mayutic.com
 `;
 
 export const API_DOCS_MARKDOWN = `# Ration API and Agent Documentation

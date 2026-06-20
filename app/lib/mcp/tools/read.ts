@@ -29,7 +29,7 @@ export function registerReadTools(server: McpServer, env: McpToolsEnv): void {
 	registerMcpTool(
 		server,
 		"get_context",
-		"Return the calling agent's organization id, API key id (prefix), authorized scopes, and tool capabilities. Always safe to call first to introspect what the key can do.",
+		"Return the calling agent's organization id, API key id (prefix), authorized scopes, tool capabilities, kitchen tier/usage/credits, and suggested next actions. Always safe to call first.",
 		{},
 		async () =>
 			makeTool({
@@ -44,15 +44,23 @@ export function registerReadTools(server: McpServer, env: McpToolsEnv): void {
 						buildGetContextCapabilities,
 						buildSuggestedNextActions,
 					} = await import("../../agent/onboarding.server");
+					const { getAgentKitchenSnapshot } = await import(
+						"../../agent/kitchen-snapshot.server"
+					);
 					const onboarding = await getAgentOnboardingState(
 						env,
 						ctx.organizationId,
 						origin,
 					);
+					const kitchen = await getAgentKitchenSnapshot(
+						env,
+						ctx.organizationId,
+					);
 					const capabilities = buildGetContextCapabilities(ctx.scopes);
 					const suggestedNextActions = buildSuggestedNextActions(
 						onboarding,
 						capabilities,
+						kitchen,
 					);
 					return ok("get_context", {
 						organizationId: ctx.organizationId,
@@ -62,6 +70,7 @@ export function registerReadTools(server: McpServer, env: McpToolsEnv): void {
 						scopes: ctx.scopes,
 						authMethod: ctx.authMethod,
 						onboarding,
+						kitchen,
 						capabilities,
 						suggestedNextActions,
 						versions: { mcp: MCP_SERVER_VERSION },

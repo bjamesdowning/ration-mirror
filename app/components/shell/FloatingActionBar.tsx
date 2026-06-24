@@ -51,6 +51,7 @@ export function FloatingActionBar({
 						type="button"
 						onClick={action.onClick}
 						disabled={action.disabled}
+						aria-label={action.label}
 						className={`
 							flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all min-w-[44px] min-h-[44px] justify-center
 							${

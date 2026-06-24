@@ -2,6 +2,7 @@ import { ShoppingCart } from "lucide-react";
 import type { supplyList } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
+import { type SupplySortMode, sortSupplyItems } from "~/lib/supply-sort";
 import { SupplyItem } from "./SupplyItem";
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {
@@ -13,6 +14,7 @@ interface SupplyListProps {
 	onRefresh?: () => void;
 	filterDomain?: (typeof ITEM_DOMAINS)[number] | "all";
 	filterSearch?: string;
+	sortMode?: SupplySortMode;
 }
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -22,14 +24,13 @@ export function SupplyList({
 	onRefresh,
 	filterDomain = "all",
 	filterSearch = "",
+	sortMode = "alpha",
 }: SupplyListProps) {
-	// Apply domain filter
 	let filteredItems =
 		filterDomain === "all"
 			? list.items
 			: list.items.filter((item) => item.domain === filterDomain);
 
-	// Apply search filter
 	if (filterSearch.trim()) {
 		const query = filterSearch.toLowerCase();
 		filteredItems = filteredItems.filter((item) =>
@@ -56,7 +57,6 @@ export function SupplyList({
 
 	return (
 		<div className="space-y-6">
-			{/* Items List */}
 			{domainFilteredItems.length === 0 ? (
 				<div className="bg-platinum/50 rounded-xl p-8 text-center">
 					<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted" />
@@ -70,7 +70,10 @@ export function SupplyList({
 			) : (
 				<div className="space-y-6">
 					{ITEM_DOMAINS.map((domain) => {
-						const domainItems = groupedByDomain[domain];
+						const domainItems = sortSupplyItems(
+							groupedByDomain[domain],
+							sortMode,
+						);
 						if (domainItems.length === 0) return null;
 
 						const domainPurchased = domainItems.filter(
@@ -78,22 +81,24 @@ export function SupplyList({
 						).length;
 
 						return (
-							<section key={domain} className="space-y-4">
-								<div className="flex items-center justify-between gap-3">
-									<div className="flex items-center gap-3">
+							<section key={domain} className="space-y-3 md:space-y-4">
+								<div className="flex items-center justify-between gap-3 px-1">
+									<div className="flex items-center gap-2 md:gap-3">
 										{(() => {
 											const Icon = DOMAIN_ICONS[domain];
-											return <Icon className="w-5 h-5 text-hyper-green" />;
+											return (
+												<Icon className="w-4 h-4 md:w-5 md:h-5 text-hyper-green" />
+											);
 										})()}
-										<h3 className="text-lg font-semibold text-carbon">
+										<h3 className="text-base md:text-lg font-semibold text-carbon dark:text-white">
 											{DOMAIN_LABELS[domain]}
 										</h3>
 									</div>
-									<span className="text-data text-muted">
+									<span className="text-data text-muted text-sm">
 										{domainPurchased}/{domainItems.length}
 									</span>
 								</div>
-								<div className="glass-panel rounded-xl p-4 space-y-1">
+								<div className="glass-panel rounded-xl p-2 md:p-4 space-y-0">
 									{domainItems.map((item) => (
 										<SupplyItem
 											key={item.id}

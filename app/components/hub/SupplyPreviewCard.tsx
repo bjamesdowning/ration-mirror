@@ -1,5 +1,7 @@
 import { Link } from "react-router";
 import type { supplyItem, supplyList } from "~/db/schema";
+import { toTitleCase } from "~/lib/format-display";
+import { formatQuantity } from "~/lib/format-quantity";
 import { CheckIcon, GroceryIcon, ListIcon } from "../icons/HubIcons";
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {
@@ -90,10 +92,10 @@ export function SupplyPreviewCard({ list }: SupplyPreviewCardProps) {
 								{item.isPurchased && <CheckIcon className="w-3 h-3" />}
 							</span>
 							<span className="truncate">
-								{item.name}
-								{item.quantity > 1 && (
-									<span className="text-muted ml-1">×{item.quantity}</span>
-								)}
+								{toTitleCase(item.name)}
+								<span className="text-muted ml-1">
+									({formatQuantity(item.quantity, item.unit ?? "unit")})
+								</span>
 							</span>
 						</li>
 					))}

@@ -29,13 +29,44 @@ const COUNT_UNITS = new Set([
 	"sprig",
 ]);
 
+function isCountUnit(unit: string): boolean {
+	return COUNT_UNITS.has(String(unit).toLowerCase());
+}
+
+/**
+ * Rounds a quantity for decimal display. Max 2 decimal places; values >= 10 use 1 dp.
+ */
+export function formatQuantityNumber(
+	qty: number,
+	unit: string,
+	isCount = isCountUnit(unit),
+): number {
+	if (isCount) {
+		return Math.round(qty);
+	}
+	const decimals = qty >= 10 ? 1 : 2;
+	return Number.parseFloat(qty.toFixed(decimals));
+}
+
+/**
+ * Formats the numeric portion for display, trimming trailing zeros.
+ * e.g. 22.20 → "22.2", 3.00 → "3"
+ */
+export function formatQuantityNumericString(qty: number, unit: string): string {
+	const rounded = formatQuantityNumber(qty, unit);
+	if (Number.isInteger(rounded)) {
+		return String(rounded);
+	}
+	return String(rounded);
+}
+
 /**
  * Formats a quantity for display. Uses vulgar fractions for common values,
- * otherwise rounds to a sensible number of decimal places.
+ * otherwise rounds to a sensible number of decimal places (max 2).
  */
 export function formatQuantity(qty: number, unit: string): string {
 	const unitLower = String(unit).toLowerCase();
-	const isCount = COUNT_UNITS.has(unitLower);
+	const isCount = isCountUnit(unitLower);
 
 	if (Number.isInteger(qty) && qty >= 0 && qty < 1000) {
 		return `${qty} ${unit}`;
@@ -58,10 +89,8 @@ export function formatQuantity(qty: number, unit: string): string {
 		}
 	}
 
-	// Round to 1-2 decimals for non-count, 0 for count
-	const decimals = isCount ? 0 : qty >= 10 ? 1 : 2;
-	const rounded =
-		decimals === 0 ? Math.round(qty) : Number.parseFloat(qty.toFixed(decimals));
+	const rounded = formatQuantityNumber(qty, unit, isCount);
+	const numeric = formatQuantityNumericString(rounded, unit);
 
-	return `${rounded} ${unit}`;
+	return `${numeric} ${unit}`;
 }

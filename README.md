@@ -667,6 +667,7 @@ The supply list bridges the Galley and Cargo — it holds ingredients needed to 
 - **Snooze** — An item can be snoozed for a duration (via `supply_snooze` table, keyed on `normalizedName + domain`). Snoozed items are silently excluded from all future syncs until the snooze expires or is manually dismissed. Useful for items that are always on hand.
 - **Share** — Crew Member only. Public URL at `/shared/:token`. Any visitor can toggle purchased state on items via `PATCH /api/shared/:token/items/:itemId` (rate-limited by IP, no session required). This supports shared household shopping.
 - **Export** — `GET /api/supply-lists/:id/export?format=text|markdown` for clipboard/note-app sharing.
+- **Mobile shopping UI** — Stacked list rows with title-case names, tap-to-edit quantity pills, one-tap check-off at the listed (or edited) amount, sticky progress/sort/domain bar, and hide-bought toggle. Quantities display via `formatQuantity()` (max 2 decimal places, vulgar fractions where appropriate).
 
 ---
 
@@ -1235,7 +1236,7 @@ flowchart TB
 The discovery surface comprises:
 
 - [`/robots.txt`](app/routes/robots-txt.ts) — explicit `Allow` rules for major AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.). Cloudflare's managed AI bot block must also be set to **Allow** for these bots in the dashboard; see [`docs/seo/ai-crawlers.md`](docs/seo/ai-crawlers.md).
-- [`/sitemap.xml`](app/routes/sitemap.xml.ts) — every public route plus all blog posts with `<lastmod>` derived from each post's `dateModified`.
+- [`/sitemap.xml`](app/routes/sitemap.xml.ts) — every public route plus all blog posts with `<lastmod>` derived from each post's `dateModified` (see [`app/lib/sitemap.server.ts`](app/lib/sitemap.server.ts) for the canonical URL list).
 - [`/llms.txt`](app/routes/llms-txt.ts) and [`/llms-full.txt`](app/routes/llms-full-txt.ts) — markdown index and full-content companion per the [llmstxt.org](https://llmstxt.org) spec, used by AI answer engines for grounding.
 - [`/blog/rss.xml`](app/routes/blog.rss.xml.ts) — RSS 2.0 feed of all blog posts. Surfaced from the blog index head as `<link rel="alternate" type="application/rss+xml">`.
 

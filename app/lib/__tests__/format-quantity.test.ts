@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatQuantity } from "~/lib/format-quantity";
+import { formatQuantity, formatQuantityNumber } from "~/lib/format-quantity";
 
 describe("formatQuantity", () => {
 	it("returns integer values directly without decimal points", () => {
@@ -78,5 +78,22 @@ describe("formatQuantity", () => {
 	it("handles large integer values (>= 1000 skips fast path, falls to fraction/round logic)", () => {
 		const result = formatQuantity(1000, "g");
 		expect(result).toBe("1000 g");
+	});
+
+	it("trims trailing zeros from decimal display", () => {
+		expect(formatQuantity(22.2, "ml")).toBe("22.2 ml");
+		expect(formatQuantity(3, "ml")).toBe("3 ml");
+	});
+
+	it("rounds long precision to max 2 decimal places", () => {
+		// 22.234567 is close enough to 22¼ that fraction display wins
+		expect(formatQuantity(22.234567, "ml")).toBe("22¼ ml");
+		expect(formatQuantity(22.19, "ml")).toBe("22.2 ml");
+		expect(formatQuantity(1.567, "ml")).toBe("1.57 ml");
+	});
+
+	it("formatQuantityNumber respects count unit rounding", () => {
+		expect(formatQuantityNumber(3.44, "can")).toBe(3);
+		expect(formatQuantityNumber(10.44, "g")).toBe(10.4);
 	});
 });

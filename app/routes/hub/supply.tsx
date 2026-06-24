@@ -26,6 +26,7 @@ import { ExportMenu } from "~/components/supply/ExportMenu";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
+import { SupplyShoppingBar } from "~/components/supply/SupplyShoppingBar";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
 import {
@@ -75,7 +76,13 @@ export function shouldRevalidate({
 	const nextKeys = new Set(nextUrl.searchParams.keys());
 	const allKeys = new Set([...currentKeys, ...nextKeys]);
 	for (const key of allKeys) {
-		if (key === "domain" || key === "tag") continue;
+		if (
+			key === "domain" ||
+			key === "tag" ||
+			key === "sort" ||
+			key === "hidePurchased"
+		)
+			continue;
 		if (currentUrl.searchParams.get(key) !== nextUrl.searchParams.get(key)) {
 			return defaultShouldRevalidate;
 		}
@@ -303,15 +310,19 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const {
 		activeDomain,
 		currentTag,
+		sortMode,
+		hidePurchased,
 		handleDomainChange,
 		handleTagChange,
+		handleSortChange,
+		handleHidePurchasedChange,
 		clearAllFilters,
 		hasActiveFilters,
-	} = usePageFilters();
+	} = usePageFilters({ supportsSupplySort: true });
 
 	// Local Search Logic (matches Cargo/Galley pattern)
-	const filteredItems = useMemo(() => {
-		if (!displayList?.items) return [];
+	const { filteredItems, progressItems } = useMemo(() => {
+		if (!displayList?.items) return { filteredItems: [], progressItems: [] };
 		let items = displayList.items;
 
 		// Filter by Domain
@@ -352,16 +363,30 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			items = items.filter((item) => item.name.toLowerCase().includes(query));
 		}
 
-		return items;
-	}, [displayList?.items, searchQuery, activeDomain, currentTag, cargo]);
+		const progressItems = items;
+		const filteredItems = hidePurchased
+			? items.filter((item) => !item.isPurchased)
+			: items;
+
+		return { filteredItems, progressItems };
+	}, [
+		displayList?.items,
+		searchQuery,
+		activeDomain,
+		currentTag,
+		cargo,
+		hidePurchased,
+	]);
 
 	// Filter content for mobile sheet
 	const filterContent = (
 		<div className="space-y-6">
-			<DomainFilterChips
-				activeDomain={activeDomain}
-				onDomainChange={handleDomainChange}
-			/>
+			<div className="hidden md:block">
+				<DomainFilterChips
+					activeDomain={activeDomain}
+					onDomainChange={handleDomainChange}
+				/>
+			</div>
 
 			{availableTags.length > 0 && (
 				<TagFilterDropdown
@@ -444,9 +469,15 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 	const isDocking = dockFetcher.state !== "idle";
 
-	// Calculate purchased count for Dock button state
+	// Calculate purchased count for Dock button state (all items, not filtered)
 	const purchasedCount =
 		displayList?.items?.filter((i) => i.isPurchased).length || 0;
+
+	const progressPurchasedCount = progressItems.filter(
+		(i) => i.isPurchased,
+	).length;
+	const progressTotalCount = progressItems.length;
+	const progressRemainingCount = progressTotalCount - progressPurchasedCount;
 
 	const handleDockCargo = async () => {
 		if (!displayList) return;
@@ -562,6 +593,18 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							Updating list from your meal plan...
 						</output>
 					)}
+
+					<SupplyShoppingBar
+						purchasedCount={progressPurchasedCount}
+						totalCount={progressTotalCount}
+						remainingCount={progressRemainingCount}
+						hidePurchased={hidePurchased}
+						activeDomain={activeDomain}
+						sortMode={sortMode}
+						onDomainChange={handleDomainChange}
+						onSortChange={handleSortChange}
+						onHidePurchasedChange={handleHidePurchasedChange}
+					/>
 					<div className="hidden md:block">
 						<PanelToolbar
 							primaryAction={
@@ -651,7 +694,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 					{/* Mobile Quick Add Form */}
 					{showQuickAdd && (
-						<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
+						<div
+							data-testid="supply-quick-add"
+							className="glass-panel rounded-xl p-6 md:hidden animate-fade-in"
+						>
 							<AddItemForm
 								listId={displayList.id}
 								defaultDomain={activeDomain === "all" ? "food" : activeDomain}
@@ -677,6 +723,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							list={{ ...displayList, items: filteredItems }}
 							filterDomain="all"
 							filterSearch=""
+							sortMode={sortMode}
 						/>
 					)}
 
@@ -718,6 +765,21 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			)}
 
 			{/* Floating Action Bar */}
+			{purchasedCount > 0 && !isFilterSheetOpen && (
+				<div className="md:hidden fixed bottom-32 left-4 right-4 z-30">
+					<button
+						type="button"
+						onClick={handleDockCargo}
+						disabled={isDocking}
+						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-hyper-green/15 border border-hyper-green/30 text-hyper-green font-semibold rounded-xl text-sm backdrop-blur-sm disabled:opacity-50"
+					>
+						<CheckIcon className="w-4 h-4" />
+						{isDocking
+							? "Transferring to Cargo..."
+							: `Dock ${purchasedCount} to Cargo`}
+					</button>
+				</div>
+			)}
 			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
 
 			{/* Share Modal */}

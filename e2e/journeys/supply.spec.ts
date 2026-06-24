@@ -13,7 +13,9 @@ async function openSupplyQuickAdd(page: Page) {
 
 async function addSupplyItem(page: Page, itemName: string) {
 	await openSupplyQuickAdd(page);
-	await page.locator('[data-testid="supply-quick-add"] #supply-item-name').fill(itemName);
+	await page
+		.locator('[data-testid="supply-quick-add"] #supply-item-name')
+		.fill(itemName);
 	await page
 		.getByTestId("supply-quick-add")
 		.getByRole("button", { name: "Add to Supply" })
@@ -22,7 +24,10 @@ async function addSupplyItem(page: Page, itemName: string) {
 }
 
 function supplyRow(page: Page, itemName: string) {
-	return page.getByTestId("supply-item-row").filter({ hasText: itemName }).first();
+	return page
+		.getByTestId("supply-item-row")
+		.filter({ hasText: itemName })
+		.first();
 }
 
 function supplyMobileRow(page: Page, itemName: string) {
@@ -142,7 +147,9 @@ test.describe("supply", () => {
 			.filter({ hasText: String(suffix) });
 		await expect(rows).toHaveCount(2);
 
-		const names = await rows.locator(".md\\:hidden .line-clamp-2").allTextContents();
+		const names = await rows
+			.locator(".md\\:hidden .line-clamp-2")
+			.allTextContents();
 		const appleIndex = names.findIndex((n) =>
 			n.toLowerCase().includes("apple"),
 		);

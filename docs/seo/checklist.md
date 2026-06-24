@@ -23,7 +23,7 @@ be automated and must be done from a human-controlled console.
 - [ ] Confirm the `ration.mayutic.com` property is verified.
 - [ ] **Sitemaps** → submit/resubmit `https://ration.mayutic.com/sitemap.xml`.
       Wait for status to show "Success" and the URL count to match the
-      sitemap (currently 7 static + N blog posts).
+      sitemap (currently 11 static + 8 blog posts = 19 URLs).
 - [ ] **URL Inspection** → for each URL below, paste it, click
       **Test Live URL**, then **Request Indexing**. Repeat after every
       meaningful content update.
@@ -34,6 +34,14 @@ be automated and must be done from a human-controlled console.
   - [ ] `https://ration.mayutic.com/blog/pantry-data-problem`
   - [ ] `https://ration.mayutic.com/blog/mcp-kitchen-assistant`
   - [ ] `https://ration.mayutic.com/blog/agent-first-mcp-onboarding`
+  - [ ] `https://ration.mayutic.com/blog/mcp-consumer-app-architecture`
+  - [ ] `https://ration.mayutic.com/blog/semantic-pantry-search`
+  - [ ] `https://ration.mayutic.com/blog/cloudflare-vectorize-semantic-pantry-search`
+  - [ ] `https://ration.mayutic.com/blog/food-waste-data-pipeline`
+  - [ ] `https://ration.mayutic.com/connect`
+  - [ ] `https://ration.mayutic.com/docs/api`
+  - [ ] `https://ration.mayutic.com/auth.md`
+  - [ ] `https://ration.mayutic.com/mcp.md`
   - [ ] `https://ration.mayutic.com/tools`
   - [ ] `https://ration.mayutic.com/tools/unit-converter`
   - [ ] `https://ration.mayutic.com/legal/privacy`
@@ -134,7 +142,7 @@ inbound links. Aim for 5-10 contextual mentions in the first 30 days:
 - [ ] Weekly: check Search Console **Performance** → impressions/clicks
       trend; **Page indexing** → new "not indexed" reasons.
 - [ ] Monthly: regenerate `lastmod` dates in
-      [`app/routes/sitemap.xml.ts`](../../app/routes/sitemap.xml.ts) for
+      [`app/lib/sitemap.server.ts`](../../app/lib/sitemap.server.ts) for
       any static page that received meaningful content updates.
 - [ ] Quarterly: re-validate structured data and OG previews; update
       `llms.txt` and `llms-full.txt` content if product surface area has

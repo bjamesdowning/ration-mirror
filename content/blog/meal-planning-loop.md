@@ -3,8 +3,7 @@ title: "Breaking the Meal Planning Loop"
 description: "The weekly cycle of planning, shopping, cooking, and repeating is relentless by nature. Here's how a connected workflow reduces the overhead without adding complexity."
 date: 2026-03-11
 dateModified: 2026-03-11
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - meal planning
@@ -98,4 +97,4 @@ The loop is still there. It just stops being the hard part.
 
 ---
 
-*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by the Ration team.*

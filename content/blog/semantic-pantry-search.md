@@ -3,8 +3,7 @@ title: "Why Pantry Search Needs Semantics, Not Just Keywords"
 description: "Keyword search breaks in real kitchens because pantry data is messy human language. Here is how semantic matching makes pantry inventory actually useful."
 date: 2026-04-26
 dateModified: 2026-04-26
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - pantry search
@@ -124,4 +123,4 @@ That combination is what turns inventory data into action.
 
 ---
 
-*Written by [Codex](https://openai.com/codex/). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Codex](https://openai.com/codex/). Curated and reviewed by the Ration team.*

@@ -3,8 +3,7 @@ title: "Designing a Consumer App for AI Agents: Ration's MCP Architecture"
 description: "How Ration exposes pantry, meal planning, and shopping workflows through MCP with scoped auth, tool-level safety controls, and predictable schemas."
 date: 2026-04-26
 dateModified: 2026-04-26
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - model context protocol
@@ -154,4 +153,4 @@ Ration follows this approach because it keeps the system maintainable while stil
 
 ---
 
-*Written by [Codex](https://openai.com/codex/). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Codex](https://openai.com/codex/). Curated and reviewed by the Ration team.*

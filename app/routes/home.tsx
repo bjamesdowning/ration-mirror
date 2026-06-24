@@ -11,7 +11,7 @@ import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
 import { buildHomeFaqEntries } from "~/lib/home-faq";
-import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
 import {
 	faqSchema,
 	organizationSchema,
@@ -591,13 +591,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	}, [currency]);
 
 	const homeSchemas = [
-		organizationSchema({
-			founder: {
-				name: "Billy Downing",
-				url: `${SITE_ORIGIN}/about`,
-				jobTitle: "Founder",
-			},
-		}),
+		organizationSchema({}),
 		websiteSchema(),
 		softwareAppSchema({
 			name: "Ration",

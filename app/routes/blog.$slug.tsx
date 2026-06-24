@@ -161,9 +161,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 						<div className="text-sm text-muted leading-relaxed">
 							<p className="text-carbon font-bold mb-1">{post.authorName}</p>
 							<p>
-								Founder of Ration. Writing about AI-native kitchen software,
-								MCP, and the boring infrastructure that makes meal planning
-								actually work.{" "}
+								Writing about AI-native kitchen software, MCP, and the
+								infrastructure that makes meal planning actually work.{" "}
 								<Link to="/about" className="text-hyper-green hover:underline">
 									More about the team →
 								</Link>

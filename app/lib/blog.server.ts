@@ -75,7 +75,7 @@ function parsePost(path: string, raw: string): BlogPost {
 		description: (data.description as string) || "",
 		date: publishedDate,
 		dateModified: normalizeBlogDate(data.dateModified ?? publishedDate),
-		authorName: (data.authorName as string) || "Billy Downing",
+		authorName: (data.authorName as string) || "Ration",
 		authorUrl:
 			typeof data.authorUrl === "string" && data.authorUrl.trim().length > 0
 				? data.authorUrl.trim()

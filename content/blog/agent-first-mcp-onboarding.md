@@ -3,8 +3,7 @@ title: "Let Your Agent Connect Itself: Agent-First MCP Onboarding for Ration"
 description: "How autonomous MCP clients self-register via auth.md, configure Ration in Claude, Cursor, ChatGPT, or Goose, and start managing a real kitchen — then you claim ownership whenever you want."
 date: 2026-06-19
 dateModified: 2026-06-19
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/og/agent-first-mcp-onboarding.png"
 tags:
   - MCP

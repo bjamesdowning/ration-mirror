@@ -3,8 +3,7 @@ title: "Your Kitchen Has an API Now"
 description: "How to connect Ration to Claude, Cursor, and any MCP client — with real prompts, real outputs, and workflows that make it worth setting up."
 date: 2026-03-10
 dateModified: 2026-03-21
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - MCP
@@ -261,4 +260,4 @@ It's especially useful if you:
 
 ---
 
-*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by the Ration team.*

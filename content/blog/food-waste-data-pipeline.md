@@ -3,8 +3,7 @@ title: "Food Waste Is a Data Pipeline Problem"
 description: "Reducing household food waste is not only about discipline. It is mostly an information freshness problem across inventory, recipes, planning, and shopping."
 date: 2026-04-26
 dateModified: 2026-04-26
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - food waste reduction
@@ -133,4 +132,4 @@ The result is simple. You buy less duplicate food, use more of what you already 
 
 ---
 
-*Written by [Codex](https://openai.com/codex/). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Codex](https://openai.com/codex/). Curated and reviewed by the Ration team.*

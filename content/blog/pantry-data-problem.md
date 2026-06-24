@@ -3,8 +3,7 @@ title: "The Pantry Data Problem"
 description: "Most pantry trackers fail because getting data in is harder than keeping it organized. Here's how AI image processing, APIs, and structured ingestion change the equation."
 date: 2026-03-11
 dateModified: 2026-03-11
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - pantry tracker
@@ -93,4 +92,4 @@ In the meantime, the combination of AI image processing, conversational input vi
 
 ---
 
-*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Opus](https://www.anthropic.com/claude). Curated and reviewed by the Ration team.*

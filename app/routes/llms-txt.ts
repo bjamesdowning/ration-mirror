@@ -78,7 +78,7 @@ ${blogList}
 
 ## Contact
 
-Ration is built by Billy Downing at Mayutic. Reach out via [mayutic.com](https://www.mayutic.com).
+Ration is built by Mayutic. Reach out via [mayutic.com](https://www.mayutic.com).
 `;
 
 	return new Response(body, {

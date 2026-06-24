@@ -3,8 +3,7 @@ title: "How Ration Uses Cloudflare Vectorize for Semantic Pantry Search"
 description: "A technical walkthrough of Ration's semantic ingredient matching stack: embeddings, Vectorize namespaces, D1 hydration, and quantity-aware result validation."
 date: 2026-04-26
 dateModified: 2026-04-26
-authorName: "Billy Downing"
-authorUrl: "https://linkedin.com/in/billy-downing"
+authorName: "Ration"
 image: "/static/ration-logo.svg"
 tags:
   - cloudflare vectorize
@@ -147,4 +146,4 @@ Ration follows this pattern because it scales from demo quality to daily-use qua
 
 ---
 
-*Written by [Codex](https://openai.com/codex/). Curated and reviewed by [Billy Downing](https://linkedin.com/in/billy-downing).*
+*Written by [Codex](https://openai.com/codex/). Curated and reviewed by the Ration team.*

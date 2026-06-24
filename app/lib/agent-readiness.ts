@@ -510,7 +510,7 @@ Ration has a Free tier with lifecycle access and a Crew Member plan for unlimite
 
 export const ABOUT_MARKDOWN = `# About Ration
 
-Ration is built by Billy Downing at Mayutic — an independent product studio focused on AI-native consumer software.
+Ration is built by Mayutic — an independent product studio focused on AI-native consumer software.
 
 ## Mission
 
@@ -522,10 +522,6 @@ Eliminate the everyday cognitive overhead of running a kitchen — what is in st
 - **Edge-native.** Inventory and meal data sit at the edge so AI grounding requests are fast.
 - **Browser-native.** Use Ration on desktop or mobile from any modern browser — no app store install required.
 - **Privacy by default.** Your kitchen data is yours. No selling, no cross-user leaks, and exportable any time.
-
-## Founder
-
-Billy Downing started Ration because pantry trackers assumed humans would do the boring work. MCP and LLMs make it cheap to push that work to the agent; Ration is the structured substrate underneath — D1 inventory, Vectorize semantic search, Workers AI ingestion, and a clean MCP server any compatible client can drive.
 
 Contact: https://www.mayutic.com
 `;

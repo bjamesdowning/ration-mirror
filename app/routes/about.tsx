@@ -2,11 +2,10 @@ import { Link } from "react-router";
 import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
-import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
+import { canonicalMeta, ogMeta } from "~/lib/seo";
 import {
 	breadcrumbSchema,
 	organizationSchema,
-	personSchema,
 	webPageSchema,
 } from "~/lib/structured-data";
 import type { Route } from "./+types/about";
@@ -14,7 +13,7 @@ import type { Route } from "./+types/about";
 export function meta(_: Route.MetaArgs) {
 	const title = "About Ration | The team building AI-native kitchen software";
 	const description =
-		"Ration is built by Billy Downing at Mayutic — an independent product studio focused on AI-native consumer software. Learn about the mission, the team, and the product roadmap.";
+		"Ration is built by Mayutic — an independent product studio focused on AI-native consumer software. Learn about the mission, the team, and the product roadmap.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -22,17 +21,6 @@ export function meta(_: Route.MetaArgs) {
 		...ogMeta({ title, description, path: "/about" }),
 	];
 }
-
-const FOUNDER = {
-	name: "Billy Downing",
-	url: `${SITE_ORIGIN}/about`,
-	jobTitle: "Founder, Ration",
-	sameAs: [
-		"https://www.mayutic.com",
-		"https://github.com/billydowning",
-		"https://www.linkedin.com/in/billydowning",
-	],
-};
 
 const schemas = [
 	webPageSchema({
@@ -47,9 +35,7 @@ const schemas = [
 	]),
 	organizationSchema({
 		sameAs: ["https://www.mayutic.com"],
-		founder: FOUNDER,
 	}),
-	personSchema(FOUNDER),
 ];
 
 export default function AboutPage() {
@@ -83,59 +69,6 @@ export default function AboutPage() {
 						first-class user, not a chat bolted on top.
 					</p>
 				</header>
-
-				{/* Founder card */}
-				<section
-					className="glass-panel rounded-2xl p-8 mb-12"
-					aria-labelledby="founder-heading"
-				>
-					<div className="flex items-start gap-5 mb-6">
-						<div
-							className="w-16 h-16 shrink-0 rounded-full bg-hyper-green/15 border border-hyper-green/30 flex items-center justify-center text-hyper-green font-bold text-2xl"
-							aria-hidden
-						>
-							BD
-						</div>
-						<div>
-							<h2
-								id="founder-heading"
-								className="text-display text-xl text-carbon"
-							>
-								Billy Downing
-							</h2>
-							<p className="text-sm text-muted">Founder, Ration · Mayutic</p>
-						</div>
-					</div>
-					<div className="space-y-4 text-sm text-muted leading-relaxed">
-						<p>
-							I started building Ration because every pantry tracker I had used
-							assumed the user would do the boring work — typing in every can of
-							tomatoes, reconciling a shopping list against what is already in
-							the cupboard, planning meals on a Sunday evening. That model
-							breaks down the moment life gets busy.
-						</p>
-						<p>
-							The unlock is that LLMs and MCP make it cheap to push the boring
-							work to the agent. Ration is the substrate underneath: structured
-							inventory in Cloudflare D1, semantic search via Vectorize,
-							image-based ingestion via Workers AI, and a clean MCP server that
-							any compatible client can drive.
-						</p>
-						<p>
-							If you want to chat about the product, MCP, edge data
-							infrastructure, or just send feedback, get in touch via{" "}
-							<a
-								href="https://www.mayutic.com"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-hyper-green hover:underline"
-							>
-								mayutic.com
-							</a>
-							.
-						</p>
-					</div>
-				</section>
 
 				{/* Company / mission */}
 				<section className="space-y-10 mb-12">

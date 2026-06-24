@@ -14,6 +14,7 @@ import {
 	useRouteLoaderData,
 } from "react-router";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
+import { CalendarSpanPicker } from "~/components/manifest/CalendarSpanPicker";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { DeveloperSection } from "~/components/settings/developer/DeveloperSection";
 import { GroupAvatar } from "~/components/shell/GroupAvatar";
@@ -1491,32 +1492,14 @@ function ManifestCalendarSection({ settings }: { settings: UserSettings }) {
 		<div className="glass-panel rounded-xl p-6">
 			<h3 className="text-xs text-label text-muted mb-1">Manifest Calendar</h3>
 			<p className="text-sm text-muted mb-4">
-				Default number of days shown in the Manifest on desktop. Mobile always
-				shows one day at a time.
+				Number of days shown in the Manifest. On mobile, swipe between days
+				using the day tabs.
 			</p>
 			<div className="flex items-center gap-2">
-				<fieldset
-					className="flex items-center rounded-lg overflow-hidden border border-platinum m-0 p-0"
-					aria-label="Manifest calendar span"
-				>
-					<legend className="sr-only">Number of days shown in Manifest</legend>
-					{([3, 5, 7] as const).map((span) => (
-						<button
-							key={span}
-							type="button"
-							onClick={() => handleChange(span)}
-							aria-pressed={calendarSpan === span}
-							aria-label={`${span} days`}
-							className={`px-4 py-2 text-sm font-medium transition-colors ${
-								calendarSpan === span
-									? "bg-hyper-green text-carbon"
-									: "text-muted hover:bg-platinum/50"
-							}`}
-						>
-							{span} days
-						</button>
-					))}
-				</fieldset>
+				<CalendarSpanPicker
+					currentSpan={calendarSpan}
+					onChange={handleChange}
+				/>
 				{fetcher.state !== "idle" && (
 					<span className="text-hyper-green animate-pulse text-sm">
 						Saving...

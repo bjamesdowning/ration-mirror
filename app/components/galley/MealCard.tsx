@@ -104,10 +104,19 @@ export function MealCard({
 		});
 	};
 
+	const supplyAction = {
+		label: localActive ? "Remove from Supply list" : "Add to Supply list",
+		onClick: handleToggleActive,
+	};
+	const cardActions = [
+		{ label: "Edit", onClick: () => setIsEditing(true) },
+		{ label: "Delete", onClick: handleDelete, destructive: true },
+	];
+
 	return (
 		<>
 			<div className="relative">
-				{/* Toggle button — positioned above card content */}
+				{/* Toggle button — desktop only */}
 				<button
 					type="button"
 					onClick={(e) => {
@@ -116,7 +125,7 @@ export function MealCard({
 					}}
 					disabled={isToggling}
 					aria-pressed={localActive}
-					className={`absolute top-4 left-4 z-40 flex items-center justify-center min-w-[44px] min-h-[44px] border text-xs font-bold transition-all shadow-sm ${
+					className={`hidden md:flex absolute top-4 left-4 z-40 items-center justify-center min-w-[44px] min-h-[44px] border text-xs font-bold transition-all shadow-sm ${
 						localActive
 							? "bg-hyper-green text-carbon border-hyper-green"
 							: "bg-platinum/70 text-muted border-carbon/20 hover:bg-platinum"
@@ -134,22 +143,13 @@ export function MealCard({
 
 				<StandardCard
 					to={detailHref ?? `/hub/galley/${meal.id}`}
-					actions={[
-						{
-							label: "Edit",
-							onClick: () => setIsEditing(true),
-						},
-						{
-							label: "Delete",
-							onClick: handleDelete,
-							destructive: true,
-						},
-					]}
+					actions={cardActions}
+					mobileActions={[supplyAction, ...cardActions]}
 				>
 					<div className="flex justify-between items-start mb-2">
 						<div className="flex items-start gap-2 min-w-0">
-							{/* Spacer to account for floating toggle button */}
-							<div className="w-11 h-11 flex-shrink-0" />
+							{/* Spacer to account for floating toggle button on desktop */}
+							<div className="hidden md:block w-11 h-11 flex-shrink-0" />
 							<h3
 								className="text-lg font-bold text-carbon group-hover:text-hyper-green transition-colors truncate mr-2"
 								title={meal.name}
@@ -157,7 +157,7 @@ export function MealCard({
 								{meal.name}
 							</h3>
 						</div>
-						<div className="text-right">
+						<div className="text-right hidden md:block">
 							<span className="text-label text-muted block text-xs">PREP</span>
 							<span className="text-data text-sm font-bold text-carbon">
 								{meal.prepTime ? `${meal.prepTime}m` : "--"}

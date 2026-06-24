@@ -2,6 +2,7 @@
 import type { useFetcher } from "react-router";
 import type { cargo } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { formatQuantityNumericString } from "~/lib/format-quantity";
 
 interface CargoEditModalProps {
 	item: typeof cargo.$inferSelect;
@@ -67,8 +68,12 @@ export function CargoEditModal({
 								inputMode="decimal"
 								name="quantity"
 								id={`quantity-${item.id}`}
-								defaultValue={item.quantity}
+								defaultValue={formatQuantityNumericString(
+									item.quantity,
+									item.unit,
+								)}
 								min={0}
+								step="any"
 								required
 								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>

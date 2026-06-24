@@ -7,6 +7,7 @@ import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { formatCargoStatus } from "~/lib/cargo";
+import { formatQuantityNumericString } from "~/lib/format-quantity";
 
 interface CargoCardProps {
 	item: typeof cargo.$inferSelect;
@@ -175,7 +176,7 @@ export function CargoCard({
 					</div>
 					<div className="text-right">
 						<span className="text-xl font-bold text-data text-carbon">
-							{item.quantity}
+							{formatQuantityNumericString(item.quantity, item.unit)}
 						</span>
 						<span className="text-sm ml-1 text-muted">{item.unit}</span>
 					</div>

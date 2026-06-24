@@ -54,8 +54,9 @@ import {
 	normalizeForCargoKey,
 	normalizeTags,
 } from "./cargo-utils";
+import { normalizeCargoQuantity } from "./format-quantity";
 
-export const CargoItemSchema = z.object({
+const CargoItemBaseSchema = z.object({
 	name: z
 		.string()
 		.min(1, "Name is required")
@@ -66,6 +67,13 @@ export const CargoItemSchema = z.object({
 	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
 	expiresAt: z.coerce.date().optional(),
 });
+
+export const CargoItemSchema = CargoItemBaseSchema.transform((data) => ({
+	...data,
+	quantity: normalizeCargoQuantity(data.quantity, data.unit),
+}));
+
+export const PartialCargoItemSchema = CargoItemBaseSchema.partial();
 
 export type CargoItemInput = z.infer<typeof CargoItemSchema>;
 export type CargoItemUpdateInput = Partial<CargoItemInput>;
@@ -468,7 +476,13 @@ export async function ingestCargoItems(
 						convertedQty: converted,
 					};
 					const cur = quantityByCargoId.get(target.id) ?? target.quantity;
-					quantityByCargoId.set(target.id, cur + converted);
+					quantityByCargoId.set(
+						target.id,
+						normalizeCargoQuantity(
+							cur + converted,
+							target.unit as SupportedUnit,
+						),
+					);
 					continue;
 				}
 			}
@@ -493,7 +507,10 @@ export async function ingestCargoItems(
 					convertedQty: converted,
 				};
 				const cur = quantityByCargoId.get(exact.id) ?? exact.quantity;
-				quantityByCargoId.set(exact.id, cur + converted);
+				quantityByCargoId.set(
+					exact.id,
+					normalizeCargoQuantity(cur + converted, exact.unit as SupportedUnit),
+				);
 				continue;
 			}
 		}
@@ -554,7 +571,13 @@ export async function ingestCargoItems(
 								convertedQty: converted,
 							};
 							const cur = quantityByCargoId.get(target.id) ?? target.quantity;
-							quantityByCargoId.set(target.id, cur + converted);
+							quantityByCargoId.set(
+								target.id,
+								normalizeCargoQuantity(
+									cur + converted,
+									target.unit as SupportedUnit,
+								),
+							);
 						}
 						handled = true;
 					}
@@ -647,6 +670,7 @@ export async function ingestCargoItems(
 		}
 
 		const newId = crypto.randomUUID();
+		const normalizedQty = normalizeCargoQuantity(it.quantity, it.unit);
 		const tagsJson = Array.isArray(it.tags)
 			? JSON.stringify(it.tags)
 			: typeof it.tags === "string"
@@ -657,7 +681,7 @@ export async function ingestCargoItems(
 				id: newId,
 				organizationId,
 				name: it.name,
-				quantity: it.quantity,
+				quantity: normalizedQty,
 				unit: it.unit,
 				domain: it.domain,
 				tags: tagsJson,
@@ -671,7 +695,7 @@ export async function ingestCargoItems(
 			id: newId,
 			organizationId,
 			name: it.name,
-			quantity: it.quantity,
+			quantity: normalizedQty,
 			unit: it.unit,
 			domain: it.domain,
 			tags: tagsJson,
@@ -681,7 +705,7 @@ export async function ingestCargoItems(
 			updatedAt: now,
 		} as typeof cargo.$inferSelect;
 		cargoById.set(newId, newRow);
-		quantityByCargoId.set(newId, it.quantity);
+		quantityByCargoId.set(newId, normalizedQty);
 		const key = `${normalizeForCargoKey(it.name)}__${it.domain}`;
 		const arr = cargoByKey.get(key) ?? [];
 		arr.push(newRow);
@@ -819,8 +843,11 @@ export async function updateItem(
 	const nextExpiresAt =
 		data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt;
 	const nextName = data.name ?? existing.name;
-	const nextQuantity = data.quantity ?? existing.quantity;
 	const nextUnit = data.unit ?? (existing.unit as CargoItemInput["unit"]);
+	const nextQuantity =
+		data.quantity !== undefined
+			? normalizeCargoQuantity(data.quantity, nextUnit)
+			: existing.quantity;
 	const nextStatus = calculateInventoryStatus(nextExpiresAt);
 	const nextData: CargoItemInput = {
 		name: nextName,
@@ -1116,9 +1143,14 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 
 			if (toDelete.length === 0) continue;
 
+			const normalizedQty = normalizeCargoQuantity(
+				mergedQuantity,
+				primary.unit as SupportedUnit,
+			);
+
 			await d1
 				.update(cargo)
-				.set({ quantity: mergedQuantity, updatedAt: new Date() })
+				.set({ quantity: normalizedQty, updatedAt: new Date() })
 				.where(eq(cargo.id, primary.id));
 
 			for (const deleteChunk of chunkArray(toDelete, D1_MAX_BOUND_PARAMS)) {

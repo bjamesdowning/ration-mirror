@@ -1,51 +1,53 @@
+import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
-
-type CalendarSpan = 3 | 5 | 7;
+import {
+	type CalendarSpan,
+	CalendarSpanPicker,
+} from "~/components/manifest/CalendarSpanPicker";
 
 interface CalendarSpanSelectorProps {
 	currentSpan: CalendarSpan;
 	onSpanChange?: (span: CalendarSpan) => void;
+	/** Stretch buttons to fill container width (e.g. mobile filter drawer). */
+	fullWidth?: boolean;
 }
 
 export function CalendarSpanSelector({
 	currentSpan,
 	onSpanChange,
+	fullWidth = false,
 }: CalendarSpanSelectorProps) {
-	const fetcher = useFetcher();
+	const fetcher = useFetcher<{ success?: boolean }>();
+	const pendingSpanRef = useRef<CalendarSpan | null>(null);
 
 	const handleChange = (span: CalendarSpan) => {
 		if (span === currentSpan) return;
-		onSpanChange?.(span);
+		pendingSpanRef.current = span;
 		fetcher.submit(
 			{ intent: "update-manifest-calendar-span", span: String(span) },
 			{ method: "post", action: "/hub/settings" },
 		);
 	};
 
+	useEffect(() => {
+		if (fetcher.state !== "idle") return;
+		if (fetcher.data?.success && pendingSpanRef.current !== null) {
+			onSpanChange?.(pendingSpanRef.current);
+			pendingSpanRef.current = null;
+			return;
+		}
+		if (pendingSpanRef.current !== null) {
+			pendingSpanRef.current = null;
+		}
+	}, [fetcher.state, fetcher.data, onSpanChange]);
+
 	return (
 		<div className="flex items-center gap-2">
-			<fieldset
-				className="flex items-center rounded-lg overflow-hidden border border-platinum dark:border-white/10 m-0 p-0"
-				aria-label="Calendar span"
-			>
-				<legend className="sr-only">Number of days shown in Manifest</legend>
-				{([3, 5, 7] as const).map((span) => (
-					<button
-						key={span}
-						type="button"
-						onClick={() => handleChange(span)}
-						aria-pressed={currentSpan === span}
-						aria-label={`${span} days`}
-						className={`px-4 py-2 text-sm font-medium transition-colors ${
-							currentSpan === span
-								? "bg-hyper-green text-carbon"
-								: "text-muted hover:bg-platinum/50 dark:hover:bg-white/10"
-						}`}
-					>
-						{span} days
-					</button>
-				))}
-			</fieldset>
+			<CalendarSpanPicker
+				currentSpan={currentSpan}
+				onChange={handleChange}
+				fullWidth={fullWidth}
+			/>
 			{fetcher.state !== "idle" && (
 				<span className="text-hyper-green animate-pulse text-sm">
 					Saving...

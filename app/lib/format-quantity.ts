@@ -49,6 +49,14 @@ export function formatQuantityNumber(
 }
 
 /**
+ * Normalizes a cargo quantity for storage and display (count units → integer;
+ * continuous units → max 2 dp, 1 dp when ≥ 10).
+ */
+export function normalizeCargoQuantity(qty: number, unit: string): number {
+	return formatQuantityNumber(qty, unit);
+}
+
+/**
  * Formats the numeric portion for display, trimming trailing zeros.
  * e.g. 22.20 → "22.2", 3.00 → "3"
  */

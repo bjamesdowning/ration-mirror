@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import { ProvisionEditModal } from "~/components/galley/ProvisionEditModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
@@ -42,6 +42,7 @@ export function MealListRow({
 	onToggleActive,
 	detailHref,
 }: MealListRowProps) {
+	const navigate = useNavigate();
 	const fetcher = useFetcher();
 	const toggleFetcher = useFetcher<{
 		success: boolean;
@@ -94,10 +95,22 @@ export function MealListRow({
 		? `${singleIngredient.quantity} ${singleIngredient.unit}`
 		: null;
 
+	const detailPath = detailHref ?? `/hub/galley/${meal.id}`;
+	const supplyAction = {
+		label: localActive ? "Remove from Supply list" : "Add to Supply list",
+		onClick: handleToggleActive,
+	};
+	const editAction = { label: "Edit", onClick: () => setIsEditing(true) };
+	const deleteAction = {
+		label: "Delete",
+		onClick: handleDelete,
+		destructive: true,
+	};
+
 	return (
 		<>
 			<div className="flex items-center gap-3 py-3 px-1 min-h-[48px] group">
-				{/* Supply list toggle */}
+				{/* Supply list toggle — desktop only */}
 				<button
 					type="button"
 					onClick={handleToggleActive}
@@ -106,7 +119,7 @@ export function MealListRow({
 					title={
 						localActive ? "Selected for Supply list" : "Add to Supply list"
 					}
-					className={`flex items-center justify-center min-w-[44px] min-h-[44px] border rounded text-xs font-bold transition-all shrink-0 ${
+					className={`hidden md:flex items-center justify-center min-w-[44px] min-h-[44px] border rounded text-xs font-bold transition-all shrink-0 ${
 						localActive
 							? "bg-hyper-green text-carbon border-hyper-green"
 							: "bg-platinum/70 dark:bg-white/5 text-muted border-carbon/20 hover:bg-platinum"
@@ -119,10 +132,10 @@ export function MealListRow({
 					)}
 				</button>
 
-				{/* Name — tappable to open detail or edit */}
+				{/* Name — tappable to open detail */}
 				<button
 					type="button"
-					onClick={() => setIsEditing(true)}
+					onClick={() => navigate(detailPath)}
 					className="flex-1 text-left min-w-0"
 				>
 					<span
@@ -157,7 +170,7 @@ export function MealListRow({
 						<span className="text-xs text-muted shrink-0 hidden md:block w-20 text-right">
 							{meal.ingredients?.length ?? 0} ingredients
 						</span>
-						<span className="text-xs font-medium text-carbon dark:text-white shrink-0 w-12 text-right">
+						<span className="text-xs font-medium text-carbon dark:text-white shrink-0 w-12 text-right hidden md:block">
 							{meal.prepTime ? `${meal.prepTime}m` : "--"}
 						</span>
 					</>
@@ -171,14 +184,11 @@ export function MealListRow({
 				)}
 
 				{/* Action menu */}
-				<div className="shrink-0">
-					<ActionMenu
-						actions={[
-							{ label: "View", to: detailHref ?? `/hub/galley/${meal.id}` },
-							{ label: "Edit", onClick: () => setIsEditing(true) },
-							{ label: "Delete", onClick: handleDelete, destructive: true },
-						]}
-					/>
+				<div className="shrink-0 md:hidden">
+					<ActionMenu actions={[supplyAction, editAction, deleteAction]} />
+				</div>
+				<div className="shrink-0 hidden md:block">
+					<ActionMenu actions={[editAction, deleteAction]} />
 				</div>
 			</div>
 

@@ -6,16 +6,34 @@ export type ActionConfig = ActionMenuItem;
 export interface StandardCardProps {
 	children: React.ReactNode;
 	actions: ActionConfig[];
+	/** When provided, overrides actions in the mobile (< md) action menu. */
+	mobileActions?: ActionConfig[];
 	/** When provided, clicking anywhere on the card navigates to this path. */
 	to?: string;
 }
 
-export function StandardCard({ children, actions, to }: StandardCardProps) {
+export function StandardCard({
+	children,
+	actions,
+	mobileActions,
+	to,
+}: StandardCardProps) {
 	const navigate = useNavigate();
 
 	const menu = (
 		<div className="absolute top-2 right-2 z-10 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-			<ActionMenu actions={actions} />
+			{mobileActions ? (
+				<>
+					<div className="md:hidden">
+						<ActionMenu actions={mobileActions} />
+					</div>
+					<div className="hidden md:block">
+						<ActionMenu actions={actions} />
+					</div>
+				</>
+			) : (
+				<ActionMenu actions={actions} />
+			)}
 		</div>
 	);
 

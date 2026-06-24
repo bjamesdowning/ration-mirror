@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	useFetcher,
 	useNavigate,
@@ -11,7 +11,6 @@ import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	ConsumeIcon,
-	MoreVerticalIcon,
 	ShareIcon,
 } from "~/components/icons/PageIcons";
 import { CalendarSpanSelector } from "~/components/manifest/CalendarSpanSelector";
@@ -221,6 +220,14 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		searchParams.get("day") ?? defaultActiveDay,
 	);
 
+	// Keep mobile day selection in range when calendar span changes
+	useEffect(() => {
+		if (weekDates.includes(activeDay)) return;
+		const fallback = weekDates.includes(today) ? today : weekDates[0];
+		setActiveDay(fallback);
+		setSelectedDay(fallback);
+	}, [weekDates, activeDay, today]);
+
 	// Picker state
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pickerSlot, setPickerSlot] = useState<SlotType>("dinner");
@@ -228,6 +235,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 	// Share modal
 	const [shareOpen, setShareOpen] = useState(false);
+	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	// Plan Week modal — controlled from FAB on mobile
 	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
@@ -475,19 +483,37 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const navigate = useNavigate();
 	const weekRangeLabel = formatWeekRange(currentRangeStart, currentRangeEnd);
 
-	// Mobile "more options" sheet content — Share only (Plan Week is in FAB, Consume is in FAB)
-	const moreOptionsContent = (
-		<div className="space-y-3 pt-2">
-			<button
-				type="button"
-				onClick={() => {
-					setShareOpen(true);
-				}}
-				className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-hyper-green/10 text-hyper-green font-semibold rounded-xl hover:bg-hyper-green/20 transition-colors"
-			>
-				<ShareIcon className="w-5 h-5" />
-				Share Manifest
-			</button>
+	const handleSpanChange = useCallback(() => {
+		revalidator.revalidate();
+	}, [revalidator.revalidate]);
+
+	// Mobile filter sheet — date range + share
+	const filterContent = (
+		<div className="space-y-6">
+			<div className="space-y-2">
+				<p className="text-xs font-semibold text-muted uppercase tracking-widest">
+					Date Range
+				</p>
+				<CalendarSpanSelector
+					currentSpan={calendarSpan}
+					onSpanChange={handleSpanChange}
+					fullWidth
+				/>
+			</div>
+
+			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6">
+				<button
+					type="button"
+					onClick={() => {
+						setShareOpen(true);
+						setIsFilterSheetOpen(false);
+					}}
+					className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-hyper-green/10 text-hyper-green font-semibold rounded-xl hover:bg-hyper-green/20 transition-colors"
+				>
+					<ShareIcon className="w-5 h-5" />
+					Share Manifest
+				</button>
+			</div>
 		</div>
 	);
 
@@ -498,10 +524,8 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				icon={<CalendarIcon className="w-6 h-6 text-hyper-green" />}
 				title="Manifest"
 				itemCount={hasEntries ? entries.length : undefined}
-				filterContent={moreOptionsContent}
-				actionIcon={<MoreVerticalIcon className="w-4 h-4" />}
-				actionLabel="More options"
-				sheetTitle="Options"
+				filterContent={filterContent}
+				onFilterOpenChange={setIsFilterSheetOpen}
 				mobileOnly
 				titleRowExtra={
 					/* Compact prev/next chevrons — no date label, no "Today" pill */
@@ -547,7 +571,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 							today={today}
 							weekStartPref={weekStartPref}
 						/>
-						<CalendarSpanSelector currentSpan={calendarSpan} />
+						<CalendarSpanSelector
+							currentSpan={calendarSpan}
+							onSpanChange={handleSpanChange}
+						/>
 					</div>
 					<PanelToolbar
 						secondaryAction={
@@ -701,6 +728,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 
 			{/* Mobile FAB: Plan Week (always) + Copy Day + Consume All (contextual) */}
 			<FloatingActionBar
+				hidden={isFilterSheetOpen}
 				actions={[
 					{
 						id: "plan-week",

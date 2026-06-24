@@ -1,11 +1,9 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { CargoItemSchema, updateItem } from "~/lib/cargo.server";
+import { PartialCargoItemSchema, updateItem } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/cargo.$id";
-
-const PartialCargoSchema = CargoItemSchema.partial();
 
 export async function action({ request, params, context }: Route.ActionArgs) {
 	const {
@@ -38,7 +36,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 	try {
 		const payload = await request.json();
-		const input = PartialCargoSchema.parse(payload);
+		const input = PartialCargoItemSchema.parse(payload);
 
 		const updated = await updateItem(
 			context.cloudflare.env,

@@ -100,8 +100,8 @@ export function SupplyQuantityEditor({
 
 	const pillClasses =
 		variant === "pill"
-			? "inline-flex items-center rounded-lg bg-platinum/60 dark:bg-white/10 px-3 py-1.5 text-sm text-data text-muted hover:bg-platinum dark:hover:bg-white/15 transition-colors min-h-[36px]"
-			: "inline-flex items-center rounded-lg px-2 py-1 text-sm text-data text-muted hover:bg-platinum/50 transition-colors min-h-[32px] min-w-[88px] justify-end";
+			? "inline-flex items-center rounded-lg bg-platinum/60 dark:bg-white/15 px-3 py-1.5 text-sm text-data text-carbon dark:text-white/90 hover:bg-platinum dark:hover:bg-white/20 transition-colors min-h-[36px]"
+			: "inline-flex items-center rounded-lg bg-platinum/40 dark:bg-white/10 px-2 py-0.5 text-xs text-data text-carbon dark:text-white/90 hover:bg-platinum/60 dark:hover:bg-white/15 transition-colors min-h-[28px] max-w-[96px] justify-end";
 
 	if (isEditing) {
 		return (

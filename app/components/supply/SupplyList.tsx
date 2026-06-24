@@ -81,7 +81,7 @@ export function SupplyList({
 						).length;
 
 						return (
-							<section key={domain} className="space-y-3 md:space-y-4">
+							<section key={domain} className="space-y-2 md:space-y-4">
 								<div className="flex items-center justify-between gap-3 px-1">
 									<div className="flex items-center gap-2 md:gap-3">
 										{(() => {
@@ -98,7 +98,7 @@ export function SupplyList({
 										{domainPurchased}/{domainItems.length}
 									</span>
 								</div>
-								<div className="glass-panel rounded-xl p-2 md:p-4 space-y-0">
+								<div className="divide-y divide-platinum dark:divide-white/10 md:glass-panel md:rounded-xl md:p-4">
 									{domainItems.map((item) => (
 										<SupplyItem
 											key={item.id}

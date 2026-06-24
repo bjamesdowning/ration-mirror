@@ -1,8 +1,15 @@
 import { RefreshCcw } from "lucide-react";
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Link } from "react-router";
 import { lockBodyScroll } from "~/lib/body-scroll-lock";
+import {
+	resolveSupplyItemSources,
+	type SupplyItemSource,
+	type SupplyItemSourceInput,
+} from "~/lib/supply-sources";
 
-interface SupplyItemActionsSheetProps {
+interface SupplyItemActionsSheetProps extends SupplyItemSourceInput {
 	itemName: string;
 	isMealSourced: boolean;
 	convertLabel: string;
@@ -14,36 +21,93 @@ interface SupplyItemActionsSheetProps {
 	onRemove: () => void;
 }
 
+function SourceMealsSection({ sources }: { sources: SupplyItemSource[] }) {
+	if (sources.length === 0) {
+		return <p className="text-sm text-muted mb-4">Added manually</p>;
+	}
+
+	return (
+		<div className="mb-4">
+			<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-2">
+				From meals
+			</p>
+			<ul className="space-y-1">
+				{sources.map((source) => (
+					<li key={source.id ?? source.name} className="text-sm">
+						{source.id ? (
+							<Link
+								to={`/hub/galley/${source.id}`}
+								className="text-hyper-green hover:underline"
+								onClick={(e) => e.stopPropagation()}
+							>
+								{source.name}
+							</Link>
+						) : (
+							<span className="text-carbon dark:text-white">{source.name}</span>
+						)}
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
 export function SupplyItemActionsSheet({
 	itemName,
 	isMealSourced,
 	convertLabel,
 	isPending,
 	isConvertPending,
+	sourceMealName,
+	sourceMealNames,
+	sourceMealSources,
 	onClose,
 	onConvert,
 	onSnooze,
 	onRemove,
 }: SupplyItemActionsSheetProps) {
+	const sources = resolveSupplyItemSources({
+		sourceMealName,
+		sourceMealNames,
+		sourceMealSources,
+	});
+
 	useEffect(() => lockBodyScroll(), []);
 
-	return (
+	useEffect(() => {
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose();
+		};
+		document.addEventListener("keydown", handleEscape);
+		return () => document.removeEventListener("keydown", handleEscape);
+	}, [onClose]);
+
+	const sheet = (
 		<>
 			<button
 				type="button"
-				className="fixed inset-0 z-[75] bg-carbon/40 backdrop-blur-sm animate-fade-in border-none cursor-default"
+				className="fixed inset-0 z-[99] bg-carbon/50 backdrop-blur-sm animate-fade-in border-none cursor-default"
 				onClick={onClose}
 				aria-label="Close actions"
 			/>
-			<div className="fixed bottom-0 left-0 right-0 z-[80] bg-ceramic dark:bg-[#1A1A1A] rounded-t-3xl shadow-2xl animate-slide-up safe-area-pb">
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="supply-item-actions-title"
+				data-testid="supply-item-actions-sheet"
+				className="fixed bottom-0 left-0 right-0 z-[100] bg-ceramic dark:bg-[#1A1A1A] rounded-t-3xl shadow-2xl animate-slide-up safe-area-pb"
+			>
 				<div className="flex justify-center pt-3 pb-2">
 					<div className="w-10 h-1 bg-platinum dark:bg-white/20 rounded-full" />
 				</div>
 				<div className="px-6 pb-6">
-					<h3 className="text-lg font-bold text-carbon dark:text-white mb-1 truncate">
+					<h3
+						id="supply-item-actions-title"
+						className="text-lg font-bold text-carbon dark:text-white mb-1 truncate"
+					>
 						{itemName}
 					</h3>
-					<p className="text-sm text-muted mb-4">Item actions</p>
+					<SourceMealsSection sources={sources} />
 					<div className="space-y-2">
 						<button
 							type="button"
@@ -113,7 +177,7 @@ export function SupplyItemActionsSheet({
 					<button
 						type="button"
 						onClick={onClose}
-						className="w-full mt-4 py-3 text-center text-muted font-medium hover:text-carbon transition-colors"
+						className="w-full mt-4 py-3 text-center text-muted font-medium hover:text-carbon dark:hover:text-white transition-colors"
 					>
 						Cancel
 					</button>
@@ -121,4 +185,7 @@ export function SupplyItemActionsSheet({
 			</div>
 		</>
 	);
+
+	if (typeof document === "undefined") return null;
+	return createPortal(sheet, document.body);
 }

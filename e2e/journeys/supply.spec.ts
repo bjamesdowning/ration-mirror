@@ -103,34 +103,49 @@ test.describe("supply", () => {
 		await removeSupplyItem(page, itemName);
 	});
 
-	test("hide bought toggle filters purchased items", async ({
+	test("item actions sheet shows item name and manual source", async ({
 		authenticatedPage: page,
 	}) => {
-		const itemName = `e2e-supply-hide-${Date.now()}`;
+		const itemName = `e2e-supply-actions-${Date.now()}`;
 		await addSupplyItem(page, itemName);
 
 		const row = supplyRow(page, itemName);
+		await row.getByRole("button", { name: "Item actions" }).click();
 
-		await row.getByRole("button", { name: "Mark as purchased" }).click();
+		await expect(page.getByRole("heading", { name: itemName })).toBeVisible({
+			timeout: 5000,
+		});
 		await expect(
-			row.getByRole("button", { name: "Mark as not purchased" }),
-		).toBeVisible({ timeout: 5000 });
+			page.getByTestId("supply-item-actions-sheet").getByText("Added manually"),
+		).toBeVisible();
+		await page.getByRole("button", { name: "Cancel" }).click();
 
-		await page.getByRole("button", { name: "Hide bought" }).click();
+		await removeSupplyItem(page, itemName);
+	});
+
+	test("domain filter in options sheet filters items", async ({
+		authenticatedPage: page,
+	}) => {
+		const itemName = `e2e-supply-domain-${Date.now()}`;
+		await addSupplyItem(page, itemName);
+
+		await page.getByRole("button", { name: "More options" }).click();
+		await expect(page.getByRole("heading", { name: "Filters" })).toBeVisible({
+			timeout: 5000,
+		});
+		await page.getByRole("button", { name: "Household" }).click();
 		await expect(supplyRow(page, itemName)).toHaveCount(0, {
 			timeout: 5000,
 		});
 
-		await expect(page.getByText(/1\/\d+ bought/)).toBeVisible();
-
-		await page.getByRole("button", { name: "Showing unbought" }).click();
+		await page.getByRole("button", { name: "Food" }).click();
 		await expect(supplyRow(page, itemName)).toBeVisible({ timeout: 5000 });
 
-		await row.getByRole("button", { name: "Mark as not purchased" }).click();
+		await page.keyboard.press("Escape");
 		await removeSupplyItem(page, itemName);
 	});
 
-	test("A-Z sort orders items alphabetically", async ({
+	test("default A-Z sort orders items alphabetically", async ({
 		authenticatedPage: page,
 	}) => {
 		const suffix = Date.now();
@@ -140,15 +155,13 @@ test.describe("supply", () => {
 		await addSupplyItem(page, zebra);
 		await addSupplyItem(page, apple);
 
-		await page.getByRole("button", { name: "A–Z" }).click();
-
 		const rows = page
 			.getByTestId("supply-item-row")
 			.filter({ hasText: String(suffix) });
 		await expect(rows).toHaveCount(2);
 
 		const names = await rows
-			.locator(".md\\:hidden .line-clamp-2")
+			.locator(".md\\:hidden .truncate")
 			.allTextContents();
 		const appleIndex = names.findIndex((n) =>
 			n.toLowerCase().includes("apple"),

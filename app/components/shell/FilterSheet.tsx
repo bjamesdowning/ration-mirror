@@ -60,9 +60,6 @@ export function FilterSheet({
 			<div
 				ref={sheetRef}
 				className="fixed bottom-0 left-0 right-0 z-[70] bg-ceramic dark:bg-[#1A1A1A] rounded-t-3xl shadow-2xl animate-slide-up max-h-[85vh] overflow-hidden"
-				style={{
-					animation: "slideUp 0.3s ease-out forwards",
-				}}
 			>
 				{/* Handle */}
 				<div className="flex justify-center pt-3 pb-2">
@@ -86,31 +83,6 @@ export function FilterSheet({
 				{/* Safe area padding for iOS */}
 				<div className="h-safe-area-inset-bottom" />
 			</div>
-
-			<style>{`
-				@keyframes slideUp {
-					from {
-						transform: translateY(100%);
-					}
-					to {
-						transform: translateY(0);
-					}
-				}
-				@keyframes fadeIn {
-					from {
-						opacity: 0;
-					}
-					to {
-						opacity: 1;
-					}
-				}
-				.animate-slide-up {
-					animation: slideUp 0.3s ease-out forwards;
-				}
-				.animate-fade-in {
-					animation: fadeIn 0.2s ease-out forwards;
-				}
-			`}</style>
 		</>
 	);
 }

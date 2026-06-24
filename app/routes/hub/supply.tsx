@@ -314,8 +314,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		hidePurchased,
 		handleDomainChange,
 		handleTagChange,
-		handleSortChange,
-		handleHidePurchasedChange,
 		clearAllFilters,
 		hasActiveFilters,
 	} = usePageFilters({ supportsSupplySort: true });
@@ -381,12 +379,10 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	// Filter content for mobile sheet
 	const filterContent = (
 		<div className="space-y-6">
-			<div className="hidden md:block">
-				<DomainFilterChips
-					activeDomain={activeDomain}
-					onDomainChange={handleDomainChange}
-				/>
-			</div>
+			<DomainFilterChips
+				activeDomain={activeDomain}
+				onDomainChange={handleDomainChange}
+			/>
 
 			{availableTags.length > 0 && (
 				<TagFilterDropdown
@@ -403,7 +399,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				<p className="text-xs font-semibold text-muted uppercase tracking-widest">
 					Unit Display
 				</p>
-				<div className="flex items-center rounded-lg border border-platinum overflow-hidden">
+				<div className="flex items-center rounded-lg border border-platinum dark:border-white/10 overflow-hidden">
 					{(
 						[
 							{ id: "metric", label: "Metric" },
@@ -427,7 +423,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							className={`flex-1 py-2 text-xs font-semibold transition-colors ${
 								displayUnitMode === mode.id
 									? "bg-hyper-green/20 text-hyper-green"
-									: "text-muted hover:bg-platinum/60"
+									: "text-muted hover:bg-platinum/60 dark:hover:bg-white/10"
 							}`}
 						>
 							{mode.label}
@@ -477,7 +473,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		(i) => i.isPurchased,
 	).length;
 	const progressTotalCount = progressItems.length;
-	const progressRemainingCount = progressTotalCount - progressPurchasedCount;
 
 	const handleDockCargo = async () => {
 		if (!displayList) return;
@@ -597,13 +592,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 					<SupplyShoppingBar
 						purchasedCount={progressPurchasedCount}
 						totalCount={progressTotalCount}
-						remainingCount={progressRemainingCount}
-						hidePurchased={hidePurchased}
-						activeDomain={activeDomain}
-						sortMode={sortMode}
-						onDomainChange={handleDomainChange}
-						onSortChange={handleSortChange}
-						onHidePurchasedChange={handleHidePurchasedChange}
 					/>
 					<div className="hidden md:block">
 						<PanelToolbar
@@ -764,22 +752,6 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Floating Action Bar */}
-			{purchasedCount > 0 && !isFilterSheetOpen && (
-				<div className="md:hidden fixed bottom-32 left-4 right-4 z-30">
-					<button
-						type="button"
-						onClick={handleDockCargo}
-						disabled={isDocking}
-						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-hyper-green/15 border border-hyper-green/30 text-hyper-green font-semibold rounded-xl text-sm backdrop-blur-sm disabled:opacity-50"
-					>
-						<CheckIcon className="w-4 h-4" />
-						{isDocking
-							? "Transferring to Cargo..."
-							: `Dock ${purchasedCount} to Cargo`}
-					</button>
-				</div>
-			)}
 			<FloatingActionBar actions={fabActions} hidden={isFilterSheetOpen} />
 
 			{/* Share Modal */}

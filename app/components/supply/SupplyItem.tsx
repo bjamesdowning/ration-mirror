@@ -34,7 +34,7 @@ export function SupplyItem({
 		onRefresh,
 	});
 
-	const rowClasses = `group py-3 px-2 md:px-4 border-b border-platinum last:border-0 transition-all ${
+	const rowClasses = `group py-2 px-1 md:py-3 md:px-4 border-b border-platinum dark:border-white/10 last:border-0 transition-all ${
 		state.isPending ? "opacity-60" : ""
 	} ${state.optimisticPurchased ? "opacity-50" : ""}`;
 
@@ -51,9 +51,6 @@ export function SupplyItem({
 						onToggle={state.handleToggle}
 						onQuantityChange={state.handleQuantityChange}
 						onOpenActions={() => state.setShowActionsSheet(true)}
-						sourceMealName={state.sourceMealName}
-						sourceMealNames={state.sourceMealNames}
-						sourceMealSources={state.sourceMealSources}
 					/>
 				</div>
 				<div className="hidden md:block">
@@ -84,6 +81,9 @@ export function SupplyItem({
 					convertLabel={state.convertLabel}
 					isPending={state.isPending}
 					isConvertPending={state.isConvertPending}
+					sourceMealName={state.sourceMealName}
+					sourceMealNames={state.sourceMealNames}
+					sourceMealSources={state.sourceMealSources}
 					onClose={() => state.setShowActionsSheet(false)}
 					onConvert={state.handleConvertUnit}
 					onSnooze={state.handleSnooze}

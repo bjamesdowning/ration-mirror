@@ -116,7 +116,9 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 export function HydrateFallback() {
 	return (
 		<>
-			<HubHeader title="INGREDIENT DETAILS" subtitle="Loading..." />
+			<div className="hidden md:block">
+				<HubHeader title="INGREDIENT DETAILS" subtitle="Loading..." />
+			</div>
 			<div className="max-w-5xl mx-auto space-y-8 animate-pulse">
 				<div className="text-sm">
 					<div className="h-4 w-24 bg-platinum rounded" />
@@ -163,11 +165,13 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			<HubHeader
-				title="INGREDIENT DETAILS"
-				subtitle={`ID: ${item.id.slice(0, 8)}`}
-			/>
-			<div className="flex items-center justify-between mb-6">
+			<div className="hidden md:block">
+				<HubHeader
+					title="INGREDIENT DETAILS"
+					subtitle={`ID: ${item.id.slice(0, 8)}`}
+				/>
+			</div>
+			<div className="flex items-center justify-between mb-4 md:mb-6">
 				<Link
 					to="/hub/cargo"
 					className="text-sm text-muted hover:text-hyper-green transition-colors"

@@ -273,41 +273,44 @@ export function MealDetail({
 
 	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);
 	const triggeredAllergens = detectAllergens(ingredientNames, userAllergens);
+	const sourceUrl = meal.customFields?.sourceUrl as string | undefined;
+
+	const mealDescriptionBlock = (
+		<>
+			{meal.description && (
+				<p className="text-muted text-base md:text-lg w-full">
+					{meal.description}
+				</p>
+			)}
+			{sourceUrl && (
+				<a
+					href={sourceUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1.5 text-sm text-hyper-green hover:underline"
+				>
+					<ExternalLink className="w-3.5 h-3.5" />
+					View Source
+				</a>
+			)}
+		</>
+	);
 
 	return (
-		<div className="max-w-4xl mx-auto space-y-8">
+		<div className="max-w-4xl mx-auto space-y-6 md:space-y-8">
 			{/* Allergen warning banner */}
 			{triggeredAllergens.length > 0 && (
 				<AllergenWarningBadge triggered={triggeredAllergens} />
 			)}
 
 			{/* Header */}
-			<div className="border-b border-platinum pb-6 flex justify-between items-start">
-				<div>
-					<div className="text-label text-muted text-xs mb-2">
+			<div className="glass-panel rounded-xl p-4 md:p-6 border border-platinum/70 space-y-4">
+				<div className="flex items-center justify-between gap-3">
+					<div className="text-label text-muted text-xs">
 						Meal ID: {meal.id.slice(0, 8)}
 					</div>
-					<h1 className="text-display text-3xl text-carbon mb-2">
-						{meal.name}
-					</h1>
-					{meal.description && (
-						<p className="text-muted text-lg max-w-2xl">{meal.description}</p>
-					)}
-					{meal.customFields?.sourceUrl && (
-						<a
-							href={meal.customFields.sourceUrl as string}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-1.5 text-sm text-hyper-green hover:underline mt-2"
-						>
-							<ExternalLink className="w-3.5 h-3.5" />
-							View Source
-						</a>
-					)}
-				</div>
-				<div className="flex flex-col gap-2 text-right">
 					{isOwner && (
-						<div className="flex gap-2 justify-end">
+						<div className="flex gap-2 shrink-0">
 							<Link
 								to="edit"
 								className="text-muted hover:text-hyper-green px-3 py-1 text-sm transition-colors"
@@ -324,65 +327,80 @@ export function MealDetail({
 							</button>
 						</div>
 					)}
-					<div className="mt-4 flex gap-6 text-sm">
-						<div className="flex flex-col items-center">
-							<span className="text-label text-muted text-xs">Prep</span>
-							<span className="text-data font-bold text-carbon">
-								{meal.prepTime || "--"}m
-							</span>
-						</div>
-						<div className="flex flex-col items-center">
-							<span className="text-label text-muted text-xs">Cook</span>
-							<span className="text-data font-bold text-carbon">
-								{meal.cookTime || "--"}m
-							</span>
-						</div>
-						{/* Servings stepper */}
-						<div className="flex flex-col items-center">
-							<span className="text-label text-muted text-xs">Servings</span>
-							<div className="flex items-center gap-1 mt-0.5">
-								<button
-									type="button"
-									aria-label="Decrease servings"
-									disabled={desiredServings <= MIN_SERVINGS}
-									onClick={() => handleServingsChange(desiredServings - 1)}
-									className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-								>
-									<Minus className="w-3.5 h-3.5" />
-								</button>
-								<input
-									ref={inputRef}
-									type="number"
-									inputMode="numeric"
-									min={MIN_SERVINGS}
-									max={MAX_SERVINGS}
-									value={inputValue}
-									onChange={(e) => setInputValue(e.target.value)}
-									onBlur={handleInputBlur}
-									onKeyDown={(e) => {
-										if (e.key === "Enter") inputRef.current?.blur();
-									}}
-									className="w-9 text-center text-data font-bold text-carbon bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-hyper-green rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-								/>
-								<button
-									type="button"
-									aria-label="Increase servings"
-									disabled={desiredServings >= MAX_SERVINGS}
-									onClick={() => handleServingsChange(desiredServings + 1)}
-									className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-								>
-									<Plus className="w-3.5 h-3.5" />
-								</button>
-							</div>
-							{isScaled && (
-								<span className="text-xs text-hyper-green font-medium mt-0.5">
-									{scaleFactor >= 1
-										? `${scaleFactor.toFixed(scaleFactor % 1 === 0 ? 0 : 1)}×`
-										: `÷${(1 / scaleFactor).toFixed((1 / scaleFactor) % 1 === 0 ? 0 : 1)}`}
-								</span>
-							)}
+				</div>
+
+				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+					<div className="flex-1 min-w-0 space-y-3">
+						<h1 className="text-display text-2xl sm:text-3xl text-carbon">
+							{meal.name}
+						</h1>
+						<div className="hidden md:block space-y-2">
+							{mealDescriptionBlock}
 						</div>
 					</div>
+
+					<div className="w-full md:w-auto shrink-0">
+						<div className="grid grid-cols-3 gap-2 w-full rounded-xl bg-platinum/30 dark:bg-white/5 p-3 text-sm">
+							<div className="flex flex-col items-center">
+								<span className="text-label text-muted text-xs">Prep</span>
+								<span className="text-data font-bold text-carbon">
+									{meal.prepTime || "--"}m
+								</span>
+							</div>
+							<div className="flex flex-col items-center">
+								<span className="text-label text-muted text-xs">Cook</span>
+								<span className="text-data font-bold text-carbon">
+									{meal.cookTime || "--"}m
+								</span>
+							</div>
+							<div className="flex flex-col items-center">
+								<span className="text-label text-muted text-xs">Servings</span>
+								<div className="flex items-center gap-1 mt-0.5">
+									<button
+										type="button"
+										aria-label="Decrease servings"
+										disabled={desiredServings <= MIN_SERVINGS}
+										onClick={() => handleServingsChange(desiredServings - 1)}
+										className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									>
+										<Minus className="w-3.5 h-3.5" />
+									</button>
+									<input
+										ref={inputRef}
+										type="number"
+										inputMode="numeric"
+										min={MIN_SERVINGS}
+										max={MAX_SERVINGS}
+										value={inputValue}
+										onChange={(e) => setInputValue(e.target.value)}
+										onBlur={handleInputBlur}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") inputRef.current?.blur();
+										}}
+										className="w-9 text-center text-data font-bold text-carbon bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-hyper-green rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+									/>
+									<button
+										type="button"
+										aria-label="Increase servings"
+										disabled={desiredServings >= MAX_SERVINGS}
+										onClick={() => handleServingsChange(desiredServings + 1)}
+										className="min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center text-muted hover:text-carbon hover:bg-platinum transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+									>
+										<Plus className="w-3.5 h-3.5" />
+									</button>
+								</div>
+								{isScaled && (
+									<span className="text-xs text-hyper-green font-medium mt-0.5">
+										{scaleFactor >= 1
+											? `${scaleFactor.toFixed(scaleFactor % 1 === 0 ? 0 : 1)}×`
+											: `÷${(1 / scaleFactor).toFixed((1 / scaleFactor) % 1 === 0 ? 0 : 1)}`}
+									</span>
+								)}
+							</div>
+						</div>
+					</div>
+
+					<div className="md:hidden space-y-2">{mealDescriptionBlock}</div>
 				</div>
 			</div>
 

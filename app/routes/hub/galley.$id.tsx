@@ -114,11 +114,13 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 
 	return (
 		<>
-			<HubHeader
-				title="PROTOCOL DETAILS"
-				subtitle={`ID: ${meal.id.split("-")[0]}`}
-			/>
-			<div className="flex items-center justify-between mb-6">
+			<div className="hidden md:block">
+				<HubHeader
+					title="PROTOCOL DETAILS"
+					subtitle={`ID: ${meal.id.slice(0, 8)}`}
+				/>
+			</div>
+			<div className="flex items-center justify-between mb-4 md:mb-6">
 				<Link
 					to="/hub/galley"
 					className="text-sm text-muted hover:text-hyper-green transition-colors"

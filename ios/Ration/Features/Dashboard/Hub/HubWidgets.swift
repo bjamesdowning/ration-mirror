@@ -27,18 +27,49 @@ struct HubStatsWidget: View {
 
 struct SupplyPreviewWidget: View {
     let list: SupplyList?
+    var onToggleItem: ((SupplyItem, Bool) async -> Void)?
+    var onOpenSupply: (() -> Void)?
+
+    private var uncheckedItems: [SupplyItem] {
+        (list?.items.filter { !$0.isPurchased } ?? []).prefix(6).map { $0 }
+    }
 
     var body: some View {
         GlassCard {
-            let total = list?.items.count ?? 0
-            let unchecked = list?.items.filter { !$0.isPurchased }.count ?? 0
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Supply list").rationHeadline()
-                    Text("\(unchecked) of \(total) to buy").rationCaption()
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    onOpenSupply?()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Supply list").rationHeadline()
+                            let total = list?.items.count ?? 0
+                            let unchecked = list?.items.filter { !$0.isPurchased }.count ?? 0
+                            Text("\(unchecked) of \(total) to buy").rationCaption()
+                        }
+                        Spacer()
+                        Image(systemName: "cart").foregroundStyle(Theme.hyperGreen)
+                    }
                 }
-                Spacer()
-                Image(systemName: "cart").foregroundStyle(Theme.hyperGreen)
+                .buttonStyle(.plain)
+
+                if !uncheckedItems.isEmpty {
+                    ForEach(uncheckedItems) { item in
+                        Button {
+                            Task { await onToggleItem?(item, true) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "circle")
+                                    .foregroundStyle(Theme.muted)
+                                Text(item.name.capitalized).rationBody()
+                                Spacer()
+                                Text("\(item.quantity.formatted()) \(item.unit)")
+                                    .rationCaption()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
     }

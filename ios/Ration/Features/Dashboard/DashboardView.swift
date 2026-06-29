@@ -5,6 +5,7 @@ struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    var onOpenSupply: () -> Void = {}
     @State private var model = HubViewModel()
     @State private var showingEdit = false
 
@@ -64,7 +65,7 @@ struct DashboardView: View {
             .safeAreaInset(edge: .bottom) {
                 if !model.isEditMode {
                     FloatingActionBar(actions: [
-                        FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, primary: true),
+                        FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, isAI: true),
                     ])
                 }
             }
@@ -121,7 +122,20 @@ struct DashboardView: View {
         case .cargoExpiring:
             CargoExpiringWidget(items: data.expiringItems, alertDays: data.expirationAlertDays)
         case .supplyPreview:
-            SupplyPreviewWidget(list: data.latestSupplyList)
+            SupplyPreviewWidget(
+                list: data.latestSupplyList,
+                onToggleItem: { item, purchased in
+                    await model.toggleSupplyItem(
+                        item,
+                        isPurchased: purchased,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId
+                    )
+                },
+                onOpenSupply: onOpenSupply
+            )
         case .manifestPreview:
             ManifestPreviewWidget(preview: data.manifestPreview)
         case .none:

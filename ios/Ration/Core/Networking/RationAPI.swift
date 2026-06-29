@@ -85,6 +85,14 @@ final class RationAPI {
         try await client.patch("supply/items/\(id)", body: ["isPurchased": isPurchased])
     }
 
+    func updateSupplyItem(_ id: String, quantity: Double?, unit: String?, isPurchased: Bool?) async throws -> EmptyResponse {
+        var body: [String: EncodableValue] = [:]
+        if let quantity { body["quantity"] = .double(quantity) }
+        if let unit { body["unit"] = .string(unit) }
+        if let isPurchased { body["isPurchased"] = .bool(isPurchased) }
+        return try await client.patch("supply/items/\(id)", body: body)
+    }
+
     func syncSupply() async throws -> SupplySyncResponse {
         try await client.post("supply/sync", body: EmptyBody())
     }
@@ -146,14 +154,15 @@ final class RationAPI {
         try await client.get("meals/\(id)")
     }
 
-    func matchMeals(mode: String = "delta", limit: Int = 20) async throws -> MealMatchResponse {
-        try await client.get(
-            "meals/match",
-            query: [
-                URLQueryItem(name: "mode", value: mode),
-                URLQueryItem(name: "limit", value: String(limit)),
-            ]
-        )
+    func matchMeals(mode: String = "delta", limit: Int = 20, servings: Int? = nil) async throws -> MealMatchResponse {
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "mode", value: mode),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        if let servings {
+            query.append(URLQueryItem(name: "servings", value: String(servings)))
+        }
+        return try await client.get("meals/match", query: query)
     }
 
     func cookMeal(id: String, servings: Int? = nil) async throws -> CookMealResponse {
@@ -208,9 +217,59 @@ final class RationAPI {
     func scanStatus(requestId: String) async throws -> ScanStatusResponse {
         try await client.get("scan/\(requestId)")
     }
+
+    // Avatars
+    func uploadUserAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> AvatarUploadResponse {
+        try await client.uploadAvatar("user/avatar", imageData: imageData, mimeType: mimeType)
+    }
+
+    func uploadOrganizationAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> OrgAvatarUploadResponse {
+        try await client.uploadAvatar("organization/avatar", imageData: imageData, mimeType: mimeType)
+    }
+
+    // Share
+    func manifestShareStatus() async throws -> ShareStatusResponse {
+        try await client.get("manifest/share")
+    }
+
+    func createManifestShare() async throws -> ShareCreateResponse {
+        try await client.post("manifest/share", body: EmptyBody())
+    }
+
+    func revokeManifestShare() async throws -> ShareRevokeResponse {
+        try await client.delete("manifest/share")
+    }
+
+    func supplyShareStatus() async throws -> ShareStatusResponse {
+        try await client.get("supply/share")
+    }
+
+    func createSupplyShare() async throws -> ShareCreateResponse {
+        try await client.post("supply/share", body: EmptyBody())
+    }
+
+    func revokeSupplyShare() async throws -> ShareRevokeResponse {
+        try await client.delete("supply/share")
+    }
 }
 
 struct EmptyBody: Encodable, Sendable {}
+
+/// Heterogeneous JSON body for supply item PATCH.
+enum EncodableValue: Encodable {
+    case string(String)
+    case double(Double)
+    case bool(Bool)
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let v): try container.encode(v)
+        case .double(let v): try container.encode(v)
+        case .bool(let v): try container.encode(v)
+        }
+    }
+}
 
 struct EmptyResponse: Decodable, Sendable {
     init() {}

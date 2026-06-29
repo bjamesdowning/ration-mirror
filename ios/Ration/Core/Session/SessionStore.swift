@@ -26,12 +26,7 @@ final class SessionStore {
     var isTierExpired: Bool { session?.isTierExpired ?? false }
     var isCrewMember: Bool { session?.isCrewMember ?? false }
     var userImageURL: URL? {
-        guard let raw = session?.user.image?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty,
-              let url = URL(string: raw),
-              url.scheme == "https"
-        else { return nil }
-        return url
+        AvatarURLResolver.resolve(session?.user.image)
     }
 
     func load(api: RationAPI) async {

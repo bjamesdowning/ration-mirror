@@ -37,11 +37,26 @@ final class APIClient {
 
     /// Multipart image upload for the scan endpoint.
     func uploadImage<T: Decodable>(_ path: String, imageData: Data, filename: String = "scan.jpg") async throws -> T {
+        try await uploadMultipart(path, fieldName: "image", imageData: imageData, filename: filename, mimeType: "image/jpeg")
+    }
+
+    /// Multipart avatar upload (`avatar` field).
+    func uploadAvatar<T: Decodable>(_ path: String, imageData: Data, filename: String = "avatar.jpg", mimeType: String = "image/jpeg") async throws -> T {
+        try await uploadMultipart(path, fieldName: "avatar", imageData: imageData, filename: filename, mimeType: mimeType)
+    }
+
+    private func uploadMultipart<T: Decodable>(
+        _ path: String,
+        fieldName: String,
+        imageData: Data,
+        filename: String,
+        mimeType: String
+    ) async throws -> T {
         let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"\(filename)\"\r\n")
-        body.append("Content-Type: image/jpeg\r\n\r\n")
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n")
+        body.append("Content-Type: \(mimeType)\r\n\r\n")
         body.append(imageData)
         body.append("\r\n--\(boundary)--\r\n")
 

@@ -11,12 +11,36 @@ enum AppConfig {
         return URL(string: "https://ration.mayutic.com/api/mobile/v1")!
     }
 
+    /// Site origin for resolving relative avatar paths (`/api/user/avatar/...`).
+    static var webOrigin: URL {
+        if let override = ProcessInfo.processInfo.environment["RATION_WEB_ORIGIN"],
+           let url = URL(string: override) {
+            return url
+        }
+        var origin = apiBaseURL
+        if origin.path.hasSuffix("/api/mobile/v1") {
+            origin.deleteLastPathComponent()
+            origin.deleteLastPathComponent()
+            origin.deleteLastPathComponent()
+        }
+        return origin
+    }
+
+    /// Allow `http://localhost` avatar URLs when the web origin is local dev.
+    static var allowsInsecureLocalhost: Bool {
+        guard let host = webOrigin.host?.lowercased() else { return false }
+        return host == "localhost" || host == "127.0.0.1"
+    }
+
     /// Custom URL scheme registered in Info.plist for the auth callback fallback.
     static let authCallbackScheme = "ration"
     static let authCallbackHost = "ration.mayutic.com"
 
     static let supportEmail = "support@mayutic.com"
     static let gitlabIssuesURL = URL(string: "https://gitlab.com/mayutic/ration/application/-/issues")!
+    static let webOriginURL = URL(string: "https://ration.mayutic.com")!
+    static let helpDocsURL = URL(string: "https://ration.mayutic.com/hub/settings#connected-agents")!
+    static let blogURL = URL(string: "https://ration.mayutic.com/blog")!
     static let termsURL = URL(string: "https://ration.mayutic.com/legal/terms")!
     static let privacyURL = URL(string: "https://ration.mayutic.com/legal/privacy")!
 

@@ -62,9 +62,9 @@ struct GalleyView: View {
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
             .safeAreaInset(edge: .bottom) {
                 FloatingActionBar(actions: [
-                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }, primary: true),
-                    FloatingAction(id: "generate", systemImage: "sparkles", label: "Generate", action: { showingGenerate = true }),
-                    FloatingAction(id: "import", systemImage: "link", label: "Import", action: { showingImport = true }),
+                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }),
+                    FloatingAction(id: "generate", systemImage: "sparkles", label: "Generate", action: { showingGenerate = true }, isAI: true),
+                    FloatingAction(id: "import", systemImage: "link", label: "Import", action: { showingImport = true }, isAI: true),
                 ])
             }
         }
@@ -177,7 +177,10 @@ struct MealDetailView: View {
     let mealId: String
     let initialMeal: Meal
     @State private var meal: Meal?
+    @State private var matchResult: MealMatch?
+    @State private var desiredServings: Int = 1
     @State private var isLoading = false
+    @State private var isLoadingAvailability = false
     @State private var errorMessage: String?
     @State private var cookMessage: String?
     @State private var showingEdit = false
@@ -193,8 +196,9 @@ struct MealDetailView: View {
                 }
                 let displayMeal = meal ?? initialMeal
                 header(displayMeal)
+                servingsStepper(baseServings: max(displayMeal.servings ?? 1, 1))
                 if !displayMeal.ingredients.isEmpty {
-                    ingredients(displayMeal.ingredients)
+                    ingredients(displayMeal)
                 }
                 if let directions = displayMeal.directions, !directions.isEmpty {
                     GlassCard {
@@ -207,7 +211,7 @@ struct MealDetailView: View {
                 }
                 HStack(spacing: 12) {
                     Button("Cook meal") { Task { await cook() } }
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                     Button("Edit") { showingEdit = true }
                         .buttonStyle(SecondaryButtonStyle())
                 }
@@ -217,10 +221,35 @@ struct MealDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle((meal ?? initialMeal).name.capitalized)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            let base = max(initialMeal.servings ?? 1, 1)
+            desiredServings = base
+            await load()
+            await loadAvailability()
+        }
+        .onChange(of: desiredServings) { _, _ in
+            Task { await loadAvailability() }
+        }
         .sheet(isPresented: $showingEdit) {
             EditMealView(meal: meal ?? initialMeal) {
                 await load()
+                await loadAvailability()
+            }
+        }
+    }
+
+    private func servingsStepper(baseServings: Int) -> some View {
+        GlassCard {
+            HStack {
+                Text("Servings").rationHeadline()
+                Spacer()
+                Button { if desiredServings > 1 { desiredServings -= 1 } } label: {
+                    Image(systemName: "minus.circle")
+                }
+                Text("\(desiredServings)").rationBody().frame(minWidth: 32)
+                Button { if desiredServings < 99 { desiredServings += 1 } } label: {
+                    Image(systemName: "plus.circle")
+                }
             }
         }
     }
@@ -244,19 +273,51 @@ struct MealDetailView: View {
         }
     }
 
-    private func ingredients(_ ingredients: [MealIngredient]) -> some View {
-        GlassCard {
+    private func ingredients(_ meal: Meal) -> some View {
+        let rows = MealAvailabilityEngine.availabilityRows(
+            meal: meal,
+            match: matchResult,
+            desiredServings: desiredServings
+        )
+        return GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Ingredients").rationHeadline()
-                ForEach(ingredients) { ingredient in
-                    HStack {
-                        Text(ingredient.ingredientName.capitalized).rationBody()
+                HStack {
+                    Text("Ingredients").rationHeadline()
+                    if isLoadingAvailability {
+                        ProgressView().scaleEffect(0.8)
+                    }
+                }
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(alignment: .top, spacing: 10) {
+                        Circle()
+                            .fill(color(for: row.status))
+                            .frame(width: 8, height: 8)
+                            .padding(.top, 6)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.ingredient.ingredientName.capitalized).rationBody()
+                            let scaled = MealAvailabilityEngine.scaledQuantity(
+                                row.ingredient.quantity,
+                                baseServings: max(meal.servings ?? 1, 1),
+                                desiredServings: desiredServings
+                            )
+                            Text("\(scaled.formatted()) \(row.ingredient.unit)")
+                                .rationCaption()
+                            if let subtitle = row.subtitle {
+                                Text(subtitle).rationCaption().foregroundStyle(Theme.muted)
+                            }
+                        }
                         Spacer()
-                        Text("\(ingredient.quantity.formatted()) \(ingredient.unit)")
-                            .rationCaption()
                     }
                 }
             }
+        }
+    }
+
+    private func color(for status: IngredientAvailabilityStatus) -> Color {
+        switch status {
+        case .available: Theme.hyperGreen
+        case .partial: Theme.warning
+        case .missing: Theme.danger
         }
     }
 
@@ -267,15 +328,33 @@ struct MealDetailView: View {
         defer { isLoading = false }
         do {
             meal = try await env.api.meal(id: mealId).meal
+            if let s = meal?.servings, s > 0 { desiredServings = s }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
     @MainActor
+    private func loadAvailability() async {
+        isLoadingAvailability = true
+        defer { isLoadingAvailability = false }
+        do {
+            let response = try await env.api.matchMeals(
+                mode: "strict",
+                limit: 20,
+                servings: desiredServings
+            )
+            matchResult = response.matches.first { $0.meal.id == mealId }
+                ?? response.matches.first { $0.meal.name.lowercased() == (meal ?? initialMeal).name.lowercased() }
+        } catch {
+            // Availability is supplementary — don't block the detail view.
+        }
+    }
+
+    @MainActor
     private func cook() async {
         do {
-            let result = try await env.api.cookMeal(id: mealId)
+            let result = try await env.api.cookMeal(id: mealId, servings: desiredServings)
             Haptics.success()
             cookMessage = "Cooked \(result.servings) servings · \(result.ingredientsDeducted) deductions"
         } catch {

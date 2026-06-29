@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Primary CTA — Hyper-Green fill, Carbon label.
+/// Primary CTA — Hyper-Green fill, Carbon label (AI actions).
 struct PrimaryButtonStyle: ButtonStyle {
     var isLoading: Bool = false
 
@@ -18,6 +18,9 @@ struct PrimaryButtonStyle: ButtonStyle {
         .opacity(isLoading ? 0.7 : 1)
     }
 }
+
+/// Alias for AI-powered sheet CTAs (Generate, Import, Plan week, Scan).
+typealias AIButtonStyle = PrimaryButtonStyle
 
 /// Secondary — platinum fill, carbon label.
 struct SecondaryButtonStyle: ButtonStyle {

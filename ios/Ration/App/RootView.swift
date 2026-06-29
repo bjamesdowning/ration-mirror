@@ -46,28 +46,38 @@ struct MainTabView: View {
     @State private var showingSettings = false
     @State private var showingScan = false
     @State private var orgGeneration = 0
+    @State private var selectedTab = 0
 
     var body: some View {
-        TabView {
-            DashboardView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
+        TabView(selection: $selectedTab) {
+            DashboardView(
+                onScan: { showingScan = true },
+                onOpenSettings: { showingSettings = true },
+                onOpenSupply: { selectedTab = 4 }
+            )
                 .id(orgGeneration)
                 .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
+                .tag(0)
 
             CargoListView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
                 .id(orgGeneration)
                 .tabItem { Label("Cargo", systemImage: "shippingbox") }
+                .tag(1)
 
             GalleyView(onOpenSettings: { showingSettings = true })
                 .id(orgGeneration)
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
+                .tag(2)
 
             ManifestView(onOpenSettings: { showingSettings = true })
                 .id(orgGeneration)
                 .tabItem { Label("Manifest", systemImage: "calendar") }
+                .tag(3)
 
             SupplyView(onOpenSettings: { showingSettings = true })
                 .id(orgGeneration)
                 .tabItem { Label("Supply", systemImage: "cart") }
+                .tag(4)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -85,9 +95,6 @@ struct MainTabView: View {
         }
         .onChange(of: env.session.orgGeneration) { _, newValue in
             orgGeneration = newValue
-            if let orgId = env.session.activeOrganizationId {
-                env.nextActionDismiss.clear(organizationId: orgId)
-            }
         }
     }
 }

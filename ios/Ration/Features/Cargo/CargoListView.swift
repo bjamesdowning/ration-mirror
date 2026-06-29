@@ -35,7 +35,7 @@ struct CargoListView: View {
                         )
                         if !model.isSearchActive {
                             Button("Scan receipt") { onScan() }
-                                .buttonStyle(PrimaryButtonStyle())
+                                .buttonStyle(AIButtonStyle())
                             Button("Add manually") { showingAdd = true }
                                 .buttonStyle(SecondaryButtonStyle())
                         }
@@ -66,7 +66,7 @@ struct CargoListView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 FloatingActionBar(actions: [
-                    FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, primary: true),
+                    FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, isAI: true),
                     FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }),
                 ])
             }

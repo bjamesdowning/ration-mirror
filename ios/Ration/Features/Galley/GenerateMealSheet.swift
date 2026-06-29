@@ -81,7 +81,10 @@ struct GenerateMealSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    LoadingView(label: "Generating meals…")
+                    AIProcessingView(
+                        feature: .generateMeals,
+                        creditCost: env.session.session?.aiCosts?.mealGenerate ?? 2
+                    )
                 case let .completed(recipes):
                     completedContent(recipes)
                 case let .failed(message):
@@ -118,7 +121,7 @@ struct GenerateMealSheet: View {
             TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
             Button("Generate") { showingIntro = true }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(AIButtonStyle())
         }
     }
 

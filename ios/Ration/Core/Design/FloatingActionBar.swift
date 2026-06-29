@@ -41,13 +41,13 @@ struct FloatingActionBar: View {
     }
 
     private func background(for action: FloatingAction) -> Color {
-        if action.primary || action.variant == .primary { return Theme.hyperGreen }
+        if action.usesAccentStyle { return Theme.hyperGreen }
         if action.variant == .danger { return Theme.danger.opacity(0.9) }
         return Theme.platinum
     }
 
     private func foreground(for action: FloatingAction) -> Color {
-        if action.primary || action.variant == .primary { return .black }
+        if action.usesAccentStyle { return .black }
         if action.variant == .danger { return .white }
         return Theme.carbon
     }

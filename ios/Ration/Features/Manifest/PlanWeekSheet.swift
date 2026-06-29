@@ -14,7 +14,10 @@ struct PlanWeekSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    LoadingView(label: "Planning week…")
+                    AIProcessingView(
+                        feature: .planWeek,
+                        creditCost: env.session.session?.aiCosts?.mealPlanWeekly ?? 3
+                    )
                 case let .completed(entries):
                     completedContent(entries)
                 case let .failed(message):
@@ -54,7 +57,7 @@ struct PlanWeekSheet: View {
             TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
             Button("Plan week") { showingIntro = true }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(AIButtonStyle())
         }
     }
 
@@ -82,7 +85,7 @@ struct PlanWeekSheet: View {
                         }
                     }
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(AIButtonStyle())
             }
         }
     }

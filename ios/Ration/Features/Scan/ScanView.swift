@@ -129,13 +129,13 @@ struct ScanView: View {
                 case .idle:
                     idleContent
                 case .uploading:
-                    LoadingView(label: "Uploading scan…")
+                    AIProcessingView(feature: .scanReceipt, creditCost: env.session.session?.aiCosts?.scan ?? 1)
                 case let .processing(requestId):
                     processingContent(requestId)
                 case let .completed(requestId, items):
                     completedContent(requestId: requestId, items: items)
                 case .confirming:
-                    LoadingView(label: "Adding to Cargo…")
+                    AIProcessingView(feature: .scanReceipt, creditCost: nil)
                 case let .confirmed(added, updated):
                     confirmedContent(added: added, updated: updated)
                 case let .failed(message):

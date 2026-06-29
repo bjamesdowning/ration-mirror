@@ -10,6 +10,7 @@ final class ManifestViewModel {
     var errorMessage: String?
     var staleLabel: String?
     var rangeStart: String = ManifestDateHelpers.todayISO()
+    var selectedDay: String = ManifestDateHelpers.todayISO()
     var calendarSpan = 7
     var weekStartPref = "sunday"
 
@@ -37,6 +38,7 @@ final class ManifestViewModel {
 
     func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         rangeStart = start
+        selectedDay = start
         await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
     }
 
@@ -92,6 +94,9 @@ struct ManifestView: View {
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
     @State private var showingPlanWeek = false
+    @State private var showingOptions = false
+    @State private var manifestShareURL: String?
+    @State private var showingPaywall = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -110,8 +115,19 @@ struct ManifestView: View {
             }
             .navigationTitle("Manifest")
             .toolbar {
-                GlobalPageToolbar(onOpenSettings: onOpenSettings)
+                GlobalPageToolbar(
+                    onOptions: { showingOptions = true },
+                    onOpenSettings: onOpenSettings
+                )
             }
+            .sheet(isPresented: $showingOptions) {
+                ManifestOptionsSheet(
+                    shareURL: manifestShareURL,
+                    onShare: { await createManifestShare() },
+                    onRevokeShare: { await revokeManifestShare() }
+                )
+            }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(defaultDate: model.manifest?.startDate) { mealId, date, slot in
@@ -139,7 +155,6 @@ struct ManifestView: View {
                         systemImage: "plus",
                         label: "Add",
                         action: { showingAddEntry = true },
-                        primary: true,
                         disabled: !env.network.isOnline
                     ),
                     FloatingAction(
@@ -147,6 +162,7 @@ struct ManifestView: View {
                         systemImage: "sparkles",
                         label: "Plan week",
                         action: { showingPlanWeek = true },
+                        isAI: true,
                         disabled: !env.network.isOnline
                     ),
                 ])
@@ -160,8 +176,10 @@ struct ManifestView: View {
                     for: ManifestDateHelpers.todayISO(),
                     preference: model.weekStartPref
                 )
+                model.selectedDay = ManifestDateHelpers.todayISO()
             }
             await reload()
+            await loadManifestShareStatus()
         }
         .refreshable { await reload() }
     }
@@ -183,18 +201,24 @@ struct ManifestView: View {
                 message: "Schedule meals from Galley to close your weekly loop."
             )
             Button("Add to plan") { showingAddEntry = true }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(!env.network.isOnline)
         }
         .padding(24)
     }
 
+    @ViewBuilder
     private func content(_ manifest: ManifestResponse) -> some View {
+        let entryDates = Set(manifest.entries.map(\.date))
+        let dayEntries = manifest.entries.filter { $0.date == model.selectedDay }
+
         List {
             WeekNavigator(
                 calendarSpan: model.calendarSpan,
                 rangeStart: $model.rangeStart,
-                weekStartPref: model.weekStartPref
+                selectedDay: $model.selectedDay,
+                weekStartPref: model.weekStartPref,
+                entryDates: entryDates
             ) { start in
                 Task {
                     await model.navigateWeek(
@@ -215,16 +239,13 @@ struct ManifestView: View {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
 
-            if manifest.entries.isEmpty {
-                Text("No meals planned this week. Tap + to schedule one.")
+            if dayEntries.isEmpty {
+                Text("No meals planned for this day. Tap + to schedule one.")
                     .rationCaption()
                     .listRowBackground(Color.clear)
-            }
-
-            let grouped = Dictionary(grouping: manifest.entries, by: \.date)
-            ForEach(grouped.keys.sorted(), id: \.self) { date in
-                Section(date) {
-                    ForEach(grouped[date] ?? []) { entry in
+            } else {
+                Section(model.selectedDay) {
+                    ForEach(dayEntries) { entry in
                         ManifestEntryRow(entry: entry) {
                             Task {
                                 await model.consume(
@@ -242,6 +263,28 @@ struct ManifestView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private func loadManifestShareStatus() async {
+        manifestShareURL = try? await env.api.manifestShareStatus().shareUrl
+    }
+
+    private func createManifestShare() async {
+        do {
+            let response = try await env.api.createManifestShare()
+            manifestShareURL = response.shareUrl
+            Haptics.success()
+        } catch let error as APIError {
+            if case .server(let status, _, _) = error, status == 403 {
+                showingPaywall = true
+            }
+        } catch {}
+    }
+
+    private func revokeManifestShare() async {
+        _ = try? await env.api.revokeManifestShare()
+        manifestShareURL = nil
+        Haptics.light()
     }
 }
 

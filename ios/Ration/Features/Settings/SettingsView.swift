@@ -68,6 +68,25 @@ struct SettingsView: View {
 
     private func content(_ session: SessionResponse) -> some View {
         List {
+            Section("Profile") {
+                SettingsAvatarSection(
+                    title: "Your photo",
+                    imageURL: env.session.userImageURL,
+                    upload: { data, mime in
+                        _ = try await env.api.uploadUserAvatar(imageData: data, mimeType: mime)
+                    }
+                )
+                if let org = env.session.activeOrg {
+                    SettingsAvatarSection(
+                        title: "\(org.name) photo",
+                        imageURL: AvatarURLResolver.resolve(org.logo),
+                        upload: { data, mime in
+                            _ = try await env.api.uploadOrganizationAvatar(imageData: data, mimeType: mime)
+                        }
+                    )
+                }
+            }
+
             Section("Account") {
                 LabeledContent("Name", value: session.user.name ?? "—")
                 LabeledContent("Email", value: session.user.email)
@@ -113,10 +132,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Help") {
-                Link("Email support", destination: URL(string: "mailto:\(AppConfig.supportEmail)")!)
-                Link("Report an issue on GitLab", destination: AppConfig.gitlabIssuesURL)
-            }
+            SettingsHelpSection()
 
             Section {
                 Button("Sign out", role: .destructive) {

@@ -85,7 +85,10 @@ struct ImportRecipeSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    LoadingView(label: "Importing recipe…")
+                    AIProcessingView(
+                        feature: .importRecipe,
+                        creditCost: env.session.session?.aiCosts?.importUrl ?? 1
+                    )
                 case let .completed(meal):
                     completedContent(meal)
                 case let .failed(message):
@@ -124,7 +127,7 @@ struct ImportRecipeSheet: View {
                 .keyboardType(.URL)
                 .textFieldStyle(.roundedBorder)
             Button("Import") { showingIntro = true }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(AIButtonStyle())
                 .disabled(model.url.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }

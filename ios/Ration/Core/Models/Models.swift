@@ -342,6 +342,24 @@ struct UpdateCargoRequest: Encodable, Sendable {
 
 struct CargoDetailResponse: Codable, Sendable {
     let item: CargoItem
+    let connectedMeals: [ConnectedCargoMeal]?
+}
+
+struct ConnectedCargoIngredient: Codable, Sendable, Identifiable {
+    let id: String
+    let mealId: String
+    let ingredientName: String
+    let quantity: Double
+    let unit: String
+    let connectionType: String
+}
+
+struct ConnectedCargoMeal: Codable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let type: String
+    let tags: [String]
+    let connectedIngredients: [ConnectedCargoIngredient]
 }
 
 // MARK: - Manifest
@@ -405,6 +423,24 @@ struct MealMatch: Codable, Sendable, Identifiable {
     let meal: Meal
     let matchPercentage: Double
     let canMake: Bool
+    let availableIngredients: [IngredientAvailabilityMatch]?
+    let missingIngredients: [MissingIngredientMatch]?
+}
+
+struct IngredientAvailabilityMatch: Codable, Sendable, Identifiable {
+    var id: String { name }
+    let name: String
+    let requiredQuantity: Double
+    let availableQuantity: Double
+    let unit: String
+}
+
+struct MissingIngredientMatch: Codable, Sendable, Identifiable {
+    var id: String { name }
+    let name: String
+    let requiredQuantity: Double
+    let unit: String
+    let isOptional: Bool
 }
 
 struct MealMatchResponse: Codable, Sendable {
@@ -566,9 +602,59 @@ struct SupplySyncResponse: Codable, Sendable {
 }
 
 struct SupplySyncSummary: Codable, Sendable {
-    let added: Int?
-    let updated: Int?
-    let removed: Int?
+    let addedItems: Int?
+    let skippedItems: Int?
+    let mealsProcessed: Int?
+    let totalIngredients: Int?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        addedItems = try c.decodeIfPresent(Int.self, forKey: .addedItems)
+            ?? c.decodeIfPresent(Int.self, forKey: .added)
+        skippedItems = try c.decodeIfPresent(Int.self, forKey: .skippedItems)
+            ?? c.decodeIfPresent(Int.self, forKey: .removed)
+        mealsProcessed = try c.decodeIfPresent(Int.self, forKey: .mealsProcessed)
+        totalIngredients = try c.decodeIfPresent(Int.self, forKey: .totalIngredients)
+            ?? c.decodeIfPresent(Int.self, forKey: .updated)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(addedItems, forKey: .addedItems)
+        try c.encodeIfPresent(skippedItems, forKey: .skippedItems)
+        try c.encodeIfPresent(mealsProcessed, forKey: .mealsProcessed)
+        try c.encodeIfPresent(totalIngredients, forKey: .totalIngredients)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case addedItems, skippedItems, mealsProcessed, totalIngredients
+        case added, updated, removed
+    }
+}
+
+struct AvatarUploadResponse: Codable, Sendable {
+    let success: Bool
+    let imageUrl: String
+}
+
+struct OrgAvatarUploadResponse: Codable, Sendable {
+    let success: Bool
+    let logoUrl: String
+}
+
+struct ShareStatusResponse: Codable, Sendable {
+    let shareUrl: String?
+    let shareExpiresAt: String?
+}
+
+struct ShareCreateResponse: Codable, Sendable {
+    let shareToken: String
+    let shareUrl: String
+    let shareExpiresAt: String
+}
+
+struct ShareRevokeResponse: Codable, Sendable {
+    let revoked: Bool
 }
 
 struct SupplyCompleteRequest: Encodable, Sendable {

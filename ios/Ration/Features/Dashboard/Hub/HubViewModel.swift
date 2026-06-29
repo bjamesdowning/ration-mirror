@@ -71,4 +71,46 @@ final class HubViewModel {
             hubLayout: HubLayoutPayload(widgets: widgets)
         ))
     }
+
+    func toggleSupplyItem(
+        _ item: SupplyItem,
+        isPurchased: Bool,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard case var .loaded(data) = state else { return }
+        guard var supplyList = data.latestSupplyList else { return }
+
+        let updatedItems = supplyList.items.map { existing in
+            existing.id == item.id
+                ? SupplyItem(id: existing.id, name: existing.name, quantity: existing.quantity, unit: existing.unit, domain: existing.domain, isPurchased: isPurchased)
+                : existing
+        }
+        supplyList = SupplyList(id: supplyList.id, name: supplyList.name, items: updatedItems)
+        data = HubResponse(
+            expiringItems: data.expiringItems,
+            cargoStats: data.cargoStats,
+            latestSupplyList: supplyList,
+            manifestPreview: data.manifestPreview,
+            expirationAlertDays: data.expirationAlertDays,
+            hubProfile: data.hubProfile,
+            hubLayout: data.hubLayout,
+            availableMealTags: data.availableMealTags,
+            mealMatches: data.mealMatches,
+            partialMealMatches: data.partialMealMatches,
+            snackMatches: data.snackMatches
+        )
+        state = .loaded(data)
+        snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
+        if isPurchased { Haptics.light() }
+
+        guard online else { return }
+        do {
+            _ = try await api.toggleSupplyItem(item.id, isPurchased: isPurchased)
+        } catch {
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        }
+    }
 }

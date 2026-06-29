@@ -269,6 +269,11 @@ export default [
 	),
 	route("api/mobile/v1/hub", "routes/api/mobile/v1.hub.ts"),
 	route("api/mobile/v1/settings", "routes/api/mobile/v1.settings.ts"),
+	route("api/mobile/v1/user/avatar", "routes/api/mobile/v1.user.avatar.ts"),
+	route(
+		"api/mobile/v1/organization/avatar",
+		"routes/api/mobile/v1.organization.avatar.ts",
+	),
 	route("api/mobile/v1/cargo", "routes/api/mobile/v1.cargo.ts"),
 	route("api/mobile/v1/cargo/batch", "routes/api/mobile/v1.cargo.batch.ts"),
 	route("api/mobile/v1/cargo/tags", "routes/api/mobile/v1.cargo.tags.ts"),
@@ -330,6 +335,10 @@ export default [
 	),
 	route("api/mobile/v1/manifest/bulk", "routes/api/mobile/v1.manifest.bulk.ts"),
 	route(
+		"api/mobile/v1/manifest/share",
+		"routes/api/mobile/v1.manifest.share.ts",
+	),
+	route(
 		"api/mobile/v1/meals/:id/cook",
 		"routes/api/mobile/v1.meals.$id.cook.ts",
 	),
@@ -342,6 +351,7 @@ export default [
 		"api/mobile/v1/supply/complete",
 		"routes/api/mobile/v1.supply.complete.ts",
 	),
+	route("api/mobile/v1/supply/share", "routes/api/mobile/v1.supply.share.ts"),
 
 	route("api/auth/*", "routes/api.auth.$.ts"),
 

@@ -1698,10 +1698,14 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items |
 | `POST` | `/api/mobile/v1/supply/sync` | Rebuild supply from selected meals |
 | `POST` | `/api/mobile/v1/supply/complete` | Dock purchased items to cargo |
+| `GET` / `POST` / `DELETE` | `/api/mobile/v1/manifest/share` | Share state / create / revoke manifest link (Crew) |
+| `GET` / `POST` / `DELETE` | `/api/mobile/v1/supply/share` | Share state / create / revoke supply link (Crew) |
+| `POST` | `/api/mobile/v1/user/avatar` | Multipart profile avatar upload (≤2MB, JPEG/PNG/WebP) |
+| `POST` | `/api/mobile/v1/organization/avatar` | Multipart group logo upload (owner/admin, ≤2MB) |
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 
-**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply. Global chrome: org switcher (avatar + credits), profile avatar, per-page filter sheet, and bottom FAB. Hub uses customizable widget grid (`GET /hub`). Galley supports manual create/edit, AI generate, and URL import. Manifest supports week navigation and AI plan-week. Features include PKCE auth, onboarding, AI consent gating, org-scoped offline snapshots, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply. Global chrome: org switcher (avatar + credits), profile avatar, per-page filter sheet, and bottom FAB. Hub uses customizable widget grid (`GET /hub`). Galley supports manual create/edit, AI generate, and URL import. Manifest supports week navigation and AI plan-week. Features include PKCE auth, onboarding, AI consent gating, org-scoped offline snapshots, supply sync/dock, scan-to-cargo confirm, profile/group image uploads, Crew-gated manifest & supply share links, read-only cargo detail with connected meals, Galley meal ingredient-availability + servings scaler, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

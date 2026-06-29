@@ -6,11 +6,18 @@ struct FloatingAction: Identifiable {
     let systemImage: String
     let label: String
     var action: () -> Void = {}
+    /// AI-powered actions use Hyper-Green; manual actions use platinum.
+    var isAI = false
+    /// Deprecated — use `isAI` instead. Kept for backward compatibility.
     var primary = false
     var variant: Variant = .default
     var disabled = false
 
     enum Variant {
         case `default`, primary, danger
+    }
+
+    var usesAccentStyle: Bool {
+        isAI || primary || variant == .primary
     }
 }

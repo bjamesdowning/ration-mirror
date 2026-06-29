@@ -11,6 +11,7 @@ final class SupplyViewModel {
     var errorMessage: String?
     var staleLabel: String?
     var dockMessage: String?
+    private var lastHapticMilestone = 0
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
         supportsSupplySort: true,
@@ -28,6 +29,11 @@ final class SupplyViewModel {
 
     var totalCount: Int {
         list?.items.count ?? 0
+    }
+
+    var progressFraction: Double {
+        guard totalCount > 0 else { return 0 }
+        return Double(purchasedCount) / Double(totalCount)
     }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
@@ -58,19 +64,57 @@ final class SupplyViewModel {
     }
 
     func toggle(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+        if item.isPurchased {
+            guard let current = list else { return }
+            let updatedItems = current.items.map { existing in
+                existing.id == item.id ? existing.withPurchased(false) : existing
+            }
+            list = SupplyList(id: current.id, name: current.name, items: updatedItems)
+            guard online else { return }
+            do {
+                _ = try await api.updateSupplyItem(item.id, quantity: nil, unit: nil, isPurchased: false)
+            } catch {
+                await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+            }
+        } else {
+            await markPurchased(item, quantity: item.quantity, unit: item.unit, api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        }
+    }
+
+    func markPurchased(
+        _ item: SupplyItem,
+        quantity: Double,
+        unit: String,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
         guard let current = list else { return }
-        let newValue = !item.isPurchased
         let updatedItems = current.items.map { existing in
-            existing.id == item.id ? existing.withPurchased(newValue) : existing
+            existing.id == item.id
+                ? SupplyItem(id: existing.id, name: existing.name, quantity: quantity, unit: unit, domain: existing.domain, isPurchased: true)
+                : existing
         }
         list = SupplyList(id: current.id, name: current.name, items: updatedItems)
-        if newValue { Haptics.light() }
+        Haptics.light()
+        checkProgressHaptic()
         guard online else { return }
         do {
-            _ = try await api.toggleSupplyItem(item.id, isPurchased: newValue)
+            _ = try await api.updateSupplyItem(item.id, quantity: quantity, unit: unit, isPurchased: true)
         } catch {
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func checkProgressHaptic() {
+        guard totalCount > 0 else { return }
+        let pct = Int(progressFraction * 100)
+        let milestone = [25, 50, 75, 100].last { pct >= $0 && lastHapticMilestone < $0 }
+        if let milestone {
+            lastHapticMilestone = milestone
+            Haptics.success()
         }
     }
 
@@ -104,6 +148,7 @@ final class SupplyViewModel {
             Haptics.success()
             errorMessage = nil
             dockMessage = "Docked \(result.docked) items into Cargo"
+            lastHapticMilestone = 0
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -132,7 +177,12 @@ struct SupplyView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
     @State private var model = SupplyViewModel()
+    @State private var showingOptions = false
     @State private var showingFilters = false
+    @State private var checkOffItem: SupplyItem?
+    @State private var supplyShareURL: String?
+    @State private var showingPaywall = false
+    @State private var hasTriggeredAutoSync = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -150,12 +200,12 @@ struct SupplyView: View {
                         EmptyStateView(
                             icon: "cart",
                             title: "No supply delta yet",
-                            message: "Select meals in Galley and sync Supply to build your shopping list."
+                            message: "Select meals in Galley and your list will refresh when you open Supply."
                         )
-                        Button("Sync from meals") {
+                        Button("Refresh from meals") {
                             Task { await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId) }
                         }
-                        .buttonStyle(PrimaryButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                         .disabled(model.isSyncing)
                     }
                     .padding(24)
@@ -165,11 +215,26 @@ struct SupplyView: View {
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
-                    onOptions: { showingFilters = true },
+                    onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: $showingOptions) {
+                SupplyOptionsSheet(
+                    shareURL: supplyShareURL,
+                    isSyncing: model.isSyncing,
+                    onRefreshFromMeals: {
+                        await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                    },
+                    onShare: { await createSupplyShare() },
+                    onRevokeShare: { await revokeSupplyShare() },
+                    onOpenFilters: {
+                        showingOptions = false
+                        showingFilters = true
+                    }
+                )
+            }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(
                     filters: model.filters,
@@ -180,25 +245,23 @@ struct SupplyView: View {
                     }
                 )
             }
+            .sheet(item: $checkOffItem) { item in
+                SupplyItemCheckOffSheet(item: item) { quantity, unit in
+                    await model.markPurchased(
+                        item,
+                        quantity: quantity,
+                        unit: unit,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId
+                    )
+                }
+            }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if model.totalCount > 0 {
-                        progressFooter
-                    }
-                    FloatingActionBar(actions: [
-                        FloatingAction(
-                            id: "sync",
-                            systemImage: "arrow.triangle.2.circlepath",
-                            label: model.isSyncing ? "Syncing…" : "Sync",
-                            action: {
-                                Task {
-                                    await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                                }
-                            },
-                            primary: true,
-                            disabled: model.isSyncing
-                        ),
-                    ])
+                if model.totalCount > 0 {
+                    progressFooter
                 }
             }
         }
@@ -207,29 +270,44 @@ struct SupplyView: View {
             if let mode = try? await env.api.settings().settings.supplyUnitMode {
                 model.filters.supplyUnitMode = mode
             }
+            supplyShareURL = try? await env.api.supplyShareStatus().shareUrl
+            if env.network.isOnline, !hasTriggeredAutoSync {
+                hasTriggeredAutoSync = true
+                await model.sync(api: env.api, snapshots: env.snapshots, online: true, organizationId: organizationId)
+            }
         }
     }
 
     private var progressFooter: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             if let message = model.dockMessage {
                 Text(message).rationCaption().foregroundStyle(Theme.hyperGreen)
             }
-            HStack {
-                Text("\(model.purchasedCount)/\(model.totalCount) purchased")
-                    .rationCaption()
-                Spacer()
-                Button(model.isDocking ? "Docking…" : "Dock to Cargo") {
-                    Task {
-                        await model.dock(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                    }
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .stroke(Theme.platinum, lineWidth: 6)
+                    Circle()
+                        .trim(from: 0, to: model.progressFraction)
+                        .stroke(Theme.hyperGreen, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text("\(model.purchasedCount)/\(model.totalCount)")
+                        .rationCaption()
                 }
-                .font(Typography.headline())
-                .foregroundStyle(Theme.hyperGreen)
-                .disabled(model.isDocking || model.purchasedCount == 0)
+                .frame(width: 56, height: 56)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Shopping progress").rationHeadline()
+                    Text("\(model.purchasedCount) of \(model.totalCount) purchased").rationCaption()
+                }
+                Spacer()
             }
-            ProgressView(value: Double(model.purchasedCount), total: Double(max(model.totalCount, 1)))
-                .tint(Theme.hyperGreen)
+            Button(model.isDocking ? "Docking…" : "Dock to Cargo") {
+                Task {
+                    await model.dock(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(model.isDocking || model.purchasedCount == 0)
         }
         .padding()
         .background(Theme.surface)
@@ -245,8 +323,12 @@ struct SupplyView: View {
             }
             ForEach(model.displayedItems) { item in
                 Button {
-                    Task {
-                        await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                    if item.isPurchased {
+                        Task {
+                            await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                        }
+                    } else {
+                        checkOffItem = item
                     }
                 } label: {
                     HStack {
@@ -261,6 +343,18 @@ struct SupplyView: View {
                     }
                 }
                 .listRowBackground(Theme.surface)
+                .swipeActions(edge: .leading) {
+                    if !item.isPurchased {
+                        Button {
+                            Task {
+                                await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                            }
+                        } label: {
+                            Label("Check", systemImage: "checkmark")
+                        }
+                        .tint(Theme.hyperGreen)
+                    }
+                }
                 .swipeActions {
                     Button(role: .destructive) {
                         Task {
@@ -268,7 +362,6 @@ struct SupplyView: View {
                         }
                     } label: { Label("Delete", systemImage: "trash") }
                 }
-                .accessibilityLabel("\(item.name), \(item.isPurchased ? "purchased" : "not purchased")")
             }
         }
         .listStyle(.insetGrouped)
@@ -278,4 +371,27 @@ struct SupplyView: View {
             await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
         }
     }
+
+    private func createSupplyShare() async {
+        do {
+            let response = try await env.api.createSupplyShare()
+            supplyShareURL = response.shareUrl
+            Haptics.success()
+        } catch let error as APIError {
+            if case .server(let status, _, _) = error, status == 403 {
+                showingPaywall = true
+            }
+        } catch {}
+    }
+
+    private func revokeSupplyShare() async {
+        _ = try? await env.api.revokeSupplyShare()
+        supplyShareURL = nil
+        Haptics.light()
+    }
+}
+
+extension SupplyItem: Hashable {
+    static func == (lhs: SupplyItem, rhs: SupplyItem) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

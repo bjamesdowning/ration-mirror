@@ -39,24 +39,25 @@ struct OrgAvatar: View {
   var imageURL: String?
   var size: CGFloat = 32
 
-  private var safeImageURL: URL? {
-    guard let raw = imageURL?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !raw.isEmpty,
-          let url = URL(string: raw),
-          url.scheme == "https"
-    else { return nil }
-    return url
+  private var resolvedURL: URL? {
+    AvatarURLResolver.resolve(imageURL)
   }
 
   var body: some View {
     Group {
-      if let url = safeImageURL {
-        AsyncImage(url: url) { phase in
-          switch phase {
-          case .success(let image):
-            image.resizable().scaledToFill()
-          default:
+      if let url = resolvedURL {
+        if AvatarURLResolver.requiresAuthentication(url) {
+          AuthImageView(url: url) {
             initialsView
+          }
+        } else {
+          AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+              image.resizable().scaledToFill()
+            default:
+              initialsView
+            }
           }
         }
       } else {

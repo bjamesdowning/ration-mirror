@@ -15,6 +15,25 @@ describe("RevenueCatWebhookEventSchema", () => {
 		});
 		expect(parsed.success).toBe(true);
 	});
+
+	it("parses RevenueCat dashboard TEST events with null optional fields", () => {
+		const parsed = RevenueCatWebhookEventSchema.safeParse({
+			api_version: "1.0",
+			event: {
+				type: "TEST",
+				id: "848F7032-7F67-4FB8-8BE1-C9B4C0539C82",
+				app_user_id: "8b80a9af-be48-489b-a09c-c7467173b1c8",
+				entitlement_ids: null,
+				entitlement_id: null,
+				product_id: "test_product",
+				expiration_at_ms: 1782736307311,
+				store: "APP_STORE",
+				currency: null,
+				transaction_id: null,
+			},
+		});
+		expect(parsed.success).toBe(true);
+	});
 });
 
 describe("MobileBillingStatusSchema", () => {

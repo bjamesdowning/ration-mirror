@@ -204,7 +204,7 @@ export async function processRevenueCatWebhookEvent(
 	const hasCrewEntitlement = entitlementIds.includes(
 		RC_ENTITLEMENT_CREW_MEMBER,
 	);
-	const productId = event.product_id;
+	const productId = event.product_id ?? undefined;
 
 	const grantTypes = new Set([
 		"INITIAL_PURCHASE",

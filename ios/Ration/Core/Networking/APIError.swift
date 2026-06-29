@@ -33,4 +33,9 @@ enum APIError: Error, LocalizedError, Sendable {
         if case let .server(_, _, code) = self { return code }
         return nil
     }
+
+    var statusCode: Int? {
+        if case let .server(status, _, _) = self { return status }
+        return nil
+    }
 }

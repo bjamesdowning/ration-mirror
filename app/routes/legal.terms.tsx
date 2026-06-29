@@ -138,8 +138,8 @@ export default function TermsOfService() {
 			<h2>8. Payments, Subscriptions & Refunds</h2>
 			<p>
 				Certain features of the Service require the purchase of credits or an
-				active subscription, processed via Stripe. By completing a purchase you
-				agree to the following terms:
+				active subscription, processed via Stripe on the web or Apple on iOS. By
+				completing a purchase you agree to the following terms:
 			</p>
 			<ul>
 				<li>
@@ -151,9 +151,11 @@ export default function TermsOfService() {
 				</li>
 				<li>
 					<strong>Subscriptions:</strong> The Crew Member subscription is billed
-					annually at the rate displayed at checkout. Cancelling a subscription
-					stops automatic renewal at the end of the current billing period; no
-					pro-rata refund is issued for the unused portion of the period.
+					at the interval and price displayed at checkout. Subscriptions renew
+					automatically until cancelled. Cancelling a subscription stops
+					automatic renewal at the end of the current billing period; no
+					pro-rata refund is issued for the unused portion of the period unless
+					required by law or by the payment processor&apos;s policies.
 					Subscription credits granted at the start of a billing cycle are
 					subject to the same non-refundable terms as purchased credits.
 				</li>
@@ -166,14 +168,24 @@ export default function TermsOfService() {
 				</li>
 				<li>
 					<strong>Payment processor:</strong> All payment information is
-					collected and stored by Stripe, Inc. We do not store card details. See
-					Stripe's Privacy Policy at{" "}
+					collected and stored by Stripe, Inc. for web purchases or Apple for
+					iOS App Store purchases. RevenueCat manages subscription entitlement
+					status across platforms. We do not store card or App Store payment
+					details. See Stripe&apos;s Privacy Policy at{" "}
 					<a
 						href="https://stripe.com/privacy"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
 						stripe.com/privacy
+					</a>{" "}
+					and Apple&apos;s privacy information at{" "}
+					<a
+						href="https://www.apple.com/legal/privacy/"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						apple.com/legal/privacy
 					</a>
 					.
 				</li>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getEffectiveTier } from "~/lib/capacity.server";
-import { isD1ContentionError } from "~/lib/error-handler";
+import { CapacityExceededError, getEffectiveTier } from "~/lib/capacity.server";
+import { handleApiError, isD1ContentionError } from "~/lib/error-handler";
 
 const NOW = new Date("2025-06-15T12:00:00Z");
 
@@ -85,6 +85,41 @@ describe("isD1ContentionError", () => {
 		).toBe(false);
 		expect(isD1ContentionError(new Error("fetch failed"))).toBe(false);
 		expect(isD1ContentionError(new Error("404 not found"))).toBe(false);
+	});
+});
+
+describe("handleApiError", () => {
+	it("returns structured 403 details for CapacityExceededError", () => {
+		const result = handleApiError(
+			new CapacityExceededError({
+				resource: "cargo",
+				current: 50,
+				limit: 50,
+				tier: "free",
+				isExpired: false,
+				canAdd: 0,
+			}),
+		) as unknown as {
+			data: {
+				error: string;
+				code: string;
+				resource: string;
+				current: number;
+				limit: number;
+				upgradePath: string;
+			};
+			init: { status: number };
+		};
+
+		expect(result.init.status).toBe(403);
+		expect(result.data).toMatchObject({
+			error: "capacity_exceeded",
+			code: "capacity_exceeded",
+			resource: "cargo",
+			current: 50,
+			limit: 50,
+			upgradePath: "crew_member",
+		});
 	});
 });
 

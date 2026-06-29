@@ -276,6 +276,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60, // Cheap D1 read; cached client-side after first call
 		keyPrefix: "rate:cargo_list",
 	},
+	meal_list: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 60, // Read-only mobile Galley browsing
+		keyPrefix: "rate:meal_list",
+	},
 	interest_signup: {
 		windowMs: 60_000,
 		maxRequests: 10,

@@ -14,6 +14,8 @@ final class ScanViewModel {
     }
 
     private(set) var state: State = .idle
+    private let maxPollAttempts = 80
+    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
 
     func submit(image: UIImage, api: RationAPI) async {
         state = .uploading
@@ -35,10 +37,9 @@ final class ScanViewModel {
     }
 
     func poll(requestId: String, api: RationAPI) async {
-        let delays: [UInt64] = [1_500_000_000, 3_000_000_000, 5_000_000_000, 5_000_000_000, 5_000_000_000]
-        for delay in delays {
+        for attempt in 0..<maxPollAttempts {
             do {
-                try await Task.sleep(nanoseconds: delay)
+                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
                 let result = try await api.scanStatus(requestId: requestId)
                 switch result.status {
                 case "completed":
@@ -53,6 +54,13 @@ final class ScanViewModel {
             } catch is CancellationError {
                 return
             } catch {
+                if let apiError = error as? APIError,
+                   [429, 503].contains(apiError.statusCode ?? 0),
+                   attempt < maxPollAttempts - 1
+                {
+                    state = .processing(requestId: requestId)
+                    continue
+                }
                 state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
                 return
             }

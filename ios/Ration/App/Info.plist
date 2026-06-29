@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mayutic Ration</string>
+	<string>Ration by Mayutic</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -33,7 +33,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Ration uses the camera to scan grocery receipts and add items to your pantry.</string>
 	<key>RevenueCatPublicAPIKey</key>
-	<string></string>
+	<string>appl_pUrEkfszvAWSscslkeXEMleEace</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

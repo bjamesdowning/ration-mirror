@@ -100,7 +100,7 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 - **C5 — Scan:** capture, upload, and status polling are wired. A richer confirm-into-cargo review step remains for post-MVP polish. Document edge detection (Vision) is a later enhancement.
 - **C6 — Galley:** browse and detail views are wired to `/meals` and `/meals/:id`.
 - **C7 — Paywall:** RevenueCat SDK login, offering-driven purchase buttons, and restore are wired (`BillingManager`). Set `RevenueCatPublicAPIKey` in `Info.plist` with the public iOS SDK key and configure a RevenueCat offering whose current packages include the Crew Member product; the remaining work is App Store sandbox verification before external TestFlight.
-- **App icon / launch:** drop a 1024px icon into `Resources/Assets.xcassets/AppIcon.appiconset`.
+- **Audit Gate:** code P0 findings are tracked in `plans/stream-c-audit-gate.md`; TestFlight remains gated on Apple/RevenueCat configuration and sandbox purchase verification.
 - **Brand font:** optionally bundle Space Mono TTFs and register `UIAppFonts`
   (currently falls back to the system monospaced design).
 

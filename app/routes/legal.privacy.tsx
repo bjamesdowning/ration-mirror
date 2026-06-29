@@ -296,6 +296,14 @@ export default function PrivacyPolicy() {
 					directly to Stripe.
 				</li>
 				<li>
+					<strong>RevenueCat and Apple:</strong> Subscription and in-app
+					purchase management for the native iOS app. We share the Ration user
+					id needed to map App Store purchases to your account, along with
+					entitlement and transaction status metadata required to unlock paid
+					features. Payment credentials are processed by Apple; Ration does not
+					receive or store your App Store payment details.
+				</li>
+				<li>
 					<strong>Better Auth:</strong> Authentication (session management,
 					magic link verification, OAuth).
 				</li>

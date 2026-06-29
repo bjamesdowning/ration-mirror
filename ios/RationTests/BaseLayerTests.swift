@@ -84,6 +84,17 @@ final class BaseLayerTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Active App Store subscription")
     }
 
+    func testAPIErrorStatusCodeExposesServerStatusOnly() {
+        let error = APIError.server(
+            status: 429,
+            message: "Too many requests",
+            code: nil
+        )
+
+        XCTAssertEqual(error.statusCode, 429)
+        XCTAssertNil(APIError.transport("offline").statusCode)
+    }
+
     func testPKCEChallengeMatchesRFC7636Vector() {
         // RFC 7636 Appendix B reference vector — must match the server's S256 impl.
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -99,28 +110,39 @@ final class BaseLayerTests: XCTestCase {
         XCTAssertNil(verifier.rangeOfCharacter(from: CharacterSet(charactersIn: "+/=")))
     }
 
-    @MainActor
-    func testBillingManagerIsSafeWhenRevenueCatKeyMissing() {
-        let manager = BillingManager()
+    private var hasRevenueCatPublicKey: Bool {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "RevenueCatPublicAPIKey") as? String else {
+            return false
+        }
+        return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
+    @MainActor
+    func testBillingManagerConfigureReflectsPlistKey() {
+        let manager = BillingManager()
         manager.configureIfPossible()
 
-        guard case let .notConfigured(message) = manager.sdkState else {
-            XCTFail("Expected missing public RevenueCat key to leave SDK unconfigured")
-            return
+        if hasRevenueCatPublicKey {
+            XCTAssertEqual(manager.sdkState, .configured)
+        } else {
+            guard case let .notConfigured(message) = manager.sdkState else {
+                XCTFail("Expected missing public RevenueCat key to leave SDK unconfigured")
+                return
+            }
+            XCTAssertTrue(message.contains("RevenueCatPublicAPIKey"))
         }
-        XCTAssertTrue(message.contains("RevenueCatPublicAPIKey"))
     }
 
     @MainActor
     func testBillingManagerBlocksPurchaseWhenRevenueCatIsNotReady() async {
         let manager = BillingManager()
+        let expectedCode = hasRevenueCatPublicKey ? "revenuecat_login_required" : "revenuecat_not_configured"
 
         do {
             _ = try await manager.purchase(packageID: "crew-monthly")
             XCTFail("Expected purchase to fail when RevenueCat is not ready")
         } catch let error as APIError {
-            XCTAssertEqual(error.code, "revenuecat_not_configured")
+            XCTAssertEqual(error.code, expectedCode)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
@@ -129,12 +151,13 @@ final class BaseLayerTests: XCTestCase {
     @MainActor
     func testBillingManagerBlocksRestoreWhenRevenueCatIsNotReady() async {
         let manager = BillingManager()
+        let expectedCode = hasRevenueCatPublicKey ? "revenuecat_login_required" : "revenuecat_not_configured"
 
         do {
             try await manager.restorePurchases()
             XCTFail("Expected restore to fail when RevenueCat is not ready")
         } catch let error as APIError {
-            XCTAssertEqual(error.code, "revenuecat_not_configured")
+            XCTAssertEqual(error.code, expectedCode)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

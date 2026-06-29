@@ -6,10 +6,14 @@ import Foundation
 @MainActor
 final class APIClient {
     private let auth: AuthManager
-    private let session = URLSession(configuration: .default)
+    private let session: URLSession
 
     init(auth: AuthManager) {
         self.auth = auth
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        self.session = URLSession(configuration: config)
     }
 
     // MARK: Verb helpers
@@ -72,6 +76,7 @@ final class APIClient {
 
         var req = URLRequest(url: components.url!)
         req.httpMethod = method
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         req.setValue("ios/1.0.0", forHTTPHeaderField: "X-Ration-Client")
         if let body {
             req.httpBody = body
@@ -101,6 +106,20 @@ final class APIClient {
                 await auth.signOutLocal()
                 throw APIError.unauthorized
             }
+            return try await send(
+                path: path, method: method, query: query,
+                body: body, contentType: contentType, isRetry: true
+            )
+        }
+
+        if method == "GET",
+           !isRetry,
+           (http.statusCode == 429 || http.statusCode == 503)
+        {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
+                .flatMap(Double.init)
+                .map { min(max($0, 0.5), 60) } ?? 2
+            try await Task.sleep(nanoseconds: UInt64(retryAfter * 1_000_000_000))
             return try await send(
                 path: path, method: method, query: query,
                 body: body, contentType: contentType, isRetry: true

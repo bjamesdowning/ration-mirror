@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { z } from "zod";
+import { CapacityExceededError } from "./capacity.server";
 import { log } from "./logging.server";
 
 /**
@@ -50,6 +51,23 @@ export function handleApiError(error: unknown) {
 		(error as { type: string }).type === "DataWithResponseInit"
 	) {
 		throw error;
+	}
+
+	if (error instanceof CapacityExceededError) {
+		return data(
+			{
+				error: "capacity_exceeded",
+				code: "capacity_exceeded" as const,
+				resource: error.resource,
+				current: error.current,
+				limit: error.limit,
+				tier: error.tier,
+				isExpired: error.isExpired,
+				canAdd: error.canAdd,
+				upgradePath: "crew_member",
+			},
+			{ status: 403 },
+		);
 	}
 
 	// Graceful tier gate: convert capacity_exceeded throws to 403 with upgrade path

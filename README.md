@@ -1675,7 +1675,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 
-**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md) (Stream C). It is generated from `ios/project.yml` via [XcodeGen](https://github.com/yonyz/XcodeGen) (`brew install xcodegen && cd ios && xcodegen generate`). The app covers PKCE-protected auth (magic link → `ration://` callback), dashboard, cargo CRUD, supply, scan upload, settings/org switch, and a RevenueCat-driven billing paywall (offering-based purchase + restore). Final App Store wiring is setting `RevenueCatPublicAPIKey` and a RevenueCat offering. See `ios/README.md` for build and architecture details.
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md) (Stream C). It is generated from `ios/project.yml` via [XcodeGen](https://github.com/yonyz/XcodeGen) (`brew install xcodegen && cd ios && xcodegen generate`). The app covers PKCE-protected auth (magic link → `ration://` callback), dashboard, cargo CRUD, supply, scan upload, settings/org switch, and a RevenueCat-driven billing paywall (offering-based purchase + restore). The pre-TestFlight Stream C audit gate is documented in [`plans/stream-c-audit-gate.md`](plans/stream-c-audit-gate.md); remaining launch work is Apple/RevenueCat configuration and sandbox purchase verification.
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

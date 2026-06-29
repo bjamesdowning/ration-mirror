@@ -79,6 +79,7 @@ final class BillingViewModel {
 struct PaywallView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var model = BillingViewModel()
 
     var body: some View {
@@ -172,7 +173,7 @@ struct PaywallView: View {
         } else {
             VStack(spacing: 12) {
                 if env.billing.packages.isEmpty {
-                    Button("Subscribe — Crew Member") {}
+                    Button("Waiting for App Store products…") {}
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(true)
                 } else {
@@ -206,7 +207,31 @@ struct PaywallView: View {
                 Text(revenueCatStatusText)
                     .rationCaption()
                     .multilineTextAlignment(.center)
+
+                subscriptionDisclosure
             }
+        }
+    }
+
+    private var subscriptionDisclosure: some View {
+        VStack(spacing: 8) {
+            Text("Subscriptions renew automatically through your Apple ID until cancelled at least 24 hours before the end of the current period. Manage or cancel in App Store account settings after purchase.")
+                .rationCaption()
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                Button("Terms") {
+                    if let url = URL(string: "https://ration.mayutic.com/legal/terms") {
+                        openURL(url)
+                    }
+                }
+                Button("Privacy") {
+                    if let url = URL(string: "https://ration.mayutic.com/legal/privacy") {
+                        openURL(url)
+                    }
+                }
+            }
+            .font(Typography.caption())
+            .foregroundStyle(Theme.hyperGreen)
         }
     }
 
@@ -223,6 +248,9 @@ struct PaywallView: View {
 
     private var revenueCatStatusText: String {
         if env.billing.packages.isEmpty {
+            if let offeringsMessage = env.billing.offeringsMessage {
+                return offeringsMessage
+            }
             switch env.billing.sdkState {
             case .configured:
                 return "No offerings are available yet. Configure an offering with the Crew Member package in RevenueCat to enable purchases."

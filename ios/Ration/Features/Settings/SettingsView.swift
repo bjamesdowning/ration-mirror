@@ -91,7 +91,10 @@ struct SettingsView: View {
 
             Section {
                 Button("Sign out", role: .destructive) {
-                    Task { await env.auth.signOut() }
+                    Task {
+                        await env.billing.logOut()
+                        await env.auth.signOut()
+                    }
                 }
             }
         }

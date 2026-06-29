@@ -30,6 +30,8 @@ final class BillingManager {
     private(set) var sdkState: SDKState = .notConfigured("RevenueCat SDK not initialized.")
     /// Offering packages from `offerings.current`. Empty until `loadOfferings()`.
     private(set) var packages: [BillingPackage] = []
+    /// Human-readable reason `packages` is empty after `loadOfferings()` (for the paywall).
+    private(set) var offeringsMessage: String?
     private var configured = false
     private var loggedInUserId: String?
 
@@ -84,6 +86,20 @@ final class BillingManager {
         #endif
     }
 
+    func logOut() async {
+        guard configured else {
+            resetSessionState()
+            return
+        }
+
+        #if canImport(RevenueCat)
+        if loggedInUserId != nil {
+            _ = try? await Purchases.shared.logOut()
+        }
+        #endif
+        resetSessionState()
+    }
+
     /// Loads the current offering's packages. Never throws — leaves `packages`
     /// empty and surfaces the reason via `sdkState` so the paywall degrades gracefully.
     func loadOfferings() async {
@@ -101,7 +117,15 @@ final class BillingManager {
         #if canImport(RevenueCat)
         do {
             let offerings = try await Purchases.shared.offerings()
-            let available = offerings.current?.availablePackages ?? []
+            guard let current = offerings.current else {
+                rcPackages = [:]
+                packages = []
+                offeringsMessage =
+                    "No current offering in RevenueCat. Open Product catalog → Offerings and mark \"default\" as Current."
+                return
+            }
+
+            let available = current.availablePackages
             var map: [String: Package] = [:]
             var ui: [BillingPackage] = []
             for pkg in available {
@@ -117,8 +141,15 @@ final class BillingManager {
             }
             rcPackages = map
             packages = ui
+            if ui.isEmpty {
+                offeringsMessage =
+                    "Offering is set but App Store products did not load yet. After ASC shows Ready to Submit, sync can take up to a few hours. Force-quit and reopen, or test on a device with a Sandbox Apple ID."
+            } else {
+                offeringsMessage = nil
+            }
         } catch {
             packages = []
+            offeringsMessage = "Could not load offerings: \(error.localizedDescription)"
         }
         #endif
     }
@@ -160,9 +191,18 @@ final class BillingManager {
 
     private func clearOfferings() {
         packages = []
+        offeringsMessage = nil
         #if canImport(RevenueCat)
         rcPackages = [:]
         #endif
+    }
+
+    private func resetSessionState() {
+        loggedInUserId = nil
+        clearOfferings()
+        if configured {
+            sdkState = .configured
+        }
     }
 
     private func notConfiguredError() -> APIError {

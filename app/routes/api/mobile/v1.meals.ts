@@ -14,7 +14,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 		const rateLimitResult = await checkRateLimit(
 			context.cloudflare.env.RATION_KV,
-			"meal_mutation",
+			"meal_list",
 			userId,
 		);
 		if (!rateLimitResult.allowed) {

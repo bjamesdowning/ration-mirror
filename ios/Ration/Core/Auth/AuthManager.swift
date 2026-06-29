@@ -146,7 +146,7 @@ final class AuthManager {
     // MARK: Sign out
 
     func signOut() async {
-        if let token = accessToken {
+        if let token = try? await validAccessToken() {
             var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "auth/session"))
             req.httpMethod = "DELETE"
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

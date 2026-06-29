@@ -10,21 +10,24 @@ struct RationApp: App {
                 .environment(env)
                 .tint(Theme.hyperGreen)
                 .task { await env.auth.bootstrap() }
+                // Universal Link (preferred): https://ration.mayutic.com/auth/mobile-callback/open?code=…
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL {
+                        handleAuthHandoff(url)
+                    }
+                }
+                // Custom-scheme fallback: ration://auth/callback?code=…
                 .onOpenURL { url in
-                    handleCallback(url)
+                    handleAuthHandoff(url)
                 }
         }
     }
 
-    /// Handles `ration://auth/callback?code=...` from the magic-link redirect.
+    /// Extracts the one-time auth code from either the Universal Link or the
+    /// custom-scheme fallback and exchanges it for a token pair.
     @MainActor
-    private func handleCallback(_ url: URL) {
-        guard url.scheme == AppConfig.authCallbackScheme,
-              url.host == "auth",
-              let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                  .queryItems?.first(where: { $0.name == "code" })?.value
-        else { return }
-
+    private func handleAuthHandoff(_ url: URL) {
+        guard let code = Self.authCode(from: url) else { return }
         Task {
             do {
                 try await env.auth.exchangeCode(code)
@@ -32,5 +35,24 @@ struct RationApp: App {
                 env.auth.recordAuthError(error)
             }
         }
+    }
+
+    /// Parses the auth `code` from a supported handoff URL.
+    /// - Universal Link: `https://<host>/auth/mobile-callback/open?code=…`
+    /// - Custom scheme: `ration://auth/callback?code=…`
+    static func authCode(from url: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+
+        let isUniversalLink =
+            (components.scheme == "https" || components.scheme == "http")
+            && components.path == "/auth/mobile-callback/open"
+        let isCustomScheme =
+            components.scheme == AppConfig.authCallbackScheme && components.host == "auth"
+
+        guard isUniversalLink || isCustomScheme else { return nil }
+        return components.queryItems?
+            .first(where: { $0.name == "code" })?
+            .value
     }
 }

@@ -1687,7 +1687,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 
-**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply (Settings via profile menu; Scan as a contextual action). Features include PKCE auth, onboarding, AI consent, account deletion, offline read snapshots, manifest planning, galley match/cook, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply (Settings via profile menu; Scan as a contextual action). Features include PKCE auth, onboarding, AI consent, account deletion, offline read snapshots, manifest planning, galley match/cook, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

@@ -25,6 +25,11 @@ targets:
     platform: iOS
     sources:
       - path: Ration
+    entitlements:
+      path: Ration/App/Ration.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - applinks:ration.mayutic.com
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration

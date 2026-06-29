@@ -176,4 +176,24 @@ final class BaseLayerTests: XCTestCase {
         XCTAssertTrue("credits_m".hasPrefix(AppConfig.creditPackProductPrefix))
         XCTAssertFalse("crew_monthly".hasPrefix(AppConfig.creditPackProductPrefix))
     }
+
+    func testAuthCodeParsesUniversalLink() {
+        let url = URL(string: "https://ration.mayutic.com/auth/mobile-callback/open?code=abc-123")!
+        XCTAssertEqual(RationApp.authCode(from: url), "abc-123")
+    }
+
+    func testAuthCodeParsesCustomSchemeFallback() {
+        let url = URL(string: "ration://auth/callback?code=xyz-789")!
+        XCTAssertEqual(RationApp.authCode(from: url), "xyz-789")
+    }
+
+    func testAuthCodeRejectsUnrelatedUniversalLinkPath() {
+        let url = URL(string: "https://ration.mayutic.com/hub?code=nope")!
+        XCTAssertNil(RationApp.authCode(from: url))
+    }
+
+    func testAuthCodeRejectsUnknownScheme() {
+        let url = URL(string: "evil://auth/callback?code=nope")!
+        XCTAssertNil(RationApp.authCode(from: url))
+    }
 }

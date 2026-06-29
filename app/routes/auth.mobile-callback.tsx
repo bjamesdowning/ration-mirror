@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 import { ensureActiveOrganization, getAuth } from "~/lib/auth.server";
@@ -39,7 +38,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 	const client = url.searchParams.get("client");
 	if (client === "ios") {
 		// PKCE is mandatory for the iOS flow — without a bound challenge the
-		// one-time code would be redeemable by any app that hijacks `ration://`.
+		// one-time code would be redeemable by any app that intercepts the handoff.
 		const codeChallenge = url.searchParams.get("code_challenge");
 		if (!codeChallenge || !PKCE_CHALLENGE_REGEX.test(codeChallenge)) {
 			throw redirect("/auth/verify?error=invalid_request");
@@ -50,8 +49,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			organizationId,
 			codeChallenge,
 		);
+		const baseUrl = context.cloudflare.env.BETTER_AUTH_URL.replace(/\/$/, "");
+		const encoded = encodeURIComponent(code);
 		return {
-			deepLink: `ration://auth/callback?code=${encodeURIComponent(code)}`,
+			// Primary handoff: a verified-domain Universal Link. A user tap on this
+			// https link opens the app directly (Associated Domains); custom-scheme
+			// is only the fallback when Universal Links don't fire.
+			universalLink: `${baseUrl}/auth/mobile-callback/open?code=${encoded}`,
+			customSchemeLink: `ration://auth/callback?code=${encoded}`,
 		};
 	}
 
@@ -66,12 +71,7 @@ export function meta() {
 }
 
 export default function MobileAuthCallback() {
-	const { deepLink } = useLoaderData<typeof loader>();
-
-	useEffect(() => {
-		// Best-effort auto-open; manual button below covers Simulator / browser failures.
-		window.location.assign(deepLink);
-	}, [deepLink]);
+	const { universalLink, customSchemeLink } = useLoaderData<typeof loader>();
 
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
@@ -84,10 +84,16 @@ export default function MobileAuthCallback() {
 					complete sign-in. The link expires in about one minute.
 				</p>
 				<a
-					href={deepLink}
+					href={universalLink}
 					className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
 				>
 					Open Ration
+				</a>
+				<a
+					href={customSchemeLink}
+					className="inline-flex items-center justify-center gap-2 w-full mt-3 text-sm text-muted underline focus-ring"
+				>
+					Having trouble? Open with the app link instead
 				</a>
 				<p className="text-xs text-muted mt-4 leading-relaxed">
 					Using the Simulator? Open the magic link in{" "}

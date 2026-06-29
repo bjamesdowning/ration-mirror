@@ -14,7 +14,7 @@ Version: 1.3.44
 - Configure App Store Connect products and RevenueCat products, entitlement, and current offering.
 - Configure the RevenueCat webhook to production and deploy required Worker secrets.
 - Sandbox-test purchase and restore before enabling `REVENUECAT_FULFILLMENT_ENABLED=true`.
-- Replace the AASA `TEAMID` placeholder and add Associated Domains when moving from custom-scheme auth to Universal Links.
+- ~~Replace the AASA `TEAMID` placeholder and add Associated Domains when moving from custom-scheme auth to Universal Links.~~ **Done (v1.3.46):** AASA serves the real appID `M2KJH5GDGH.com.mayutic.ration`, the iOS app declares `applinks:ration.mayutic.com`, the auth handoff uses a Universal Link as primary with the custom scheme as fallback. Operator step remaining: ensure the signing provisioning profile includes the Associated Domains capability and verify on a physical device (see `plans/app-review-notes.md`).
 
 ## Audit Scope
 
@@ -54,7 +54,7 @@ Version: 1.3.44
 - Scan results are displayed but not yet confirmed into Cargo via `/api/mobile/v1/cargo/batch`. This is acceptable for internal MVP testing but should be completed before making Scan a headline TestFlight claim.
 - Galley and Supply mobile payloads are not yet cursor-paginated/slimmed. Fine for small test orgs; revisit before broad beta.
 - Offline persistence is not implemented in the native app. The web PWA remains the offline-first surface for now.
-- Universal Links are not active until `TEAMID`, AASA, and Associated Domains are configured. PKCE mitigates custom-scheme code interception for the current MVP flow.
+- Universal Links are the primary auth handoff as of v1.3.46 (AASA + Associated Domains shipped); the PKCE-bound custom scheme remains as a fallback only. Activation still depends on signing the build with a profile that carries the Associated Domains capability.
 
 ## Required Verification
 

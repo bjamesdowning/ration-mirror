@@ -52,6 +52,7 @@ export default [
 	route("select-group", "routes/select-group.tsx"),
 	route("auth/verify", "routes/auth.verify.tsx"),
 	route("auth/mobile-callback", "routes/auth.mobile-callback.tsx"),
+	route("auth/mobile-callback/open", "routes/auth.mobile-callback.open.tsx"),
 	route("oauth/sign-in", "routes/oauth.sign-in.tsx"),
 	route("oauth/consent", "routes/oauth.consent.tsx"),
 	route("oauth/select-org", "routes/oauth.select-org.tsx"),

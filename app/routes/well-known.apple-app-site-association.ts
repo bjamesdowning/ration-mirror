@@ -1,15 +1,7 @@
+import { buildAppleAppSiteAssociation } from "~/lib/aasa";
+
 export async function loader() {
-	const body = {
-		applinks: {
-			apps: [],
-			details: [
-				{
-					appID: "TEAMID.com.mayutic.ration",
-					paths: ["/auth/mobile-callback", "/auth/mobile-callback/*"],
-				},
-			],
-		},
-	};
+	const body = buildAppleAppSiteAssociation();
 
 	return Response.json(body, {
 		headers: {

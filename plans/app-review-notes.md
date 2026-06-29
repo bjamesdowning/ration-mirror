@@ -4,9 +4,17 @@ Use this document when submitting to App Review or TestFlight external testing.
 
 ## Login
 
-- **Method:** Magic link email with PKCE (`ration://auth/callback`).
+- **Method:** Magic link email with PKCE.
+- **Handoff (primary):** Universal Link `https://ration.mayutic.com/auth/mobile-callback/open?code=…` (Associated Domains `applinks:ration.mayutic.com`). A user tap on the "Open Ration" page button opens the app directly.
+- **Handoff (fallback):** Custom URL scheme `ration://auth/callback?code=…`, used only if Universal Links don't fire (app not installed, AASA not yet cached). The code is a single-use, PKCE-bound UUID with a ~60s TTL.
 - **Demo account:** Provide App Review with a dedicated test email that receives magic links, or supply a pre-authenticated TestFlight build note with step-by-step login.
-- **Deep link:** Custom URL scheme `ration://` is registered for auth callback.
+
+### Universal Links operator checklist
+
+- [ ] `https://ration.mayutic.com/.well-known/apple-app-site-association` returns JSON (no redirect, `Content-Type: application/json`) with appID `M2KJH5GDGH.com.mayutic.ration`.
+- [ ] App is signed with a provisioning profile that includes the **Associated Domains** capability.
+- [ ] On a physical device, tapping the magic-link "Open Ration" button opens the app (not Safari).
+- [ ] Custom-scheme fallback still completes sign-in when Universal Links are unavailable.
 
 ## In-App Purchases
 

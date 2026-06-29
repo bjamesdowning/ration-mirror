@@ -31,7 +31,11 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Ration uses the camera to scan grocery receipts and add items to your pantry.</string>
+	<string>Ration uses the camera to scan grocery receipts and pantry labels to add items to Cargo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ration can import receipt photos from your library when the camera is unavailable.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Ration can remind you about expiring cargo and planned meals when you enable reminders.</string>
 	<key>RevenueCatPublicAPIKey</key>
 	<string>appl_pUrEkfszvAWSscslkeXEMleEace</string>
 	<key>CFBundleURLTypes</key>

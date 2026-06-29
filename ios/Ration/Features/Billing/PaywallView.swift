@@ -152,51 +152,16 @@ struct PaywallView: View {
     @ViewBuilder
     private func offerings(_ status: BillingStatus) -> some View {
         if status.entitlements.crew_member.active {
-            GlassCard {
-                VStack(spacing: 8) {
-                    Text("You're a Crew Member").rationHeadline()
-                    if status.management.store == "stripe" {
-                        Text("This subscription is managed on the web via Stripe. Visit ration.mayutic.com to change or cancel.")
-                            .rationCaption()
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text("Manage your subscription in the App Store settings.")
-                            .rationCaption()
-                            .multilineTextAlignment(.center)
-                    }
-                }
-            }
+            activeSubscriberCard(status)
+            creditPackSection
         } else if status.billingUnavailable {
             ErrorBanner(message: "Billing is temporarily unavailable. Please try again shortly.")
         } else if !status.canPurchaseSubscription {
             ErrorBanner(message: blockMessage(status.purchaseBlockReason))
         } else {
             VStack(spacing: 12) {
-                if env.billing.packages.isEmpty {
-                    Button("Waiting for App Store products…") {}
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(true)
-                } else {
-                    ForEach(env.billing.packages) { pkg in
-                        Button {
-                            Task {
-                                await model.purchase(
-                                    packageID: pkg.id,
-                                    api: env.api,
-                                    billing: env.billing
-                                )
-                            }
-                        } label: {
-                            HStack {
-                                Text(model.purchasingPackageID == pkg.id ? "Purchasing…" : pkg.title)
-                                Spacer()
-                                Text(pkg.priceString)
-                            }
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(model.purchasingPackageID != nil)
-                    }
-                }
+                subscriptionSection
+                creditPackSection
 
                 Button(model.isRestoring ? "Restoring…" : "Restore purchases") {
                     Task { await model.restore(api: env.api, billing: env.billing) }
@@ -233,6 +198,66 @@ struct PaywallView: View {
             .font(Typography.caption())
             .foregroundStyle(Theme.hyperGreen)
         }
+    }
+
+    private func activeSubscriberCard(_ status: BillingStatus) -> some View {
+        GlassCard {
+            VStack(spacing: 8) {
+                Text("You're a Crew Member").rationHeadline()
+                if status.management.store == "stripe" {
+                    Text("This subscription is managed on the web via Stripe. Visit ration.mayutic.com to change or cancel.")
+                        .rationCaption()
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Manage your subscription in the App Store settings.")
+                        .rationCaption()
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+    }
+
+    private var subscriptionSection: some View {
+        Group {
+            if env.billing.subscriptionPackages.isEmpty {
+                Text("Subscriptions load from RevenueCat offerings.").rationCaption()
+            } else {
+                Text("Crew Member").rationHeadline()
+                ForEach(env.billing.subscriptionPackages) { pkg in
+                    purchaseButton(pkg)
+                }
+            }
+        }
+    }
+
+    private var creditPackSection: some View {
+        Group {
+            if !env.billing.creditPackages.isEmpty {
+                Text("Credit packs").rationHeadline().frame(maxWidth: .infinity, alignment: .leading)
+                Text("Consumable credits for AI scans. Credits do not expire.")
+                    .rationCaption()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(env.billing.creditPackages) { pkg in
+                    purchaseButton(pkg)
+                }
+            }
+        }
+    }
+
+    private func purchaseButton(_ pkg: BillingPackage) -> some View {
+        Button {
+            Task {
+                await model.purchase(packageID: pkg.id, api: env.api, billing: env.billing)
+            }
+        } label: {
+            HStack {
+                Text(model.purchasingPackageID == pkg.id ? "Purchasing…" : pkg.title)
+                Spacer()
+                Text(pkg.priceString)
+            }
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(model.purchasingPackageID != nil)
     }
 
     private func blockMessage(_ reason: String?) -> String {

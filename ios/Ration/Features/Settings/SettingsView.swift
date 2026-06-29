@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class SessionViewModel {
     private(set) var session: SessionResponse?
+    private(set) var settings: UserSettings?
     private(set) var isLoading = false
     var errorMessage: String?
 
@@ -12,7 +13,10 @@ final class SessionViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            session = try await api.session()
+            async let sessionTask = api.session()
+            async let settingsTask = api.settings()
+            session = try await sessionTask
+            settings = try await settingsTask.settings
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -21,7 +25,6 @@ final class SessionViewModel {
     func activate(_ org: OrgMembership, api: RationAPI, auth: AuthManager) async {
         guard !org.isActive else { return }
         do {
-            // Org switch issues a new org-scoped token pair; adopt it, then refresh session.
             let pair = try await api.activateOrg(org.id)
             auth.adopt(pair)
             session = try await api.session()
@@ -33,8 +36,11 @@ final class SessionViewModel {
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var model = SessionViewModel()
     @State private var showingPaywall = false
+    @State private var showingPrivacy = false
 
     var body: some View {
         NavigationStack {
@@ -48,8 +54,15 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
         }
         .task { await model.load(api: env.api) }
     }
@@ -59,24 +72,27 @@ struct SettingsView: View {
             Section("Account") {
                 LabeledContent("Name", value: session.user.name ?? "—")
                 LabeledContent("Email", value: session.user.email)
+                NavigationLink("Delete account") {
+                    AccountDeletionView()
+                }
+                .foregroundStyle(Theme.danger)
             }
 
             Section("Membership") {
                 LabeledContent("Tier", value: session.isCrewMember ? "Crew Member" : "Free")
                 LabeledContent("Credits", value: "\(session.credits)")
-                if !session.isCrewMember {
-                    Button("Upgrade to Crew Member") { showingPaywall = true }
-                        .foregroundStyle(Theme.hyperGreen)
-                } else {
-                    Button("Manage / buy credits") { showingPaywall = true }
-                        .foregroundStyle(Theme.hyperGreen)
+                Button(session.isCrewMember ? "Manage billing" : "Upgrade to Crew Member") {
+                    showingPaywall = true
                 }
+                .foregroundStyle(Theme.hyperGreen)
             }
 
             if session.organizations.count > 1 {
                 Section("Organizations") {
                     ForEach(session.organizations) { org in
-                        Button { Task { await model.activate(org, api: env.api, auth: env.auth) } } label: {
+                        Button {
+                            Task { await model.activate(org, api: env.api, auth: env.auth) }
+                        } label: {
                             HStack {
                                 Text(org.name).foregroundStyle(Theme.carbon)
                                 Spacer()
@@ -89,11 +105,27 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Privacy") {
+                Button("Privacy & AI") { showingPrivacy = true }
+                Button("Privacy Policy") { openURL(AppConfig.privacyURL) }
+                Button("Terms of Service") { openURL(AppConfig.termsURL) }
+                if let consent = model.settings?.aiConsentAt, !consent.isEmpty {
+                    LabeledContent("AI consent", value: "Granted")
+                }
+            }
+
+            Section("Help") {
+                Link("Email support", destination: URL(string: "mailto:\(AppConfig.supportEmail)")!)
+                Link("Report an issue on GitLab", destination: AppConfig.gitlabIssuesURL)
+            }
+
             Section {
                 Button("Sign out", role: .destructive) {
                     Task {
+                        env.snapshots.clearAll()
                         await env.billing.logOut()
                         await env.auth.signOut()
+                        dismiss()
                     }
                 }
             }

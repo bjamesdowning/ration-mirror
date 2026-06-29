@@ -30,6 +30,14 @@ final class BillingManager {
     private(set) var sdkState: SDKState = .notConfigured("RevenueCat SDK not initialized.")
     /// Offering packages from `offerings.current`. Empty until `loadOfferings()`.
     private(set) var packages: [BillingPackage] = []
+    /// Subscription products (Crew Member, etc.).
+    var subscriptionPackages: [BillingPackage] {
+        packages.filter { !$0.productIdentifier.hasPrefix(AppConfig.creditPackProductPrefix) }
+    }
+    /// Consumable credit packs (`credits_s`, `credits_m`, …).
+    var creditPackages: [BillingPackage] {
+        packages.filter { $0.productIdentifier.hasPrefix(AppConfig.creditPackProductPrefix) }
+    }
     /// Human-readable reason `packages` is empty after `loadOfferings()` (for the paywall).
     private(set) var offeringsMessage: String?
     private var configured = false

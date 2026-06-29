@@ -36,11 +36,18 @@ export const MobileActivateOrgSchema = z.object({
 	organizationId: z.string().min(1),
 });
 
+const isoTimestamp = z.string().datetime({ offset: true });
+
 export const MobileSettingsPatchSchema = z
 	.object({
 		theme: z.enum(["light", "dark"]).optional(),
 		supplyUnitMode: z.enum(["cooking", "metric", "imperial"]).optional(),
 		allergens: z.array(z.enum(ALLERGEN_SLUGS)).optional(),
+		/** ISO timestamp when the user consented to AI/receipt processing. */
+		aiConsentAt: isoTimestamp.optional(),
+		onboardingCompletedAt: isoTimestamp.optional(),
+		onboardingStep: z.coerce.number().int().min(0).max(6).optional(),
+		expirationAlertDays: z.coerce.number().int().min(1).max(90).optional(),
 	})
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",

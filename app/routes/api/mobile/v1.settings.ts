@@ -5,6 +5,16 @@ import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { MobileSettingsPatchSchema } from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.settings";
 
+export async function loader({ request, context }: Route.LoaderArgs) {
+	try {
+		const { userId } = await requireMobileActiveGroup(context, request);
+		const settings = await getUserSettings(context.cloudflare.env.DB, userId);
+		return { settings };
+	} catch (e) {
+		return handleApiError(e);
+	}
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
 	if (request.method !== "PATCH") {
 		throw data({ error: "Method not allowed" }, { status: 405 });

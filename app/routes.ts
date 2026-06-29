@@ -290,6 +290,25 @@ export default [
 		"api/mobile/v1/billing/status",
 		"routes/api/mobile/v1.billing.status.ts",
 	),
+	route("api/mobile/v1/account", "routes/api/mobile/v1.account.ts"),
+	route("api/mobile/v1/manifest", "routes/api/mobile/v1.manifest.ts"),
+	route(
+		"api/mobile/v1/manifest/consume",
+		"routes/api/mobile/v1.manifest.consume.ts",
+	),
+	route(
+		"api/mobile/v1/meals/:id/cook",
+		"routes/api/mobile/v1.meals.$id.cook.ts",
+	),
+	route(
+		"api/mobile/v1/meals/:id/toggle-active",
+		"routes/api/mobile/v1.meals.$id.toggle-active.ts",
+	),
+	route("api/mobile/v1/supply/sync", "routes/api/mobile/v1.supply.sync.ts"),
+	route(
+		"api/mobile/v1/supply/complete",
+		"routes/api/mobile/v1.supply.complete.ts",
+	),
 
 	route("api/auth/*", "routes/api.auth.$.ts"),
 

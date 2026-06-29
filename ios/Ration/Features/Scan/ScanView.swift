@@ -10,10 +10,13 @@ final class ScanViewModel {
         case uploading
         case processing(requestId: String)
         case completed(requestId: String, items: [ScanResultItem])
+        case confirming
+        case confirmed(added: Int, updated: Int)
         case failed(String)
     }
 
     private(set) var state: State = .idle
+    private(set) var selectedItems: Set<String> = []
     private let maxPollAttempts = 80
     private let pollDelayNanoseconds: UInt64 = 1_500_000_000
 
@@ -29,6 +32,7 @@ final class ScanViewModel {
                 state = .failed("Scan was submitted but no request id was returned.")
                 return
             }
+            Haptics.light()
             state = .processing(requestId: requestId)
             await poll(requestId: requestId, api: api)
         } catch {
@@ -43,7 +47,9 @@ final class ScanViewModel {
                 let result = try await api.scanStatus(requestId: requestId)
                 switch result.status {
                 case "completed":
-                    state = .completed(requestId: requestId, items: result.items ?? [])
+                    let items = result.items ?? []
+                    selectedItems = Set(items.map(\.id))
+                    state = .completed(requestId: requestId, items: items)
                     return
                 case "failed":
                     state = .failed(result.error ?? "Scan failed. Please try again.")
@@ -68,94 +74,100 @@ final class ScanViewModel {
         state = .failed("Scan is still processing. Pull Cargo to refresh shortly.")
     }
 
-    func reset() { state = .idle }
+    func toggleSelection(_ item: ScanResultItem) {
+        if selectedItems.contains(item.id) {
+            selectedItems.remove(item.id)
+        } else {
+            selectedItems.insert(item.id)
+        }
+    }
+
+    func confirmToCargo(api: RationAPI, items: [ScanResultItem]) async {
+        let chosen = items.filter { selectedItems.contains($0.id) }
+        guard !chosen.isEmpty else {
+            state = .failed("Select at least one item to add to Cargo.")
+            return
+        }
+        state = .confirming
+        let batchItems = chosen.map { item in
+            BatchCargoItem(
+                name: item.name,
+                quantity: item.quantity,
+                unit: item.unit,
+                domain: item.domain ?? "food",
+                tags: item.tags ?? []
+            )
+        }
+        do {
+            let result = try await api.batchAddCargo(BatchCargoRequest(items: batchItems))
+            Haptics.success()
+            state = .confirmed(added: result.added, updated: result.updated)
+        } catch {
+            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+        }
+    }
+
+    func reset() {
+        state = .idle
+        selectedItems = []
+    }
 }
 
 struct ScanView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.dismiss) private var dismiss
     @State private var model = ScanViewModel()
     @State private var showingCamera = false
+    @State private var showingConsentGate = false
+    @State private var hasAIConsent = false
+    @State private var checkedConsent = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
                 switch model.state {
                 case .idle:
-                    EmptyStateView(
-                        icon: "camera.viewfinder",
-                        title: "Scan a receipt",
-                        message: "Capture a grocery receipt and Ration adds the items to your cargo automatically."
-                    )
-                    Button("Open camera") { showingCamera = true }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .padding(.horizontal, 24)
-
+                    idleContent
                 case .uploading:
                     LoadingView(label: "Uploading scan…")
-
                 case let .processing(requestId):
-                    GlassCard {
-                        VStack(spacing: 12) {
-                            ProgressView().tint(Theme.hyperGreen)
-                            Text("Processing scan").rationHeadline()
-                            Text("Request \(requestId) is extracting cargo. This usually takes a few seconds.")
-                                .rationCaption()
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .padding(24)
-
+                    processingContent(requestId)
                 case let .completed(requestId, items):
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            GlassCard {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 36))
-                                        .foregroundStyle(Theme.hyperGreen)
-                                    Text("Scan complete").rationHeadline()
-                                    Text("Request \(requestId) returned \(items.count) item\(items.count == 1 ? "" : "s").")
-                                        .rationCaption()
-                                        .multilineTextAlignment(.center)
-                                }
-                            }
-                            if items.isEmpty {
-                                EmptyStateView(icon: "doc.text.magnifyingglass", title: "No items found", message: "Try a clearer receipt photo or add cargo manually.")
-                            } else {
-                                ForEach(items) { item in
-                                    GlassCard {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(item.name.capitalized).rationBody()
-                                                if let domain = item.domain {
-                                                    Text(domain.capitalized).rationCaption()
-                                                }
-                                            }
-                                            Spacer()
-                                            Text("\(item.quantity.formatted()) \(item.unit)")
-                                                .rationCaption()
-                                        }
-                                    }
-                                }
-                            }
-                            Button("Scan another") { model.reset() }
-                                .buttonStyle(SecondaryButtonStyle())
-                        }
-                        .padding(16)
-                    }
-
+                    completedContent(requestId: requestId, items: items)
+                case .confirming:
+                    LoadingView(label: "Adding to Cargo…")
+                case let .confirmed(added, updated):
+                    confirmedContent(added: added, updated: updated)
                 case let .failed(message):
-                    VStack(spacing: 16) {
-                        ErrorBanner(message: message)
-                        Button("Try again") { model.reset() }
-                            .buttonStyle(SecondaryButtonStyle())
-                    }
-                    .padding(24)
+                    failedContent(message)
                 }
             }
             .frame(maxHeight: .infinity)
             .navigationTitle("Scan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
             .background(Theme.ceramic)
+            .task { await loadConsent() }
+            .sheet(isPresented: $showingConsentGate) {
+                AIConsentGateView(
+                    onAccept: {
+                        Task {
+                            _ = try? await env.api.patchSettings(
+                                SettingsPatch(aiConsentAt: ISO8601DateFormatter().string(from: Date()))
+                            )
+                            hasAIConsent = true
+                            showingConsentGate = false
+                            showingCamera = true
+                        }
+                    },
+                    onDecline: { showingConsentGate = false }
+                )
+                .presentationDetents([.medium])
+            }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraPicker { image in
                     showingCamera = false
@@ -165,10 +177,127 @@ struct ScanView: View {
             }
         }
     }
+
+    private var idleContent: some View {
+        VStack(spacing: 20) {
+            EmptyStateView(
+                icon: "camera.viewfinder",
+                title: "Scan a receipt",
+                message: "Capture a grocery receipt and Ration adds the items to your cargo automatically."
+            )
+            Button("Open camera") { beginScan() }
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 24)
+        }
+    }
+
+    private func beginScan() {
+        guard checkedConsent else { return }
+        if hasAIConsent {
+            showingCamera = true
+        } else {
+            showingConsentGate = true
+        }
+    }
+
+    @MainActor
+    private func loadConsent() async {
+        do {
+            let settings = try await env.api.settings().settings
+            hasAIConsent = settings.aiConsentAt?.isEmpty == false
+        } catch {
+            hasAIConsent = false
+        }
+        checkedConsent = true
+    }
+
+    private func processingContent(_ requestId: String) -> some View {
+        GlassCard {
+            VStack(spacing: 12) {
+                ProgressView().tint(Theme.hyperGreen)
+                Text("Extracting items").rationHeadline()
+                Text("Request \(requestId) is processing. This usually takes a few seconds.")
+                    .rationCaption()
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(24)
+    }
+
+    private func completedContent(requestId: String, items: [ScanResultItem]) -> some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                GlassCard {
+                    VStack(spacing: 8) {
+                        Text("Ready to review").rationHeadline()
+                        Text("\(items.count) item\(items.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
+                            .rationCaption()
+                    }
+                }
+                if items.isEmpty {
+                    EmptyStateView(icon: "doc.text.magnifyingglass", title: "No items found", message: "Try a clearer receipt photo or add cargo manually.")
+                } else {
+                    ForEach(items) { item in
+                        Button { model.toggleSelection(item) } label: {
+                            GlassCard {
+                                HStack {
+                                    Image(systemName: model.selectedItems.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(model.selectedItems.contains(item.id) ? Theme.hyperGreen : Theme.muted)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(item.name.capitalized).rationBody()
+                                        if let domain = item.domain {
+                                            Text(domain.capitalized).rationCaption()
+                                        }
+                                    }
+                                    Spacer()
+                                    Text("\(item.quantity.formatted()) \(item.unit)")
+                                        .rationCaption()
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button("Add selected to Cargo") {
+                        Task { await model.confirmToCargo(api: env.api, items: items) }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    Button("Scan another") { model.reset() }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func confirmedContent(added: Int, updated: Int) -> some View {
+        VStack(spacing: 16) {
+            GlassCard {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(Theme.hyperGreen)
+                    Text("Cargo updated").rationHeadline()
+                    Text("Added \(added), merged \(updated).")
+                        .rationCaption()
+                }
+            }
+            Button("Done") { dismiss() }
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 24)
+        }
+        .padding(24)
+    }
+
+    private func failedContent(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            ErrorBanner(message: message)
+            Button("Try again") { model.reset() }
+                .buttonStyle(SecondaryButtonStyle())
+        }
+        .padding(24)
+    }
 }
 
-/// UIKit camera bridge — keeps the MVP dependency-free. Vision-based document
-/// edge detection is a later enhancement (Stream E).
 struct CameraPicker: UIViewControllerRepresentable {
     let onResult: (UIImage?) -> Void
 
@@ -201,8 +330,6 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 
 extension UIImage {
-    /// Downscales to `maxDimension` (longest edge) and encodes JPEG — mirrors the
-    /// web `CameraInput` resize so uploads stay small on cellular.
     func resizedJPEG(maxDimension: CGFloat, quality: CGFloat) -> Data? {
         let longest = max(size.width, size.height)
         let scale = longest > maxDimension ? maxDimension / longest : 1

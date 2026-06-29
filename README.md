@@ -1669,13 +1669,25 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/session` | User, org, credits, tier |
 | `GET` | `/api/mobile/v1/dashboard` | Hub summary (single round-trip) |
 | `GET` / `POST` | `/api/mobile/v1/cargo` | Paginated inventory / create item |
+| `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/cargo/:id` | Cargo detail / update / delete |
+| `POST` | `/api/mobile/v1/cargo/batch` | Batch add cargo (scan confirm) |
+| `GET` | `/api/mobile/v1/search` | Cargo keyword search |
+| `GET` / `PATCH` | `/api/mobile/v1/settings` | User preferences and AI consent |
+| `DELETE` | `/api/mobile/v1/account` | Permanently delete account |
+| `GET` / `POST` | `/api/mobile/v1/manifest` | Meal plan week / add entry |
+| `POST` | `/api/mobile/v1/manifest/consume` | Consume planned entries |
+| `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo |
+| `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
+| `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync |
 | `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
+| `POST` | `/api/mobile/v1/supply/sync` | Rebuild supply from selected meals |
+| `POST` | `/api/mobile/v1/supply/complete` | Dock purchased items to cargo |
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 
-**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md) (Stream C). It is generated from `ios/project.yml` via [XcodeGen](https://github.com/yonyz/XcodeGen) (`brew install xcodegen && cd ios && xcodegen generate`). The app covers PKCE-protected auth (magic link → `ration://` callback), dashboard, cargo CRUD, supply, scan upload, settings/org switch, and a RevenueCat-driven billing paywall (offering-based purchase + restore). The pre-TestFlight Stream C audit gate is documented in [`plans/stream-c-audit-gate.md`](plans/stream-c-audit-gate.md); remaining launch work is Apple/RevenueCat configuration and sandbox purchase verification.
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply (Settings via profile menu; Scan as a contextual action). Features include PKCE auth, onboarding, AI consent, account deletion, offline read snapshots, manifest planning, galley match/cook, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

@@ -198,6 +198,189 @@ struct MealDetailResponse: Codable, Sendable {
     let meal: Meal
 }
 
+// MARK: - Settings
+
+struct UserSettings: Codable, Sendable {
+    var theme: String?
+    var supplyUnitMode: String?
+    var allergens: [String]?
+    var aiConsentAt: String?
+    var onboardingCompletedAt: String?
+    var onboardingStep: Int?
+    var expirationAlertDays: Int?
+}
+
+struct SettingsResponse: Codable, Sendable {
+    let settings: UserSettings
+}
+
+struct SettingsPatch: Encodable, Sendable {
+    var theme: String?
+    var supplyUnitMode: String?
+    var allergens: [String]?
+    var aiConsentAt: String?
+    var onboardingCompletedAt: String?
+    var onboardingStep: Int?
+    var expirationAlertDays: Int?
+}
+
+// MARK: - Search
+
+struct SearchResult: Codable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let quantity: Double
+    let unit: String
+    let domain: String
+}
+
+struct SearchResponse: Codable, Sendable {
+    let results: [SearchResult]
+}
+
+// MARK: - Cargo batch / update
+
+struct BatchCargoItem: Encodable, Sendable {
+    let name: String
+    let quantity: Double
+    let unit: String
+    var domain: String = "food"
+    var tags: [String] = []
+    var expiresAt: Date?
+}
+
+struct BatchCargoRequest: Encodable, Sendable {
+    let items: [BatchCargoItem]
+}
+
+struct BatchCargoResponse: Codable, Sendable {
+    let added: Int
+    let updated: Int
+    let errors: [BatchCargoError]?
+}
+
+struct BatchCargoError: Codable, Sendable {
+    let name: String
+    let error: String
+}
+
+struct UpdateCargoRequest: Encodable, Sendable {
+    var name: String?
+    var quantity: Double?
+    var unit: String?
+    var domain: String?
+    var tags: [String]?
+    var expiresAt: Date?
+}
+
+struct CargoDetailResponse: Codable, Sendable {
+    let item: CargoItem
+}
+
+// MARK: - Manifest
+
+struct MealPlanSummary: Codable, Sendable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct ManifestEntry: Codable, Sendable, Identifiable {
+    let id: String
+    let planId: String
+    let mealId: String
+    let date: String
+    let slotType: String
+    let orderIndex: Int
+    let servingsOverride: Int?
+    let notes: String?
+    let consumedAt: Date?
+    let createdAt: Date
+    let mealName: String
+    let mealServings: Int
+    let mealType: String
+    let mealPrepTime: Int?
+    let mealCookTime: Int?
+
+    var isConsumed: Bool { consumedAt != nil }
+}
+
+struct ManifestResponse: Codable, Sendable {
+    let plan: MealPlanSummary
+    let startDate: String
+    let endDate: String
+    let entries: [ManifestEntry]
+}
+
+struct ManifestEntryCreate: Encodable, Sendable {
+    let mealId: String
+    let date: String
+    let slotType: String
+    var servingsOverride: Int?
+    var notes: String?
+}
+
+struct ManifestEntryCreateResponse: Codable, Sendable {
+    let entry: ManifestEntry
+}
+
+struct ManifestConsumeRequest: Encodable, Sendable {
+    let entryIds: [String]
+}
+
+struct ManifestConsumeResponse: Codable, Sendable {
+    let consumed: Int
+}
+
+// MARK: - Galley match / cook
+
+struct MealMatch: Codable, Sendable, Identifiable {
+    var id: String { meal.id }
+    let meal: Meal
+    let matchPercentage: Double
+    let canMake: Bool
+}
+
+struct MealMatchResponse: Codable, Sendable {
+    let matches: [MealMatch]
+}
+
+struct CookMealResponse: Codable, Sendable {
+    let cooked: Bool
+    let ingredientsDeducted: Int
+    let servings: Int
+}
+
+struct ToggleActiveResponse: Codable, Sendable {
+    let isActive: Bool
+}
+
+// MARK: - Supply sync / dock
+
+struct SupplySyncResponse: Codable, Sendable {
+    let list: SupplyList
+    let summary: SupplySyncSummary
+}
+
+struct SupplySyncSummary: Codable, Sendable {
+    let added: Int?
+    let updated: Int?
+    let removed: Int?
+}
+
+struct SupplyCompleteRequest: Encodable, Sendable {
+    let listId: String
+}
+
+struct SupplyCompleteResponse: Codable, Sendable {
+    let success: Bool
+    let docked: Int
+}
+
+struct AccountDeleteResponse: Codable, Sendable {
+    let success: Bool
+    let deleted: Bool
+}
+
 // MARK: - Billing
 
 struct EntitlementInfo: Codable, Sendable {

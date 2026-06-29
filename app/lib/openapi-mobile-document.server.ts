@@ -229,6 +229,65 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 				},
 			},
+			"/api/mobile/v1/settings": {
+				get: {
+					summary: "User settings (theme, units, allergens, privacy)",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Settings payload" } },
+				},
+				patch: {
+					summary: "Patch user settings",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Updated settings" } },
+				},
+			},
+			"/api/mobile/v1/account": {
+				delete: {
+					summary: "Permanently delete the authenticated user account",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Account deleted" } },
+				},
+			},
+			"/api/mobile/v1/manifest": {
+				get: {
+					summary: "Meal plan entries for a date range",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Manifest week" } },
+				},
+				post: {
+					summary: "Add a meal plan entry",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Created entry" } },
+				},
+			},
+			"/api/mobile/v1/manifest/consume": {
+				post: {
+					summary: "Mark manifest entries as consumed",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Consume result" } },
+				},
+			},
+			"/api/mobile/v1/cargo/batch": {
+				post: {
+					summary: "Batch add cargo items (scan confirm)",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Batch ingest summary" } },
+				},
+			},
+			"/api/mobile/v1/supply/sync": {
+				post: {
+					summary: "Rebuild supply list from selected meals",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Synced supply list" } },
+				},
+			},
+			"/api/mobile/v1/supply/complete": {
+				post: {
+					summary: "Dock purchased supply items into cargo",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Dock result" } },
+				},
+			},
 		},
 	};
 }

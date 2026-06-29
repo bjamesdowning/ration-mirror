@@ -16,6 +16,14 @@ enum AppConfig {
 
     /// RevenueCat entitlement identifier shared with the server (`billing.constants.ts`).
     static let crewEntitlement = "crew_member"
+
+    static let supportEmail = "support@mayutic.com"
+    static let gitlabIssuesURL = URL(string: "https://gitlab.com/mayutic/ration/application/-/issues")!
+    static let termsURL = URL(string: "https://ration.mayutic.com/legal/terms")!
+    static let privacyURL = URL(string: "https://ration.mayutic.com/legal/privacy")!
+
+    /// RevenueCat consumable product id prefix (`credits_s`, `credits_m`, …).
+    static let creditPackProductPrefix = "credits_"
 }
 
 /// Shared JSON coders with lenient ISO-8601 date handling.

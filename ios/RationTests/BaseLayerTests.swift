@@ -162,4 +162,18 @@ final class BaseLayerTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func testSettingsResponseDecodesAIConsent() throws {
+        let data = """
+        { "settings": { "aiConsentAt": "2026-06-29T12:00:00.000Z", "supplyUnitMode": "metric" } }
+        """.data(using: .utf8)!
+
+        let response = try JSON.decoder.decode(SettingsResponse.self, from: data)
+        XCTAssertEqual(response.settings.aiConsentAt, "2026-06-29T12:00:00.000Z")
+    }
+
+    func testCreditPackProductPrefix() {
+        XCTAssertTrue("credits_m".hasPrefix(AppConfig.creditPackProductPrefix))
+        XCTAssertFalse("crew_monthly".hasPrefix(AppConfig.creditPackProductPrefix))
+    }
 }

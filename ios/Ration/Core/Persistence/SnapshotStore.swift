@@ -1,7 +1,6 @@
 import Foundation
 
 /// File-backed read snapshots with per-domain sync metadata.
-/// Designed so optimistic writes can layer on later without changing feature screens.
 @MainActor
 final class SnapshotStore {
     struct Metadata: Codable, Sendable {
@@ -12,6 +11,10 @@ final class SnapshotStore {
     private struct Envelope<T: Codable>: Codable {
         var metadata: Metadata
         var payload: T
+    }
+
+    private struct MetadataEnvelope: Codable {
+        var metadata: Metadata
     }
 
     private let fileManager = FileManager.default
@@ -53,12 +56,9 @@ final class SnapshotStore {
 
     private func loadMetadata(domain: String) -> Metadata? {
         guard let data = try? Data(contentsOf: fileURL(for: domain)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let meta = json["metadata"] as? [String: Any],
-              let syncedRaw = meta["syncedAt"] as? String,
-              let syncedAt = ISO8601DateFormatter().date(from: syncedRaw)
+              let envelope = try? decoder.decode(MetadataEnvelope.self, from: data)
         else { return nil }
-        return Metadata(syncedAt: syncedAt, organizationId: meta["organizationId"] as? String)
+        return envelope.metadata
     }
 
     private var baseDirectory: URL {

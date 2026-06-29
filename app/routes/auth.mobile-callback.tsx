@@ -1,18 +1,12 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, useLoaderData } from "react-router";
+import { MobileAuthHandoffCard } from "~/components/auth/MobileAuthHandoffCard";
 import { ensureActiveOrganization, getAuth } from "~/lib/auth.server";
+import { mobileAuthHandoffLinks } from "~/lib/mobile/auth-handoff";
 import { PKCE_CHALLENGE_REGEX } from "~/lib/mobile/pkce";
 import { storeMobileAuthCode } from "~/lib/mobile/token.server";
 
-/**
- * Landing page after magic-link verification for iOS clients.
- * Web magic links continue to use /auth/verify — this path is only used when
- * `callbackURL` includes `client=ios` from the mobile API.
- *
- * Returns a visible "Open Ration" page instead of an immediate server redirect
- * to `ration://` — Safari (especially in Simulator) often shows a blank screen
- * when custom-scheme redirects fail silently.
- */
+/** Landing page after magic-link verification for iOS clients. */
 export async function loader({ request, context }: LoaderFunctionArgs) {
 	const url = new URL(request.url);
 	const error = url.searchParams.get("error");
@@ -37,8 +31,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	const client = url.searchParams.get("client");
 	if (client === "ios") {
-		// PKCE is mandatory for the iOS flow — without a bound challenge the
-		// one-time code would be redeemable by any app that intercepts the handoff.
 		const codeChallenge = url.searchParams.get("code_challenge");
 		if (!codeChallenge || !PKCE_CHALLENGE_REGEX.test(codeChallenge)) {
 			throw redirect("/auth/verify?error=invalid_request");
@@ -50,14 +42,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			codeChallenge,
 		);
 		const baseUrl = context.cloudflare.env.BETTER_AUTH_URL.replace(/\/$/, "");
-		const encoded = encodeURIComponent(code);
-		return {
-			// Primary handoff: a verified-domain Universal Link. A user tap on this
-			// https link opens the app directly (Associated Domains); custom-scheme
-			// is only the fallback when Universal Links don't fire.
-			universalLink: `${baseUrl}/auth/mobile-callback/open?code=${encoded}`,
-			customSchemeLink: `ration://auth/callback?code=${encoded}`,
-		};
+		return mobileAuthHandoffLinks(baseUrl, code);
 	}
 
 	throw redirect("/hub");
@@ -71,36 +56,21 @@ export function meta() {
 }
 
 export default function MobileAuthCallback() {
-	const { universalLink, customSchemeLink } = useLoaderData<typeof loader>();
+	const links = useLoaderData<typeof loader>();
 
 	return (
-		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
-			<div className="w-full max-w-md glass-panel rounded-2xl p-8 shadow-xl text-center">
-				<h1 className="text-display text-xl text-carbon mb-3">
-					Open Ration to finish signing in
-				</h1>
-				<p className="text-sm text-muted mb-6 leading-relaxed">
-					Your email link was verified. Tap below to return to the app and
-					complete sign-in. The link expires in about one minute.
-				</p>
-				<a
-					href={universalLink}
-					className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
-				>
-					Open Ration
-				</a>
-				<a
-					href={customSchemeLink}
-					className="inline-flex items-center justify-center gap-2 w-full mt-3 text-sm text-muted underline focus-ring"
-				>
-					Having trouble? Open with the app link instead
-				</a>
-				<p className="text-xs text-muted mt-4 leading-relaxed">
+		<MobileAuthHandoffCard
+			title="Open Ration to finish signing in"
+			body="Your email link was verified. Tap below to return to the app and complete sign-in. The link expires in about one minute."
+			primaryHref={links.universalLink}
+			secondaryHref={links.customSchemeLink}
+			footnote={
+				<>
 					Using the Simulator? Open the magic link in{" "}
 					<strong className="text-carbon">Safari inside the Simulator</strong>,
 					not your Mac&apos;s browser — then tap Open Ration above.
-				</p>
-			</div>
-		</div>
+				</>
+			}
+		/>
 	);
 }

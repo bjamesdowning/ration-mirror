@@ -11,11 +11,9 @@ enum AppConfig {
         return URL(string: "https://ration.mayutic.com/api/mobile/v1")!
     }
 
-    /// Custom URL scheme registered in Info.plist for the auth callback.
+    /// Custom URL scheme registered in Info.plist for the auth callback fallback.
     static let authCallbackScheme = "ration"
-
-    /// RevenueCat entitlement identifier shared with the server (`billing.constants.ts`).
-    static let crewEntitlement = "crew_member"
+    static let authCallbackHost = "ration.mayutic.com"
 
     static let supportEmail = "support@mayutic.com"
     static let gitlabIssuesURL = URL(string: "https://gitlab.com/mayutic/ration/application/-/issues")!

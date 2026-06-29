@@ -92,14 +92,14 @@ final class SupplyViewModel {
             let result = try await api.completeSupply(listId: list.id)
             Haptics.success()
             errorMessage = nil
-            cookMessage = "Docked \(result.docked) items into Cargo"
+            dockMessage = "Docked \(result.docked) items into Cargo"
             await load(api: api, snapshots: snapshots, online: online)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    var cookMessage: String?
+    var dockMessage: String?
 }
 
 private extension SupplyItem {
@@ -166,7 +166,7 @@ struct SupplyView: View {
 
     private var progressFooter: some View {
         VStack(spacing: 8) {
-            if let message = model.cookMessage {
+            if let message = model.dockMessage {
                 Text(message).rationCaption().foregroundStyle(Theme.hyperGreen)
             }
             HStack {

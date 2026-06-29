@@ -10,9 +10,9 @@ struct CargoListView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if model.isLoading && model.items.isEmpty {
+                if model.isLoading && isEmpty {
                     LoadingView()
-                } else if let errorMessage = model.errorMessage, model.items.isEmpty {
+                } else if let errorMessage = model.errorMessage, isEmpty {
                     VStack(spacing: 16) {
                         ErrorBanner(message: errorMessage)
                         Button("Retry") {
@@ -23,17 +23,21 @@ struct CargoListView: View {
                         .buttonStyle(SecondaryButtonStyle())
                     }
                     .padding(24)
-                } else if model.items.isEmpty {
+                } else if isEmpty {
                     VStack(spacing: 16) {
                         EmptyStateView(
                             icon: "shippingbox",
-                            title: "No cargo yet",
-                            message: "Scan a receipt or add staples manually to fill your pantry."
+                            title: model.isSearchActive ? "No matches" : "No cargo yet",
+                            message: model.isSearchActive
+                                ? "Try a different search term."
+                                : "Scan a receipt or add staples manually to fill your pantry."
                         )
-                        Button("Scan receipt") { onScan() }
-                            .buttonStyle(PrimaryButtonStyle())
-                        Button("Add manually") { showingAdd = true }
-                            .buttonStyle(SecondaryButtonStyle())
+                        if !model.isSearchActive {
+                            Button("Scan receipt") { onScan() }
+                                .buttonStyle(PrimaryButtonStyle())
+                            Button("Add manually") { showingAdd = true }
+                                .buttonStyle(SecondaryButtonStyle())
+                        }
                     }
                     .padding(24)
                 } else {
@@ -70,33 +74,52 @@ struct CargoListView: View {
             }
         }
         .task {
-            if model.items.isEmpty {
+            if isEmpty {
                 await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
             }
         }
     }
 
+    private var isEmpty: Bool {
+        switch model.listContent {
+        case let .inventory(items): items.isEmpty
+        case let .search(results): results.isEmpty
+        }
+    }
+
     private var list: some View {
         List {
-            if let staleLabel = model.staleLabel {
+            if let staleLabel = model.staleLabel, !model.isSearchActive {
                 Text(staleLabel).rationCaption().listRowBackground(Color.clear)
             }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
             Section {
-                ForEach(model.items) { item in
-                    NavigationLink {
-                        CargoDetailView(itemId: item.id)
-                    } label: {
-                        CargoRow(item: item)
+                switch model.listContent {
+                case let .inventory(items):
+                    ForEach(items) { item in
+                        NavigationLink {
+                            CargoDetailView(itemId: item.id)
+                        } label: {
+                            CargoRow(item: item)
+                        }
+                        .listRowBackground(Theme.surface)
+                        .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                Task { await model.delete(item, api: env.api) }
+                            } label: { Label("Delete", systemImage: "trash") }
+                        }
                     }
-                    .listRowBackground(Theme.surface)
-                    .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
-                    .swipeActions {
-                        Button(role: .destructive) {
-                            Task { await model.delete(item, api: env.api) }
-                        } label: { Label("Delete", systemImage: "trash") }
+                case let .search(results):
+                    ForEach(results) { result in
+                        NavigationLink {
+                            CargoDetailView(itemId: result.id)
+                        } label: {
+                            SearchResultRow(result: result)
+                        }
+                        .listRowBackground(Theme.surface)
                     }
                 }
             } header: {
@@ -129,6 +152,24 @@ struct CargoListView: View {
             Image(systemName: "line.3.horizontal.decrease.circle")
         }
         .accessibilityLabel("Filter cargo")
+    }
+}
+
+struct SearchResultRow: View {
+    let result: SearchResult
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(result.name.capitalized).rationBody()
+                Text(result.domain.capitalized).rationCaption()
+            }
+            Spacer()
+            Text("\(result.quantity.formatted()) \(result.unit)")
+                .font(Typography.caption())
+                .foregroundStyle(Theme.carbon)
+        }
+        .padding(.vertical, 4)
     }
 }
 

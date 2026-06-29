@@ -6,6 +6,7 @@ import Observation
 final class ManifestViewModel {
     private(set) var manifest: ManifestResponse?
     private(set) var isLoading = false
+    private(set) var isSavingEntry = false
     var errorMessage: String?
     var staleLabel: String?
 
@@ -39,6 +40,34 @@ final class ManifestViewModel {
         }
     }
 
+    func addEntry(
+        mealId: String,
+        date: String,
+        slotType: String,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool
+    ) async -> Bool {
+        guard online else {
+            errorMessage = "Planning meals requires a network connection."
+            return false
+        }
+        isSavingEntry = true
+        errorMessage = nil
+        defer { isSavingEntry = false }
+        do {
+            _ = try await api.addManifestEntry(
+                ManifestEntryCreate(mealId: mealId, date: date, slotType: slotType)
+            )
+            Haptics.success()
+            await load(api: api, snapshots: snapshots, online: online)
+            return true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+    }
+
     private func restoreSnapshot(_ snapshots: SnapshotStore) {
         if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest) {
             manifest = cached.payload
@@ -50,6 +79,7 @@ struct ManifestView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
     @State private var model = ManifestViewModel()
+    @State private var showingAddEntry = false
 
     var body: some View {
         NavigationStack {
@@ -59,20 +89,38 @@ struct ManifestView: View {
                 } else if let manifest = model.manifest {
                     content(manifest)
                 } else {
-                    EmptyStateView(
-                        icon: "calendar",
-                        title: "Plan your next meal",
-                        message: "Schedule meals from Galley to close your weekly loop."
-                    )
+                    emptyPrompt
                 }
             }
             .navigationTitle("Manifest")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingAddEntry = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add meal to plan")
+                    .disabled(!env.network.isOnline)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     ProfileToolbarButton(action: onOpenSettings)
                 }
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: $showingAddEntry) {
+                AddManifestEntrySheet(defaultDate: model.manifest?.startDate) { mealId, date, slot in
+                    let ok = await model.addEntry(
+                        mealId: mealId,
+                        date: date,
+                        slotType: slot,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline
+                    )
+                    return ok ? nil : model.errorMessage
+                }
+            }
         }
         .task {
             await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
@@ -82,6 +130,20 @@ struct ManifestView: View {
         }
     }
 
+    private var emptyPrompt: some View {
+        VStack(spacing: 16) {
+            EmptyStateView(
+                icon: "calendar",
+                title: "Plan your next meal",
+                message: "Schedule meals from Galley to close your weekly loop."
+            )
+            Button("Add to plan") { showingAddEntry = true }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!env.network.isOnline)
+        }
+        .padding(24)
+    }
+
     private func content(_ manifest: ManifestResponse) -> some View {
         List {
             if let staleLabel = model.staleLabel {
@@ -89,6 +151,12 @@ struct ManifestView: View {
             }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
+            }
+
+            if manifest.entries.isEmpty {
+                Text("No meals planned this week. Tap + to schedule one.")
+                    .rationCaption()
+                    .listRowBackground(Color.clear)
             }
 
             let grouped = Dictionary(grouping: manifest.entries, by: \.date)

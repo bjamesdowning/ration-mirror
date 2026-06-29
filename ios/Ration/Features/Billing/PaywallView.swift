@@ -64,18 +64,7 @@ final class BillingViewModel {
     }
 }
 
-/// Crew Member + credits paywall.
-///
-/// Renders entitlement state from `GET /api/mobile/v1/billing/status` and drives
-/// native purchases through RevenueCat (`BillingManager`):
-///   1. `Purchases.configure(withAPIKey:)` with the public Apple key (NOT the `sk_`/`strp_` server keys).
-///   2. `Purchases.shared.logIn(session.user.id)` after auth — `app_user_id` MUST equal `user.id`.
-///   3. Buttons are rendered from `offerings.current` packages — App Store product IDs are never hardcoded.
-///   4. `Purchases.shared.purchase(package:)`; success is gated on `entitlements["crew_member"].isActive`.
-///   5. The RC → Ration webhook updates `user.tier`; the model polls billing status to refresh the UI.
-///
-/// Final App Store wiring: set `RevenueCatPublicAPIKey` in `Info.plist` and configure a
-/// RevenueCat offering whose current packages include the Crew Member product.
+/// Crew Member + credit packs paywall (RevenueCat offering-driven).
 struct PaywallView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss

@@ -192,6 +192,11 @@ final class BaseLayerTests: XCTestCase {
         XCTAssertNil(RationApp.authCode(from: url))
     }
 
+    func testAuthCodeRejectsUniversalLinkOnWrongHost() {
+        let url = URL(string: "https://evil.example/auth/mobile-callback/open?code=nope")!
+        XCTAssertNil(RationApp.authCode(from: url))
+    }
+
     func testAuthCodeRejectsUnknownScheme() {
         let url = URL(string: "evil://auth/callback?code=nope")!
         XCTAssertNil(RationApp.authCode(from: url))

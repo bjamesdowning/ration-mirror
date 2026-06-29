@@ -6,7 +6,6 @@ struct PrivacySettingsView: View {
     @Environment(\.openURL) private var openURL
 
     @State private var hasConsent = false
-    @State private var isLoading = true
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -24,7 +23,7 @@ struct PrivacySettingsView: View {
                     Toggle("Allow AI processing", isOn: $hasConsent)
                         .tint(Theme.hyperGreen)
                 } footer: {
-                    Text("Disable to block receipt scans and other AI features. Manual entry remains available.")
+                    Text("Turn off to stop new AI processing. Consent already granted stays on record until you contact support.")
                 }
 
                 Section("Legal") {
@@ -55,8 +54,6 @@ struct PrivacySettingsView: View {
 
     @MainActor
     private func load() async {
-        isLoading = true
-        defer { isLoading = false }
         do {
             let response = try await env.api.settings()
             hasConsent = response.settings.aiConsentAt?.isEmpty == false

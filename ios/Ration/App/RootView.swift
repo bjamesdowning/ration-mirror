@@ -41,35 +41,25 @@ struct RootView: View {
 /// Bottom tab navigation — Hub, Cargo, Galley, Manifest, Supply.
 struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
-    @State private var selectedTab: Tab = .hub
     @State private var showingSettings = false
     @State private var showingScan = false
 
-    enum Tab: Hashable {
-        case hub, cargo, galley, manifest, supply
-    }
-
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView {
             DashboardView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
                 .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
-                .tag(Tab.hub)
 
             CargoListView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
                 .tabItem { Label("Cargo", systemImage: "shippingbox") }
-                .tag(Tab.cargo)
 
             GalleyView(onOpenSettings: { showingSettings = true })
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
-                .tag(Tab.galley)
 
             ManifestView(onOpenSettings: { showingSettings = true })
                 .tabItem { Label("Manifest", systemImage: "calendar") }
-                .tag(Tab.manifest)
 
             SupplyView(onOpenSettings: { showingSettings = true })
                 .tabItem { Label("Supply", systemImage: "cart") }
-                .tag(Tab.supply)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()

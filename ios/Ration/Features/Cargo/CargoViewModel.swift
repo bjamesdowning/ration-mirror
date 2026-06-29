@@ -4,7 +4,12 @@ import Observation
 @MainActor
 @Observable
 final class CargoViewModel {
-    private(set) var items: [CargoItem] = []
+    enum ListContent {
+        case inventory([CargoItem])
+        case search([SearchResult])
+    }
+
+    private(set) var listContent: ListContent = .inventory([])
     private(set) var total = 0
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
@@ -13,6 +18,10 @@ final class CargoViewModel {
     var searchQuery = ""
     var staleLabel: String?
 
+    var isSearchActive: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     private var nextCursor: String?
 
     func reload(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
@@ -20,7 +29,7 @@ final class CargoViewModel {
         errorMessage = nil
         defer { isLoading = false }
 
-        if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, online {
+        if isSearchActive, online {
             await search(api: api)
             return
         }
@@ -28,7 +37,7 @@ final class CargoViewModel {
         if online {
             do {
                 let page = try await api.cargo(cursor: nil, domain: domainFilter)
-                items = page.items
+                listContent = .inventory(page.items)
                 total = page.total
                 nextCursor = page.nextCursor
                 snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: nil)
@@ -45,22 +54,8 @@ final class CargoViewModel {
     private func search(api: RationAPI) async {
         do {
             let response = try await api.search(query: searchQuery)
-            items = response.results.map { result in
-                CargoItem(
-                    id: result.id,
-                    organizationId: "",
-                    name: result.name,
-                    quantity: result.quantity,
-                    unit: result.unit,
-                    tags: [],
-                    domain: result.domain,
-                    status: "stable",
-                    expiresAt: nil,
-                    createdAt: Date(),
-                    updatedAt: Date()
-                )
-            }
-            total = items.count
+            listContent = .search(response.results)
+            total = response.results.count
             nextCursor = nil
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -69,22 +64,24 @@ final class CargoViewModel {
 
     private func restoreSnapshot(_ snapshots: SnapshotStore) {
         if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo) {
-            items = cached.payload.items
+            listContent = .inventory(cached.payload.items)
             total = cached.payload.total
             nextCursor = cached.payload.nextCursor
         }
     }
 
     func loadMoreIfNeeded(current item: CargoItem, api: RationAPI) async {
-        guard searchQuery.isEmpty else { return }
+        guard !isSearchActive else { return }
         guard let cursor = nextCursor, !isLoadingMore else { return }
-        guard items.suffix(5).contains(where: { $0.id == item.id }) else { return }
+        guard case let .inventory(items) = listContent,
+              items.suffix(5).contains(where: { $0.id == item.id })
+        else { return }
 
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
             let page = try await api.cargo(cursor: cursor, domain: domainFilter)
-            items.append(contentsOf: page.items)
+            listContent = .inventory(items + page.items)
             nextCursor = page.nextCursor
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -97,45 +94,18 @@ final class CargoViewModel {
     }
 
     func delete(_ item: CargoItem, api: RationAPI) async {
+        guard case var .inventory(items) = listContent else { return }
         let snapshot = items
         items.removeAll { $0.id == item.id }
+        listContent = .inventory(items)
         total = max(0, total - 1)
         do {
             try await api.deleteCargo(item.id)
             Haptics.light()
         } catch {
-            items = snapshot
+            listContent = .inventory(snapshot)
             total = snapshot.count
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
-    }
-}
-
-/// Memberwise initializer for search result mapping (CargoItem only decodes from JSON).
-extension CargoItem {
-    init(
-        id: String,
-        organizationId: String,
-        name: String,
-        quantity: Double,
-        unit: String,
-        tags: [String],
-        domain: String,
-        status: String,
-        expiresAt: Date?,
-        createdAt: Date,
-        updatedAt: Date
-    ) {
-        self.id = id
-        self.organizationId = organizationId
-        self.name = name
-        self.quantity = quantity
-        self.unit = unit
-        self.tags = tags
-        self.domain = domain
-        self.status = status
-        self.expiresAt = expiresAt
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
     }
 }

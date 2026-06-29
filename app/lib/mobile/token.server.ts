@@ -140,15 +140,21 @@ export async function revokeMobileRefreshFamilies(
 		.where(eq(schema.mobileRefreshToken.userId, userId));
 }
 
+export interface MobileAuthCodeRecord extends MobileAccessClaims {
+	/** S256 PKCE challenge the redeeming client must prove a verifier for. */
+	codeChallenge: string;
+}
+
 export async function storeMobileAuthCode(
 	kv: KVNamespace,
 	userId: string,
 	organizationId: string,
+	codeChallenge: string,
 ): Promise<string> {
 	const code = crypto.randomUUID();
 	await kv.put(
 		`${MOBILE_AUTH_CODE_KV_PREFIX}${code}`,
-		JSON.stringify({ userId, organizationId }),
+		JSON.stringify({ userId, organizationId, codeChallenge }),
 		{ expirationTtl: MOBILE_AUTH_CODE_TTL_SEC },
 	);
 	return code;
@@ -157,7 +163,7 @@ export async function storeMobileAuthCode(
 export async function consumeMobileAuthCode(
 	kv: KVNamespace,
 	code: string,
-): Promise<MobileAccessClaims | null> {
+): Promise<MobileAuthCodeRecord | null> {
 	const key = `${MOBILE_AUTH_CODE_KV_PREFIX}${code}`;
 	const raw = await kv.get(key);
 	if (!raw) return null;
@@ -165,16 +171,19 @@ export async function consumeMobileAuthCode(
 	const parsed = JSON.parse(raw) as {
 		userId?: string;
 		organizationId?: string;
+		codeChallenge?: string;
 	};
 	if (
 		typeof parsed.userId !== "string" ||
-		typeof parsed.organizationId !== "string"
+		typeof parsed.organizationId !== "string" ||
+		typeof parsed.codeChallenge !== "string"
 	) {
 		return null;
 	}
 	return {
 		userId: parsed.userId,
 		organizationId: parsed.organizationId,
+		codeChallenge: parsed.codeChallenge,
 	};
 }
 

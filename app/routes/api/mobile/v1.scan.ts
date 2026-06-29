@@ -40,11 +40,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 		});
 	} catch (e) {
-		try {
-			mapScanSubmitError(e);
-		} catch (mapped) {
-			throw mapped;
-		}
+		mapScanSubmitError(e);
 		return handleApiError(e);
 	}
 }

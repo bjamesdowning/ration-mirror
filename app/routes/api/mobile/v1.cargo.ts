@@ -4,6 +4,7 @@ import {
 	getCargoCount,
 	getCargoPage,
 } from "~/lib/cargo.server";
+import { normalizeTags } from "~/lib/cargo-utils";
 import { handleApiError } from "~/lib/error-handler";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -66,8 +67,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			query.domain,
 		);
 
+		// `tags` is a `mode: "json"` column; legacy rows may have been double-encoded
+		// and read back as a JSON string. Normalize to a real array so the typed
+		// mobile contract (`tags: [String]`) always decodes.
+		const items = page.items.map((item) => ({
+			...item,
+			tags: normalizeTags(item.tags),
+		}));
+
 		return {
-			...paginatedResponse(page.items, nextCursor),
+			...paginatedResponse(items, nextCursor),
 			total,
 		};
 	} catch (e) {
@@ -127,7 +136,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		return { item: result.item };
+		return { item: { ...result.item, tags: normalizeTags(result.item.tags) } };
 	} catch (e) {
 		return handleApiError(e);
 	}

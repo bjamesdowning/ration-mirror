@@ -671,11 +671,10 @@ export async function ingestCargoItems(
 
 		const newId = crypto.randomUUID();
 		const normalizedQty = normalizeCargoQuantity(it.quantity, it.unit);
-		const tagsJson = Array.isArray(it.tags)
-			? JSON.stringify(it.tags)
-			: typeof it.tags === "string"
-				? it.tags
-				: "[]";
+		// The `tags` column is `mode: "json"` — Drizzle JSON-encodes on write.
+		// Pass a real array, never a pre-stringified string, or it double-encodes
+		// (stored as `"[\"x\"]"`) and reads back as a string instead of an array.
+		const normalizedTags = normalizeTags(it.tags);
 		batchOps.push(
 			d1.insert(cargo).values({
 				id: newId,
@@ -684,7 +683,7 @@ export async function ingestCargoItems(
 				quantity: normalizedQty,
 				unit: it.unit,
 				domain: it.domain,
-				tags: tagsJson,
+				tags: normalizedTags,
 				status: calculateInventoryStatus(it.expiresAt),
 				expiresAt: it.expiresAt ?? null,
 				createdAt: now,
@@ -698,7 +697,7 @@ export async function ingestCargoItems(
 			quantity: normalizedQty,
 			unit: it.unit,
 			domain: it.domain,
-			tags: tagsJson,
+			tags: normalizedTags,
 			status: calculateInventoryStatus(it.expiresAt),
 			expiresAt: it.expiresAt ?? null,
 			createdAt: now,

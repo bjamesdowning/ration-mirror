@@ -92,8 +92,15 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 							"application/json": {
 								schema: {
 									type: "object",
-									properties: { email: { type: "string", format: "email" } },
-									required: ["email"],
+									properties: {
+										email: { type: "string", format: "email" },
+										codeChallenge: {
+											type: "string",
+											description:
+												"PKCE S256 challenge (base64url, 43-128 chars). Proven via codeVerifier at token exchange.",
+										},
+									},
+									required: ["email", "codeChallenge"],
 								},
 							},
 						},
@@ -116,9 +123,31 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 			"/api/mobile/v1/auth/token": {
 				post: {
 					summary: "Exchange authorization code or refresh token",
+					description:
+						"authorization_code grant requires codeVerifier (PKCE). refresh_token grant requires refreshToken.",
 					requestBody: {
 						required: true,
-						content: { "application/json": { schema: { type: "object" } } },
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										grantType: {
+											type: "string",
+											enum: ["authorization_code", "refresh_token"],
+										},
+										code: { type: "string" },
+										codeVerifier: {
+											type: "string",
+											description:
+												"PKCE verifier (base64url, 43-128 chars) matching the codeChallenge from magic-link.",
+										},
+										refreshToken: { type: "string" },
+									},
+									required: ["grantType"],
+								},
+							},
+						},
 					},
 					responses: {
 						"200": {

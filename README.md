@@ -1655,7 +1655,7 @@ Ration exposes a programmatic REST API for external integrations, authenticated 
 
 Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web hub routes (`/api/*` with cookies) are unchanged.
 
-**Authentication:** `Authorization: Bearer <access_jwt>`. Obtain tokens via magic link (`POST /api/mobile/v1/auth/magic-link` → email → `/auth/mobile-callback?client=ios` → `ration://auth/callback?code=...` → `POST /api/mobile/v1/auth/token` with `grantType: authorization_code`). Refresh with `grantType: refresh_token`.
+**Authentication:** `Authorization: Bearer <access_jwt>`. Obtain tokens via a **PKCE-protected** magic link: the app generates a `code_verifier`, sends its S256 `codeChallenge` (`POST /api/mobile/v1/auth/magic-link { email, codeChallenge }`) → email → `/auth/mobile-callback?client=ios&code_challenge=...` (challenge bound to the one-time code) → `ration://auth/callback?code=...` → `POST /api/mobile/v1/auth/token` with `grantType: authorization_code` **and `codeVerifier`** (server verifies `S256(verifier)`, rejecting a mismatch with `invalid_grant`). Refresh with `grantType: refresh_token`. PKCE binds the one-time code to the originating app so a hijacked `ration://` redirect cannot be redeemed.
 
 **OpenAPI:** [`GET /api/openapi/mobile-v1.json`](/api/openapi/mobile-v1.json)
 
@@ -1674,6 +1674,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
+
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md) (Stream C). It is generated from `ios/project.yml` via [XcodeGen](https://github.com/yonyz/XcodeGen) (`brew install xcodegen && cd ios && xcodegen generate`). The app covers PKCE-protected auth (magic link → `ration://` callback), dashboard, cargo CRUD, supply, scan upload, settings/org switch, and a RevenueCat-driven billing paywall (offering-based purchase + restore). Final App Store wiring is setting `RevenueCatPublicAPIKey` and a RevenueCat offering. See `ios/README.md` for build and architecture details.
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

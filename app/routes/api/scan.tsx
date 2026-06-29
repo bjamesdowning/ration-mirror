@@ -50,11 +50,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId: groupId,
 		});
 	} catch (outerError: unknown) {
-		try {
-			mapScanSubmitError(outerError);
-		} catch (mapped) {
-			throw mapped;
-		}
+		mapScanSubmitError(outerError);
 		if (outerError instanceof Response) {
 			throw outerError;
 		}

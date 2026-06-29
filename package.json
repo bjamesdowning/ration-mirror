@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.3.35",
+	"version": "1.3.42",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -11,6 +11,10 @@
 		"dev": "RATION_DEV_MODE=local react-router dev",
 		"dev:local": "RATION_DEV_MODE=local react-router dev",
 		"dev:remote": "RATION_DEV_MODE=dev CLOUDFLARE_ENV=dev react-router dev",
+		"ios:generate": "cd ios && xcodegen generate",
+		"ios:build": "bash scripts/ios-build.sh",
+		"ios:test": "bash scripts/ios-test.sh",
+		"ios:check": "bash scripts/ios-check.sh",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"postinstall": "bun scripts/postinstall.ts",

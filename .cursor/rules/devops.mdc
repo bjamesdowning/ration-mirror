@@ -15,6 +15,7 @@ description: CI/CD pipeline patterns, deployment workflows, quality gates, and r
 - **Blocker:** No code reaches usage (Preview or Prod) without passing QA protocols (Linting, Types, Unit Tests)
 - **Preview:** Every Merge Request should generate a unique, ephemeral Preview URL for stakeholder verification
 - **Automation:** Run `bun run lint`, `bun run typecheck`, and `bun run test:unit` in CI
+- **iOS Automation:** For changes under `ios/` or mobile API/auth/billing contracts, run `bun run ios:check` on a macOS runner with full Xcode, an iOS Simulator runtime, and XcodeGen installed
 
 ## Deployment Safety
 
@@ -28,6 +29,23 @@ description: CI/CD pipeline patterns, deployment workflows, quality gates, and r
 2. **Apply Migrations:** `bun run db:migrate:prod` (applies to remote D1 database)
 3. **Build:** `bun run build` (generates production build)
 4. **Deploy:** `bun run deploy` (builds + deploys to Cloudflare)
+
+## iOS Build/Test Lane
+
+Use package scripts so local developers, Cursor agents, and CI use the same commands:
+
+1. **Generate Xcode project:** `bun run ios:generate`
+2. **Build app:** `bun run ios:build`
+3. **Run XCTest:** `bun run ios:test`
+4. **Full iOS gate:** `bun run ios:check`
+
+The default destination is `generic/platform=iOS Simulator` for CI portability. Developers can target a concrete simulator, for example:
+
+```bash
+IOS_DESTINATION="platform=iOS Simulator,name=iPhone 17" bun run ios:check
+```
+
+Any Swift file addition/removal or `ios/project.yml` change requires regenerating `ios/Ration.xcodeproj`; build failures like "Cannot find X in scope" often mean Xcode is still using a stale generated project.
 
 ## CI/CD Configuration
 

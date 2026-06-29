@@ -5,27 +5,58 @@ import {
 	MobileTokenRequestSchema,
 } from "~/lib/schemas/mobile/auth";
 
+const VALID_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+const VALID_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
 describe("MobileMagicLinkSchema", () => {
-	it("accepts valid email", () => {
+	it("accepts valid email with a PKCE challenge", () => {
 		const result = MobileMagicLinkSchema.safeParse({
 			email: "crew@ration.app",
+			codeChallenge: VALID_CHALLENGE,
 		});
 		expect(result.success).toBe(true);
 	});
 
 	it("rejects invalid email", () => {
-		const result = MobileMagicLinkSchema.safeParse({ email: "not-an-email" });
+		const result = MobileMagicLinkSchema.safeParse({
+			email: "not-an-email",
+			codeChallenge: VALID_CHALLENGE,
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a missing PKCE challenge", () => {
+		const result = MobileMagicLinkSchema.safeParse({
+			email: "crew@ration.app",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a malformed PKCE challenge", () => {
+		const result = MobileMagicLinkSchema.safeParse({
+			email: "crew@ration.app",
+			codeChallenge: "too short",
+		});
 		expect(result.success).toBe(false);
 	});
 });
 
 describe("MobileTokenRequestSchema", () => {
-	it("accepts authorization_code grant", () => {
+	it("accepts authorization_code grant with a verifier", () => {
+		const result = MobileTokenRequestSchema.safeParse({
+			grantType: "authorization_code",
+			code: "abc123",
+			codeVerifier: VALID_VERIFIER,
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects authorization_code grant without a verifier", () => {
 		const result = MobileTokenRequestSchema.safeParse({
 			grantType: "authorization_code",
 			code: "abc123",
 		});
-		expect(result.success).toBe(true);
+		expect(result.success).toBe(false);
 	});
 
 	it("accepts refresh_token grant", () => {

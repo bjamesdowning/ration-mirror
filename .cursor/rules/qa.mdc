@@ -11,6 +11,7 @@ No code is "Done" until:
 1. `bun run lint` passes (Biome check)
 2. `bun run typecheck` passes (No type errors)
 3. `bun run test:unit` passes (All unit tests green)
+4. If the diff touches `ios/`, `ios/project.yml`, mobile auth callback routes, mobile API response contracts, or RevenueCat/iOS billing code, `bun run ios:check` passes on a Mac with full Xcode + iOS simulator runtime
 
 You are the gatekeeper. Reject any "Solution" that breaks the build.
 
@@ -35,6 +36,7 @@ You are the gatekeeper. Reject any "Solution" that breaks the build.
 - **Location:** Test files in `app/**/*.test.ts` and `app/**/*.test.tsx`
 - **Coverage:** Aim for meaningful test coverage, especially for critical paths
 - **E2E:** Playwright (if applicable) for end-to-end testing
+- **iOS:** XCTest + Xcode build/test via `bun run ios:check`. SwiftUI/UIKit/RevenueCat changes require Xcode build evidence; `swiftc -parse` is only a lightweight syntax smoke check.
 
 ## Commands
 
@@ -42,3 +44,7 @@ You are the gatekeeper. Reject any "Solution" that breaks the build.
 - `bun run lint:fix` - Auto-fix linting issues
 - `bun run typecheck` - Full type checking pipeline
 - `bun run test:unit` - Run unit tests
+- `bun run ios:generate` - Generate `ios/Ration.xcodeproj` from XcodeGen
+- `bun run ios:build` - Build the iOS app with `xcodebuild`
+- `bun run ios:test` - Run iOS XCTest target
+- `bun run ios:check` - Generate, build, and test the iOS app

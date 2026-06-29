@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { verifyPkceChallenge } from "~/lib/mobile/pkce";
 import {
 	consumeMobileAuthCode,
 	issueMobileTokenPair,
@@ -36,10 +37,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const env = context.cloudflare.env;
 
 		if (input.grantType === "authorization_code") {
+			// Consume the code first (single-use, even on PKCE failure) so a stolen
+			// code can't be brute-forced against the verifier.
 			const claims = await consumeMobileAuthCode(env.RATION_KV, input.code);
 			if (!claims) {
 				throw data(
 					{ error: "Invalid or expired code", code: "invalid_code" },
+					{ status: 400 },
+				);
+			}
+			const pkceValid = await verifyPkceChallenge(
+				input.codeVerifier,
+				claims.codeChallenge,
+			);
+			if (!pkceValid) {
+				throw data(
+					{ error: "Invalid code verifier", code: "invalid_grant" },
 					{ status: 400 },
 				);
 			}

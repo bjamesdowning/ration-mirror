@@ -84,7 +84,7 @@ export async function submitVisualScan(
 	);
 }
 
-export function mapScanSubmitError(outerError: unknown): never {
+export function mapScanSubmitError(outerError: unknown): void {
 	if (outerError instanceof InsufficientCreditsError) {
 		throw data(
 			{
@@ -95,5 +95,4 @@ export function mapScanSubmitError(outerError: unknown): never {
 			{ status: 402 },
 		);
 	}
-	throw outerError;
 }

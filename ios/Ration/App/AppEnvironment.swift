@@ -11,6 +11,8 @@ final class AppEnvironment {
     let billing: BillingManager
     let snapshots: SnapshotStore
     let network: NetworkMonitor
+    let session: SessionStore
+    let nextActionDismiss: NextActionDismissStore
 
     init() {
         let auth = AuthManager()
@@ -19,5 +21,7 @@ final class AppEnvironment {
         self.billing = BillingManager()
         self.snapshots = SnapshotStore()
         self.network = NetworkMonitor()
+        self.session = SessionStore()
+        self.nextActionDismiss = NextActionDismissStore()
     }
 }

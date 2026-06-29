@@ -22,12 +22,11 @@ final class SessionViewModel {
         }
     }
 
-    func activate(_ org: OrgMembership, api: RationAPI, auth: AuthManager) async {
+    func activate(_ org: OrgMembership, env: AppEnvironment) async {
         guard !org.isActive else { return }
         do {
-            let pair = try await api.activateOrg(org.id)
-            auth.adopt(pair)
-            session = try await api.session()
+            try await env.session.activateOrg(org, api: env.api, auth: env.auth, snapshots: env.snapshots)
+            session = env.session.session
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -91,7 +90,7 @@ struct SettingsView: View {
                 Section("Organizations") {
                     ForEach(session.organizations) { org in
                         Button {
-                            Task { await model.activate(org, api: env.api, auth: env.auth) }
+                            Task { await model.activate(org, env: env) }
                         } label: {
                             HStack {
                                 Text(org.name).foregroundStyle(Theme.carbon)

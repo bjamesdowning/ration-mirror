@@ -168,11 +168,11 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					responses: { "200": { description: "Session payload" } },
 				},
 			},
-			"/api/mobile/v1/dashboard": {
+			"/api/mobile/v1/hub": {
 				get: {
-					summary: "Hub dashboard aggregates",
+					summary: "Hub widget grid data and resolved layout",
 					security: [{ bearerAuth: [] }],
-					responses: { "200": { description: "Dashboard" } },
+					responses: { "200": { description: "Hub payload" } },
 				},
 			},
 			"/api/mobile/v1/cargo": {

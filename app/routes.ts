@@ -267,10 +267,15 @@ export default [
 		"api/mobile/v1/orgs/:id/activate",
 		"routes/api/mobile/v1.orgs.$id.activate.ts",
 	),
-	route("api/mobile/v1/dashboard", "routes/api/mobile/v1.dashboard.ts"),
+	route("api/mobile/v1/hub", "routes/api/mobile/v1.hub.ts"),
 	route("api/mobile/v1/settings", "routes/api/mobile/v1.settings.ts"),
 	route("api/mobile/v1/cargo", "routes/api/mobile/v1.cargo.ts"),
 	route("api/mobile/v1/cargo/batch", "routes/api/mobile/v1.cargo.batch.ts"),
+	route("api/mobile/v1/cargo/tags", "routes/api/mobile/v1.cargo.tags.ts"),
+	route(
+		"api/mobile/v1/cargo/tag-index",
+		"routes/api/mobile/v1.cargo.tag-index.ts",
+	),
 	route("api/mobile/v1/cargo/:id", "routes/api/mobile/v1.cargo.$id.ts"),
 	route("api/mobile/v1/scan", "routes/api/mobile/v1.scan.ts"),
 	route(
@@ -279,6 +284,24 @@ export default [
 	),
 	route("api/mobile/v1/meals", "routes/api/mobile/v1.meals.ts"),
 	route("api/mobile/v1/meals/match", "routes/api/mobile/v1.meals.match.ts"),
+	route("api/mobile/v1/meals/tags", "routes/api/mobile/v1.meals.tags.ts"),
+	route(
+		"api/mobile/v1/meals/generate",
+		"routes/api/mobile/v1.meals.generate.ts",
+	),
+	route(
+		"api/mobile/v1/meals/generate/:requestId",
+		"routes/api/mobile/v1.meals.generate.$requestId.ts",
+	),
+	route("api/mobile/v1/meals/import", "routes/api/mobile/v1.meals.import.ts"),
+	route(
+		"api/mobile/v1/meals/import/:requestId",
+		"routes/api/mobile/v1.meals.import.$requestId.ts",
+	),
+	route(
+		"api/mobile/v1/meals/import/confirm",
+		"routes/api/mobile/v1.meals.import.confirm.ts",
+	),
 	route("api/mobile/v1/meals/:id", "routes/api/mobile/v1.meals.$id.ts"),
 	route("api/mobile/v1/supply", "routes/api/mobile/v1.supply.ts"),
 	route("api/mobile/v1/supply/items", "routes/api/mobile/v1.supply.items.ts"),
@@ -297,6 +320,15 @@ export default [
 		"api/mobile/v1/manifest/consume",
 		"routes/api/mobile/v1.manifest.consume.ts",
 	),
+	route(
+		"api/mobile/v1/manifest/plan-week",
+		"routes/api/mobile/v1.manifest.plan-week.ts",
+	),
+	route(
+		"api/mobile/v1/manifest/plan-week/:requestId",
+		"routes/api/mobile/v1.manifest.plan-week.$requestId.ts",
+	),
+	route("api/mobile/v1/manifest/bulk", "routes/api/mobile/v1.manifest.bulk.ts"),
 	route(
 		"api/mobile/v1/meals/:id/cook",
 		"routes/api/mobile/v1.meals.$id.cook.ts",

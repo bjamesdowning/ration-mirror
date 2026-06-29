@@ -5,6 +5,7 @@ import {
 	PKCE_MAX_LENGTH,
 	PKCE_MIN_LENGTH,
 } from "~/lib/mobile/pkce";
+import { HubLayoutSchema } from "~/lib/schemas/hub";
 
 /** RFC 7636 base64url verifier: 43–128 unreserved characters. */
 const PkceCodeChallenge = z.string().regex(PKCE_CHALLENGE_REGEX);
@@ -48,6 +49,10 @@ export const MobileSettingsPatchSchema = z
 		onboardingCompletedAt: isoTimestamp.optional(),
 		onboardingStep: z.coerce.number().int().min(0).max(6).optional(),
 		expirationAlertDays: z.coerce.number().int().min(1).max(90).optional(),
+		hubProfile: z
+			.enum(["cook", "shop", "minimal", "full", "custom"])
+			.optional(),
+		hubLayout: HubLayoutSchema.optional(),
 	})
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",

@@ -31,9 +31,9 @@ final class RationAPI {
         try await client.patch("settings", body: patch)
     }
 
-    // Dashboard
-    func dashboard() async throws -> DashboardResponse {
-        try await client.get("dashboard")
+    // Hub
+    func hub() async throws -> HubResponse {
+        try await client.get("hub")
     }
 
     // Cargo
@@ -68,6 +68,14 @@ final class RationAPI {
         try await client.get("search", query: [URLQueryItem(name: "q", value: query)])
     }
 
+    func cargoTags() async throws -> TagsResponse {
+        try await client.get("cargo/tags")
+    }
+
+    func cargoTagIndex() async throws -> CargoTagIndexResponse {
+        try await client.get("cargo/tag-index")
+    }
+
     // Supply
     func supply() async throws -> SupplyResponse {
         try await client.get("supply")
@@ -85,13 +93,55 @@ final class RationAPI {
         try await client.post("supply/complete", body: SupplyCompleteRequest(listId: listId))
     }
 
+    func addSupplyItem(_ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
+        try await client.post("supply/items", body: body)
+    }
+
+    func deleteSupplyItem(_ id: String) async throws {
+        let _: EmptyResponse = try await client.delete("supply/items/\(id)")
+    }
+
     // Galley
-    func meals(limit: Int = 50, tag: String? = nil) async throws -> MealsResponse {
+    func meals(limit: Int = 50, tag: String? = nil, domain: CargoDomain? = nil) async throws -> MealsResponse {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if let tag, !tag.isEmpty { query.append(URLQueryItem(name: "tag", value: tag)) }
+        if let domain { query.append(URLQueryItem(name: "domain", value: domain.rawValue)) }
         return try await client.get("meals", query: query)
     }
 
+    func mealTags() async throws -> TagsResponse {
+        try await client.get("meals/tags")
+    }
+
+    func createMeal(_ body: CreateMealRequest) async throws -> CreateMealResponse {
+        try await client.post("meals", body: body)
+    }
+
+    func updateMeal(id: String, _ body: CreateMealRequest) async throws -> UpdateMealResponse {
+        try await client.patch("meals/\(id)", body: body)
+    }
+
+    func deleteMeal(_ id: String) async throws {
+        let _: EmptyResponse = try await client.delete("meals/\(id)")
+    }
+
+    func generateMeal(_ body: GenerateMealRequest) async throws -> AIJobSubmitResponse {
+        try await client.post("meals/generate", body: body)
+    }
+
+    func generateMealStatus(requestId: String) async throws -> GenerateMealStatusResponse {
+        try await client.get("meals/generate/\(requestId)")
+    }
+
+    func importRecipe(_ body: ImportRecipeRequest) async throws -> AIJobSubmitResponse {
+        try await client.post("meals/import", body: body)
+    }
+
+    func importRecipeStatus(requestId: String) async throws -> ImportRecipeStatusResponse {
+        try await client.get("meals/import/\(requestId)")
+    }
+
+    // Galley (continued)
     func meal(id: String) async throws -> MealDetailResponse {
         try await client.get("meals/\(id)")
     }
@@ -131,6 +181,18 @@ final class RationAPI {
 
     func consumeManifestEntries(_ entryIds: [String]) async throws -> ManifestConsumeResponse {
         try await client.post("manifest/consume", body: ManifestConsumeRequest(entryIds: entryIds))
+    }
+
+    func planWeek(_ body: PlanWeekRequest) async throws -> AIJobSubmitResponse {
+        try await client.post("manifest/plan-week", body: body)
+    }
+
+    func planWeekStatus(requestId: String) async throws -> PlanWeekStatusResponse {
+        try await client.get("manifest/plan-week/\(requestId)")
+    }
+
+    func bulkManifest(_ body: BulkManifestRequest) async throws -> BulkManifestResponse {
+        try await client.post("manifest/bulk", body: body)
     }
 
     // Billing

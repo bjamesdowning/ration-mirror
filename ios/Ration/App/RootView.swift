@@ -14,7 +14,10 @@ struct RootView: View {
             SignInView()
         case .signedIn:
             MainTabView()
-                .task { await evaluateOnboarding() }
+                .task {
+                    await env.session.load(api: env.api)
+                    await evaluateOnboarding()
+                }
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView {
                         showOnboarding = false
@@ -32,7 +35,6 @@ struct RootView: View {
             let completed = response.settings.onboardingCompletedAt?.isEmpty == false
             showOnboarding = !completed
         } catch {
-            // If settings cannot load, still allow the app — onboarding can be retried from Settings.
             showOnboarding = false
         }
     }
@@ -43,22 +45,28 @@ struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showingSettings = false
     @State private var showingScan = false
+    @State private var orgGeneration = 0
 
     var body: some View {
         TabView {
             DashboardView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
+                .id(orgGeneration)
                 .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
 
             CargoListView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
+                .id(orgGeneration)
                 .tabItem { Label("Cargo", systemImage: "shippingbox") }
 
             GalleyView(onOpenSettings: { showingSettings = true })
+                .id(orgGeneration)
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
 
             ManifestView(onOpenSettings: { showingSettings = true })
+                .id(orgGeneration)
                 .tabItem { Label("Manifest", systemImage: "calendar") }
 
             SupplyView(onOpenSettings: { showingSettings = true })
+                .id(orgGeneration)
                 .tabItem { Label("Supply", systemImage: "cart") }
         }
         .sheet(isPresented: $showingSettings) {
@@ -70,6 +78,15 @@ struct MainTabView: View {
         .overlay(alignment: .top) {
             if !env.network.isOnline {
                 OfflineBanner(label: "Offline — showing cached data where available")
+            }
+        }
+        .task {
+            await env.session.load(api: env.api)
+        }
+        .onChange(of: env.session.orgGeneration) { _, newValue in
+            orgGeneration = newValue
+            if let orgId = env.session.activeOrganizationId {
+                env.nextActionDismiss.clear(organizationId: orgId)
             }
         }
     }

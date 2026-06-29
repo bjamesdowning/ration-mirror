@@ -1,11 +1,11 @@
 import Foundation
 
-/// File-backed read snapshots with per-domain sync metadata.
+/// File-backed read snapshots with per-domain sync metadata, scoped by organization.
 @MainActor
 final class SnapshotStore {
     struct Metadata: Codable, Sendable {
         var syncedAt: Date
-        var organizationId: String?
+        var organizationId: String
     }
 
     private struct Envelope<T: Codable>: Codable {
@@ -26,25 +26,31 @@ final class SnapshotStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
-    func save<T: Codable>(_ payload: T, domain: String, organizationId: String?) {
+    func save<T: Codable>(_ payload: T, domain: String, organizationId: String) {
         let envelope = Envelope(
             metadata: Metadata(syncedAt: Date(), organizationId: organizationId),
             payload: payload
         )
         guard let data = try? encoder.encode(envelope) else { return }
-        try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
-        try? data.write(to: fileURL(for: domain), options: .atomic)
+        let dir = orgDirectory(for: organizationId)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? data.write(to: fileURL(domain: domain, organizationId: organizationId), options: .atomic)
     }
 
-    func load<T: Codable>(_ type: T.Type, domain: String) -> (payload: T, metadata: Metadata)? {
-        guard let data = try? Data(contentsOf: fileURL(for: domain)),
+    func load<T: Codable>(
+        _ type: T.Type,
+        domain: String,
+        organizationId: String
+    ) -> (payload: T, metadata: Metadata)? {
+        guard let data = try? Data(contentsOf: fileURL(domain: domain, organizationId: organizationId)),
               let envelope = try? decoder.decode(Envelope<T>.self, from: data)
         else { return nil }
+        guard envelope.metadata.organizationId == organizationId else { return nil }
         return (envelope.payload, envelope.metadata)
     }
 
-    func lastSyncedLabel(domain: String) -> String? {
-        guard let meta = loadMetadata(domain: domain) else { return nil }
+    func lastSyncedLabel(domain: String, organizationId: String) -> String? {
+        guard let meta = loadMetadata(domain: domain, organizationId: organizationId) else { return nil }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return "Last synced \(formatter.localizedString(for: meta.syncedAt, relativeTo: Date()))"
@@ -54,10 +60,15 @@ final class SnapshotStore {
         try? fileManager.removeItem(at: baseDirectory)
     }
 
-    private func loadMetadata(domain: String) -> Metadata? {
-        guard let data = try? Data(contentsOf: fileURL(for: domain)),
+    func clear(organizationId: String) {
+        try? fileManager.removeItem(at: orgDirectory(for: organizationId))
+    }
+
+    private func loadMetadata(domain: String, organizationId: String) -> Metadata? {
+        guard let data = try? Data(contentsOf: fileURL(domain: domain, organizationId: organizationId)),
               let envelope = try? decoder.decode(MetadataEnvelope.self, from: data)
         else { return nil }
+        guard envelope.metadata.organizationId == organizationId else { return nil }
         return envelope.metadata
     }
 
@@ -66,13 +77,17 @@ final class SnapshotStore {
         return support.appendingPathComponent("ration-snapshots", isDirectory: true)
     }
 
-    private func fileURL(for domain: String) -> URL {
-        baseDirectory.appendingPathComponent("\(domain).json")
+    private func orgDirectory(for organizationId: String) -> URL {
+        baseDirectory.appendingPathComponent(organizationId, isDirectory: true)
+    }
+
+    private func fileURL(domain: String, organizationId: String) -> URL {
+        orgDirectory(for: organizationId).appendingPathComponent("\(domain).json")
     }
 }
 
 enum SnapshotDomain {
-    static let dashboard = "dashboard"
+    static let hub = "hub"
     static let cargo = "cargo"
     static let galley = "galley"
     static let manifest = "manifest"

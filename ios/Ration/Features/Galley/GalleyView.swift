@@ -1,73 +1,18 @@
 import SwiftUI
-import Observation
-
-@MainActor
-@Observable
-final class GalleyViewModel {
-    enum Mode: String, CaseIterable {
-        case all = "All"
-        case match = "Match"
-    }
-
-    private(set) var meals: [Meal] = []
-    private(set) var matches: [MealMatch] = []
-    private(set) var isLoading = false
-    var errorMessage: String?
-    var mode: Mode = .all
-    var staleLabel: String?
-
-    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-
-        if online {
-            do {
-                if mode == .match {
-                    matches = try await api.matchMeals().matches
-                } else {
-                    meals = try await api.meals().meals
-                    snapshots.save(MealsResponse(meals: meals), domain: SnapshotDomain.galley, organizationId: nil)
-                }
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots)
-            }
-        } else {
-            restoreSnapshot(snapshots)
-        }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.galley)
-    }
-
-    private func restoreSnapshot(_ snapshots: SnapshotStore) {
-        if let cached = snapshots.load(MealsResponse.self, domain: SnapshotDomain.galley) {
-            meals = cached.payload.meals
-        }
-    }
-
-    func cook(_ mealId: String, api: RationAPI) async {
-        do {
-            _ = try await api.cookMeal(id: mealId)
-            Haptics.success()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    func toggleActive(_ mealId: String, api: RationAPI) async {
-        do {
-            _ = try await api.toggleMealActive(id: mealId)
-            Haptics.light()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-}
 
 struct GalleyView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
     @State private var model = GalleyViewModel()
+    @State private var showingFilters = false
+    @State private var showingAdd = false
+    @State private var showingGenerate = false
+    @State private var showingImport = false
+    @State private var availableTags: [String] = []
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
 
     var body: some View {
         NavigationStack {
@@ -77,17 +22,13 @@ struct GalleyView: View {
                 } else if let errorMessage = model.errorMessage, model.meals.isEmpty && model.matches.isEmpty {
                     VStack(spacing: 16) {
                         ErrorBanner(message: errorMessage)
-                        Button("Retry") {
-                            Task {
-                                await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                            }
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
+                        Button("Retry") { Task { await reload() } }
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                     .padding(24)
-                } else if model.mode == .match {
+                } else if model.isMatchMode {
                     matchList
-                } else if model.meals.isEmpty {
+                } else if model.displayedMeals.isEmpty {
                     EmptyStateView(
                         icon: "fork.knife",
                         title: "No galley plans yet",
@@ -99,29 +40,49 @@ struct GalleyView: View {
             }
             .navigationTitle("Galley")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Picker("Mode", selection: $model.mode) {
-                        ForEach(GalleyViewModel.Mode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 160)
-                    .onChange(of: model.mode) { _, _ in
-                        Task {
-                            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    ProfileToolbarButton(action: onOpenSettings)
-                }
+                GlobalPageToolbar(
+                    hasActiveFilters: model.filters.hasActiveFilters,
+                    onOptions: { showingFilters = true },
+                    onOpenSettings: onOpenSettings
+                )
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: $showingFilters) {
+                FilterOptionsSheet(filters: model.filters, availableTags: availableTags)
+            }
+            .sheet(isPresented: $showingAdd) {
+                AddMealSheet { await reload() }
+            }
+            .sheet(isPresented: $showingGenerate) {
+                GenerateMealSheet { await reload() }
+            }
+            .sheet(isPresented: $showingImport) {
+                ImportRecipeSheet { await reload() }
+            }
+            .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
+            .safeAreaInset(edge: .bottom) {
+                FloatingActionBar(actions: [
+                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }, primary: true),
+                    FloatingAction(id: "generate", systemImage: "sparkles", label: "Generate", action: { showingGenerate = true }),
+                    FloatingAction(id: "import", systemImage: "link", label: "Import", action: { showingImport = true }),
+                ])
+            }
         }
-        .task {
-            if model.meals.isEmpty { await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline) }
+        .task(id: organizationId) {
+            if model.meals.isEmpty { await reload() }
+            if let tags = try? await env.api.mealTags().tags {
+                availableTags = tags
+            }
         }
+    }
+
+    private func reload() async {
+        await model.load(
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 
     private var mealList: some View {
@@ -129,7 +90,7 @@ struct GalleyView: View {
             if let staleLabel = model.staleLabel {
                 Text(staleLabel).rationCaption().listRowBackground(Color.clear)
             }
-            ForEach(model.meals) { meal in
+            ForEach(model.displayedMeals) { meal in
                 NavigationLink {
                     MealDetailView(mealId: meal.id, initialMeal: meal)
                 } label: {
@@ -148,19 +109,24 @@ struct GalleyView: View {
                     } label: {
                         Label("Cook", systemImage: "flame")
                     }
+                    Button(role: .destructive) {
+                        Task {
+                            await model.deleteMeal(meal.id, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-        }
+        .refreshable { await reload() }
     }
 
     private var matchList: some View {
         List {
-            ForEach(model.matches) { match in
+            ForEach(model.displayedMatches) { match in
                 NavigationLink {
                     MealDetailView(mealId: match.meal.id, initialMeal: match.meal)
                 } label: {
@@ -177,9 +143,7 @@ struct GalleyView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-        }
+        .refreshable { await reload() }
     }
 }
 
@@ -216,6 +180,7 @@ struct MealDetailView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var cookMessage: String?
+    @State private var showingEdit = false
 
     var body: some View {
         ScrollView {
@@ -243,7 +208,7 @@ struct MealDetailView: View {
                 HStack(spacing: 12) {
                     Button("Cook meal") { Task { await cook() } }
                         .buttonStyle(PrimaryButtonStyle())
-                    Button("Toggle selected") { Task { await toggle() } }
+                    Button("Edit") { showingEdit = true }
                         .buttonStyle(SecondaryButtonStyle())
                 }
             }
@@ -253,6 +218,11 @@ struct MealDetailView: View {
         .navigationTitle((meal ?? initialMeal).name.capitalized)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .sheet(isPresented: $showingEdit) {
+            EditMealView(meal: meal ?? initialMeal) {
+                await load()
+            }
+        }
     }
 
     private func header(_ meal: Meal) -> some View {
@@ -308,17 +278,6 @@ struct MealDetailView: View {
             let result = try await env.api.cookMeal(id: mealId)
             Haptics.success()
             cookMessage = "Cooked \(result.servings) servings · \(result.ingredientsDeducted) deductions"
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func toggle() async {
-        do {
-            let result = try await env.api.toggleMealActive(id: mealId)
-            Haptics.light()
-            cookMessage = result.isActive ? "Meal selected for supply sync" : "Meal deselected"
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

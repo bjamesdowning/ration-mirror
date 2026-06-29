@@ -14,17 +14,27 @@ final class CargoViewModel {
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     var errorMessage: String?
-    var domainFilter: CargoDomain?
-    var searchQuery = ""
     var staleLabel: String?
+    var availableTags: [String] = []
+
+    var filters = PageFilterState(configuration: PageFilterConfiguration(
+        supportsDomain: true,
+        supportsTags: true,
+        supportsSearch: true
+    ))
 
     var isSearchActive: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty
+        !filters.search.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private var nextCursor: String?
+    private var rawItems: [CargoItem] = []
 
-    func reload(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    var displayedInventory: [CargoItem] {
+        PageFilterEngine.filterCargo(rawItems, domain: filters.domain, tag: filters.tag, search: filters.search)
+    }
+
+    func reload(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -36,24 +46,34 @@ final class CargoViewModel {
 
         if online {
             do {
-                let page = try await api.cargo(cursor: nil, domain: domainFilter)
-                listContent = .inventory(page.items)
+                async let pageTask = api.cargo(cursor: nil, domain: filters.domain)
+                async let tagsTask = api.cargoTags()
+                let page = try await pageTask
+                availableTags = (try? await tagsTask.tags) ?? availableTags
+                rawItems = page.items
+                listContent = .inventory(displayedInventory)
                 total = page.total
                 nextCursor = page.nextCursor
-                snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: nil)
+                snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots)
+                restoreSnapshot(snapshots, organizationId: organizationId)
             }
         } else {
-            restoreSnapshot(snapshots)
+            restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.cargo)
+        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.cargo, organizationId: organizationId)
+    }
+
+    func applyClientFilters() {
+        if case .inventory = listContent {
+            listContent = .inventory(displayedInventory)
+        }
     }
 
     private func search(api: RationAPI) async {
         do {
-            let response = try await api.search(query: searchQuery)
+            let response = try await api.search(query: filters.search)
             listContent = .search(response.results)
             total = response.results.count
             nextCursor = nil
@@ -62,9 +82,10 @@ final class CargoViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore) {
-        if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo) {
-            listContent = .inventory(cached.payload.items)
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
+        if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo, organizationId: organizationId) {
+            rawItems = cached.payload.items
+            listContent = .inventory(displayedInventory)
             total = cached.payload.total
             nextCursor = cached.payload.nextCursor
         }
@@ -80,29 +101,27 @@ final class CargoViewModel {
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let page = try await api.cargo(cursor: cursor, domain: domainFilter)
-            listContent = .inventory(items + page.items)
+            let page = try await api.cargo(cursor: cursor, domain: filters.domain)
+            rawItems.append(contentsOf: page.items)
+            listContent = .inventory(displayedInventory)
             nextCursor = page.nextCursor
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    func setFilter(_ domain: CargoDomain?, api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
-        domainFilter = domain
-        await reload(api: api, snapshots: snapshots, online: online)
-    }
-
     func delete(_ item: CargoItem, api: RationAPI) async {
         guard case var .inventory(items) = listContent else { return }
         let snapshot = items
-        items.removeAll { $0.id == item.id }
+        rawItems.removeAll { $0.id == item.id }
+        items = displayedInventory
         listContent = .inventory(items)
         total = max(0, total - 1)
         do {
             try await api.deleteCargo(item.id)
             Haptics.light()
         } catch {
+            rawItems = snapshot
             listContent = .inventory(snapshot)
             total = snapshot.count
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription

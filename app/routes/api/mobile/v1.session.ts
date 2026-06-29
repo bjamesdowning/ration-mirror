@@ -1,6 +1,6 @@
 import { getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkBalance } from "~/lib/ledger.server";
+import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import {
 	getMobileUser,
 	listMobileOrganizations,
@@ -46,6 +46,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			tier: tierInfo.tier,
 			isTierExpired: tierInfo.isExpired,
 			organizations,
+			aiCosts: AI_COSTS,
 		};
 	} catch (e) {
 		return handleApiError(e);

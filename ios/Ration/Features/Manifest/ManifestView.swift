@@ -9,32 +9,42 @@ final class ManifestViewModel {
     private(set) var isSavingEntry = false
     var errorMessage: String?
     var staleLabel: String?
+    var rangeStart: String = ManifestDateHelpers.todayISO()
+    var calendarSpan = 7
+    var weekStartPref = "sunday"
 
-    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
+        let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+
         if online {
             do {
-                let data = try await api.manifest()
+                let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
                 manifest = data
-                snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: nil)
+                snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots)
+                restoreSnapshot(snapshots, organizationId: organizationId)
             }
         } else {
-            restoreSnapshot(snapshots)
+            restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.manifest)
+        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.manifest, organizationId: organizationId)
     }
 
-    func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+        rangeStart = start
+        await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+    }
+
+    func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         do {
             _ = try await api.consumeManifestEntries([entry.id])
             Haptics.success()
-            await load(api: api, snapshots: snapshots, online: online)
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -46,7 +56,8 @@ final class ManifestViewModel {
         slotType: String,
         api: RationAPI,
         snapshots: SnapshotStore,
-        online: Bool
+        online: Bool,
+        organizationId: String
     ) async -> Bool {
         guard online else {
             errorMessage = "Planning meals requires a network connection."
@@ -60,7 +71,7 @@ final class ManifestViewModel {
                 ManifestEntryCreate(mealId: mealId, date: date, slotType: slotType)
             )
             Haptics.success()
-            await load(api: api, snapshots: snapshots, online: online)
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             return true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -68,8 +79,8 @@ final class ManifestViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore) {
-        if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest) {
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
+        if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
             manifest = cached.payload
         }
     }
@@ -80,6 +91,11 @@ struct ManifestView: View {
     var onOpenSettings: () -> Void = {}
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
+    @State private var showingPlanWeek = false
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
 
     var body: some View {
         NavigationStack {
@@ -94,18 +110,7 @@ struct ManifestView: View {
             }
             .navigationTitle("Manifest")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingAddEntry = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add meal to plan")
-                    .disabled(!env.network.isOnline)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    ProfileToolbarButton(action: onOpenSettings)
-                }
+                GlobalPageToolbar(onOpenSettings: onOpenSettings)
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
@@ -116,18 +121,58 @@ struct ManifestView: View {
                         slotType: slot,
                         api: env.api,
                         snapshots: env.snapshots,
-                        online: env.network.isOnline
+                        online: env.network.isOnline,
+                        organizationId: organizationId
                     )
                     return ok ? nil : model.errorMessage
                 }
             }
+            .sheet(isPresented: $showingPlanWeek) {
+                PlanWeekSheet {
+                    await reload()
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                FloatingActionBar(actions: [
+                    FloatingAction(
+                        id: "add",
+                        systemImage: "plus",
+                        label: "Add",
+                        action: { showingAddEntry = true },
+                        primary: true,
+                        disabled: !env.network.isOnline
+                    ),
+                    FloatingAction(
+                        id: "plan",
+                        systemImage: "sparkles",
+                        label: "Plan week",
+                        action: { showingPlanWeek = true },
+                        disabled: !env.network.isOnline
+                    ),
+                ])
+            }
         }
-        .task {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+        .task(id: organizationId) {
+            if let settings = try? await env.api.settings().settings.manifestSettings {
+                model.calendarSpan = settings.calendarSpan ?? 7
+                model.weekStartPref = settings.weekStart ?? "sunday"
+                model.rangeStart = ManifestDateHelpers.weekStart(
+                    for: ManifestDateHelpers.todayISO(),
+                    preference: model.weekStartPref
+                )
+            }
+            await reload()
         }
-        .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-        }
+        .refreshable { await reload() }
+    }
+
+    private func reload() async {
+        await model.load(
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 
     private var emptyPrompt: some View {
@@ -146,6 +191,23 @@ struct ManifestView: View {
 
     private func content(_ manifest: ManifestResponse) -> some View {
         List {
+            WeekNavigator(
+                calendarSpan: model.calendarSpan,
+                rangeStart: $model.rangeStart,
+                weekStartPref: model.weekStartPref
+            ) { start in
+                Task {
+                    await model.navigateWeek(
+                        to: start,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId
+                    )
+                }
+            }
+            .listRowBackground(Color.clear)
+
             if let staleLabel = model.staleLabel {
                 Text(staleLabel).rationCaption().listRowBackground(Color.clear)
             }
@@ -169,7 +231,8 @@ struct ManifestView: View {
                                     entry,
                                     api: env.api,
                                     snapshots: env.snapshots,
-                                    online: env.network.isOnline
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
                                 )
                             }
                         }

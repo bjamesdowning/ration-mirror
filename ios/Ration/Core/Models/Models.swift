@@ -40,6 +40,23 @@ struct OrgMembership: Codable, Sendable, Identifiable {
     let isActive: Bool
 }
 
+/// Credit costs for AI features — mirrors `AI_COSTS` from ledger.server.
+struct AICosts: Codable, Sendable {
+    let scan: Int
+    let mealGenerate: Int
+    let importUrl: Int
+    let organizeCargo: Int
+    let mealPlanWeekly: Int
+
+    enum CodingKeys: String, CodingKey {
+        case scan = "SCAN"
+        case mealGenerate = "MEAL_GENERATE"
+        case importUrl = "IMPORT_URL"
+        case organizeCargo = "ORGANIZE_CARGO"
+        case mealPlanWeekly = "MEAL_PLAN_WEEKLY"
+    }
+}
+
 /// `GET /api/mobile/v1/session`
 struct SessionResponse: Codable, Sendable {
     let user: MobileUser
@@ -48,32 +65,17 @@ struct SessionResponse: Codable, Sendable {
     let tier: String
     let isTierExpired: Bool
     let organizations: [OrgMembership]
+    let aiCosts: AICosts?
 
     var isCrewMember: Bool { tier == "crew_member" && !isTierExpired }
 }
 
-// MARK: - Dashboard
+// MARK: - Hub
 
 struct CargoStats: Codable, Sendable {
     let totalItems: Int
     let expiringCount: Int
     let expiredCount: Int
-}
-
-/// `GET /api/mobile/v1/dashboard`
-struct DashboardResponse: Codable, Sendable {
-    struct Meals: Codable, Sendable { let total: Int }
-    struct Supply: Codable, Sendable {
-        let totalItems: Int
-        let uncheckedItems: Int
-        let listId: String?
-    }
-    let cargo: CargoStats
-    let meals: Meals
-    let supply: Supply
-    let credits: Int
-    let tier: String
-    let isTierExpired: Bool
 }
 
 // MARK: - Cargo
@@ -198,7 +200,67 @@ struct MealDetailResponse: Codable, Sendable {
     let meal: Meal
 }
 
+// MARK: - Hub
+
+typealias HubProfile = String
+
+struct HubWidgetFilters: Codable, Sendable, Equatable {
+    var tags: [String]?
+    var slotType: String?
+    var domain: String?
+    var limit: Int?
+}
+
+struct HubWidgetLayout: Codable, Sendable, Identifiable, Equatable {
+    var id: String
+    var order: Int
+    var size: String?
+    var visible: Bool
+    var filters: HubWidgetFilters?
+}
+
+struct HubLayoutPayload: Codable, Sendable {
+    var widgets: [HubWidgetLayout]
+}
+
+struct ManifestPreviewEntry: Codable, Sendable, Identifiable {
+    var id: String { "\(date)-\(slotType)-\(mealId)" }
+    let date: String
+    let slotType: String
+    let mealName: String
+    let mealId: String
+    let mealType: String?
+    let servingsOverride: Int?
+}
+
+struct ManifestPreviewData: Codable, Sendable {
+    let planId: String?
+    let entries: [ManifestPreviewEntry]
+}
+
+/// `GET /api/mobile/v1/hub`
+struct HubResponse: Codable, Sendable {
+    let expiringItems: [CargoItem]
+    let cargoStats: CargoStats
+    let latestSupplyList: SupplyList?
+    let manifestPreview: ManifestPreviewData?
+    let expirationAlertDays: Int
+    let hubProfile: HubProfile?
+    let hubLayout: HubLayoutPayload?
+    let availableMealTags: [String]
+    let mealMatches: [MealMatch]
+    let partialMealMatches: [MealMatch]
+    let snackMatches: [MealMatch]
+}
+
 // MARK: - Settings
+
+struct ManifestSettings: Codable, Sendable {
+    var weekStart: String?
+    var defaultSlots: [String]?
+    var showSnackSlot: Bool?
+    var calendarSpan: Int?
+}
 
 struct UserSettings: Codable, Sendable {
     var theme: String?
@@ -208,6 +270,9 @@ struct UserSettings: Codable, Sendable {
     var onboardingCompletedAt: String?
     var onboardingStep: Int?
     var expirationAlertDays: Int?
+    var hubProfile: HubProfile?
+    var hubLayout: HubLayoutPayload?
+    var manifestSettings: ManifestSettings?
 }
 
 struct SettingsResponse: Codable, Sendable {
@@ -222,6 +287,8 @@ struct SettingsPatch: Encodable, Sendable {
     var onboardingCompletedAt: String?
     var onboardingStep: Int?
     var expirationAlertDays: Int?
+    var hubProfile: HubProfile?
+    var hubLayout: HubLayoutPayload?
 }
 
 // MARK: - Search
@@ -352,6 +419,143 @@ struct CookMealResponse: Codable, Sendable {
 
 struct ToggleActiveResponse: Codable, Sendable {
     let isActive: Bool
+}
+
+struct CreateMealIngredientRequest: Codable, Sendable {
+    let ingredientName: String
+    let quantity: Double
+    let unit: String
+    var cargoId: String?
+    var isOptional: Bool = false
+    var orderIndex: Int = 0
+}
+
+/// `POST /api/mobile/v1/meals` request body.
+struct CreateMealRequest: Encodable, Sendable {
+    let name: String
+    var domain: String = "food"
+    var description: String?
+    var directions: String?
+    var equipment: [String] = []
+    var servings: Int = 1
+    var prepTime: Int?
+    var cookTime: Int?
+    var ingredients: [CreateMealIngredientRequest] = []
+    var tags: [String] = []
+}
+
+struct CreateMealResponse: Codable, Sendable {
+    let meal: Meal
+}
+
+struct UpdateMealResponse: Codable, Sendable {
+    let meal: Meal
+}
+
+struct TagsResponse: Codable, Sendable {
+    let tags: [String]
+}
+
+struct CargoTagIndexResponse: Codable, Sendable {
+    let index: [String: [String]]
+}
+
+struct AIJobSubmitResponse: Codable, Sendable {
+    let status: String
+    let requestId: String?
+}
+
+struct GenerateMealStatusResponse: Codable, Sendable {
+    let status: String
+    let recipes: [GeneratedRecipe]?
+    let error: String?
+}
+
+struct GeneratedRecipe: Codable, Sendable, Identifiable {
+    var id: String { name }
+    let name: String
+    let description: String?
+    let directions: String?
+    let servings: Int?
+    let prepTime: Int?
+    let cookTime: Int?
+    let ingredients: [CreateMealIngredientRequest]?
+    let tags: [String]?
+}
+
+struct ImportRecipeStatusResponse: Codable, Sendable {
+    let status: String
+    let success: Bool?
+    let meal: MealSummary?
+    let sourceUrl: String?
+    let code: String?
+    let error: String?
+    let existingMealId: String?
+    let existingMealName: String?
+}
+
+struct MealSummary: Codable, Sendable {
+    let id: String
+    let name: String
+}
+
+struct ImportRecipeRequest: Encodable, Sendable {
+    let url: String
+}
+
+struct GenerateMealRequest: Encodable, Sendable {
+    var customization: String?
+}
+
+struct PlanWeekRequest: Encodable, Sendable {
+    let startDate: String
+    var days: Int = 7
+    var slots: [String] = ["breakfast", "lunch", "dinner"]
+    var tag: String?
+    var dietaryNote: String?
+    var variety: String = "medium"
+}
+
+struct PlanWeekScheduleEntry: Codable, Sendable, Identifiable {
+    var id: String { "\(date)-\(slotType)-\(mealId)" }
+    let date: String
+    let slotType: String
+    let mealId: String
+    let mealName: String
+    let notes: String?
+}
+
+struct PlanWeekStatusResponse: Codable, Sendable {
+    let status: String
+    let schedule: [PlanWeekScheduleEntry]?
+    let error: String?
+}
+
+struct BulkManifestEntry: Encodable, Sendable {
+    let mealId: String
+    let date: String
+    let slotType: String
+    var servingsOverride: Int?
+    var notes: String?
+}
+
+struct BulkManifestRequest: Encodable, Sendable {
+    let entries: [BulkManifestEntry]
+}
+
+struct BulkManifestResponse: Codable, Sendable {
+    let added: Int
+}
+
+struct CreateSupplyItemRequest: Encodable, Sendable {
+    let name: String
+    var quantity: Double = 1
+    var unit: String = "unit"
+    var domain: String = "food"
+}
+
+struct CreateSupplyItemResponse: Codable, Sendable {
+    let item: SupplyItem
 }
 
 // MARK: - Supply sync / dock

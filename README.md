@@ -1666,28 +1666,42 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/auth/magic-link` | Request sign-in email |
 | `POST` | `/api/mobile/v1/auth/token` | Exchange code or refresh token |
 | `DELETE` | `/api/mobile/v1/auth/session` | Revoke all mobile refresh tokens |
-| `GET` | `/api/mobile/v1/session` | User, org, credits, tier |
-| `GET` | `/api/mobile/v1/dashboard` | Hub summary (single round-trip) |
+| `GET` | `/api/mobile/v1/session` | User, org, credits, tier, `aiCosts` |
+| `GET` | `/api/mobile/v1/hub` | Widget grid data + resolved layout |
 | `GET` / `POST` | `/api/mobile/v1/cargo` | Paginated inventory / create item |
+| `GET` | `/api/mobile/v1/cargo/tags` | Distinct cargo tags (filter picker) |
+| `GET` | `/api/mobile/v1/cargo/tag-index` | Cargo name→tag index (supply filter) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/cargo/:id` | Cargo detail / update / delete |
 | `POST` | `/api/mobile/v1/cargo/batch` | Batch add cargo (scan confirm) |
 | `GET` | `/api/mobile/v1/search` | Cargo keyword search |
-| `GET` / `PATCH` | `/api/mobile/v1/settings` | User preferences and AI consent |
+| `GET` / `PATCH` | `/api/mobile/v1/settings` | User preferences, AI consent, hub layout |
 | `DELETE` | `/api/mobile/v1/account` | Permanently delete account |
 | `GET` / `POST` | `/api/mobile/v1/manifest` | Meal plan week / add entry |
 | `POST` | `/api/mobile/v1/manifest/consume` | Consume planned entries |
+| `POST` | `/api/mobile/v1/manifest/plan-week` | AI plan week (3 credits) |
+| `GET` | `/api/mobile/v1/manifest/plan-week/:requestId` | Poll plan-week job |
+| `POST` | `/api/mobile/v1/manifest/bulk` | Bulk add plan entries |
+| `GET` / `POST` | `/api/mobile/v1/meals` | List/create meals |
+| `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/meals/:id` | Meal detail / update / delete |
+| `GET` | `/api/mobile/v1/meals/tags` | Distinct meal tags |
 | `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo |
+| `POST` | `/api/mobile/v1/meals/generate` | AI meal ideas (2 credits) |
+| `GET` | `/api/mobile/v1/meals/generate/:requestId` | Poll generate job |
+| `POST` | `/api/mobile/v1/meals/import` | URL recipe import (1 credit) |
+| `GET` | `/api/mobile/v1/meals/import/:requestId` | Poll import job |
+| `POST` | `/api/mobile/v1/meals/import/confirm` | Confirm imported recipe |
 | `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
 | `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync |
 | `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
+| `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items |
 | `POST` | `/api/mobile/v1/supply/sync` | Rebuild supply from selected meals |
 | `POST` | `/api/mobile/v1/supply/complete` | Dock purchased items to cargo |
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 
-**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply (Settings via profile menu; Scan as a contextual action). Features include PKCE auth, onboarding, AI consent, account deletion, offline read snapshots, manifest planning, galley match/cook, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
+**Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply. Global chrome: org switcher (avatar + credits), profile avatar, per-page filter sheet, and bottom FAB. Hub uses customizable widget grid (`GET /hub`). Galley supports manual create/edit, AI generate, and URL import. Manifest supports week navigation and AI plan-week. Features include PKCE auth, onboarding, AI consent gating, org-scoped offline snapshots, supply sync/dock, scan-to-cargo confirm, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
 ### 11.2 RevenueCat billing (setup & safe rollout)
 

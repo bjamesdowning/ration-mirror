@@ -1,0 +1,76 @@
+import { data } from "react-router";
+import {
+	AI_COSTS,
+	InsufficientCreditsError,
+	withCreditGate,
+} from "~/lib/ledger.server";
+import { insertQueueJobPending } from "~/lib/queue-job.server";
+
+export interface SubmitMealGenerateInput {
+	userId: string;
+	organizationId: string;
+	customization?: string;
+}
+
+export async function submitMealGenerate(
+	env: Cloudflare.Env,
+	input: SubmitMealGenerateInput,
+) {
+	const { userId, organizationId, customization } = input;
+
+	return withCreditGate(
+		{
+			env,
+			organizationId,
+			userId,
+			cost: AI_COSTS.MEAL_GENERATE,
+			reason: "Meal Generation",
+		},
+		async () => {
+			const MEAL_GENERATE_QUEUE = env.MEAL_GENERATE_QUEUE;
+			if (!MEAL_GENERATE_QUEUE) {
+				throw data(
+					{
+						error:
+							"Meal generation service unavailable. Please try again later.",
+					},
+					{ status: 503 },
+				);
+			}
+
+			const requestId = crypto.randomUUID();
+
+			await MEAL_GENERATE_QUEUE.send({
+				requestId,
+				organizationId,
+				userId,
+				customization,
+				cost: AI_COSTS.MEAL_GENERATE,
+			});
+
+			await insertQueueJobPending(
+				env.DB,
+				requestId,
+				"meal_generate",
+				organizationId,
+			);
+
+			return { status: "queued" as const, requestId };
+		},
+	);
+}
+
+export function mapMealGenerateSubmitError(outerError: unknown): void {
+	if (outerError instanceof InsufficientCreditsError) {
+		throw data(
+			{
+				error: "Insufficient credits",
+				required: outerError.required,
+				...(typeof outerError.current === "number"
+					? { current: outerError.current }
+					: {}),
+			},
+			{ status: 402 },
+		);
+	}
+}

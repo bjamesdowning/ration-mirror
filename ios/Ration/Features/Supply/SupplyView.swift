@@ -10,6 +10,17 @@ final class SupplyViewModel {
     private(set) var isDocking = false
     var errorMessage: String?
     var staleLabel: String?
+    var dockMessage: String?
+
+    var filters = PageFilterState(configuration: PageFilterConfiguration(
+        supportsSupplySort: true,
+        supportsSupplyUnitMode: true
+    ))
+
+    var displayedItems: [SupplyItem] {
+        guard let items = list?.items else { return [] }
+        return PageFilterEngine.filterSupplyItems(items, sortMode: filters.supplySort, hidePurchased: filters.hidePurchased)
+    }
 
     var purchasedCount: Int {
         list?.items.filter(\.isPurchased).count ?? 0
@@ -19,7 +30,7 @@ final class SupplyViewModel {
         list?.items.count ?? 0
     }
 
-    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -28,25 +39,25 @@ final class SupplyViewModel {
             do {
                 list = try await api.supply().list
                 if let list {
-                    snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: nil)
+                    snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: organizationId)
                 }
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots)
+                restoreSnapshot(snapshots, organizationId: organizationId)
             }
         } else {
-            restoreSnapshot(snapshots)
+            restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.supply)
+        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.supply, organizationId: organizationId)
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore) {
-        if let cached = snapshots.load(SupplyResponse.self, domain: SnapshotDomain.supply) {
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
+        if let cached = snapshots.load(SupplyResponse.self, domain: SnapshotDomain.supply, organizationId: organizationId) {
             list = cached.payload.list
         }
     }
 
-    func toggle(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func toggle(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard let current = list else { return }
         let newValue = !item.isPurchased
         let updatedItems = current.items.map { existing in
@@ -58,12 +69,12 @@ final class SupplyViewModel {
         do {
             _ = try await api.toggleSupplyItem(item.id, isPurchased: newValue)
         } catch {
-            await load(api: api, snapshots: snapshots, online: online)
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    func sync(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func sync(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard online else {
             errorMessage = "Supply sync requires a network connection."
             return
@@ -73,14 +84,14 @@ final class SupplyViewModel {
         do {
             let response = try await api.syncSupply()
             list = response.list
-            snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: nil)
+            snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
             Haptics.success()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    func dock(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
+    func dock(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard let list else { return }
         guard online else {
             errorMessage = "Docking requires a network connection."
@@ -93,13 +104,22 @@ final class SupplyViewModel {
             Haptics.success()
             errorMessage = nil
             dockMessage = "Docked \(result.docked) items into Cargo"
-            await load(api: api, snapshots: snapshots, online: online)
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    var dockMessage: String?
+    func deleteItem(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+        guard online else { return }
+        do {
+            try await api.deleteSupplyItem(item.id)
+            Haptics.light()
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
 }
 
 private extension SupplyItem {
@@ -112,6 +132,11 @@ struct SupplyView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
     @State private var model = SupplyViewModel()
+    @State private var showingFilters = false
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
 
     var body: some View {
         NavigationStack {
@@ -128,9 +153,7 @@ struct SupplyView: View {
                             message: "Select meals in Galley and sync Supply to build your shopping list."
                         )
                         Button("Sync from meals") {
-                            Task {
-                                await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                            }
+                            Task { await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId) }
                         }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(model.isSyncing)
@@ -140,27 +163,50 @@ struct SupplyView: View {
             }
             .navigationTitle("Supply")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(model.isSyncing ? "Syncing…" : "Sync") {
-                        Task {
-                            await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                        }
-                    }
-                    .disabled(model.isSyncing)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    ProfileToolbarButton(action: onOpenSettings)
-                }
+                GlobalPageToolbar(
+                    hasActiveFilters: model.filters.hasActiveFilters,
+                    onOptions: { showingFilters = true },
+                    onOpenSettings: onOpenSettings
+                )
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: $showingFilters) {
+                FilterOptionsSheet(
+                    filters: model.filters,
+                    onApplySupplyUnitMode: { mode in
+                        Task {
+                            _ = try? await env.api.patchSettings(SettingsPatch(supplyUnitMode: mode))
+                        }
+                    }
+                )
+            }
             .safeAreaInset(edge: .bottom) {
-                if model.totalCount > 0 {
-                    progressFooter
+                VStack(spacing: 8) {
+                    if model.totalCount > 0 {
+                        progressFooter
+                    }
+                    FloatingActionBar(actions: [
+                        FloatingAction(
+                            id: "sync",
+                            systemImage: "arrow.triangle.2.circlepath",
+                            label: model.isSyncing ? "Syncing…" : "Sync",
+                            action: {
+                                Task {
+                                    await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                                }
+                            },
+                            primary: true,
+                            disabled: model.isSyncing
+                        ),
+                    ])
                 }
             }
         }
-        .task {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+        .task(id: organizationId) {
+            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+            if let mode = try? await env.api.settings().settings.supplyUnitMode {
+                model.filters.supplyUnitMode = mode
+            }
         }
     }
 
@@ -175,7 +221,7 @@ struct SupplyView: View {
                 Spacer()
                 Button(model.isDocking ? "Docking…" : "Dock to Cargo") {
                     Task {
-                        await model.dock(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+                        await model.dock(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                     }
                 }
                 .font(Typography.headline())
@@ -197,10 +243,10 @@ struct SupplyView: View {
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
-            ForEach(list.items) { item in
+            ForEach(model.displayedItems) { item in
                 Button {
                     Task {
-                        await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+                        await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                     }
                 } label: {
                     HStack {
@@ -215,6 +261,13 @@ struct SupplyView: View {
                     }
                 }
                 .listRowBackground(Theme.surface)
+                .swipeActions {
+                    Button(role: .destructive) {
+                        Task {
+                            await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                        }
+                    } label: { Label("Delete", systemImage: "trash") }
+                }
                 .accessibilityLabel("\(item.name), \(item.isPurchased ? "purchased" : "not purchased")")
             }
         }
@@ -222,7 +275,7 @@ struct SupplyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
         }
     }
 }

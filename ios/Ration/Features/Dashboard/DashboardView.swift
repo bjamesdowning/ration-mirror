@@ -1,70 +1,16 @@
 import SwiftUI
 import Observation
 
-@MainActor
-@Observable
-final class DashboardViewModel {
-    enum State {
-        case loading
-        case loaded(DashboardResponse)
-        case failed(String)
-    }
-
-    private(set) var state: State = .loading
-    var staleLabel: String?
-
-    func load(api: RationAPI, snapshots: SnapshotStore, online: Bool) async {
-        if online {
-            do {
-                let data = try await api.dashboard()
-                state = .loaded(data)
-                snapshots.save(data, domain: SnapshotDomain.dashboard, organizationId: nil)
-            } catch {
-                // Prefer cached data on failure; only surface the error if no snapshot exists.
-                if !restoreSnapshot(snapshots) {
-                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                }
-            }
-        } else if restoreSnapshot(snapshots) {
-            // offline snapshot
-        } else {
-            state = .failed("You're offline and no cached Hub data is available.")
-        }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.dashboard)
-    }
-
-    @discardableResult
-    private func restoreSnapshot(_ snapshots: SnapshotStore) -> Bool {
-        guard let cached = snapshots.load(DashboardResponse.self, domain: SnapshotDomain.dashboard) else {
-            return false
-        }
-        state = .loaded(cached.payload)
-        return true
-    }
-
-    var nextAction: (title: String, detail: String, icon: String)? {
-        guard case let .loaded(data) = state else { return nil }
-        if data.cargo.expiringCount > 0 {
-            return ("Use expiring cargo", "\(data.cargo.expiringCount) items expiring soon", "clock.badge.exclamationmark")
-        }
-        if data.supply.uncheckedItems > 0 {
-            return ("Finish supply run", "\(data.supply.uncheckedItems) items to buy", "cart")
-        }
-        if data.cargo.expiredCount > 0 {
-            return ("Clear expired cargo", "\(data.cargo.expiredCount) expired items", "xmark.bin")
-        }
-        if data.meals.total == 0 {
-            return ("Stock Galley", "Add your first meal", "fork.knife")
-        }
-        return ("Scan receipt", "Add cargo from a receipt", "camera.viewfinder")
-    }
-}
-
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
-    @State private var model = DashboardViewModel()
+    @State private var model = HubViewModel()
+    @State private var showingEdit = false
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,128 +22,133 @@ struct DashboardView: View {
                     VStack(spacing: 16) {
                         ErrorBanner(message: message)
                         Button("Retry") {
-                            Task {
-                                await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                            }
+                            Task { await reload() }
                         }
                         .buttonStyle(SecondaryButtonStyle())
                     }
                     .padding(24)
                 case let .loaded(data):
-                    content(data)
+                    if model.isEditMode {
+                        HubEditView(
+                            hubProfile: data.hubProfile,
+                            hubLayout: data.hubLayout,
+                            onSave: { widgets in
+                                try await model.saveLayout(widgets, api: env.api)
+                                await reload()
+                            },
+                            onExit: {
+                                model.isEditMode = false
+                                Task { await reload() }
+                            }
+                        )
+                    } else {
+                        hubContent(data)
+                    }
                 }
             }
             .navigationTitle("Hub")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack {
-                        Button(action: onScan) {
-                            Image(systemName: "camera.viewfinder")
+                GlobalPageToolbar(onOpenSettings: onOpenSettings)
+                if case .loaded = model.state, !model.isEditMode {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            model.isEditMode = true
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
                         }
-                        .accessibilityLabel("Scan receipt")
-                        ProfileToolbarButton(action: onOpenSettings)
+                        .accessibilityLabel("Edit Hub layout")
                     }
                 }
             }
             .background(Theme.ceramic)
+            .safeAreaInset(edge: .bottom) {
+                if !model.isEditMode {
+                    FloatingActionBar(actions: [
+                        FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, primary: true),
+                    ])
+                }
+            }
         }
-        .task {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+        .task(id: organizationId) {
+            await reload()
         }
         .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
+            await reload()
         }
     }
 
-    private func content(_ data: DashboardResponse) -> some View {
+    private func reload() async {
+        await model.load(
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
+    }
+
+    private func hubContent(_ data: HubResponse) -> some View {
         ScrollView {
             VStack(spacing: 16) {
                 if let staleLabel = model.staleLabel {
                     Text(staleLabel).rationCaption().frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                tierBanner(data)
-
-                if let action = model.nextAction {
-                    GlassCard {
-                        HStack(spacing: 12) {
-                            Image(systemName: action.icon)
-                                .font(.title2)
-                                .foregroundStyle(Theme.hyperGreen)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Next action").rationCaption()
-                                Text(action.title).rationHeadline()
-                                Text(action.detail).rationCaption()
-                            }
-                            Spacer()
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
+                if let action = model.nextAction(for: data),
+                   !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
+                {
+                    nextActionCard(action)
                 }
 
-                loopStrip
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    StatCard(title: "Cargo", value: "\(data.cargo.totalItems)", icon: "shippingbox", tint: Theme.carbon)
-                    StatCard(title: "Expiring", value: "\(data.cargo.expiringCount)", icon: "clock.badge.exclamationmark", tint: Theme.warning)
-                    StatCard(title: "Expired", value: "\(data.cargo.expiredCount)", icon: "xmark.bin", tint: Theme.danger)
-                    StatCard(title: "Meals", value: "\(data.meals.total)", icon: "fork.knife", tint: Theme.carbon)
-                }
-
-                GlassCard {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Supply list").rationHeadline()
-                            Text("\(data.supply.uncheckedItems) of \(data.supply.totalItems) to buy")
-                                .rationCaption()
-                        }
-                        Spacer()
-                        Image(systemName: "cart")
-                            .foregroundStyle(Theme.hyperGreen)
-                    }
+                ForEach(model.resolvedLayout) { widget in
+                    widgetView(widget, data: data)
                 }
             }
             .padding(16)
         }
     }
 
-    private var loopStrip: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Ration loop").rationHeadline()
-                HStack {
-                    loopStep("Cargo", icon: "shippingbox")
-                    Image(systemName: "arrow.right").foregroundStyle(Theme.muted)
-                    loopStep("Galley", icon: "fork.knife")
-                    Image(systemName: "arrow.right").foregroundStyle(Theme.muted)
-                    loopStep("Manifest", icon: "calendar")
-                    Image(systemName: "arrow.right").foregroundStyle(Theme.muted)
-                    loopStep("Supply", icon: "cart")
-                }
-                .font(Typography.caption())
-            }
+    @ViewBuilder
+    private func widgetView(_ widget: HubWidgetLayout, data: HubResponse) -> some View {
+        switch HubWidgetID(rawValue: widget.id) {
+        case .hubStats:
+            HubStatsWidget(data: data)
+        case .mealsReady:
+            MealsReadyWidget(matches: data.mealMatches)
+        case .mealsPartial:
+            MealsPartialWidget(matches: data.partialMealMatches)
+        case .snacksReady:
+            MealsReadyWidget(matches: data.snackMatches)
+        case .cargoExpiring:
+            CargoExpiringWidget(items: data.expiringItems, alertDays: data.expirationAlertDays)
+        case .supplyPreview:
+            SupplyPreviewWidget(list: data.latestSupplyList)
+        case .manifestPreview:
+            ManifestPreviewWidget(preview: data.manifestPreview)
+        case .none:
+            EmptyView()
         }
     }
 
-    private func loopStep(_ title: String, icon: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon).foregroundStyle(Theme.hyperGreen)
-            Text(title)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func tierBanner(_ data: DashboardResponse) -> some View {
+    private func nextActionCard(_ action: (key: String, title: String, detail: String, icon: String)) -> some View {
         GlassCard {
-            HStack {
+            HStack(spacing: 12) {
+                Image(systemName: action.icon)
+                    .font(.title2)
+                    .foregroundStyle(Theme.hyperGreen)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(data.tier == "crew_member" && !data.isTierExpired ? "Crew Member" : "Free")
-                        .rationTitle()
-                    Text("\(data.credits) credits").rationCaption()
+                    Text("Next action").rationCaption()
+                    Text(action.title).rationHeadline()
+                    Text(action.detail).rationCaption()
                 }
                 Spacer()
-                Image(systemName: "bolt.fill")
-                    .foregroundStyle(Theme.hyperGreen)
+                Button {
+                    env.nextActionDismiss.dismiss(actionKey: action.key, organizationId: organizationId)
+                    Haptics.light()
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Dismiss")
             }
         }
     }

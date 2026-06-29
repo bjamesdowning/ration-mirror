@@ -1,8 +1,8 @@
-# Ration iOS (Stream C)
+# Ration iOS (Stream C + Post-MVP Polish)
 
 Native SwiftUI client for Ration, talking to the `/api/mobile/v1/*` Bearer-token API.
 Entitlements are owned by RevenueCat; the app reads `user.tier`/credits from the
-server and (in Stream C7) purchases via the RevenueCat SDK.
+server and purchases via the RevenueCat SDK.
 
 ## Requirements
 
@@ -60,21 +60,32 @@ callback requires the universal-link/redirect to reach the device.
 Ration/
 ├── App/            # @main entry, DI container, auth-gated root, tab shell
 ├── Core/
-│   ├── Design/     # Theme (Ceramic/Hyper-Green/Carbon), Typography, components
+│   ├── Design/     # Theme, OrgSwitcherBar, ProfileAvatarButton, FloatingActionBar
+│   ├── Filters/    # PageFilterState, FilterOptionsSheet (Cargo/Galley/Supply)
+│   ├── Session/    # SessionStore — global org context + credits
+│   ├── Persistence/# SnapshotStore — org-scoped offline cache
 │   ├── Networking/ # APIClient (auto token refresh), RationAPI facade, config
 │   ├── Auth/       # AuthManager (token lifecycle), Keychain wrapper
 │   ├── Billing/    # RevenueCat SDK boundary
 │   └── Models/     # Codable types matching mobile API responses
 └── Features/
     ├── Auth/       # Magic-link sign-in
-    ├── Dashboard/  # Hub aggregate (GET /dashboard)
-    ├── Cargo/      # Paginated list + create (cursor pagination)
-    ├── Supply/     # Shopping list with check-off
+    ├── Dashboard/  # Hub widget grid (GET /hub), customize layout
+    ├── Cargo/      # Paginated list + filters + FAB
+    ├── Supply/     # Shopping list with filters + dock FAB
     ├── Scan/       # Camera capture → resize → POST /scan
-    ├── Galley/     # Meals browse/detail
-    ├── Settings/   # Session, org switcher, sign out
-    └── Billing/    # Paywall (REST status; RevenueCat SDK = C7)
+    ├── Galley/     # Meals CRUD, AI generate/import, match mode
+    ├── Manifest/   # Week navigation, plan-week AI, consume
+    ├── Settings/   # Session, org switcher fallback, sign out
+    └── Billing/    # Paywall (RevenueCat SDK)
 ```
+
+### Global shell (all tabs)
+
+- **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap to switch orgs.
+- **Trailing:** `PageOptionsButton` (filters/options sheet) + `ProfileAvatarButton` (user image when set).
+- **Bottom:** `FloatingActionBar` — thumb-zone page actions above the tab bar.
+- **Org switch:** invalidates org-scoped snapshots and reloads all tabs via `orgGeneration`.
 
 ### Auth flow
 
@@ -93,16 +104,39 @@ verifier.
 
 **Org switching** calls `POST /orgs/:id/activate`, which returns a **new** org-scoped
 token pair (prior refresh families are revoked server-side); the app adopts it via
-`AuthManager.adopt(_:)` then reloads the session.
+`SessionStore.activateOrg` then reloads all tabs.
 
-## Remaining work
+## Mobile API routes (v1.3.48+)
 
-- **C5 — Scan:** capture, upload, and status polling are wired. A richer confirm-into-cargo review step remains for post-MVP polish. Document edge detection (Vision) is a later enhancement.
-- **C6 — Galley:** browse and detail views are wired to `/meals` and `/meals/:id`.
-- **C7 — Paywall:** RevenueCat SDK login, offering-driven purchase buttons, and restore are wired (`BillingManager`). Set `RevenueCatPublicAPIKey` in `Info.plist` with the public iOS SDK key and configure a RevenueCat offering whose current packages include the Crew Member product; the remaining work is App Store sandbox verification before external TestFlight.
-- **Audit Gate:** code P0 findings are tracked in `plans/stream-c-audit-gate.md`; TestFlight remains gated on Apple/RevenueCat configuration and sandbox purchase verification.
-- **Brand font:** optionally bundle Space Mono TTFs and register `UIAppFonts`
-  (currently falls back to the system monospaced design).
+### Existing (MVP)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/session` | GET | User, org, credits, tier, `aiCosts` |
+| `/cargo`, `/cargo/:id`, `/cargo/batch` | GET/POST/PATCH/DELETE | Inventory CRUD |
+| `/meals`, `/meals/:id`, `/meals/match` | GET | Galley browse + match |
+| `/meals/:id/cook`, `/meals/:id/toggle-active` | POST | Cook + supply selection |
+| `/supply`, `/supply/items`, `/supply/sync`, `/supply/complete` | various | Supply list |
+| `/manifest`, `/manifest/consume` | GET/POST | Meal plan |
+| `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
+| `/settings` | GET/PATCH | User preferences |
+| `/orgs/:id/activate` | POST | Org switch |
+
+### New (post-MVP polish)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/hub` | GET | Widget grid data + layout |
+| `/cargo/tags`, `/cargo/tag-index` | GET | Filter tag sources |
+| `/meals/tags` | GET | Galley tag picker |
+| `/meals` | POST | Create meal(s) |
+| `/meals/:id` | PATCH/DELETE | Edit/delete meal |
+| `/meals/generate`, `/meals/generate/:requestId` | POST/GET | AI meal ideas (2 credits) |
+| `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | URL import (1 credit) |
+| `/manifest/plan-week`, `/manifest/plan-week/:requestId` | POST/GET | AI week plan (3 credits) |
+| `/manifest/bulk` | POST | Bulk add plan entries |
+
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets.
 
 ## Security notes
 
@@ -111,3 +145,5 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
   custom scheme cannot be abused to steal an intercepted auth code.
 - No secrets are committed (`.gitignore` excludes `*.p8`, `Secrets.xcconfig`, provisioning).
 - All requests are HTTPS; org isolation is enforced server-side from the JWT claim.
+- Offline snapshots are scoped per `organizationId`; org switch clears stale cache.
+- AI features require `aiConsentAt` in settings; server returns 403 `ai_consent_required` otherwise.

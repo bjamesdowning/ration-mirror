@@ -38,7 +38,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const body = await request.json();
 		const patch = MobileSettingsPatchSchema.parse(body);
-		await patchUserSettings(context.cloudflare.env.DB, userId, patch);
+
+		const settingsPatch = {
+			...patch,
+			...(patch.hubProfile && patch.hubProfile !== "custom"
+				? { hubLayout: undefined }
+				: {}),
+		};
+
+		await patchUserSettings(context.cloudflare.env.DB, userId, settingsPatch);
 		const settings = await getUserSettings(context.cloudflare.env.DB, userId);
 		return { settings };
 	} catch (e) {

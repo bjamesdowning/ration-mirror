@@ -6,6 +6,11 @@ struct CargoListView: View {
     var onOpenSettings: () -> Void = {}
     @State private var model = CargoViewModel()
     @State private var showingAdd = false
+    @State private var showingFilters = false
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
 
     var body: some View {
         NavigationStack {
@@ -15,12 +20,8 @@ struct CargoListView: View {
                 } else if let errorMessage = model.errorMessage, isEmpty {
                     VStack(spacing: 16) {
                         ErrorBanner(message: errorMessage)
-                        Button("Retry") {
-                            Task {
-                                await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                            }
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
+                        Button("Retry") { Task { await reload() } }
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                     .padding(24)
                 } else if isEmpty {
@@ -45,39 +46,43 @@ struct CargoListView: View {
                 }
             }
             .navigationTitle("Cargo")
-            .searchable(text: $model.searchQuery, prompt: "Search cargo")
-            .onSubmit(of: .search) {
-                Task {
-                    await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                }
-            }
+            .searchable(text: $model.filters.search, prompt: "Search cargo")
+            .onSubmit(of: .search) { Task { await reload() } }
+            .onChange(of: model.filters.domain) { _, _ in model.applyClientFilters() }
+            .onChange(of: model.filters.tag) { _, _ in model.applyClientFilters() }
             .background(Theme.ceramic)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { filterMenu }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack {
-                        Button(action: onScan) {
-                            Image(systemName: "camera.viewfinder")
-                        }
-                        .accessibilityLabel("Scan receipt")
-                        Button { showingAdd = true } label: {
-                            Image(systemName: "plus")
-                        }
-                        ProfileToolbarButton(action: onOpenSettings)
-                    }
-                }
+                GlobalPageToolbar(
+                    hasActiveFilters: model.filters.hasActiveFilters,
+                    onOptions: { showingFilters = true },
+                    onOpenSettings: onOpenSettings
+                )
             }
             .sheet(isPresented: $showingAdd) {
-                AddCargoView {
-                    await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                }
+                AddCargoView { await reload() }
+            }
+            .sheet(isPresented: $showingFilters) {
+                FilterOptionsSheet(filters: model.filters, availableTags: model.availableTags)
+            }
+            .safeAreaInset(edge: .bottom) {
+                FloatingActionBar(actions: [
+                    FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, primary: true),
+                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }),
+                ])
             }
         }
-        .task {
-            if isEmpty {
-                await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-            }
+        .task(id: organizationId) {
+            if isEmpty { await reload() }
         }
+    }
+
+    private func reload() async {
+        await model.reload(
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 
     private var isEmpty: Bool {
@@ -129,29 +134,7 @@ struct CargoListView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
-        .refreshable {
-            await model.reload(api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-        }
-    }
-
-    private var filterMenu: some View {
-        Menu {
-            Button("All") {
-                Task {
-                    await model.setFilter(nil, api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                }
-            }
-            ForEach(CargoDomain.allCases, id: \.self) { domain in
-                Button(domain.label) {
-                    Task {
-                        await model.setFilter(domain, api: env.api, snapshots: env.snapshots, online: env.network.isOnline)
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-        }
-        .accessibilityLabel("Filter cargo")
+        .refreshable { await reload() }
     }
 }
 

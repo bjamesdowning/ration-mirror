@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { getUserSettings, patchUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MobileSettingsPatchSchema } from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.settings";
 
@@ -22,6 +23,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const { userId } = await requireMobileActiveGroup(context, request);
+
+		const rateLimitResult = await checkRateLimit(
+			context.cloudflare.env.RATION_KV,
+			"settings_mutation",
+			userId,
+		);
+		if (!rateLimitResult.allowed) {
+			throw data(
+				{ error: "Too many requests. Please try again later." },
+				{ status: 429, headers: { "Retry-After": "60" } },
+			);
+		}
+
 		const body = await request.json();
 		const patch = MobileSettingsPatchSchema.parse(body);
 		await patchUserSettings(context.cloudflare.env.DB, userId, patch);

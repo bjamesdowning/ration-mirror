@@ -20,9 +20,8 @@ final class DashboardViewModel {
                 state = .loaded(data)
                 snapshots.save(data, domain: SnapshotDomain.dashboard, organizationId: nil)
             } catch {
-                if restoreSnapshot(snapshots) {
-                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                } else {
+                // Prefer cached data on failure; only surface the error if no snapshot exists.
+                if !restoreSnapshot(snapshots) {
                     state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
                 }
             }

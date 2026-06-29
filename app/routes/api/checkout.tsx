@@ -4,6 +4,8 @@ import { data } from "react-router";
 import type Stripe from "stripe";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
+import { assertCanPurchaseStripeSubscription } from "~/lib/billing.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -128,6 +130,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					subscription_data: {
 						metadata: {
 							userId,
+							app_user_id: userId,
 							organizationId: groupId,
 							tier: selectedSubscription.tier,
 						},
@@ -135,6 +138,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					metadata: {
 						type: "subscription",
 						userId,
+						app_user_id: userId,
 						organizationId: groupId,
 						tier: selectedSubscription.tier,
 					},
@@ -162,6 +166,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				metadata: {
 					type: "credits",
 					userId,
+					app_user_id: userId,
 					organizationId: groupId,
 					credits: CREDIT_PACKS[pack].credits.toString(),
 					pack,
@@ -175,6 +180,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 				throw data(
 					{ error: "Subscription required for subscription checkout" },
 					{ status: 400 },
+				);
+			}
+
+			const purchaseGuard = await assertCanPurchaseStripeSubscription(
+				context.cloudflare.env,
+				userId,
+			);
+			if (!purchaseGuard.allowed) {
+				const status =
+					purchaseGuard.code === BILLING_ERROR_CODES.BILLING_UNAVAILABLE
+						? 503
+						: 409;
+				throw data(
+					{ error: purchaseGuard.reason, code: purchaseGuard.code },
+					{ status },
 				);
 			}
 		} else {

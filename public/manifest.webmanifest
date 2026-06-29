@@ -1,0 +1,19 @@
+{
+	"name": "Ration",
+	"short_name": "Ration",
+	"description": "AI-powered pantry and meal planning",
+	"start_url": "/hub",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#F8F9FA",
+	"theme_color": "#00E088",
+	"orientation": "portrait-primary",
+	"icons": [
+		{
+			"src": "/static/ration-logo.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any"
+		}
+	]
+}

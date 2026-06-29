@@ -31,6 +31,10 @@ export default [
 		"routes/well-known.mcp.server-card.ts",
 	),
 	route(
+		".well-known/apple-app-site-association",
+		"routes/well-known.apple-app-site-association.ts",
+	),
+	route(
 		".well-known/agent-skills/index.json",
 		"routes/well-known.agent-skills.index.ts",
 	),
@@ -47,6 +51,7 @@ export default [
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
 	route("auth/verify", "routes/auth.verify.tsx"),
+	route("auth/mobile-callback", "routes/auth.mobile-callback.tsx"),
 	route("oauth/sign-in", "routes/oauth.sign-in.tsx"),
 	route("oauth/consent", "routes/oauth.consent.tsx"),
 	route("oauth/select-org", "routes/oauth.select-org.tsx"),
@@ -202,6 +207,7 @@ export default [
 	route("api/search", "routes/api/search.ts"),
 	route("api/checkout", "routes/api/checkout.tsx"),
 	route("api/webhook", "routes/api/webhook.tsx"),
+	route("api/webhook/revenuecat", "routes/api/webhook.revenuecat.tsx"),
 	route("api/billing-portal", "routes/api/billing-portal.ts"),
 	route("api/fin/billing-summary", "routes/api/fin.billing-summary.ts"),
 	route("api/fin/subscription-cancel", "routes/api/fin.subscription-cancel.ts"),
@@ -245,6 +251,46 @@ export default [
 		"routes/api/agent/auth.claim.reissue.ts",
 	),
 	route("api/oauth/grants", "routes/api.oauth.grants.ts"),
+	route("api/openapi/mobile-v1.json", "routes/api/openapi.mobile-v1.ts"),
+
+	// Mobile API v1 (Bearer JWT — iOS app)
+	route(
+		"api/mobile/v1/auth/magic-link",
+		"routes/api/mobile/v1.auth.magic-link.ts",
+	),
+	route("api/mobile/v1/auth/token", "routes/api/mobile/v1.auth.token.ts"),
+	route("api/mobile/v1/auth/session", "routes/api/mobile/v1.auth.session.ts"),
+	route("api/mobile/v1/session", "routes/api/mobile/v1.session.ts"),
+	route("api/mobile/v1/orgs", "routes/api/mobile/v1.orgs.ts"),
+	route(
+		"api/mobile/v1/orgs/:id/activate",
+		"routes/api/mobile/v1.orgs.$id.activate.ts",
+	),
+	route("api/mobile/v1/dashboard", "routes/api/mobile/v1.dashboard.ts"),
+	route("api/mobile/v1/settings", "routes/api/mobile/v1.settings.ts"),
+	route("api/mobile/v1/cargo", "routes/api/mobile/v1.cargo.ts"),
+	route("api/mobile/v1/cargo/batch", "routes/api/mobile/v1.cargo.batch.ts"),
+	route("api/mobile/v1/cargo/:id", "routes/api/mobile/v1.cargo.$id.ts"),
+	route("api/mobile/v1/scan", "routes/api/mobile/v1.scan.ts"),
+	route(
+		"api/mobile/v1/scan/:requestId",
+		"routes/api/mobile/v1.scan.$requestId.ts",
+	),
+	route("api/mobile/v1/meals", "routes/api/mobile/v1.meals.ts"),
+	route("api/mobile/v1/meals/match", "routes/api/mobile/v1.meals.match.ts"),
+	route("api/mobile/v1/meals/:id", "routes/api/mobile/v1.meals.$id.ts"),
+	route("api/mobile/v1/supply", "routes/api/mobile/v1.supply.ts"),
+	route("api/mobile/v1/supply/items", "routes/api/mobile/v1.supply.items.ts"),
+	route(
+		"api/mobile/v1/supply/items/:id",
+		"routes/api/mobile/v1.supply.items.$id.ts",
+	),
+	route("api/mobile/v1/search", "routes/api/mobile/v1.search.ts"),
+	route(
+		"api/mobile/v1/billing/status",
+		"routes/api/mobile/v1.billing.status.ts",
+	),
+
 	route("api/auth/*", "routes/api.auth.$.ts"),
 
 	// Tools (public, no auth)

@@ -225,6 +225,13 @@
       "when": 1781530893407,
       "tag": "0031_supreme_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1782427980452,
+      "tag": "0032_serious_next_avengers",
+      "breakpoints": true
     }
   ]
 }

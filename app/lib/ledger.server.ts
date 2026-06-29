@@ -1,7 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
-import { invalidateTierCache } from "./capacity.server";
+import {
+	grantCrewMemberTier,
+	revokeCrewMemberTier,
+} from "./billing-tier.server";
 import { log, redactId } from "./logging.server";
 import { getStripe, isAnnualSubscriptionPrice } from "./stripe.server";
 
@@ -103,7 +106,7 @@ export async function addCredits(
 	userId: string | null,
 	amount: number,
 	reason: string,
-	metadata?: { sessionId?: string },
+	metadata?: { sessionId?: string; idempotencyKey?: string },
 ) {
 	if (amount <= 0) {
 		throw new Error("Amount must be positive");
@@ -111,26 +114,28 @@ export async function addCredits(
 
 	const db = drizzle(env.DB, { schema });
 
-	// 1. Idempotency guard for Stripe fulfillment (keyed on sessionId)
-	if (metadata?.sessionId) {
+	const idempotencyToken = metadata?.idempotencyKey ?? metadata?.sessionId;
+
+	// 1. Idempotency guard for Stripe / RevenueCat fulfillment
+	if (idempotencyToken) {
 		const existing = await db.query.ledger.findFirst({
 			where: (ledger, { and, eq }) =>
 				and(
 					eq(ledger.organizationId, organizationId),
-					eq(ledger.reason, `${reason}:${metadata.sessionId}`),
+					eq(ledger.reason, `${reason}:${idempotencyToken}`),
 				),
 		});
 
 		if (existing) {
-			log.warn("Duplicate credit add attempt for Stripe session", {
-				sessionId: metadata.sessionId,
+			log.warn("Duplicate credit add attempt", {
+				idempotencyKey: redactId(idempotencyToken),
 			});
 			return;
 		}
 	}
 
-	const ledgerReason = metadata?.sessionId
-		? `${reason}:${metadata.sessionId}`
+	const ledgerReason = idempotencyToken
+		? `${reason}:${idempotencyToken}`
 		: reason;
 
 	// 3. Atomic balance + ledger write via D1 batch
@@ -276,7 +281,11 @@ export async function withCreditGate<T>(
 	}
 }
 
-export async function processCheckoutSession(env: Env, sessionId: string) {
+export async function processCheckoutSession(
+	env: Env,
+	sessionId: string,
+	options?: { fulfillmentKey?: string },
+) {
 	const stripe = getStripe(env);
 	const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -319,7 +328,7 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 		credits,
 		"Stripe Purchase",
 		{
-			sessionId: session.id,
+			idempotencyKey: options?.fulfillmentKey ?? session.id,
 		},
 	);
 
@@ -334,6 +343,7 @@ export async function processCheckoutSession(env: Env, sessionId: string) {
 export async function processSubscriptionCheckoutSession(
 	env: Env,
 	sessionId: string,
+	options?: { fulfillmentKey?: string },
 ) {
 	const stripe = getStripe(env);
 	const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -362,30 +372,22 @@ export async function processSubscriptionCheckoutSession(
 		sub.current_period_end ??
 		Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60;
 	const periodEnd = new Date(currentPeriodEnd * 1000);
-	const db = drizzle(env.DB, { schema });
 
-	const updatePayload: Record<string, unknown> = {
-		tier: "crew_member",
-		tierExpiresAt: periodEnd,
-		crewSubscribedAt: sql`coalesce(crew_subscribed_at, unixepoch())`,
-	};
-	if (typeof session.customer === "string") {
-		updatePayload.stripeCustomerId = session.customer;
-	}
+	const stripeCustomerId =
+		typeof session.customer === "string" ? session.customer : null;
 
-	await db
-		.update(schema.user)
-		.set(updatePayload)
-		.where(eq(schema.user.id, userId));
+	await grantCrewMemberTier(env, {
+		userId,
+		organizationId,
+		periodEnd,
+		stripeCustomerId,
+	});
 
 	log.info("Tier updated to crew_member", {
 		userId: redactId(userId),
 		organizationId: redactId(organizationId),
 		periodEnd: periodEnd.toISOString(),
 	});
-
-	// Invalidate the tier KV cache so the new tier is visible immediately
-	await invalidateTierCache(env, organizationId);
 
 	// Only Annual plan gets credits; Monthly gets none
 	const firstItem = subscription.items?.data?.[0];
@@ -395,7 +397,7 @@ export async function processSubscriptionCheckoutSession(
 			: (firstItem?.price as { id?: string } | undefined)?.id;
 	if (priceId && isAnnualSubscriptionPrice(env, priceId)) {
 		await addCredits(env, organizationId, userId, 65, "Crew Member Credits", {
-			sessionId,
+			idempotencyKey: options?.fulfillmentKey ?? sessionId,
 		});
 	}
 
@@ -406,6 +408,7 @@ export async function processSubscriptionInvoice(
 	env: Env,
 	subscriptionId: string,
 	invoiceId: string,
+	options?: { fulfillmentKey?: string },
 ) {
 	const stripe = getStripe(env);
 	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -425,18 +428,12 @@ export async function processSubscriptionInvoice(
 		sub.current_period_end ??
 		Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60;
 	const periodEnd = new Date(currentPeriodEnd * 1000);
-	const db = drizzle(env.DB, { schema });
-	await db
-		.update(schema.user)
-		.set({
-			tier: "crew_member",
-			tierExpiresAt: periodEnd,
-			crewSubscribedAt: sql`coalesce(crew_subscribed_at, unixepoch())`,
-		})
-		.where(eq(schema.user.id, userId));
 
-	// Invalidate the tier KV cache so the renewed tier is visible immediately
-	await invalidateTierCache(env, organizationId);
+	await grantCrewMemberTier(env, {
+		userId,
+		organizationId,
+		periodEnd,
+	});
 
 	// Only Annual plan gets credits on renewal; Monthly gets none
 	const firstItem = subscription.items?.data?.[0];
@@ -451,7 +448,7 @@ export async function processSubscriptionInvoice(
 			userId,
 			65,
 			"Crew Member Renewal Credits",
-			{ sessionId: invoiceId },
+			{ idempotencyKey: options?.fulfillmentKey ?? invoiceId },
 		);
 	}
 
@@ -471,21 +468,10 @@ export async function downgradeExpiredSubscription(
 		throw new Error(`Subscription ${subscriptionId} missing user metadata`);
 	}
 
-	const db = drizzle(env.DB, { schema });
-	await db
-		.update(schema.user)
-		.set({
-			tier: "free",
-			tierExpiresAt: null,
-			crewSubscribedAt: null,
-			subscriptionCancelAtPeriodEnd: false,
-		})
-		.where(eq(schema.user.id, userId));
-
-	// Invalidate the tier KV cache so the downgrade is visible immediately
-	if (organizationId) {
-		await invalidateTierCache(env, organizationId);
-	}
+	await revokeCrewMemberTier(env, {
+		userId,
+		organizationId: organizationId ?? null,
+	});
 
 	return { userId };
 }

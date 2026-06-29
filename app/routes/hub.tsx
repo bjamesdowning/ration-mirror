@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { useEffect } from "react";
 import { NavLink, Outlet, redirect, useRouteLoaderData } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
 import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
+import { PwaInstallPrompt } from "~/components/shell/PwaInstallPrompt";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { HubIntercomFromRoot } from "~/components/support/HubIntercom";
 import { IntercomLauncherButton } from "~/components/support/IntercomLauncherButton";
@@ -19,6 +21,7 @@ import { ConfirmProvider } from "~/lib/confirm-context";
 import { IntercomLauncherProvider } from "~/lib/intercom-launcher-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
+import { registerServiceWorker } from "~/lib/pwa.client";
 import type { Route } from "./+types/hub";
 
 type RootLoaderHeaderSlice = {
@@ -172,6 +175,10 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const root = useRouteLoaderData("root") as RootLoaderHeaderSlice | undefined;
 	const showIntercomLauncher = Boolean(root?.user?.id && root?.intercomAppId);
 
+	useEffect(() => {
+		registerServiceWorker();
+	}, []);
+
 	return (
 		<ConfirmProvider>
 			<IntercomLauncherProvider>
@@ -232,6 +239,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 
 					{/* Mobile Bottom Nav */}
 					<BottomNav />
+					<PwaInstallPrompt />
 				</div>
 			</IntercomLauncherProvider>
 			<ConfirmDialog />

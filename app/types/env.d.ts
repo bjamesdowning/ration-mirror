@@ -8,6 +8,14 @@ declare namespace Cloudflare {
 		STRIPE_SECRET_KEY?: string;
 		STRIPE_PUBLISHABLE_KEY?: string;
 		STRIPE_WEBHOOK_SECRET?: string;
+		/** RevenueCat secret API key — subscriber lookups. */
+		REVENUECAT_API_KEY?: string;
+		/** RevenueCat Stripe app public API key — sync Stripe purchases into RC. */
+		REVENUECAT_STRIPE_PUBLIC_API_KEY?: string;
+		/** Bearer token RevenueCat sends on webhooks. */
+		REVENUECAT_WEBHOOK_SECRET?: string;
+		/** Set to "true" to grant tier/credits from RC webhooks (default: off for safe rollout). */
+		REVENUECAT_FULFILLMENT_ENABLED?: string;
 		// Stripe price IDs (production: _usd/_eur; dev: single-currency legacy)
 		STRIPE_PRICE_TASTE_TEST_usd?: string;
 		STRIPE_PRICE_TASTE_TEST_eur?: string;

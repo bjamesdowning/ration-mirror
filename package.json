@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.3.31",
+	"version": "1.3.34",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -41,6 +41,7 @@
 		"@types/react-syntax-highlighter": "^15.5.13",
 		"agents": "^0.7.9",
 		"better-auth": "1.6.16",
+		"jose": "^6.1.3",
 		"drizzle-orm": "^0.45.2",
 		"gray-matter": "^4.0.3",
 		"isbot": "^5.1.39",

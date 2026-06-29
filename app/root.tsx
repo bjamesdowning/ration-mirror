@@ -27,6 +27,11 @@ import { resolveAuthorizationServerUrl } from "./lib/oauth.constants";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
+	{ rel: "manifest", href: "/manifest.webmanifest" },
+	{
+		rel: "apple-touch-icon",
+		href: "/static/ration-logo.svg",
+	},
 ];
 
 export const loader = async ({ request, context }: Route.LoaderArgs) => {
@@ -124,6 +129,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<meta name="theme-color" content="#00E088" />
+				<meta name="apple-mobile-web-app-capable" content="yes" />
+				<meta name="apple-mobile-web-app-title" content="Ration" />
 				<Meta />
 				<Links />
 			</head>

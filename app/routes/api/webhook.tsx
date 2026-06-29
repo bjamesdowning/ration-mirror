@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import Stripe from "stripe";
 import * as schema from "~/db/schema";
+import { stripeFulfillmentKey } from "~/lib/billing-idempotency.server";
 import { checkStripeWebhookProcessed } from "~/lib/idempotency.server";
 import {
 	downgradeExpiredSubscription,
@@ -10,6 +11,10 @@ import {
 	processSubscriptionInvoice,
 } from "~/lib/ledger.server";
 import { log, redactId } from "~/lib/logging.server";
+import {
+	isRevenueCatFulfillmentEnabled,
+	syncStripePurchaseBestEffort,
+} from "~/lib/revenuecat.server";
 import { getStripe } from "~/lib/stripe.server";
 import type { Route } from "./+types/webhook";
 
@@ -80,32 +85,88 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return new Response("Event already processed", { status: 200 });
 		}
 
+		const env = context.cloudflare.env;
+		const rcFulfillment = isRevenueCatFulfillmentEnabled(env);
+		const fulfillmentKey = stripeFulfillmentKey(event.id);
+
 		if (event.type === "checkout.session.completed") {
 			const session = event.data.object;
 			const metadataType = session.metadata?.type ?? "credits";
+			const userId =
+				typeof session.metadata?.userId === "string"
+					? session.metadata.userId
+					: null;
 
 			if (metadataType === "subscription") {
-				const result = await processSubscriptionCheckoutSession(
-					context.cloudflare.env,
-					session.id,
+				if (rcFulfillment) {
+					const subscriptionId = session.subscription;
+					if (typeof subscriptionId === "string" && userId) {
+						context.cloudflare.ctx.waitUntil(
+							syncStripePurchaseBestEffort(env, userId, subscriptionId),
+						);
+					}
+					log.info(
+						"Stripe subscription synced to RevenueCat (RC fulfillment)",
+						{
+							userId: userId ? redactId(userId) : undefined,
+							sessionId: redactId(session.id),
+							eventId: redactId(event.id),
+						},
+					);
+				} else {
+					const result = await processSubscriptionCheckoutSession(
+						env,
+						session.id,
+						{ fulfillmentKey },
+					);
+					log.info("Subscription started", {
+						userId: redactId(result.userId),
+						organizationId: redactId(result.organizationId),
+						sessionId: redactId(session.id),
+						eventId: redactId(event.id),
+					});
+					const subscriptionId = session.subscription;
+					if (typeof subscriptionId === "string" && result.userId) {
+						context.cloudflare.ctx.waitUntil(
+							syncStripePurchaseBestEffort(env, result.userId, subscriptionId),
+						);
+					}
+				}
+			} else if (rcFulfillment) {
+				if (
+					session.metadata?.pack === "SUPPLY_RUN" &&
+					session.amount_total === 0 &&
+					userId
+				) {
+					const db = drizzle(env.DB, { schema });
+					await db
+						.update(schema.user)
+						.set({ welcomeVoucherRedeemed: true })
+						.where(eq(schema.user.id, userId));
+				}
+				if (userId) {
+					context.cloudflare.ctx.waitUntil(
+						syncStripePurchaseBestEffort(env, userId, session.id),
+					);
+				}
+				log.info(
+					"Stripe credit checkout synced to RevenueCat (RC fulfillment)",
+					{
+						userId: userId ? redactId(userId) : undefined,
+						sessionId: redactId(session.id),
+						eventId: redactId(event.id),
+					},
 				);
-				log.info("Subscription started", {
-					userId: redactId(result.userId),
-					organizationId: redactId(result.organizationId),
-					sessionId: redactId(session.id),
-					eventId: redactId(event.id),
-				});
 			} else {
-				const result = await processCheckoutSession(
-					context.cloudflare.env,
-					session.id,
-				);
+				const result = await processCheckoutSession(env, session.id, {
+					fulfillmentKey,
+				});
 				if (
 					session.metadata?.pack === "SUPPLY_RUN" &&
 					session.amount_total === 0 &&
 					result.userId
 				) {
-					const db = drizzle(context.cloudflare.env.DB, { schema });
+					const db = drizzle(env.DB, { schema });
 					await db
 						.update(schema.user)
 						.set({ welcomeVoucherRedeemed: true })
@@ -117,6 +178,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 					sessionId: redactId(session.id),
 					eventId: redactId(event.id),
 				});
+				if (result.userId) {
+					context.cloudflare.ctx.waitUntil(
+						syncStripePurchaseBestEffort(env, result.userId, session.id),
+					);
+				}
 			}
 		}
 
@@ -126,31 +192,74 @@ export async function action({ request, context }: Route.ActionArgs) {
 				invoice as unknown as { subscription?: string }
 			).subscription;
 			if (invoiceSubscription && typeof invoiceSubscription === "string") {
-				const renewal = await processSubscriptionInvoice(
-					context.cloudflare.env,
-					invoiceSubscription,
-					invoice.id,
-				);
-				log.info("Subscription invoice processed", {
-					userId: redactId(renewal.userId),
-					organizationId: redactId(renewal.organizationId),
-					invoiceId: redactId(invoice.id),
-					eventId: redactId(event.id),
-				});
+				if (rcFulfillment) {
+					const subscription =
+						await stripe.subscriptions.retrieve(invoiceSubscription);
+					const renewalUserId =
+						typeof subscription.metadata?.userId === "string"
+							? subscription.metadata.userId
+							: null;
+					if (renewalUserId) {
+						context.cloudflare.ctx.waitUntil(
+							syncStripePurchaseBestEffort(
+								env,
+								renewalUserId,
+								invoiceSubscription,
+							),
+						);
+					}
+					log.info("Stripe renewal synced to RevenueCat (RC fulfillment)", {
+						invoiceId: redactId(invoice.id),
+						eventId: redactId(event.id),
+					});
+				} else {
+					const renewal = await processSubscriptionInvoice(
+						env,
+						invoiceSubscription,
+						invoice.id,
+						{ fulfillmentKey },
+					);
+					log.info("Subscription invoice processed", {
+						userId: redactId(renewal.userId),
+						organizationId: redactId(renewal.organizationId),
+						invoiceId: redactId(invoice.id),
+						eventId: redactId(event.id),
+					});
+					context.cloudflare.ctx.waitUntil(
+						syncStripePurchaseBestEffort(
+							env,
+							renewal.userId,
+							invoiceSubscription,
+						),
+					);
+				}
 			}
 		}
 
 		if (event.type === "customer.subscription.deleted") {
 			const subscription = event.data.object;
-			const result = await downgradeExpiredSubscription(
-				context.cloudflare.env,
-				subscription.id,
-			);
-			log.info("Subscription downgraded", {
-				userId: redactId(result.userId),
-				subscriptionId: redactId(subscription.id),
-				eventId: redactId(event.id),
-			});
+			if (rcFulfillment) {
+				const deletedUserId =
+					typeof subscription.metadata?.userId === "string"
+						? subscription.metadata.userId
+						: null;
+				if (deletedUserId) {
+					context.cloudflare.ctx.waitUntil(
+						syncStripePurchaseBestEffort(env, deletedUserId, subscription.id),
+					);
+				}
+				log.info("Stripe cancellation synced to RevenueCat (RC fulfillment)", {
+					subscriptionId: redactId(subscription.id),
+					eventId: redactId(event.id),
+				});
+			} else {
+				const result = await downgradeExpiredSubscription(env, subscription.id);
+				log.info("Subscription downgraded", {
+					userId: redactId(result.userId),
+					subscriptionId: redactId(subscription.id),
+					eventId: redactId(event.id),
+				});
+			}
 		}
 
 		if (event.type === "customer.subscription.updated") {

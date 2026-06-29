@@ -1651,6 +1651,205 @@ Ration exposes a programmatic REST API for external integrations, authenticated 
 
 **Key security model:** Keys use the format `rtn_live_<32 hex chars>`. Only the SHA-256 hash is stored in D1. The raw key is shown exactly once at creation. Lookups use a prefix index (first 17 chars) then constant-time comparison. On successful use, `lastUsedAt` is updated via `ctx.waitUntil` (non-blocking — does not add latency to the response).
 
+### 11.1 Mobile REST API (v1)
+
+Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web hub routes (`/api/*` with cookies) are unchanged.
+
+**Authentication:** `Authorization: Bearer <access_jwt>`. Obtain tokens via magic link (`POST /api/mobile/v1/auth/magic-link` → email → `/auth/mobile-callback?client=ios` → `ration://auth/callback?code=...` → `POST /api/mobile/v1/auth/token` with `grantType: authorization_code`). Refresh with `grantType: refresh_token`.
+
+**OpenAPI:** [`GET /api/openapi/mobile-v1.json`](/api/openapi/mobile-v1.json)
+
+**Representative endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/mobile/v1/auth/magic-link` | Request sign-in email |
+| `POST` | `/api/mobile/v1/auth/token` | Exchange code or refresh token |
+| `DELETE` | `/api/mobile/v1/auth/session` | Revoke all mobile refresh tokens |
+| `GET` | `/api/mobile/v1/session` | User, org, credits, tier |
+| `GET` | `/api/mobile/v1/dashboard` | Hub summary (single round-trip) |
+| `GET` / `POST` | `/api/mobile/v1/cargo` | Paginated inventory / create item |
+| `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
+| `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
+| `GET` | `/api/mobile/v1/supply` | Active supply list + items |
+
+**PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
+
+### 11.2 RevenueCat billing (setup & safe rollout)
+
+Cross-platform entitlements use **RevenueCat** as the product/subscriber authority. Ration materializes `user.tier` and org credits from **RevenueCat webhook events** when fulfillment is enabled. Until then, **Stripe webhooks remain authoritative** (no behavior change for existing subscribers).
+
+#### Step 1 — Create the RevenueCat project
+
+1. Sign in at [app.revenuecat.com](https://app.revenuecat.com).
+2. **Create project** → name it `Ration` (or match your App Store app name).
+3. Note your **Project ID** (Settings → General).
+
+#### Step 2 — Connect App Store Connect (iOS)
+
+1. RevenueCat → **Apps** → **+ New** → **Apple App Store**.
+2. Link your App Store Connect app (Bundle ID: `com.mayutic.ration` or your production ID).
+3. Upload **In-App Purchase Key** (.p8) from App Store Connect → Users and Access → Integrations → In-App Purchase.
+4. Enter **Issuer ID** and **Key ID** from Apple.
+
+#### Step 3 — Connect Stripe (two different places in RevenueCat)
+
+RevenueCat has **two** Stripe integrations. Ration uses **your own** embedded Stripe Checkout on `/hub/pricing`, so you need the **Stripe app** (`strp_` key) — **not** the Web Billing `rcb_` key.
+
+##### 3a — Account-level Stripe link (one-time)
+
+1. RevenueCat → **Account settings** (avatar, top-left) → **Connect Stripe**
+2. In Stripe: install **RevenueCat** from the [Stripe App Marketplace](https://marketplace.stripe.com/apps/revenuecat)
+3. In the Stripe app → **Sign in with RevenueCat**
+4. Confirm the account appears connected in RevenueCat account settings
+
+This alone does **not** produce `REVENUECAT_STRIPE_PUBLIC_API_KEY`.
+
+##### 3b — Add a **Stripe app** inside your Ration **project** (this is the key you need)
+
+Ration syncs via `POST /v1/receipts` ([track external purchases](https://www.revenuecat.com/docs/web/integrations/stripe/track-external-purchases)). That uses the **Stripe app public key** (`strp_…`), created when you add Stripe under **Apps & providers** — not when you create a **Web** billing config.
+
+1. Open your **Ration** project in RevenueCat
+2. **Apps & providers** (left sidebar) → **+ New** / **New app configuration**
+3. Choose **Stripe** (not “Web Billing”, not “Apple”)
+4. Name it e.g. `Ration Web (Stripe)`
+5. Open that app → copy **App public API key** (prefix **`strp_`**) → `REVENUECAT_STRIPE_PUBLIC_API_KEY`
+
+| You set up… | Key you see | Used for Ration Worker? |
+|-------------|-------------|-------------------------|
+| Account → Connect Stripe only | (none) | No |
+| Project → **Web** → Stripe config | `rcb_` / `rcb_sb_` | **No** — RC-hosted checkout |
+| Project → **Apps & providers** → **Stripe app** | **`strp_`** | **Yes** |
+
+If you only created a **Web** Stripe configuration, add a **Stripe app** under **Apps & providers**.
+
+##### 3c — Stripe → RevenueCat server notifications (recommended)
+
+On the **same Stripe app** (3b):
+
+1. Stripe app settings → **Webhook configuration** → copy RevenueCat’s **Stripe Webhook Endpoint**
+2. [Stripe Dashboard → Webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint** → paste URL
+3. Events only: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `invoice.updated`, `charge.refunded`
+4. Copy Stripe signing secret → RevenueCat Stripe app → **Stripe Webhook Secret**
+5. Enable **Track new purchases from server-to-server notifications**
+6. **App User ID** metadata field: **`app_user_id`**
+
+**Not the same as** Ration’s webhook `https://ration.mayutic.com/api/webhook/revenuecat` (Step 6) — that is RevenueCat → Ration.
+
+#### Step 4 — Define entitlements & products (catalog lives in RC)
+
+Create in RevenueCat dashboard — **not in Ration code**:
+
+| RevenueCat entitlement | Meaning in Ration |
+|------------------------|-------------------|
+| `crew_member` | `user.tier = crew_member` |
+
+| RevenueCat product ID | Type | Grants | Attach stores |
+|-----------------------|------|--------|---------------|
+| `crew_monthly` | Subscription | `crew_member` | Stripe Price + App Store sub |
+| `crew_annual` | Subscription | `crew_member` + 65 credits on purchase/renewal | Stripe Price + App Store sub |
+| `credits_s` | Consumable | 12 credits | Stripe + App Store |
+| `credits_m` | Consumable | 65 credits | Stripe + App Store |
+| `credits_l` | Consumable | 165 credits | Stripe + App Store |
+| `credits_xl` | Consumable | 550 credits | Stripe + App Store |
+
+Map each RC product to the matching Stripe Price ID and App Store product ID in the RC product editor.
+
+#### Step 5 — Stripe server notifications → RevenueCat
+
+1. RevenueCat → Stripe app → **Server Notifications** → enable.
+2. Set **App User ID detection** to read metadata field **`app_user_id`** (fallback: `userId` — Ration sends both).
+3. Ensure metadata is on **both** Checkout Session and Subscription (Ration checkout already sets this).
+
+Alternatively, configure Stripe Dashboard → Webhooks to forward to RevenueCat per [RC Stripe docs](https://www.revenuecat.com/docs/platform-resources/server-notifications/stripe-server-notifications).
+
+#### Step 6 — RevenueCat webhook → Ration Worker
+
+1. RevenueCat → **Integrations** → **Webhooks** → **+ New**.
+2. **URL:** `https://ration.mayutic.com/api/webhook/revenuecat` (use your production hostname).
+3. **Authorization:** generate a strong random secret (e.g. `openssl rand -hex 32`). This becomes `REVENUECAT_WEBHOOK_SECRET`.
+4. Enable events: `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `NON_RENEWING_PURCHASE`, `UNCANCELLATION`, `PRODUCT_CHANGE`.
+5. Send a test event; expect `200 OK` after secrets are deployed.
+
+#### Step 7 — Cloudflare secrets
+
+```bash
+# Subscriber API (Project Settings → API keys → Secret key)
+wrangler secret put REVENUECAT_API_KEY
+
+# Stripe app public key (Stripe app in RC dashboard)
+wrangler secret put REVENUECAT_STRIPE_PUBLIC_API_KEY
+
+# Same value you configured as Bearer token in RC webhook
+wrangler secret put REVENUECAT_WEBHOOK_SECRET
+
+# DO NOT set until backfill + sandbox verification complete:
+# wrangler secret put REVENUECAT_FULFILLMENT_ENABLED
+# Enter: true
+```
+
+Add to local `.dev.vars` for testing:
+
+```env
+REVENUECAT_API_KEY=sk_...
+REVENUECAT_STRIPE_PUBLIC_API_KEY=sk_...
+REVENUECAT_WEBHOOK_SECRET=whsec_...
+# REVENUECAT_FULFILLMENT_ENABLED=true
+```
+
+#### Step 8 — Deploy (phase 1: additive, safe)
+
+1. Deploy Worker **v1.3.34+** with secrets above.
+2. Leave `REVENUECAT_FULFILLMENT_ENABLED` **unset** — Stripe still grants tier/credits; RC webhooks are acknowledged only; Stripe events sync to RC in the background.
+3. Confirm existing subscribers still have Crew Member on web.
+
+#### Step 9 — Backfill existing Stripe subscribers
+
+```bash
+STRIPE_SECRET_KEY=sk_live_... \
+REVENUECAT_STRIPE_PUBLIC_API_KEY=sk_... \
+bun run scripts/revenuecat-backfill-stripe.ts
+```
+
+This posts each active Stripe subscription to RevenueCat with `app_user_id = user.id` so iOS `Purchases.logIn(userId)` sees entitlements without re-purchase.
+
+#### Step 10 — Verify in sandbox
+
+1. Sandbox Apple purchase → RC webhook → (with fulfillment off) check RC dashboard subscriber has `crew_member`.
+2. Stripe test checkout → confirm RC subscriber updates.
+3. `GET /api/mobile/v1/billing/status` with Bearer token → `entitlements.crew_member.active`.
+
+#### Step 11 — Enable RevenueCat fulfillment
+
+```bash
+wrangler secret put REVENUECAT_FULFILLMENT_ENABLED
+# Enter: true
+```
+
+When enabled:
+
+- **RevenueCat webhooks** become the **sole** tier/credit grant path (idempotency key: `rc:{event.id}`).
+- **Stripe webhooks** only **sync** purchases to RC (no duplicate tier/credit grants).
+- Purchase guards **fail closed** if RC API is unreachable (checkout returns 503).
+
+#### Identity rule (critical)
+
+`app_user_id` in RevenueCat **must equal** Ration `user.id`:
+
+- iOS: `Purchases.logIn(user.id)` after auth
+- Stripe: checkout metadata `app_user_id` + `userId`
+- Same user on web and iOS shares one `crew_member` entitlement
+
+#### API reference
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `POST /api/webhook/revenuecat` | Bearer `REVENUECAT_WEBHOOK_SECRET` | RC → Ration fulfillment |
+| `GET /api/mobile/v1/billing/status` | Bearer JWT | Entitlements + purchase eligibility |
+| `POST /api/checkout` | Cookie session | Stripe checkout (guarded) |
+
+OpenAPI: [`GET /api/openapi/mobile-v1.json`](/api/openapi/mobile-v1.json) includes `MobileBillingStatus`.
+
 ---
 
 ## 12. Testing

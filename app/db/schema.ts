@@ -719,6 +719,32 @@ export const agentRegistrationRelations = relations(
 );
 
 // Pre-launch interest signup (temporary — remove when no longer needed)
+export const mobileRefreshToken = sqliteTable(
+	"mobile_refresh_token",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		tokenHash: text("token_hash").notNull().unique(),
+		familyId: text("family_id").notNull(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		revokedAt: integer("revoked_at", { mode: "timestamp" }),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("mobile_refresh_token_user_id_idx").on(table.userId),
+		index("mobile_refresh_token_family_id_idx").on(table.familyId),
+	],
+);
+
 export const interestSignup = sqliteTable(
 	"interest_signup",
 	{

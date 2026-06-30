@@ -13,6 +13,7 @@ final class HubViewModel {
     private(set) var state: State = .loading
     var staleLabel: String?
     var isEditMode = false
+    var toggleErrorMessage: String?
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         if online {
@@ -51,7 +52,7 @@ final class HubViewModel {
         if data.cargoStats.expiringCount > 0 {
             return ("expiring", "Use expiring cargo", "\(data.cargoStats.expiringCount) items expiring soon", "clock.badge.exclamationmark")
         }
-        let unchecked = data.latestSupplyList?.items.filter { !$0.isPurchased }.count ?? 0
+        let unchecked = data.latestSupplyList?.resolvedUncheckedCount ?? 0
         if unchecked > 0 {
             return ("supply", "Finish supply run", "\(unchecked) items to buy", "cart")
         }
@@ -80,37 +81,45 @@ final class HubViewModel {
         online: Bool,
         organizationId: String
     ) async {
-        guard case var .loaded(data) = state else { return }
-        guard var supplyList = data.latestSupplyList else { return }
+        guard case let .loaded(data) = state else { return }
+        guard let supplyList = data.latestSupplyList else { return }
 
-        let updatedItems = supplyList.items.map { existing in
-            existing.id == item.id
-                ? SupplyItem(id: existing.id, name: existing.name, quantity: existing.quantity, unit: existing.unit, domain: existing.domain, isPurchased: isPurchased)
-                : existing
-        }
-        supplyList = SupplyList(id: supplyList.id, name: supplyList.name, items: updatedItems)
-        data = HubResponse(
-            expiringItems: data.expiringItems,
-            cargoStats: data.cargoStats,
-            latestSupplyList: supplyList,
-            manifestPreview: data.manifestPreview,
-            expirationAlertDays: data.expirationAlertDays,
-            hubProfile: data.hubProfile,
-            hubLayout: data.hubLayout,
-            availableMealTags: data.availableMealTags,
-            mealMatches: data.mealMatches,
-            partialMealMatches: data.partialMealMatches,
-            snackMatches: data.snackMatches
-        )
-        state = .loaded(data)
-        snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
+        toggleErrorMessage = nil
+
+        let updatedList = supplyList.withItemPurchaseState(item.id, isPurchased: isPurchased)
+        let newData = data.withSupplyList(updatedList)
+        state = .loaded(newData)
+        snapshots.save(newData, domain: SnapshotDomain.hub, organizationId: organizationId)
         if isPurchased { Haptics.light() }
 
-        guard online else { return }
+        guard online else {
+            toggleErrorMessage = "Checked off offline — will sync when you're back online."
+            return
+        }
+
         do {
             _ = try await api.toggleSupplyItem(item.id, isPurchased: isPurchased)
         } catch {
+            toggleErrorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         }
+    }
+}
+
+private extension HubResponse {
+    func withSupplyList(_ list: SupplyList) -> HubResponse {
+        HubResponse(
+            expiringItems: expiringItems,
+            cargoStats: cargoStats,
+            latestSupplyList: list,
+            manifestPreview: manifestPreview,
+            expirationAlertDays: expirationAlertDays,
+            hubProfile: hubProfile,
+            hubLayout: hubLayout,
+            availableMealTags: availableMealTags,
+            mealMatches: mealMatches,
+            partialMealMatches: partialMealMatches,
+            snackMatches: snackMatches
+        )
     }
 }

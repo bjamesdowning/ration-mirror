@@ -69,21 +69,25 @@ struct SettingsView: View {
     private func content(_ session: SessionResponse) -> some View {
         List {
             Section("Profile") {
-                SettingsAvatarSection(
+                AvatarUploadPicker(
                     title: "Your photo",
                     imageURL: env.session.userImageURL,
                     upload: { data, mime in
                         _ = try await env.api.uploadUserAvatar(imageData: data, mimeType: mime)
                     }
                 )
-                if let org = env.session.activeOrg {
-                    SettingsAvatarSection(
+                .listRowBackground(Color.clear)
+
+                if let org = env.session.activeOrg, org.canManageLogo {
+                    AvatarUploadPicker(
                         title: "\(org.name) photo",
                         imageURL: AvatarURLResolver.resolve(org.logo),
+                        usesAuthenticatedImage: true,
                         upload: { data, mime in
                             _ = try await env.api.uploadOrganizationAvatar(imageData: data, mimeType: mime)
                         }
                     )
+                    .listRowBackground(Color.clear)
                 }
             }
 

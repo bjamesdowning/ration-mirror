@@ -119,6 +119,7 @@ struct ScanView: View {
     @State private var model = ScanViewModel()
     @State private var showingCamera = false
     @State private var showingConsentGate = false
+    @State private var showingIntro = false
     @State private var hasAIConsent = false
     @State private var checkedConsent = false
 
@@ -152,6 +153,21 @@ struct ScanView: View {
             }
             .background(Theme.ceramic)
             .task { await loadConsent() }
+            .sheet(isPresented: $showingIntro) {
+                AIFeatureIntroView(
+                    title: "Scan to add items",
+                    detail: "AI reads your receipt or pantry photo and suggests items to add to Cargo.",
+                    creditCost: env.session.session?.aiCosts?.scan ?? 1,
+                    costLabel: "per scan",
+                    confirmLabel: "Continue",
+                    nextSteps: "Review detected items before confirming them to Cargo.",
+                    onContinue: {
+                        showingIntro = false
+                        proceedAfterIntro()
+                    }
+                )
+                .presentationDetents([.medium])
+            }
             .sheet(isPresented: $showingConsentGate) {
                 AIConsentGateView(
                     onAccept: {
@@ -193,6 +209,10 @@ struct ScanView: View {
 
     private func beginScan() {
         guard checkedConsent else { return }
+        showingIntro = true
+    }
+
+    private func proceedAfterIntro() {
         if hasAIConsent {
             showingCamera = true
         } else {

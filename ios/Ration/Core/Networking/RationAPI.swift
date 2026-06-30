@@ -251,9 +251,25 @@ final class RationAPI {
     func revokeSupplyShare() async throws -> ShareRevokeResponse {
         try await client.delete("supply/share")
     }
+
+    func supplySnoozes() async throws -> SupplySnoozesResponse {
+        try await client.get("supply/snoozes")
+    }
+
+    func snoozeSupplyItem(_ id: String, duration: String) async throws -> SupplySnoozeResponse {
+        try await client.post("supply/items/\(id)", body: SnoozeRequest(duration: duration))
+    }
+
+    func unsnoozeSupplyItem(_ snoozeId: String) async throws -> SupplyUnsnoozeResponse {
+        try await client.delete("supply/snoozes/\(snoozeId)")
+    }
 }
 
 struct EmptyBody: Encodable, Sendable {}
+
+struct SnoozeRequest: Encodable, Sendable {
+    let duration: String
+}
 
 /// Heterogeneous JSON body for supply item PATCH.
 enum EncodableValue: Encodable {

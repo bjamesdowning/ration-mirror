@@ -108,8 +108,11 @@ struct ImportRecipeSheet: View {
             .sheet(isPresented: $showingIntro) {
                 AIFeatureIntroView(
                     title: "Import recipe",
-                    detail: "Paste a recipe URL and Ration extracts it into Galley.",
+                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley.",
                     creditCost: env.session.session?.aiCosts?.importUrl ?? 1,
+                    costLabel: "per import",
+                    confirmLabel: "Import",
+                    nextSteps: "Review the imported meal before saving to Galley.",
                     onContinue: {
                         showingIntro = false
                         Task { await model.submit(api: env.api) }

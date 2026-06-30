@@ -52,10 +52,13 @@ struct SupplyItemCheckOffSheet: View {
 struct SupplyOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var shareURL: String?
+    var shareExpiresAt: String?
+    var isLoadingShare: Bool = false
     var isSyncing: Bool
     var onRefreshFromMeals: () async -> Void
     var onShare: () async -> Void
     var onRevokeShare: () async -> Void
+    var onUpgradeRequired: () -> Void
     var onOpenFilters: () -> Void
 
     var body: some View {
@@ -72,24 +75,18 @@ struct SupplyOptionsSheet: View {
                         Label("Filters & sort", systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
-                Section("Sharing") {
-                    if let shareURL, !shareURL.isEmpty {
-                        ShareLink(item: shareURL) {
-                            Label("Copy share link", systemImage: "link")
-                        }
-                        Button(role: .destructive) {
-                            Task { await onRevokeShare() }
-                        } label: {
-                            Label("Revoke share link", systemImage: "xmark.circle")
-                        }
-                    } else {
-                        Button {
-                            Task { await onShare() }
-                        } label: {
-                            Label("Share supply list", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                }
+
+                ShareLinkSection(
+                    shareURL: shareURL,
+                    shareExpiresAt: shareExpiresAt,
+                    capabilities: [
+                        "Viewers can see your supply list",
+                        "They can check off items while shopping",
+                    ],
+                    isLoading: isLoadingShare,
+                    onGenerate: onShare,
+                    onRevoke: onRevokeShare
+                )
             }
             .navigationTitle("Supply options")
             .navigationBarTitleDisplayMode(.inline)
@@ -99,6 +96,80 @@ struct SupplyOptionsSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+struct SnoozeDurationSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let itemName: String
+    var onSelect: (String) async -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Snooze \(itemName.capitalized)") {
+                    snoozeButton("24 hours", duration: "24h")
+                    snoozeButton("3 days", duration: "3d")
+                    snoozeButton("1 week", duration: "1w")
+                }
+            }
+            .navigationTitle("Snooze item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
         .presentationDetents([.medium])
+    }
+
+    private func snoozeButton(_ label: String, duration: String) -> some View {
+        Button(label) {
+            Task {
+                await onSelect(duration)
+                dismiss()
+            }
+        }
+    }
+}
+
+struct SnoozedItemsSection: View {
+    let snoozes: [SupplySnooze]
+    var onUnsnooze: (SupplySnooze) async -> Void
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        if !snoozes.isEmpty {
+            Section {
+                if isExpanded {
+                    ForEach(snoozes) { snooze in
+                        HStack {
+                            Text(snooze.displayName.capitalized).rationBody()
+                            Spacer()
+                            Button("Unsnooze") {
+                                Task { await onUnsnooze(snooze) }
+                            }
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.hyperGreen)
+                        }
+                    }
+                }
+            } header: {
+                Button {
+                    withAnimation { isExpanded.toggle() }
+                } label: {
+                    HStack {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        Text("Snoozed (\(snoozes.count))")
+                            .rationHeadline()
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }

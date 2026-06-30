@@ -11,6 +11,19 @@ IOS_DESTINATION="${IOS_DESTINATION:-generic/platform=iOS Simulator}"
 # simulator destination resolution, so we can't use it.
 IOS_DERIVED_DATA="${IOS_DERIVED_DATA:-ios/.build/DerivedData}"
 
+# Simulator builds/tests never ship to users, and the Simulator runtime does not
+# enforce code signing. Disabling it here makes the gate deterministic when the
+# repo lives in an iCloud/file-provider-synced folder: sync continuously
+# re-applies com.apple.FinderInfo to freshly-built bundles mid-build, which makes
+# `codesign` fail with "resource fork, Finder information, or similar detritus
+# not allowed". Device/TestFlight builds are signed through the separate
+# archive/export flow, so this does not weaken release signing.
+IOS_SIM_SIGNING_FLAGS=(
+	CODE_SIGNING_ALLOWED=NO
+	CODE_SIGNING_REQUIRED=NO
+	CODE_SIGN_IDENTITY=
+)
+
 require_command() {
 	local name="$1"
 	if ! command -v "$name" >/dev/null 2>&1; then

@@ -1695,13 +1695,17 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
-| `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items |
+| `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items; `POST .../:id` snoozes item (`{ duration: "24h" \| "3d" \| "1w" }`) |
+| `GET` / `DELETE` | `/api/mobile/v1/supply/snoozes` / `.../:snoozeId` | List active snoozes / unsnooze |
+| `GET` | `/api/mobile/v1/hub` | Hub widgets; `latestSupplyList` includes `itemCount`, `uncheckedCount`, `purchasedCount` before sliced `items` |
 | `POST` | `/api/mobile/v1/supply/sync` | Rebuild supply from selected meals |
 | `POST` | `/api/mobile/v1/supply/complete` | Dock purchased items to cargo |
 | `GET` / `POST` / `DELETE` | `/api/mobile/v1/manifest/share` | Share state / create / revoke manifest link (Crew) |
 | `GET` / `POST` / `DELETE` | `/api/mobile/v1/supply/share` | Share state / create / revoke supply link (Crew) |
 | `POST` | `/api/mobile/v1/user/avatar` | Multipart profile avatar upload (≤2MB, JPEG/PNG/WebP) |
 | `POST` | `/api/mobile/v1/organization/avatar` | Multipart group logo upload (owner/admin, ≤2MB) |
+
+`GET /api/organization/avatar/:orgId` accepts **cookie session or mobile Bearer** (membership required).
 
 **PWA (web):** `public/manifest.webmanifest` and a shell-only service worker (`public/sw.js`) support Add to Home Screen on mobile browsers without the native app.
 

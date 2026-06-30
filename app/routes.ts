@@ -314,6 +314,14 @@ export default [
 		"api/mobile/v1/supply/items/:id",
 		"routes/api/mobile/v1.supply.items.$id.ts",
 	),
+	route(
+		"api/mobile/v1/supply/snoozes",
+		"routes/api/mobile/v1.supply.snoozes.ts",
+	),
+	route(
+		"api/mobile/v1/supply/snoozes/:snoozeId",
+		"routes/api/mobile/v1.supply.snoozes.$snoozeId.ts",
+	),
 	route("api/mobile/v1/search", "routes/api/mobile/v1.search.ts"),
 	route(
 		"api/mobile/v1/billing/status",

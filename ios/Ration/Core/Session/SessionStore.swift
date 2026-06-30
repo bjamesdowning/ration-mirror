@@ -50,6 +50,9 @@ final class SessionStore {
         defer { isSwitchingOrg = false }
         let pair = try await api.activateOrg(org.id)
         auth.adopt(pair)
+        if let oldLogo = activeOrg?.logo, let url = AvatarURLResolver.resolve(oldLogo) {
+            AuthImageLoader.shared.invalidate(url: url)
+        }
         snapshots.clearAll()
         session = try await api.session()
         orgGeneration += 1

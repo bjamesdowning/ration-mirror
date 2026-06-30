@@ -77,6 +77,20 @@ enum ManifestDateHelpers {
         }
         return "\(display.string(from: s)) – \(display.string(from: e)), \(year)"
     }
+
+    static let navigationWeekBound = 26
+
+    static func smartLabel(isoDate: String) -> String {
+        HubDateFormat.smartLabel(isoDate: isoDate)
+    }
+
+    static func canNavigate(from rangeStart: String, byDays days: Int) -> Bool {
+        let target = addDays(rangeStart, days: days)
+        let today = todayISO()
+        let minDate = addDays(today, days: -navigationWeekBound * 7)
+        let maxDate = addDays(today, days: navigationWeekBound * 7)
+        return target >= minDate && target <= maxDate
+    }
 }
 
 struct WeekNavigator: View {
@@ -85,7 +99,16 @@ struct WeekNavigator: View {
     @Binding var selectedDay: String
     var weekStartPref: String = "sunday"
     var entryDates: Set<String> = []
+    var isLoading: Bool = false
     var onNavigate: (String) -> Void
+
+    private var canGoBack: Bool {
+        ManifestDateHelpers.canNavigate(from: rangeStart, byDays: -calendarSpan)
+    }
+
+    private var canGoForward: Bool {
+        ManifestDateHelpers.canNavigate(from: rangeStart, byDays: calendarSpan)
+    }
 
     private var rangeEnd: String {
         ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
@@ -112,9 +135,15 @@ struct WeekNavigator: View {
                     onNavigate(ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan))
                 } label: {
                     Image(systemName: "chevron.left")
-                        .foregroundStyle(Theme.muted)
+                        .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
                 }
+                .disabled(!canGoBack || isLoading)
                 .accessibilityLabel("Previous")
+
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
                 Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
                     .font(Typography.headline())
@@ -125,8 +154,9 @@ struct WeekNavigator: View {
                     onNavigate(ManifestDateHelpers.addDays(rangeStart, days: calendarSpan))
                 } label: {
                     Image(systemName: "chevron.right")
-                        .foregroundStyle(Theme.muted)
+                        .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
                 }
+                .disabled(!canGoForward || isLoading)
                 .accessibilityLabel("Next")
 
                 if rangeStart != todayAnchor {
@@ -155,14 +185,15 @@ struct WeekNavigator: View {
     private func dayPill(_ day: String) -> some View {
         let isSelected = day == selectedDay
         let hasMeals = entryDates.contains(day)
+        let isToday = day == ManifestDateHelpers.todayISO()
         return Button {
             selectedDay = day
         } label: {
             VStack(spacing: 4) {
-                Text(ManifestDateHelpers.dayShortName(day))
+                Text(ManifestDateHelpers.smartLabel(isoDate: day))
                     .font(Typography.caption())
-                Text(ManifestDateHelpers.dayNumber(day))
-                    .font(Typography.headline())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Circle()
                     .fill(hasMeals ? Theme.hyperGreen : Color.clear)
                     .frame(width: 6, height: 6)
@@ -170,7 +201,7 @@ struct WeekNavigator: View {
             .foregroundStyle(isSelected ? Color.black : Theme.carbon)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? Theme.hyperGreen : Theme.platinum)
+            .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)

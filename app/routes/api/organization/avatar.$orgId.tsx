@@ -1,7 +1,5 @@
-import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import * as schema from "~/db/schema";
-import { requireAuth } from "~/lib/auth.server";
+import { resolveOrgAvatarViewerUserId } from "~/lib/org-avatar-auth.server";
 import type { Route } from "./+types/avatar.$orgId";
 
 const paramsSchema = z.object({
@@ -19,16 +17,8 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
 	}
 
 	const orgId = parsed.data.orgId;
-	const { user } = await requireAuth(context, request);
-	const db = drizzle(context.cloudflare.env.DB, { schema });
-
-	// Verify user is a member of the organization (can view group logo)
-	const membership = await db.query.member.findFirst({
-		where: (m, { and, eq }) =>
-			and(eq(m.organizationId, orgId), eq(m.userId, user.id)),
-	});
-
-	if (!membership) {
+	const userId = await resolveOrgAvatarViewerUserId(context, request, orgId);
+	if (!userId) {
 		return new Response("Not found", { status: 404 });
 	}
 

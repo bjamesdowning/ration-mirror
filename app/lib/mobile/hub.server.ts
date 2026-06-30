@@ -100,13 +100,17 @@ export async function getMobileHubData(
 	]);
 
 	const latestSupplyList = latestSupplyListRaw
-		? {
-				...latestSupplyListRaw,
-				items: (latestSupplyListRaw.items ?? []).slice(
-					0,
-					MOBILE_SUPPLY_ITEMS_SLICE,
-				),
-			}
+		? (() => {
+				const fullItems = latestSupplyListRaw.items ?? [];
+				const purchasedCount = fullItems.filter((i) => i.isPurchased).length;
+				return {
+					...latestSupplyListRaw,
+					itemCount: fullItems.length,
+					uncheckedCount: fullItems.length - purchasedCount,
+					purchasedCount,
+					items: fullItems.slice(0, MOBILE_SUPPLY_ITEMS_SLICE),
+				};
+			})()
 		: null;
 
 	const manifestPreview = manifestPreviewRaw

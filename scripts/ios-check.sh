@@ -16,7 +16,8 @@ xcodebuild build \
 	-project "$IOS_PROJECT" \
 	-scheme "$IOS_SCHEME" \
 	-destination "$IOS_DESTINATION" \
-	-derivedDataPath "$IOS_DERIVED_DATA"
+	-derivedDataPath "$IOS_DERIVED_DATA" \
+	"${IOS_SIM_SIGNING_FLAGS[@]}"
 
 TEST_DESTINATION="$(resolve_test_destination)" || exit 1
 if [ -z "$TEST_DESTINATION" ]; then
@@ -28,4 +29,5 @@ xcodebuild test \
 	-project "$IOS_PROJECT" \
 	-scheme "$IOS_TEST_SCHEME" \
 	-destination "$TEST_DESTINATION" \
-	-derivedDataPath "$IOS_DERIVED_DATA"
+	-derivedDataPath "$IOS_DERIVED_DATA" \
+	"${IOS_SIM_SIGNING_FLAGS[@]}"

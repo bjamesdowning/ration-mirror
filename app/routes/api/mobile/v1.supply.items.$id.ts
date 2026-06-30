@@ -2,10 +2,14 @@ import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { MobileUpdateSupplyItemSchema } from "~/lib/schemas/mobile/supply";
+import {
+	MobileSnoozeItemSchema,
+	MobileUpdateSupplyItemSchema,
+} from "~/lib/schemas/mobile/supply";
 import {
 	deleteSupplyItem,
 	getSupplyList,
+	snoozeSupplyItem,
 	updateSupplyItem,
 } from "~/lib/supply.server";
 import type { Route } from "./+types/v1.supply.items.$id";
@@ -60,6 +64,19 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				input,
 			);
 			return { item };
+		}
+
+		if (request.method === "POST") {
+			const body = await request.json();
+			const { duration } = MobileSnoozeItemSchema.parse(body);
+			const result = await snoozeSupplyItem(
+				context.cloudflare.env.DB,
+				organizationId,
+				list.id,
+				itemId,
+				duration,
+			);
+			return result;
 		}
 
 		throw data({ error: "Method not allowed" }, { status: 405 });

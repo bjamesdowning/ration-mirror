@@ -6,6 +6,8 @@ struct OrgSwitcherBar: View {
     @State private var showOrgSheet = false
     @State private var showExpandedName = false
 
+    private var tierLabel: String { env.session.isCrewMember ? "CREW" : "FREE" }
+
     var body: some View {
         Button {
             showOrgSheet = true
@@ -25,23 +27,21 @@ struct OrgSwitcherBar: View {
                             .lineLimit(1)
                             .frame(maxWidth: 120, alignment: .leading)
                     }
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
                         Image(systemName: "diamond.fill")
                             .font(.system(size: 8))
                             .foregroundStyle(Theme.hyperGreen)
-                        Text("\(env.session.credits)")
+                        Text("\(env.session.credits) credits")
                             .font(Typography.caption())
                             .foregroundStyle(Theme.muted)
                     }
-                    if env.session.isCrewMember {
-                        Text("CREW")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Theme.muted)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Theme.platinum)
-                            .clipShape(Capsule())
-                    }
+                    Text(tierLabel)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(env.session.isCrewMember ? Theme.carbon : Theme.muted)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Theme.platinum)
+                        .clipShape(Capsule())
                 } else if env.session.isLoading {
                     ProgressView()
                         .controlSize(.small)
@@ -61,6 +61,7 @@ struct OrgSwitcherBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Organization switcher")
+        .accessibilityHint("\(env.session.credits) credits, \(tierLabel) tier. Tap to switch organization.")
         .sheet(isPresented: $showOrgSheet) {
             orgSheet
         }
@@ -80,11 +81,24 @@ struct OrgSwitcherBar: View {
                             OrgAvatar(name: org.name, orgId: org.id, imageURL: org.logo, size: 44)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(org.name).rationHeadline()
-                                Text("\(env.session.credits) credits")
+                                Text("\(env.session.credits) credits · \(tierLabel)")
                                     .rationCaption()
                             }
                         }
                         .padding(.vertical, 4)
+
+                        if org.canManageLogo {
+                            AvatarUploadPicker(
+                                title: "Group photo",
+                                imageURL: AvatarURLResolver.resolve(org.logo),
+                                usesAuthenticatedImage: true,
+                                size: 48,
+                                upload: { data, mime in
+                                    _ = try await env.api.uploadOrganizationAvatar(imageData: data, mimeType: mime)
+                                }
+                            )
+                            .listRowBackground(Color.clear)
+                        }
                     }
                 }
                 if let orgs = env.session.session?.organizations, orgs.count > 1 {
@@ -125,7 +139,7 @@ struct OrgSwitcherBar: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     @MainActor

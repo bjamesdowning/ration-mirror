@@ -104,8 +104,11 @@ struct GenerateMealSheet: View {
             .sheet(isPresented: $showingIntro) {
                 AIFeatureIntroView(
                     title: "Generate meals",
-                    detail: "AI creates recipe ideas from your Cargo.",
+                    detail: "AI creates recipe ideas from your Cargo inventory.",
                     creditCost: env.session.session?.aiCosts?.mealGenerate ?? 2,
+                    costLabel: "per generation",
+                    confirmLabel: "Generate",
+                    nextSteps: "Pick recipes you like, then save them to Galley.",
                     onContinue: {
                         showingIntro = false
                         Task { await model.submit(api: env.api) }

@@ -37,8 +37,20 @@ final class ManifestViewModel {
     }
 
     func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+        let previousSelected = selectedDay
         rangeStart = start
-        selectedDay = start
+        let visible = ManifestDateHelpers.calendarDates(
+            span: calendarSpan,
+            anchor: rangeStart,
+            weekStartPref: weekStartPref
+        )
+        if visible.contains(previousSelected) {
+            selectedDay = previousSelected
+        } else if visible.contains(ManifestDateHelpers.todayISO()) {
+            selectedDay = ManifestDateHelpers.todayISO()
+        } else {
+            selectedDay = visible.first ?? start
+        }
         await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
     }
 
@@ -96,6 +108,8 @@ struct ManifestView: View {
     @State private var showingPlanWeek = false
     @State private var showingOptions = false
     @State private var manifestShareURL: String?
+    @State private var manifestShareExpiresAt: String?
+    @State private var isLoadingShare = false
     @State private var showingPaywall = false
 
     private var organizationId: String {
@@ -123,9 +137,13 @@ struct ManifestView: View {
             .sheet(isPresented: $showingOptions) {
                 ManifestOptionsSheet(
                     shareURL: manifestShareURL,
+                    shareExpiresAt: manifestShareExpiresAt,
+                    isLoadingShare: isLoadingShare,
                     onShare: { await createManifestShare() },
-                    onRevokeShare: { await revokeManifestShare() }
+                    onRevokeShare: { await revokeManifestShare() },
+                    onUpgradeRequired: { showingPaywall = true }
                 )
+                .task { await loadManifestShareStatus() }
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
             .background(Theme.ceramic)
@@ -218,7 +236,8 @@ struct ManifestView: View {
                 rangeStart: $model.rangeStart,
                 selectedDay: $model.selectedDay,
                 weekStartPref: model.weekStartPref,
-                entryDates: entryDates
+                entryDates: entryDates,
+                isLoading: model.isLoading,
             ) { start in
                 Task {
                     await model.navigateWeek(
@@ -266,13 +285,20 @@ struct ManifestView: View {
     }
 
     private func loadManifestShareStatus() async {
-        manifestShareURL = try? await env.api.manifestShareStatus().shareUrl
+        isLoadingShare = true
+        defer { isLoadingShare = false }
+        do {
+            let status = try await env.api.manifestShareStatus()
+            manifestShareURL = status.shareUrl
+            manifestShareExpiresAt = status.shareExpiresAt
+        } catch {}
     }
 
     private func createManifestShare() async {
         do {
             let response = try await env.api.createManifestShare()
             manifestShareURL = response.shareUrl
+            manifestShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
             if case .server(let status, _, _) = error, status == 403 {
@@ -284,6 +310,7 @@ struct ManifestView: View {
     private func revokeManifestShare() async {
         _ = try? await env.api.revokeManifestShare()
         manifestShareURL = nil
+        manifestShareExpiresAt = nil
         Haptics.light()
     }
 }

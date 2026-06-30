@@ -8,6 +8,7 @@ final class SupplyViewModel {
     private(set) var isLoading = false
     private(set) var isSyncing = false
     private(set) var isDocking = false
+    private(set) var snoozes: [SupplySnooze] = []
     var errorMessage: String?
     var staleLabel: String?
     var dockMessage: String?
@@ -55,6 +56,17 @@ final class SupplyViewModel {
             restoreSnapshot(snapshots, organizationId: organizationId)
         }
         staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.supply, organizationId: organizationId)
+        if online {
+            await loadSnoozes(api: api)
+        }
+    }
+
+    func loadSnoozes(api: RationAPI) async {
+        do {
+            snoozes = try await api.supplySnoozes().snoozes
+        } catch {
+            // Non-fatal — snooze panel hides when empty.
+        }
     }
 
     private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
@@ -165,6 +177,44 @@ final class SupplyViewModel {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
+
+    func snooze(
+        _ item: SupplyItem,
+        duration: String,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard online else {
+            errorMessage = "Snoozing requires a network connection."
+            return
+        }
+        do {
+            _ = try await api.snoozeSupplyItem(item.id, duration: duration)
+            Haptics.light()
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func unsnooze(
+        _ snooze: SupplySnooze,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard online else { return }
+        do {
+            _ = try await api.unsnoozeSupplyItem(snooze.id)
+            Haptics.light()
+            await loadSnoozes(api: api)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
 }
 
 private extension SupplyItem {
@@ -181,6 +231,9 @@ struct SupplyView: View {
     @State private var showingFilters = false
     @State private var checkOffItem: SupplyItem?
     @State private var supplyShareURL: String?
+    @State private var supplyShareExpiresAt: String?
+    @State private var isLoadingShare = false
+    @State private var snoozeItem: SupplyItem?
     @State private var showingPaywall = false
     @State private var hasTriggeredAutoSync = false
 
@@ -223,17 +276,21 @@ struct SupplyView: View {
             .sheet(isPresented: $showingOptions) {
                 SupplyOptionsSheet(
                     shareURL: supplyShareURL,
+                    shareExpiresAt: supplyShareExpiresAt,
+                    isLoadingShare: isLoadingShare,
                     isSyncing: model.isSyncing,
                     onRefreshFromMeals: {
                         await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                     },
                     onShare: { await createSupplyShare() },
                     onRevokeShare: { await revokeSupplyShare() },
+                    onUpgradeRequired: { showingPaywall = true },
                     onOpenFilters: {
                         showingOptions = false
                         showingFilters = true
                     }
                 )
+                .task { await loadSupplyShareStatus() }
             }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(
@@ -258,10 +315,42 @@ struct SupplyView: View {
                     )
                 }
             }
+            .sheet(item: $snoozeItem) { item in
+                SnoozeDurationSheet(itemName: item.name) { duration in
+                    await model.snooze(
+                        item,
+                        duration: duration,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId
+                    )
+                }
+            }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
             .safeAreaInset(edge: .bottom) {
                 if model.totalCount > 0 {
-                    progressFooter
+                    VStack(spacing: 8) {
+                        progressFooter
+                        FloatingActionBar(actions: [
+                            FloatingAction(
+                                id: "dock",
+                                systemImage: "shippingbox",
+                                label: model.isDocking ? "Docking…" : "Dock to Cargo",
+                                action: {
+                                    Task {
+                                        await model.dock(
+                                            api: env.api,
+                                            snapshots: env.snapshots,
+                                            online: env.network.isOnline,
+                                            organizationId: organizationId
+                                        )
+                                    }
+                                },
+                                disabled: model.isDocking || model.purchasedCount == 0
+                            ),
+                        ])
+                    }
                 }
             }
         }
@@ -271,6 +360,7 @@ struct SupplyView: View {
                 model.filters.supplyUnitMode = mode
             }
             supplyShareURL = try? await env.api.supplyShareStatus().shareUrl
+            supplyShareExpiresAt = try? await env.api.supplyShareStatus().shareExpiresAt
             if env.network.isOnline, !hasTriggeredAutoSync {
                 hasTriggeredAutoSync = true
                 await model.sync(api: env.api, snapshots: env.snapshots, online: true, organizationId: organizationId)
@@ -279,37 +369,29 @@ struct SupplyView: View {
     }
 
     private var progressFooter: some View {
-        VStack(spacing: 12) {
+        HStack(spacing: 12) {
             if let message = model.dockMessage {
                 Text(message).rationCaption().foregroundStyle(Theme.hyperGreen)
             }
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .stroke(Theme.platinum, lineWidth: 6)
-                    Circle()
-                        .trim(from: 0, to: model.progressFraction)
-                        .stroke(Theme.hyperGreen, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    Text("\(model.purchasedCount)/\(model.totalCount)")
-                        .rationCaption()
-                }
-                .frame(width: 56, height: 56)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Shopping progress").rationHeadline()
-                    Text("\(model.purchasedCount) of \(model.totalCount) purchased").rationCaption()
-                }
-                Spacer()
+            ZStack {
+                Circle()
+                    .stroke(Theme.platinum, lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: model.progressFraction)
+                    .stroke(Theme.hyperGreen, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(model.purchasedCount)/\(model.totalCount)")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
             }
-            Button(model.isDocking ? "Docking…" : "Dock to Cargo") {
-                Task {
-                    await model.dock(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                }
+            .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Shopping progress").rationHeadline()
+                Text("\(model.purchasedCount) of \(model.totalCount) purchased").rationCaption()
             }
-            .buttonStyle(SecondaryButtonStyle())
-            .disabled(model.isDocking || model.purchasedCount == 0)
+            Spacer()
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Theme.surface)
     }
 
@@ -320,6 +402,15 @@ struct SupplyView: View {
             }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
+            }
+            SnoozedItemsSection(snoozes: model.snoozes) { snooze in
+                await model.unsnooze(
+                    snooze,
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
             }
             ForEach(model.displayedItems) { item in
                 Button {
@@ -356,6 +447,14 @@ struct SupplyView: View {
                     }
                 }
                 .swipeActions {
+                    if !item.isPurchased {
+                        Button {
+                            snoozeItem = item
+                        } label: {
+                            Label("Snooze", systemImage: "moon.zzz")
+                        }
+                        .tint(Theme.carbon.opacity(0.6))
+                    }
                     Button(role: .destructive) {
                         Task {
                             await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
@@ -372,10 +471,21 @@ struct SupplyView: View {
         }
     }
 
+    private func loadSupplyShareStatus() async {
+        isLoadingShare = true
+        defer { isLoadingShare = false }
+        do {
+            let status = try await env.api.supplyShareStatus()
+            supplyShareURL = status.shareUrl
+            supplyShareExpiresAt = status.shareExpiresAt
+        } catch {}
+    }
+
     private func createSupplyShare() async {
         do {
             let response = try await env.api.createSupplyShare()
             supplyShareURL = response.shareUrl
+            supplyShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
             if case .server(let status, _, _) = error, status == 403 {
@@ -387,6 +497,7 @@ struct SupplyView: View {
     private func revokeSupplyShare() async {
         _ = try? await env.api.revokeSupplyShare()
         supplyShareURL = nil
+        supplyShareExpiresAt = nil
         Haptics.light()
     }
 }

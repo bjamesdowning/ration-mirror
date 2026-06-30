@@ -38,6 +38,8 @@ struct OrgMembership: Codable, Sendable, Identifiable {
     let credits: Int
     let role: String
     let isActive: Bool
+
+    var canManageLogo: Bool { role == "owner" || role == "admin" }
 }
 
 /// Credit costs for AI features — mirrors `AI_COSTS` from ledger.server.
@@ -152,6 +154,69 @@ struct SupplyList: Codable, Sendable, Identifiable {
     let id: String
     let name: String
     let items: [SupplyItem]
+    /// Full-list counts from hub API (items array may be sliced).
+    let itemCount: Int?
+    let uncheckedCount: Int?
+    let purchasedCount: Int?
+
+    init(
+        id: String,
+        name: String,
+        items: [SupplyItem],
+        itemCount: Int? = nil,
+        uncheckedCount: Int? = nil,
+        purchasedCount: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.items = items
+        self.itemCount = itemCount
+        self.uncheckedCount = uncheckedCount
+        self.purchasedCount = purchasedCount
+    }
+
+    var resolvedItemCount: Int { itemCount ?? items.count }
+    var resolvedUncheckedCount: Int {
+        uncheckedCount ?? items.filter { !$0.isPurchased }.count
+    }
+    var resolvedPurchasedCount: Int {
+        purchasedCount ?? items.filter(\.isPurchased).count
+    }
+
+    func withItemPurchaseState(_ itemId: String, isPurchased: Bool) -> SupplyList {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return self }
+        let existing = items[index]
+        guard existing.isPurchased != isPurchased else { return self }
+
+        var updatedItems = items
+        updatedItems[index] = SupplyItem(
+            id: existing.id,
+            name: existing.name,
+            quantity: existing.quantity,
+            unit: existing.unit,
+            domain: existing.domain,
+            isPurchased: isPurchased
+        )
+
+        var newUnchecked = resolvedUncheckedCount
+        var newPurchased = resolvedPurchasedCount
+        if isPurchased {
+            newUnchecked = max(0, newUnchecked - 1)
+            newPurchased += 1
+        } else {
+            newUnchecked += 1
+            newPurchased = max(0, newPurchased - 1)
+        }
+
+        return SupplyList(
+            id: id,
+            name: name,
+            items: updatedItems,
+            itemCount: resolvedItemCount,
+            uncheckedCount: newUnchecked,
+            purchasedCount: newPurchased
+        )
+    }
 }
 
 /// `GET /api/mobile/v1/supply`
@@ -655,6 +720,29 @@ struct ShareCreateResponse: Codable, Sendable {
 
 struct ShareRevokeResponse: Codable, Sendable {
     let revoked: Bool
+}
+
+struct SupplySnooze: Codable, Sendable, Identifiable {
+    let id: String
+    let normalizedName: String
+    let domain: String
+    let snoozedUntil: Date
+    let createdAt: Date
+
+    var displayName: String { normalizedName.replacingOccurrences(of: "-", with: " ") }
+}
+
+struct SupplySnoozesResponse: Codable, Sendable {
+    let snoozes: [SupplySnooze]
+}
+
+struct SupplySnoozeResponse: Codable, Sendable {
+    let snoozed: Bool
+    let snoozedUntil: Date?
+}
+
+struct SupplyUnsnoozeResponse: Codable, Sendable {
+    let unsnoozed: Bool
 }
 
 struct SupplyCompleteRequest: Encodable, Sendable {

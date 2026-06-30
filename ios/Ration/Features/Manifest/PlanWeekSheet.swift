@@ -37,8 +37,11 @@ struct PlanWeekSheet: View {
             .sheet(isPresented: $showingIntro) {
                 AIFeatureIntroView(
                     title: "Plan your week",
-                    detail: "AI schedules meals from your Galley across the week.",
+                    detail: "AI schedules meals from your Galley across breakfast, lunch, and dinner slots.",
                     creditCost: env.session.session?.aiCosts?.mealPlanWeekly ?? 3,
+                    costLabel: "per plan",
+                    confirmLabel: "Plan week",
+                    nextSteps: "Review the generated schedule, then confirm to add entries to Manifest.",
                     onContinue: {
                         showingIntro = false
                         Task { await model.submit(api: env.api) }

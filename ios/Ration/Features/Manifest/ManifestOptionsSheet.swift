@@ -1,45 +1,29 @@
 import SwiftUI
 
-/// Manifest-specific options — share link wired in Phase 5.
+/// Manifest-specific options — share link with web parity UI.
 struct ManifestOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var shareURL: String?
+    var shareExpiresAt: String?
+    var isLoadingShare: Bool = false
     var onShare: () async -> Void = {}
     var onRevokeShare: () async -> Void = {}
-    @State private var isWorking = false
+    var onUpgradeRequired: () -> Void = {}
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Sharing") {
-                    if let shareURL, !shareURL.isEmpty {
-                        ShareLink(item: shareURL) {
-                            Label("Copy share link", systemImage: "link")
-                        }
-                        Button(role: .destructive) {
-                            Task {
-                                isWorking = true
-                                await onRevokeShare()
-                                isWorking = false
-                                dismiss()
-                            }
-                        } label: {
-                            Label("Revoke share link", systemImage: "xmark.circle")
-                        }
-                        .disabled(isWorking)
-                    } else {
-                        Button {
-                            Task {
-                                isWorking = true
-                                await onShare()
-                                isWorking = false
-                            }
-                        } label: {
-                            Label("Share manifest", systemImage: "square.and.arrow.up")
-                        }
-                        .disabled(isWorking)
-                    }
-                }
+                ShareLinkSection(
+                    shareURL: shareURL,
+                    shareExpiresAt: shareExpiresAt,
+                    capabilities: [
+                        "Viewers can see your meal plan",
+                        "They cannot edit your plan",
+                    ],
+                    isLoading: isLoadingShare,
+                    onGenerate: onShare,
+                    onRevoke: onRevokeShare
+                )
             }
             .navigationTitle("Manifest options")
             .navigationBarTitleDisplayMode(.inline)
@@ -49,6 +33,6 @@ struct ManifestOptionsSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

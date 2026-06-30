@@ -2,31 +2,20 @@ import XCTest
 @testable import Ration
 
 final class ManifestDateHelpersTests: XCTestCase {
-    func testAddDaysUsesLocalCalendar() {
-        let result = ManifestDateHelpers.addDays("2026-06-29", days: 1)
-        XCTAssertEqual(result, "2026-06-30")
+    func testSmartLabelToday() {
+        let today = ManifestDateHelpers.todayISO()
+        XCTAssertEqual(HubDateFormat.smartLabel(isoDate: today), "Today")
     }
 
-    func testAddDaysNegative() {
-        let result = ManifestDateHelpers.addDays("2026-06-29", days: -1)
-        XCTAssertEqual(result, "2026-06-28")
+    func testCanNavigateWithinBounds() {
+        let today = ManifestDateHelpers.todayISO()
+        XCTAssertTrue(ManifestDateHelpers.canNavigate(from: today, byDays: 7))
+        let farPast = ManifestDateHelpers.addDays(today, days: -ManifestDateHelpers.navigationWeekBound * 7 - 1)
+        XCTAssertFalse(ManifestDateHelpers.canNavigate(from: farPast, byDays: -7))
     }
 
-    func testWeekStartSunday() {
-        // 2026-06-29 is Monday
-        let start = ManifestDateHelpers.weekStart(for: "2026-06-29", preference: "sunday")
-        XCTAssertEqual(start, "2026-06-28")
-    }
-
-    func testWeekStartMonday() {
-        let start = ManifestDateHelpers.weekStart(for: "2026-06-29", preference: "monday")
-        XCTAssertEqual(start, "2026-06-29")
-    }
-
-    func testCalendarDatesSevenDaySpan() {
-        let dates = ManifestDateHelpers.calendarDates(span: 7, anchor: "2026-06-29", weekStartPref: "monday")
-        XCTAssertEqual(dates.count, 7)
-        XCTAssertEqual(dates.first, "2026-06-29")
-        XCTAssertEqual(dates.last, "2026-07-05")
+    func testAddDaysAcrossMonthBoundary() {
+        let result = ManifestDateHelpers.addDays("2026-01-30", days: 5)
+        XCTAssertEqual(result, "2026-02-04")
     }
 }

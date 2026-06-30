@@ -94,6 +94,10 @@ struct DashboardView: View {
                     Text(staleLabel).rationCaption().frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                if let toggleError = model.toggleErrorMessage {
+                    ErrorBanner(message: toggleError).frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 if let action = model.nextAction(for: data),
                    !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
                 {

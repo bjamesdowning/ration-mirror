@@ -8,7 +8,7 @@ final class ManifestViewModel {
     private(set) var isLoading = false
     private(set) var isSavingEntry = false
     var errorMessage: String?
-    var staleLabel: String?
+    var offlineBannerMessage: String?
     var rangeStart: String = ManifestDateHelpers.todayISO()
     var selectedDay: String = ManifestDateHelpers.todayISO()
     var calendarSpan = 7
@@ -17,6 +17,7 @@ final class ManifestViewModel {
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
+        offlineBannerMessage = nil
         defer { isLoading = false }
 
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
@@ -28,30 +29,68 @@ final class ManifestViewModel {
                 snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots, organizationId: organizationId)
+                restoreSnapshot(snapshots, organizationId: organizationId, requestedStart: rangeStart)
             }
         } else {
-            restoreSnapshot(snapshots, organizationId: organizationId)
+            restoreSnapshot(snapshots, organizationId: organizationId, requestedStart: rangeStart)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.manifest, organizationId: organizationId)
     }
 
     func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        let previousSelected = selectedDay
-        rangeStart = start
+        let newSelectedDay = resolvedSelectedDay(forWeekStart: start, previousSelected: selectedDay)
+        let endDate = ManifestDateHelpers.addDays(start, days: max(calendarSpan - 1, 0))
+
+        isLoading = true
+        errorMessage = nil
+        offlineBannerMessage = nil
+        defer { isLoading = false }
+
+        if online {
+            do {
+                let data = try await api.manifest(startDate: start, endDate: endDate)
+                rangeStart = start
+                selectedDay = newSelectedDay
+                manifest = data
+                snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+            } catch {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
+        } else if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
+            if cached.payload.startDate == start {
+                rangeStart = start
+                selectedDay = newSelectedDay
+                manifest = cached.payload
+            } else {
+                let formatted = ManifestDateHelpers.formatRange(
+                    start: cached.payload.startDate,
+                    end: cached.payload.endDate
+                )
+                offlineBannerMessage = "Offline — showing cached week \(formatted)"
+                rangeStart = cached.payload.startDate
+                selectedDay = resolvedSelectedDay(
+                    forWeekStart: cached.payload.startDate,
+                    previousSelected: selectedDay
+                )
+                manifest = cached.payload
+            }
+        } else {
+            offlineBannerMessage = "Offline — no cached manifest data for this week"
+        }
+    }
+
+    private func resolvedSelectedDay(forWeekStart start: String, previousSelected: String) -> String {
         let visible = ManifestDateHelpers.calendarDates(
             span: calendarSpan,
-            anchor: rangeStart,
+            anchor: start,
             weekStartPref: weekStartPref
         )
         if visible.contains(previousSelected) {
-            selectedDay = previousSelected
-        } else if visible.contains(ManifestDateHelpers.todayISO()) {
-            selectedDay = ManifestDateHelpers.todayISO()
-        } else {
-            selectedDay = visible.first ?? start
+            return previousSelected
         }
-        await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        if visible.contains(ManifestDateHelpers.todayISO()) {
+            return ManifestDateHelpers.todayISO()
+        }
+        return visible.first ?? start
     }
 
     func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
@@ -93,10 +132,20 @@ final class ManifestViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
-        if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
-            manifest = cached.payload
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String, requestedStart: String) {
+        guard let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) else {
+            return
         }
+        manifest = cached.payload
+        if !requestedStart.isEmpty, cached.payload.startDate != requestedStart {
+            let formatted = ManifestDateHelpers.formatRange(
+                start: cached.payload.startDate,
+                end: cached.payload.endDate
+            )
+            offlineBannerMessage = "Offline — showing cached week \(formatted)"
+        }
+        rangeStart = cached.payload.startDate
+        selectedDay = resolvedSelectedDay(forWeekStart: cached.payload.startDate, previousSelected: selectedDay)
     }
 }
 
@@ -130,6 +179,8 @@ struct ManifestView: View {
             .navigationTitle("Manifest")
             .toolbar {
                 GlobalPageToolbar(
+                    syncDomain: SnapshotDomain.manifest,
+                    organizationId: organizationId,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -167,23 +218,20 @@ struct ManifestView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                FloatingActionBar(actions: [
-                    FloatingAction(
-                        id: "add",
-                        systemImage: "plus",
-                        label: "Add",
-                        action: { showingAddEntry = true },
-                        disabled: !env.network.isOnline
-                    ),
-                    FloatingAction(
-                        id: "plan",
-                        systemImage: "sparkles",
-                        label: "Plan week",
-                        action: { showingPlanWeek = true },
-                        isAI: true,
-                        disabled: !env.network.isOnline
-                    ),
-                ])
+                IconFAB(
+                    systemImage: "plus.circle.fill",
+                    accessibilityLabel: "Manifest actions",
+                    disabled: !env.network.isOnline
+                ) {
+                    Button { showingAddEntry = true } label: {
+                        Label("Add entry", systemImage: "plus")
+                    }
+                    .disabled(!env.network.isOnline)
+                    Button { showingPlanWeek = true } label: {
+                        Label("Plan week", systemImage: "sparkles")
+                    }
+                    .disabled(!env.network.isOnline)
+                }
             }
         }
         .task(id: organizationId) {
@@ -251,9 +299,13 @@ struct ManifestView: View {
             }
             .listRowBackground(Color.clear)
 
-            if let staleLabel = model.staleLabel {
-                Text(staleLabel).rationCaption().listRowBackground(Color.clear)
+            if let offlineBanner = model.offlineBannerMessage {
+                Text(offlineBanner)
+                    .rationCaption()
+                    .foregroundStyle(Theme.warning)
+                    .listRowBackground(Color.clear)
             }
+
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
@@ -320,10 +372,11 @@ struct ManifestEntryRow: View {
     let onConsume: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            SlotGlyphView(slotType: entry.slotType)
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.mealName.capitalized).rationBody()
-                Text("\(entry.slotType.capitalized) · \(entry.mealType.capitalized)")
+                Text(entry.mealType.capitalized)
                     .rationCaption()
             }
             Spacer()

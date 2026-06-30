@@ -33,6 +33,24 @@ final class GenerateMealViewModel {
         }
     }
 
+    func saveSelected(_ recipes: [GeneratedRecipe], api: RationAPI) async throws {
+        for recipe in recipes {
+            let steps = DirectionsParser.parseDirections(recipe.directions)
+            let directionsPayload = steps.isEmpty ? recipe.directions : DirectionsParser.serializeDirections(steps)
+            let body = CreateMealRequest(
+                name: recipe.name.lowercased(),
+                description: recipe.description,
+                directions: directionsPayload,
+                servings: recipe.servings ?? 2,
+                prepTime: recipe.prepTime,
+                cookTime: recipe.cookTime,
+                ingredients: recipe.ingredients ?? [],
+                tags: recipe.tags ?? []
+            )
+            _ = try await api.createMeal(body)
+        }
+    }
+
     func poll(requestId: String, api: RationAPI) async {
         for attempt in 0..<maxPollAttempts {
             do {
@@ -71,8 +89,14 @@ struct GenerateMealSheet: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var model = GenerateMealViewModel()
-    @State private var showingIntro = false
+    @State private var selectedRecipeNames: Set<String> = []
+    @State private var isSaving = false
+    @State private var saveError: String?
     var onComplete: () async -> Void = {}
+
+    private var creditCost: Int {
+        env.session.session?.aiCosts?.mealGenerate ?? 2
+    }
 
     var body: some View {
         NavigationStack {
@@ -81,10 +105,7 @@ struct GenerateMealSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    AIProcessingView(
-                        feature: .generateMeals,
-                        creditCost: env.session.session?.aiCosts?.mealGenerate ?? 2
-                    )
+                    AIProcessingView(feature: .generateMeals, creditCost: creditCost)
                 case let .completed(recipes):
                     completedContent(recipes)
                 case let .failed(message):
@@ -101,55 +122,96 @@ struct GenerateMealSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .background(Theme.ceramic)
-            .sheet(isPresented: $showingIntro) {
-                AIFeatureIntroView(
-                    title: "Generate meals",
-                    detail: "AI creates recipe ideas from your Cargo inventory.",
-                    creditCost: env.session.session?.aiCosts?.mealGenerate ?? 2,
-                    costLabel: "per generation",
-                    confirmLabel: "Generate",
-                    nextSteps: "Pick recipes you like, then save them to Galley.",
-                    onContinue: {
-                        showingIntro = false
-                        Task { await model.submit(api: env.api) }
-                    }
-                )
-                .presentationDetents([.medium])
-            }
         }
     }
 
     private var idleContent: some View {
-        VStack(spacing: 16) {
-            TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-            Button("Generate") { showingIntro = true }
-                .buttonStyle(AIButtonStyle())
+        ScrollView {
+            VStack(spacing: 16) {
+                AIFeatureInlineIntro(
+                    title: "Generate meals",
+                    detail: "AI creates recipe ideas from your Cargo inventory.",
+                    creditCost: creditCost,
+                    costLabel: "per generation",
+                    nextSteps: "Pick recipes you like, then save them to Galley."
+                )
+                TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                AIFeaturePrimaryButton(label: "Generate ideas", creditCost: creditCost) {
+                    Task { await model.submit(api: env.api) }
+                }
+            }
         }
     }
 
     private func completedContent(_ recipes: [GeneratedRecipe]) -> some View {
         ScrollView {
             VStack(spacing: 12) {
-                ForEach(recipes) { recipe in
-                    GlassCard {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(recipe.name.capitalized).rationHeadline()
-                            if let description = recipe.description {
-                                Text(description).rationCaption()
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                if let saveError {
+                    ErrorBanner(message: saveError)
                 }
-                Button("Done") {
-                    Task {
-                        await onComplete()
-                        dismiss()
+                ForEach(recipes) { recipe in
+                    Button {
+                        toggleRecipe(recipe)
+                    } label: {
+                        GlassCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: selectedRecipeNames.contains(recipe.name) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedRecipeNames.contains(recipe.name) ? Theme.hyperGreen : Theme.muted)
+                                    Text(recipe.name.capitalized).rationHeadline()
+                                    Spacer()
+                                }
+                                if let description = recipe.description {
+                                    Text(description).rationCaption()
+                                }
+                                if let ingredients = recipe.ingredients, !ingredients.isEmpty {
+                                    Text("\(ingredients.count) ingredients").rationCaption()
+                                }
+                                if let directions = recipe.directions, !DirectionsParser.parseDirections(directions).isEmpty {
+                                    Text("\(DirectionsParser.parseDirections(directions).count) steps").rationCaption()
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
+                    .buttonStyle(.plain)
+                }
+                Button(selectedRecipeNames.isEmpty ? "Done" : "Save selected to Galley") {
+                    Task { await finish(recipes: recipes) }
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .disabled(isSaving)
             }
+        }
+    }
+
+    private func toggleRecipe(_ recipe: GeneratedRecipe) {
+        if selectedRecipeNames.contains(recipe.name) {
+            selectedRecipeNames.remove(recipe.name)
+        } else {
+            selectedRecipeNames.insert(recipe.name)
+        }
+    }
+
+    @MainActor
+    private func finish(recipes: [GeneratedRecipe]) async {
+        let selected = recipes.filter { selectedRecipeNames.contains($0.name) }
+        if selected.isEmpty {
+            await onComplete()
+            dismiss()
+            return
+        }
+        isSaving = true
+        saveError = nil
+        defer { isSaving = false }
+        do {
+            try await model.saveSelected(selected, api: env.api)
+            Haptics.success()
+            await onComplete()
+            dismiss()
+        } catch {
+            saveError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

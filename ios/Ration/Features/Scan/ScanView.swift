@@ -119,9 +119,13 @@ struct ScanView: View {
     @State private var model = ScanViewModel()
     @State private var showingCamera = false
     @State private var showingConsentGate = false
-    @State private var showingIntro = false
     @State private var hasAIConsent = false
     @State private var checkedConsent = false
+    @State private var showingPaywall = false
+
+    private var scanCreditCost: Int {
+        env.session.session?.aiCosts?.scan ?? 1
+    }
 
     var body: some View {
         NavigationStack {
@@ -153,21 +157,6 @@ struct ScanView: View {
             }
             .background(Theme.ceramic)
             .task { await loadConsent() }
-            .sheet(isPresented: $showingIntro) {
-                AIFeatureIntroView(
-                    title: "Scan to add items",
-                    detail: "AI reads your receipt or pantry photo and suggests items to add to Cargo.",
-                    creditCost: env.session.session?.aiCosts?.scan ?? 1,
-                    costLabel: "per scan",
-                    confirmLabel: "Continue",
-                    nextSteps: "Review detected items before confirming them to Cargo.",
-                    onContinue: {
-                        showingIntro = false
-                        proceedAfterIntro()
-                    }
-                )
-                .presentationDetents([.medium])
-            }
             .sheet(isPresented: $showingConsentGate) {
                 AIConsentGateView(
                     onAccept: {
@@ -182,7 +171,10 @@ struct ScanView: View {
                     },
                     onDecline: { showingConsentGate = false }
                 )
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView()
             }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraPicker { image in
@@ -195,21 +187,25 @@ struct ScanView: View {
     }
 
     private var idleContent: some View {
-        VStack(spacing: 20) {
-            EmptyStateView(
-                icon: "camera.viewfinder",
-                title: "Scan a receipt",
-                message: "Capture a grocery receipt and Ration adds the items to your cargo automatically."
-            )
-            Button("Open camera") { beginScan() }
-                .buttonStyle(PrimaryButtonStyle())
-                .padding(.horizontal, 24)
+        ScrollView {
+            VStack(spacing: 20) {
+                AIFeatureInlineIntro(
+                    title: "Scan to add items",
+                    detail: "AI reads your receipt or pantry photo and suggests items to add to Cargo.",
+                    creditCost: scanCreditCost,
+                    costLabel: "per scan",
+                    nextSteps: "Review detected items before confirming them to Cargo."
+                )
+                AIFeaturePrimaryButton(label: "Open camera", creditCost: scanCreditCost) {
+                    proceedAfterIntro()
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
     private func beginScan() {
-        guard checkedConsent else { return }
-        showingIntro = true
+        proceedAfterIntro()
     }
 
     private func proceedAfterIntro() {

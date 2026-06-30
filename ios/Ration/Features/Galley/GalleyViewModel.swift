@@ -8,7 +8,6 @@ final class GalleyViewModel {
     private(set) var matches: [MealMatch] = []
     private(set) var isLoading = false
     var errorMessage: String?
-    var staleLabel: String?
 
     var isMatchMode: Bool { filters.matchingEnabled }
 
@@ -55,7 +54,6 @@ final class GalleyViewModel {
         } else {
             restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.galley, organizationId: organizationId)
     }
 
     private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {

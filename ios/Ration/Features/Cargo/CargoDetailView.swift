@@ -11,12 +11,15 @@ final class CargoDetailViewModel {
 
     func load(id: String, api: RationAPI) async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         do {
             let response = try await api.cargoItem(id: id)
             item = response.item
             connectedMeals = response.connectedMeals ?? []
         } catch {
+            item = nil
+            connectedMeals = []
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -62,18 +65,22 @@ struct CargoDetailView: View {
                     }
                     .padding(16)
                 }
+            } else {
+                cargoLoadFailureView
             }
         }
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Edit") { showingEdit = true }
-                    Button("Delete", role: .destructive) { showingDeleteConfirm = true }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+            if model.item != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Edit") { showingEdit = true }
+                        Button("Delete", role: .destructive) { showingDeleteConfirm = true }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
@@ -94,6 +101,21 @@ struct CargoDetailView: View {
                 }
             }
         }
+    }
+
+    private var cargoLoadFailureView: some View {
+        VStack(spacing: 16) {
+            EmptyStateView(
+                icon: "shippingbox",
+                title: "Couldn't load item",
+                message: model.errorMessage ?? "This item may have been deleted or is unavailable."
+            )
+            Button("Retry") {
+                Task { await model.load(id: itemId, api: env.api) }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+        .padding(24)
     }
 
     private func header(_ item: CargoItem) -> some View {

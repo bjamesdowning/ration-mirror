@@ -11,7 +11,6 @@ final class HubViewModel {
     }
 
     private(set) var state: State = .loading
-    var staleLabel: String?
     var isEditMode = false
     var toggleErrorMessage: String?
 
@@ -31,7 +30,6 @@ final class HubViewModel {
         } else {
             state = .failed("You're offline and no cached Hub data is available.")
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.hub, organizationId: organizationId)
     }
 
     @discardableResult
@@ -73,6 +71,11 @@ final class HubViewModel {
         ))
     }
 
+    func saveProfile(_ profile: HubProfile, api: RationAPI) async throws {
+        guard profile != "custom" else { return }
+        _ = try await api.patchSettings(SettingsPatch(hubProfile: profile))
+    }
+
     func toggleSupplyItem(
         _ item: SupplyItem,
         isPurchased: Bool,
@@ -89,7 +92,6 @@ final class HubViewModel {
         let updatedList = supplyList.withItemPurchaseState(item.id, isPurchased: isPurchased)
         let newData = data.withSupplyList(updatedList)
         state = .loaded(newData)
-        snapshots.save(newData, domain: SnapshotDomain.hub, organizationId: organizationId)
         if isPurchased { Haptics.light() }
 
         guard online else {
@@ -99,6 +101,7 @@ final class HubViewModel {
 
         do {
             _ = try await api.toggleSupplyItem(item.id, isPurchased: isPurchased)
+            snapshots.save(newData, domain: SnapshotDomain.hub, organizationId: organizationId)
         } catch {
             toggleErrorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
@@ -117,6 +120,7 @@ private extension HubResponse {
             hubProfile: hubProfile,
             hubLayout: hubLayout,
             availableMealTags: availableMealTags,
+            availableCargoTags: availableCargoTags,
             mealMatches: mealMatches,
             partialMealMatches: partialMealMatches,
             snackMatches: snackMatches

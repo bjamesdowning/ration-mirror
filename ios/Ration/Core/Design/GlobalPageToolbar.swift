@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Standard page toolbar: org switcher leading; options + profile trailing.
+/// Standard page toolbar: org switcher leading; sync indicator, options + profile trailing.
 struct GlobalPageToolbar: ToolbarContent {
     var hasActiveFilters: Bool = false
+    var syncDomain: String?
+    var organizationId: String?
     var onOptions: (() -> Void)?
     var onOpenSettings: () -> Void
     @Environment(AppEnvironment.self) private var env
@@ -13,6 +15,16 @@ struct GlobalPageToolbar: ToolbarContent {
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {
+                if let syncDomain, let organizationId {
+                    let state = env.snapshots.syncState(
+                        domain: syncDomain,
+                        organizationId: organizationId,
+                        online: env.network.isOnline
+                    )
+                    if state.shouldShowIndicator {
+                        SyncIndicatorIcon(state: state)
+                    }
+                }
                 if let onOptions {
                     PageOptionsButton(hasActiveFilters: hasActiveFilters, action: onOptions)
                 }

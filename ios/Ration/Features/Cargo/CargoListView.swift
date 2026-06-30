@@ -54,6 +54,8 @@ struct CargoListView: View {
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
+                    syncDomain: SnapshotDomain.cargo,
+                    organizationId: organizationId,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -65,10 +67,14 @@ struct CargoListView: View {
                 FilterOptionsSheet(filters: model.filters, availableTags: model.availableTags)
             }
             .safeAreaInset(edge: .bottom) {
-                FloatingActionBar(actions: [
-                    FloatingAction(id: "scan", systemImage: "camera.viewfinder", label: "Scan", action: onScan, isAI: true),
-                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }),
-                ])
+                IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
+                    Button(action: onScan) {
+                        Label("Scan receipt", systemImage: "camera.viewfinder")
+                    }
+                    Button { showingAdd = true } label: {
+                        Label("Add item", systemImage: "plus")
+                    }
+                }
             }
         }
         .task(id: organizationId) {
@@ -94,9 +100,6 @@ struct CargoListView: View {
 
     private var list: some View {
         List {
-            if let staleLabel = model.staleLabel, !model.isSearchActive {
-                Text(staleLabel).rationCaption().listRowBackground(Color.clear)
-            }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }

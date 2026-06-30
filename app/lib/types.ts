@@ -81,6 +81,10 @@ export interface HubWidgetFilters {
 	domain?: CargoDomain;
 	/** Override the default result count limit for this widget (1–20). */
 	limit?: number;
+	/** Manifest preview day span (1, 3, 7, or 14 days from today). */
+	daySpan?: 1 | 3 | 7 | 14;
+	/** Cargo tag slugs for supply-preview widget (OR logic). */
+	supplyTags?: string[];
 }
 
 export interface HubWidgetLayout {
@@ -93,6 +97,7 @@ export interface HubWidgetLayout {
 }
 
 export interface ManifestPreviewEntry {
+	entryId: string;
 	date: string; // YYYY-MM-DD
 	slotType: string;
 	mealName: string;

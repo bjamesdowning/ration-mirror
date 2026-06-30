@@ -14,7 +14,6 @@ final class CargoViewModel {
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     var errorMessage: String?
-    var staleLabel: String?
     var availableTags: [String] = []
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
@@ -62,7 +61,6 @@ final class CargoViewModel {
         } else {
             restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.cargo, organizationId: organizationId)
     }
 
     func applyClientFilters() {

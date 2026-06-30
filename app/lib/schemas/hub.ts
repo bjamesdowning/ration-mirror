@@ -23,6 +23,12 @@ export const HubWidgetFiltersSchema = z.object({
 	domain: z.enum(CARGO_DOMAINS).optional(),
 	/** Override the default result limit for this widget. 1–20. */
 	limit: z.number().int().min(1).max(20).optional(),
+	/** Manifest preview day span (today + N-1 days). Applies to manifest-preview only. */
+	daySpan: z
+		.union([z.literal(1), z.literal(3), z.literal(7), z.literal(14)])
+		.optional(),
+	/** Cargo tag slugs for supply-preview (OR logic). Max 5 tags. */
+	supplyTags: z.array(z.string().min(1).max(50)).max(5).optional(),
 });
 
 export const HubWidgetLayoutSchema = z.object({

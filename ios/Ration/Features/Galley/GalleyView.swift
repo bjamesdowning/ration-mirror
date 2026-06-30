@@ -42,6 +42,8 @@ struct GalleyView: View {
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
+                    syncDomain: SnapshotDomain.galley,
+                    organizationId: organizationId,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -61,11 +63,17 @@ struct GalleyView: View {
             }
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
             .safeAreaInset(edge: .bottom) {
-                FloatingActionBar(actions: [
-                    FloatingAction(id: "add", systemImage: "plus", label: "Add", action: { showingAdd = true }),
-                    FloatingAction(id: "generate", systemImage: "sparkles", label: "Generate", action: { showingGenerate = true }, isAI: true),
-                    FloatingAction(id: "import", systemImage: "link", label: "Import", action: { showingImport = true }, isAI: true),
-                ])
+                IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
+                    Button { showingAdd = true } label: {
+                        Label("Add meal", systemImage: "plus")
+                    }
+                    Button { showingGenerate = true } label: {
+                        Label("Generate meal", systemImage: "sparkles")
+                    }
+                    Button { showingImport = true } label: {
+                        Label("Import recipe", systemImage: "link")
+                    }
+                }
             }
         }
         .task(id: organizationId) {
@@ -87,9 +95,6 @@ struct GalleyView: View {
 
     private var mealList: some View {
         List {
-            if let staleLabel = model.staleLabel {
-                Text(staleLabel).rationCaption().listRowBackground(Color.clear)
-            }
             ForEach(model.displayedMeals) { meal in
                 NavigationLink {
                     MealDetailView(mealId: meal.id, initialMeal: meal)
@@ -204,7 +209,7 @@ struct MealDetailView: View {
                     GlassCard {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Directions").rationHeadline()
-                            Text(directions).rationBody()
+                            DirectionsStepsView(steps: DirectionsParser.parseDirections(directions))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }

@@ -92,8 +92,19 @@ describe("HubWidgetFiltersSchema", () => {
 			slotType: "dinner",
 			domain: "food",
 			limit: 8,
+			daySpan: 3,
+			supplyTags: ["costco"],
 		});
 		expect(result.success).toBe(true);
+	});
+
+	it("accepts daySpan values 1, 3, 7, 14", () => {
+		for (const daySpan of [1, 3, 7, 14] as const) {
+			expect(HubWidgetFiltersSchema.safeParse({ daySpan }).success).toBe(true);
+		}
+		expect(HubWidgetFiltersSchema.safeParse({ daySpan: 5 }).success).toBe(
+			false,
+		);
 	});
 });
 

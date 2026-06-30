@@ -53,7 +53,10 @@ struct MainTabView: View {
             DashboardView(
                 onScan: { showingScan = true },
                 onOpenSettings: { showingSettings = true },
-                onOpenSupply: { selectedTab = 4 }
+                onOpenSupply: { selectedTab = 4 },
+                onOpenCargo: { selectedTab = 1 },
+                onOpenGalley: { selectedTab = 2 },
+                onOpenManifest: { selectedTab = 3 }
             )
                 .id(orgGeneration)
                 .tabItem { Label("Hub", systemImage: "square.grid.2x2") }

@@ -12,6 +12,7 @@ import {
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { log } from "./logging.server";
 import { cookMeal } from "./meals.server";
+import { chunkedQuery } from "./query-utils.server";
 import type { ManifestPreviewData } from "./types";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
@@ -700,6 +701,7 @@ export async function getManifestPreview(
 	organizationId: string,
 	days = 7,
 	slotType?: string,
+	tags?: string[],
 ): Promise<ManifestPreviewData> {
 	const d1 = drizzle(db);
 
@@ -725,6 +727,7 @@ export async function getManifestPreview(
 
 	const rows = await d1
 		.select({
+			entryId: mealPlanEntry.id,
 			date: mealPlanEntry.date,
 			slotType: mealPlanEntry.slotType,
 			mealName: meal.name,
@@ -747,6 +750,27 @@ export async function getManifestPreview(
 			mealPlanEntry.slotType,
 			mealPlanEntry.orderIndex,
 		);
+
+	// Tag filter applied against the bounded preview window only. The distinct
+	// meal IDs present in `rows` are capped by the date range (max ~14 days of
+	// entries), so the follow-up `inArray` stays well under D1's 100-param limit.
+	if (tags && tags.length > 0) {
+		const previewMealIds = [...new Set(rows.map((r) => r.mealId))];
+		if (previewMealIds.length === 0) {
+			return { planId: plan.id, entries: [] };
+		}
+		const taggedRows = await chunkedQuery(previewMealIds, (chunk) =>
+			d1
+				.selectDistinct({ mealId: mealTag.mealId })
+				.from(mealTag)
+				.where(and(inArray(mealTag.mealId, chunk), inArray(mealTag.tag, tags))),
+		);
+		const allowed = new Set(taggedRows.map((r) => r.mealId));
+		return {
+			planId: plan.id,
+			entries: rows.filter((r) => allowed.has(r.mealId)),
+		};
+	}
 
 	return { planId: plan.id, entries: rows };
 }

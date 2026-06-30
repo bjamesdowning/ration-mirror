@@ -49,6 +49,10 @@ final class SnapshotStore {
         return (envelope.payload, envelope.metadata)
     }
 
+    func syncedAt(domain: String, organizationId: String) -> Date? {
+        loadMetadata(domain: domain, organizationId: organizationId)?.syncedAt
+    }
+
     func lastSyncedLabel(domain: String, organizationId: String) -> String? {
         guard let meta = loadMetadata(domain: domain, organizationId: organizationId) else { return nil }
         let formatter = RelativeDateTimeFormatter()

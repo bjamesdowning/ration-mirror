@@ -10,7 +10,6 @@ final class SupplyViewModel {
     private(set) var isDocking = false
     private(set) var snoozes: [SupplySnooze] = []
     var errorMessage: String?
-    var staleLabel: String?
     var dockMessage: String?
     private var lastHapticMilestone = 0
 
@@ -55,7 +54,6 @@ final class SupplyViewModel {
         } else {
             restoreSnapshot(snapshots, organizationId: organizationId)
         }
-        staleLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.supply, organizationId: organizationId)
         if online {
             await loadSnoozes(api: api)
         }
@@ -268,6 +266,8 @@ struct SupplyView: View {
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
+                    syncDomain: SnapshotDomain.supply,
+                    organizationId: organizationId,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -328,29 +328,55 @@ struct SupplyView: View {
                 }
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .background(Theme.ceramic)
+            .safeAreaInset(edge: .top) {
+                if model.totalCount > 0 {
+                    VStack(spacing: 6) {
+                        ThinProgressBar(progress: model.progressFraction)
+                            .padding(.horizontal, 16)
+                        if let message = model.dockMessage {
+                            Text(message)
+                                .rationCaption()
+                                .foregroundStyle(Theme.hyperGreen)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .background(Theme.ceramic)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 if model.totalCount > 0 {
-                    VStack(spacing: 8) {
-                        progressFooter
-                        FloatingActionBar(actions: [
-                            FloatingAction(
-                                id: "dock",
-                                systemImage: "shippingbox",
-                                label: model.isDocking ? "Docking…" : "Dock to Cargo",
-                                action: {
-                                    Task {
-                                        await model.dock(
-                                            api: env.api,
-                                            snapshots: env.snapshots,
-                                            online: env.network.isOnline,
-                                            organizationId: organizationId
-                                        )
-                                    }
-                                },
-                                disabled: model.isDocking || model.purchasedCount == 0
-                            ),
-                        ])
+                    HStack {
+                        Spacer()
+                        Menu {
+                            Button {
+                                Task {
+                                    await model.dock(
+                                        api: env.api,
+                                        snapshots: env.snapshots,
+                                        online: env.network.isOnline,
+                                        organizationId: organizationId
+                                    )
+                                }
+                            } label: {
+                                Label("Dock to Cargo", systemImage: "shippingbox")
+                            }
+                            .disabled(model.isDocking || model.purchasedCount == 0)
+                        } label: {
+                            Image(systemName: "shippingbox.and.arrow.backward.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Theme.carbon)
+                                .frame(width: 56, height: 56)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay(Circle().stroke(Theme.platinum, lineWidth: 1))
+                        }
+                        .accessibilityLabel("Dock purchased items to Cargo")
+                        .disabled(model.isDocking || model.purchasedCount == 0)
                     }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
                 }
             }
         }
@@ -368,38 +394,8 @@ struct SupplyView: View {
         }
     }
 
-    private var progressFooter: some View {
-        HStack(spacing: 12) {
-            if let message = model.dockMessage {
-                Text(message).rationCaption().foregroundStyle(Theme.hyperGreen)
-            }
-            ZStack {
-                Circle()
-                    .stroke(Theme.platinum, lineWidth: 5)
-                Circle()
-                    .trim(from: 0, to: model.progressFraction)
-                    .stroke(Theme.hyperGreen, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text("\(model.purchasedCount)/\(model.totalCount)")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-            }
-            .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Shopping progress").rationHeadline()
-                Text("\(model.purchasedCount) of \(model.totalCount) purchased").rationCaption()
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Theme.surface)
-    }
-
     private func listView(_ list: SupplyList) -> some View {
         List {
-            if let staleLabel = model.staleLabel {
-                Text(staleLabel).rationCaption().listRowBackground(Color.clear)
-            }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }

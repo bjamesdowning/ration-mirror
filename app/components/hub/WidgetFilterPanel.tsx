@@ -20,6 +20,11 @@ export const SLOT_FILTER_WIDGETS: HubWidgetId[] = ["manifest-preview"];
 
 export const DOMAIN_FILTER_WIDGETS: HubWidgetId[] = ["cargo-expiring"];
 
+export const DAY_SPAN_FILTER_WIDGETS: HubWidgetId[] = ["manifest-preview"];
+
+export const SUPPLY_TAG_FILTER_WIDGETS: HubWidgetId[] = ["supply-preview"];
+
+const DAY_SPAN_OPTIONS = [1, 3, 7, 14] as const;
 const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 const CARGO_DOMAINS = ["food", "household", "alcohol"] as const;
 
@@ -27,6 +32,7 @@ interface WidgetFilterPanelProps {
 	widgetId: HubWidgetId;
 	filters: HubWidgetFilters | undefined;
 	availableMealTags: string[];
+	availableCargoTags?: string[];
 	isSaving: boolean;
 	onChange: (filters: HubWidgetFilters) => void;
 	touchFriendly?: boolean;
@@ -38,7 +44,9 @@ export function supportsWidgetFilters(widgetId: HubWidgetId): boolean {
 		TAG_FILTER_WIDGETS.includes(widgetId) ||
 		SLOT_FILTER_WIDGETS.includes(widgetId) ||
 		DOMAIN_FILTER_WIDGETS.includes(widgetId) ||
-		LIMIT_FILTER_WIDGETS.includes(widgetId)
+		LIMIT_FILTER_WIDGETS.includes(widgetId) ||
+		DAY_SPAN_FILTER_WIDGETS.includes(widgetId) ||
+		SUPPLY_TAG_FILTER_WIDGETS.includes(widgetId)
 	);
 }
 
@@ -46,6 +54,7 @@ export function WidgetFilterPanel({
 	widgetId,
 	filters,
 	availableMealTags,
+	availableCargoTags = [],
 	isSaving,
 	onChange,
 	touchFriendly = false,
@@ -55,8 +64,15 @@ export function WidgetFilterPanel({
 	const supportsSlot = SLOT_FILTER_WIDGETS.includes(widgetId);
 	const supportsDomain = DOMAIN_FILTER_WIDGETS.includes(widgetId);
 	const supportsLimit = LIMIT_FILTER_WIDGETS.includes(widgetId);
+	const supportsDaySpan = DAY_SPAN_FILTER_WIDGETS.includes(widgetId);
+	const supportsSupplyTags = SUPPLY_TAG_FILTER_WIDGETS.includes(widgetId);
 	const hasAnyFilter =
-		supportsTags || supportsSlot || supportsDomain || supportsLimit;
+		supportsTags ||
+		supportsSlot ||
+		supportsDomain ||
+		supportsLimit ||
+		supportsDaySpan ||
+		supportsSupplyTags;
 
 	if (!hasAnyFilter) return null;
 
@@ -64,6 +80,8 @@ export function WidgetFilterPanel({
 	const currentSlot = filters?.slotType;
 	const currentDomain = filters?.domain;
 	const currentLimit = filters?.limit;
+	const currentDaySpan = filters?.daySpan;
+	const currentSupplyTags = filters?.supplyTags ?? [];
 
 	const containerClass =
 		theme === "dark"
@@ -215,6 +233,71 @@ export function WidgetFilterPanel({
 								{domain}
 							</button>
 						))}
+					</div>
+				</div>
+			)}
+
+			{supportsDaySpan && (
+				<div>
+					<p className={labelClass}>Days to show</p>
+					<div className="flex gap-1.5 flex-wrap">
+						{DAY_SPAN_OPTIONS.map((days) => (
+							<button
+								key={days}
+								type="button"
+								disabled={isSaving}
+								onClick={() =>
+									update({
+										daySpan: currentDaySpan === days ? undefined : days,
+									})
+								}
+								className={`${chipSizeClass} rounded-full font-medium transition-colors ${
+									(currentDaySpan ?? 7) === days
+										? "bg-hyper-green text-carbon"
+										: inactiveChipClass
+								}`}
+							>
+								{days === 1 ? "Today" : `${days} days`}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
+
+			{supportsSupplyTags && availableCargoTags.length > 0 && (
+				<div>
+					<p className={labelClass}>
+						Cargo tags
+						{currentSupplyTags.length > 0 && (
+							<span className="ml-1.5 text-hyper-green">
+								({currentSupplyTags.length})
+							</span>
+						)}
+					</p>
+					<div className="flex flex-wrap gap-1.5">
+						{availableCargoTags.map((tag) => {
+							const active = currentSupplyTags.includes(tag);
+							return (
+								<button
+									key={tag}
+									type="button"
+									disabled={isSaving}
+									onClick={() => {
+										const next = active
+											? currentSupplyTags.filter((t) => t !== tag)
+											: [...currentSupplyTags, tag].slice(0, 5);
+										update({
+											supplyTags: next.length ? next : undefined,
+										});
+									}}
+									className={`${chipSizeClass} rounded-full font-medium transition-colors capitalize ${
+										active ? "bg-hyper-green text-carbon" : inactiveChipClass
+									}`}
+								>
+									{tag}
+								</button>
+							);
+						})}
 					</div>
 				</div>
 			)}

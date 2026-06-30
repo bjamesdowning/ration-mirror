@@ -136,7 +136,9 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/manifest/plan-week`, `/manifest/plan-week/:requestId` | POST/GET | AI week plan (3 credits) |
 | `/manifest/bulk` | POST | Bulk add plan entries |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`.
+
+**Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows. See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
 
 ## Security notes
 

@@ -75,8 +75,11 @@ struct ImportRecipeSheet: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var model = ImportRecipeViewModel()
-    @State private var showingIntro = false
     var onComplete: () async -> Void = {}
+
+    private var creditCost: Int {
+        env.session.session?.aiCosts?.importUrl ?? 1
+    }
 
     var body: some View {
         NavigationStack {
@@ -85,10 +88,7 @@ struct ImportRecipeSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    AIProcessingView(
-                        feature: .importRecipe,
-                        creditCost: env.session.session?.aiCosts?.importUrl ?? 1
-                    )
+                    AIProcessingView(feature: .importRecipe, creditCost: creditCost)
                 case let .completed(meal):
                     completedContent(meal)
                 case let .failed(message):
@@ -105,33 +105,31 @@ struct ImportRecipeSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .background(Theme.ceramic)
-            .sheet(isPresented: $showingIntro) {
-                AIFeatureIntroView(
-                    title: "Import recipe",
-                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley.",
-                    creditCost: env.session.session?.aiCosts?.importUrl ?? 1,
-                    costLabel: "per import",
-                    confirmLabel: "Import",
-                    nextSteps: "Review the imported meal before saving to Galley.",
-                    onContinue: {
-                        showingIntro = false
-                        Task { await model.submit(api: env.api) }
-                    }
-                )
-                .presentationDetents([.medium])
-            }
         }
     }
 
     private var idleContent: some View {
-        VStack(spacing: 16) {
-            TextField("Recipe URL", text: $model.url)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-                .textFieldStyle(.roundedBorder)
-            Button("Import") { showingIntro = true }
-                .buttonStyle(AIButtonStyle())
-                .disabled(model.url.trimmingCharacters(in: .whitespaces).isEmpty)
+        ScrollView {
+            VStack(spacing: 16) {
+                AIFeatureInlineIntro(
+                    title: "Import recipe",
+                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley.",
+                    creditCost: creditCost,
+                    costLabel: "per import",
+                    nextSteps: "Review the imported meal in Galley after import completes."
+                )
+                TextField("Recipe URL", text: $model.url)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .textFieldStyle(.roundedBorder)
+                AIFeaturePrimaryButton(
+                    label: "Import",
+                    creditCost: creditCost,
+                    isDisabled: model.url.trimmingCharacters(in: .whitespaces).isEmpty
+                ) {
+                    Task { await model.submit(api: env.api) }
+                }
+            }
         }
     }
 

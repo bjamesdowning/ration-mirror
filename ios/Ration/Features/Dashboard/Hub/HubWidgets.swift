@@ -2,40 +2,62 @@ import SwiftUI
 
 struct HubStatsWidget: View {
     let data: HubResponse
+    var size: String = "lg"
+    var onOpenCargo: (() -> Void)?
+    var onOpenExpiring: (() -> Void)?
+    var onOpenGalley: (() -> Void)?
+    var onOpenSupply: (() -> Void)?
+
+    private var compact: Bool { size == "sm" }
 
     var body: some View {
         GlassCard {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                statCell("Cargo", value: data.cargoStats.totalItems, icon: "shippingbox")
-                statCell("Expiring", value: data.cargoStats.expiringCount, icon: "clock.badge.exclamationmark", highlight: data.cargoStats.expiringCount > 0)
-                statCell("Meals ready", value: data.mealMatches.filter(\.canMake).count, icon: "fork.knife")
-                statCell("Supply", value: data.latestSupplyList?.resolvedUncheckedCount ?? 0, icon: "cart")
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compact ? 8 : 12) {
+                statCell("Cargo", value: data.cargoStats.totalItems, icon: "shippingbox", action: onOpenCargo)
+                statCell("Expiring", value: data.cargoStats.expiringCount, icon: "clock.badge.exclamationmark", highlight: data.cargoStats.expiringCount > 0, action: onOpenExpiring)
+                statCell("Meals ready", value: data.mealMatches.filter(\.canMake).count, icon: "fork.knife", action: onOpenGalley)
+                statCell("Supply", value: data.latestSupplyList?.resolvedUncheckedCount ?? 0, icon: "cart", action: onOpenSupply)
             }
         }
     }
 
-    private func statCell(_ label: String, value: Int, icon: String, highlight: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon)
-                .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
-            Text("\(value)").font(Typography.display()).foregroundStyle(highlight ? Theme.warning : Theme.carbon)
-            Text(label).rationCaption()
+    private func statCell(_ label: String, value: Int, icon: String, highlight: Bool = false, action: (() -> Void)?) -> some View {
+        Button {
+            action?()
+        } label: {
+            VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+                Image(systemName: icon)
+                    .font(.system(size: compact ? 14 : 16, weight: .semibold))
+                    .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
+                Text("\(value)")
+                    .font(compact ? Typography.headline() : Typography.display())
+                    .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
+                if !compact {
+                    Text(label).rationCaption()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label), \(value)")
     }
 }
 
 struct SupplyPreviewWidget: View {
     let list: SupplyList?
+    var size: String = "md"
     var onToggleItem: ((SupplyItem, Bool) async -> Void)?
     var onOpenSupply: (() -> Void)?
 
     @State private var checkedAnimationIDs: Set<String> = []
 
+    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
+
     private var displayItems: [SupplyItem] {
         guard let list else { return [] }
         let unchecked = list.items.filter { !$0.isPurchased || checkedAnimationIDs.contains($0.id) }
-        return Array(unchecked.prefix(6))
+        return Array(unchecked.prefix(rowLimit))
     }
 
     var body: some View {
@@ -104,13 +126,25 @@ struct SupplyPreviewWidget: View {
 }
 
 struct MealsReadyWidget: View {
+    let title: String
     let matches: [MealMatch]
+    var size: String = "md"
+    var onSelectMeal: ((Meal) -> Void)?
+
+    init(title: String = "Meals ready", matches: [MealMatch], size: String = "md", onSelectMeal: ((Meal) -> Void)? = nil) {
+        self.title = title
+        self.matches = matches
+        self.size = size
+        self.onSelectMeal = onSelectMeal
+    }
+
+    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
                 HubWidgetHeader(
-                    title: "Meals ready",
+                    title: title,
                     systemImage: "fork.knife",
                     trailing: "\(matches.filter(\.canMake).count)"
                 )
@@ -118,14 +152,24 @@ struct MealsReadyWidget: View {
                 if ready.isEmpty {
                     Text("No meals ready with current Cargo").rationCaption()
                 } else {
-                    ForEach(ready.prefix(4)) { match in
-                        HStack(spacing: 10) {
-                            HubMatchRing(percentage: match.matchPercentage)
-                            Text(match.meal.name.capitalized)
-                                .rationBody()
-                                .lineLimit(1)
-                            Spacer()
+                    ForEach(ready.prefix(rowLimit)) { match in
+                        Button {
+                            onSelectMeal?(match.meal)
+                        } label: {
+                            HStack(spacing: 10) {
+                                HubMatchRing(percentage: match.matchPercentage)
+                                Text(match.meal.name.capitalized)
+                                    .rationBody()
+                                    .lineLimit(2)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(match.meal.name)")
                     }
                 }
             }
@@ -136,6 +180,10 @@ struct MealsReadyWidget: View {
 
 struct MealsPartialWidget: View {
     let matches: [MealMatch]
+    var size: String = "md"
+    var onSelectMeal: ((Meal) -> Void)?
+
+    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
@@ -145,12 +193,21 @@ struct MealsPartialWidget: View {
                 if partial.isEmpty {
                     Text("No partial matches").rationCaption()
                 } else {
-                    ForEach(partial.prefix(4)) { match in
-                        HStack(spacing: 10) {
-                            HubMatchRing(percentage: match.matchPercentage)
-                            Text(match.meal.name.capitalized).rationBody().lineLimit(1)
-                            Spacer()
+                    ForEach(partial.prefix(rowLimit)) { match in
+                        Button {
+                            onSelectMeal?(match.meal)
+                        } label: {
+                            HStack(spacing: 10) {
+                                HubMatchRing(percentage: match.matchPercentage)
+                                Text(match.meal.name.capitalized).rationBody().lineLimit(2)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -162,6 +219,10 @@ struct MealsPartialWidget: View {
 struct CargoExpiringWidget: View {
     let items: [CargoItem]
     let alertDays: Int
+    var size: String = "md"
+    var onSelectItem: ((CargoItem) -> Void)?
+
+    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
@@ -174,14 +235,24 @@ struct CargoExpiringWidget: View {
                 if items.isEmpty {
                     Text("Nothing expiring soon").rationCaption()
                 } else {
-                    ForEach(items.prefix(5)) { item in
-                        HStack {
-                            Text(item.name.capitalized).rationBody().lineLimit(1)
-                            Spacer()
-                            if let expires = item.expiresAt {
-                                HubUrgencyLabel(date: expires)
+                    ForEach(items.prefix(rowLimit)) { item in
+                        Button {
+                            onSelectItem?(item)
+                        } label: {
+                            HStack {
+                                Text(item.name.capitalized).rationBody().lineLimit(1)
+                                Spacer()
+                                if let expires = item.expiresAt {
+                                    HubUrgencyLabel(date: expires)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.muted)
                             }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(item.name)")
                     }
                 }
             }
@@ -192,19 +263,36 @@ struct CargoExpiringWidget: View {
 
 struct ManifestPreviewWidget: View {
     let preview: ManifestPreviewData?
+    var daySpan: Int = 3
+    var size: String = "md"
+    var onSelectEntry: ((ManifestPreviewEntry) -> Void)?
+    var onOpenManifest: (() -> Void)?
+
+    private var effectiveDaySpan: Int {
+        let spanCap = size == "sm" ? 1 : size == "lg" ? 7 : 3
+        return min(max(daySpan, 1), spanCap)
+    }
 
     private var previewDates: [String] {
         guard let entries = preview?.entries else { return [] }
         let unique = Array(Set(entries.map(\.date))).sorted()
-        return Array(unique.prefix(3))
+        return Array(unique.prefix(effectiveDaySpan))
     }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                HubWidgetHeader(title: "Upcoming plan", systemImage: "calendar")
+                Button {
+                    onOpenManifest?()
+                } label: {
+                    HubWidgetHeader(title: effectiveDaySpan == 1 ? "Today" : "Upcoming plan", systemImage: "calendar")
+                }
+                .buttonStyle(.plain)
+
                 if previewDates.isEmpty {
                     Text("No meals planned this week").rationCaption()
+                } else if effectiveDaySpan == 1, let today = previewDates.first {
+                    todayHero(date: today, entries: preview?.entries ?? [])
                 } else {
                     HStack(alignment: .top, spacing: 8) {
                         ForEach(previewDates, id: \.self) { date in
@@ -212,8 +300,38 @@ struct ManifestPreviewWidget: View {
                         }
                     }
                 }
+
+                if onOpenManifest != nil {
+                    Button("Edit plan") { onOpenManifest?() }
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.hyperGreen)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func todayHero(date: String, entries: [ManifestPreviewEntry]) -> some View {
+        let dayEntries = entries.filter { $0.date == date }
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(dayEntries) { entry in
+                Button {
+                    onSelectEntry?(entry)
+                } label: {
+                    HStack(spacing: 10) {
+                        HubSlotBadge(slotType: entry.slotType)
+                        Text(entry.mealName.capitalized)
+                            .rationBody()
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -229,13 +347,21 @@ struct ManifestPreviewWidget: View {
                 .frame(maxWidth: .infinity)
                 .background(isToday ? Theme.hyperGreen : Theme.platinum)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            ForEach(dayEntries.prefix(3)) { entry in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.mealName.capitalized)
-                        .font(Typography.caption())
-                        .lineLimit(1)
-                    HubSlotBadge(slotType: entry.slotType)
+            ForEach(dayEntries.prefix(effectiveDaySpan == 1 ? 10 : HubLayoutEngine.rowLimit(for: size))) { entry in
+                Button {
+                    onSelectEntry?(entry)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.mealName.capitalized)
+                            .font(Typography.caption())
+                            .lineLimit(effectiveDaySpan == 1 ? nil : 2)
+                            .multilineTextAlignment(.leading)
+                        HubSlotBadge(slotType: entry.slotType)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(8)

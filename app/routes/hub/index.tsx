@@ -10,10 +10,18 @@ import { resolveLayout } from "~/components/hub/widgets/registry";
 import { HomeIcon } from "~/components/icons/PageIcons";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
-import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
+import {
+	getCargoStats,
+	getCargoTagIndex,
+	getCargoTags,
+	getExpiringCargo,
+} from "~/lib/cargo.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
-import { getSupplyList } from "~/lib/supply.server";
+import {
+	filterSupplyItemsByCargoTags,
+	getSupplyList,
+} from "~/lib/supply.server";
 import type { Route } from "./+types/index";
 
 // --- LOADER ---
@@ -39,26 +47,51 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const snacksReadyConfig = findWidget("snacks-ready");
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
+	const supplyPreviewConfig = findWidget("supply-preview");
 
 	// Derive per-widget filter values with safe defaults
 	const cargoLimit = cargoExpiringConfig?.filters?.limit ?? 10;
 	const cargoDomain = cargoExpiringConfig?.filters?.domain;
 	const manifestSlotType = manifestPreviewConfig?.filters?.slotType;
+	const manifestDaySpan = manifestPreviewConfig?.filters?.daySpan ?? 7;
+	const manifestTags = manifestPreviewConfig?.filters?.tags;
+	const supplyTags = supplyPreviewConfig?.filters?.supplyTags;
 
 	// Fast data — awaited immediately; page shell renders right away
 	const [
 		expiringItems,
 		cargoStats,
-		latestSupplyList,
+		latestSupplyListRaw,
 		manifestPreview,
 		availableMealTags,
+		availableCargoTags,
+		cargoTagIndex,
 	] = await Promise.all([
 		getExpiringCargo(db, groupId, expirationAlertDays, cargoLimit, cargoDomain),
 		getCargoStats(db, groupId),
 		getSupplyList(db, groupId),
-		getManifestPreview(db, groupId, 7, manifestSlotType),
+		getManifestPreview(
+			db,
+			groupId,
+			manifestDaySpan,
+			manifestSlotType,
+			manifestTags,
+		),
 		getDistinctMealTags(db, groupId),
+		getCargoTags(db, groupId),
+		getCargoTagIndex(db, groupId),
 	]);
+
+	const latestSupplyList = latestSupplyListRaw
+		? {
+				...latestSupplyListRaw,
+				items: filterSupplyItemsByCargoTags(
+					latestSupplyListRaw.items ?? [],
+					cargoTagIndex,
+					supplyTags,
+				),
+			}
+		: null;
 
 	// Deferred — raw promises; meal/snack widgets show skeletons until resolved
 	// preLimit: 12 caps meals matched; bounds vector work for large orgs
@@ -100,6 +133,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		hubProfile,
 		hubLayout,
 		availableMealTags,
+		availableCargoTags,
 		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		mealMatches,
@@ -145,6 +179,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		welcomeVoucherRedeemed,
 		welcomePromoCode,
 		availableMealTags,
+		availableCargoTags,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -229,6 +264,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 							hubLayout={hubLayout}
 							data={widgetData}
 							availableMealTags={availableMealTags}
+							availableCargoTags={availableCargoTags}
 							onExit={() => setIsEditing(false)}
 						/>
 					) : (
@@ -237,6 +273,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 							hubLayout={hubLayout}
 							data={widgetData}
 							availableMealTags={availableMealTags}
+							availableCargoTags={availableCargoTags}
 							onExit={() => setIsEditing(false)}
 						/>
 					)

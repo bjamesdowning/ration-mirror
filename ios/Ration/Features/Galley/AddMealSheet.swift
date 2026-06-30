@@ -5,7 +5,7 @@ struct AddMealSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var servings = 2
-    @State private var directions = ""
+    @State private var directionSteps: [RecipeStep] = [RecipeStep(position: 1, text: "")]
     @State private var isSaving = false
     @State private var errorMessage: String?
     var onSaved: () async -> Void = {}
@@ -21,8 +21,7 @@ struct AddMealSheet: View {
                     Stepper("Servings: \(servings)", value: $servings, in: 1...20)
                 }
                 Section("Directions") {
-                    TextField("Optional directions", text: $directions, axis: .vertical)
-                        .lineLimit(3...8)
+                    DirectionsEditorView(steps: $directionSteps)
                 }
             }
             .navigationTitle("Add meal")
@@ -32,6 +31,9 @@ struct AddMealSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
                 }
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
@@ -44,9 +46,15 @@ struct AddMealSheet: View {
         errorMessage = nil
         defer { isSaving = false }
         do {
+            let trimmedSteps = directionSteps.filter {
+                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            let directionsPayload: String? = trimmedSteps.isEmpty
+                ? nil
+                : DirectionsParser.serializeDirections(trimmedSteps)
             let body = CreateMealRequest(
                 name: name.trimmingCharacters(in: .whitespaces).lowercased(),
-                directions: directions.isEmpty ? nil : directions
+                directions: directionsPayload
             )
             _ = try await env.api.createMeal(body)
             Haptics.success()
@@ -64,7 +72,7 @@ struct EditMealView: View {
     let meal: Meal
     @State private var name: String
     @State private var servings: Int
-    @State private var directions: String
+    @State private var directionSteps: [RecipeStep]
     @State private var isSaving = false
     @State private var errorMessage: String?
     var onSaved: () async -> Void = {}
@@ -74,7 +82,8 @@ struct EditMealView: View {
         self.onSaved = onSaved
         _name = State(initialValue: meal.name)
         _servings = State(initialValue: meal.servings ?? 2)
-        _directions = State(initialValue: meal.directions ?? "")
+        let parsed = DirectionsParser.parseDirections(meal.directions)
+        _directionSteps = State(initialValue: parsed.isEmpty ? [RecipeStep(position: 1, text: "")] : parsed)
     }
 
     var body: some View {
@@ -88,8 +97,7 @@ struct EditMealView: View {
                     Stepper("Servings: \(servings)", value: $servings, in: 1...20)
                 }
                 Section("Directions") {
-                    TextField("Directions", text: $directions, axis: .vertical)
-                        .lineLimit(3...8)
+                    DirectionsEditorView(steps: $directionSteps)
                 }
             }
             .navigationTitle("Edit meal")
@@ -99,6 +107,9 @@ struct EditMealView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
                 }
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
@@ -111,9 +122,15 @@ struct EditMealView: View {
         errorMessage = nil
         defer { isSaving = false }
         do {
+            let trimmedSteps = directionSteps.filter {
+                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            let directionsPayload: String? = trimmedSteps.isEmpty
+                ? nil
+                : DirectionsParser.serializeDirections(trimmedSteps)
             let body = CreateMealRequest(
                 name: name.trimmingCharacters(in: .whitespaces).lowercased(),
-                directions: directions.isEmpty ? nil : directions,
+                directions: directionsPayload,
                 servings: servings
             )
             _ = try await env.api.updateMeal(id: meal.id, body)

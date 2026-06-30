@@ -1,9 +1,17 @@
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
-import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
+import {
+	getCargoStats,
+	getCargoTagIndex,
+	getCargoTags,
+	getExpiringCargo,
+} from "~/lib/cargo.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
-import { getSupplyList } from "~/lib/supply.server";
+import {
+	filterSupplyItemsByCargoTags,
+	getSupplyList,
+} from "~/lib/supply.server";
 
 const MOBILE_PRE_LIMIT = 12;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
@@ -34,10 +42,15 @@ export async function getMobileHubData(
 	const snacksReadyConfig = findWidget("snacks-ready");
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
+	const supplyPreviewConfig = findWidget("supply-preview");
 
 	const cargoLimit = clampWidgetLimit(cargoExpiringConfig?.filters?.limit, 10);
 	const cargoDomain = cargoExpiringConfig?.filters?.domain;
 	const manifestSlotType = manifestPreviewConfig?.filters?.slotType;
+	const manifestDaySpan = manifestPreviewConfig?.filters?.daySpan ?? 7;
+	const manifestTags = manifestPreviewConfig?.filters?.tags;
+	const supplyLimit = clampWidgetLimit(supplyPreviewConfig?.filters?.limit, 6);
+	const supplyTags = supplyPreviewConfig?.filters?.supplyTags;
 
 	const mealsReadyLimit = clampWidgetLimit(mealsReadyConfig?.filters?.limit, 6);
 	const mealsPartialLimit = clampWidgetLimit(
@@ -55,6 +68,8 @@ export async function getMobileHubData(
 		latestSupplyListRaw,
 		manifestPreviewRaw,
 		availableMealTags,
+		availableCargoTags,
+		cargoTagIndex,
 		mealMatches,
 		partialMealMatches,
 		snackMatches,
@@ -68,8 +83,16 @@ export async function getMobileHubData(
 		),
 		getCargoStats(db, organizationId),
 		getSupplyList(db, organizationId),
-		getManifestPreview(db, organizationId, 7, manifestSlotType),
+		getManifestPreview(
+			db,
+			organizationId,
+			manifestDaySpan,
+			manifestSlotType,
+			manifestTags,
+		),
 		getDistinctMealTags(db, organizationId),
+		getCargoTags(db, organizationId),
+		getCargoTagIndex(db, organizationId),
 		matchMeals(env, organizationId, {
 			mode: "delta",
 			minMatch: 50,
@@ -101,14 +124,24 @@ export async function getMobileHubData(
 
 	const latestSupplyList = latestSupplyListRaw
 		? (() => {
-				const fullItems = latestSupplyListRaw.items ?? [];
-				const purchasedCount = fullItems.filter((i) => i.isPurchased).length;
+				const filteredItems = filterSupplyItemsByCargoTags(
+					latestSupplyListRaw.items ?? [],
+					cargoTagIndex,
+					supplyTags,
+				);
+				const purchasedCount = filteredItems.filter(
+					(i) => i.isPurchased,
+				).length;
+				const displayItems = filteredItems.slice(
+					0,
+					Math.min(supplyLimit, MOBILE_SUPPLY_ITEMS_SLICE),
+				);
 				return {
 					...latestSupplyListRaw,
-					itemCount: fullItems.length,
-					uncheckedCount: fullItems.length - purchasedCount,
+					itemCount: filteredItems.length,
+					uncheckedCount: filteredItems.length - purchasedCount,
 					purchasedCount,
-					items: fullItems.slice(0, MOBILE_SUPPLY_ITEMS_SLICE),
+					items: displayItems,
 				};
 			})()
 		: null;
@@ -129,6 +162,7 @@ export async function getMobileHubData(
 		hubProfile,
 		hubLayout,
 		availableMealTags,
+		availableCargoTags,
 		mealMatches,
 		partialMealMatches,
 		snackMatches,

@@ -29,6 +29,7 @@ interface HubEditModeMobileProps {
 	hubLayout?: { widgets: HubWidgetLayout[] };
 	data: HubLoaderData;
 	availableMealTags: string[];
+	availableCargoTags?: string[];
 	onExit: () => void;
 }
 
@@ -36,6 +37,7 @@ export function HubEditModeMobile({
 	hubProfile,
 	hubLayout,
 	availableMealTags,
+	availableCargoTags = [],
 	onExit,
 }: HubEditModeMobileProps) {
 	const [widgets, setWidgets] = useState(() =>
@@ -320,6 +322,7 @@ export function HubEditModeMobile({
 									widgetId={activeWidgetIdTyped}
 									filters={activeWidget.filters}
 									availableMealTags={availableMealTags}
+									availableCargoTags={availableCargoTags}
 									isSaving={isSaving}
 									onChange={(filters) =>
 										handleFilters(activeWidget.id, filters)

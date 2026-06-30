@@ -33,6 +33,7 @@ const SupplyListPreviewSchema = z
 	.nullable();
 
 const ManifestPreviewEntrySchema = z.object({
+	entryId: z.string(),
 	date: z.string(),
 	slotType: z.string(),
 	mealName: z.string(),
@@ -65,6 +66,7 @@ export const MobileHubResponseSchema = z.object({
 	hubProfile: HubProfileSchema.optional(),
 	hubLayout: HubLayoutSchema.optional(),
 	availableMealTags: z.array(z.string()),
+	availableCargoTags: z.array(z.string()).optional(),
 	mealMatches: z.array(MealMatchResultSchema),
 	partialMealMatches: z.array(MealMatchResultSchema),
 	snackMatches: z.array(MealMatchResultSchema),

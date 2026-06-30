@@ -57,4 +57,18 @@ enum HubLayoutEngine {
     enum MoveDirection {
         case up, down
     }
+
+    /// Row display cap by widget size — mirrors web compact vs full layouts.
+    static func rowLimit(for size: String?) -> Int {
+        switch size ?? "md" {
+        case "sm": return 2
+        case "lg": return 6
+        default: return 4
+        }
+    }
+
+    static func resolvedSize(_ size: String?, defaultSize: String) -> String {
+        let raw = size ?? defaultSize
+        return ["sm", "md", "lg"].contains(raw) ? raw : defaultSize
+    }
 }

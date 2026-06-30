@@ -24,6 +24,8 @@ vi.mock("~/lib/auth.server", () => ({
 vi.mock("~/lib/cargo.server", () => ({
 	getExpiringCargo: () => getExpiringCargo(),
 	getCargoStats: () => getCargoStats(),
+	getCargoTags: vi.fn(async () => []),
+	getCargoTagIndex: vi.fn(async () => []),
 }));
 
 vi.mock("~/lib/manifest.server", () => ({
@@ -35,9 +37,13 @@ vi.mock("~/lib/matching.server", () => ({
 	matchMeals: () => matchMeals(),
 }));
 
-vi.mock("~/lib/supply.server", () => ({
-	getSupplyList: () => getSupplyList(),
-}));
+vi.mock("~/lib/supply.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/supply.server")>();
+	return {
+		...actual,
+		getSupplyList: () => getSupplyList(),
+	};
+});
 
 describe("getMobileHubData supply counts", () => {
 	it("includes full-list counts when items are sliced", async () => {
@@ -58,6 +64,7 @@ describe("getMobileHubData supply counts", () => {
 				isPurchased: i < 5,
 			})),
 		});
+		// cargoTagIndex defaults to [] via mock
 
 		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
 		const result = await getMobileHubData(
@@ -66,7 +73,7 @@ describe("getMobileHubData supply counts", () => {
 			"user_1",
 		);
 
-		expect(result.latestSupplyList?.items).toHaveLength(20);
+		expect(result.latestSupplyList?.items).toHaveLength(6);
 		expect(result.latestSupplyList?.itemCount).toBe(25);
 		expect(result.latestSupplyList?.purchasedCount).toBe(5);
 		expect(result.latestSupplyList?.uncheckedCount).toBe(20);

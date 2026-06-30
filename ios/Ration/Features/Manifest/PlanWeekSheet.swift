@@ -4,8 +4,11 @@ struct PlanWeekSheet: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var model = PlanWeekViewModel()
-    @State private var showingIntro = false
     var onComplete: () async -> Void = {}
+
+    private var creditCost: Int {
+        env.session.session?.aiCosts?.mealPlanWeekly ?? 3
+    }
 
     var body: some View {
         NavigationStack {
@@ -14,10 +17,7 @@ struct PlanWeekSheet: View {
                 case .idle:
                     idleContent
                 case .submitting, .processing:
-                    AIProcessingView(
-                        feature: .planWeek,
-                        creditCost: env.session.session?.aiCosts?.mealPlanWeekly ?? 3
-                    )
+                    AIProcessingView(feature: .planWeek, creditCost: creditCost)
                 case let .completed(entries):
                     completedContent(entries)
                 case let .failed(message):
@@ -34,33 +34,28 @@ struct PlanWeekSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .background(Theme.ceramic)
-            .sheet(isPresented: $showingIntro) {
-                AIFeatureIntroView(
-                    title: "Plan your week",
-                    detail: "AI schedules meals from your Galley across breakfast, lunch, and dinner slots.",
-                    creditCost: env.session.session?.aiCosts?.mealPlanWeekly ?? 3,
-                    costLabel: "per plan",
-                    confirmLabel: "Plan week",
-                    nextSteps: "Review the generated schedule, then confirm to add entries to Manifest.",
-                    onContinue: {
-                        showingIntro = false
-                        Task { await model.submit(api: env.api) }
-                    }
-                )
-                .presentationDetents([.medium])
-            }
         }
     }
 
     private var idleContent: some View {
-        VStack(spacing: 16) {
-            TextField("Start date (YYYY-MM-DD)", text: $model.startDate)
-                .textFieldStyle(.roundedBorder)
-            Stepper("Days: \(model.days)", value: $model.days, in: 1...7)
-            TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-            Button("Plan week") { showingIntro = true }
-                .buttonStyle(AIButtonStyle())
+        ScrollView {
+            VStack(spacing: 16) {
+                AIFeatureInlineIntro(
+                    title: "Plan your week",
+                    detail: "AI schedules meals from your Galley across breakfast, lunch, and dinner slots.",
+                    creditCost: creditCost,
+                    costLabel: "per plan",
+                    nextSteps: "Review the generated schedule, then confirm to add entries to Manifest."
+                )
+                TextField("Start date (YYYY-MM-DD)", text: $model.startDate)
+                    .textFieldStyle(.roundedBorder)
+                Stepper("Days: \(model.days)", value: $model.days, in: 1...7)
+                TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                AIFeaturePrimaryButton(label: "Plan week", creditCost: creditCost) {
+                    Task { await model.submit(api: env.api) }
+                }
+            }
         }
     }
 

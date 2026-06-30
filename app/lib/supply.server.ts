@@ -336,6 +336,47 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 }
 
 /**
+ * Filters supply items to those whose names match cargo rows carrying any of the given tags (OR logic).
+ */
+export function filterSupplyItemsByCargoTags<T extends { name: string }>(
+	items: T[],
+	cargoRows: { name: string; tags: unknown }[],
+	supplyTags: string[] | undefined,
+): T[] {
+	if (!supplyTags?.length) return items;
+	const tagSet = new Set(supplyTags);
+	const namesWithTag = new Set(
+		cargoRows
+			.filter((row) => {
+				const tags = parseSupplyCargoTags(row.tags);
+				return tags.some((tag) => tagSet.has(tag));
+			})
+			.map((row) => row.name.toLowerCase()),
+	);
+	return items.filter((item) => namesWithTag.has(item.name.toLowerCase()));
+}
+
+function parseSupplyCargoTags(tags: unknown): string[] {
+	if (Array.isArray(tags)) {
+		return tags.filter((tag): tag is string => typeof tag === "string");
+	}
+	if (typeof tags === "string") {
+		try {
+			const parsed: unknown = JSON.parse(tags);
+			if (Array.isArray(parsed)) {
+				return parsed.filter((tag): tag is string => typeof tag === "string");
+			}
+		} catch {
+			return tags
+				.split(",")
+				.map((tag) => tag.trim())
+				.filter(Boolean);
+		}
+	}
+	return [];
+}
+
+/**
  * Retrieves the "Supply" list for an organization.
  * This is the main entry point for the UI.
  */

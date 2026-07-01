@@ -1,11 +1,11 @@
 import { data } from "react-router";
+import { applyUndoRecord } from "~/lib/cook-reversal.server";
 import { handleApiError } from "~/lib/error-handler";
-import { consumeManifestEntries, ensureMealPlan } from "~/lib/manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { ConsumeEntriesRequestSchema } from "~/lib/schemas/manifest";
-import { storeUndoToken } from "~/lib/undo-token.server";
-import type { Route } from "./+types/v1.manifest.consume";
+import { UndoActionSchema } from "~/lib/schemas/mobile/undo";
+import { consumeUndoToken } from "~/lib/undo-token.server";
+import type { Route } from "./+types/v1.undo";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	if (request.method !== "POST") {
@@ -31,31 +31,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const body = await request.json();
-		const { entryIds } = ConsumeEntriesRequestSchema.parse(body);
-		const plan = await ensureMealPlan(
-			context.cloudflare.env.DB,
+		const { token } = UndoActionSchema.parse(body);
+		const record = await consumeUndoToken(
+			context.cloudflare.env.RATION_KV,
+			token,
+			userId,
 			organizationId,
-		);
-		const result = await consumeManifestEntries(
-			context.cloudflare.env,
-			organizationId,
-			plan.id,
-			entryIds,
 		);
 
-		let undoToken: string | undefined;
-		if (result.consumed > 0) {
-			undoToken = await storeUndoToken(context.cloudflare.env.RATION_KV, {
-				userId,
-				organizationId,
-				kind: "manifest_consume",
-				deductions: result.deductions,
-				manifestEntryIds: result.entryIds,
-				planId: result.planId,
-			});
+		if (!record) {
+			throw data({ error: "Undo expired or unavailable" }, { status: 410 });
 		}
 
-		return { consumed: result.consumed, undoToken };
+		await applyUndoRecord(context.cloudflare.env.DB, organizationId, record);
+
+		return { success: true, kind: record.kind };
 	} catch (e) {
 		return handleApiError(e);
 	}

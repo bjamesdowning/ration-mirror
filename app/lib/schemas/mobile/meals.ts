@@ -4,7 +4,7 @@ import { MealSchema } from "~/lib/schemas/meal";
 
 export const MobileCreateMealSchema = MealSchema;
 
-export const MobileUpdateMealSchema = MealSchema;
+export const MobileUpdateMealSchema = MealSchema.partial();
 
 export const MobileMealsListQuerySchema = z.object({
 	limit: z.coerce.number().int().min(1).max(100).default(50),

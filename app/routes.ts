@@ -264,6 +264,11 @@ export default [
 	route("api/mobile/v1/session", "routes/api/mobile/v1.session.ts"),
 	route("api/mobile/v1/orgs", "routes/api/mobile/v1.orgs.ts"),
 	route(
+		"api/mobile/v1/groups/credits/transfer",
+		"routes/api/mobile/v1.groups.credits.transfer.ts",
+	),
+	route("api/mobile/v1/undo", "routes/api/mobile/v1.undo.ts"),
+	route(
 		"api/mobile/v1/orgs/:id/activate",
 		"routes/api/mobile/v1.orgs.$id.activate.ts",
 	),

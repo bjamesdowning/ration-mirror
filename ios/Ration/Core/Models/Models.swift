@@ -263,6 +263,8 @@ struct MealsResponse: Codable, Sendable {
 /// `GET /api/mobile/v1/meals/:id`
 struct MealDetailResponse: Codable, Sendable {
     let meal: Meal
+    let isSelectedForSupply: Bool?
+    let servingsOverride: Int?
 }
 
 // MARK: - Hub
@@ -362,6 +364,7 @@ struct SettingsPatch: Encodable, Sendable {
     var expirationAlertDays: Int?
     var hubProfile: HubProfile?
     var hubLayout: HubLayoutPayload?
+    var manifestSettings: ManifestSettings?
 }
 
 // MARK: - Search
@@ -487,6 +490,16 @@ struct ManifestConsumeRequest: Encodable, Sendable {
 
 struct ManifestConsumeResponse: Codable, Sendable {
     let consumed: Int
+    let undoToken: String?
+}
+
+struct UndoActionRequest: Encodable, Sendable {
+    let token: String
+}
+
+struct UndoActionResponse: Codable, Sendable {
+    let success: Bool
+    let kind: String?
 }
 
 // MARK: - Galley match / cook
@@ -524,10 +537,24 @@ struct CookMealResponse: Codable, Sendable {
     let cooked: Bool
     let ingredientsDeducted: Int
     let servings: Int
+    let undoToken: String?
 }
 
 struct ToggleActiveResponse: Codable, Sendable {
+    let success: Bool?
+    let mealId: String?
     let isActive: Bool
+    let servingsOverride: Int?
+}
+
+struct TransferCreditsRequest: Encodable, Sendable {
+    let sourceOrganizationId: String
+    let destinationOrganizationId: String
+    let amount: Int
+}
+
+struct TransferCreditsResponse: Codable, Sendable {
+    let success: Bool
 }
 
 struct CreateMealIngredientRequest: Codable, Sendable {

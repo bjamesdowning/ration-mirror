@@ -13,6 +13,25 @@ final class ManifestViewModel {
     var selectedDay: String = ManifestDateHelpers.todayISO()
     var calendarSpan = 7
     var weekStartPref = "sunday"
+    private(set) var hasInitializedAnchor = false
+
+    func applyInitialAnchorIfNeeded() {
+        guard !hasInitializedAnchor else { return }
+        rangeStart = ManifestDateHelpers.initialRangeStart(
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        selectedDay = ManifestDateHelpers.todayISO()
+        hasInitializedAnchor = true
+    }
+
+    func configureFromSettings(calendarSpan: Int, weekStartPref: String) {
+        self.calendarSpan = calendarSpan
+        self.weekStartPref = weekStartPref
+        if !hasInitializedAnchor {
+            applyInitialAnchorIfNeeded()
+        }
+    }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
@@ -29,16 +48,31 @@ final class ManifestViewModel {
                 snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots, organizationId: organizationId, requestedStart: rangeStart)
+                restoreSnapshot(
+                    snapshots,
+                    organizationId: organizationId,
+                    requestedStart: rangeStart,
+                    preserveRangeStart: true
+                )
             }
         } else {
-            restoreSnapshot(snapshots, organizationId: organizationId, requestedStart: rangeStart)
+            restoreSnapshot(
+                snapshots,
+                organizationId: organizationId,
+                requestedStart: rangeStart,
+                preserveRangeStart: false
+            )
         }
     }
 
     func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        let newSelectedDay = resolvedSelectedDay(forWeekStart: start, previousSelected: selectedDay)
-        let endDate = ManifestDateHelpers.addDays(start, days: max(calendarSpan - 1, 0))
+        let normalizedStart = ManifestDateHelpers.normalizedNavigationStart(
+            start,
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        let newSelectedDay = resolvedSelectedDay(forWeekStart: normalizedStart, previousSelected: selectedDay)
+        let endDate = ManifestDateHelpers.addDays(normalizedStart, days: max(calendarSpan - 1, 0))
 
         isLoading = true
         errorMessage = nil
@@ -47,8 +81,8 @@ final class ManifestViewModel {
 
         if online {
             do {
-                let data = try await api.manifest(startDate: start, endDate: endDate)
-                rangeStart = start
+                let data = try await api.manifest(startDate: normalizedStart, endDate: endDate)
+                rangeStart = normalizedStart
                 selectedDay = newSelectedDay
                 manifest = data
                 snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
@@ -56,8 +90,8 @@ final class ManifestViewModel {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
         } else if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
-            if cached.payload.startDate == start {
-                rangeStart = start
+            if cached.payload.startDate == normalizedStart {
+                rangeStart = normalizedStart
                 selectedDay = newSelectedDay
                 manifest = cached.payload
             } else {
@@ -93,13 +127,15 @@ final class ManifestViewModel {
         return visible.first ?? start
     }
 
-    func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+    func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async -> String? {
         do {
-            _ = try await api.consumeManifestEntries([entry.id])
+            let result = try await api.consumeManifestEntries([entry.id])
             Haptics.success()
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+            return result.undoToken
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
         }
     }
 
@@ -132,7 +168,12 @@ final class ManifestViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String, requestedStart: String) {
+    private func restoreSnapshot(
+        _ snapshots: SnapshotStore,
+        organizationId: String,
+        requestedStart: String,
+        preserveRangeStart: Bool = false
+    ) {
         guard let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) else {
             return
         }
@@ -144,8 +185,10 @@ final class ManifestViewModel {
             )
             offlineBannerMessage = "Offline — showing cached week \(formatted)"
         }
-        rangeStart = cached.payload.startDate
-        selectedDay = resolvedSelectedDay(forWeekStart: cached.payload.startDate, previousSelected: selectedDay)
+        if !preserveRangeStart {
+            rangeStart = cached.payload.startDate
+            selectedDay = resolvedSelectedDay(forWeekStart: cached.payload.startDate, previousSelected: selectedDay)
+        }
     }
 }
 
@@ -160,9 +203,17 @@ struct ManifestView: View {
     @State private var manifestShareExpiresAt: String?
     @State private var isLoadingShare = false
     @State private var showingPaywall = false
+    @State private var consumeUndoToken: String?
+    @State private var showConsumeUndo = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
+    }
+
+    private var manifestEntryCount: Int {
+        guard let manifest = model.manifest else { return 0 }
+        let end = ManifestDateHelpers.addDays(model.rangeStart, days: max(model.calendarSpan - 1, 0))
+        return manifest.entries.filter { $0.date >= model.rangeStart && $0.date <= end }.count
     }
 
     var body: some View {
@@ -177,10 +228,12 @@ struct ManifestView: View {
                 }
             }
             .navigationTitle("Manifest")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
+                    countChip: manifestEntryCount,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -234,15 +287,27 @@ struct ManifestView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if showConsumeUndo, consumeUndoToken != nil {
+                UndoToast(
+                    message: "Meal consumed",
+                    onUndo: { Task { await undoConsume() } },
+                    onDismiss: {
+                        showConsumeUndo = false
+                        consumeUndoToken = nil
+                    }
+                )
+                .padding(.bottom, 24)
+            }
+        }
         .task(id: organizationId) {
             if let settings = try? await env.api.settings().settings.manifestSettings {
-                model.calendarSpan = settings.calendarSpan ?? 7
-                model.weekStartPref = settings.weekStart ?? "sunday"
-                model.rangeStart = ManifestDateHelpers.weekStart(
-                    for: ManifestDateHelpers.todayISO(),
-                    preference: model.weekStartPref
+                model.configureFromSettings(
+                    calendarSpan: settings.calendarSpan ?? 7,
+                    weekStartPref: settings.weekStart ?? "sunday"
                 )
-                model.selectedDay = ManifestDateHelpers.todayISO()
+            } else {
+                model.applyInitialAnchorIfNeeded()
             }
             await reload()
             await loadManifestShareStatus()
@@ -317,17 +382,23 @@ struct ManifestView: View {
             } else {
                 Section(model.selectedDay) {
                     ForEach(dayEntries) { entry in
-                        ManifestEntryRow(entry: entry) {
-                            Task {
-                                await model.consume(
-                                    entry,
-                                    api: env.api,
-                                    snapshots: env.snapshots,
-                                    online: env.network.isOnline,
-                                    organizationId: organizationId
-                                )
+                        ManifestEntryRow(
+                            entry: entry,
+                            onConsume: {
+                                Task {
+                                    if let token = await model.consume(
+                                        entry,
+                                        api: env.api,
+                                        snapshots: env.snapshots,
+                                        online: env.network.isOnline,
+                                        organizationId: organizationId
+                                    ) {
+                                        consumeUndoToken = token
+                                        showConsumeUndo = true
+                                    }
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -365,6 +436,28 @@ struct ManifestView: View {
         manifestShareExpiresAt = nil
         Haptics.light()
     }
+
+    private func undoConsume() async {
+        guard let token = consumeUndoToken, env.network.isOnline else {
+            showConsumeUndo = false
+            consumeUndoToken = nil
+            return
+        }
+        showConsumeUndo = false
+        consumeUndoToken = nil
+        do {
+            _ = try await env.api.undoAction(token: token)
+            Haptics.light()
+            await model.load(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
 }
 
 struct ManifestEntryRow: View {
@@ -374,22 +467,57 @@ struct ManifestEntryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             SlotGlyphView(slotType: entry.slotType)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.mealName.capitalized).rationBody()
-                Text(entry.mealType.capitalized)
-                    .rationCaption()
+            NavigationLink {
+                MealDetailView(
+                    mealId: entry.mealId,
+                    initialMeal: entry.stubMeal()
+                )
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.mealName.capitalized).rationBody()
+                    Text(entry.mealType.capitalized)
+                        .rationCaption()
+                }
             }
+            .buttonStyle(.plain)
             Spacer()
             if entry.isConsumed {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(Theme.hyperGreen)
+                    .accessibilityLabel("Consumed")
             } else {
-                Button("Consume", action: onConsume)
-                    .font(Typography.caption())
-                    .foregroundStyle(Theme.hyperGreen)
+                Button(action: onConsume) {
+                    Image(systemName: "fork.knife.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Theme.hyperGreen)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Consume meal and deduct from Cargo")
             }
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension ManifestEntry {
+    func stubMeal() -> Meal {
+        Meal(
+            id: mealId,
+            organizationId: "",
+            name: mealName,
+            domain: "food",
+            type: mealType,
+            description: nil,
+            directions: nil,
+            equipment: [],
+            servings: mealServings,
+            prepTime: mealPrepTime,
+            cookTime: mealCookTime,
+            createdAt: Date(),
+            updatedAt: Date(),
+            tags: [],
+            ingredients: []
+        )
     }
 }

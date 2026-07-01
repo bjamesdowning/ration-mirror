@@ -23,7 +23,7 @@ struct SupplyItemCheckOffSheet: View {
                     Stepper(value: $quantity, in: 0...999, step: 0.5) {
                         Text("Quantity: \(quantity.formatted())")
                     }
-                    TextField("Unit", text: $unit)
+                    UnitPicker(units: RationUnits.all, selection: $unit)
                 }
                 Section {
                     Button("Mark purchased") {

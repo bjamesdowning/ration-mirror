@@ -154,11 +154,19 @@ final class RationAPI {
         try await client.get("meals/\(id)")
     }
 
-    func matchMeals(mode: String = "delta", limit: Int = 20, servings: Int? = nil) async throws -> MealMatchResponse {
+    func matchMeals(
+        mode: String = "delta",
+        limit: Int = 20,
+        minMatch: Int? = nil,
+        servings: Int? = nil
+    ) async throws -> MealMatchResponse {
         var query: [URLQueryItem] = [
             URLQueryItem(name: "mode", value: mode),
             URLQueryItem(name: "limit", value: String(limit)),
         ]
+        if let minMatch {
+            query.append(URLQueryItem(name: "minMatch", value: String(minMatch)))
+        }
         if let servings {
             query.append(URLQueryItem(name: "servings", value: String(servings)))
         }
@@ -172,8 +180,26 @@ final class RationAPI {
         return try await client.post("meals/\(id)/cook", body: EmptyBody())
     }
 
-    func toggleMealActive(id: String) async throws -> ToggleActiveResponse {
-        try await client.post("meals/\(id)/toggle-active", body: EmptyBody())
+    func toggleMealActive(id: String, servings: Int? = nil) async throws -> ToggleActiveResponse {
+        if let servings {
+            return try await client.post("meals/\(id)/toggle-active", body: ["servings": servings])
+        }
+        return try await client.post("meals/\(id)/toggle-active", body: EmptyBody())
+    }
+
+    func transferCredits(
+        sourceOrganizationId: String,
+        destinationOrganizationId: String,
+        amount: Int
+    ) async throws -> TransferCreditsResponse {
+        try await client.post(
+            "groups/credits/transfer",
+            body: TransferCreditsRequest(
+                sourceOrganizationId: sourceOrganizationId,
+                destinationOrganizationId: destinationOrganizationId,
+                amount: amount
+            )
+        )
     }
 
     // Manifest
@@ -190,6 +216,10 @@ final class RationAPI {
 
     func consumeManifestEntries(_ entryIds: [String]) async throws -> ManifestConsumeResponse {
         try await client.post("manifest/consume", body: ManifestConsumeRequest(entryIds: entryIds))
+    }
+
+    func undoAction(token: String) async throws -> UndoActionResponse {
+        try await client.post("undo", body: UndoActionRequest(token: token))
     }
 
     func planWeek(_ body: PlanWeekRequest) async throws -> AIJobSubmitResponse {

@@ -58,6 +58,30 @@ enum HubLayoutEngine {
         case up, down
     }
 
+    /// Reorders visible widgets by moving `sourceId` to the position of `destinationId`.
+    static func reorderVisible(
+        _ widgets: [HubWidgetLayout],
+        moving sourceId: String,
+        to destinationId: String
+    ) -> [HubWidgetLayout] {
+        let sorted = widgets.sorted { $0.order < $1.order }
+        var visible = sorted.filter(\.visible)
+        guard let fromIndex = visible.firstIndex(where: { $0.id == sourceId }),
+              let toIndex = visible.firstIndex(where: { $0.id == destinationId }),
+              fromIndex != toIndex
+        else { return sorted }
+
+        let moved = visible.remove(at: fromIndex)
+        visible.insert(moved, at: toIndex)
+
+        var visibleIterator = visible.makeIterator()
+        return sorted.enumerated().map { index, widget in
+            var copy = widget.visible ? (visibleIterator.next() ?? widget) : widget
+            copy.order = index
+            return copy
+        }
+    }
+
     /// Row display cap by widget size — mirrors web compact vs full layouts.
     static func rowLimit(for size: String?) -> Int {
         switch size ?? "md" {

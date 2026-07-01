@@ -46,6 +46,22 @@ import {
 	type SimilarCargoMatch,
 } from "./vector.server";
 
+export type CargoDeduction = { cargoId: string; quantity: number };
+
+function recordCargoDeduction(
+	deductions: CargoDeduction[],
+	cargoId: string,
+	quantity: number,
+): void {
+	if (quantity <= 0) return;
+	const existing = deductions.find((d) => d.cargoId === cargoId);
+	if (existing) {
+		existing.quantity += quantity;
+	} else {
+		deductions.push({ cargoId, quantity });
+	}
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
 	const out: T[][] = [];
 	for (let i = 0; i < arr.length; i += size) {
@@ -1207,6 +1223,7 @@ export async function cookMeal(
 	// 4. Build deduction updates: linked (by cargoId) and unlinked (by name match)
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	const updates: any[] = [];
+	const deductions: CargoDeduction[] = [];
 	let cargoById = new Map<string, typeof cargo.$inferSelect>();
 
 	if (linkedIngredients.length > 0) {
@@ -1275,6 +1292,11 @@ export async function cookMeal(
 				if (ing.isOptional) continue;
 				throw new Error(`Insufficient Cargo for: ${ing.ingredientName}`);
 			}
+			recordCargoDeduction(
+				deductions,
+				ing.cargoId as string,
+				deductionInCargoUnit,
+			);
 			updates.push(
 				d1
 					.update(cargo)
@@ -1357,6 +1379,7 @@ export async function cookMeal(
 			}
 
 			for (const { cargoId, quantityToDeduct } of allocations) {
+				recordCargoDeduction(deductions, cargoId, quantityToDeduct);
 				updates.push(
 					d1
 						.update(cargo)
@@ -1396,6 +1419,7 @@ export async function cookMeal(
 		cooked: true,
 		ingredientsDeducted: updates.length,
 		servings: effectiveServings,
+		deductions,
 	};
 }
 

@@ -56,6 +56,7 @@ struct CargoListView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.cargo,
                     organizationId: organizationId,
+                    countChip: model.total > 0 ? model.total : nil,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -110,7 +111,7 @@ struct CargoListView: View {
                         NavigationLink {
                             CargoDetailView(itemId: item.id)
                         } label: {
-                            CargoRow(item: item)
+                            CargoRowView(item: item)
                         }
                         .listRowBackground(Theme.surface)
                         .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
@@ -152,28 +153,6 @@ struct SearchResultRow: View {
             }
             Spacer()
             Text("\(result.quantity.formatted()) \(result.unit)")
-                .font(Typography.caption())
-                .foregroundStyle(Theme.carbon)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-struct CargoRow: View {
-    let item: CargoItem
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.name.capitalized).rationBody()
-                if let expiresAt = item.expiresAt {
-                    Text("Expires \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
-                        .rationCaption()
-                        .foregroundStyle(expiresAt < Date() ? Theme.danger : Theme.muted)
-                }
-            }
-            Spacer()
-            Text("\(item.quantity.formatted()) \(item.unit)")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.carbon)
         }

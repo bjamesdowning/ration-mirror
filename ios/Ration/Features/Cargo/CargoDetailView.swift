@@ -72,14 +72,18 @@ struct CargoDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
             if model.item != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Edit") { showingEdit = true }
-                        Button("Delete", role: .destructive) { showingDeleteConfirm = true }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                DetailActionFAB(
+                    systemImage: "ellipsis.circle.fill",
+                    accessibilityLabel: "Cargo actions"
+                ) {
+                    Button { showingEdit = true } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                 }
             }
@@ -233,15 +237,21 @@ struct CargoDetailView: View {
 @Observable
 final class CargoEditViewModel {
     var name = ""
+    var domain = "food"
     var quantity = ""
     var unit = ""
+    var tags: [String] = []
+    var expiresAt: Date?
     private(set) var isSaving = false
     var errorMessage: String?
 
     init(item: CargoItem) {
         name = item.name
+        domain = item.domain
         quantity = String(item.quantity)
         unit = item.unit
+        tags = item.tags
+        expiresAt = item.expiresAt
     }
 
     func save(itemId: String, api: RationAPI) async -> Bool {
@@ -254,7 +264,14 @@ final class CargoEditViewModel {
         do {
             _ = try await api.updateCargo(
                 id: itemId,
-                UpdateCargoRequest(name: name, quantity: qty, unit: unit)
+                UpdateCargoRequest(
+                    name: name,
+                    quantity: qty,
+                    unit: unit,
+                    domain: domain,
+                    tags: tags,
+                    expiresAt: expiresAt
+                )
             )
             Haptics.light()
             return true
@@ -271,6 +288,7 @@ struct CargoEditSheet: View {
     let item: CargoItem
     var onSaved: () async -> Void = {}
     @State private var model: CargoEditViewModel
+    @State private var tagSuggestions: [String] = []
 
     init(item: CargoItem, onSaved: @escaping () async -> Void = {}) {
         self.item = item
@@ -282,9 +300,29 @@ struct CargoEditSheet: View {
         Form {
             Section("Item") {
                 TextField("Name", text: $model.name)
+                Picker("Domain", selection: $model.domain) {
+                    Text("Food").tag("food")
+                    Text("Household").tag("household")
+                    Text("Alcohol").tag("alcohol")
+                }
                 TextField("Quantity", text: $model.quantity)
                     .keyboardType(.decimalPad)
-                TextField("Unit", text: $model.unit)
+                UnitPicker(units: RationUnits.cargoEdit, selection: $model.unit)
+                TagChipEditor(tags: $model.tags, suggestions: tagSuggestions)
+                Toggle("Set expiry date", isOn: Binding(
+                    get: { model.expiresAt != nil },
+                    set: { model.expiresAt = $0 ? (model.expiresAt ?? Date()) : nil }
+                ))
+                if model.expiresAt != nil {
+                    DatePicker(
+                        "Expires",
+                        selection: Binding(
+                            get: { model.expiresAt ?? Date() },
+                            set: { model.expiresAt = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                }
             }
             if let errorMessage = model.errorMessage {
                 Section { ErrorBanner(message: errorMessage) }
@@ -303,5 +341,10 @@ struct CargoEditSheet: View {
         }
         .navigationTitle("Edit Cargo")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if let response = try? await env.api.cargoTags() {
+                tagSuggestions = response.tags
+            }
+        }
     }
 }

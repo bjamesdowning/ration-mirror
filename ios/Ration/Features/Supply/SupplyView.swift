@@ -12,6 +12,7 @@ final class SupplyViewModel {
     var errorMessage: String?
     var dockMessage: String?
     private var lastHapticMilestone = 0
+    var undoBuffer = UndoBuffer<SupplyUndoAction>()
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
         supportsSupplySort: true,
@@ -112,6 +113,12 @@ final class SupplyViewModel {
         guard online else { return }
         do {
             _ = try await api.updateSupplyItem(item.id, quantity: quantity, unit: unit, isPurchased: true)
+            undoBuffer.record(SupplyUndoAction(
+                itemId: item.id,
+                previousPurchased: false,
+                previousQuantity: item.quantity,
+                previousUnit: item.unit
+            ))
         } catch {
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -141,6 +148,45 @@ final class SupplyViewModel {
             snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
             Haptics.success()
         } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func undoCheckoff(
+        _ action: SupplyUndoAction,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard let current = list else {
+            undoBuffer.clear()
+            return
+        }
+        let updatedItems = current.items.map { existing in
+            guard existing.id == action.itemId else { return existing }
+            return SupplyItem(
+                id: existing.id,
+                name: existing.name,
+                quantity: action.previousQuantity,
+                unit: action.previousUnit,
+                domain: existing.domain,
+                isPurchased: action.previousPurchased
+            )
+        }
+        list = SupplyList(id: current.id, name: current.name, items: updatedItems)
+        undoBuffer.clear()
+        guard online else { return }
+        do {
+            _ = try await api.updateSupplyItem(
+                action.itemId,
+                quantity: action.previousQuantity,
+                unit: action.previousUnit,
+                isPurchased: action.previousPurchased
+            )
+            Haptics.light()
+        } catch {
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -221,6 +267,13 @@ private extension SupplyItem {
     }
 }
 
+struct SupplyUndoAction: Sendable {
+    let itemId: String
+    let previousPurchased: Bool
+    let previousQuantity: Double
+    let previousUnit: String
+}
+
 struct SupplyView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
@@ -263,11 +316,13 @@ struct SupplyView: View {
                 }
             }
             .navigationTitle("Supply")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.supply,
                     organizationId: organizationId,
+                    countChip: model.totalCount > 0 ? model.totalCount : nil,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -328,55 +383,47 @@ struct SupplyView: View {
                 }
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
-            .background(Theme.ceramic)
-            .safeAreaInset(edge: .top) {
-                if model.totalCount > 0 {
-                    VStack(spacing: 6) {
-                        ThinProgressBar(progress: model.progressFraction)
-                            .padding(.horizontal, 16)
-                        if let message = model.dockMessage {
-                            Text(message)
-                                .rationCaption()
-                                .foregroundStyle(Theme.hyperGreen)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 16)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .background(Theme.ceramic)
+            .overlay(alignment: .bottom) {
+                if model.undoBuffer.isShowing {
+                    UndoToast(
+                        message: "Item checked off",
+                        onUndo: { Task { await undoSupplyCheckoff() } },
+                        onDismiss: { model.undoBuffer.clear() }
+                    )
+                    .padding(.bottom, 80)
+                } else if let message = model.dockMessage {
+                    Text(message)
+                        .rationCaption()
+                        .foregroundStyle(Theme.carbon)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Theme.hyperGreen.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .padding(.bottom, 72)
+                        .padding(.horizontal, 16)
                 }
             }
             .safeAreaInset(edge: .bottom) {
                 if model.totalCount > 0 {
-                    HStack {
-                        Spacer()
-                        Menu {
-                            Button {
-                                Task {
-                                    await model.dock(
-                                        api: env.api,
-                                        snapshots: env.snapshots,
-                                        online: env.network.isOnline,
-                                        organizationId: organizationId
-                                    )
-                                }
-                            } label: {
-                                Label("Dock to Cargo", systemImage: "shippingbox")
+                    IconFAB(
+                        systemImage: "shippingbox.and.arrow.backward.fill",
+                        accessibilityLabel: "Dock purchased items to Cargo",
+                        disabled: model.isDocking || model.purchasedCount == 0
+                    ) {
+                        Button {
+                            Task {
+                                await model.dock(
+                                    api: env.api,
+                                    snapshots: env.snapshots,
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
+                                )
                             }
-                            .disabled(model.isDocking || model.purchasedCount == 0)
                         } label: {
-                            Image(systemName: "shippingbox.and.arrow.backward.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(Theme.carbon)
-                                .frame(width: 56, height: 56)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .overlay(Circle().stroke(Theme.platinum, lineWidth: 1))
+                            Label("Dock to Cargo", systemImage: "shippingbox")
                         }
-                        .accessibilityLabel("Dock purchased items to Cargo")
                         .disabled(model.isDocking || model.purchasedCount == 0)
                     }
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 8)
                 }
             }
         }
@@ -396,6 +443,23 @@ struct SupplyView: View {
 
     private func listView(_ list: SupplyList) -> some View {
         List {
+            if model.totalCount > 0 {
+                Section {
+                    EmptyView()
+                } header: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("\(model.purchasedCount)/\(model.totalCount) bought")
+                                .rationCaption()
+                                .foregroundStyle(Theme.muted)
+                            Spacer()
+                        }
+                        ThinProgressBar(progress: model.progressFraction)
+                    }
+                    .padding(.vertical, 4)
+                    .textCase(nil)
+                }
+            }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
@@ -463,7 +527,11 @@ struct SupplyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable {
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+            if env.network.isOnline {
+                await model.sync(api: env.api, snapshots: env.snapshots, online: true, organizationId: organizationId)
+            } else {
+                await model.load(api: env.api, snapshots: env.snapshots, online: false, organizationId: organizationId)
+            }
         }
     }
 
@@ -495,6 +563,22 @@ struct SupplyView: View {
         supplyShareURL = nil
         supplyShareExpiresAt = nil
         Haptics.light()
+    }
+
+    private func undoSupplyCheckoff() async {
+        guard let action = model.undoBuffer.pendingItem,
+              env.network.isOnline
+        else {
+            model.undoBuffer.clear()
+            return
+        }
+        await model.undoCheckoff(
+            action,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 }
 

@@ -11,9 +11,10 @@ import {
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { log } from "./logging.server";
-import { cookMeal } from "./meals.server";
+import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
 import type { ManifestPreviewData } from "./types";
+import { mergeDeductions } from "./undo-token.server";
 
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -144,6 +145,9 @@ export interface MealPlanEntryWithMeal {
 
 export interface ConsumeManifestEntriesResult {
 	consumed: number;
+	deductions: CargoDeduction[];
+	entryIds: string[];
+	planId: string;
 }
 
 export async function getWeekEntries(
@@ -247,7 +251,9 @@ export async function consumeManifestEntries(
 		return true;
 	});
 
-	if (uniqueEntries.length === 0) return { consumed: 0 };
+	if (uniqueEntries.length === 0) {
+		return { consumed: 0, deductions: [], entryIds: [], planId };
+	}
 
 	// 3. Cook each unique meal once with aggregated servings. Entries for the
 	//    same mealId are combined so we call cookMeal M times (unique meals)
@@ -263,10 +269,12 @@ export async function consumeManifestEntries(
 		);
 	}
 
+	const allDeductions: CargoDeduction[] = [];
 	for (const [mealId, totalServings] of servingsByMeal) {
-		await cookMeal(env, organizationId, mealId, {
+		const cookResult = await cookMeal(env, organizationId, mealId, {
 			servings: totalServings,
 		});
+		mergeDeductions(allDeductions, cookResult.deductions);
 	}
 
 	// 4. Mark all as consumed
@@ -284,7 +292,12 @@ export async function consumeManifestEntries(
 			),
 		);
 
-	return { consumed: uniqueEntries.length };
+	return {
+		consumed: uniqueEntries.length,
+		deductions: allDeductions,
+		entryIds: uniqueEntries.map((e) => e.id),
+		planId,
+	};
 }
 
 export async function addEntry(

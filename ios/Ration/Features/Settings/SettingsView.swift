@@ -116,7 +116,14 @@ struct SettingsView: View {
                             Task { await model.activate(org, env: env) }
                         } label: {
                             HStack {
-                                Text(org.name).foregroundStyle(Theme.carbon)
+                                VStack(alignment: .leading) {
+                                    Text(org.name).foregroundStyle(Theme.carbon)
+                                    if org.role == "owner", org.credits > 0 {
+                                        Text("\(org.credits) credits")
+                                            .rationCaption()
+                                            .foregroundStyle(Theme.muted)
+                                    }
+                                }
                                 Spacer()
                                 if org.isActive {
                                     Image(systemName: "checkmark").foregroundStyle(Theme.hyperGreen)
@@ -124,6 +131,14 @@ struct SettingsView: View {
                             }
                         }
                     }
+                }
+
+                if canTransferCredits(session) {
+                    TransferCreditsSection(
+                        organizations: session.organizations,
+                        api: env.api,
+                        onTransferred: { Task { await model.load(api: env.api) } }
+                    )
                 }
             }
 
@@ -134,6 +149,14 @@ struct SettingsView: View {
                 if let consent = model.settings?.aiConsentAt, !consent.isEmpty {
                     LabeledContent("AI consent", value: "Granted")
                 }
+            }
+
+            if let settings = model.settings {
+                ManifestSettingsSection(
+                    settings: settings,
+                    api: env.api,
+                    onSaved: { Task { await model.load(api: env.api) } }
+                )
             }
 
             SettingsHelpSection()
@@ -156,5 +179,143 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await model.load(api: env.api) }
+    }
+
+    private func canTransferCredits(_ session: SessionResponse) -> Bool {
+        let ownerWithCredits = session.organizations.contains { $0.role == "owner" && $0.credits > 0 }
+        return ownerWithCredits && session.organizations.count >= 2
+    }
+}
+
+private struct TransferCreditsSection: View {
+    let organizations: [OrgMembership]
+    let api: RationAPI
+    var onTransferred: () -> Void = {}
+
+    @State private var sourceId: String = ""
+    @State private var destinationId: String = ""
+    @State private var amount = 1
+    @State private var isTransferring = false
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
+
+    private var sourceOrgs: [OrgMembership] {
+        organizations.filter { $0.role == "owner" && $0.credits > 0 }
+    }
+
+    private var destinationOrgs: [OrgMembership] {
+        organizations.filter { $0.id != sourceId }
+    }
+
+    var body: some View {
+        Section("Transfer credits") {
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(Theme.danger).font(Typography.caption())
+            }
+            if let successMessage {
+                Text(successMessage).foregroundStyle(Theme.hyperGreen).font(Typography.caption())
+            }
+            Picker("From", selection: $sourceId) {
+                Text("Select source").tag("")
+                ForEach(sourceOrgs) { org in
+                    Text("\(org.name) (\(org.credits))").tag(org.id)
+                }
+            }
+            Picker("To", selection: $destinationId) {
+                Text("Select destination").tag("")
+                ForEach(destinationOrgs) { org in
+                    Text(org.name).tag(org.id)
+                }
+            }
+            Stepper("Amount: \(amount)", value: $amount, in: 1...10_000)
+            Button("Transfer credits") {
+                Task { await transfer() }
+            }
+            .disabled(isTransferring || sourceId.isEmpty || destinationId.isEmpty)
+        }
+        .onAppear {
+            if sourceId.isEmpty { sourceId = sourceOrgs.first?.id ?? "" }
+            if destinationId.isEmpty {
+                destinationId = destinationOrgs.first?.id ?? ""
+            }
+        }
+    }
+
+    private func transfer() async {
+        isTransferring = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isTransferring = false }
+        do {
+            _ = try await api.transferCredits(
+                sourceOrganizationId: sourceId,
+                destinationOrganizationId: destinationId,
+                amount: amount
+            )
+            successMessage = "Credits transferred"
+            Haptics.success()
+            onTransferred()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+}
+
+private struct ManifestSettingsSection: View {
+    let settings: UserSettings
+    let api: RationAPI
+    var onSaved: () -> Void = {}
+
+    @State private var weekStart: String
+    @State private var calendarSpan: Int
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(settings: UserSettings, api: RationAPI, onSaved: @escaping () -> Void = {}) {
+        self.settings = settings
+        self.api = api
+        self.onSaved = onSaved
+        let manifest = settings.manifestSettings
+        _weekStart = State(initialValue: manifest?.weekStart ?? "sunday")
+        _calendarSpan = State(initialValue: manifest?.calendarSpan ?? 5)
+    }
+
+    var body: some View {
+        Section("Manifest") {
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(Theme.danger).font(Typography.caption())
+            }
+            Picker("Week starts", selection: $weekStart) {
+                Text("Sunday").tag("sunday")
+                Text("Monday").tag("monday")
+            }
+            Picker("Calendar span", selection: $calendarSpan) {
+                Text("3 days").tag(3)
+                Text("5 days").tag(5)
+                Text("7 days").tag(7)
+            }
+            Button("Save manifest settings") {
+                Task { await save() }
+            }
+            .disabled(isSaving)
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            _ = try await api.patchSettings(SettingsPatch(
+                manifestSettings: ManifestSettings(
+                    weekStart: weekStart,
+                    calendarSpan: calendarSpan
+                )
+            ))
+            Haptics.success()
+            onSaved()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 }

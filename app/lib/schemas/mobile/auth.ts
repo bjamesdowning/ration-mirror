@@ -53,6 +53,14 @@ export const MobileSettingsPatchSchema = z
 			.enum(["cook", "shop", "minimal", "full", "custom"])
 			.optional(),
 		hubLayout: HubLayoutSchema.optional(),
+		manifestSettings: z
+			.object({
+				weekStart: z.enum(["sunday", "monday"]).optional(),
+				calendarSpan: z
+					.union([z.literal(3), z.literal(5), z.literal(7)])
+					.optional(),
+			})
+			.optional(),
 	})
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",

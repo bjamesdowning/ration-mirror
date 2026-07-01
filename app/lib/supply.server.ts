@@ -32,6 +32,7 @@ import { TIER_LIMITS } from "./tiers.server";
 import {
 	type BaseUnit,
 	chooseReadableUnit,
+	convertFromBaseUnit,
 	convertIngredientAmount,
 	convertQuantity,
 	getUnitMultiplier,
@@ -205,7 +206,64 @@ function getExistingListQuantity(
 	return total;
 }
 
-function aggregateIngredients(
+function mergeIntoAggregation(
+	existing: {
+		name: string;
+		normalizedName: string;
+		baseQuantity: number;
+		baseUnit: BaseUnit;
+		domain: string;
+		sourceMealIds: Set<string>;
+	},
+	quantity: number,
+	unit: SupportedUnit,
+	mealId: string,
+	ingredientName: string,
+): boolean {
+	const normalized = normalizeToBaseUnit(quantity, unit);
+	if (normalized.unit === existing.baseUnit) {
+		existing.baseQuantity += normalized.quantity;
+		existing.sourceMealIds.add(mealId);
+		return true;
+	}
+
+	const targetUnit = baseUnitToSupported(existing.baseUnit);
+	const existingInTarget = convertFromBaseUnit(
+		existing.baseQuantity,
+		existing.baseUnit,
+		targetUnit,
+	);
+	if (existingInTarget === null) return false;
+
+	const added = convertIngredientAmount(
+		quantity,
+		unit,
+		targetUnit,
+		ingredientName,
+	);
+	if (added === null) return false;
+
+	const merged = normalizeToBaseUnit(existingInTarget + added, targetUnit);
+	existing.baseQuantity = merged.quantity;
+	existing.baseUnit = merged.unit;
+	existing.sourceMealIds.add(mealId);
+	return true;
+}
+
+function baseUnitToSupported(baseUnit: BaseUnit): SupportedUnit {
+	switch (baseUnit) {
+		case "g":
+			return "g";
+		case "ml":
+			return "ml";
+		case "oz":
+			return "oz";
+		default:
+			return "unit";
+	}
+}
+
+export function aggregateIngredients(
 	rows: IngredientRow[],
 	unitMode: SupplyUnitMode = "metric",
 ): AggregatedIngredient[] {
@@ -235,12 +293,35 @@ function aggregateIngredients(
 			});
 		}
 		const normalized = normalizeToBaseUnit(ingredient.quantity, safeUnit);
-		const key = `${normalizedName}__${domain}__${normalized.unit}`;
+		const key = `${normalizedName}__${domain}`;
 
 		const existing = aggregation.get(key);
 		if (existing) {
-			existing.baseQuantity += normalized.quantity;
-			existing.sourceMealIds.add(ingredient.mealId);
+			const merged = mergeIntoAggregation(
+				existing,
+				ingredient.quantity,
+				safeUnit,
+				ingredient.mealId,
+				ingredient.ingredientName,
+			);
+			if (!merged) {
+				// Incompatible units — keep as separate line with disambiguated key
+				const fallbackKey = `${key}__${normalized.unit}`;
+				const fallbackExisting = aggregation.get(fallbackKey);
+				if (fallbackExisting) {
+					fallbackExisting.baseQuantity += normalized.quantity;
+					fallbackExisting.sourceMealIds.add(ingredient.mealId);
+				} else {
+					aggregation.set(fallbackKey, {
+						name: ingredient.ingredientName,
+						normalizedName,
+						baseQuantity: normalized.quantity,
+						baseUnit: normalized.unit,
+						domain,
+						sourceMealIds: new Set([ingredient.mealId]),
+					});
+				}
+			}
 			continue;
 		}
 

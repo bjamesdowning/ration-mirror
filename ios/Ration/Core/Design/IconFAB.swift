@@ -34,6 +34,9 @@ struct IconFAB<MenuContent: View>: View {
     }
 }
 
+/// Detail screens use the same icon FAB menu pattern as list tabs.
+typealias DetailActionFAB = IconFAB
+
 /// Single-action icon FAB (no menu).
 struct IconFABButton: View {
     let systemImage: String

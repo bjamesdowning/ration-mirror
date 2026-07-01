@@ -11,9 +11,10 @@ struct DashboardView: View {
     var onOpenManifest: () -> Void = {}
     @State private var model = HubViewModel()
     @State private var showingEdit = false
+    @State private var editableWidgets: [HubWidgetLayout] = []
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
-    @State private var selectedManifestEntry: ManifestPreviewEntry?
+    @State private var draggingWidgetId: String?
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -98,11 +99,6 @@ struct DashboardView: View {
                     MealDetailView(mealId: route.meal.id, initialMeal: route.meal)
                 }
             }
-            .sheet(item: $selectedManifestEntry) { entry in
-                ManifestEntryDetailSheet(entry: entry) {
-                    await reload()
-                }
-            }
         }
         .task(id: organizationId) {
             await reload()
@@ -121,6 +117,25 @@ struct DashboardView: View {
         )
     }
 
+    private func reorderWidgets(
+        sourceId: String,
+        to destinationId: String,
+        data: HubResponse
+    ) async {
+        var widgets = HubLayoutEngine.initEditableWidgets(
+            profile: data.hubProfile,
+            layout: data.hubLayout
+        )
+        widgets = HubLayoutEngine.reorderVisible(widgets, moving: sourceId, to: destinationId)
+        do {
+            try await model.saveLayout(widgets, api: env.api)
+            Haptics.light()
+            await reload()
+        } catch {
+            await reload()
+        }
+    }
+
     private func hubContent(_ data: HubResponse) -> some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -136,6 +151,33 @@ struct DashboardView: View {
 
                 ForEach(model.resolvedLayout) { widget in
                     widgetView(widget, data: data)
+                        .opacity(draggingWidgetId == widget.id ? 0.55 : 1)
+                        .scaleEffect(draggingWidgetId == widget.id ? 1.02 : 1)
+                        .shadow(
+                            color: draggingWidgetId == widget.id ? Theme.carbon.opacity(0.1) : .clear,
+                            radius: 10,
+                            y: 4
+                        )
+                        .onDrag {
+                            draggingWidgetId = widget.id
+                            return NSItemProvider(object: widget.id as NSString)
+                        }
+                        .onDrop(
+                            of: [.text],
+                            delegate: HubWidgetDropDelegate(
+                                widgetId: widget.id,
+                                draggingId: $draggingWidgetId,
+                                onDrop: { sourceId, destinationId in
+                                    Task {
+                                        await reorderWidgets(
+                                            sourceId: sourceId,
+                                            to: destinationId,
+                                            data: data
+                                        )
+                                    }
+                                }
+                            )
+                        )
                 }
             }
             .padding(16)
@@ -185,7 +227,7 @@ struct DashboardView: View {
                 daySpan: widget.filters?.daySpan ?? 3,
                 size: size,
                 onSelectEntry: { entry in
-                    selectedManifestEntry = entry
+                    selectedMealRoute = HubMealRoute(meal: entry.stubMeal())
                 },
                 onOpenManifest: onOpenManifest
             )
@@ -217,6 +259,27 @@ struct DashboardView: View {
     }
 }
 
+private struct HubWidgetDropDelegate: DropDelegate {
+    let widgetId: String
+    @Binding var draggingId: String?
+    let onDrop: (String, String) -> Void
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let sourceId = draggingId, sourceId != widgetId else {
+            draggingId = nil
+            return false
+        }
+        onDrop(sourceId, widgetId)
+        draggingId = nil
+        Haptics.light()
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+}
+
 private struct HubCargoRoute: Identifiable {
     let id: String
 }
@@ -224,6 +287,28 @@ private struct HubCargoRoute: Identifiable {
 private struct HubMealRoute: Identifiable {
     let meal: Meal
     var id: String { meal.id }
+}
+
+private extension ManifestPreviewEntry {
+    func stubMeal() -> Meal {
+        Meal(
+            id: mealId,
+            organizationId: "",
+            name: mealName,
+            domain: "food",
+            type: mealType ?? "dinner",
+            description: nil,
+            directions: nil,
+            equipment: [],
+            servings: servingsOverride,
+            prepTime: nil,
+            cookTime: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            tags: [],
+            ingredients: []
+        )
+    }
 }
 
 struct StatCard: View {

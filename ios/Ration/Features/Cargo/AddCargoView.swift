@@ -25,8 +25,7 @@ struct AddCargoView: View {
                     HStack {
                         TextField("Quantity", text: $quantity)
                             .keyboardType(.decimalPad)
-                        TextField("Unit", text: $unit)
-                            .autocorrectionDisabled()
+                        UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
                     }
                     Picker("Domain", selection: $domain) {
                         ForEach(CargoDomain.allCases, id: \.self) { d in

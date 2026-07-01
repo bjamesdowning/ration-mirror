@@ -5,13 +5,26 @@ struct GlobalPageToolbar: ToolbarContent {
     var hasActiveFilters: Bool = false
     var syncDomain: String?
     var organizationId: String?
+    var countChip: Int?
     var onOptions: (() -> Void)?
     var onOpenSettings: () -> Void
     @Environment(AppEnvironment.self) private var env
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            OrgSwitcherBar()
+            HStack(spacing: 8) {
+                OrgSwitcherBar()
+                if let countChip {
+                    Text("\(countChip)")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.carbon)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Theme.platinum)
+                        .clipShape(Capsule())
+                        .accessibilityLabel("\(countChip) items")
+                }
+            }
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {

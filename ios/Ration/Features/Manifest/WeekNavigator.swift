@@ -53,6 +53,27 @@ enum ManifestDateHelpers {
         return (0..<span).map { addDays(anchor, days: $0) }
     }
 
+    /// Normalizes navigation anchor: span 7 → week start; span 3/5 → exact date.
+    static func normalizedNavigationStart(
+        _ date: String,
+        calendarSpan: Int,
+        weekStartPref: String
+    ) -> String {
+        if calendarSpan == 7 {
+            return weekStart(for: date, preference: weekStartPref)
+        }
+        return date
+    }
+
+    /// Initial anchor when opening Manifest — mirrors web `manifest.tsx` loader.
+    static func initialRangeStart(calendarSpan: Int, weekStartPref: String) -> String {
+        let today = todayISO()
+        if calendarSpan == 7 {
+            return weekStart(for: today, preference: weekStartPref)
+        }
+        return today
+    }
+
     static func dayShortName(_ isoDate: String) -> String {
         guard let date = localDate(from: isoDate) else { return isoDate }
         let formatter = DateFormatter()
@@ -86,6 +107,10 @@ enum ManifestDateHelpers {
 
     static func canNavigate(from rangeStart: String, byDays days: Int) -> Bool {
         let target = addDays(rangeStart, days: days)
+        return canNavigate(from: rangeStart, to: target)
+    }
+
+    static func canNavigate(from rangeStart: String, to target: String) -> Bool {
         let today = todayISO()
         let minDate = addDays(today, days: -navigationWeekBound * 7)
         let maxDate = addDays(today, days: navigationWeekBound * 7)
@@ -102,12 +127,25 @@ struct WeekNavigator: View {
     var isLoading: Bool = false
     var onNavigate: (String) -> Void
 
+    @State private var showingDatePicker = false
+    @State private var jumpDate = Date()
+
     private var canGoBack: Bool {
-        ManifestDateHelpers.canNavigate(from: rangeStart, byDays: -calendarSpan)
+        let target = ManifestDateHelpers.normalizedNavigationStart(
+            ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan),
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        return ManifestDateHelpers.canNavigate(from: rangeStart, to: target)
     }
 
     private var canGoForward: Bool {
-        ManifestDateHelpers.canNavigate(from: rangeStart, byDays: calendarSpan)
+        let target = ManifestDateHelpers.normalizedNavigationStart(
+            ManifestDateHelpers.addDays(rangeStart, days: calendarSpan),
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        return ManifestDateHelpers.canNavigate(from: rangeStart, to: target)
     }
 
     private var rangeEnd: String {
@@ -132,7 +170,13 @@ struct WeekNavigator: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Button {
-                    onNavigate(ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan))
+                    let raw = ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan)
+                    let target = ManifestDateHelpers.normalizedNavigationStart(
+                        raw,
+                        calendarSpan: calendarSpan,
+                        weekStartPref: weekStartPref
+                    )
+                    onNavigate(target)
                 } label: {
                     Image(systemName: "chevron.left")
                         .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
@@ -151,7 +195,13 @@ struct WeekNavigator: View {
                     .frame(minWidth: 160)
 
                 Button {
-                    onNavigate(ManifestDateHelpers.addDays(rangeStart, days: calendarSpan))
+                    let raw = ManifestDateHelpers.addDays(rangeStart, days: calendarSpan)
+                    let target = ManifestDateHelpers.normalizedNavigationStart(
+                        raw,
+                        calendarSpan: calendarSpan,
+                        weekStartPref: weekStartPref
+                    )
+                    onNavigate(target)
                 } label: {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
@@ -170,6 +220,14 @@ struct WeekNavigator: View {
                     .background(Theme.platinum)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+
+                Button {
+                    showingDatePicker = true
+                } label: {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Go to date")
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -179,6 +237,39 @@ struct WeekNavigator: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                VStack {
+                    DatePicker("Jump to date", selection: $jumpDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                    Spacer()
+                }
+                .navigationTitle("Go to date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Go") {
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            formatter.timeZone = TimeZone.current
+                            let iso = formatter.string(from: jumpDate)
+                            let target = ManifestDateHelpers.normalizedNavigationStart(
+                                iso,
+                                calendarSpan: calendarSpan,
+                                weekStartPref: weekStartPref
+                            )
+                            onNavigate(target)
+                            showingDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 

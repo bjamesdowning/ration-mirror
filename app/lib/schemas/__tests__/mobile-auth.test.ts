@@ -17,4 +17,12 @@ describe("MobileSettingsPatchSchema", () => {
 		const result = MobileSettingsPatchSchema.safeParse({});
 		expect(result.success).toBe(false);
 	});
+
+	it("accepts manifest settings partial patch", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			manifestSettings: { weekStart: "monday", calendarSpan: 7 },
+		});
+		expect(parsed.manifestSettings?.weekStart).toBe("monday");
+		expect(parsed.manifestSettings?.calendarSpan).toBe(7);
+	});
 });

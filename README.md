@@ -1691,6 +1691,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `DELETE` | `/api/mobile/v1/account` | Permanently delete account |
 | `GET` / `POST` | `/api/mobile/v1/manifest` | Meal plan week / add entry |
 | `POST` | `/api/mobile/v1/manifest/consume` | Consume planned entries |
+| `POST` | `/api/mobile/v1/undo` | Reverse cook or manifest consume within 5s (KV token) |
 | `POST` | `/api/mobile/v1/manifest/plan-week` | AI plan week (3 credits) |
 | `GET` | `/api/mobile/v1/manifest/plan-week/:requestId` | Poll plan-week job |
 | `POST` | `/api/mobile/v1/manifest/bulk` | Bulk add plan entries |
@@ -1704,7 +1705,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/meals/import/:requestId` | Poll import job |
 | `POST` | `/api/mobile/v1/meals/import/confirm` | Confirm imported recipe |
 | `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
-| `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync |
+| `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync (optional `{ servings }` body) |
+| `POST` | `/api/mobile/v1/groups/credits/transfer` | Transfer credits between orgs (source owner, dest member) |
 | `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |

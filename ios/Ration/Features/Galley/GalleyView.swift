@@ -14,6 +14,10 @@ struct GalleyView: View {
         env.session.activeOrganizationId ?? "unknown"
     }
 
+    private var galleyCount: Int {
+        model.isMatchMode ? model.displayedMatches.count : model.displayedMeals.count
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -44,6 +48,7 @@ struct GalleyView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.galley,
                     organizationId: organizationId,
+                    countChip: galleyCount > 0 ? galleyCount : nil,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -99,7 +104,7 @@ struct GalleyView: View {
                 NavigationLink {
                     MealDetailView(mealId: meal.id, initialMeal: meal)
                 } label: {
-                    MealRow(meal: meal)
+                    MealRowView(meal: meal)
                 }
                 .listRowBackground(Theme.surface)
                 .swipeActions {
@@ -135,13 +140,7 @@ struct GalleyView: View {
                 NavigationLink {
                     MealDetailView(mealId: match.meal.id, initialMeal: match.meal)
                 } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(match.meal.name.capitalized).rationBody()
-                        Text("\(Int(match.matchPercentage))% match · \(match.canMake ? "Ready" : "Missing items")")
-                            .rationCaption()
-                            .foregroundStyle(match.canMake ? Theme.hyperGreen : Theme.muted)
-                    }
-                    .padding(.vertical, 4)
+                    MealRowView(meal: match.meal, match: match)
                 }
                 .listRowBackground(Theme.surface)
             }
@@ -149,31 +148,6 @@ struct GalleyView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .refreshable { await reload() }
-    }
-}
-
-struct MealRow: View {
-    let meal: Meal
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(meal.name.capitalized).rationBody()
-            HStack(spacing: 8) {
-                Text(meal.type.capitalized)
-                if let servings = meal.servings {
-                    Text("\(servings) servings")
-                }
-                if let prepTime = meal.prepTime {
-                    Text("\(prepTime)m prep")
-                }
-            }
-            .rationCaption()
-            if !meal.tags.isEmpty {
-                Text(meal.tags.prefix(4).joined(separator: " / "))
-                    .rationCaption()
-            }
-        }
-        .padding(.vertical, 4)
     }
 }
 
@@ -189,6 +163,12 @@ struct MealDetailView: View {
     @State private var errorMessage: String?
     @State private var cookMessage: String?
     @State private var showingEdit = false
+    @State private var showingDeleteConfirm = false
+    @State private var isSelectedForSupply = false
+    @State private var isTogglingSupply = false
+    @State private var cookUndoToken: String?
+    @State private var showCookUndo = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -198,6 +178,11 @@ struct MealDetailView: View {
                 }
                 if let cookMessage {
                     Text(cookMessage).rationCaption().foregroundStyle(Theme.hyperGreen)
+                }
+                if isSelectedForSupply {
+                    Label("On Supply list", systemImage: "checkmark.circle.fill")
+                        .rationCaption()
+                        .foregroundStyle(Theme.hyperGreen)
                 }
                 let displayMeal = meal ?? initialMeal
                 header(displayMeal)
@@ -214,18 +199,49 @@ struct MealDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                HStack(spacing: 12) {
-                    Button("Cook meal") { Task { await cook() } }
-                        .buttonStyle(SecondaryButtonStyle())
-                    Button("Edit") { showingEdit = true }
-                        .buttonStyle(SecondaryButtonStyle())
-                }
             }
             .padding(16)
+            .padding(.bottom, 72)
         }
         .background(Theme.ceramic)
         .navigationTitle((meal ?? initialMeal).name.capitalized)
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if showCookUndo, cookUndoToken != nil {
+                UndoToast(
+                    message: "Ingredients deducted from Cargo",
+                    onUndo: { Task { await undoCook() } },
+                    onDismiss: {
+                        showCookUndo = false
+                        cookUndoToken = nil
+                    }
+                )
+                .padding(.bottom, 80)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            DetailActionFAB(
+                systemImage: "ellipsis.circle.fill",
+                accessibilityLabel: "Meal actions"
+            ) {
+                Button { Task { await cook() } } label: {
+                    Label("Cook meal", systemImage: "flame")
+                }
+                Button { Task { await toggleSupply() } } label: {
+                    Label(
+                        isSelectedForSupply ? "Remove from Supply" : "Add to Supply",
+                        systemImage: isSelectedForSupply ? "cart.fill.badge.minus" : "cart.badge.plus"
+                    )
+                }
+                .disabled(isTogglingSupply)
+                Button { showingEdit = true } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
         .task {
             let base = max(initialMeal.servings ?? 1, 1)
             desiredServings = base
@@ -239,6 +255,19 @@ struct MealDetailView: View {
             EditMealView(meal: meal ?? initialMeal) {
                 await load()
                 await loadAvailability()
+            }
+        }
+        .confirmationDialog("Delete this meal?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    do {
+                        try await env.api.deleteMeal(mealId)
+                        Haptics.light()
+                        dismiss()
+                    } catch {
+                        errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                    }
+                }
             }
         }
     }
@@ -332,7 +361,9 @@ struct MealDetailView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            meal = try await env.api.meal(id: mealId).meal
+            let response = try await env.api.meal(id: mealId)
+            meal = response.meal
+            isSelectedForSupply = response.isSelectedForSupply ?? false
             if let s = meal?.servings, s > 0 { desiredServings = s }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -344,15 +375,30 @@ struct MealDetailView: View {
         isLoadingAvailability = true
         defer { isLoadingAvailability = false }
         do {
-            let response = try await env.api.matchMeals(
-                mode: "strict",
-                limit: 20,
-                servings: desiredServings
+            matchResult = try await MealAvailabilityLoader.fetchMatch(
+                mealId: mealId,
+                servings: desiredServings,
+                api: env.api
             )
-            matchResult = response.matches.first { $0.meal.id == mealId }
-                ?? response.matches.first { $0.meal.name.lowercased() == (meal ?? initialMeal).name.lowercased() }
         } catch {
             // Availability is supplementary — don't block the detail view.
+        }
+    }
+
+    @MainActor
+    private func toggleSupply() async {
+        isTogglingSupply = true
+        defer { isTogglingSupply = false }
+        do {
+            let activating = !isSelectedForSupply
+            let response = try await env.api.toggleMealActive(
+                id: mealId,
+                servings: activating ? desiredServings : nil
+            )
+            isSelectedForSupply = response.isActive
+            Haptics.light()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
@@ -362,6 +408,30 @@ struct MealDetailView: View {
             let result = try await env.api.cookMeal(id: mealId, servings: desiredServings)
             Haptics.success()
             cookMessage = "Cooked \(result.servings) servings · \(result.ingredientsDeducted) deductions"
+            if let token = result.undoToken {
+                cookUndoToken = token
+                showCookUndo = true
+            }
+            await loadAvailability()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func undoCook() async {
+        guard let token = cookUndoToken, env.network.isOnline else {
+            showCookUndo = false
+            cookUndoToken = nil
+            return
+        }
+        showCookUndo = false
+        cookUndoToken = nil
+        do {
+            _ = try await env.api.undoAction(token: token)
+            Haptics.light()
+            cookMessage = "Cook undone — Cargo restored"
+            await loadAvailability()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

@@ -180,6 +180,17 @@ flowchart TB
 
 **Secrets (wrangler):** `CF_BROWSER_RENDERING_TOKEN` — optional; when set, recipe import uses Cloudflare Browser Rendering for JS-heavy sites. When absent, plain fetch only.
 
+**R2 lifecycle (`scan-pending/*`):** Failed/abandoned scans can leave orphaned objects under `scan-pending/*` in the `ration-storage` bucket. Cleanup is a native, zero-code **R2 Object Lifecycle Rule** (not application code), applied once per bucket by an operator:
+
+```bash
+npx wrangler r2 bucket lifecycle add ration-storage \
+  --prefix "scan-pending/" \
+  --expire-days 1 \
+  --id "expire-scan-pending-orphans"
+```
+
+Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
+
 **Vars:** `INTERCOM_APP_ID` — public Intercom workspace app id; set in `wrangler.jsonc` / `wrangler.dev.jsonc` / `wrangler.local.jsonc`. The Intercom Messenger loads only on authenticated `/hub/*` routes (see `app/components/support/HubIntercom.tsx`). The default floating launcher is hidden; support opens from the hub header **Ask Ration** primary control inside the grouped actions toolbar (`app/components/support/IntercomLauncherButton.tsx`, composed in `app/routes/hub.tsx`) so it does not cover the mobile bottom nav. `custom_launcher_selector` targets the shared class `ration-intercom-launcher` (`app/lib/intercom-hub-settings.ts`), also used on the **Ask Ration** link in **Help & Feedback** under System settings (`/hub/settings#help`, `HelpSection` in `app/routes/hub/settings.tsx`). On narrow viewports the header label shortens to **Ask** while the accessible name stays “Ask Ration (support chat)”. Theme switching stays in the header on `md+` and remains available under **Settings** on smaller viewports. The app **Content-Security-Policy** in `app/root.tsx` includes Intercom script/connect/img/font/media/frame/form-action sources required by their widget.
 
 **Secrets (optional):** `INTERCOM_MESSENGER_JWT_SECRET` — `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET`; when set, the root loader signs a short-lived HS256 JWT and the hub Messenger boots with `intercom_user_jwt` (Messenger Security / Fin). Generate the secret in Intercom under **Settings → Messenger → Security**. See [Authenticating users in the Messenger with JWTs](https://www.intercom.com/help/en/articles/10589769-authenticating-users-in-the-messenger-with-json-web-tokens-jwts).
@@ -1456,6 +1467,8 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | Inventory mutations | userId | 60s | 60 | Write storm protection |
 | Meal mutations | userId | 60s | 30 | Write storm protection |
 | Supply list mutations | userId | 60s | 60 | Write storm protection (Hub Supply → Update list, REST) |
+| `GET /api/mobile/v1/hub` | userId | 60s | 60 | `hub_read` — 10-way parallel fan-out per call; same tier class as `cargo_list`/`meal_list` |
+| `GET /api/mobile/v1/supply` | userId | 60s | 60 | `supply_read` — read-only, same tier class as `cargo_list` |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
 | MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, inventory_import_schema, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
@@ -1711,6 +1724,10 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 
 **Native iOS client:** A SwiftUI app consuming this API lives in [`ios/`](ios/README.md). Tabs: Hub, Cargo, Galley, Manifest, Supply. Global chrome: org switcher (avatar + credits), profile avatar, per-page filter sheet, conditional offline/stale sync indicator, and icon-only bottom FAB menus (v1.4.5). Hub uses customizable widget grid with layout presets, per-widget size (S/M/L), and filters (`GET /hub`, shared `hubLayout` with web). Galley renders structured recipe steps; AI flows use single-screen intro+input. Manifest week navigation uses fetch-then-commit; hub widgets deep-link to cargo/meal/manifest detail. Features include PKCE auth, onboarding, AI consent gating, org-scoped offline snapshots, supply sync/dock, scan-to-cargo confirm, profile/group image uploads, Crew-gated manifest & supply share links, cargo detail with connected meals, Galley meal ingredient-availability + servings scaler, and RevenueCat subscriptions + credit packs. Auth handoff uses **Universal Links** (`applinks:ration.mayutic.com` → `/auth/mobile-callback/open`) with the `ration://` custom scheme as a PKCE-bound fallback; the AASA is served at [`/.well-known/apple-app-site-association`](app/routes/well-known.apple-app-site-association.ts). App Review notes: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
+**AI consent (v1.4.8, symmetric across all four AI entry points):** `POST /api/mobile/v1/scan` now enforces the same server-side AI-consent gate (`requireMobileAIConsent`, 403 `ai_consent_required`) that `generate`/`import`/`plan-week` already enforced — closing the one endpoint that was previously permissive client-side and server-enforced-but-unchecked. Client-side, consent state (`aiConsentAt`) is lifted out of `ScanView` into `SessionStore.hasAIConsent`, loaded once at app start in `RootView`; a shared `AIConsentCoordinator` (`ios/Ration/Core/Consent/AIConsentCoordinator.swift`) gates the "proceed" action in all four sheets (`ScanView`, `GenerateMealSheet`, `ImportRecipeSheet`, `PlanWeekSheet`) against that single flag, so the full-screen consent gate is shown at most once per user regardless of which AI feature they reach first — accepting from any one immediately clears the gate for the other three without a second prompt or network fetch.
+
+**Forced-logout full wipe (v1.4.9):** A forced sign-out (401 from an expired/revoked refresh token, handled in `APIClient.swift` and `AuthManager.bootstrap()`) now runs the exact same full wipe as the explicit "Sign out" action, via `AuthManager.onSignedOut`, wired once in `AppEnvironment.init()`: `SnapshotStore.clearAll()` (offline pantry/meal snapshots), `BillingManager.logOut()`, `SessionStore.clear()` (in-memory session + AI-consent cache), and `AuthImageLoader.clearAll()` (cached authenticated images). This closes a shared-device cross-account data leakage gap — previously a forced logout left offline snapshots and cached images on disk for the next person signing in on the same device to read. `signOutLocal()` also deletes any orphaned PKCE verifier from Keychain on every sign-out (bundled fix, closes an abandoned-magic-link Keychain leak).
+
 ### 11.2 RevenueCat billing (setup & safe rollout)
 
 Cross-platform entitlements use **RevenueCat** as the product/subscriber authority. Ration materializes `user.tier` and org credits from **RevenueCat webhook events** when fulfillment is enabled. Until then, **Stripe webhooks remain authoritative** (no behavior change for existing subscribers).
@@ -1913,8 +1930,10 @@ bun run lint:fix      # Biome v2 auto-fix
 
 | Category | Location | Examples |
 |----------|----------|---------|
-| Core lib utilities | `app/lib/__tests__/` | `rate-limiter`, `ledger`, `capacity`, `vector`, `matching`, `query-utils`, `error-handler`, `api-key`, `idempotency` |
+| Core lib utilities | `app/lib/__tests__/` | `rate-limiter` (incl. `hub_read`/`supply_read` tiers), `ledger`, `capacity`, `vector`, `matching`, `query-utils`, `error-handler`, `api-key`, `idempotency`, `supply-pagination` |
 | Zod schemas | `app/lib/schemas/__tests__/` | `scan`, `meal`, `supply`, `week-plan`, `manifest`, `units`, `recipe-import`, `api-import` |
+| Mobile route logic | `app/lib/mobile/__tests__/`, `app/routes/api/mobile/__tests__/` | `ai-consent.server`, `hub.server`, `v1.hub`, `v1.supply`, `v1.meals.match` |
+| Native iOS | `ios/RationTests/` | XCTest suite, run via `bun run ios:check`; includes `AuthManagerSignOutTests`, `AppEnvironmentForcedLogoutWipeTests`, `AIConsentGateSymmetryTests` |
 
 **What is not tested (by design):**
 - React components — UI layer, deferred to a separate initiative

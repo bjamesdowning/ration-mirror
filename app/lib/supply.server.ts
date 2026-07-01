@@ -282,7 +282,11 @@ function aggregateIngredients(
  * and deletes the others (per user directive to destroy data if easier).
  * If no list exists, creates a new one named "Supply".
  */
-export async function ensureSupplyList(db: D1Database, organizationId: string) {
+export async function ensureSupplyList(
+	db: D1Database,
+	organizationId: string,
+	options?: SupplyItemsFetchOptions,
+) {
 	const d1 = drizzle(db);
 
 	// Fast path (99%+ of calls): a correctly-named list already exists.
@@ -300,7 +304,7 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 		.limit(1);
 
 	if (existing) {
-		return getSupplyListById(db, organizationId, existing.id);
+		return getSupplyListById(db, organizationId, existing.id, options);
 	}
 
 	// Slow path: either no list exists, or the primary list has the wrong name.
@@ -332,7 +336,7 @@ export async function ensureSupplyList(db: D1Database, organizationId: string) {
 		}
 	}
 
-	return getSupplyListById(db, organizationId, primaryList.id);
+	return getSupplyListById(db, organizationId, primaryList.id, options);
 }
 
 /**
@@ -376,12 +380,26 @@ function parseSupplyCargoTags(tags: unknown): string[] {
 	return [];
 }
 
+/** Bounds the `supply_item` row fetch — omit both to fetch all rows (default, current behavior). */
+export interface SupplyItemsFetchOptions {
+	limit?: number;
+	offset?: number;
+}
+
 /**
  * Retrieves the "Supply" list for an organization.
  * This is the main entry point for the UI.
+ *
+ * Pass `options.limit`/`options.offset` to bound the item-row fetch (see H-4);
+ * omit to fetch all items (needed by callers that compute totals/merges over
+ * the complete list, e.g. supply-sync and the web grocery view).
  */
-export async function getSupplyList(db: D1Database, organizationId: string) {
-	return ensureSupplyList(db, organizationId);
+export async function getSupplyList(
+	db: D1Database,
+	organizationId: string,
+	options?: SupplyItemsFetchOptions,
+) {
+	return ensureSupplyList(db, organizationId, options);
 }
 
 /**
@@ -391,8 +409,18 @@ export async function getSupplyListById(
 	db: D1Database,
 	organizationId: string,
 	listId: string,
+	options?: SupplyItemsFetchOptions,
 ) {
 	const d1 = drizzle(db);
+
+	const itemsQuery = d1
+		.select()
+		.from(supplyItem)
+		.where(eq(supplyItem.listId, listId))
+		.orderBy(supplyItem.createdAt, supplyItem.id)
+		.$dynamic()
+		.limit(options?.limit ?? Number.MAX_SAFE_INTEGER)
+		.offset(options?.offset ?? 0);
 
 	const [lists, itemRows] = await d1.batch([
 		d1
@@ -404,7 +432,7 @@ export async function getSupplyListById(
 					eq(supplyList.organizationId, organizationId),
 				),
 			),
-		d1.select().from(supplyItem).where(eq(supplyItem.listId, listId)),
+		itemsQuery,
 	]);
 
 	const list = lists[0];
@@ -465,6 +493,31 @@ export async function getSupplyListById(
 	return {
 		...list,
 		items,
+	};
+}
+
+/**
+ * Lightweight COUNT-style aggregate for a supply list's item totals — used by
+ * the hub widget (H-3) so per-request counts don't require fetching every row.
+ * Only valid when no cargo-tag filter is applied (callers filtering by tag
+ * need the full row set to match against item names; see hub.server.ts).
+ */
+export async function getSupplyItemStats(
+	db: D1Database,
+	listId: string,
+): Promise<{ itemCount: number; purchasedCount: number }> {
+	const d1 = drizzle(db);
+	const [row] = await d1
+		.select({
+			itemCount: sql<number>`count(*)`,
+			purchasedCount: sql<number>`coalesce(sum(case when ${supplyItem.isPurchased} then 1 else 0 end), 0)`,
+		})
+		.from(supplyItem)
+		.where(eq(supplyItem.listId, listId));
+
+	return {
+		itemCount: row?.itemCount ?? 0,
+		purchasedCount: row?.purchasedCount ?? 0,
 	};
 }
 

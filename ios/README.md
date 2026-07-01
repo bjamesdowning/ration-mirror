@@ -62,7 +62,8 @@ Ration/
 ├── Core/
 │   ├── Design/     # Theme, OrgSwitcherBar, ProfileAvatarButton, FloatingActionBar
 │   ├── Filters/    # PageFilterState, FilterOptionsSheet (Cargo/Galley/Supply)
-│   ├── Session/    # SessionStore — global org context + credits
+│   ├── Session/    # SessionStore — global org context + credits + AI consent
+│   ├── Consent/    # AIConsentCoordinator — shared "proceed" gate for all 4 AI entry points
 │   ├── Persistence/# SnapshotStore — org-scoped offline cache
 │   ├── Networking/ # APIClient (auto token refresh), RationAPI facade, config
 │   ├── Auth/       # AuthManager (token lifecycle), Keychain wrapper
@@ -140,12 +141,27 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows. See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
 
+**Security hardening (v1.4.6–v1.4.11, iOS security audit fix plan):** `PrivacyInfo.xcprivacy` privacy manifest (v1.4.6); centralized/symmetric AI consent gate across all four AI entry points via `SessionStore.hasAIConsent` + `AIConsentCoordinator`, and server-side consent enforcement added to `/scan` (v1.4.8); forced-logout full wipe (`AuthManager.onSignedOut` → snapshots/billing/session/image caches) plus abandoned-PKCE-verifier Keychain cleanup on every sign-out (v1.4.9); mobile `/hub` and `/supply` rate limiting + pagination, and a `preLimit` fix for `/meals/match` (v1.4.10); post-review cleanup — explicit sign-out now routes through the same `onSignedOut` wipe hook instead of duplicating it, and `RootView`'s startup fetches (`session.load`, settings) run concurrently and are shared between the AI consent flag and the onboarding check instead of double-fetching `/settings` (v1.4.11). See [`plans/ios-security-audit-fix-plan.md`](../plans/ios-security-audit-fix-plan.md).
+
 ## Security notes
 
 - Tokens live in the Keychain with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
 - The magic-link → code exchange is PKCE-protected (S256), so the `ration://`
-  custom scheme cannot be abused to steal an intercepted auth code.
+  custom scheme cannot be abused to steal an intercepted auth code. Any orphaned
+  verifier (e.g. an abandoned magic-link request) is deleted from the Keychain on
+  every sign-out, not just a successful code exchange.
 - No secrets are committed (`.gitignore` excludes `*.p8`, `Secrets.xcconfig`, provisioning).
 - All requests are HTTPS; org isolation is enforced server-side from the JWT claim.
 - Offline snapshots are scoped per `organizationId`; org switch clears stale cache.
-- AI features require `aiConsentAt` in settings; server returns 403 `ai_consent_required` otherwise.
+  A **forced logout** (401 from an expired/revoked token) runs the same full wipe
+  as explicit sign-out — snapshots, billing session state, the in-memory
+  `SessionStore` cache, and cached authenticated images — via
+  `AuthManager.onSignedOut`, wired once in `AppEnvironment.init()`. This closes a
+  shared-device cross-account data leakage gap where a forced logout previously
+  left another user's cached pantry/session data readable by the next sign-in.
+- AI features require `aiConsentAt` in settings; server returns 403 `ai_consent_required`
+  otherwise (enforced on all four AI entry points: scan, generate, import, plan-week).
+  Client-side, a single `SessionStore.hasAIConsent` flag (loaded once at app start)
+  and a shared `AIConsentCoordinator` ensure the full-screen consent gate is shown
+  at most once across all four entry points, regardless of which one the user
+  reaches first.

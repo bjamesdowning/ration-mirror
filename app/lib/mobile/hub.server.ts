@@ -10,10 +10,16 @@ import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
 import {
 	filterSupplyItemsByCargoTags,
+	getSupplyItemStats,
 	getSupplyList,
 } from "~/lib/supply.server";
 
-const MOBILE_PRE_LIMIT = 12;
+/**
+ * Meal-matching pre-fetch bound shared across the hub widgets and
+ * `/meals/match` (see H-5) — kept in one place so the two call sites can't
+ * drift independently.
+ */
+export const MOBILE_PRE_LIMIT = 12;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
 const MOBILE_MANIFEST_ENTRY_CAP = 50;
 const MOBILE_SUPPLY_ITEMS_SLICE = 20;
@@ -51,6 +57,11 @@ export async function getMobileHubData(
 	const manifestTags = manifestPreviewConfig?.filters?.tags;
 	const supplyLimit = clampWidgetLimit(supplyPreviewConfig?.filters?.limit, 6);
 	const supplyTags = supplyPreviewConfig?.filters?.supplyTags;
+	// Tag filtering must inspect every item's name to match against cargo tags,
+	// so it needs the full row set. The common (untag-filtered) case fetches a
+	// bounded slice instead and gets its counts from a separate COUNT query —
+	// see getSupplyItemStats — avoiding a full-table read on every /hub call.
+	const supplyTagFilterActive = (supplyTags?.length ?? 0) > 0;
 
 	const mealsReadyLimit = clampWidgetLimit(mealsReadyConfig?.filters?.limit, 6);
 	const mealsPartialLimit = clampWidgetLimit(
@@ -82,7 +93,11 @@ export async function getMobileHubData(
 			cargoDomain,
 		),
 		getCargoStats(db, organizationId),
-		getSupplyList(db, organizationId),
+		getSupplyList(
+			db,
+			organizationId,
+			supplyTagFilterActive ? undefined : { limit: MOBILE_SUPPLY_ITEMS_SLICE },
+		),
 		getManifestPreview(
 			db,
 			organizationId,
@@ -122,6 +137,12 @@ export async function getMobileHubData(
 		}),
 	]);
 
+	// Only queried when the widget isn't tag-filtered — see supplyTagFilterActive above.
+	const supplyStats =
+		latestSupplyListRaw && !supplyTagFilterActive
+			? await getSupplyItemStats(db, latestSupplyListRaw.id)
+			: null;
+
 	const latestSupplyList = latestSupplyListRaw
 		? (() => {
 				const filteredItems = filterSupplyItemsByCargoTags(
@@ -129,17 +150,23 @@ export async function getMobileHubData(
 					cargoTagIndex,
 					supplyTags,
 				);
-				const purchasedCount = filteredItems.filter(
-					(i) => i.isPurchased,
-				).length;
+				const purchasedCount = supplyStats
+					? supplyStats.purchasedCount
+					: filteredItems.filter((i) => i.isPurchased).length;
+				const itemCount = supplyStats
+					? supplyStats.itemCount
+					: filteredItems.length;
+				const uncheckedCount = supplyStats
+					? supplyStats.itemCount - supplyStats.purchasedCount
+					: filteredItems.length - purchasedCount;
 				const displayItems = filteredItems.slice(
 					0,
 					Math.min(supplyLimit, MOBILE_SUPPLY_ITEMS_SLICE),
 				);
 				return {
 					...latestSupplyListRaw,
-					itemCount: filteredItems.length,
-					uncheckedCount: filteredItems.length - purchasedCount,
+					itemCount,
+					uncheckedCount,
 					purchasedCount,
 					items: displayItems,
 				};

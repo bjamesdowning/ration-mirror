@@ -92,6 +92,7 @@ struct GenerateMealSheet: View {
     @State private var selectedRecipeNames: Set<String> = []
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var consent = AIConsentCoordinator()
     var onComplete: () async -> Void = {}
 
     private var creditCost: Int {
@@ -122,6 +123,16 @@ struct GenerateMealSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: Binding(
+                get: { consent.isPresenting },
+                set: { if !$0 { consent.decline() } }
+            )) {
+                AIConsentGateView(
+                    onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                    onDecline: { consent.decline() }
+                )
+                .presentationDetents([.large])
+            }
         }
     }
 
@@ -138,7 +149,9 @@ struct GenerateMealSheet: View {
                 TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                 AIFeaturePrimaryButton(label: "Generate ideas", creditCost: creditCost) {
-                    Task { await model.submit(api: env.api) }
+                    consent.presentIfNeeded(session: env.session) {
+                        Task { await model.submit(api: env.api) }
+                    }
                 }
             }
         }

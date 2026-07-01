@@ -71,7 +71,10 @@ struct PrivacySettingsView: View {
             let patch = SettingsPatch(
                 aiConsentAt: hasConsent ? ISO8601DateFormatter().string(from: Date()) : nil
             )
-            _ = try await env.api.patchSettings(patch)
+            let response = try await env.api.patchSettings(patch)
+            // Reuse the response already returned by the PATCH instead of a
+            // second `GET /settings` round-trip just to re-derive the flag.
+            env.session.applyConsent(response.settings)
             Haptics.success()
             dismiss()
         } catch {

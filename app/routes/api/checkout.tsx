@@ -7,7 +7,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import { assertCanPurchaseStripeSubscription } from "~/lib/billing.server";
 import { handleApiError } from "~/lib/error-handler";
-import { log } from "~/lib/logging.server";
+import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { CheckoutFormSchema } from "~/lib/schemas/checkout";
 import {
@@ -219,8 +219,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 		} catch (sessionError) {
 			if (isStripeNoSuchCustomerError(sessionError)) {
 				log.warn("[checkout] Stale Stripe customer, clearing and retrying", {
-					userId,
-					customerId,
+					userId: redactId(userId),
+					customerId: redactId(customerId),
 				});
 				await clearStripeCustomerId(db, userId);
 				customerId = await getOrCreateStripeCustomer(

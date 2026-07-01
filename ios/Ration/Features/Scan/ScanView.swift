@@ -118,9 +118,7 @@ struct ScanView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = ScanViewModel()
     @State private var showingCamera = false
-    @State private var showingConsentGate = false
-    @State private var hasAIConsent = false
-    @State private var checkedConsent = false
+    @State private var consent = AIConsentCoordinator()
     @State private var showingPaywall = false
 
     private var scanCreditCost: Int {
@@ -156,20 +154,13 @@ struct ScanView: View {
                 }
             }
             .background(Theme.ceramic)
-            .task { await loadConsent() }
-            .sheet(isPresented: $showingConsentGate) {
+            .sheet(isPresented: Binding(
+                get: { consent.isPresenting },
+                set: { if !$0 { consent.decline() } }
+            )) {
                 AIConsentGateView(
-                    onAccept: {
-                        Task {
-                            _ = try? await env.api.patchSettings(
-                                SettingsPatch(aiConsentAt: ISO8601DateFormatter().string(from: Date()))
-                            )
-                            hasAIConsent = true
-                            showingConsentGate = false
-                            showingCamera = true
-                        }
-                    },
-                    onDecline: { showingConsentGate = false }
+                    onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                    onDecline: { consent.decline() }
                 )
                 .presentationDetents([.large])
             }
@@ -204,27 +195,10 @@ struct ScanView: View {
         }
     }
 
-    private func beginScan() {
-        proceedAfterIntro()
-    }
-
     private func proceedAfterIntro() {
-        if hasAIConsent {
+        consent.presentIfNeeded(session: env.session) {
             showingCamera = true
-        } else {
-            showingConsentGate = true
         }
-    }
-
-    @MainActor
-    private func loadConsent() async {
-        do {
-            let settings = try await env.api.settings().settings
-            hasAIConsent = settings.aiConsentAt?.isEmpty == false
-        } catch {
-            hasAIConsent = false
-        }
-        checkedConsent = true
     }
 
     private func processingContent(_ requestId: String) -> some View {

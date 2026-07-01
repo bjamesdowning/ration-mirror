@@ -141,8 +141,11 @@ struct SettingsView: View {
             Section {
                 Button("Sign out", role: .destructive) {
                     Task {
-                        env.snapshots.clearAll()
-                        await env.billing.logOut()
+                        // `auth.signOut()` runs the full wipe (snapshots,
+                        // billing, session, image cache) via `AuthManager
+                        // .onSignedOut` — see `AppEnvironment.init()` (H-2).
+                        // Explicit sign-out and forced 401 logout share this
+                        // one path so there's a single source of truth.
                         await env.auth.signOut()
                         dismiss()
                     }

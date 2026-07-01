@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { mapScanSubmitError, submitVisualScan } from "~/lib/scan-submit.server";
@@ -15,6 +16,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context,
 			request,
 		);
+
+		await requireMobileAIConsent(context.cloudflare.env, userId);
 
 		const rateLimitResult = await checkRateLimit(
 			context.cloudflare.env.RATION_KV,

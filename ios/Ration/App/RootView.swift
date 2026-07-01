@@ -15,8 +15,14 @@ struct RootView: View {
         case .signedIn:
             MainTabView()
                 .task {
-                    await env.session.load(api: env.api)
-                    await evaluateOnboarding()
+                    // `session.load` and the settings fetch hit independent
+                    // endpoints — run them concurrently rather than back to
+                    // back. The single settings response feeds both the AI
+                    // consent flag (H-8) and the onboarding check, instead of
+                    // each fetching `/settings` on its own.
+                    async let sessionLoad: Void = env.session.load(api: env.api)
+                    async let settingsLoad = loadSettings()
+                    _ = await (sessionLoad, settingsLoad)
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView {
@@ -27,12 +33,13 @@ struct RootView: View {
     }
 
     @MainActor
-    private func evaluateOnboarding() async {
+    private func loadSettings() async {
         guard !settingsLoaded else { return }
         settingsLoaded = true
         do {
-            let response = try await env.api.settings()
-            let completed = response.settings.onboardingCompletedAt?.isEmpty == false
+            let settings = try await env.api.settings().settings
+            env.session.applyConsent(settings)
+            let completed = settings.onboardingCompletedAt?.isEmpty == false
             showOnboarding = !completed
         } catch {
             showOnboarding = false

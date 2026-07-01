@@ -49,7 +49,9 @@ Any Swift file addition/removal or `ios/project.yml` change requires regeneratin
 
 ## CI/CD Configuration
 
-- **Platform:** GitLab CI (`.gitlab-ci.yml`) - currently disabled, but patterns should be maintained
+- **Test/verify pipeline:** `.gitlab-ci.yml` runs `install` → `verify` (lint/typecheck/unit tests) stages. Its own `deploy` stage is commented out (`#- deploy`) and is **not** the deploy mechanism — do not assume this file controls production deploys.
+- **Actual deploy mechanism:** Cloudflare **Workers Builds** is connected directly to the GitLab repo and watches `main`. On every push to `main`, Cloudflare triggers its own build+deploy job on a GitLab runner, entirely outside `.gitlab-ci.yml`. This means `git push` to `main` (e.g., the final step of `/quick-commit`) is itself a production deploy trigger — treat it accordingly.
+- **Known reliability gap:** these Cloudflare-triggered auto-deploys sometimes fail, and Cloudflare rolls back to the previously deployed Worker version on failure — **silently, with no alerting configured**. A route or config change can therefore be merged to `main` and pass all local/CI checks while never actually reaching production, with no signal that it didn't. Treat any prod-vs-code discrepancy as a possible silent rollback before assuming a missing manual step. Adding deploy failure/rollback alerting (e.g., via Cloudflare Workers Builds notifications/webhooks) plus a post-deploy smoke test of critical routes is an open hardening item.
 - **Scripts:** Use `package.json` scripts for consistency between local and CI environments
 - **Versioning:** Ensure `wrangler.jsonc` compatibility_date is up-to-date
 

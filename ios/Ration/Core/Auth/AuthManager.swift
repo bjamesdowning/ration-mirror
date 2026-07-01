@@ -19,6 +19,14 @@ final class AuthManager {
     private(set) var phase: Phase = .loading
     private(set) var authErrorMessage: String?
 
+    /// Invoked at the end of `signOutLocal()`, after token state is cleared.
+    /// Wired once in `AppEnvironment.init()` to run the same full-wipe
+    /// sequence (`SnapshotStore`, `BillingManager`, `SessionStore`, the
+    /// authenticated-image cache) that explicit sign-out already runs, so a
+    /// forced 401 logout doesn't leave a signed-out user's cached data
+    /// readable to whoever signs in next on a shared device (H-2).
+    var onSignedOut: (() async -> Void)?
+
     private var accessToken: String?
     private var refreshToken: String? {
         didSet {
@@ -159,8 +167,11 @@ final class AuthManager {
         accessToken = nil
         accessExpiry = nil
         refreshToken = nil
-		clearAuthError()
+        // M-12: an abandoned magic-link request otherwise leaves this orphaned in Keychain indefinitely.
+        Keychain.delete(Self.pkceVerifierKey)
+        clearAuthError()
         phase = .signedOut
+        await onSignedOut?()
     }
 
     // MARK: Helpers

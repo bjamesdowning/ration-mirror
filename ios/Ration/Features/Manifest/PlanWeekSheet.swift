@@ -4,6 +4,7 @@ struct PlanWeekSheet: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var model = PlanWeekViewModel()
+    @State private var consent = AIConsentCoordinator()
     var onComplete: () async -> Void = {}
 
     private var creditCost: Int {
@@ -34,6 +35,16 @@ struct PlanWeekSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .background(Theme.ceramic)
+            .sheet(isPresented: Binding(
+                get: { consent.isPresenting },
+                set: { if !$0 { consent.decline() } }
+            )) {
+                AIConsentGateView(
+                    onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                    onDecline: { consent.decline() }
+                )
+                .presentationDetents([.large])
+            }
         }
     }
 
@@ -53,7 +64,9 @@ struct PlanWeekSheet: View {
                 TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                 AIFeaturePrimaryButton(label: "Plan week", creditCost: creditCost) {
-                    Task { await model.submit(api: env.api) }
+                    consent.presentIfNeeded(session: env.session) {
+                        Task { await model.submit(api: env.api) }
+                    }
                 }
             }
         }

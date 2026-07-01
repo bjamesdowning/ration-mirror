@@ -286,6 +286,18 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 60, // Read-only mobile Galley browsing
 		keyPrefix: "rate:meal_list",
 	},
+	/** Mobile `/hub` — 10-way parallel fan-out per call (see H-3); same tier class as cargo_list/meal_list. */
+	hub_read: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 60,
+		keyPrefix: "rate:hub_read",
+	},
+	/** Mobile `/supply` — read-only, same tier class as cargo_list (see H-4). */
+	supply_read: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 60,
+		keyPrefix: "rate:supply_read",
+	},
 	interest_signup: {
 		windowMs: 60_000,
 		maxRequests: 10,

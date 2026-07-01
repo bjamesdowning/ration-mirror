@@ -6,7 +6,10 @@ import SwiftUI
 final class AuthImageLoader {
     static let shared = AuthImageLoader()
 
-    private var cache: [URL: UIImage] = [:]
+    // Not `private` so tests can seed/inspect it directly via `@testable
+    // import` (there is no successful-fetch seam to populate it otherwise,
+    // since `fetch(url:auth:)` requires a real network round-trip).
+    var cache: [URL: UIImage] = [:]
     private var inFlight: [URL: Task<UIImage?, Never>] = [:]
 
     func image(for url: URL, auth: AuthManager) async -> UIImage? {
@@ -28,6 +31,13 @@ final class AuthImageLoader {
 
     func invalidate(url: URL) {
         cache.removeValue(forKey: url)
+    }
+
+    /// Drops every cached authenticated image — called on forced logout (H-2)
+    /// so another user signing in on the same device can't see a stale
+    /// cached org logo/avatar rendered from the previous account's session.
+    func clearAll() {
+        cache.removeAll()
     }
 
     private func fetch(url: URL, auth: AuthManager) async -> UIImage? {

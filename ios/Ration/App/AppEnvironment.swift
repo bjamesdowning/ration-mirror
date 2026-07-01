@@ -18,10 +18,24 @@ final class AppEnvironment {
         let auth = AuthManager()
         self.auth = auth
         self.api = RationAPI(client: APIClient(auth: auth))
-        self.billing = BillingManager()
-        self.snapshots = SnapshotStore()
+        let billing = BillingManager()
+        self.billing = billing
+        let snapshots = SnapshotStore()
+        self.snapshots = snapshots
         self.network = NetworkMonitor()
-        self.session = SessionStore()
+        let session = SessionStore()
+        self.session = session
         self.nextActionDismiss = NextActionDismissStore()
+
+        // H-2: a forced 401 logout must match explicit sign-out's full wipe
+        // (`SettingsView.swift`'s "Sign out" action) so cached pantry/session/
+        // image data from the signed-out user isn't readable by the next
+        // person who signs in on the same shared device.
+        auth.onSignedOut = { [snapshots, billing, session] in
+            snapshots.clearAll()
+            await billing.logOut()
+            session.clear()
+            AuthImageLoader.shared.clearAll()
+        }
     }
 }

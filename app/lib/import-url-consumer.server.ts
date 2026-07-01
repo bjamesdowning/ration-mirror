@@ -15,6 +15,7 @@ import {
 } from "~/lib/browser-rendering.server";
 import { log } from "~/lib/logging.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
+import { isBlockedImportUrl } from "~/lib/recipe-import-submit.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
 import type { RecipeImportAIResponse } from "~/lib/schemas/recipe-import";
@@ -131,6 +132,10 @@ async function fetchPageContentForImport(
 			},
 		});
 		clearTimeout(timeoutId);
+
+		if (isBlockedImportUrl(response.url)) {
+			return { ok: false, error: "That URL is not accessible." };
+		}
 
 		if (!response.ok) {
 			const retryWithBR =

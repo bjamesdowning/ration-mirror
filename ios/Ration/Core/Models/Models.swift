@@ -557,7 +557,7 @@ struct TransferCreditsResponse: Codable, Sendable {
     let success: Bool
 }
 
-struct CreateMealIngredientRequest: Codable, Sendable {
+struct CreateMealIngredientRequest: Codable, Sendable, Equatable {
     let ingredientName: String
     let quantity: Double
     let unit: String
@@ -601,13 +601,14 @@ struct AIJobSubmitResponse: Codable, Sendable {
     let requestId: String?
 }
 
-struct GenerateMealStatusResponse: Codable, Sendable {
+struct GenerateMealStatusResponse: Decodable, Sendable {
     let status: String
     let recipes: [GeneratedRecipe]?
     let error: String?
 }
 
-struct GeneratedRecipe: Codable, Sendable, Identifiable {
+/// Decoded generate poll recipe — tolerates legacy AI array shapes.
+struct GeneratedRecipe: Sendable, Identifiable, Decodable {
     var id: String { name }
     let name: String
     let description: String?
@@ -617,17 +618,95 @@ struct GeneratedRecipe: Codable, Sendable, Identifiable {
     let cookTime: Int?
     let ingredients: [CreateMealIngredientRequest]?
     let tags: [String]?
+
+    private struct FlexibleIngredient: Decodable {
+        let name: String?
+        let ingredientName: String?
+        let quantity: Double?
+        let unit: String?
+        let cargoId: String?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, description, directions, servings, prepTime, cookTime, ingredients, tags
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        servings = try container.decodeIfPresent(Int.self, forKey: .servings)
+        prepTime = try container.decodeIfPresent(Int.self, forKey: .prepTime)
+        cookTime = try container.decodeIfPresent(Int.self, forKey: .cookTime)
+        tags = try container.decodeIfPresent([String].self, forKey: .tags)
+
+        if let serialized = try? container.decode(String.self, forKey: .directions) {
+            directions = serialized
+        } else if let steps = try? container.decode([String].self, forKey: .directions) {
+            let recipeSteps = steps.enumerated().map { index, text in
+                RecipeStep(position: index + 1, text: text)
+            }
+            directions = DirectionsParser.serializeDirections(recipeSteps)
+        } else {
+            directions = nil
+        }
+
+        if let standard = try? container.decode([CreateMealIngredientRequest].self, forKey: .ingredients) {
+            ingredients = standard
+        } else if let flexible = try? container.decode([FlexibleIngredient].self, forKey: .ingredients) {
+            ingredients = flexible.enumerated().map { index, item in
+                CreateMealIngredientRequest(
+                    ingredientName: item.ingredientName ?? item.name ?? "",
+                    quantity: item.quantity ?? 0,
+                    unit: item.unit ?? "unit",
+                    cargoId: item.cargoId,
+                    orderIndex: index
+                )
+            }
+        } else {
+            ingredients = nil
+        }
+    }
+}
+
+struct ExtractedRecipePreview: Codable, Sendable, Equatable {
+    let name: String
+    let ingredients: [CreateMealIngredientRequest]?
+
+    var ingredientCount: Int { ingredients?.count ?? 0 }
 }
 
 struct ImportRecipeStatusResponse: Codable, Sendable {
     let status: String
     let success: Bool?
     let meal: MealSummary?
+    let extractedRecipe: ExtractedRecipePreview?
     let sourceUrl: String?
     let code: String?
     let error: String?
     let existingMealId: String?
     let existingMealName: String?
+}
+
+struct ImportRecipeConfirmRequest: Encodable, Sendable {
+    let requestId: String
+}
+
+struct ImportRecipeConfirmResponse: Codable, Sendable {
+    let meal: MealSummary
+    let code: String?
+}
+
+struct CreateProvisionRequest: Encodable, Sendable {
+    let name: String
+    var domain: String = "food"
+    var quantity: Double = 1
+    var unit: String = "unit"
+    var tags: [String] = []
+}
+
+struct CreateProvisionResponse: Codable, Sendable {
+    let provision: Meal
 }
 
 struct MealSummary: Codable, Sendable {

@@ -8,6 +8,9 @@ final class ImportRecipeViewModel {
         case idle
         case submitting
         case processing(requestId: String)
+        case verification(ExtractedRecipePreview, requestId: String)
+        case confirming
+        case duplicate(existingMealId: String, existingMealName: String?)
         case completed(MealSummary)
         case failed(String)
     }
@@ -28,6 +31,15 @@ final class ImportRecipeViewModel {
             Haptics.light()
             state = .processing(requestId: requestId)
             await poll(requestId: requestId, api: api)
+        } catch let error as APIError where error.statusCode == 409 && error.code == "DUPLICATE_URL" {
+            if let existingId = error.existingMealId {
+                state = .duplicate(
+                    existingMealId: existingId,
+                    existingMealName: error.existingMealName
+                )
+            } else {
+                state = .failed(error.errorDescription ?? "This recipe URL was already imported.")
+            }
         } catch {
             state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
@@ -38,12 +50,23 @@ final class ImportRecipeViewModel {
             do {
                 try await Task.sleep(nanoseconds: pollDelayNanoseconds)
                 let result = try await api.importRecipeStatus(requestId: requestId)
+                if result.code == "DUPLICATE_URL",
+                   let existingId = result.existingMealId
+                {
+                    state = .duplicate(
+                        existingMealId: existingId,
+                        existingMealName: result.existingMealName
+                    )
+                    return
+                }
                 switch result.status {
                 case "completed":
                     if let meal = result.meal {
                         state = .completed(meal)
+                    } else if let extracted = result.extractedRecipe {
+                        state = .verification(extracted, requestId: requestId)
                     } else {
-                        state = .failed(result.error ?? "Import completed without a meal.")
+                        state = .failed(result.error ?? "Import completed without recipe data.")
                     }
                     return
                 case "failed":
@@ -68,6 +91,16 @@ final class ImportRecipeViewModel {
         state = .failed("Import is still processing. Check Galley shortly.")
     }
 
+    func confirm(requestId: String, api: RationAPI) async {
+        state = .confirming
+        do {
+            let response = try await api.importRecipeConfirm(requestId: requestId)
+            state = .completed(response.meal)
+        } catch {
+            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+        }
+    }
+
     func reset() { state = .idle }
 }
 
@@ -77,6 +110,7 @@ struct ImportRecipeSheet: View {
     @State private var model = ImportRecipeViewModel()
     @State private var consent = AIConsentCoordinator()
     var onComplete: () async -> Void = {}
+    var onImportedMeal: (MealSummary) -> Void = { _ in }
 
     private var creditCost: Int {
         env.session.session?.aiCosts?.importUrl ?? 1
@@ -90,6 +124,13 @@ struct ImportRecipeSheet: View {
                     idleContent
                 case .submitting, .processing:
                     AIProcessingView(feature: .importRecipe, creditCost: creditCost)
+                case let .verification(extracted, requestId):
+                    verificationContent(extracted, requestId: requestId)
+                case .confirming:
+                    ProgressView("Adding to Galley…")
+                        .tint(Theme.hyperGreen)
+                case let .duplicate(existingId, existingName):
+                    duplicateContent(existingId: existingId, existingName: existingName)
                 case let .completed(meal):
                     completedContent(meal)
                 case let .failed(message):
@@ -127,7 +168,7 @@ struct ImportRecipeSheet: View {
                     detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley.",
                     creditCost: creditCost,
                     costLabel: "per import",
-                    nextSteps: "Review the imported meal in Galley after import completes."
+                    nextSteps: "Review the imported meal before adding to Galley."
                 )
                 TextField("Recipe URL", text: $model.url)
                     .textInputAutocapitalization(.never)
@@ -146,6 +187,43 @@ struct ImportRecipeSheet: View {
         }
     }
 
+    private func verificationContent(_ extracted: ExtractedRecipePreview, requestId: String) -> some View {
+        VStack(spacing: 16) {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Review import").rationHeadline()
+                    Text(extracted.name.capitalized).rationBody()
+                    Text("\(extracted.ingredientCount) ingredients")
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button("Add to Galley") {
+                Task { await model.confirm(requestId: requestId, api: env.api) }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    private func duplicateContent(existingId: String, existingName: String?) -> some View {
+        VStack(spacing: 16) {
+            GlassCard {
+                VStack(spacing: 8) {
+                    Text("Already imported").rationHeadline()
+                    if let existingName {
+                        Text(existingName.capitalized).rationCaption()
+                    }
+                }
+            }
+            Button("View existing meal") {
+                onImportedMeal(MealSummary(id: existingId, name: existingName ?? "meal"))
+                dismiss()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
     private func completedContent(_ meal: MealSummary) -> some View {
         VStack(spacing: 16) {
             GlassCard {
@@ -153,13 +231,14 @@ struct ImportRecipeSheet: View {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 36))
                         .foregroundStyle(Theme.hyperGreen)
-                    Text("Imported").rationHeadline()
+                    Text("Added to Galley").rationHeadline()
                     Text(meal.name.capitalized).rationCaption()
                 }
             }
-            Button("Done") {
+            Button("View meal") {
                 Task {
                     await onComplete()
+                    onImportedMeal(meal)
                     dismiss()
                 }
             }

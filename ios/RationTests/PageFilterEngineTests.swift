@@ -71,4 +71,31 @@ final class PageFilterEngineTests: XCTestCase {
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered[0].name, "eggs")
     }
+
+    private func mealItem(name: String, tags: [String] = []) -> Meal {
+        Meal(
+            id: "meal_\(name)",
+            organizationId: "org_1",
+            name: name,
+            domain: "food",
+            type: "recipe",
+            description: nil,
+            directions: nil,
+            equipment: nil,
+            servings: 2,
+            prepTime: nil,
+            cookTime: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            tags: tags,
+            ingredients: []
+        )
+    }
+
+    func testFilterMealsBySearch() {
+        let meals = [mealItem(name: "potato salad"), mealItem(name: "pasta")]
+        let filtered = PageFilterEngine.filterMeals(meals, domain: nil, tag: nil, search: "potato")
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered[0].name, "potato salad")
+    }
 }

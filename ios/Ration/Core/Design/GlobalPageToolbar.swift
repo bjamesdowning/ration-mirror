@@ -22,9 +22,14 @@ struct GlobalPageToolbar: ToolbarContent {
                         .padding(.vertical, 4)
                         .background(Theme.platinum)
                         .clipShape(Capsule())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(1)
                         .accessibilityLabel("\(countChip) items")
                 }
             }
+            .layoutPriority(0)
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {

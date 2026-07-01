@@ -5,9 +5,12 @@ struct GalleyView: View {
     var onOpenSettings: () -> Void = {}
     @State private var model = GalleyViewModel()
     @State private var showingFilters = false
-    @State private var showingAdd = false
+    @State private var showingAddTypeChoice = false
+    @State private var showingAddMeal = false
+    @State private var showingAddProvision = false
     @State private var showingGenerate = false
     @State private var showingImport = false
+    @State private var navigateToMealId: String?
     @State private var availableTags: [String] = []
 
     private var organizationId: String {
@@ -31,18 +34,19 @@ struct GalleyView: View {
                     }
                     .padding(24)
                 } else if model.isMatchMode {
-                    matchList
+                    if model.displayedMatches.isEmpty {
+                        galleyEmptyState(isSearch: model.isSearchActive)
+                    } else {
+                        matchList
+                    }
                 } else if model.displayedMeals.isEmpty {
-                    EmptyStateView(
-                        icon: "fork.knife",
-                        title: "No galley plans yet",
-                        message: "Add a go-to meal or generate ideas from your Cargo."
-                    )
+                    galleyEmptyState(isSearch: model.isSearchActive || !model.meals.isEmpty)
                 } else {
                     mealList
                 }
             }
             .navigationTitle("Galley")
+            .searchable(text: $model.filters.search, prompt: "Search meals")
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
@@ -57,20 +61,35 @@ struct GalleyView: View {
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: availableTags)
             }
-            .sheet(isPresented: $showingAdd) {
-                AddMealSheet { await reload() }
+            .sheet(isPresented: $showingAddTypeChoice) {
+                GalleyAddTypeChoiceSheet(
+                    onSelectRecipe: { showingAddMeal = true },
+                    onSelectProvision: { showingAddProvision = true }
+                )
+            }
+            .sheet(isPresented: $showingAddMeal) {
+                MealFormView(mode: .create) { await reload() }
+            }
+            .sheet(isPresented: $showingAddProvision) {
+                ProvisionFormView { await reload() }
             }
             .sheet(isPresented: $showingGenerate) {
                 GenerateMealSheet { await reload() }
             }
             .sheet(isPresented: $showingImport) {
-                ImportRecipeSheet { await reload() }
+                ImportRecipeSheet(
+                    onComplete: { await reload() },
+                    onImportedMeal: { meal in navigateToMealId = meal.id }
+                )
+            }
+            .navigationDestination(item: $navigateToMealId) { mealId in
+                MealDetailView(mealId: mealId, initialMeal: placeholderMeal(id: mealId))
             }
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
             .safeAreaInset(edge: .bottom) {
                 IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
-                    Button { showingAdd = true } label: {
-                        Label("Add meal", systemImage: "plus")
+                    Button { showingAddTypeChoice = true } label: {
+                        Label("Add", systemImage: "plus")
                     }
                     Button { showingGenerate = true } label: {
                         Label("Generate meal", systemImage: "sparkles")
@@ -95,6 +114,43 @@ struct GalleyView: View {
             snapshots: env.snapshots,
             online: env.network.isOnline,
             organizationId: organizationId
+        )
+    }
+
+    private func galleyEmptyState(isSearch: Bool) -> some View {
+        VStack(spacing: 16) {
+            EmptyStateView(
+                icon: isSearch ? "magnifyingglass" : "fork.knife",
+                title: isSearch ? "No matches" : "No galley plans yet",
+                message: isSearch
+                    ? "Try a different search term."
+                    : "Add a go-to meal or generate ideas from your Cargo."
+            )
+            if !isSearch {
+                Button("Add") { showingAddTypeChoice = true }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+        .padding(24)
+    }
+
+    private func placeholderMeal(id: String) -> Meal {
+        Meal(
+            id: id,
+            organizationId: "",
+            name: "meal",
+            domain: "food",
+            type: "recipe",
+            description: nil,
+            directions: nil,
+            equipment: nil,
+            servings: 1,
+            prepTime: nil,
+            cookTime: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            tags: [],
+            ingredients: []
         )
     }
 
@@ -252,7 +308,7 @@ struct MealDetailView: View {
             Task { await loadAvailability() }
         }
         .sheet(isPresented: $showingEdit) {
-            EditMealView(meal: meal ?? initialMeal) {
+            MealFormView(mode: .edit(meal ?? initialMeal)) {
                 await load()
                 await loadAvailability()
             }

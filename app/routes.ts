@@ -293,6 +293,7 @@ export default [
 		"routes/api/mobile/v1.scan.$requestId.ts",
 	),
 	route("api/mobile/v1/meals", "routes/api/mobile/v1.meals.ts"),
+	route("api/mobile/v1/provisions", "routes/api/mobile/v1.provisions.ts"),
 	route("api/mobile/v1/meals/match", "routes/api/mobile/v1.meals.match.ts"),
 	route("api/mobile/v1/meals/tags", "routes/api/mobile/v1.meals.tags.ts"),
 	route(

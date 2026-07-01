@@ -91,10 +91,8 @@ struct CargoDetailView: View {
         .task { await model.load(id: itemId, api: env.api) }
         .sheet(isPresented: $showingEdit) {
             if let item = model.item {
-                NavigationStack {
-                    CargoEditSheet(item: item) {
-                        await model.load(id: itemId, api: env.api)
-                    }
+                CargoFormView(mode: .edit(item)) {
+                    await model.load(id: itemId, api: env.api)
                 }
             }
         }
@@ -230,121 +228,5 @@ struct CargoDetailView: View {
                 )
             }
         )
-    }
-}
-
-@MainActor
-@Observable
-final class CargoEditViewModel {
-    var name = ""
-    var domain = "food"
-    var quantity = ""
-    var unit = ""
-    var tags: [String] = []
-    var expiresAt: Date?
-    private(set) var isSaving = false
-    var errorMessage: String?
-
-    init(item: CargoItem) {
-        name = item.name
-        domain = item.domain
-        quantity = String(item.quantity)
-        unit = item.unit
-        tags = item.tags
-        expiresAt = item.expiresAt
-    }
-
-    func save(itemId: String, api: RationAPI) async -> Bool {
-        guard let qty = Double(quantity) else {
-            errorMessage = "Quantity must be a number."
-            return false
-        }
-        isSaving = true
-        defer { isSaving = false }
-        do {
-            _ = try await api.updateCargo(
-                id: itemId,
-                UpdateCargoRequest(
-                    name: name,
-                    quantity: qty,
-                    unit: unit,
-                    domain: domain,
-                    tags: tags,
-                    expiresAt: expiresAt
-                )
-            )
-            Haptics.light()
-            return true
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return false
-        }
-    }
-}
-
-struct CargoEditSheet: View {
-    @Environment(AppEnvironment.self) private var env
-    @Environment(\.dismiss) private var dismiss
-    let item: CargoItem
-    var onSaved: () async -> Void = {}
-    @State private var model: CargoEditViewModel
-    @State private var tagSuggestions: [String] = []
-
-    init(item: CargoItem, onSaved: @escaping () async -> Void = {}) {
-        self.item = item
-        self.onSaved = onSaved
-        _model = State(initialValue: CargoEditViewModel(item: item))
-    }
-
-    var body: some View {
-        Form {
-            Section("Item") {
-                TextField("Name", text: $model.name)
-                Picker("Domain", selection: $model.domain) {
-                    Text("Food").tag("food")
-                    Text("Household").tag("household")
-                    Text("Alcohol").tag("alcohol")
-                }
-                TextField("Quantity", text: $model.quantity)
-                    .keyboardType(.decimalPad)
-                UnitPicker(units: RationUnits.cargoEdit, selection: $model.unit)
-                TagChipEditor(tags: $model.tags, suggestions: tagSuggestions)
-                Toggle("Set expiry date", isOn: Binding(
-                    get: { model.expiresAt != nil },
-                    set: { model.expiresAt = $0 ? (model.expiresAt ?? Date()) : nil }
-                ))
-                if model.expiresAt != nil {
-                    DatePicker(
-                        "Expires",
-                        selection: Binding(
-                            get: { model.expiresAt ?? Date() },
-                            set: { model.expiresAt = $0 }
-                        ),
-                        displayedComponents: .date
-                    )
-                }
-            }
-            if let errorMessage = model.errorMessage {
-                Section { ErrorBanner(message: errorMessage) }
-            }
-            Section {
-                Button("Save changes") {
-                    Task {
-                        if await model.save(itemId: item.id, api: env.api) {
-                            await onSaved()
-                            dismiss()
-                        }
-                    }
-                }
-                .disabled(model.isSaving)
-            }
-        }
-        .navigationTitle("Edit Cargo")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if let response = try? await env.api.cargoTags() {
-                tagSuggestions = response.tags
-            }
-        }
     }
 }

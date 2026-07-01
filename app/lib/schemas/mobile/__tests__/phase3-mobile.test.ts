@@ -9,6 +9,7 @@ import {
 import {
 	MobileCreateMealSchema,
 	MobileMealsListQuerySchema,
+	MobileProvisionSchema,
 } from "~/lib/schemas/mobile/meals";
 
 describe("MobileMealsListQuerySchema", () => {
@@ -49,6 +50,30 @@ describe("MobileCreateMealSchema", () => {
 			ingredients: [],
 		});
 		expect(result.success).toBe(true);
+	});
+});
+
+describe("MobileProvisionSchema", () => {
+	it("accepts a valid provision", () => {
+		const result = MobileProvisionSchema.safeParse({
+			name: "bananas",
+			quantity: 1,
+			unit: "bunch",
+			domain: "food",
+			tags: ["snack"],
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.name).toBe("bananas");
+		}
+	});
+
+	it("rejects empty name", () => {
+		const result = MobileProvisionSchema.safeParse({
+			name: "",
+			quantity: 1,
+		});
+		expect(result.success).toBe(false);
 	});
 });
 

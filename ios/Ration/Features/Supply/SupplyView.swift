@@ -316,7 +316,6 @@ struct SupplyView: View {
                 }
             }
             .navigationTitle("Supply")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
@@ -392,15 +391,10 @@ struct SupplyView: View {
                     )
                     .padding(.bottom, 80)
                 } else if let message = model.dockMessage {
-                    Text(message)
-                        .rationCaption()
-                        .foregroundStyle(Theme.carbon)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Theme.hyperGreen.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .padding(.bottom, 72)
-                        .padding(.horizontal, 16)
+                    TransientSuccessToast(message: message) {
+                        model.dockMessage = nil
+                    }
+                    .padding(.bottom, 80)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -552,7 +546,7 @@ struct SupplyView: View {
             supplyShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
-            if case .server(let status, _, _) = error, status == 403 {
+            if case .server(let status, _, _, _, _) = error, status == 403 {
                 showingPaywall = true
             }
         } catch {}

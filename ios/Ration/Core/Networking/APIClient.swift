@@ -92,7 +92,8 @@ final class APIClient {
         var req = URLRequest(url: components.url!)
         req.httpMethod = method
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        req.setValue("ios/1.0.0", forHTTPHeaderField: "X-Ration-Client")
+        let clientVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        req.setValue("ios/\(clientVersion)", forHTTPHeaderField: "X-Ration-Client")
         if let body {
             req.httpBody = body
             req.setValue(contentType, forHTTPHeaderField: "Content-Type")
@@ -147,7 +148,13 @@ final class APIClient {
                 await auth.signOutLocal()
                 throw APIError.unauthorized
             }
-            throw APIError.server(status: http.statusCode, message: errBody?.error, code: errBody?.code)
+            throw APIError.server(
+                status: http.statusCode,
+                message: errBody?.error,
+                code: errBody?.code,
+                existingMealId: errBody?.existingMealId,
+                existingMealName: errBody?.existingMealName
+            )
         }
 
         if data.isEmpty, let empty = EmptyResponse() as? T {

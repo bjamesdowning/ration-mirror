@@ -54,6 +54,7 @@ struct MainTabView: View {
     @State private var showingScan = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
+    @State private var manifestSuccessMessage: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -79,7 +80,13 @@ struct MainTabView: View {
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
                 .tag(2)
 
-            ManifestView(onOpenSettings: { showingSettings = true })
+            ManifestView(
+                onOpenSettings: { showingSettings = true },
+                onPlanWeekComplete: { count in
+                    selectedTab = 3
+                    manifestSuccessMessage = "\(count) meals added to plan"
+                }
+            )
                 .id(orgGeneration)
                 .tabItem { Label("Manifest", systemImage: "calendar") }
                 .tag(3)
@@ -98,6 +105,14 @@ struct MainTabView: View {
         .overlay(alignment: .top) {
             if !env.network.isOnline {
                 OfflineBanner(label: "Offline — showing cached data where available")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = manifestSuccessMessage {
+                TransientSuccessToast(message: message) {
+                    manifestSuccessMessage = nil
+                }
+                .padding(.bottom, 88)
             }
         }
         .task {

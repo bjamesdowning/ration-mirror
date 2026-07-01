@@ -33,6 +33,10 @@ final class GalleyViewModel {
         return matches.filter { ids.contains($0.meal.id) }
     }
 
+    var isSearchActive: Bool {
+        !filters.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil

@@ -5,7 +5,7 @@ struct PlanWeekSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = PlanWeekViewModel()
     @State private var consent = AIConsentCoordinator()
-    var onComplete: () async -> Void = {}
+    var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
         env.session.session?.aiCosts?.mealPlanWeekly ?? 3
@@ -88,11 +88,13 @@ struct PlanWeekSheet: View {
                 Button("Apply to Manifest") {
                     Task {
                         do {
-                            try await model.applySchedule(entries, api: env.api)
-                            await onComplete()
+                            let count = try await model.applySchedule(entries, api: env.api)
+                            await onComplete(count)
                             dismiss()
                         } catch {
-                            model.reset()
+                            model.fail(
+                                (error as? APIError)?.errorDescription ?? error.localizedDescription
+                            )
                         }
                     }
                 }

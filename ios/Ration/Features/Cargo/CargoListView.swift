@@ -62,7 +62,7 @@ struct CargoListView: View {
                 )
             }
             .sheet(isPresented: $showingAdd) {
-                AddCargoView { await reload() }
+                CargoFormView(mode: .create) { await reload() }
             }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: model.availableTags)

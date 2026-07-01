@@ -72,13 +72,16 @@ final class PlanWeekViewModel {
         state = .failed("Planning is still processing. Refresh Manifest shortly.")
     }
 
-    func applySchedule(_ entries: [PlanWeekScheduleEntry], api: RationAPI) async throws {
+    func applySchedule(_ entries: [PlanWeekScheduleEntry], api: RationAPI) async throws -> Int {
         let bulk = entries.map {
             BulkManifestEntry(mealId: $0.mealId, date: $0.date, slotType: $0.slotType, notes: $0.notes)
         }
         _ = try await api.bulkManifest(BulkManifestRequest(entries: bulk))
         Haptics.success()
+        return bulk.count
     }
 
     func reset() { state = .idle }
+
+    func fail(_ message: String) { state = .failed(message) }
 }

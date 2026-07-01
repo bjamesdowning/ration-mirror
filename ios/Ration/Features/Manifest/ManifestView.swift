@@ -33,6 +33,11 @@ final class ManifestViewModel {
         }
     }
 
+    func resetAnchorForOrganizationChange() {
+        hasInitializedAnchor = false
+        applyInitialAnchorIfNeeded()
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
@@ -131,11 +136,66 @@ final class ManifestViewModel {
         do {
             let result = try await api.consumeManifestEntries([entry.id])
             Haptics.success()
-            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
-            return result.undoToken
+            markEntryConsumedLocally(entryId: entry.id)
+            let undoToken = result.undoToken
+            await reloadManifestSilently(
+                api: api,
+                snapshots: snapshots,
+                online: online,
+                organizationId: organizationId
+            )
+            return undoToken
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return nil
+        }
+    }
+
+    private func markEntryConsumedLocally(entryId: String) {
+        guard let manifest else { return }
+        let now = Date()
+        let updated = manifest.entries.map { entry -> ManifestEntry in
+            guard entry.id == entryId else { return entry }
+            return ManifestEntry(
+                id: entry.id,
+                planId: entry.planId,
+                mealId: entry.mealId,
+                date: entry.date,
+                slotType: entry.slotType,
+                orderIndex: entry.orderIndex,
+                servingsOverride: entry.servingsOverride,
+                notes: entry.notes,
+                consumedAt: now,
+                createdAt: entry.createdAt,
+                mealName: entry.mealName,
+                mealServings: entry.mealServings,
+                mealType: entry.mealType,
+                mealPrepTime: entry.mealPrepTime,
+                mealCookTime: entry.mealCookTime
+            )
+        }
+        self.manifest = ManifestResponse(
+            plan: manifest.plan,
+            startDate: manifest.startDate,
+            endDate: manifest.endDate,
+            entries: updated
+        )
+    }
+
+    private func reloadManifestSilently(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+        guard online else { return }
+        do {
+            let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
+            manifest = data
+            snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+        } catch {
+            // Consume succeeded — do not surface reload failures as errors.
         }
     }
 
@@ -195,6 +255,7 @@ final class ManifestViewModel {
 struct ManifestView: View {
     @Environment(AppEnvironment.self) private var env
     var onOpenSettings: () -> Void = {}
+    var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
     @State private var showingPlanWeek = false
@@ -228,12 +289,11 @@ struct ManifestView: View {
                 }
             }
             .navigationTitle("Manifest")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
-                    countChip: manifestEntryCount,
+                    countChip: manifestEntryCount > 0 ? manifestEntryCount : nil,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -266,7 +326,8 @@ struct ManifestView: View {
                 }
             }
             .sheet(isPresented: $showingPlanWeek) {
-                PlanWeekSheet {
+                PlanWeekSheet { count in
+                    onPlanWeekComplete(count)
                     await reload()
                 }
             }
@@ -301,6 +362,7 @@ struct ManifestView: View {
             }
         }
         .task(id: organizationId) {
+            model.resetAnchorForOrganizationChange()
             if let settings = try? await env.api.settings().settings.manifestSettings {
                 model.configureFromSettings(
                     calendarSpan: settings.calendarSpan ?? 7,
@@ -424,7 +486,7 @@ struct ManifestView: View {
             manifestShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
-            if case .server(let status, _, _) = error, status == 403 {
+            if case .server(let status, _, _, _, _) = error, status == 403 {
                 showingPaywall = true
             }
         } catch {}

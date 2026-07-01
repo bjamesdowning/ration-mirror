@@ -1696,6 +1696,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/manifest/plan-week/:requestId` | Poll plan-week job |
 | `POST` | `/api/mobile/v1/manifest/bulk` | Bulk add plan entries |
 | `GET` / `POST` | `/api/mobile/v1/meals` | List/create meals |
+| `POST` | `/api/mobile/v1/provisions` | Create provision (single-item snack/staple) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/meals/:id` | Meal detail / update / delete |
 | `GET` | `/api/mobile/v1/meals/tags` | Distinct meal tags |
 | `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo |

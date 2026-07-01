@@ -149,6 +149,17 @@ final class RationAPI {
         try await client.get("meals/import/\(requestId)")
     }
 
+    func importRecipeConfirm(requestId: String) async throws -> ImportRecipeConfirmResponse {
+        try await client.post(
+            "meals/import/confirm",
+            body: ImportRecipeConfirmRequest(requestId: requestId)
+        )
+    }
+
+    func createProvision(_ body: CreateProvisionRequest) async throws -> CreateProvisionResponse {
+        try await client.post("provisions", body: body)
+    }
+
     // Galley (continued)
     func meal(id: String) async throws -> MealDetailResponse {
         try await client.get("meals/\(id)")

@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import { normalizeMobileGeneratedRecipes } from "~/lib/mobile/generated-recipes.server";
 import { getQueueJob } from "~/lib/queue-job.server";
 import { NO_STORE, parseJobResultJson } from "~/lib/queue-status-loader.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -55,10 +56,15 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			error?: string;
 		}>(job.resultJson);
 
+		const recipes =
+			result.status === "completed" && result.recipes
+				? normalizeMobileGeneratedRecipes(result.recipes)
+				: result.recipes;
+
 		return data(
 			{
 				status: result.status,
-				recipes: result.recipes,
+				recipes,
 				error: result.error,
 			},
 			{ headers: NO_STORE },

@@ -9,6 +9,7 @@ struct RationApp: App {
             RootView()
                 .environment(env)
                 .tint(Theme.hyperGreen)
+                .background(Theme.ceramic)
                 .task { await env.auth.bootstrap() }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {

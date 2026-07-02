@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Ration "Orbital Luxury" palette — mirrors `app/app.css` web tokens.
-/// Theme-aware colors resolve light/dark via `Color(UIColor { traits in ... })`.
+/// Theme-aware colors resolve light/dark via `UIColor` dynamic providers (no SwiftUI `Color` bridging).
 enum Theme {
     // Accent colors — identical in both themes.
     static let hyperGreen = Color(hex: 0x00E088)
@@ -25,18 +25,27 @@ enum Theme {
     static let tagChipForeground = hyperGreen
     static let tagChipBackground = adaptiveTagChipBackground(light: 0.1, dark: 0.15)
 
+    private static func uiColor(hex: UInt32, alpha: CGFloat = 1.0) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255.0,
+            green: CGFloat((hex >> 8) & 0xFF) / 255.0,
+            blue: CGFloat(hex & 0xFF) / 255.0,
+            alpha: alpha
+        )
+    }
+
     private static func adaptiveTagChipBackground(light: Double, dark: Double) -> Color {
         Color(UIColor { traits in
             let alpha = traits.userInterfaceStyle == .dark ? dark : light
-            return UIColor(Color(hex: 0x00E088)).withAlphaComponent(alpha)
+            return uiColor(hex: 0x00E088, alpha: alpha)
         })
     }
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(Color(hex: dark))
-                : UIColor(Color(hex: light))
+                ? uiColor(hex: dark)
+                : uiColor(hex: light)
         })
     }
 }

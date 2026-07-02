@@ -60,7 +60,7 @@ callback requires the universal-link/redirect to reach the device.
 Ration/
 ├── App/            # @main entry, DI container, auth-gated root, tab shell
 ├── Core/
-│   ├── Design/     # Theme, OrgSwitcherBar, ProfileAvatarButton, FloatingActionBar
+│   ├── Design/     # Theme, Typography (Space Mono), ListCountHeader, ListRowViews, VisualLanguage.md
 │   ├── Filters/    # PageFilterState, FilterOptionsSheet (Cargo/Galley/Supply)
 │   ├── Session/    # SessionStore — global org context + credits + AI consent
 │   ├── Consent/    # AIConsentCoordinator — shared "proceed" gate for all 4 AI entry points
@@ -139,7 +139,9 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 
 Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`.
 
-**Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows. See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
+**Post-buildout UX overhaul (v1.4.18):** Trailing `ListCountHeader` (`"{n} items"`) on Cargo, Galley, and Manifest; toolbar count pill removed. Space Mono typography shipped with Dynamic Type scaling. Unified Telemetry Strip rows (`CargoRowView` / `MealRowView`) with hyper-green tag chips. Rich connected-meals section on Cargo detail (connection badges, all ingredients, sort). Manifest incremental polish (consumed strikethrough, week navigator density). See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
+
+**Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows.
 
 **Security hardening (v1.4.6–v1.4.11, iOS security audit fix plan):** `PrivacyInfo.xcprivacy` privacy manifest (v1.4.6); centralized/symmetric AI consent gate across all four AI entry points via `SessionStore.hasAIConsent` + `AIConsentCoordinator`, and server-side consent enforcement added to `/scan` (v1.4.8); forced-logout full wipe (`AuthManager.onSignedOut` → snapshots/billing/session/image caches) plus abandoned-PKCE-verifier Keychain cleanup on every sign-out (v1.4.9); mobile `/hub` and `/supply` rate limiting + pagination, and a `preLimit` fix for `/meals/match` (v1.4.10); post-review cleanup — explicit sign-out now routes through the same `onSignedOut` wipe hook instead of duplicating it, and `RootView`'s startup fetches (`session.load`, settings) run concurrently and are shared between the AI consent flag and the onboarding check instead of double-fetching `/settings` (v1.4.11). See [`plans/ios-security-audit-fix-plan.md`](../plans/ios-security-audit-fix-plan.md).
 

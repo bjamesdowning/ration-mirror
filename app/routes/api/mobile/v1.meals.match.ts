@@ -60,7 +60,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			organizationId,
 			query,
 		);
-		return { matches };
+		return { matches, total: matches.length };
 	} catch (e) {
 		return handleApiError(e);
 	}

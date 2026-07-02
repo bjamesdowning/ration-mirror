@@ -34,6 +34,11 @@
 	<string>Ration uses the camera to scan grocery receipts and pantry labels to add items to Cargo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Ration can import receipt photos from your library when the camera is unavailable.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>SpaceMono-Regular.ttf</string>
+		<string>SpaceMono-Bold.ttf</string>
+	</array>
 	<key>RevenueCatPublicAPIKey</key>
 	<string>appl_pUrEkfszvAWSscslkeXEMleEace</string>
 	<key>CFBundleURLTypes</key>

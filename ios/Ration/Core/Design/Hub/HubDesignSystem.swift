@@ -115,7 +115,7 @@ struct HubMatchRing: View {
                 .stroke(percentage >= 100 ? Theme.hyperGreen : Theme.muted, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(Int(percentage))")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(Typography.mono(10, weight: .bold))
                 .foregroundStyle(percentage >= 100 ? Theme.hyperGreen : Theme.carbon)
         }
         .frame(width: 32, height: 32)
@@ -125,24 +125,28 @@ struct HubMatchRing: View {
 struct HubUrgencyLabel: View {
     let date: Date
     var reference: Date = Date()
+    var isExpired: Bool = false
 
     private var daysUntil: Int {
         Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: reference), to: Calendar.current.startOfDay(for: date)).day ?? 0
     }
 
     private var label: String {
-        if daysUntil <= 0 { return "Today" }
+        if daysUntil < 0 { return "Expired" }
+        if daysUntil == 0 { return "Today" }
         if daysUntil == 1 { return "1d" }
         return "\(daysUntil)d"
     }
 
     private var color: Color {
-        daysUntil <= 3 ? Theme.warning : Theme.muted
+        if isExpired || daysUntil < 0 { return Theme.danger }
+        if daysUntil <= 3 { return Theme.warning }
+        return Theme.muted
     }
 
     var body: some View {
         Text(label)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .font(Typography.mono(11, weight: .semibold))
             .foregroundStyle(color)
     }
 }

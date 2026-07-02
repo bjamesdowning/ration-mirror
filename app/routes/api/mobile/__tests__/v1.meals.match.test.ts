@@ -86,4 +86,26 @@ describe("GET /api/mobile/v1/meals/match preLimit", () => {
 		expect(query.limit).toBe(1);
 		expect(query.preLimit).toBe(12);
 	});
+
+	it("returns total equal to the number of matches", async () => {
+		matchMeals.mockResolvedValue([
+			{ meal: { id: "m1" }, matchPercentage: 100 },
+			{ meal: { id: "m2" }, matchPercentage: 80 },
+		]);
+
+		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
+		const result = await loader({
+			request: getRequest(),
+			context: ctx,
+			params: {},
+		} as never);
+
+		expect(result).toEqual({
+			matches: [
+				{ meal: { id: "m1" }, matchPercentage: 100 },
+				{ meal: { id: "m2" }, matchPercentage: 80 },
+			],
+			total: 2,
+		});
+	});
 });

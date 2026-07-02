@@ -6,6 +6,8 @@ import Observation
 final class GalleyViewModel {
     private(set) var meals: [Meal] = []
     private(set) var matches: [MealMatch] = []
+    private(set) var mealTotal = 0
+    private(set) var matchTotal = 0
     private(set) var isLoading = false
     var errorMessage: String?
 
@@ -37,6 +39,11 @@ final class GalleyViewModel {
         !filters.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Server org meal total in list mode; match result total in match mode.
+    var listHeaderCount: Int {
+        isMatchMode ? matchTotal : mealTotal
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
@@ -45,10 +52,13 @@ final class GalleyViewModel {
         if online {
             do {
                 if isMatchMode {
-                    matches = try await api.matchMeals().matches
+                    let response = try await api.matchMeals()
+                    matches = response.matches
+                    matchTotal = response.total ?? response.matches.count
                 } else {
                     let response = try await api.meals(tag: filters.tag, domain: filters.domain)
                     meals = response.meals
+                    mealTotal = response.total ?? response.meals.count
                     snapshots.save(response, domain: SnapshotDomain.galley, organizationId: organizationId)
                 }
             } catch {
@@ -63,6 +73,7 @@ final class GalleyViewModel {
     private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
         if let cached = snapshots.load(MealsResponse.self, domain: SnapshotDomain.galley, organizationId: organizationId) {
             meals = cached.payload.meals
+            mealTotal = cached.payload.total ?? cached.payload.meals.count
         }
     }
 

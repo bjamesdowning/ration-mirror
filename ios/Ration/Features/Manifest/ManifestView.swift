@@ -293,7 +293,6 @@ struct ManifestView: View {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
-                    countChip: manifestEntryCount > 0 ? manifestEntryCount : nil,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -406,6 +405,9 @@ struct ManifestView: View {
         let dayEntries = manifest.entries.filter { $0.date == model.selectedDay }
 
         List {
+            if !model.isLoading {
+                ListCountHeader(count: manifestEntryCount)
+            }
             WeekNavigator(
                 calendarSpan: model.calendarSpan,
                 rangeStart: $model.rangeStart,
@@ -438,11 +440,14 @@ struct ManifestView: View {
             }
 
             if dayEntries.isEmpty {
-                Text("No meals planned for this day. Tap + to schedule one.")
+                Text(model.offlineBannerMessage != nil
+                    ? "Offline — showing cached plan. Meals for this day may be incomplete."
+                    : "No meals planned for this day. Tap + to schedule one.")
                     .rationCaption()
+                    .foregroundStyle(Theme.muted)
                     .listRowBackground(Color.clear)
             } else {
-                Section(model.selectedDay) {
+                Section(ManifestDateHelpers.smartLabel(isoDate: model.selectedDay)) {
                     ForEach(dayEntries) { entry in
                         ManifestEntryRow(
                             entry: entry,
@@ -461,6 +466,7 @@ struct ManifestView: View {
                                 }
                             }
                         )
+                        .listRowBackground(Theme.surface)
                     }
                 }
             }
@@ -519,67 +525,5 @@ struct ManifestView: View {
         } catch {
             model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
-    }
-}
-
-struct ManifestEntryRow: View {
-    let entry: ManifestEntry
-    let onConsume: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SlotGlyphView(slotType: entry.slotType)
-            NavigationLink {
-                MealDetailView(
-                    mealId: entry.mealId,
-                    initialMeal: entry.stubMeal()
-                )
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.mealName.capitalized).rationBody()
-                    Text(entry.mealType.capitalized)
-                        .rationCaption()
-                }
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            if entry.isConsumed {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Theme.hyperGreen)
-                    .accessibilityLabel("Consumed")
-            } else {
-                Button(action: onConsume) {
-                    Image(systemName: "fork.knife.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Theme.hyperGreen)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Consume meal and deduct from Cargo")
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private extension ManifestEntry {
-    func stubMeal() -> Meal {
-        Meal(
-            id: mealId,
-            organizationId: "",
-            name: mealName,
-            domain: "food",
-            type: mealType,
-            description: nil,
-            directions: nil,
-            equipment: [],
-            servings: mealServings,
-            prepTime: mealPrepTime,
-            cookTime: mealCookTime,
-            createdAt: Date(),
-            updatedAt: Date(),
-            tags: [],
-            ingredients: []
-        )
     }
 }

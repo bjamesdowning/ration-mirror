@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
-import { createMeal, getMeals } from "~/lib/meals.server";
+import { createMeal, getMeals, getMealsCount } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import {
@@ -36,15 +36,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			domain: url.searchParams.get("domain") ?? undefined,
 		});
 
-		const meals = await getMeals(
-			context.cloudflare.env.DB,
-			organizationId,
-			query.tag,
-			query.domain,
-			{ limit: query.limit },
-		);
+		const [meals, total] = await Promise.all([
+			getMeals(
+				context.cloudflare.env.DB,
+				organizationId,
+				query.tag,
+				query.domain,
+				{ limit: query.limit },
+			),
+			getMealsCount(context.cloudflare.env.DB, organizationId),
+		]);
 
-		return { meals };
+		return { meals, total };
 	} catch (e) {
 		return handleApiError(e);
 	}

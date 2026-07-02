@@ -6,7 +6,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 
 1. **Primary actions** — SF Symbol in toolbar or icon FAB; text label only in VoiceOver.
 2. **Progress** — Thin 2–4pt bar at list top (`safeAreaInset`), not a footer card.
-3. **Metadata** — Symbol + number before words (`cart 3` not `3 items to buy`).
+3. **List totals** — Trailing `"{n} items"` caption at list top (`ListCountHeader`); toolbar stays symbol-only (no count pill).
 4. **Orbital aesthetic** — Ceramic backgrounds, GlassCard for grouped content, Hyper-Green for primary/AI only.
 5. **Accessibility** — `.accessibilityLabel` on every icon-only control.
 
@@ -18,6 +18,16 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `IconFAB` / `IconFABButton` | `IconFAB.swift` | Cargo, Galley, Manifest, Hub scan |
 | `SlotGlyphView` | `SlotGlyph.swift` | Manifest meal-plan rows |
 | `SyncIndicatorIcon` | `SyncIndicator.swift` | Offline/stale toolbar affordance |
+| `ListCountHeader` | `ListCountHeader.swift` | Trailing inventory total on Cargo, Galley, Manifest |
+| `TelemetryTagChip` | `ListRowViews.swift` | Hyper-green tag chips (`Theme.tagChipForeground` / `Theme.tagChipBackground`) |
+| `CargoRowView` / `MealRowView` | `ListRowViews.swift` | Unified Telemetry Strip list rows |
+| `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + consume) |
+
+## Typography
+
+- **Space Mono** (Regular + Bold) bundled in `Resources/Fonts/`; registered via `UIAppFonts`.
+- Scale via `UIFontMetrics` in `Typography.swift` for Dynamic Type.
+- Use `.rationBody()`, `.rationCaption()`, etc. — avoid raw `.system` fonts in new views.
 
 ## Per-page patterns
 

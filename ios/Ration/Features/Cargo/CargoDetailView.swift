@@ -44,6 +44,9 @@ struct CargoDetailView: View {
     @State private var model = CargoDetailViewModel()
     @State private var showingEdit = false
     @State private var showingDeleteConfirm = false
+    @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
+    @State private var expandedMealIds: Set<String> = []
+    @State private var showAllConnectedMeals = false
 
     var body: some View {
         Group {
@@ -59,9 +62,7 @@ struct CargoDetailView: View {
                         if !item.tags.isEmpty {
                             tagsSection(item.tags)
                         }
-                        if !model.connectedMeals.isEmpty {
-                            connectedMealsSection
-                        }
+                        connectedMealsSection(cargoItem: item)
                     }
                     .padding(16)
                 }
@@ -71,7 +72,6 @@ struct CargoDetailView: View {
         }
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             if model.item != nil {
@@ -177,26 +177,143 @@ struct CargoDetailView: View {
         }
     }
 
-    private var connectedMealsSection: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Connected meals").rationHeadline()
-                ForEach(model.connectedMeals) { meal in
-                    NavigationLink {
-                        MealDetailView(mealId: meal.id, initialMeal: placeholderMeal(from: meal))
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(meal.name.capitalized).rationBody()
-                            if let first = meal.connectedIngredients.first {
-                                Text("\(first.quantity.formatted()) \(first.unit) needed")
-                                    .rationCaption()
-                            }
+    private func connectedMealsSection(cargoItem: CargoItem) -> some View {
+        let sorted = ConnectedMealsPresentation.sort(model.connectedMeals, by: connectedMealsSort)
+        let visible = showAllConnectedMeals ? sorted : Array(sorted.prefix(5))
+        let hiddenCount = max(0, sorted.count - 5)
+
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Theme.hyperGreen)
+                            .frame(width: 8, height: 8)
+                        Text("Connected meals")
+                            .rationHeadline()
+                    }
+                    Spacer()
+                    Text(ListCountLabel.format(sorted.count))
+                        .rationCaption()
+                }
+
+                if sorted.isEmpty {
+                    Text("No meals use this ingredient yet.")
+                        .rationBody()
+                        .foregroundStyle(Theme.muted)
+                } else {
+                    Menu {
+                        Picker("Sort", selection: $connectedMealsSort) {
+                            Text("Alphabetical").tag(ConnectedMealsSort.alphabetical)
+                            Text("Quantity needed").tag(ConnectedMealsSort.quantityNeeded)
+                            Text("Connection type").tag(ConnectedMealsSort.connectionType)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
+                    }
+
+                    ForEach(visible) { meal in
+                        connectedMealCard(
+                            meal,
+                            onHand: cargoItem.quantity,
+                            onHandUnit: cargoItem.unit
+                        )
+                    }
+
+                    if hiddenCount > 0 && !showAllConnectedMeals {
+                        Button("Show \(hiddenCount) more") {
+                            showAllConnectedMeals = true
+                        }
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.hyperGreen)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func connectedMealCard(
+        _ meal: ConnectedCargoMeal,
+        onHand: Double,
+        onHandUnit: String
+    ) -> some View {
+        let isExpanded = expandedMealIds.contains(meal.id) || meal.connectedIngredients.count <= 2
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                NavigationLink {
+                    MealDetailView(mealId: meal.id, initialMeal: placeholderMeal(from: meal))
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(meal.name.capitalized).rationBody()
+                        if let description = meal.description, !description.isEmpty, isExpanded {
+                            Text(description).rationCaption()
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                if meal.connectedIngredients.count > 2 {
+                    Button {
+                        if expandedMealIds.contains(meal.id) {
+                            expandedMealIds.remove(meal.id)
+                        } else {
+                            expandedMealIds.insert(meal.id)
+                        }
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse ingredients" : "Expand ingredients")
+                }
+            }
+
+            if !meal.tags.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(meal.tags, id: \.self) { tag in
+                        Text(tag)
+                            .rationCaption()
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Theme.platinum)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+
+            if isExpanded {
+                ForEach(meal.connectedIngredients) { ingredient in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(ingredient.ingredientName.capitalized)
+                                .rationBody()
+                            Spacer()
+                            Text(ConnectedMealsPresentation.coverageLabel(
+                                needed: ingredient.quantity,
+                                onHand: onHand,
+                                unit: ingredient.unit,
+                                onHandUnit: onHandUnit
+                            ))
+                            .rationCaption()
+                            .multilineTextAlignment(.trailing)
+                        }
+                        Text(ConnectedMealsPresentation.connectionTypeLabel(ingredient.connectionType))
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .padding(10)
+                    .background(Theme.platinum.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func placeholderMeal(from connected: ConnectedCargoMeal) -> Meal {
@@ -206,7 +323,7 @@ struct CargoDetailView: View {
             name: connected.name,
             domain: "food",
             type: connected.type,
-            description: nil,
+            description: connected.description,
             directions: nil,
             equipment: nil,
             servings: 1,
@@ -223,8 +340,8 @@ struct CargoDetailView: View {
                     ingredientName: $0.ingredientName,
                     quantity: $0.quantity,
                     unit: $0.unit,
-                    isOptional: false,
-                    orderIndex: 0
+                    isOptional: $0.isOptional ?? false,
+                    orderIndex: $0.orderIndex ?? 0
                 )
             }
         )

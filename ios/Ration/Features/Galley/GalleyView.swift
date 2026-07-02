@@ -18,7 +18,7 @@ struct GalleyView: View {
     }
 
     private var galleyCount: Int {
-        model.isMatchMode ? model.displayedMatches.count : model.displayedMeals.count
+        model.listHeaderCount
     }
 
     var body: some View {
@@ -52,7 +52,6 @@ struct GalleyView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.galley,
                     organizationId: organizationId,
-                    countChip: galleyCount > 0 ? galleyCount : nil,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -156,6 +155,9 @@ struct GalleyView: View {
 
     private var mealList: some View {
         List {
+            if !model.isLoading {
+                ListCountHeader(count: galleyCount)
+            }
             ForEach(model.displayedMeals) { meal in
                 NavigationLink {
                     MealDetailView(mealId: meal.id, initialMeal: meal)
@@ -192,6 +194,9 @@ struct GalleyView: View {
 
     private var matchList: some View {
         List {
+            if !model.isLoading {
+                ListCountHeader(count: galleyCount)
+            }
             ForEach(model.displayedMatches) { match in
                 NavigationLink {
                     MealDetailView(mealId: match.meal.id, initialMeal: match.meal)

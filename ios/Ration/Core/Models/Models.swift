@@ -258,6 +258,7 @@ struct Meal: Codable, Sendable, Identifiable {
 /// `GET /api/mobile/v1/meals`
 struct MealsResponse: Codable, Sendable {
     let meals: [Meal]
+    let total: Int?
 }
 
 /// `GET /api/mobile/v1/meals/:id`
@@ -428,12 +429,15 @@ struct ConnectedCargoIngredient: Codable, Sendable, Identifiable {
     let quantity: Double
     let unit: String
     let connectionType: String
+    let isOptional: Bool?
+    let orderIndex: Int?
 }
 
 struct ConnectedCargoMeal: Codable, Sendable, Identifiable {
     let id: String
     let name: String
     let type: String
+    let description: String?
     let tags: [String]
     let connectedIngredients: [ConnectedCargoIngredient]
 }
@@ -531,6 +535,7 @@ struct MissingIngredientMatch: Codable, Sendable, Identifiable {
 
 struct MealMatchResponse: Codable, Sendable {
     let matches: [MealMatch]
+    let total: Int?
 }
 
 struct CookMealResponse: Codable, Sendable {

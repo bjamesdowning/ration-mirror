@@ -321,7 +321,6 @@ struct SupplyView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.supply,
                     organizationId: organizationId,
-                    countChip: model.totalCount > 0 ? model.totalCount : nil,
                     onOptions: { showingOptions = true },
                     onOpenSettings: onOpenSettings
                 )

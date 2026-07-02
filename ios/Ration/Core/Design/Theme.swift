@@ -21,6 +21,17 @@ enum Theme {
     /// Surface — frosted panels.
     static let surface = adaptive(light: 0xFFFFFF, dark: 0x1A1A1A)
 
+    /// Hyper-green list tag chips (Telemetry Strip).
+    static let tagChipForeground = hyperGreen
+    static let tagChipBackground = adaptiveTagChipBackground(light: 0.1, dark: 0.15)
+
+    private static func adaptiveTagChipBackground(light: Double, dark: Double) -> Color {
+        Color(UIColor { traits in
+            let alpha = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(Color(hex: 0x00E088)).withAlphaComponent(alpha)
+        })
+    }
+
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(UIColor { traits in
             traits.userInterfaceStyle == .dark

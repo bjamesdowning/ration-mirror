@@ -167,7 +167,7 @@ struct WeekNavigator: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Button {
                     let raw = ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan)
@@ -231,7 +231,7 @@ struct WeekNavigator: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ForEach(visibleDays, id: \.self) { day in
                         dayPill(day)
                     }
@@ -289,9 +289,9 @@ struct WeekNavigator: View {
                     .fill(hasMeals ? Theme.hyperGreen : Color.clear)
                     .frame(width: 6, height: 6)
             }
-            .foregroundStyle(isSelected ? Color.black : Theme.carbon)
+            .foregroundStyle(isSelected ? Theme.ceramic : Theme.carbon)
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }

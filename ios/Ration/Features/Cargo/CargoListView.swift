@@ -56,7 +56,6 @@ struct CargoListView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.cargo,
                     organizationId: organizationId,
-                    countChip: model.total > 0 ? model.total : nil,
                     onOptions: { showingFilters = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -101,6 +100,9 @@ struct CargoListView: View {
 
     private var list: some View {
         List {
+            if !model.isLoading {
+                ListCountHeader(count: model.total)
+            }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
@@ -131,8 +133,6 @@ struct CargoListView: View {
                         .listRowBackground(Theme.surface)
                     }
                 }
-            } header: {
-                Text("\(model.total) items").rationCaption()
             }
         }
         .listStyle(.insetGrouped)

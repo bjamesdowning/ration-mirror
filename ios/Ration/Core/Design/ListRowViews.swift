@@ -53,9 +53,10 @@ struct CargoRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
+            CargoExpiryGauge(
+                expiresAt: item.expiresAt,
+                isExpiredStatus: item.status == "expired"
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name.capitalized)
@@ -103,18 +104,6 @@ struct CargoRowView: View {
         }
         return parts.joined(separator: ", ")
     }
-
-    private var statusColor: Color {
-        if let expiresAt = item.expiresAt, expiresAt < Date() {
-            return Theme.danger
-        }
-        switch item.status {
-        case "expiring": return Theme.warning
-        case "low": return Theme.warning
-        case "expired": return Theme.danger
-        default: return Theme.hyperGreen
-        }
-    }
 }
 
 // MARK: - Meal row
@@ -140,7 +129,7 @@ struct MealRowView: View {
                 HStack(spacing: 6) {
                     TelemetryTypeBadge(label: meal.type.capitalized)
                     if !meal.ingredients.isEmpty {
-                        Text("\(meal.ingredients.count) ing")
+                        Label("\(meal.ingredients.count)", systemImage: "list.bullet")
                             .rationCaption()
                     }
                     if let prep = meal.prepTime {

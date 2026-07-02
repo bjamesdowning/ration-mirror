@@ -12,6 +12,8 @@ struct GalleyView: View {
     @State private var showingImport = false
     @State private var navigateToMealId: String?
     @State private var availableTags: [String] = []
+    @State private var generateSuccessMessage: String?
+    @State private var showGroupSettings = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -46,15 +48,19 @@ struct GalleyView: View {
                 }
             }
             .navigationTitle("Galley")
-            .searchable(text: $model.filters.search, prompt: "Search meals")
+            .searchable(text: $model.filters.search, prompt: "Search galley")
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.galley,
                     organizationId: organizationId,
                     onOptions: { showingFilters = true },
+                    onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
+            }
+            .navigationDestination(isPresented: $showGroupSettings) {
+                GroupSettingsView()
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingFilters) {
@@ -73,7 +79,10 @@ struct GalleyView: View {
                 ProvisionFormView { await reload() }
             }
             .sheet(isPresented: $showingGenerate) {
-                GenerateMealSheet { await reload() }
+                GenerateMealSheet { count in
+                    await reload()
+                    generateSuccessMessage = "Added \(count) meals to Galley"
+                }
             }
             .sheet(isPresented: $showingImport) {
                 ImportRecipeSheet(
@@ -85,6 +94,12 @@ struct GalleyView: View {
                 MealDetailView(mealId: mealId, initialMeal: placeholderMeal(id: mealId))
             }
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
+            .onChange(of: env.cargoDataRevision) { _, _ in
+                Task {
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    await model.refreshAvailabilityMatches(api: env.api, online: env.network.isOnline)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
                     Button { showingAddTypeChoice = true } label: {
@@ -97,6 +112,14 @@ struct GalleyView: View {
                         Label("Import recipe", systemImage: "link")
                     }
                 }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = generateSuccessMessage {
+                TransientSuccessToast(message: message) {
+                    generateSuccessMessage = nil
+                }
+                .padding(.bottom, 80)
             }
         }
         .task(id: organizationId) {
@@ -158,37 +181,47 @@ struct GalleyView: View {
             if !model.isLoading {
                 ListCountHeader(count: galleyCount)
             }
-            ForEach(model.displayedMeals) { meal in
-                NavigationLink {
-                    MealDetailView(mealId: meal.id, initialMeal: meal)
-                } label: {
-                    MealRowView(meal: meal)
-                }
-                .listRowBackground(Theme.surface)
-                .swipeActions {
-                    Button {
-                        Task { await model.toggleActive(meal.id, api: env.api) }
+            Section {
+                ForEach(model.displayedMeals) { meal in
+                    NavigationLink {
+                        MealDetailView(mealId: meal.id, initialMeal: meal)
                     } label: {
-                        Label("Select", systemImage: "checkmark.circle")
+                        MealRowView(
+                            meal: meal,
+                            match: env.network.isOnline ? model.match(for: meal.id) : nil,
+                            showMatchRing: env.network.isOnline
+                        )
                     }
-                    .tint(Theme.hyperGreen)
-                    Button {
-                        Task { await model.cook(meal.id, api: env.api) }
-                    } label: {
-                        Label("Cook", systemImage: "flame")
-                    }
-                    Button(role: .destructive) {
-                        Task {
-                            await model.deleteMeal(meal.id, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                    .listRowBackground(Theme.surface)
+                    .swipeActions {
+                        Button {
+                            Task { await model.toggleActive(meal.id, api: env.api) }
+                        } label: {
+                            Label("Select", systemImage: "checkmark.circle")
                         }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                        .tint(Theme.hyperGreen)
+                        Button {
+                            Task {
+                                await model.cook(meal.id, api: env.api)
+                                env.notifyCargoDataChanged()
+                            }
+                        } label: {
+                            Label("Cook", systemImage: "flame")
+                        }
+                        Button(role: .destructive) {
+                            Task {
+                                await model.deleteMeal(meal.id, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .background(Theme.ceramic)
         .refreshable { await reload() }
     }
 
@@ -197,17 +230,20 @@ struct GalleyView: View {
             if !model.isLoading {
                 ListCountHeader(count: galleyCount)
             }
-            ForEach(model.displayedMatches) { match in
-                NavigationLink {
-                    MealDetailView(mealId: match.meal.id, initialMeal: match.meal)
-                } label: {
-                    MealRowView(meal: match.meal, match: match)
+            Section {
+                ForEach(model.displayedMatches) { match in
+                    NavigationLink {
+                        MealDetailView(mealId: match.meal.id, initialMeal: match.meal)
+                    } label: {
+                        MealRowView(meal: match.meal, match: match)
+                    }
+                    .listRowBackground(Theme.surface)
                 }
-                .listRowBackground(Theme.surface)
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .background(Theme.ceramic)
         .refreshable { await reload() }
     }
 }

@@ -151,6 +151,43 @@ final class ManifestViewModel {
         }
     }
 
+    func deleteEntry(
+        _ entry: ManifestEntry,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard online else {
+            errorMessage = "Deleting entries requires a network connection."
+            return
+        }
+        do {
+            _ = try await api.deleteManifestEntry(entry.id)
+            Haptics.light()
+            removeEntryLocally(entryId: entry.id)
+            await reloadManifestSilently(
+                api: api,
+                snapshots: snapshots,
+                online: online,
+                organizationId: organizationId
+            )
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func removeEntryLocally(entryId: String) {
+        guard let manifest else { return }
+        let updated = manifest.entries.filter { $0.id != entryId }
+        self.manifest = ManifestResponse(
+            plan: manifest.plan,
+            startDate: manifest.startDate,
+            endDate: manifest.endDate,
+            entries: updated
+        )
+    }
+
     private func markEntryConsumedLocally(entryId: String) {
         guard let manifest else { return }
         let now = Date()
@@ -266,6 +303,7 @@ struct ManifestView: View {
     @State private var showingPaywall = false
     @State private var consumeUndoToken: String?
     @State private var showConsumeUndo = false
+    @State private var showGroupSettings = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -294,17 +332,38 @@ struct ManifestView: View {
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
                     onOptions: { showingOptions = true },
+                    onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
             }
+            .navigationDestination(isPresented: $showGroupSettings) {
+                GroupSettingsView()
+            }
             .sheet(isPresented: $showingOptions) {
                 ManifestOptionsSheet(
+                    weekStart: model.weekStartPref,
+                    calendarSpan: model.calendarSpan,
                     shareURL: manifestShareURL,
                     shareExpiresAt: manifestShareExpiresAt,
                     isLoadingShare: isLoadingShare,
                     onShare: { await createManifestShare() },
                     onRevokeShare: { await revokeManifestShare() },
-                    onUpgradeRequired: { showingPaywall = true }
+                    onUpgradeRequired: { showingPaywall = true },
+                    onSaveSettings: { weekStart, span in
+                        do {
+                            _ = try await env.api.patchSettings(SettingsPatch(
+                                manifestSettings: ManifestSettings(
+                                    weekStart: weekStart,
+                                    calendarSpan: span
+                                )
+                            ))
+                            model.configureFromSettings(calendarSpan: span, weekStartPref: weekStart)
+                            Haptics.success()
+                            await reload()
+                        } catch {
+                            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                        }
+                    }
                 )
                 .task { await loadManifestShareStatus() }
             }
@@ -467,6 +526,21 @@ struct ManifestView: View {
                             }
                         )
                         .listRowBackground(Theme.surface)
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                Task {
+                                    await model.deleteEntry(
+                                        entry,
+                                        api: env.api,
+                                        snapshots: env.snapshots,
+                                        online: env.network.isOnline,
+                                        organizationId: organizationId
+                                    )
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }

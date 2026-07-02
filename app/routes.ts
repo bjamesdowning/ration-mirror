@@ -267,6 +267,24 @@ export default [
 		"api/mobile/v1/groups/credits/transfer",
 		"routes/api/mobile/v1.groups.credits.transfer.ts",
 	),
+	route("api/mobile/v1/groups", "routes/api/mobile/v1.groups.ts"),
+	route("api/mobile/v1/groups/delete", "routes/api/mobile/v1.groups.delete.ts"),
+	route(
+		"api/mobile/v1/groups/members",
+		"routes/api/mobile/v1.groups.members.ts",
+	),
+	route(
+		"api/mobile/v1/groups/invitations/create",
+		"routes/api/mobile/v1.groups.invitations.create.ts",
+	),
+	route(
+		"api/mobile/v1/groups/members/:memberId/role",
+		"routes/api/mobile/v1.groups.members.$memberId.role.ts",
+	),
+	route(
+		"api/mobile/v1/groups/ownership/transfer",
+		"routes/api/mobile/v1.groups.ownership.transfer.ts",
+	),
 	route("api/mobile/v1/undo", "routes/api/mobile/v1.undo.ts"),
 	route(
 		"api/mobile/v1/orgs/:id/activate",
@@ -348,6 +366,10 @@ export default [
 		"routes/api/mobile/v1.manifest.plan-week.$requestId.ts",
 	),
 	route("api/mobile/v1/manifest/bulk", "routes/api/mobile/v1.manifest.bulk.ts"),
+	route(
+		"api/mobile/v1/manifest/entries/:entryId",
+		"routes/api/mobile/v1.manifest.entries.$entryId.ts",
+	),
 	route(
 		"api/mobile/v1/manifest/share",
 		"routes/api/mobile/v1.manifest.share.ts",

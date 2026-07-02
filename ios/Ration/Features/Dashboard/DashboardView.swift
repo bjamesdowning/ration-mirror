@@ -15,6 +15,7 @@ struct DashboardView: View {
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
     @State private var draggingWidgetId: String?
+    @State private var showGroupSettings = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -65,6 +66,7 @@ struct DashboardView: View {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.hub,
                     organizationId: organizationId,
+                    onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
                 if case .loaded = model.state, !model.isEditMode {
@@ -79,6 +81,9 @@ struct DashboardView: View {
                 }
             }
             .background(Theme.ceramic)
+            .navigationDestination(isPresented: $showGroupSettings) {
+                GroupSettingsView()
+            }
             .safeAreaInset(edge: .bottom) {
                 if !model.isEditMode {
                     IconFABButton(

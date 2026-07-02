@@ -1695,6 +1695,14 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/manifest/plan-week` | AI plan week (3 credits) |
 | `GET` | `/api/mobile/v1/manifest/plan-week/:requestId` | Poll plan-week job |
 | `POST` | `/api/mobile/v1/manifest/bulk` | Bulk add plan entries |
+| `DELETE` | `/api/mobile/v1/manifest/entries/:entryId` | Remove manifest entry |
+| `GET` | `/api/mobile/v1/groups/members` | List active group members |
+| `POST` | `/api/mobile/v1/groups` | Create group (`{ name, slug }`) |
+| `POST` | `/api/mobile/v1/groups/delete` | Delete group (owner; `{ organizationId }`) |
+| `POST` | `/api/mobile/v1/groups/invitations/create` | Create invite link (owner/admin, Crew tier) |
+| `PATCH` | `/api/mobile/v1/groups/members/:memberId/role` | Change member role (`{ role: "admin" \| "member" }`) |
+| `POST` | `/api/mobile/v1/groups/ownership/transfer` | Transfer group ownership (`{ newOwnerMemberId }`) |
+| `POST` | `/api/mobile/v1/groups/credits/transfer` | Transfer credits between orgs (source owner, dest member) |
 | `GET` / `POST` | `/api/mobile/v1/meals` | List/create meals |
 | `POST` | `/api/mobile/v1/provisions` | Create provision (single-item snack/staple) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/meals/:id` | Meal detail / update / delete |
@@ -1707,7 +1715,6 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/meals/import/confirm` | Confirm imported recipe |
 | `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
 | `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync (optional `{ servings }` body) |
-| `POST` | `/api/mobile/v1/groups/credits/transfer` | Transfer credits between orgs (source owner, dest member) |
 | `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |

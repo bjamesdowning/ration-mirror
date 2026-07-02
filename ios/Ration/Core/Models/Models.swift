@@ -72,6 +72,67 @@ struct SessionResponse: Codable, Sendable {
     var isCrewMember: Bool { tier == "crew_member" && !isTierExpired }
 }
 
+// MARK: - Groups
+
+struct GroupMemberUser: Codable, Sendable {
+    let name: String?
+    let email: String
+    let image: String?
+}
+
+struct GroupMember: Codable, Sendable, Identifiable {
+    let id: String
+    let role: String
+    let user: GroupMemberUser
+}
+
+struct GroupMembersResponse: Codable, Sendable {
+    let members: [GroupMember]
+}
+
+struct CreateGroupRequest: Encodable, Sendable {
+    let name: String
+    let slug: String
+}
+
+struct CreateGroupResponse: Codable, Sendable {
+    let success: Bool
+    let organizationId: String
+}
+
+struct CreateGroupInvitationResponse: Codable, Sendable {
+    let success: Bool
+    let invitationId: String
+    let expiresAt: Date?
+}
+
+struct UpdateGroupMemberRoleRequest: Encodable, Sendable {
+    let role: String
+}
+
+struct UpdateGroupMemberRoleResponse: Codable, Sendable {
+    let success: Bool
+    let memberId: String?
+    let role: String?
+}
+
+struct TransferGroupOwnershipRequest: Encodable, Sendable {
+    let newOwnerMemberId: String
+}
+
+struct TransferGroupOwnershipResponse: Codable, Sendable {
+    let success: Bool
+}
+
+struct DeleteGroupRequest: Encodable, Sendable {
+    let organizationId: String
+    var confirmSlug: String?
+}
+
+struct DeleteGroupResponse: Codable, Sendable {
+    let success: Bool
+}
+
 // MARK: - Hub
 
 struct CargoStats: Codable, Sendable {
@@ -87,7 +148,7 @@ enum CargoDomain: String, Codable, Sendable, CaseIterable {
     var label: String { rawValue.capitalized }
 }
 
-struct CargoItem: Codable, Sendable, Identifiable {
+struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     let id: String
     let organizationId: String
     let name: String
@@ -141,7 +202,7 @@ struct CreateCargoResponse: Codable, Sendable {
 
 // MARK: - Supply
 
-struct SupplyItem: Codable, Sendable, Identifiable {
+struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let id: String
     let name: String
     let quantity: Double
@@ -764,7 +825,30 @@ struct BulkManifestRequest: Encodable, Sendable {
 }
 
 struct BulkManifestResponse: Codable, Sendable {
-    let added: Int
+    let inserted: Int
+
+    init(inserted: Int) {
+        self.inserted = inserted
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        inserted = try container.decodeIfPresent(Int.self, forKey: .inserted)
+            ?? container.decode(Int.self, forKey: .added)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(inserted, forKey: .inserted)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inserted, added
+    }
+}
+
+struct ManifestEntryDeleteResponse: Codable, Sendable {
+    let deleted: Bool
 }
 
 struct CreateSupplyItemRequest: Encodable, Sendable {

@@ -13,6 +13,8 @@ final class AppEnvironment {
     let network: NetworkMonitor
     let session: SessionStore
     let nextActionDismiss: NextActionDismissStore
+    let theme: ThemeStore
+    private(set) var cargoDataRevision = 0
 
     init() {
         let auth = AuthManager()
@@ -26,16 +28,23 @@ final class AppEnvironment {
         let session = SessionStore()
         self.session = session
         self.nextActionDismiss = NextActionDismissStore()
+        let theme = ThemeStore()
+        self.theme = theme
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
         // (`SettingsView.swift`'s "Sign out" action) so cached pantry/session/
         // image data from the signed-out user isn't readable by the next
         // person who signs in on the same shared device.
-        auth.onSignedOut = { [snapshots, billing, session] in
+        auth.onSignedOut = { [snapshots, billing, session, theme] in
             snapshots.clearAll()
             await billing.logOut()
             session.clear()
+            theme.clear()
             AuthImageLoader.shared.clearAll()
         }
+    }
+
+    func notifyCargoDataChanged() {
+        cargoDataRevision += 1
     }
 }

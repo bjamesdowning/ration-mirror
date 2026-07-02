@@ -19,8 +19,8 @@ struct PlanWeekSheet: View {
                     idleContent
                 case .submitting, .processing:
                     AIProcessingView(feature: .planWeek, creditCost: creditCost)
-                case let .completed(entries):
-                    completedContent(entries)
+                case .completed:
+                    completedContent
                 case let .failed(message):
                     VStack(spacing: 12) {
                         ErrorBanner(message: message)
@@ -58,37 +58,50 @@ struct PlanWeekSheet: View {
                     costLabel: "per plan",
                     nextSteps: "Review the generated schedule, then confirm to add entries to Manifest."
                 )
-                TextField("Start date (YYYY-MM-DD)", text: $model.startDate)
-                    .textFieldStyle(.roundedBorder)
-                Stepper("Days: \(model.days)", value: $model.days, in: 1...7)
                 TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                PlanWeekRangeCalendar(
+                    rangeStart: $model.rangeStart,
+                    rangeEnd: $model.rangeEnd
+                )
+                Link("Terms of Service", destination: AppConfig.termsURL)
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
                 AIFeaturePrimaryButton(label: "Plan week", creditCost: creditCost) {
                     consent.presentIfNeeded(session: env.session) {
                         Task { await model.submit(api: env.api) }
                     }
                 }
+                .disabled(!model.canSubmitPlan)
             }
         }
     }
 
-    private func completedContent(_ entries: [PlanWeekScheduleEntry]) -> some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                ForEach(entries) { entry in
-                    GlassCard {
-                        HStack {
-                            Text(entry.date).rationCaption()
-                            Text(entry.mealName.capitalized).rationBody()
-                            Spacer()
-                            Text(entry.slotType.capitalized).rationCaption()
-                        }
+    private var completedContent: some View {
+        List {
+            ForEach(model.scheduleEntries) { entry in
+                GlassCard {
+                    HStack {
+                        Text(entry.date).rationCaption()
+                        Text(entry.mealName.capitalized).rationBody()
+                        Spacer()
+                        Text(entry.slotType.capitalized).rationCaption()
                     }
                 }
-                Button("Apply to Manifest") {
+                .listRowBackground(Theme.surface)
+                .swipeActions {
+                    Button(role: .destructive) {
+                        model.removeScheduleEntry(entry)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+            Section {
+                Button(applyButtonTitle) {
                     Task {
                         do {
-                            let count = try await model.applySchedule(entries, api: env.api)
+                            let count = try await model.applySchedule(api: env.api)
                             await onComplete(count)
                             dismiss()
                         } catch {
@@ -99,7 +112,17 @@ struct PlanWeekSheet: View {
                     }
                 }
                 .buttonStyle(AIButtonStyle())
+                .disabled(model.scheduleEntries.isEmpty)
+                .listRowBackground(Color.clear)
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var applyButtonTitle: String {
+        let count = model.scheduleEntries.count
+        if count == 0 { return "Apply to Manifest" }
+        return "Apply \(count) meals to Manifest"
     }
 }

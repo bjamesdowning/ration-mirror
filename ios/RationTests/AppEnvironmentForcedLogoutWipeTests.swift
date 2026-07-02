@@ -51,4 +51,18 @@ final class AppEnvironmentForcedLogoutWipeTests: XCTestCase {
 
         XCTAssertNil(AuthImageLoader.shared.cache[url])
     }
+
+    @MainActor
+    func testForcedLogoutClearsThemeCache() async {
+        let env = AppEnvironment()
+        env.theme.apply(.light)
+        XCTAssertEqual(env.theme.theme, .light)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: ThemeStore.userDefaultsKey), "light")
+        defer { UserDefaults.standard.removeObject(forKey: ThemeStore.userDefaultsKey) }
+
+        await env.auth.signOutLocal()
+
+        XCTAssertEqual(env.theme.theme, .dark)
+        XCTAssertNil(UserDefaults.standard.string(forKey: ThemeStore.userDefaultsKey))
+    }
 }

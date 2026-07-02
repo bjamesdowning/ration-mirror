@@ -213,6 +213,39 @@ final class RationAPI {
         )
     }
 
+    func groupMembers() async throws -> GroupMembersResponse {
+        try await client.get("groups/members")
+    }
+
+    func createGroup(name: String, slug: String) async throws -> CreateGroupResponse {
+        try await client.post("groups", body: CreateGroupRequest(name: name, slug: slug))
+    }
+
+    func createGroupInvitation() async throws -> CreateGroupInvitationResponse {
+        try await client.post("groups/invitations/create", body: EmptyBody())
+    }
+
+    func updateGroupMemberRole(memberId: String, role: String) async throws -> UpdateGroupMemberRoleResponse {
+        try await client.patch(
+            "groups/members/\(memberId)/role",
+            body: UpdateGroupMemberRoleRequest(role: role)
+        )
+    }
+
+    func transferGroupOwnership(newOwnerMemberId: String) async throws -> TransferGroupOwnershipResponse {
+        try await client.post(
+            "groups/ownership/transfer",
+            body: TransferGroupOwnershipRequest(newOwnerMemberId: newOwnerMemberId)
+        )
+    }
+
+    func deleteGroup(organizationId: String, confirmSlug: String? = nil) async throws -> DeleteGroupResponse {
+        try await client.post(
+            "groups/delete",
+            body: DeleteGroupRequest(organizationId: organizationId, confirmSlug: confirmSlug)
+        )
+    }
+
     // Manifest
     func manifest(startDate: String? = nil, endDate: String? = nil) async throws -> ManifestResponse {
         var query: [URLQueryItem] = []
@@ -243,6 +276,10 @@ final class RationAPI {
 
     func bulkManifest(_ body: BulkManifestRequest) async throws -> BulkManifestResponse {
         try await client.post("manifest/bulk", body: body)
+    }
+
+    func deleteManifestEntry(_ entryId: String) async throws -> ManifestEntryDeleteResponse {
+        try await client.delete("manifest/entries/\(entryId)")
     }
 
     // Billing

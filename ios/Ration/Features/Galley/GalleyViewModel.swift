@@ -6,6 +6,7 @@ import Observation
 final class GalleyViewModel {
     private(set) var meals: [Meal] = []
     private(set) var matches: [MealMatch] = []
+    private(set) var matchByMealId: [String: MealMatch] = [:]
     private(set) var mealTotal = 0
     private(set) var matchTotal = 0
     private(set) var isLoading = false
@@ -39,9 +40,12 @@ final class GalleyViewModel {
         !filters.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Server org meal total in list mode; match result total in match mode.
     var listHeaderCount: Int {
         isMatchMode ? matchTotal : mealTotal
+    }
+
+    func match(for mealId: String) -> MealMatch? {
+        matchByMealId[mealId]
     }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
@@ -52,21 +56,43 @@ final class GalleyViewModel {
         if online {
             do {
                 if isMatchMode {
-                    let response = try await api.matchMeals()
+                    let response = try await api.matchMeals(limit: 200, minMatch: 0)
                     matches = response.matches
                     matchTotal = response.total ?? response.matches.count
+                    matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
                 } else {
-                    let response = try await api.meals(tag: filters.tag, domain: filters.domain)
-                    meals = response.meals
-                    mealTotal = response.total ?? response.meals.count
-                    snapshots.save(response, domain: SnapshotDomain.galley, organizationId: organizationId)
+                    async let mealsTask = api.meals(tag: filters.tag, domain: filters.domain)
+                    async let matchTask = api.matchMeals(limit: 200, minMatch: 0)
+                    let (mealsResponse, matchResponse) = try await (mealsTask, matchTask)
+                    meals = mealsResponse.meals
+                    mealTotal = mealsResponse.total ?? mealsResponse.meals.count
+                    matchByMealId = GalleyMatchMapBuilder.build(from: matchResponse.matches)
+                    snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
                 }
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
                 restoreSnapshot(snapshots, organizationId: organizationId)
             }
         } else {
+            matchByMealId = [:]
             restoreSnapshot(snapshots, organizationId: organizationId)
+        }
+    }
+
+    func refreshAvailabilityMatches(api: RationAPI, online: Bool) async {
+        guard online else {
+            matchByMealId = [:]
+            return
+        }
+        do {
+            let response = try await api.matchMeals(limit: 200, minMatch: 0)
+            if isMatchMode {
+                matches = response.matches
+                matchTotal = response.total ?? response.matches.count
+            }
+            matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
+        } catch {
+            // Non-fatal — keep existing gauges until next full reload.
         }
     }
 

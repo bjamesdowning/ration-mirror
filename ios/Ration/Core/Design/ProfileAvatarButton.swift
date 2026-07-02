@@ -1,45 +1,15 @@
 import SwiftUI
 
-/// User profile avatar — opens Settings; optional photo change menu.
+/// User profile avatar — opens Account Settings on tap.
 struct ProfileAvatarButton: View {
-    @Environment(AppEnvironment.self) private var env
     let imageURL: URL?
     let action: () -> Void
 
-    @State private var showingPhotoPicker = false
-
     var body: some View {
-        Menu {
-            Button("Account settings", action: action)
-            Button("Change photo") { showingPhotoPicker = true }
-        } label: {
+        Button(action: action) {
             avatarContent
         }
-        .accessibilityLabel("Account and settings")
-        .sheet(isPresented: $showingPhotoPicker) {
-            NavigationStack {
-                VStack(spacing: 20) {
-                    AvatarUploadPicker(
-                        title: "Profile photo",
-                        imageURL: imageURL,
-                        upload: { data, mime in
-                            _ = try await env.api.uploadUserAvatar(imageData: data, mimeType: mime)
-                        }
-                    )
-                    Spacer()
-                }
-                .padding(24)
-                .background(Theme.ceramic)
-                .navigationTitle("Change photo")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showingPhotoPicker = false }
-                    }
-                }
-            }
-            .presentationDetents([.medium])
-        }
+        .accessibilityLabel("Account settings")
     }
 
     private var avatarContent: some View {

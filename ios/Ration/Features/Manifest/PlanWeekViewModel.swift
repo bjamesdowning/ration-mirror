@@ -8,19 +8,39 @@ final class PlanWeekViewModel {
         case idle
         case submitting
         case processing(requestId: String)
-        case completed([PlanWeekScheduleEntry])
+        case completed
         case failed(String)
     }
 
     private(set) var state: State = .idle
-    var startDate = ISO8601DateFormatter().string(from: Date()).prefix(10).description
-    var days = 7
+    var scheduleEntries: [PlanWeekScheduleEntry] = []
+    var rangeStart: String?
+    var rangeEnd: String?
     var dietaryNote = ""
     var variety = "medium"
     private let maxPollAttempts = 80
     private let pollDelayNanoseconds: UInt64 = 1_500_000_000
 
+    var startDate: String {
+        rangeStart ?? ManifestDateHelpers.todayISO()
+    }
+
+    var days: Int {
+        guard let start = rangeStart, let end = rangeEnd,
+              let count = PlanWeekRangeSelection.dayCount(start: start, end: end)
+        else { return 1 }
+        return count
+    }
+
+    var canSubmitPlan: Bool {
+        PlanWeekRangeSelection.isValid(start: rangeStart, end: rangeEnd)
+    }
+
     func submit(api: RationAPI) async {
+        guard canSubmitPlan else {
+            state = .failed("Select a date range of 1–7 days.")
+            return
+        }
         state = .submitting
         do {
             let response = try await api.planWeek(PlanWeekRequest(
@@ -48,7 +68,8 @@ final class PlanWeekViewModel {
                 let result = try await api.planWeekStatus(requestId: requestId)
                 switch result.status {
                 case "completed":
-                    state = .completed(result.schedule ?? [])
+                    scheduleEntries = result.schedule ?? []
+                    state = .completed
                     return
                 case "failed":
                     state = .failed(result.error ?? "Planning failed.")
@@ -72,16 +93,25 @@ final class PlanWeekViewModel {
         state = .failed("Planning is still processing. Refresh Manifest shortly.")
     }
 
-    func applySchedule(_ entries: [PlanWeekScheduleEntry], api: RationAPI) async throws -> Int {
-        let bulk = entries.map {
-            BulkManifestEntry(mealId: $0.mealId, date: $0.date, slotType: $0.slotType, notes: $0.notes)
-        }
-        _ = try await api.bulkManifest(BulkManifestRequest(entries: bulk))
-        Haptics.success()
-        return bulk.count
+    func removeScheduleEntry(_ entry: PlanWeekScheduleEntry) {
+        scheduleEntries.removeAll { $0.id == entry.id }
     }
 
-    func reset() { state = .idle }
+    func applySchedule(api: RationAPI) async throws -> Int {
+        let bulk = scheduleEntries.map {
+            BulkManifestEntry(mealId: $0.mealId, date: $0.date, slotType: $0.slotType, notes: $0.notes)
+        }
+        let response = try await api.bulkManifest(BulkManifestRequest(entries: bulk))
+        Haptics.success()
+        return response.inserted
+    }
+
+    func reset() {
+        state = .idle
+        scheduleEntries = []
+        rangeStart = nil
+        rangeEnd = nil
+    }
 
     func fail(_ message: String) { state = .failed(message) }
 }

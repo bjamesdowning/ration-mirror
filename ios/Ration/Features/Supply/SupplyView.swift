@@ -12,7 +12,6 @@ final class SupplyViewModel {
     var errorMessage: String?
     var dockMessage: String?
     private var lastHapticMilestone = 0
-    var undoBuffer = UndoBuffer<SupplyUndoAction>()
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
         supportsSupplySort: true,
@@ -113,12 +112,6 @@ final class SupplyViewModel {
         guard online else { return }
         do {
             _ = try await api.updateSupplyItem(item.id, quantity: quantity, unit: unit, isPurchased: true)
-            undoBuffer.record(SupplyUndoAction(
-                itemId: item.id,
-                previousPurchased: false,
-                previousQuantity: item.quantity,
-                previousUnit: item.unit
-            ))
         } catch {
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -148,45 +141,6 @@ final class SupplyViewModel {
             snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
             Haptics.success()
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    func undoCheckoff(
-        _ action: SupplyUndoAction,
-        api: RationAPI,
-        snapshots: SnapshotStore,
-        online: Bool,
-        organizationId: String
-    ) async {
-        guard let current = list else {
-            undoBuffer.clear()
-            return
-        }
-        let updatedItems = current.items.map { existing in
-            guard existing.id == action.itemId else { return existing }
-            return SupplyItem(
-                id: existing.id,
-                name: existing.name,
-                quantity: action.previousQuantity,
-                unit: action.previousUnit,
-                domain: existing.domain,
-                isPurchased: action.previousPurchased
-            )
-        }
-        list = SupplyList(id: current.id, name: current.name, items: updatedItems)
-        undoBuffer.clear()
-        guard online else { return }
-        do {
-            _ = try await api.updateSupplyItem(
-                action.itemId,
-                quantity: action.previousQuantity,
-                unit: action.previousUnit,
-                isPurchased: action.previousPurchased
-            )
-            Haptics.light()
-        } catch {
-            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -267,11 +221,14 @@ private extension SupplyItem {
     }
 }
 
-struct SupplyUndoAction: Sendable {
-    let itemId: String
-    let previousPurchased: Bool
-    let previousQuantity: Double
-    let previousUnit: String
+struct CheckOffPresentationItem: Identifiable {
+    let id: String
+    let item: SupplyItem
+
+    init(item: SupplyItem) {
+        self.item = item
+        self.id = "\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)"
+    }
 }
 
 struct SupplyView: View {
@@ -280,13 +237,14 @@ struct SupplyView: View {
     @State private var model = SupplyViewModel()
     @State private var showingOptions = false
     @State private var showingFilters = false
-    @State private var checkOffItem: SupplyItem?
+    @State private var checkOffItem: CheckOffPresentationItem?
     @State private var supplyShareURL: String?
     @State private var supplyShareExpiresAt: String?
     @State private var isLoadingShare = false
     @State private var snoozeItem: SupplyItem?
     @State private var showingPaywall = false
     @State private var hasTriggeredAutoSync = false
+    @State private var showGroupSettings = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -322,8 +280,12 @@ struct SupplyView: View {
                     syncDomain: SnapshotDomain.supply,
                     organizationId: organizationId,
                     onOptions: { showingOptions = true },
+                    onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
+            }
+            .navigationDestination(isPresented: $showGroupSettings) {
+                GroupSettingsView()
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingOptions) {
@@ -355,10 +317,10 @@ struct SupplyView: View {
                     }
                 )
             }
-            .sheet(item: $checkOffItem) { item in
-                SupplyItemCheckOffSheet(item: item) { quantity, unit in
+            .sheet(item: $checkOffItem) { presentation in
+                SupplyItemCheckOffSheet(item: presentation.item) { quantity, unit in
                     await model.markPurchased(
-                        item,
+                        presentation.item,
                         quantity: quantity,
                         unit: unit,
                         api: env.api,
@@ -382,14 +344,7 @@ struct SupplyView: View {
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
             .overlay(alignment: .bottom) {
-                if model.undoBuffer.isShowing {
-                    UndoToast(
-                        message: "Item checked off",
-                        onUndo: { Task { await undoSupplyCheckoff() } },
-                        onDismiss: { model.undoBuffer.clear() }
-                    )
-                    .padding(.bottom, 80)
-                } else if let message = model.dockMessage {
+                if let message = model.dockMessage {
                     TransientSuccessToast(message: message) {
                         model.dockMessage = nil
                     }
@@ -411,6 +366,7 @@ struct SupplyView: View {
                                     online: env.network.isOnline,
                                     organizationId: organizationId
                                 )
+                                env.notifyCargoDataChanged()
                             }
                         } label: {
                             Label("Dock to Cargo", systemImage: "shippingbox")
@@ -472,7 +428,7 @@ struct SupplyView: View {
                             await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                         }
                     } else {
-                        checkOffItem = item
+                        checkOffItem = CheckOffPresentationItem(item: item)
                     }
                 } label: {
                     HStack {
@@ -486,6 +442,7 @@ struct SupplyView: View {
                         Text("\(item.quantity.formatted()) \(item.unit)").rationCaption()
                     }
                 }
+                .id("\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)")
                 .listRowBackground(Theme.surface)
                 .swipeActions(edge: .leading) {
                     if !item.isPurchased {
@@ -557,25 +514,4 @@ struct SupplyView: View {
         supplyShareExpiresAt = nil
         Haptics.light()
     }
-
-    private func undoSupplyCheckoff() async {
-        guard let action = model.undoBuffer.pendingItem,
-              env.network.isOnline
-        else {
-            model.undoBuffer.clear()
-            return
-        }
-        await model.undoCheckoff(
-            action,
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId
-        )
-    }
-}
-
-extension SupplyItem: Hashable {
-    static func == (lhs: SupplyItem, rhs: SupplyItem) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

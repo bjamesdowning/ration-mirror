@@ -39,6 +39,7 @@ struct RootView: View {
         do {
             let settings = try await env.api.settings().settings
             env.session.applyConsent(settings)
+            env.theme.syncFromServer(settings)
             let completed = settings.onboardingCompletedAt?.isEmpty == false
             showOnboarding = !completed
         } catch {
@@ -84,7 +85,7 @@ struct MainTabView: View {
                 onOpenSettings: { showingSettings = true },
                 onPlanWeekComplete: { count in
                     selectedTab = 3
-                    manifestSuccessMessage = "\(count) meals added to plan"
+                    manifestSuccessMessage = "Added \(count) meals to Manifest"
                 }
             )
                 .id(orgGeneration)

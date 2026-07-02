@@ -93,7 +93,7 @@ struct GenerateMealSheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var consent = AIConsentCoordinator()
-    var onComplete: () async -> Void = {}
+    var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
         env.session.session?.aiCosts?.mealGenerate ?? 2
@@ -112,7 +112,10 @@ struct GenerateMealSheet: View {
                 case let .failed(message):
                     VStack(spacing: 12) {
                         ErrorBanner(message: message)
-                        Button("Try again") { model.reset() }.buttonStyle(SecondaryButtonStyle())
+                        Button("Try again") {
+                            model.reset()
+                            selectedRecipeNames = []
+                        }.buttonStyle(SecondaryButtonStyle())
                     }
                 }
             }
@@ -190,13 +193,22 @@ struct GenerateMealSheet: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Button(selectedRecipeNames.isEmpty ? "Done" : "Save selected to Galley") {
+                Button(primaryActionTitle) {
                     Task { await finish(recipes: recipes) }
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(isSaving)
+                .disabled(isSaving || selectedRecipeNames.isEmpty)
+            }
+            .onAppear {
+                selectedRecipeNames = Set(recipes.map(\.name))
             }
         }
+    }
+
+    private var primaryActionTitle: String {
+        let count = selectedRecipeNames.count
+        if count == 0 { return "Add to Galley" }
+        return "Add \(count) to Galley"
     }
 
     private func toggleRecipe(_ recipe: GeneratedRecipe) {
@@ -210,18 +222,14 @@ struct GenerateMealSheet: View {
     @MainActor
     private func finish(recipes: [GeneratedRecipe]) async {
         let selected = recipes.filter { selectedRecipeNames.contains($0.name) }
-        if selected.isEmpty {
-            await onComplete()
-            dismiss()
-            return
-        }
+        guard !selected.isEmpty else { return }
         isSaving = true
         saveError = nil
         defer { isSaving = false }
         do {
             try await model.saveSelected(selected, api: env.api)
             Haptics.success()
-            await onComplete()
+            await onComplete(selected.count)
             dismiss()
         } catch {
             saveError = (error as? APIError)?.errorDescription ?? error.localizedDescription

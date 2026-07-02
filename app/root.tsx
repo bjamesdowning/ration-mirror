@@ -24,6 +24,7 @@ import { signIntercomJwt } from "./lib/intercom.server";
 import { buildIntercomAttributes } from "./lib/intercom-attributes.server";
 import { checkBalance } from "./lib/ledger.server";
 import { resolveAuthorizationServerUrl } from "./lib/oauth.constants";
+import { resolveAppTheme } from "./lib/theme";
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "icon", href: "/favicon.ico" },
@@ -49,6 +50,14 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const sessionTheme = (session?.user?.settings as { theme?: "light" | "dark" })
 		?.theme;
 
+	// Logged-in users: DB/session is source of truth (mobile PATCH may update
+	// theme without refreshing the web cookie). Guests rely on cookie only.
+	const resolvedTheme = resolveAppTheme({
+		isAuthenticated: session?.user != null,
+		sessionTheme,
+		cookieTheme,
+	});
+
 	const env = context.cloudflare.env;
 	const rawIntercomId =
 		typeof env.INTERCOM_APP_ID === "string" ? env.INTERCOM_APP_ID.trim() : "";
@@ -69,7 +78,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 			session.user,
 			activeOrganizationId,
 			{
-				theme: cookieTheme ?? sessionTheme ?? "dark",
+				theme: resolvedTheme,
 				creditBalance,
 				delegationSecret,
 				delegationIssuer: resolveAuthorizationServerUrl(env),
@@ -87,7 +96,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const url = new URL(request.url);
 	return {
 		user: session?.user,
-		theme: cookieTheme ?? sessionTheme ?? "dark",
+		theme: resolvedTheme,
 		origin: url.origin,
 		intercomAppId,
 		intercomUserJwt,

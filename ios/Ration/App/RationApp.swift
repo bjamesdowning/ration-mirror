@@ -8,6 +8,7 @@ struct RationApp: App {
         WindowGroup {
             RootView()
                 .environment(env)
+                .preferredColorScheme(env.theme.colorScheme)
                 .tint(Theme.hyperGreen)
                 .background(Theme.ceramic)
                 .task { await env.auth.bootstrap() }

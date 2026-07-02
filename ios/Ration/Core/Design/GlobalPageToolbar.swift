@@ -6,12 +6,13 @@ struct GlobalPageToolbar: ToolbarContent {
     var syncDomain: String?
     var organizationId: String?
     var onOptions: (() -> Void)?
+    var onOpenGroupSettings: () -> Void
     var onOpenSettings: () -> Void
     @Environment(AppEnvironment.self) private var env
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            OrgSwitcherBar()
+            OrgSwitcherBar(onTap: onOpenGroupSettings)
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {

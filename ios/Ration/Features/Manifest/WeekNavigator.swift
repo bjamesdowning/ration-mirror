@@ -116,6 +116,30 @@ enum ManifestDateHelpers {
         let maxDate = addDays(today, days: navigationWeekBound * 7)
         return target >= minDate && target <= maxDate
     }
+
+    /// Inclusive day count between two ISO dates (start…end).
+    static func daysBetweenInclusive(start: String, end: String) -> Int? {
+        guard let s = localDate(from: start), let e = localDate(from: end) else { return nil }
+        let startDay = calendar.startOfDay(for: s)
+        let endDay = calendar.startOfDay(for: e)
+        let days = calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0
+        return days + 1
+    }
+
+    static func monthGridDates(containing isoDate: String) -> [String] {
+        guard let anchor = localDate(from: isoDate) else { return [] }
+        let month = calendar.component(.month, from: anchor)
+        let year = calendar.component(.year, from: anchor)
+        guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: monthStart)
+        else { return [] }
+        return range.compactMap { day -> String? in
+            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else {
+                return nil
+            }
+            return isoString(from: date)
+        }
+    }
 }
 
 struct WeekNavigator: View {
@@ -171,12 +195,7 @@ struct WeekNavigator: View {
             HStack(spacing: 8) {
                 Button {
                     let raw = ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan)
-                    let target = ManifestDateHelpers.normalizedNavigationStart(
-                        raw,
-                        calendarSpan: calendarSpan,
-                        weekStartPref: weekStartPref
-                    )
-                    onNavigate(target)
+                    navigate(toRaw: raw)
                 } label: {
                     Image(systemName: "chevron.left")
                         .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
@@ -189,19 +208,36 @@ struct WeekNavigator: View {
                         .controlSize(.small)
                 }
 
-                Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
-                    .font(Typography.headline())
-                    .foregroundStyle(Theme.carbon)
-                    .frame(minWidth: 160)
+                ZStack {
+                    Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
+                        .font(Typography.headline())
+                        .foregroundStyle(Theme.carbon)
+                        .allowsHitTesting(false)
+
+                    HStack(spacing: 0) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard canGoBack, !isLoading else { return }
+                                navigate(by: -calendarSpan)
+                            }
+                            .accessibilityLabel("Previous period")
+                            .accessibilityAddTraits(.isButton)
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard canGoForward, !isLoading else { return }
+                                navigate(by: calendarSpan)
+                            }
+                            .accessibilityLabel("Next period")
+                            .accessibilityAddTraits(.isButton)
+                    }
+                }
+                .frame(minWidth: 160)
 
                 Button {
                     let raw = ManifestDateHelpers.addDays(rangeStart, days: calendarSpan)
-                    let target = ManifestDateHelpers.normalizedNavigationStart(
-                        raw,
-                        calendarSpan: calendarSpan,
-                        weekStartPref: weekStartPref
-                    )
-                    onNavigate(target)
+                    navigate(toRaw: raw)
                 } label: {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
@@ -271,6 +307,20 @@ struct WeekNavigator: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    private func navigate(by days: Int) {
+        let raw = ManifestDateHelpers.addDays(rangeStart, days: days)
+        navigate(toRaw: raw)
+    }
+
+    private func navigate(toRaw raw: String) {
+        let target = ManifestDateHelpers.normalizedNavigationStart(
+            raw,
+            calendarSpan: calendarSpan,
+            weekStartPref: weekStartPref
+        )
+        onNavigate(target)
     }
 
     private func dayPill(_ day: String) -> some View {

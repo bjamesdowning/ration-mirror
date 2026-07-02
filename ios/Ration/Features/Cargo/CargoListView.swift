@@ -7,6 +7,8 @@ struct CargoListView: View {
     @State private var model = CargoViewModel()
     @State private var showingAdd = false
     @State private var showingFilters = false
+    @State private var editingItem: CargoItem?
+    @State private var showGroupSettings = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -57,14 +59,27 @@ struct CargoListView: View {
                     syncDomain: SnapshotDomain.cargo,
                     organizationId: organizationId,
                     onOptions: { showingFilters = true },
+                    onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
             }
+            .navigationDestination(isPresented: $showGroupSettings) {
+                GroupSettingsView()
+            }
             .sheet(isPresented: $showingAdd) {
-                CargoFormView(mode: .create) { await reload() }
+                CargoFormView(mode: .create) {
+                    await reload()
+                    env.notifyCargoDataChanged()
+                }
             }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: model.availableTags)
+            }
+            .sheet(item: $editingItem) { item in
+                CargoFormView(mode: .edit(item)) {
+                    await reload()
+                    env.notifyCargoDataChanged()
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
@@ -117,9 +132,20 @@ struct CargoListView: View {
                         }
                         .listRowBackground(Theme.surface)
                         .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                editingItem = item
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(Theme.carbon)
+                        }
                         .swipeActions {
                             Button(role: .destructive) {
-                                Task { await model.delete(item, api: env.api) }
+                                Task {
+                                    await model.delete(item, api: env.api)
+                                    env.notifyCargoDataChanged()
+                                }
                             } label: { Label("Delete", systemImage: "trash") }
                         }
                     }

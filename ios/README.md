@@ -77,14 +77,15 @@ Ration/
     ├── Scan/       # Camera capture → resize → POST /scan
     ├── Galley/     # Meals CRUD, AI generate/import, match mode
     ├── Manifest/   # Week navigation, plan-week AI, consume
-    ├── Settings/   # Session, org switcher fallback, sign out
+    ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
+    │               # GroupSettingsView — org switch, members, invite, credits transfer
     └── Billing/    # Paywall (RevenueCat SDK)
 ```
 
 ### Global shell (all tabs)
 
-- **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap to switch orgs.
-- **Trailing:** `PageOptionsButton` (filters/options sheet) + `ProfileAvatarButton` (user image when set).
+- **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap pushes **Group Settings** (members, invite, create group, transfer credits, danger zone).
+- **Trailing:** `PageOptionsButton` (filters/options sheet) + `ProfileAvatarButton` (tap opens **Account Settings** sheet).
 - **Bottom:** `FloatingActionBar` — thumb-zone page actions above the tab bar.
 - **Org switch:** invalidates org-scoped snapshots and reloads all tabs via `orgGeneration`.
 
@@ -136,8 +137,16 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/meals/import`, `/meals/import/:requestId`, `/meals/import/confirm` | POST/GET/POST | URL import (1 credit) |
 | `/manifest/plan-week`, `/manifest/plan-week/:requestId` | POST/GET | AI week plan (3 credits) |
 | `/manifest/bulk` | POST | Bulk add plan entries |
+| `/manifest/entries/:entryId` | DELETE | Remove manifest entry |
+| `/groups/members` | GET | List group members |
+| `/groups` | POST | Create group |
+| `/groups/delete` | POST | Delete group (owner) |
+| `/groups/invitations/create` | POST | Create invite link |
+| `/groups/members/:memberId/role` | PATCH | Change member role |
+| `/groups/ownership/transfer` | POST | Transfer group ownership |
+| `/groups/credits/transfer` | POST | Transfer credits between owned groups |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
 
 **Post-buildout UX overhaul (v1.4.18):** Trailing `ListCountHeader` (`"{n} items"`) on Cargo, Galley, and Manifest; toolbar count pill removed. Space Mono typography shipped with Dynamic Type scaling. Unified Telemetry Strip rows (`CargoRowView` / `MealRowView`) with hyper-green tag chips. Rich connected-meals section on Cargo detail (connection badges, all ingredients, sort). Manifest incremental polish (consumed strikethrough, week navigator density). See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
 

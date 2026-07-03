@@ -1,9 +1,10 @@
-import { like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
+import { listAdminUsers } from "~/lib/admin-users.server";
 import { requireAdmin } from "~/lib/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { AdminUsersListSchema } from "~/lib/schemas/admin";
 import type { Route } from "./+types/admin.users";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -33,31 +34,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	}
 
 	const url = new URL(request.url);
-	const q = url.searchParams.get("q");
-
-	if (!q || q.trim().length < 2) {
-		return { users: [] };
-	}
+	const params = AdminUsersListSchema.parse({
+		q: url.searchParams.get("q") ?? undefined,
+		page: url.searchParams.get("page") ?? undefined,
+		limit: url.searchParams.get("limit") ?? undefined,
+		sort: url.searchParams.get("sort") ?? undefined,
+		order: url.searchParams.get("order") ?? undefined,
+	});
 
 	const db = drizzle(context.cloudflare.env.DB, { schema });
-	const searchPattern = `%${q.trim()}%`;
-
-	const users = await db
-		.select({
-			id: schema.user.id,
-			name: schema.user.name,
-			email: schema.user.email,
-			isAdmin: schema.user.isAdmin,
-			createdAt: schema.user.createdAt,
-		})
-		.from(schema.user)
-		.where(
-			or(
-				like(schema.user.name, searchPattern),
-				like(schema.user.email, searchPattern),
-			),
-		)
-		.limit(10);
-
-	return { users };
+	return listAdminUsers(db, params);
 }

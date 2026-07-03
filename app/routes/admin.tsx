@@ -4,9 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
 
 import * as schema from "../db/schema";
+import {
+	getActivationRate,
+	getAiBurnByFeature,
+	getCrewHealth,
+	getDauWauMau,
+	getOrgEngagementMedians,
+	getPlatformSplit,
+} from "../lib/admin-metrics.server";
+import {
+	type AdminUserRow,
+	type AdminUsersListResult,
+	getLoggedInUsers,
+} from "../lib/admin-users.server";
 import { requireAdmin } from "../lib/auth.server";
 import { handleApiError } from "../lib/error-handler";
-import { formatOnboardingAdminLabel } from "../lib/onboarding-admin";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
@@ -56,8 +68,14 @@ export async function loader(args: Route.LoaderArgs) {
 		topOrgsByCargoResult,
 		// Heavy hitters: top 5 orgs by meal count
 		topOrgsByMealResult,
-		// Recent signups: last 10 users
-		recentSignupsResult,
+		// Logged in now + usage metrics
+		loggedInResult,
+		dauWauMau,
+		activationRate,
+		crewHealth,
+		orgMedians,
+		platformSplit,
+		aiBurnByFeature,
 	] = await Promise.all([
 		// ── Overview totals ──────────────────────────────────────────────────
 		db.$count(schema.user),
@@ -223,18 +241,13 @@ export async function loader(args: Route.LoaderArgs) {
 			.orderBy(desc(count()))
 			.limit(5),
 
-		// ── Recent signups: last 10 users ───────────────────────────────────
-		db
-			.select({
-				id: schema.user.id,
-				name: schema.user.name,
-				email: schema.user.email,
-				createdAt: schema.user.createdAt,
-				settings: schema.user.settings,
-			})
-			.from(schema.user)
-			.orderBy(desc(schema.user.createdAt))
-			.limit(10),
+		getLoggedInUsers(db, now, 15),
+		getDauWauMau(db, now),
+		getActivationRate(db),
+		getCrewHealth(db, now, sevenDaysFromNow),
+		getOrgEngagementMedians(db),
+		getPlatformSplit(db, now),
+		getAiBurnByFeature(db, oneDayAgo, sevenDaysAgo),
 	]);
 
 	// Resolve org names for heavy hitters
@@ -301,7 +314,14 @@ export async function loader(args: Route.LoaderArgs) {
 			orgName: orgNames[r.organizationId] ?? r.organizationId,
 			count: r.mealCount,
 		})),
-		recentSignups: recentSignupsResult,
+		loggedInUsers: loggedInResult.users,
+		totalLoggedIn: loggedInResult.totalLoggedIn,
+		dauWauMau,
+		activationRate,
+		crewHealth,
+		orgMedians,
+		platformSplit,
+		aiBurnByFeature,
 	};
 }
 
@@ -350,21 +370,50 @@ export async function action(args: Route.ActionArgs) {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
+function formatRelativeTime(date: Date): string {
+	const diffMs = Date.now() - date.getTime();
+	if (diffMs < 0) return "just now";
+	const seconds = Math.floor(diffMs / 1000);
+	if (seconds < 60) return `${seconds}s ago`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m ago`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h ago`;
+	const days = Math.floor(hours / 24);
+	return `${days}d ago`;
+}
+
+function redactEmail(email: string): string {
+	return email.replace(/^(.{1,2}).*?(@.*)$/, (_, a, b) => `${a}***${b}`);
+}
+
+function formatDateTime(date: Date | null | undefined): string {
+	if (!date) return "—";
+	return date.toLocaleString(undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	});
+}
+
 function MetricCard({
 	title,
 	value,
 	subtitle,
 	iconPath,
 	delta,
+	warning,
 }: {
 	title: string;
 	value: string | number;
 	subtitle: string;
 	iconPath: string;
 	delta?: number;
+	warning?: boolean;
 }) {
 	return (
-		<div className="glass-panel rounded-2xl p-6 relative group">
+		<div
+			className={`glass-panel rounded-2xl p-6 relative group ${warning ? "ring-1 ring-warning/40" : ""}`}
+		>
 			<div className="absolute top-4 right-4 opacity-30 group-hover:opacity-50 transition-opacity">
 				<svg
 					className="w-12 h-12 text-hyper-green"
@@ -403,6 +452,12 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 		<h2 className="text-label text-muted text-sm font-medium uppercase tracking-wider mb-4">
 			{children}
 		</h2>
+	);
+}
+
+function SubSectionHeading({ children }: { children: React.ReactNode }) {
+	return (
+		<h3 className="text-sm font-medium text-carbon mb-3 mt-2">{children}</h3>
 	);
 }
 
@@ -452,13 +507,84 @@ function HeavyHittersTable({
 	);
 }
 
-type SearchUser = {
-	id: string;
-	name: string;
+function EmailRevealCell({
+	email,
+	userId,
+	isRevealed,
+	onToggle,
+}: {
 	email: string;
-	isAdmin: boolean;
-	createdAt: Date | null;
-};
+	userId: string;
+	isRevealed: boolean;
+	onToggle: (id: string) => void;
+}) {
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<span className="font-mono text-xs">
+				{isRevealed ? email : redactEmail(email)}
+			</span>
+			<button
+				type="button"
+				onClick={() => onToggle(userId)}
+				className="text-muted hover:text-carbon transition-colors"
+				aria-label={isRevealed ? "Hide email" : "Reveal email"}
+				title={isRevealed ? "Hide email" : "Reveal email"}
+			>
+				{isRevealed ? (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						className="h-3.5 w-3.5"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						aria-hidden="true"
+					>
+						<path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+						<path
+							fillRule="evenodd"
+							d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+							clipRule="evenodd"
+						/>
+					</svg>
+				) : (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						className="h-3.5 w-3.5"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							fillRule="evenodd"
+							d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
+							clipRule="evenodd"
+						/>
+						<path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+					</svg>
+				)}
+			</button>
+		</span>
+	);
+}
+
+type AdminUserSort = "createdAt" | "lastLogin" | "lastActive" | "name";
+
+function buildAdminUsersUrl(opts: {
+	q: string;
+	page: number;
+	sort: AdminUserSort;
+	order: "asc" | "desc";
+}): string {
+	const params = new URLSearchParams({
+		page: String(opts.page),
+		limit: "50",
+		sort: opts.sort,
+		order: opts.order,
+	});
+	if (opts.q) {
+		params.set("q", opts.q);
+	}
+	return `/api/admin/users?${params.toString()}`;
+}
 
 export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	const {
@@ -490,16 +616,24 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		verifiedEmailRate,
 		topOrgsByCargo,
 		topOrgsByMeal,
-		recentSignups,
+		loggedInUsers,
+		totalLoggedIn,
+		dauWauMau,
+		activationRate,
+		crewHealth,
+		orgMedians,
+		platformSplit,
+		aiBurnByFeature,
 	} = loaderData;
 
-	const searchFetcher = useFetcher<{ users: SearchUser[] }>();
+	const usersFetcher = useFetcher<AdminUsersListResult>();
 	const toggleFetcher = useFetcher();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState<AdminUserSort>("lastLogin");
+	const [order, setOrder] = useState<"asc" | "desc">("desc");
 	const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
-	// GDPR data minimisation: email is redacted by default in the passive recent-signups
-	// list. Admin must click the eye icon to reveal a specific address.
 	const [revealedEmailIds, setRevealedEmailIds] = useState<Set<string>>(
 		new Set(),
 	);
@@ -515,6 +649,17 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		});
 	}, []);
 
+	const loadUsers = useCallback(() => {
+		usersFetcher.load(
+			buildAdminUsersUrl({
+				q: debouncedQuery,
+				page,
+				sort,
+				order,
+			}),
+		);
+	}, [usersFetcher, debouncedQuery, page, sort, order]);
+
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedQuery(searchQuery.trim());
@@ -522,19 +667,35 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		return () => clearTimeout(timer);
 	}, [searchQuery]);
 
+	// Reset pagination when search or sort changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset page when filters change
 	useEffect(() => {
-		if (debouncedQuery.length >= 2) {
-			searchFetcher.load(
-				`/api/admin/users?q=${encodeURIComponent(debouncedQuery)}`,
-			);
-		}
-	}, [debouncedQuery, searchFetcher.load]);
+		setPage(1);
+	}, [debouncedQuery, sort, order]);
 
-	const users = searchFetcher.data?.users ?? [];
-	const isSearching = searchFetcher.state === "loading";
+	useEffect(() => {
+		loadUsers();
+	}, [loadUsers]);
+
+	const users = usersFetcher.data?.users ?? [];
+	const usersTotal = usersFetcher.data?.total ?? 0;
+	const usersTotalPages = usersFetcher.data?.totalPages ?? 0;
+	const isLoadingUsers = usersFetcher.state === "loading";
+
+	const handleSort = useCallback(
+		(column: AdminUserSort) => {
+			if (sort === column) {
+				setOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+			} else {
+				setSort(column);
+				setOrder("desc");
+			}
+		},
+		[sort],
+	);
 
 	const handleToggleClick = useCallback(
-		(user: SearchUser) => {
+		(user: AdminUserRow) => {
 			if (user.id === currentUserId) return;
 			if (confirmingUserId === user.id) {
 				toggleFetcher.submit(
@@ -556,19 +717,21 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	useEffect(() => {
 		if (
 			toggleFetcher.state === "idle" &&
-			(toggleFetcher.data as { success?: boolean } | undefined)?.success &&
-			debouncedQuery.length >= 2
+			(toggleFetcher.data as { success?: boolean } | undefined)?.success
 		) {
-			searchFetcher.load(
-				`/api/admin/users?q=${encodeURIComponent(debouncedQuery)}`,
-			);
+			loadUsers();
 		}
-	}, [
-		toggleFetcher.state,
-		toggleFetcher.data,
-		debouncedQuery,
-		searchFetcher.load,
-	]);
+	}, [toggleFetcher.state, toggleFetcher.data, loadUsers]);
+
+	const pageStart = usersTotal === 0 ? 0 : (page - 1) * 50 + 1;
+	const pageEnd = Math.min(page * 50, usersTotal);
+
+	const webPerMobileUser =
+		platformSplit.distinctMobileUsers > 0
+			? (
+					platformSplit.activeWebSessions / platformSplit.distinctMobileUsers
+				).toFixed(1)
+			: "—";
 
 	return (
 		<div className="min-h-screen bg-ceramic text-carbon p-4 md:p-8">
@@ -725,6 +888,220 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 					</div>
 				</section>
 
+				{/* Logged In Now */}
+				<section>
+					<SectionHeading>Logged In Now</SectionHeading>
+					<p className="text-sm text-muted mb-4">
+						Top 15 accounts with active sessions
+						{totalLoggedIn > 15
+							? ` · ${totalLoggedIn.toLocaleString()} total logged in`
+							: totalLoggedIn > 0
+								? ` · ${totalLoggedIn.toLocaleString()} logged in`
+								: ""}
+					</p>
+					<div className="glass-panel rounded-2xl p-6">
+						{loggedInUsers.length === 0 ? (
+							<p className="text-muted text-sm">No active sessions.</p>
+						) : (
+							<div className="overflow-x-auto">
+								<table className="w-full text-left">
+									<thead>
+										<tr className="border-b border-carbon/10">
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Name
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Email
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Sessions
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Platform
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Last Seen
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{loggedInUsers.map((user) => (
+											<tr key={user.id} className="border-b border-carbon/5">
+												<td className="py-2.5 pr-4 font-medium text-sm text-carbon">
+													{user.name}
+												</td>
+												<td className="py-2.5 pr-4 text-muted text-sm">
+													<EmailRevealCell
+														email={user.email}
+														userId={user.id}
+														isRevealed={revealedEmailIds.has(user.id)}
+														onToggle={toggleEmailReveal}
+													/>
+												</td>
+												<td className="py-2.5 pr-4 text-muted text-sm tabular-nums">
+													{user.sessionCount > 0 ? user.sessionCount : "—"}
+												</td>
+												<td className="py-2.5 pr-4">
+													<span className="inline-flex items-center px-2 py-0.5 rounded-full bg-platinum/50 text-muted text-xs font-medium capitalize">
+														{user.platform}
+													</span>
+												</td>
+												<td className="py-2.5 text-muted text-sm">
+													{formatRelativeTime(user.lastSeenAt)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						)}
+					</div>
+				</section>
+
+				{/* Usage & Engagement */}
+				<section>
+					<SectionHeading>Usage &amp; Engagement</SectionHeading>
+
+					<SubSectionHeading>Active Users</SubSectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+						<MetricCard
+							title="DAU"
+							value={dauWauMau.dau}
+							subtitle="Distinct users active in 24h"
+							iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+						<MetricCard
+							title="WAU"
+							value={dauWauMau.wau}
+							subtitle="Distinct users active in 7 days"
+							iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+						/>
+						<MetricCard
+							title="MAU"
+							value={dauWauMau.mau}
+							subtitle={`${dauWauMau.stickiness.toFixed(1)}% DAU/MAU stickiness`}
+							iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+						/>
+					</div>
+
+					<SubSectionHeading>Onboarding &amp; Subscriptions</SubSectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+						<MetricCard
+							title="Activation Rate"
+							value={`${activationRate.rate.toFixed(1)}%`}
+							subtitle={`${activationRate.activatedCount} of ${activationRate.totalUsers} users with cargo in 7d`}
+							iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+						<MetricCard
+							title="Active Crew"
+							value={crewHealth.activeCrew}
+							subtitle="Paid tier subscriptions"
+							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+						/>
+						<MetricCard
+							title="Expiring Soon"
+							value={crewHealth.expiringSoon}
+							subtitle="Crew tier expiring in 7 days"
+							iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+							warning={crewHealth.expiringSoon > 0}
+						/>
+						<MetricCard
+							title="Cancel Pending"
+							value={crewHealth.cancelPending}
+							subtitle="Crew cancel at period end"
+							iconPath="M6 18L18 6M6 6l12 12"
+							warning={crewHealth.cancelPending > 0}
+						/>
+					</div>
+
+					<SubSectionHeading>Median Engagement per Org</SubSectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+						<MetricCard
+							title="Median Cargo / Org"
+							value={orgMedians.medianCargo}
+							subtitle="Typical pantry size (median)"
+							iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+						/>
+						<MetricCard
+							title="Median Meals / Org"
+							value={orgMedians.medianMeals}
+							subtitle="Typical recipe count (median)"
+							iconPath="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+						/>
+						<MetricCard
+							title="Median Scans / Org"
+							value={orgMedians.medianScans}
+							subtitle="Typical AI scan usage (median)"
+							iconPath="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+						/>
+					</div>
+
+					<SubSectionHeading>Platform Split</SubSectionHeading>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+						<MetricCard
+							title="Web Sessions"
+							value={platformSplit.activeWebSessions}
+							subtitle={`${platformSplit.distinctWebUsers} distinct users · ${webPerMobileUser} sessions per mobile user`}
+							iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+						/>
+						<MetricCard
+							title="Mobile Tokens"
+							value={platformSplit.activeMobileTokens}
+							subtitle={`${platformSplit.distinctMobileUsers} distinct mobile users`}
+							iconPath="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+						/>
+					</div>
+
+					<SubSectionHeading>AI Burn by Feature</SubSectionHeading>
+					<div className="glass-panel rounded-2xl p-6">
+						{aiBurnByFeature.length === 0 ? (
+							<p className="text-muted text-sm">No credit burn recorded yet.</p>
+						) : (
+							<div className="overflow-x-auto">
+								<table className="w-full text-left">
+									<thead>
+										<tr className="border-b border-carbon/10">
+											<th className="text-label text-muted py-2 pr-4 text-xs">
+												Feature
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs text-right">
+												Credits (24h)
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs text-right">
+												Credits (7d)
+											</th>
+											<th className="text-label text-muted py-2 pr-4 text-xs text-right">
+												Calls (24h)
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{aiBurnByFeature.map((row) => (
+											<tr
+												key={row.feature}
+												className="border-b border-carbon/5"
+											>
+												<td className="py-2.5 pr-4 font-medium text-sm text-carbon">
+													{row.feature}
+												</td>
+												<td className="py-2.5 pr-4 text-right tabular-nums text-sm text-muted">
+													{row.credits24h.toLocaleString()}
+												</td>
+												<td className="py-2.5 pr-4 text-right tabular-nums text-sm text-carbon font-medium">
+													{row.credits7d.toLocaleString()}
+												</td>
+												<td className="py-2.5 text-right tabular-nums text-sm text-muted">
+													{row.calls24h.toLocaleString()}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						)}
+					</div>
+				</section>
+
 				{/* Feature Usage */}
 				<section>
 					<SectionHeading>Feature Usage</SectionHeading>
@@ -804,108 +1181,6 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 					</div>
 				</section>
 
-				{/* Recent Signups */}
-				<section>
-					<SectionHeading>Recent Signups</SectionHeading>
-					<p className="text-sm text-muted mb-4">Last 10 users who joined</p>
-					<div className="glass-panel rounded-2xl p-6">
-						{recentSignups.length === 0 ? (
-							<p className="text-muted text-sm">No users yet.</p>
-						) : (
-							<table className="w-full text-left">
-								<thead>
-									<tr className="border-b border-carbon/10">
-										<th className="text-label text-muted py-2 pr-4 text-xs">
-											Name
-										</th>
-										<th className="text-label text-muted py-2 pr-4 text-xs">
-											Email
-										</th>
-										<th className="text-label text-muted py-2 pr-4 text-xs">
-											Onboarding
-										</th>
-										<th className="text-label text-muted py-2 pr-4 text-xs">
-											Joined
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{recentSignups.map((user) => {
-										const isRevealed = revealedEmailIds.has(user.id);
-										const redacted = user.email.replace(
-											/^(.{1,2}).*?(@.*)$/,
-											(_, a, b) => `${a}***${b}`,
-										);
-										return (
-											<tr key={user.id} className="border-b border-carbon/5">
-												<td className="py-2.5 pr-4 font-medium text-sm text-carbon">
-													{user.name}
-												</td>
-												<td className="py-2.5 pr-4 text-muted text-sm">
-													<span className="inline-flex items-center gap-1.5">
-														<span className="font-mono text-xs">
-															{isRevealed ? user.email : redacted}
-														</span>
-														<button
-															type="button"
-															onClick={() => toggleEmailReveal(user.id)}
-															className="text-muted hover:text-carbon transition-colors"
-															aria-label={
-																isRevealed ? "Hide email" : "Reveal email"
-															}
-															title={isRevealed ? "Hide email" : "Reveal email"}
-														>
-															{isRevealed ? (
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	className="h-3.5 w-3.5"
-																	viewBox="0 0 20 20"
-																	fill="currentColor"
-																	aria-hidden="true"
-																>
-																	<path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-																	<path
-																		fillRule="evenodd"
-																		d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-																		clipRule="evenodd"
-																	/>
-																</svg>
-															) : (
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	className="h-3.5 w-3.5"
-																	viewBox="0 0 20 20"
-																	fill="currentColor"
-																	aria-hidden="true"
-																>
-																	<path
-																		fillRule="evenodd"
-																		d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
-																		clipRule="evenodd"
-																	/>
-																	<path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-																</svg>
-															)}
-														</button>
-													</span>
-												</td>
-												<td className="py-2.5 pr-4 text-muted text-sm">
-													{formatOnboardingAdminLabel(user.settings)}
-												</td>
-												<td className="py-2.5 text-muted text-sm">
-													{user.createdAt
-														? new Date(user.createdAt).toLocaleDateString()
-														: "—"}
-												</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						)}
-					</div>
-				</section>
-
 				{/* Heavy Hitters */}
 				<section>
 					<SectionHeading>Heavy Hitters</SectionHeading>
@@ -926,124 +1201,210 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 					</div>
 				</section>
 
-				{/* User Management */}
+				{/* Users */}
 				<section>
-					<SectionHeading>User Management</SectionHeading>
+					<SectionHeading>Users</SectionHeading>
 					<p className="text-sm text-muted mb-4">
-						Search by name or email to find users and grant or revoke admin
+						Browse all users, search by name or email, and manage admin
 						privileges.
 					</p>
 					<div className="glass-panel rounded-2xl p-6">
 						<input
 							type="search"
-							placeholder="Search by name or email (min 2 chars)..."
+							placeholder="Search by name or email..."
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							className="w-full px-4 py-3 rounded-lg border border-carbon/10 bg-ceramic text-carbon placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50 mb-6"
 							aria-label="Search users"
 						/>
-						{isSearching && (
-							<div className="text-sm text-muted mb-4">Searching...</div>
+						{isLoadingUsers && (
+							<div className="text-sm text-muted mb-4">Loading users...</div>
 						)}
-						{debouncedQuery.length >= 2 && !isSearching && (
-							<div className="overflow-x-auto">
-								{users.length === 0 ? (
-									<p className="text-muted text-sm">No users found.</p>
-								) : (
-									<table className="w-full text-left">
-										<thead>
-											<tr className="border-b border-carbon/10">
-												<th className="text-label text-muted py-3 pr-4">
-													Name
-												</th>
-												<th className="text-label text-muted py-3 pr-4">
-													Email
-												</th>
-												<th className="text-label text-muted py-3 pr-4">
-													Status
-												</th>
-												<th className="text-label text-muted py-3 pr-4">
-													Joined
-												</th>
-												<th className="text-label text-muted py-3 pr-4">
-													Actions
-												</th>
-											</tr>
-										</thead>
-										<tbody>
-											{users.map((user) => {
-												const isSelf = user.id === currentUserId;
-												const isConfirming = confirmingUserId === user.id;
-												const isSubmitting =
-													toggleFetcher.state === "submitting" &&
-													toggleFetcher.formData?.get("userId") === user.id;
-												return (
-													<tr
-														key={user.id}
-														className={`border-b border-carbon/5 ${
-															isSelf ? "bg-hyper-green/5" : ""
-														}`}
-													>
-														<td className="py-3 pr-4 font-medium">
-															{user.name}
-														</td>
-														<td className="py-3 pr-4 text-muted text-sm">
-															{user.email}
-														</td>
-														<td className="py-3 pr-4">
-															{user.isAdmin ? (
-																<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-hyper-green/20 text-hyper-green text-xs font-medium">
-																	Admin
-																</span>
-															) : (
-																<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-platinum/50 text-muted text-xs font-medium">
-																	User
-																</span>
-															)}
-														</td>
-														<td className="py-3 pr-4 text-muted text-sm">
-															{user.createdAt
-																? new Date(user.createdAt).toLocaleDateString()
-																: "—"}
-														</td>
-														<td className="py-3 pr-4">
-															{isSelf ? (
-																<span
-																	className="text-xs text-muted"
-																	title="Cannot modify your own admin status"
-																>
-																	You
-																</span>
-															) : (
-																<button
-																	type="button"
-																	onClick={() => handleToggleClick(user)}
-																	onBlur={handleConfirmBlur}
-																	disabled={isSubmitting}
-																	className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-																		isConfirming
-																			? "bg-warning/20 text-warning hover:bg-warning/30"
-																			: user.isAdmin
-																				? "bg-danger/10 text-danger hover:bg-danger/20"
-																				: "bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20"
-																	}`}
-																>
-																	{isSubmitting
-																		? "Updating..."
-																		: isConfirming
-																			? "Confirm?"
-																			: user.isAdmin
-																				? "Revoke Admin"
-																				: "Grant Admin"}
-																</button>
-															)}
-														</td>
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
-								)}
+						<div className="max-h-[32rem] overflow-y-auto overflow-x-auto">
+							<table className="w-full text-left">
+								<thead className="sticky top-0 bg-ceramic/95 backdrop-blur-sm z-10">
+									<tr className="border-b border-carbon/10">
+										<th className="text-label text-muted py-3 pr-4">
+											<button
+												type="button"
+												onClick={() => handleSort("name")}
+												className="hover:text-carbon transition-colors"
+											>
+												Name{" "}
+												{sort === "name" ? (order === "desc" ? "↓" : "↑") : ""}
+											</button>
+										</th>
+										<th className="text-label text-muted py-3 pr-4">Email</th>
+										<th className="text-label text-muted py-3 pr-4">Status</th>
+										<th className="text-label text-muted py-3 pr-4">
+											<button
+												type="button"
+												onClick={() => handleSort("lastLogin")}
+												className="hover:text-carbon transition-colors"
+											>
+												Last Login{" "}
+												{sort === "lastLogin"
+													? order === "desc"
+														? "↓"
+														: "↑"
+													: ""}
+											</button>
+										</th>
+										<th className="text-label text-muted py-3 pr-4">
+											<button
+												type="button"
+												onClick={() => handleSort("lastActive")}
+												className="hover:text-carbon transition-colors"
+											>
+												Last Active{" "}
+												{sort === "lastActive"
+													? order === "desc"
+														? "↓"
+														: "↑"
+													: ""}
+											</button>
+										</th>
+										<th className="text-label text-muted py-3 pr-4">
+											<button
+												type="button"
+												onClick={() => handleSort("createdAt")}
+												className="hover:text-carbon transition-colors"
+											>
+												Joined{" "}
+												{sort === "createdAt"
+													? order === "desc"
+														? "↓"
+														: "↑"
+													: ""}
+											</button>
+										</th>
+										<th className="text-label text-muted py-3 pr-4">Actions</th>
+									</tr>
+								</thead>
+								<tbody>
+									{!isLoadingUsers && users.length === 0 ? (
+										<tr>
+											<td
+												colSpan={7}
+												className="py-8 text-center text-muted text-sm"
+											>
+												No users found.
+											</td>
+										</tr>
+									) : (
+										users.map((user) => {
+											const isSelf = user.id === currentUserId;
+											const isConfirming = confirmingUserId === user.id;
+											const isSubmitting =
+												toggleFetcher.state === "submitting" &&
+												toggleFetcher.formData?.get("userId") === user.id;
+											return (
+												<tr
+													key={user.id}
+													className={`border-b border-carbon/5 ${
+														isSelf ? "bg-hyper-green/5" : ""
+													}`}
+												>
+													<td className="py-3 pr-4 font-medium text-sm">
+														{user.name}
+													</td>
+													<td className="py-3 pr-4 text-muted text-sm">
+														<EmailRevealCell
+															email={user.email}
+															userId={user.id}
+															isRevealed={revealedEmailIds.has(user.id)}
+															onToggle={toggleEmailReveal}
+														/>
+													</td>
+													<td className="py-3 pr-4">
+														{user.isAdmin ? (
+															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-hyper-green/20 text-hyper-green text-xs font-medium">
+																Admin
+															</span>
+														) : (
+															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-platinum/50 text-muted text-xs font-medium">
+																User
+															</span>
+														)}
+													</td>
+													<td className="py-3 pr-4 text-muted text-sm whitespace-nowrap">
+														{formatDateTime(user.lastLoginAt)}
+													</td>
+													<td className="py-3 pr-4 text-muted text-sm whitespace-nowrap">
+														{formatDateTime(user.lastActiveAt)}
+													</td>
+													<td className="py-3 pr-4 text-muted text-sm whitespace-nowrap">
+														{user.createdAt
+															? new Date(user.createdAt).toLocaleDateString()
+															: "—"}
+													</td>
+													<td className="py-3 pr-4">
+														{isSelf ? (
+															<span
+																className="text-xs text-muted"
+																title="Cannot modify your own admin status"
+															>
+																You
+															</span>
+														) : (
+															<button
+																type="button"
+																onClick={() => handleToggleClick(user)}
+																onBlur={handleConfirmBlur}
+																disabled={isSubmitting}
+																className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+																	isConfirming
+																		? "bg-warning/20 text-warning hover:bg-warning/30"
+																		: user.isAdmin
+																			? "bg-danger/10 text-danger hover:bg-danger/20"
+																			: "bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20"
+																}`}
+															>
+																{isSubmitting
+																	? "Updating..."
+																	: isConfirming
+																		? "Confirm?"
+																		: user.isAdmin
+																			? "Revoke Admin"
+																			: "Grant Admin"}
+															</button>
+														)}
+													</td>
+												</tr>
+											);
+										})
+									)}
+								</tbody>
+							</table>
+						</div>
+						{usersTotal > 0 && (
+							<div className="mt-4 flex items-center justify-between border-t border-carbon/10 pt-4">
+								<p className="text-sm text-muted">
+									Showing {pageStart}–{pageEnd} of {usersTotal.toLocaleString()}
+								</p>
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										onClick={() => setPage((p) => Math.max(1, p - 1))}
+										disabled={page <= 1 || isLoadingUsers}
+										className="px-3 py-1.5 rounded-lg text-sm font-medium btn-secondary disabled:opacity-40"
+									>
+										Prev
+									</button>
+									<span className="text-sm text-muted tabular-nums">
+										Page {page} of {usersTotalPages}
+									</span>
+									<button
+										type="button"
+										onClick={() =>
+											setPage((p) => Math.min(usersTotalPages, p + 1))
+										}
+										disabled={page >= usersTotalPages || isLoadingUsers}
+										className="px-3 py-1.5 rounded-lg text-sm font-medium btn-secondary disabled:opacity-40"
+									>
+										Next
+									</button>
+								</div>
 							</div>
 						)}
 					</div>

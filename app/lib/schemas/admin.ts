@@ -6,3 +6,15 @@ export const ToggleAdminSchema = z.object({
 });
 
 export type ToggleAdminInput = z.infer<typeof ToggleAdminSchema>;
+
+export const AdminUsersListSchema = z.object({
+	q: z.string().optional(),
+	page: z.coerce.number().int().min(1).default(1),
+	limit: z.coerce.number().int().min(1).max(100).default(50),
+	sort: z
+		.enum(["createdAt", "lastLogin", "lastActive", "name"])
+		.default("lastLogin"),
+	order: z.enum(["asc", "desc"]).default("desc"),
+});
+
+export type AdminUsersListInput = z.infer<typeof AdminUsersListSchema>;

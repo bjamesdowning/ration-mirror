@@ -1,7 +1,33 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import type { UserSettings } from "./types";
+
+/** Drizzle SQL: latest Hub / API / settings activity as unix seconds per user row. */
+export function userLastActiveUnixSql() {
+	return sql<number>`MAX(
+		COALESCE(
+			(
+				SELECT MAX(${schema.session.updatedAt})
+				FROM ${schema.session}
+				WHERE ${schema.session.userId} = ${schema.user.id}
+			),
+			0
+		),
+		COALESCE(
+			(
+				SELECT MAX(${schema.apiKey.lastUsedAt})
+				FROM ${schema.apiKey}
+				WHERE ${schema.apiKey.userId} = ${schema.user.id}
+			),
+			0
+		),
+		COALESCE(
+			unixepoch(json_extract(${schema.user.settings}, '$.lastActiveAt')),
+			0
+		)
+	)`;
+}
 
 /** Days without Hub, API, or MCP activity before a re-engagement email. */
 export const INACTIVITY_DAYS = 30;

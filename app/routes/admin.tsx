@@ -370,7 +370,16 @@ export async function action(args: Route.ActionArgs) {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-function formatRelativeTime(date: Date): string {
+/** Loader/fetcher JSON turns Date fields into ISO strings before SSR render. */
+function parseLoaderDate(value: Date | string | null | undefined): Date | null {
+	if (!value) return null;
+	const date = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatRelativeTime(value: Date | string | null | undefined): string {
+	const date = parseLoaderDate(value);
+	if (!date) return "—";
 	const diffMs = Date.now() - date.getTime();
 	if (diffMs < 0) return "just now";
 	const seconds = Math.floor(diffMs / 1000);
@@ -387,7 +396,8 @@ function redactEmail(email: string): string {
 	return email.replace(/^(.{1,2}).*?(@.*)$/, (_, a, b) => `${a}***${b}`);
 }
 
-function formatDateTime(date: Date | null | undefined): string {
+function formatDateTime(value: Date | string | null | undefined): string {
+	const date = parseLoaderDate(value);
 	if (!date) return "—";
 	return date.toLocaleString(undefined, {
 		dateStyle: "medium",

@@ -78,6 +78,47 @@ describe("mergeLoggedInUsers", () => {
 		);
 		expect(result).toHaveLength(3);
 	});
+
+	it("accepts D1 unix-second lastSeenAt values (not Date objects)", () => {
+		const d1WebRows = [
+			{
+				userId: "u1",
+				name: "Alice",
+				email: "alice@test.com",
+				sessionCount: 1,
+				lastSeenAt: 1_783_120_821,
+			},
+		];
+		const d1MobileRows = [
+			{
+				userId: "u2",
+				name: "Bob",
+				email: "bob@test.com",
+				lastSeenAt: 1_783_035_447,
+			},
+		];
+		expect(() => mergeLoggedInUsers(d1WebRows, d1MobileRows, 15)).not.toThrow();
+		const result = mergeLoggedInUsers(d1WebRows, d1MobileRows, 15);
+		expect(result[0].id).toBe("u1");
+		expect(result[0].lastSeenAt).toEqual(new Date(1_783_120_821_000));
+	});
+
+	it("accepts ISO string lastSeenAt from loader serialization", () => {
+		const result = mergeLoggedInUsers(
+			[
+				{
+					userId: "u1",
+					name: "Alice",
+					email: "alice@test.com",
+					sessionCount: 1,
+					lastSeenAt: "2026-07-03T12:00:00.000Z",
+				},
+			],
+			[],
+			15,
+		);
+		expect(result[0].lastSeenAt).toEqual(new Date("2026-07-03T12:00:00.000Z"));
+	});
 });
 
 describe("resolvePlatform", () => {

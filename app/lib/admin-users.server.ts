@@ -59,19 +59,32 @@ export interface AdminUsersListResult {
 	totalPages: number;
 }
 
+/** D1 returns MAX(timestamp) as unix seconds, not Date. */
+type SessionLastSeen = Date | number | string;
+
 interface WebSessionAggregate {
 	userId: string;
 	name: string;
 	email: string;
 	sessionCount: number;
-	lastSeenAt: Date;
+	lastSeenAt: SessionLastSeen;
 }
 
 interface MobileSessionAggregate {
 	userId: string;
 	name: string;
 	email: string;
-	lastSeenAt: Date;
+	lastSeenAt: SessionLastSeen;
+}
+
+function lastSeenToMs(value: SessionLastSeen): number {
+	const ms = timestampToMs(value);
+	if (ms > 0) return ms;
+	if (typeof value === "string") {
+		const parsed = new Date(value).getTime();
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return 0;
 }
 
 /** Merge web and mobile session aggregates into a sorted, de-duplicated list. */
@@ -101,13 +114,13 @@ export function mergeLoggedInUsers(
 			sessionCount: row.sessionCount,
 			hasWeb: true,
 			hasMobile: false,
-			lastSeenMs: row.lastSeenAt.getTime(),
+			lastSeenMs: lastSeenToMs(row.lastSeenAt),
 		});
 	}
 
 	for (const row of mobileRows) {
 		const existing = merged.get(row.userId);
-		const mobileMs = row.lastSeenAt.getTime();
+		const mobileMs = lastSeenToMs(row.lastSeenAt);
 		if (existing) {
 			existing.hasMobile = true;
 			existing.lastSeenMs = Math.max(existing.lastSeenMs, mobileMs);
@@ -206,7 +219,7 @@ export async function getLoggedInUsers(
 				name: schema.user.name,
 				email: schema.user.email,
 				sessionCount: count(),
-				lastSeenAt: sql<Date>`MAX(${schema.session.updatedAt})`,
+				lastSeenAt: sql<number>`MAX(${schema.session.updatedAt})`,
 			})
 			.from(schema.session)
 			.innerJoin(schema.user, eq(schema.session.userId, schema.user.id))
@@ -217,7 +230,7 @@ export async function getLoggedInUsers(
 				userId: schema.mobileRefreshToken.userId,
 				name: schema.user.name,
 				email: schema.user.email,
-				lastSeenAt: sql<Date>`MAX(${schema.mobileRefreshToken.createdAt})`,
+				lastSeenAt: sql<number>`MAX(${schema.mobileRefreshToken.createdAt})`,
 			})
 			.from(schema.mobileRefreshToken)
 			.innerJoin(

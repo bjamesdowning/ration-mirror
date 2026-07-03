@@ -4,6 +4,9 @@ import Observation
 @MainActor
 @Observable
 final class GalleyViewModel {
+    /// Must stay within `MealMatchQuerySchema.limit` max (100) on the server.
+    private static let matchFetchLimit = 100
+
     private(set) var meals: [Meal] = []
     private(set) var matches: [MealMatch] = []
     private(set) var matchByMealId: [String: MealMatch] = [:]
@@ -54,24 +57,30 @@ final class GalleyViewModel {
         defer { isLoading = false }
 
         if online {
-            do {
-                if isMatchMode {
-                    let response = try await api.matchMeals(limit: 200, minMatch: 0)
+            if isMatchMode {
+                do {
+                    let response = try await api.matchMeals(
+                        limit: Self.matchFetchLimit,
+                        minMatch: 0
+                    )
                     matches = response.matches
                     matchTotal = response.total ?? response.matches.count
                     matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
-                } else {
-                    async let mealsTask = api.meals(tag: filters.tag, domain: filters.domain)
-                    async let matchTask = api.matchMeals(limit: 200, minMatch: 0)
-                    let (mealsResponse, matchResponse) = try await (mealsTask, matchTask)
+                } catch {
+                    errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                    restoreSnapshot(snapshots, organizationId: organizationId)
+                }
+            } else {
+                do {
+                    let mealsResponse = try await api.meals(tag: filters.tag, domain: filters.domain)
                     meals = mealsResponse.meals
                     mealTotal = mealsResponse.total ?? mealsResponse.meals.count
-                    matchByMealId = GalleyMatchMapBuilder.build(from: matchResponse.matches)
                     snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
+                } catch {
+                    errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                    restoreSnapshot(snapshots, organizationId: organizationId)
                 }
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots, organizationId: organizationId)
+                await refreshAvailabilityMatches(api: api, online: true)
             }
         } else {
             matchByMealId = [:]
@@ -85,7 +94,7 @@ final class GalleyViewModel {
             return
         }
         do {
-            let response = try await api.matchMeals(limit: 200, minMatch: 0)
+            let response = try await api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
             if isMatchMode {
                 matches = response.matches
                 matchTotal = response.total ?? response.matches.count

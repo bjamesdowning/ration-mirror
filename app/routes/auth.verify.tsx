@@ -47,7 +47,8 @@ export function meta() {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
-	INVALID_TOKEN: "This sign-in link is invalid or has already been used.",
+	INVALID_TOKEN:
+		"This sign-in link is invalid, has already been used, or was opened by an email security scanner before you tapped it. Request a new link, then tap Continue on the landing page.",
 	EXPIRED_TOKEN: "This sign-in link has expired. Please request a new one.",
 	TOKEN_NOT_FOUND:
 		"This sign-in link could not be found. Please request a new one.",

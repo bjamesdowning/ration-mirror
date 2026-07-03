@@ -108,4 +108,16 @@ describe("GET /api/mobile/v1/meals/match preLimit", () => {
 			total: 2,
 		});
 	});
+
+	it("rejects limit above the schema maximum", async () => {
+		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
+		await expect(
+			loader({
+				request: getRequest({ limit: "101" }),
+				context: ctx,
+				params: {},
+			} as never),
+		).rejects.toMatchObject({ init: { status: 400 } });
+		expect(matchMeals).not.toHaveBeenCalled();
+	});
 });

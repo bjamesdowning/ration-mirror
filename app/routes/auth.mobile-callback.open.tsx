@@ -28,7 +28,7 @@ export default function MobileAuthCallbackOpen() {
 	return (
 		<MobileAuthHandoffCard
 			title="Finish signing in"
-			body="If Ration didn't open automatically, tap below. The link expires in about one minute."
+			body="If Ration didn't open automatically, tap below. The link expires in about five minutes."
 			primaryHref={customSchemeLink}
 			footnote="Make sure Ration is installed on this device. If the link still doesn't work, request a new magic link from the app."
 		/>

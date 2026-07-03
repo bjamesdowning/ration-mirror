@@ -23,6 +23,7 @@ import {
 	shouldSkipEmailSend,
 } from "./email.server";
 import { log, redactId } from "./logging.server";
+import { magicLinkVerifyToContinueUrl } from "./magic-link-interstitial.server";
 import {
 	OAUTH_ACCESS_TOKEN_TTL_SEC,
 	OAUTH_ADVERTISED_SCOPES,
@@ -209,7 +210,11 @@ export function createAuth(env: Cloudflare.Env) {
 						}
 						return;
 					}
-					const { html, text } = buildMagicLinkEmail(url);
+					const continueUrl = magicLinkVerifyToContinueUrl(
+						url,
+						env.BETTER_AUTH_URL,
+					);
+					const { html, text } = buildMagicLinkEmail(continueUrl);
 					const emailPromise = sendEmail(env.EMAIL, {
 						to: email,
 						subject: "Your Ration sign-in link",

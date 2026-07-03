@@ -56,7 +56,7 @@ test.describe("auth", () => {
 		await page.goto("/auth/verify?error=INVALID_TOKEN");
 		await expect(page.getByText("Link Invalid")).toBeVisible();
 		await expect(
-			page.getByText(/invalid or has already been used/i),
+			page.getByText(/invalid.*already been used/i),
 		).toBeVisible();
 		await expect(
 			page.getByRole("link", { name: /request a new link/i }),

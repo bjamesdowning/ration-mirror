@@ -3,6 +3,7 @@ import { redirect, useLoaderData } from "react-router";
 import { MobileAuthHandoffCard } from "~/components/auth/MobileAuthHandoffCard";
 import { ensureActiveOrganization, getAuth } from "~/lib/auth.server";
 import { mobileAuthHandoffLinks } from "~/lib/mobile/auth-handoff";
+import { readMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
 import { PKCE_CHALLENGE_REGEX } from "~/lib/mobile/pkce";
 import { storeMobileAuthCode } from "~/lib/mobile/token.server";
 
@@ -31,8 +32,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 	const client = url.searchParams.get("client");
 	if (client === "ios") {
-		const codeChallenge = url.searchParams.get("code_challenge");
-		if (!codeChallenge || !PKCE_CHALLENGE_REGEX.test(codeChallenge)) {
+		const pendingId = url.searchParams.get("pending");
+		const legacyChallenge = url.searchParams.get("code_challenge");
+		let codeChallenge: string | null = null;
+		if (pendingId) {
+			codeChallenge = await readMobilePendingHandoff(
+				context.cloudflare.env.RATION_KV,
+				pendingId,
+			);
+		} else if (legacyChallenge && PKCE_CHALLENGE_REGEX.test(legacyChallenge)) {
+			codeChallenge = legacyChallenge;
+		}
+		if (!codeChallenge) {
 			throw redirect("/auth/verify?error=invalid_request");
 		}
 		const code = await storeMobileAuthCode(
@@ -61,7 +72,7 @@ export default function MobileAuthCallback() {
 	return (
 		<MobileAuthHandoffCard
 			title="Open Ration to finish signing in"
-			body="Your email link was verified. Tap below to return to the app and complete sign-in. The link expires in about one minute."
+			body="Your email link was verified. Tap below to return to the app and complete sign-in. The app handoff expires in about five minutes."
 			primaryHref={links.universalLink}
 			secondaryHref={links.customSchemeLink}
 			footnote={

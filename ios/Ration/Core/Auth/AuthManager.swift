@@ -89,7 +89,7 @@ final class AuthManager {
         guard let verifier = Keychain.get(Self.pkceVerifierKey) else {
             throw APIError.server(
                 status: 400,
-                message: "Sign-in link expired. Request a new magic link.",
+                message: "Sign-in session lost. Request a new magic link from the app, then open the email link without reinstalling the app.",
                 code: "missing_pkce_verifier"
             )
         }

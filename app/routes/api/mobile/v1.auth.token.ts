@@ -2,8 +2,9 @@ import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { verifyPkceChallenge } from "~/lib/mobile/pkce";
 import {
-	consumeMobileAuthCode,
+	deleteMobileAuthCode,
 	issueMobileTokenPair,
+	readMobileAuthCode,
 	rotateMobileRefreshToken,
 } from "~/lib/mobile/token.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -37,9 +38,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const env = context.cloudflare.env;
 
 		if (input.grantType === "authorization_code") {
-			// Consume the code first (single-use, even on PKCE failure) so a stolen
-			// code can't be brute-forced against the verifier.
-			const claims = await consumeMobileAuthCode(env.RATION_KV, input.code);
+			const claims = await readMobileAuthCode(env.RATION_KV, input.code);
 			if (!claims) {
 				throw data(
 					{ error: "Invalid or expired code", code: "invalid_code" },
@@ -56,6 +55,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					{ status: 400 },
 				);
 			}
+			await deleteMobileAuthCode(env.RATION_KV, input.code);
 			const tokens = await issueMobileTokenPair(
 				env,
 				claims.userId,

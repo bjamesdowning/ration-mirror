@@ -51,6 +51,7 @@ export default [
 	route("invitations/accept", "routes/invitations.accept.tsx"),
 	route("select-group", "routes/select-group.tsx"),
 	route("auth/verify", "routes/auth.verify.tsx"),
+	route("auth/magic-link/continue", "routes/auth.magic-link.continue.tsx"),
 	route("auth/mobile-callback", "routes/auth.mobile-callback.tsx"),
 	route("auth/mobile-callback/open", "routes/auth.mobile-callback.open.tsx"),
 	route("oauth/sign-in", "routes/oauth.sign-in.tsx"),

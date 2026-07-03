@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { getAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { storeMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { MobileMagicLinkSchema } from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.auth.magic-link";
@@ -32,14 +33,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const { email, codeChallenge } = MobileMagicLinkSchema.parse(body);
 		const auth = getAuth(context.cloudflare.env);
 		const baseUrl = context.cloudflare.env.BETTER_AUTH_URL.replace(/\/$/, "");
-		// Carry the PKCE challenge through Better Auth's callbackURL so it lands on
-		// /auth/mobile-callback and gets bound to the one-time code. base64url is
-		// URL-safe, but encode defensively.
-		const callbackURL = `${baseUrl}/auth/mobile-callback?client=ios&code_challenge=${encodeURIComponent(codeChallenge)}`;
+		const pendingId = await storeMobilePendingHandoff(
+			context.cloudflare.env.RATION_KV,
+			codeChallenge,
+		);
+		// Keep callbackURL short — PKCE challenge lives in KV until mobile-callback.
+		const callbackURL = `${baseUrl}/auth/mobile-callback?client=ios&pending=${encodeURIComponent(pendingId)}`;
+		const errorCallbackURL = `${baseUrl}/auth/verify`;
 		await auth.api.signInMagicLink({
 			body: {
 				email,
 				callbackURL,
+				errorCallbackURL,
 			},
 			headers: request.headers,
 		});

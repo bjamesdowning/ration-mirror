@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct RationApp: App {
     @State private var env = AppEnvironment()
+    /// Prevents Universal Link + custom-scheme callbacks from exchanging the same code twice.
+    @State private var handledAuthCode: String?
 
     var body: some Scene {
         WindowGroup {
@@ -25,11 +27,15 @@ struct RationApp: App {
 
     @MainActor
     private func handleAuthHandoff(_ url: URL) {
+        guard env.auth.phase != .signedIn else { return }
         guard let code = Self.authCode(from: url) else { return }
+        guard handledAuthCode != code else { return }
+        handledAuthCode = code
         Task {
             do {
                 try await env.auth.exchangeCode(code)
             } catch {
+                handledAuthCode = nil
                 env.auth.recordAuthError(error)
             }
         }

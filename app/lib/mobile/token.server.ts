@@ -160,14 +160,13 @@ export async function storeMobileAuthCode(
 	return code;
 }
 
-export async function consumeMobileAuthCode(
+export async function readMobileAuthCode(
 	kv: KVNamespace,
 	code: string,
 ): Promise<MobileAuthCodeRecord | null> {
 	const key = `${MOBILE_AUTH_CODE_KV_PREFIX}${code}`;
 	const raw = await kv.get(key);
 	if (!raw) return null;
-	await kv.delete(key);
 	const parsed = JSON.parse(raw) as {
 		userId?: string;
 		organizationId?: string;
@@ -185,6 +184,23 @@ export async function consumeMobileAuthCode(
 		organizationId: parsed.organizationId,
 		codeChallenge: parsed.codeChallenge,
 	};
+}
+
+export async function deleteMobileAuthCode(
+	kv: KVNamespace,
+	code: string,
+): Promise<void> {
+	await kv.delete(`${MOBILE_AUTH_CODE_KV_PREFIX}${code}`);
+}
+
+export async function consumeMobileAuthCode(
+	kv: KVNamespace,
+	code: string,
+): Promise<MobileAuthCodeRecord | null> {
+	const claims = await readMobileAuthCode(kv, code);
+	if (!claims) return null;
+	await deleteMobileAuthCode(kv, code);
+	return claims;
 }
 
 export async function assertMobileOrgMembership(

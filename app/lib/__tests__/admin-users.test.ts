@@ -69,6 +69,15 @@ describe("mergeLoggedInUsers", () => {
 		const result = mergeLoggedInUsers(webRows, mobileRows, 2);
 		expect(result).toHaveLength(2);
 	});
+
+	it("deduplicates users for total count when limit is unbounded", () => {
+		const result = mergeLoggedInUsers(
+			webRows,
+			mobileRows,
+			Number.MAX_SAFE_INTEGER,
+		);
+		expect(result).toHaveLength(3);
+	});
 });
 
 describe("resolvePlatform", () => {

@@ -199,74 +199,56 @@ export async function getLoggedInUsers(
 	now: Date,
 	limit = 15,
 ): Promise<LoggedInUsersResult> {
-	const [webRows, mobileRows, webUserCount, mobileOnlyCount] =
-		await Promise.all([
-			db
-				.select({
-					userId: schema.session.userId,
-					name: schema.user.name,
-					email: schema.user.email,
-					sessionCount: count(),
-					lastSeenAt: sql<Date>`MAX(${schema.session.updatedAt})`,
-				})
-				.from(schema.session)
-				.innerJoin(schema.user, eq(schema.session.userId, schema.user.id))
-				.where(gt(schema.session.expiresAt, now))
-				.groupBy(schema.session.userId, schema.user.name, schema.user.email),
-			db
-				.select({
-					userId: schema.mobileRefreshToken.userId,
-					name: schema.user.name,
-					email: schema.user.email,
-					lastSeenAt: sql<Date>`MAX(${schema.mobileRefreshToken.createdAt})`,
-				})
-				.from(schema.mobileRefreshToken)
-				.innerJoin(
-					schema.user,
-					eq(schema.mobileRefreshToken.userId, schema.user.id),
-				)
-				.where(
-					and(
-						isNull(schema.mobileRefreshToken.revokedAt),
-						gt(schema.mobileRefreshToken.expiresAt, now),
-					),
-				)
-				.groupBy(
-					schema.mobileRefreshToken.userId,
-					schema.user.name,
-					schema.user.email,
+	const [webRows, mobileRows] = await Promise.all([
+		db
+			.select({
+				userId: schema.session.userId,
+				name: schema.user.name,
+				email: schema.user.email,
+				sessionCount: count(),
+				lastSeenAt: sql<Date>`MAX(${schema.session.updatedAt})`,
+			})
+			.from(schema.session)
+			.innerJoin(schema.user, eq(schema.session.userId, schema.user.id))
+			.where(gt(schema.session.expiresAt, now))
+			.groupBy(schema.session.userId, schema.user.name, schema.user.email),
+		db
+			.select({
+				userId: schema.mobileRefreshToken.userId,
+				name: schema.user.name,
+				email: schema.user.email,
+				lastSeenAt: sql<Date>`MAX(${schema.mobileRefreshToken.createdAt})`,
+			})
+			.from(schema.mobileRefreshToken)
+			.innerJoin(
+				schema.user,
+				eq(schema.mobileRefreshToken.userId, schema.user.id),
+			)
+			.where(
+				and(
+					isNull(schema.mobileRefreshToken.revokedAt),
+					gt(schema.mobileRefreshToken.expiresAt, now),
 				),
-			db
-				.select({
-					count: sql<number>`count(distinct ${schema.session.userId})`,
-				})
-				.from(schema.session)
-				.where(gt(schema.session.expiresAt, now))
-				.get(),
-			db
-				.select({
-					count: sql<number>`count(distinct ${schema.mobileRefreshToken.userId})`,
-				})
-				.from(schema.mobileRefreshToken)
-				.where(
-					and(
-						isNull(schema.mobileRefreshToken.revokedAt),
-						gt(schema.mobileRefreshToken.expiresAt, now),
-						sql`NOT EXISTS (
-							SELECT 1 FROM ${schema.session}
-							WHERE ${schema.session.userId} = ${schema.mobileRefreshToken.userId}
-								AND ${schema.session.expiresAt} > ${now}
-						)`,
-					),
-				)
-				.get(),
-		]);
+			)
+			.groupBy(
+				schema.mobileRefreshToken.userId,
+				schema.user.name,
+				schema.user.email,
+			),
+	]);
 
-	const users = mergeLoggedInUsers(webRows, mobileRows, limit);
-	const totalLoggedIn =
-		(webUserCount?.count ?? 0) + (mobileOnlyCount?.count ?? 0);
+	// Derive total from merged rows — avoids a raw NOT EXISTS subquery that binds
+	// Date inconsistently in D1 when mixed with drizzle gt() params.
+	const allLoggedIn = mergeLoggedInUsers(
+		webRows,
+		mobileRows,
+		Number.MAX_SAFE_INTEGER,
+	);
 
-	return { users, totalLoggedIn };
+	return {
+		users: allLoggedIn.slice(0, limit),
+		totalLoggedIn: allLoggedIn.length,
+	};
 }
 
 export async function listAdminUsers(

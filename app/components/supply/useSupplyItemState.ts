@@ -46,6 +46,7 @@ export function useSupplyItemState({
 		item?: { id: string };
 	}>();
 	const [showActionsSheet, setShowActionsSheet] = useState(false);
+	const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 	const [isMarkingPurchased, setIsMarkingPurchased] = useState(false);
 	const [pendingAction, setPendingAction] = useState<
 		"snooze" | "delete" | "convert" | null
@@ -109,6 +110,25 @@ export function useSupplyItemState({
 		onRefresh,
 	]);
 
+	const submitPurchased = (quantity: number, unit: string) => {
+		setShowPurchaseModal(false);
+		setIsMarkingPurchased(true);
+		setLocalQuantity(quantity);
+		setLocalUnit(toSupportedUnit(unit));
+		fetcher.submit(
+			JSON.stringify({
+				isPurchased: true,
+				quantity,
+				unit: unit.trim() || "unit",
+			}),
+			{
+				method: "PUT",
+				action: `/api/supply-lists/${listId}/items/${item.id}`,
+				encType: "application/json",
+			},
+		);
+	};
+
 	const handleToggle = () => {
 		if (optimisticPurchased) {
 			fetcher.submit(
@@ -124,19 +144,7 @@ export function useSupplyItemState({
 			return;
 		}
 
-		setIsMarkingPurchased(true);
-		fetcher.submit(
-			JSON.stringify({
-				isPurchased: true,
-				quantity: localQuantity,
-				unit: localUnit.trim() || "unit",
-			}),
-			{
-				method: "PUT",
-				action: `/api/supply-lists/${listId}/items/${item.id}`,
-				encType: "application/json",
-			},
-		);
+		setShowPurchaseModal(true);
 	};
 
 	const handleSnooze = (duration: "24h" | "3d" | "1w") => {
@@ -209,6 +217,9 @@ export function useSupplyItemState({
 		handleQuantityChange,
 		showActionsSheet,
 		setShowActionsSheet,
+		showPurchaseModal,
+		setShowPurchaseModal,
+		submitPurchased,
 		sourceMealName: item.sourceMealName,
 		sourceMealNames: item.sourceMealNames,
 		sourceMealSources,

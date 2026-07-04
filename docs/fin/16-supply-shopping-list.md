@@ -14,7 +14,16 @@ Use **Update list** (or equivalent) on the Supply page to **recompute** from cur
 
 ## Purchased state
 
-Mark items as purchased while shopping. **Dock / complete** flows can move purchased lines into **Cargo** in one step (wording varies by UI).
+**Mark purchased** (check off) while you shop — you can confirm quantity and unit when checking off an item. Checked items stay on the list until you **dock** them to Cargo or complete a **receipt scan** from Supply.
+
+**Replenish Cargo** offers two paths:
+
+- **From purchased list** — moves checked-off lines into Cargo using listed quantities.
+- **From receipt** — scan or upload a receipt; Ration pairs receipt lines with your Supply list so you can verify quantities before docking.
+
+Receipt scanning also works directly from **Cargo** when you are not using a shopping list.
+
+Optional recipe ingredients are **not** added to Supply during list sync.
 
 ## Sharing the list
 

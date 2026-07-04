@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { data, useFetcher } from "react-router";
+import { data, useFetcher, useRevalidator } from "react-router";
 
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
@@ -12,6 +12,10 @@ import {
 	ShareIcon,
 	ShoppingCartIcon,
 } from "~/components/icons/PageIcons";
+import {
+	CameraInput,
+	type CameraInputHandle,
+} from "~/components/scanner/CameraInput";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
@@ -23,6 +27,7 @@ import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
+import { ReplenishModal } from "~/components/supply/ReplenishModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
@@ -296,11 +301,14 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			: undefined) ??
 		(fetcher.state === "loading" ? fetcher.data?.list : undefined) ??
 		list;
-	const [showQuickAdd, setShowQuickAdd] = useState(false);
+	const [showQuickAdd, setShowQuickAdd] = useState(true);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 	const [showShareModal, setShowShareModal] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+	const [showReplenishModal, setShowReplenishModal] = useState(false);
+	const cameraRef = useRef<CameraInputHandle>(null);
+	const revalidator = useRevalidator();
 	const [displayUnitMode, setDisplayUnitMode] = useState<
 		"cooking" | "metric" | "imperial"
 	>(supplyUnitMode);
@@ -546,12 +554,12 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
 		{
-			id: "dock",
+			id: "replenish",
 			icon: <CheckIcon className="w-6 h-6" />,
-			label: "Add to Cargo",
+			label: "Replenish Cargo",
 			primary: true,
-			onClick: handleDockCargo,
-			disabled: isDocking || purchasedCount === 0,
+			onClick: () => setShowReplenishModal(true),
+			disabled: isDocking,
 		},
 	];
 
@@ -628,30 +636,14 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 											</button>
 										))}
 									</div>
-									{/* Add to Cargo (Dock) Button */}
 									<button
 										type="button"
-										onClick={handleDockCargo}
-										disabled={isDocking || purchasedCount === 0}
-										className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm ${
-											purchasedCount > 0
-												? "bg-hyper-green text-carbon hover:shadow-glow-sm"
-												: "bg-platinum text-muted cursor-not-allowed"
-										}`}
+										onClick={() => setShowReplenishModal(true)}
+										disabled={isDocking}
+										className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm bg-hyper-green text-carbon hover:shadow-glow-sm"
 									>
-										{isDocking ? (
-											<span className="animate-pulse">Transferring...</span>
-										) : (
-											<>
-												<CheckIcon className="w-4 h-4" />
-												Add to Cargo
-												{purchasedCount > 0 && (
-													<span className="ml-1 opacity-75">
-														({purchasedCount})
-													</span>
-												)}
-											</>
-										)}
+										<CheckIcon className="w-4 h-4" />
+										Replenish Cargo
 									</button>
 								</div>
 							}
@@ -709,6 +701,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 						<SupplyList
 							key={displayList.id}
 							list={{ ...displayList, items: filteredItems }}
+							cargoRows={cargo ?? []}
 							filterDomain="all"
 							filterSearch=""
 							sortMode={sortMode}
@@ -771,6 +764,29 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				title="Crew Member required"
 				description="Sharing supply lists is a Crew Member feature. Upgrade to unlock sharing, member invites, and unlimited capacity."
 			/>
+
+			<ReplenishModal
+				open={showReplenishModal}
+				purchasedCount={purchasedCount}
+				onClose={() => setShowReplenishModal(false)}
+				onDockPurchased={handleDockCargo}
+				onScanReceipt={() => cameraRef.current?.openCamera()}
+				isDocking={isDocking}
+			/>
+
+			{displayList && (
+				<CameraInput
+					ref={cameraRef}
+					origin="supply"
+					supplyListId={displayList.id}
+					hideButton
+					className="hidden"
+					onScanComplete={() => {
+						revalidator.revalidate();
+						dockToast.show();
+					}}
+				/>
+			)}
 		</>
 	);
 }

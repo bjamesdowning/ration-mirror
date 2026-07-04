@@ -1,4 +1,13 @@
-import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import {
+	and,
+	asc,
+	eq,
+	gte,
+	inArray,
+	isNull,
+	lte,
+	notInArray,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	meal,
@@ -11,6 +20,8 @@ import {
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { log } from "./logging.server";
+import { getExcludedManifestDates } from "./manifest-supply.server";
+import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
 import type { ManifestPreviewData } from "./types";
@@ -141,6 +152,7 @@ export interface MealPlanEntryWithMeal {
 	mealType: string;
 	mealPrepTime: number | null;
 	mealCookTime: number | null;
+	mealTags?: string[];
 }
 
 export interface ConsumeManifestEntriesResult {
@@ -148,6 +160,13 @@ export interface ConsumeManifestEntriesResult {
 	deductions: CargoDeduction[];
 	entryIds: string[];
 	planId: string;
+	requiresConfirmation?: boolean;
+	missingIngredients?: Array<{
+		name: string;
+		required: number;
+		available: number;
+		unit: string;
+	}>;
 }
 
 export async function getWeekEntries(
@@ -201,6 +220,41 @@ export async function getWeekEntries(
 	})) as MealPlanEntryWithMeal[];
 }
 
+async function attachMealTagsToEntries(
+	db: D1Database,
+	entries: MealPlanEntryWithMeal[],
+): Promise<MealPlanEntryWithMeal[]> {
+	if (entries.length === 0) return entries;
+	const mealIds = [...new Set(entries.map((e) => e.mealId))];
+	const d1 = drizzle(db);
+	const tagRows = await chunkedQuery(mealIds, (chunk) =>
+		d1
+			.select({ mealId: mealTag.mealId, tag: mealTag.tag })
+			.from(mealTag)
+			.where(inArray(mealTag.mealId, chunk)),
+	);
+	const tagsByMealId = new Map<string, string[]>();
+	for (const { mealId, tag } of tagRows) {
+		const existing = tagsByMealId.get(mealId) ?? [];
+		existing.push(tag);
+		tagsByMealId.set(mealId, existing);
+	}
+	return entries.map((entry) => ({
+		...entry,
+		mealTags: tagsByMealId.get(entry.mealId) ?? [],
+	}));
+}
+
+export async function getWeekEntriesWithTags(
+	db: D1Database,
+	planId: string,
+	startDate: string,
+	endDate: string,
+): Promise<MealPlanEntryWithMeal[]> {
+	const entries = await getWeekEntries(db, planId, startDate, endDate);
+	return attachMealTagsToEntries(db, entries);
+}
+
 // ---------------------------------------------------------------------------
 // Consume entries (deduct ingredients from Cargo, mark as consumed)
 // ---------------------------------------------------------------------------
@@ -210,6 +264,7 @@ export async function consumeManifestEntries(
 	organizationId: string,
 	planId: string,
 	entryIds: string[],
+	options?: { confirmInsufficient?: boolean },
 ): Promise<ConsumeManifestEntriesResult> {
 	const d1 = drizzle(env.DB);
 
@@ -269,12 +324,44 @@ export async function consumeManifestEntries(
 		);
 	}
 
+	if (!options?.confirmInsufficient) {
+		const missingIngredients: ConsumeManifestEntriesResult["missingIngredients"] =
+			[];
+		const seenNames = new Set<string>();
+		for (const [mealId, totalServings] of servingsByMeal) {
+			const shortfalls = await getMealMissingIngredients(
+				env,
+				organizationId,
+				mealId,
+				totalServings,
+			);
+			for (const item of shortfalls) {
+				const key = item.name.toLowerCase();
+				if (seenNames.has(key)) continue;
+				seenNames.add(key);
+				missingIngredients.push(item);
+			}
+		}
+		if (missingIngredients.length > 0) {
+			return {
+				consumed: 0,
+				deductions: [],
+				entryIds: [],
+				planId,
+				requiresConfirmation: true,
+				missingIngredients,
+			};
+		}
+	}
+
 	const allDeductions: CargoDeduction[] = [];
-	for (const [mealId, totalServings] of servingsByMeal) {
-		const cookResult = await cookMeal(env, organizationId, mealId, {
-			servings: totalServings,
-		});
-		mergeDeductions(allDeductions, cookResult.deductions);
+	if (!options?.confirmInsufficient) {
+		for (const [mealId, totalServings] of servingsByMeal) {
+			const cookResult = await cookMeal(env, organizationId, mealId, {
+				servings: totalServings,
+			});
+			mergeDeductions(allDeductions, cookResult.deductions);
+		}
 	}
 
 	// 4. Mark all as consumed
@@ -681,20 +768,30 @@ export async function getManifestWeekMealsForSupply(
 	const startDate = getWeekStart(today, weekStart);
 	const endDate = getWeekEnd(startDate);
 
+	const excludedDates = await getExcludedManifestDates(
+		db,
+		organizationId,
+		startDate,
+		endDate,
+	);
+
+	const entryConditions = [
+		eq(mealPlanEntry.planId, plan.id),
+		gte(mealPlanEntry.date, startDate),
+		lte(mealPlanEntry.date, endDate),
+		isNull(mealPlanEntry.consumedAt),
+	];
+	if (excludedDates.length > 0) {
+		entryConditions.push(notInArray(mealPlanEntry.date, excludedDates));
+	}
+
 	const rows = await d1
 		.select({
 			mealId: mealPlanEntry.mealId,
 			servingsOverride: mealPlanEntry.servingsOverride,
 		})
 		.from(mealPlanEntry)
-		.where(
-			and(
-				eq(mealPlanEntry.planId, plan.id),
-				gte(mealPlanEntry.date, startDate),
-				lte(mealPlanEntry.date, endDate),
-				isNull(mealPlanEntry.consumedAt),
-			),
-		);
+		.where(and(...entryConditions));
 
 	return rows;
 }

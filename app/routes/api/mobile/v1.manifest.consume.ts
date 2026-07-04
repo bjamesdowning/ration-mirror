@@ -32,7 +32,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const body = await request.json();
-		const { entryIds } = ConsumeEntriesRequestSchema.parse(body);
+		const { entryIds, confirmInsufficient } =
+			ConsumeEntriesRequestSchema.parse(body);
 		const plan = await ensureMealPlan(
 			context.cloudflare.env.DB,
 			organizationId,
@@ -42,7 +43,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			plan.id,
 			entryIds,
+			{ confirmInsufficient },
 		);
+
+		if (result.requiresConfirmation) {
+			return {
+				consumed: 0,
+				requiresConfirmation: true,
+				missingIngredients: result.missingIngredients,
+			};
+		}
 
 		let undoToken: string | undefined;
 		if (result.consumed > 0) {
@@ -64,7 +74,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 		}
 
-		return { consumed: result.consumed, undoToken };
+		return {
+			consumed: result.consumed,
+			undoToken,
+			deductions: result.deductions,
+		};
 	} catch (e) {
 		return handleApiError(e);
 	}

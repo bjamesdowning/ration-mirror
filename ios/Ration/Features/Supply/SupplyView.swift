@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Observation
 
 @MainActor
@@ -8,10 +9,14 @@ final class SupplyViewModel {
     private(set) var isLoading = false
     private(set) var isSyncing = false
     private(set) var isDocking = false
+    private(set) var isScanning = false
+    private(set) var scanStatusMessage: String?
     private(set) var snoozes: [SupplySnooze] = []
     var errorMessage: String?
     var dockMessage: String?
     private var lastHapticMilestone = 0
+    private let maxPollAttempts = 80
+    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
         supportsSupplySort: true,
@@ -165,6 +170,75 @@ final class SupplyViewModel {
         }
     }
 
+    func scanReceiptAndFetchMatch(
+        image: UIImage,
+        api: RationAPI
+    ) async -> SupplyScanReviewContext? {
+        guard let list else { return nil }
+        isScanning = true
+        scanStatusMessage = "Uploading receipt…"
+        errorMessage = nil
+        defer {
+            isScanning = false
+            scanStatusMessage = nil
+        }
+
+        guard let data = image.resizedJPEG(maxDimension: 1024, quality: 0.7) else {
+            errorMessage = "Could not process the image."
+            return nil
+        }
+
+        do {
+            let response = try await api.submitScan(imageData: data)
+            guard let requestId = response.requestId else {
+                errorMessage = "Scan was submitted but no request id was returned."
+                return nil
+            }
+            Haptics.light()
+            scanStatusMessage = "Extracting items…"
+            let completed = await pollScanCompletion(requestId: requestId, api: api)
+            guard completed else { return nil }
+
+            scanStatusMessage = "Matching to supply list…"
+            let match = try await api.fetchSupplyScanMatch(listId: list.id, requestId: requestId)
+            return SupplyScanReviewContext(listId: list.id, requestId: requestId, match: match)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
+    private func pollScanCompletion(requestId: String, api: RationAPI) async -> Bool {
+        for attempt in 0..<maxPollAttempts {
+            do {
+                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
+                let result = try await api.scanStatus(requestId: requestId)
+                switch result.status {
+                case "completed":
+                    return true
+                case "failed":
+                    errorMessage = result.error ?? "Scan failed. Please try again."
+                    return false
+                default:
+                    scanStatusMessage = "Extracting items…"
+                }
+            } catch is CancellationError {
+                return false
+            } catch {
+                if let apiError = error as? APIError,
+                   [429, 503].contains(apiError.statusCode ?? 0),
+                   attempt < maxPollAttempts - 1
+                {
+                    continue
+                }
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                return false
+            }
+        }
+        errorMessage = "Scan is still processing. Try again shortly."
+        return false
+    }
+
     func deleteItem(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard online else { return }
         do {
@@ -245,6 +319,11 @@ struct SupplyView: View {
     @State private var showingPaywall = false
     @State private var hasTriggeredAutoSync = false
     @State private var showGroupSettings = false
+    @State private var showingReplenishSheet = false
+    @State private var showingSupplyScanCamera = false
+    @State private var supplyScanReviewContext: SupplyScanReviewContext?
+    @State private var scanConsent = AIConsentCoordinator()
+    @State private var showingScanPaywall = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -343,6 +422,80 @@ struct SupplyView: View {
                 }
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $showingReplenishSheet) {
+                ReplenishSheet(
+                    purchasedCount: model.purchasedCount,
+                    isDocking: model.isDocking,
+                    onScanReceipt: {
+                        showingReplenishSheet = false
+                        proceedToSupplyScan()
+                    },
+                    onDockPurchased: {
+                        showingReplenishSheet = false
+                        Task {
+                            await model.dock(
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
+                            )
+                            env.notifyCargoDataChanged()
+                        }
+                    }
+                )
+            }
+            .sheet(item: $supplyScanReviewContext) { context in
+                SupplyScanReviewView(context: context) {
+                    Task {
+                        await model.load(
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            online: env.network.isOnline,
+                            organizationId: organizationId
+                        )
+                    }
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { scanConsent.isPresenting },
+                set: { if !$0 { scanConsent.decline() } }
+            )) {
+                AIConsentGateView(
+                    onAccept: { Task { await scanConsent.accept(api: env.api, session: env.session) } },
+                    onDecline: { scanConsent.decline() }
+                )
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showingScanPaywall) { PaywallView() }
+            .fullScreenCover(isPresented: $showingSupplyScanCamera) {
+                CameraPicker { image in
+                    showingSupplyScanCamera = false
+                    guard let image else { return }
+                    Task {
+                        if let context = await model.scanReceiptAndFetchMatch(image: image, api: env.api) {
+                            supplyScanReviewContext = context
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .overlay {
+                if model.isScanning {
+                    ZStack {
+                        Color.black.opacity(0.25).ignoresSafeArea()
+                        GlassCard {
+                            VStack(spacing: 12) {
+                                ProgressView().tint(Theme.hyperGreen)
+                                Text(model.scanStatusMessage ?? "Processing receipt…")
+                                    .rationBody()
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(8)
+                        }
+                        .padding(32)
+                    }
+                }
+            }
             .overlay(alignment: .bottom) {
                 if let message = model.dockMessage {
                     TransientSuccessToast(message: message) {
@@ -355,23 +508,14 @@ struct SupplyView: View {
                 if model.totalCount > 0 {
                     IconFAB(
                         systemImage: "shippingbox.and.arrow.backward.fill",
-                        accessibilityLabel: "Dock purchased items to Cargo",
-                        disabled: model.isDocking || model.purchasedCount == 0
+                        accessibilityLabel: "Replenish Cargo",
+                        disabled: model.isDocking || model.isScanning || !env.network.isOnline
                     ) {
                         Button {
-                            Task {
-                                await model.dock(
-                                    api: env.api,
-                                    snapshots: env.snapshots,
-                                    online: env.network.isOnline,
-                                    organizationId: organizationId
-                                )
-                                env.notifyCargoDataChanged()
-                            }
+                            showingReplenishSheet = true
                         } label: {
-                            Label("Dock to Cargo", systemImage: "shippingbox")
+                            Label("Replenish Cargo", systemImage: "shippingbox.and.arrow.backward")
                         }
-                        .disabled(model.isDocking || model.purchasedCount == 0)
                     }
                 }
             }
@@ -513,5 +657,99 @@ struct SupplyView: View {
         supplyShareURL = nil
         supplyShareExpiresAt = nil
         Haptics.light()
+    }
+
+    private func proceedToSupplyScan() {
+        scanConsent.presentIfNeeded(session: env.session) {
+            showingSupplyScanCamera = true
+        }
+    }
+}
+
+struct ReplenishSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let purchasedCount: Int
+    let isDocking: Bool
+    let onScanReceipt: () -> Void
+    let onDockPurchased: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("After shopping, dock items from your list or scan a receipt to reconcile and add to Cargo.")
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+
+                Button(action: onScanReceipt) {
+                    replenishOption(
+                        icon: "camera.fill",
+                        title: "From receipt",
+                        subtitle: "Scan or upload — match to your supply list",
+                        highlighted: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDockPurchased) {
+                    replenishOption(
+                        icon: "checkmark.circle.fill",
+                        title: "From purchased list",
+                        subtitle: purchasedCount > 0
+                            ? "Dock \(purchasedCount) checked-off item\(purchasedCount == 1 ? "" : "s")"
+                            : "Check off items while shopping first",
+                        highlighted: false
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(purchasedCount == 0 || isDocking)
+                .opacity(purchasedCount == 0 || isDocking ? 0.5 : 1)
+
+                Spacer()
+            }
+            .padding(20)
+            .navigationTitle("Replenish Cargo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            .background(Theme.ceramic)
+        }
+        .presentationDetents([.medium])
+    }
+
+    @ViewBuilder
+    private func replenishOption(
+        icon: String,
+        title: String,
+        subtitle: String,
+        highlighted: Bool
+    ) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(highlighted ? Theme.hyperGreen : Theme.carbon)
+                .frame(width: 40, height: 40)
+                .background(highlighted ? Theme.hyperGreen.opacity(0.15) : Theme.platinum)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .rationBody()
+                    .fontWeight(.semibold)
+                Text(subtitle)
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.platinum, lineWidth: 1)
+        )
     }
 }

@@ -101,6 +101,33 @@ final class RationAPI {
         try await client.post("supply/complete", body: SupplyCompleteRequest(listId: listId))
     }
 
+    func fetchSupplyScanMatch(listId: String, requestId: String) async throws -> SupplyScanMatchResponse {
+        try await client.get(
+            "supply/scan",
+            query: [
+                URLQueryItem(name: "listId", value: listId),
+                URLQueryItem(name: "requestId", value: requestId),
+            ]
+        )
+    }
+
+    func completeSupplyScan(
+        listId: String,
+        requestId: String,
+        pairs: [SupplyScanCompletePair],
+        supplyOnlyIds: [String]? = nil
+    ) async throws -> SupplyScanCompleteResponse {
+        try await client.post(
+            "supply/scan",
+            body: SupplyScanCompleteRequest(
+                listId: listId,
+                requestId: requestId,
+                pairs: pairs,
+                supplyOnlyIds: supplyOnlyIds
+            )
+        )
+    }
+
     func addSupplyItem(_ body: CreateSupplyItemRequest) async throws -> CreateSupplyItemResponse {
         try await client.post("supply/items", body: body)
     }
@@ -258,8 +285,18 @@ final class RationAPI {
         try await client.post("manifest", body: entry)
     }
 
-    func consumeManifestEntries(_ entryIds: [String]) async throws -> ManifestConsumeResponse {
-        try await client.post("manifest/consume", body: ManifestConsumeRequest(entryIds: entryIds))
+    func consumeManifestEntries(
+        _ entryIds: [String],
+        confirmInsufficient: Bool? = nil
+    ) async throws -> ManifestConsumeResponse {
+        try await client.post(
+            "manifest/consume",
+            body: ManifestConsumeRequest(entryIds: entryIds, confirmInsufficient: confirmInsufficient)
+        )
+    }
+
+    func toggleManifestDaySupply(date: String) async throws -> ManifestSupplyDayToggleResponse {
+        try await client.post("manifest/supply-days/\(date)", body: EmptyBody())
     }
 
     func undoAction(token: String) async throws -> UndoActionResponse {

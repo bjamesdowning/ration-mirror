@@ -9,6 +9,7 @@ import {
 	getWeekStart,
 } from "~/lib/manifest.server";
 import { getCalendarDates } from "~/lib/manifest-dates";
+import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import {
@@ -62,6 +63,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			parsed.data.endDate,
 		);
 
+		const excludedDates = await getExcludedManifestDates(
+			context.cloudflare.env.DB,
+			organizationId,
+			parsed.data.startDate,
+			parsed.data.endDate,
+		);
+		const supplyDayInclusion: Record<string, boolean> = {};
+		for (const date of excludedDates) {
+			supplyDayInclusion[date] = false;
+		}
+
 		return {
 			plan: {
 				id: plan.id,
@@ -70,6 +82,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			startDate: parsed.data.startDate,
 			endDate: parsed.data.endDate,
 			entries,
+			supplyDayInclusion,
 		};
 	} catch (e) {
 		return handleApiError(e);

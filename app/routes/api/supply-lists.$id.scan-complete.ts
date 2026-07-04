@@ -1,0 +1,87 @@
+import { data } from "react-router";
+import { requireActiveGroup } from "~/lib/auth.server";
+import { CapacityExceededError } from "~/lib/capacity.server";
+import { handleApiError } from "~/lib/error-handler";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { SupplyScanCompleteRequestSchema } from "~/lib/schemas/supply-scan";
+import {
+	completeSupplyScan,
+	SupplyScanError,
+	validateSupplyOnlyIds,
+} from "~/lib/supply-scan.server";
+import type { Route } from "./+types/supply-lists.$id.scan-complete";
+
+/**
+ * POST /api/supply-lists/:id/scan-complete
+ * Docks confirmed receipt lines to Cargo and reconciles linked supply rows.
+ */
+export async function action({ request, context, params }: Route.ActionArgs) {
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
+	const listId = params.id;
+	if (!listId) throw data({ error: "List ID required" }, { status: 400 });
+
+	if (request.method !== "POST") {
+		throw data({ error: "Method not allowed" }, { status: 405 });
+	}
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"inventory_batch",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many requests. Please try again later." },
+			{ status: 429, headers: { "Retry-After": "60" } },
+		);
+	}
+
+	try {
+		const json = await request.json();
+		const parsed = SupplyScanCompleteRequestSchema.safeParse(json);
+		if (!parsed.success) {
+			throw data(
+				{ error: "Invalid request", details: parsed.error.flatten() },
+				{ status: 400 },
+			);
+		}
+
+		await validateSupplyOnlyIds(
+			context.cloudflare.env,
+			listId,
+			parsed.data.supplyOnlyIds,
+		);
+
+		return await completeSupplyScan(
+			context.cloudflare.env,
+			groupId,
+			listId,
+			parsed.data,
+		);
+	} catch (e) {
+		if (e instanceof SupplyScanError) {
+			const status =
+				e.code === "list_not_found" || e.code === "job_not_found" ? 404 : 400;
+			throw data({ error: e.message, code: e.code }, { status });
+		}
+		if (e instanceof CapacityExceededError) {
+			throw data(
+				{
+					error: "capacity_exceeded",
+					resource: e.resource,
+					current: e.current,
+					limit: e.limit,
+					tier: e.tier,
+					isExpired: e.isExpired,
+					canAdd: e.canAdd,
+					upgradePath: "crew_member",
+				},
+				{ status: 403 },
+			);
+		}
+		return handleApiError(e);
+	}
+}

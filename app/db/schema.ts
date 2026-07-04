@@ -591,6 +591,35 @@ export const mealPlanEntryRelations = relations(mealPlanEntry, ({ one }) => ({
 	}),
 }));
 
+/** Per-day opt-out from Supply sync (default: all manifest days included). */
+export const manifestSupplyDay = sqliteTable(
+	"manifest_supply_day",
+	{
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		date: text("date").notNull(), // YYYY-MM-DD
+		excluded: integer("excluded", { mode: "boolean" }).notNull().default(true),
+		updatedAt: integer("updated_at", { mode: "timestamp" })
+			.notNull()
+			.$defaultFn(() => new Date()),
+	},
+	(table) => [
+		index("manifest_supply_day_org_idx").on(table.organizationId),
+		unique("manifest_supply_day_org_date").on(table.organizationId, table.date),
+	],
+);
+
+export const manifestSupplyDayRelations = relations(
+	manifestSupplyDay,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [manifestSupplyDay.organizationId],
+			references: [organization.id],
+		}),
+	}),
+);
+
 // API keys for programmatic access (inventory export/import)
 export const apiKey = sqliteTable(
 	"api_key",

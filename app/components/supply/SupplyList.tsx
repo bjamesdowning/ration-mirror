@@ -11,6 +11,7 @@ type SupplyListWithItems = typeof supplyList.$inferSelect & {
 
 interface SupplyListProps {
 	list: SupplyListWithItems;
+	cargoRows?: Array<{ name: string; tags: unknown }>;
 	onRefresh?: () => void;
 	filterDomain?: (typeof ITEM_DOMAINS)[number] | "all";
 	filterSearch?: string;
@@ -21,6 +22,7 @@ type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 export function SupplyList({
 	list,
+	cargoRows = [],
 	onRefresh,
 	filterDomain = "all",
 	filterSearch = "",
@@ -104,6 +106,7 @@ export function SupplyList({
 											key={item.id}
 											item={item}
 											listId={list.id}
+											cargoRows={cargoRows}
 											onDelete={onRefresh}
 											onSnooze={onRefresh}
 											onRefresh={onRefresh}

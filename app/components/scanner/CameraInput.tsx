@@ -10,8 +10,10 @@ import {
 import { useFetcher, useRevalidator } from "react-router";
 import { log } from "~/lib/logging.client";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
-import type { ScanResult } from "~/lib/schemas/scan";
+import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
+import type { SupplyScanMatchResult } from "~/lib/supply-scan-match.server";
 import { ScanResultsModal } from "./ScanResultsModal";
+import { SupplyScanReviewModal } from "./SupplyScanReviewModal";
 
 export interface CameraInputHandle {
 	openCamera: () => void;
@@ -20,6 +22,10 @@ export interface CameraInputHandle {
 interface CameraInputProps {
 	onScanComplete?: () => void;
 	className?: string;
+	origin?: "cargo" | "supply";
+	supplyListId?: string;
+	/** When true, hide the default scan button (use ref.openCamera only). */
+	hideButton?: boolean;
 }
 
 type ScanApiResponse =
@@ -36,7 +42,16 @@ type ScanApiResponse =
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB — matches server limit
 
 export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
-	({ onScanComplete, className }, ref) => {
+	(
+		{
+			onScanComplete,
+			className,
+			origin = "cargo",
+			supplyListId,
+			hideButton = false,
+		},
+		ref,
+	) => {
 		const fetcher = useFetcher<ScanApiResponse>();
 		const revalidator = useRevalidator();
 		const inputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +63,10 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		>(undefined);
 		const [scanError, setScanError] = useState<string | null>(null);
 		const [pollRequestId, setPollRequestId] = useState<string | null>(null);
+		const [supplyMatch, setSupplyMatch] = useState<
+			(SupplyScanMatchResult & { requestId: string }) | null
+		>(null);
+		const [isLoadingSupplyMatch, setIsLoadingSupplyMatch] = useState(false);
 
 		// Expose openCamera method via ref
 		useImperativeHandle(ref, () => ({
@@ -243,21 +262,54 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						return; // Keep polling
 					}
 					if (data.status === "completed" && data.items) {
-						const transformedResult = {
-							items: data.items.map((item: Record<string, unknown>) => ({
+						const transformedItems = data.items.map(
+							(item: Record<string, unknown>) => ({
 								id: String(item.id ?? crypto.randomUUID()),
 								name: String(item.name ?? "Unknown Item"),
 								quantity: Number(item.quantity ?? 1),
-								unit: String(
-									item.unit ?? "unit",
-								) as ScanResult["items"][number]["unit"],
-								domain: "food" as const,
+								unit: String(item.unit ?? "unit") as ScanResultItem["unit"],
+								domain: (item.domain as ScanResultItem["domain"]) ?? "food",
 								tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
 								expiresAt: item.expiresAt as string | undefined,
 								selected: true as const,
 								confidence: item.confidence as number | undefined,
 								rawText: item.rawText as string | undefined,
-							})),
+							}),
+						) satisfies ScanResultItem[];
+
+						if (origin === "supply" && supplyListId) {
+							setIsLoadingSupplyMatch(true);
+							try {
+								const matchRes = await fetch(
+									`/api/supply-lists/${supplyListId}/scan-match?requestId=${pollRequestId}`,
+									{ credentials: "include" },
+								);
+								if (!matchRes.ok) {
+									showError("Failed to match receipt to supply list.");
+									setIsAnalyzing(false);
+									setPollRequestId(null);
+									return;
+								}
+								const matchData =
+									(await matchRes.json()) as SupplyScanMatchResult & {
+										requestId: string;
+									};
+								setSupplyMatch({
+									...matchData,
+									requestId: pollRequestId,
+								});
+							} catch {
+								showError("Failed to match receipt to supply list.");
+							} finally {
+								setIsLoadingSupplyMatch(false);
+								setIsAnalyzing(false);
+								setPollRequestId(null);
+							}
+							return;
+						}
+
+						const transformedResult = {
+							items: transformedItems,
 							metadata: {
 								source: "image" as const,
 								processedAt: new Date().toISOString(),
@@ -281,11 +333,12 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			poll(); // first poll immediately
 
 			return () => clearInterval(id);
-		}, [pollRequestId, showError]);
+		}, [pollRequestId, showError, origin, supplyListId]);
 
 		const handleModalClose = () => {
 			setScanResult(null);
 			setExistingInventory(undefined);
+			setSupplyMatch(null);
 			setScanError(null);
 			if (inputRef.current) inputRef.current.value = "";
 		};
@@ -321,6 +374,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
                         disabled:opacity-50 disabled:cursor-not-allowed
                         active:scale-95
                         ${isAnalyzing ? "animate-pulse" : ""}
+                        ${hideButton ? "hidden" : ""}
                     `}
 					>
 						{isAnalyzing ? (
@@ -362,7 +416,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 				)}
 
 				{/* Scan in progress modal (blocking; rendered outside hidden wrapper so it is visible) */}
-				{isAnalyzing && (
+				{(isAnalyzing || isLoadingSupplyMatch) && (
 					<div
 						className="fixed inset-0 z-[60] flex items-center justify-center bg-carbon/80 backdrop-blur-sm animate-fade-in"
 						role="dialog"
@@ -394,11 +448,22 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 					</div>
 				)}
 
-				{/* Scan Results Modal */}
-				{scanResult && (
+				{scanResult && origin === "cargo" && (
 					<ScanResultsModal
 						result={scanResult}
 						existingInventory={existingInventory ?? []}
+						onClose={handleModalClose}
+						onSuccess={handleModalSuccess}
+					/>
+				)}
+
+				{supplyMatch && origin === "supply" && supplyListId && (
+					<SupplyScanReviewModal
+						listId={supplyListId}
+						requestId={supplyMatch.requestId}
+						initialPairs={supplyMatch.pairs}
+						receiptOnly={supplyMatch.receiptOnly}
+						supplyOnly={supplyMatch.supplyOnly}
 						onClose={handleModalClose}
 						onSuccess={handleModalSuccess}
 					/>

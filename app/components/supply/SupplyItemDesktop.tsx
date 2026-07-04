@@ -6,6 +6,7 @@ import { SupplyQuantityEditor } from "./SupplyQuantityEditor";
 
 interface SupplyItemDesktopProps {
 	displayName: string;
+	displayTags?: string[];
 	mealSourced: boolean;
 	convertLabel: string;
 	optimisticPurchased: boolean;
@@ -24,6 +25,7 @@ interface SupplyItemDesktopProps {
 
 export function SupplyItemDesktop({
 	displayName,
+	displayTags = [],
 	mealSourced,
 	convertLabel,
 	optimisticPurchased,
@@ -157,6 +159,18 @@ export function SupplyItemDesktop({
 					sourceMealNames={sourceMealNames}
 					sourceMealSources={sourceMealSources}
 				/>
+				{displayTags.length > 0 && (
+					<div className="flex flex-wrap gap-1 mt-1">
+						{displayTags.slice(0, 3).map((tag) => (
+							<span
+								key={tag}
+								className="text-[10px] px-1.5 py-0.5 rounded-full bg-platinum/80 dark:bg-white/10 text-muted font-mono"
+							>
+								{tag}
+							</span>
+						))}
+					</div>
+				)}
 			</div>
 		</div>
 	);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	useFetcher,
 	useNavigate,
@@ -45,10 +45,11 @@ import {
 	ensureMealPlan,
 	getTodayISO,
 	getTriggeredAllergens,
-	getWeekEntries,
+	getWeekEntriesWithTags,
 	getWeekStart,
 } from "~/lib/manifest.server";
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
+import { getManifestSupplyDayMapForWeek } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/manifest";
@@ -97,7 +98,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// the user opens the picker — not eagerly here. This removes an N+1 tag
 	// query and the full meal list payload from every Manifest page load.
 
-	const entries = await getWeekEntries(
+	const entries = await getWeekEntriesWithTags(
 		db,
 		plan.id,
 		currentRangeStart,
@@ -137,10 +138,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		return result;
 	}
 
-	const [readyMealIds, triggeredAllergensByMealId] = await Promise.all([
-		resolveReadiness(),
-		getTriggeredAllergens(db, scheduledMealIds, userAllergens),
-	]);
+	const [readyMealIds, triggeredAllergensByMealId, supplyDayInclusion] =
+		await Promise.all([
+			resolveReadiness(),
+			getTriggeredAllergens(db, scheduledMealIds, userAllergens),
+			getManifestSupplyDayMapForWeek(db, groupId, weekStartPref).then(
+				(excludedMap) => {
+					const inclusion: Record<string, boolean> = {};
+					for (const date of weekDates) {
+						inclusion[date] = excludedMap[date] !== false;
+					}
+					return inclusion;
+				},
+			),
+		]);
 
 	return {
 		plan,
@@ -156,6 +167,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		planWeekCost: AI_COSTS.MEAL_PLAN_WEEKLY,
 		triggeredAllergensByMealId,
 		readyMealIds,
+		supplyDayInclusion,
 	};
 }
 
@@ -184,7 +196,45 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		planWeekCost,
 		triggeredAllergensByMealId,
 		readyMealIds,
+		supplyDayInclusion: initialSupplyDayInclusion,
 	} = loaderData;
+
+	const supplyToggleFetcher = useFetcher<{
+		date?: string;
+		includedInSupply?: boolean;
+	}>();
+	const [supplyDayInclusion, setSupplyDayInclusion] = useState(
+		initialSupplyDayInclusion,
+	);
+
+	useEffect(() => {
+		setSupplyDayInclusion(initialSupplyDayInclusion);
+	}, [initialSupplyDayInclusion]);
+
+	useEffect(() => {
+		const data = supplyToggleFetcher.data;
+		if (
+			supplyToggleFetcher.state === "idle" &&
+			data?.date != null &&
+			data.includedInSupply != null
+		) {
+			const date = String(data.date);
+			const included = Boolean(data.includedInSupply);
+			setSupplyDayInclusion((prev) => ({
+				...prev,
+				[date]: included,
+			}));
+		}
+	}, [supplyToggleFetcher.state, supplyToggleFetcher.data]);
+
+	const handleToggleSupplyInclusion = (date: string) => {
+		supplyToggleFetcher.submit(null, {
+			method: "POST",
+			action: `/api/meal-plans/supply-days/${date}`,
+		});
+	};
+
+	const isTogglingSupply = supplyToggleFetcher.state !== "idle";
 
 	// Picker meals are loaded client-side from /api/meals. The load is triggered
 	// on mount so data is ready by the time the user opens the meal picker or
@@ -263,23 +313,43 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const consumeFetcher = useFetcher<{
 		consumed?: number;
 		error?: string;
+		requiresConfirmation?: boolean;
+		missingIngredients?: Array<{
+			name: string;
+			required: number;
+			available: number;
+			unit: string;
+		}>;
+		deductions?: unknown[];
 	}>();
+	const pendingConsumeEntryIds = useRef<string[]>([]);
+	const consumeConfirmationHandled = useRef(false);
 	const revalidator = useRevalidator();
 	const { confirm } = useConfirm();
 	const consumeToast = useToast({ duration: 4000 });
+	const consumeMarkOnlyToast = useToast({ duration: 4000 });
 	const consumeErrorToast = useToast({ duration: 6000 });
 	const copyToast = useToast({ duration: 3000 });
 	const copyErrorToast = useToast({ duration: 6000 });
 	const planWeekToast = useToast({ duration: 4000 });
 	const planWeekErrorToast = useToast({ duration: 6000 });
 
+	const submitConsume = useCallback(
+		(entryIds: string[], confirmInsufficient = false) => {
+			consumeFetcher.submit(JSON.stringify({ entryIds, confirmInsufficient }), {
+				method: "POST",
+				action: `/api/meal-plans/${plan.id}/entries/consume`,
+				encType: "application/json",
+			});
+		},
+		[consumeFetcher.submit, plan.id],
+	);
+
 	const handleConsume = (entryIds: string[]) => {
 		if (entryIds.length === 0) return;
-		consumeFetcher.submit(JSON.stringify({ entryIds }), {
-			method: "POST",
-			action: `/api/meal-plans/${plan.id}/entries/consume`,
-			encType: "application/json",
-		});
+		pendingConsumeEntryIds.current = entryIds;
+		consumeConfirmationHandled.current = false;
+		submitConsume(entryIds, false);
 	};
 
 	const handleConsumeSingle = (entryId: string) => {
@@ -412,10 +482,42 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	useEffect(() => {
 		if (consumeFetcher.state !== "idle" || !consumeFetcher.data) return;
 		const data = consumeFetcher.data;
-		if (typeof data.consumed === "number") {
+
+		if (
+			data.requiresConfirmation &&
+			data.missingIngredients &&
+			!consumeConfirmationHandled.current
+		) {
+			consumeConfirmationHandled.current = true;
+			const names = data.missingIngredients.map((m) => m.name).join(", ");
+			void (async () => {
+				const ok = await confirm({
+					title: "Missing ingredients",
+					message: `You don't have enough: ${names}. Mark as eaten without deducting from Cargo?`,
+					confirmLabel: "Consume anyway",
+					variant: "warning",
+				});
+				if (ok && pendingConsumeEntryIds.current.length > 0) {
+					submitConsume(pendingConsumeEntryIds.current, true);
+				} else {
+					pendingConsumeEntryIds.current = [];
+				}
+			})();
+			return;
+		}
+
+		if (typeof data.consumed === "number" && data.consumed > 0) {
 			revalidator.revalidate();
-			consumeToast.show();
+			pendingConsumeEntryIds.current = [];
+			const hadDeductions =
+				Array.isArray(data.deductions) && data.deductions.length > 0;
+			if (hadDeductions) {
+				consumeToast.show();
+			} else {
+				consumeMarkOnlyToast.show();
+			}
 		} else if (data.error) {
+			pendingConsumeEntryIds.current = [];
 			consumeErrorToast.show();
 		}
 	}, [
@@ -423,7 +525,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		consumeFetcher.data,
 		revalidator.revalidate,
 		consumeToast.show,
+		consumeMarkOnlyToast.show,
 		consumeErrorToast.show,
+		confirm,
+		submitConsume,
 	]);
 
 	// Revalidate and show toasts after bulk copy / plan-week confirm
@@ -645,6 +750,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								showSnackSlot={showSnackSlot}
 								triggeredAllergensByMealId={triggeredAllergensByMealId}
 								readyMealIds={readyMealIds}
+								includedInSupply={supplyDayInclusion[activeDay] !== false}
+								onToggleSupplyInclusion={handleToggleSupplyInclusion}
+								isTogglingSupply={isTogglingSupply}
 							/>
 						)}
 					</div>
@@ -672,6 +780,9 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						onSelectDate={setSelectedDay}
 						triggeredAllergensByMealId={triggeredAllergensByMealId}
 						readyMealIds={readyMealIds}
+						supplyDayInclusion={supplyDayInclusion}
+						onToggleSupplyInclusion={handleToggleSupplyInclusion}
+						isTogglingSupply={isTogglingSupply}
 					/>
 				</div>
 			</div>
@@ -809,6 +920,16 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				open={showPlanWeekModal}
 				onOpenChange={setShowPlanWeekModal}
 			/>
+
+			{consumeMarkOnlyToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Marked as eaten"
+					description="Cargo unchanged."
+					onDismiss={consumeMarkOnlyToast.hide}
+				/>
+			)}
 
 			{/* Consume success toast */}
 			{consumeToast.isOpen && (

@@ -1,4 +1,5 @@
 import { expect } from "@playwright/test";
+import { cleanupE2eMeals, deleteMealById } from "../helpers/cleanup";
 import { test } from "../fixtures/auth";
 
 const E2E_MANIFEST_MEAL = `e2e-manifest-meal-${Date.now()}`;
@@ -16,6 +17,8 @@ test.describe("manifest", () => {
 	});
 
 	test("add and remove meal entry", async ({ authenticatedPage: page }) => {
+		await cleanupE2eMeals(page);
+
 		// 1. Create a meal in Galley
 		await page.goto("/hub/galley");
 		await page.getByRole("button", { name: "Add" }).first().click();
@@ -23,6 +26,7 @@ test.describe("manifest", () => {
 		await page.getByLabel("Meal Name").fill(E2E_MANIFEST_MEAL);
 		await page.getByRole("button", { name: "Create Meal" }).click();
 		await expect(page).toHaveURL(/\/hub\/galley\/.+/);
+		const mealId = page.url().split("/").pop() ?? "";
 
 		// 2. Go to Manifest and add meal to a slot
 		await page.goto("/hub/manifest");
@@ -74,13 +78,9 @@ test.describe("manifest", () => {
 			page.getByRole("button", { name: `Remove ${E2E_MANIFEST_MEAL}` }),
 		).toHaveCount(0, { timeout: 5000 });
 
-		// 7. Cleanup: delete meal from Galley
-		await page.goto(`/hub/galley`);
-		await page.getByRole("link", { name: E2E_MANIFEST_MEAL }).click();
-		await page.getByRole("button", { name: "Delete" }).click();
-		await page
-			.getByRole("dialog")
-			.getByRole("button", { name: "Delete" })
-			.click();
+		// 7. Cleanup: delete meal via API (list view may not show the new meal immediately)
+		if (mealId) {
+			await deleteMealById(page, mealId);
+		}
 	});
 });

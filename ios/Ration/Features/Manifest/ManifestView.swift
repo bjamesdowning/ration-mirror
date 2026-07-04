@@ -7,6 +7,7 @@ final class ManifestViewModel {
     private(set) var manifest: ManifestResponse?
     private(set) var isLoading = false
     private(set) var isSavingEntry = false
+    private(set) var isTogglingSupplyDay = false
     var errorMessage: String?
     var offlineBannerMessage: String?
     var rangeStart: String = ManifestDateHelpers.todayISO()
@@ -14,6 +15,13 @@ final class ManifestViewModel {
     var calendarSpan = 7
     var weekStartPref = "sunday"
     private(set) var hasInitializedAnchor = false
+    var supplyDayInclusion: [String: Bool] = [:]
+
+    enum ConsumeOutcome: Sendable {
+        case success(undoToken: String?)
+        case needsConfirmation(missing: [MissingIngredientDetail])
+        case failed
+    }
 
     func applyInitialAnchorIfNeeded() {
         guard !hasInitializedAnchor else { return }
@@ -50,6 +58,7 @@ final class ManifestViewModel {
             do {
                 let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
                 manifest = data
+                applySupplyDayInclusion(from: data)
                 snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -90,6 +99,7 @@ final class ManifestViewModel {
                 rangeStart = normalizedStart
                 selectedDay = newSelectedDay
                 manifest = data
+                applySupplyDayInclusion(from: data)
                 snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -132,9 +142,46 @@ final class ManifestViewModel {
         return visible.first ?? start
     }
 
-    func consume(_ entry: ManifestEntry, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async -> String? {
+    func isDayIncludedInSupply(_ date: String) -> Bool {
+        supplyDayInclusion[date] ?? true
+    }
+
+    func toggleSupplyDay(_ date: String, api: RationAPI, online: Bool) async {
+        guard online else {
+            errorMessage = "Supply day toggles require a network connection."
+            return
+        }
+        isTogglingSupplyDay = true
+        defer { isTogglingSupplyDay = false }
         do {
-            let result = try await api.consumeManifestEntries([entry.id])
+            let result = try await api.toggleManifestDaySupply(date: date)
+            supplyDayInclusion[date] = result.includedInSupply
+            Haptics.light()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func consume(
+        _ entry: ManifestEntry,
+        confirmInsufficient: Bool = false,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async -> ConsumeOutcome {
+        do {
+            let result = try await api.consumeManifestEntries(
+                [entry.id],
+                confirmInsufficient: confirmInsufficient ? true : nil
+            )
+            if result.requiresConfirmation == true,
+               let missing = result.missingIngredients,
+               !missing.isEmpty,
+               !confirmInsufficient
+            {
+                return .needsConfirmation(missing: missing)
+            }
             Haptics.success()
             markEntryConsumedLocally(entryId: entry.id)
             let undoToken = result.undoToken
@@ -144,10 +191,10 @@ final class ManifestViewModel {
                 online: online,
                 organizationId: organizationId
             )
-            return undoToken
+            return .success(undoToken: undoToken)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return nil
+            return .failed
         }
     }
 
@@ -184,7 +231,8 @@ final class ManifestViewModel {
             plan: manifest.plan,
             startDate: manifest.startDate,
             endDate: manifest.endDate,
-            entries: updated
+            entries: updated,
+            supplyDayInclusion: manifest.supplyDayInclusion
         )
     }
 
@@ -215,7 +263,8 @@ final class ManifestViewModel {
             plan: manifest.plan,
             startDate: manifest.startDate,
             endDate: manifest.endDate,
-            entries: updated
+            entries: updated,
+            supplyDayInclusion: manifest.supplyDayInclusion
         )
     }
 
@@ -230,6 +279,7 @@ final class ManifestViewModel {
         do {
             let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
             manifest = data
+            applySupplyDayInclusion(from: data)
             snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
         } catch {
             // Consume succeeded — do not surface reload failures as errors.
@@ -265,6 +315,12 @@ final class ManifestViewModel {
         }
     }
 
+    private func applySupplyDayInclusion(from manifest: ManifestResponse) {
+        if let inclusion = manifest.supplyDayInclusion {
+            supplyDayInclusion = inclusion
+        }
+    }
+
     private func restoreSnapshot(
         _ snapshots: SnapshotStore,
         organizationId: String,
@@ -275,6 +331,7 @@ final class ManifestViewModel {
             return
         }
         manifest = cached.payload
+        applySupplyDayInclusion(from: cached.payload)
         if !requestedStart.isEmpty, cached.payload.startDate != requestedStart {
             let formatted = ManifestDateHelpers.formatRange(
                 start: cached.payload.startDate,
@@ -304,6 +361,9 @@ struct ManifestView: View {
     @State private var consumeUndoToken: String?
     @State private var showConsumeUndo = false
     @State private var showGroupSettings = false
+    @State private var pendingConsumeEntry: ManifestEntry?
+    @State private var consumeConfirmationMessage: String?
+    @State private var showConsumeConfirmation = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -433,6 +493,17 @@ struct ManifestView: View {
             await loadManifestShareStatus()
         }
         .refreshable { await reload() }
+        .alert("Insufficient cargo", isPresented: $showConsumeConfirmation) {
+            Button("Consume anyway") {
+                Task { await confirmConsumeDespiteShortfall() }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingConsumeEntry = nil
+                consumeConfirmationMessage = nil
+            }
+        } message: {
+            Text(consumeConfirmationMessage ?? "Missing ingredients. Consume anyway?")
+        }
     }
 
     private func reload() async {
@@ -506,23 +577,35 @@ struct ManifestView: View {
                     .foregroundStyle(Theme.muted)
                     .listRowBackground(Color.clear)
             } else {
-                Section(ManifestDateHelpers.smartLabel(isoDate: model.selectedDay)) {
+                Section {
+                    HStack {
+                        Text(ManifestDateHelpers.smartLabel(isoDate: model.selectedDay))
+                            .rationHeadline()
+                        Spacer()
+                        ManifestDaySupplyToggle(
+                            includedInSupply: model.isDayIncludedInSupply(model.selectedDay),
+                            disabled: !env.network.isOnline || model.isTogglingSupplyDay
+                        ) {
+                            Task {
+                                await model.toggleSupplyDay(
+                                    model.selectedDay,
+                                    api: env.api,
+                                    online: env.network.isOnline
+                                )
+                            }
+                        }
+                    }
+                } header: {
+                    EmptyView()
+                }
+                .listRowBackground(Theme.surface)
+
+                Section {
                     ForEach(dayEntries) { entry in
                         ManifestEntryRow(
                             entry: entry,
                             onConsume: {
-                                Task {
-                                    if let token = await model.consume(
-                                        entry,
-                                        api: env.api,
-                                        snapshots: env.snapshots,
-                                        online: env.network.isOnline,
-                                        organizationId: organizationId
-                                    ) {
-                                        consumeUndoToken = token
-                                        showConsumeUndo = true
-                                    }
-                                }
+                                Task { await handleConsume(entry) }
                             }
                         )
                         .listRowBackground(Theme.surface)
@@ -547,6 +630,54 @@ struct ManifestView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private func handleConsume(_ entry: ManifestEntry) async {
+        switch await model.consume(
+            entry,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        ) {
+        case .success(let token):
+            consumeUndoToken = token
+            showConsumeUndo = true
+        case .needsConfirmation(let missing):
+            pendingConsumeEntry = entry
+            consumeConfirmationMessage = missingIngredientsMessage(missing)
+            showConsumeConfirmation = true
+        case .failed:
+            break
+        }
+    }
+
+    private func confirmConsumeDespiteShortfall() async {
+        guard let entry = pendingConsumeEntry else { return }
+        pendingConsumeEntry = nil
+        consumeConfirmationMessage = nil
+        showConsumeConfirmation = false
+        switch await model.consume(
+            entry,
+            confirmInsufficient: true,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        ) {
+        case .success(let token):
+            consumeUndoToken = token
+            showConsumeUndo = true
+        case .needsConfirmation, .failed:
+            break
+        }
+    }
+
+    private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
+        let lines = missing.map { ingredient in
+            "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
+        }
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nConsume anyway?"
     }
 
     private func loadManifestShareStatus() async {
@@ -599,5 +730,31 @@ struct ManifestView: View {
         } catch {
             model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+    }
+}
+
+struct ManifestDaySupplyToggle: View {
+    let includedInSupply: Bool
+    var disabled = false
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            Text(includedInSupply ? "On Supply" : "Off Supply")
+                .font(Typography.caption())
+                .textCase(.uppercase)
+                .foregroundStyle(includedInSupply ? Theme.hyperGreen : Theme.muted)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(includedInSupply ? Theme.hyperGreen.opacity(0.15) : Theme.platinum)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .accessibilityLabel(
+            includedInSupply
+                ? "Included in shopping list. Tap to exclude this day."
+                : "Excluded from shopping list. Tap to include this day."
+        )
     }
 }

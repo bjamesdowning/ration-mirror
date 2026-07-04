@@ -2,6 +2,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
+	ledger,
 	meal,
 	mealIngredient,
 	member,
@@ -10,9 +11,10 @@ import {
 	supplySnooze,
 	user,
 } from "../db/schema";
-import { dockSupplyItems } from "./cargo.server";
+import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { toExpiryDate } from "./date-utils";
+import type { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { normalizeForCargoDedup } from "./matching.server";
@@ -1525,6 +1527,7 @@ async function buildIngredientRowsFromOccurrences(
 						ingredientName: mealIngredient.ingredientName,
 						quantity: mealIngredient.quantity,
 						unit: mealIngredient.unit,
+						isOptional: mealIngredient.isOptional,
 					})
 					.from(mealIngredient)
 					.where(inArray(mealIngredient.mealId, chunk)),
@@ -1553,6 +1556,7 @@ async function buildIngredientRowsFromOccurrences(
 
 		const ingredients = ingredientsByMeal.get(occurrence.mealId) ?? [];
 		for (const ing of ingredients) {
+			if (ing.isOptional) continue;
 			result.push({
 				meal_ingredient: {
 					ingredientName: ing.ingredientName,
@@ -2011,5 +2015,139 @@ export async function completeSupplyList(
 	return {
 		docked: results.updated + results.created,
 		summary: results,
+	};
+}
+
+export type SupplyScanCompleteInput = {
+	scanItemId: string;
+	supplyItemId: string | null;
+	dock: {
+		name: string;
+		quantity: number;
+		unit: string;
+		domain: string;
+		tags?: string[];
+		expiresAt?: string;
+		mergeTargetId?: string;
+	};
+	updateSupply?: { quantity: number; unit: string };
+};
+
+/**
+ * Docks receipt-selected items to Cargo and reconciles linked supply rows.
+ */
+export async function completeSupplyFromScan(
+	env: Env,
+	organizationId: string,
+	listId: string,
+	pairs: SupplyScanCompleteInput[],
+) {
+	if (pairs.length === 0) {
+		return { docked: 0, supplyUpdated: 0, supplyRemoved: 0 };
+	}
+
+	const d1 = drizzle(env.DB);
+
+	const [list] = await d1
+		.select({ id: supplyList.id })
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.id, listId),
+				eq(supplyList.organizationId, organizationId),
+			),
+		)
+		.limit(1);
+
+	if (!list) throw new Error("Supply list not found or unauthorized");
+
+	const dockInputs = pairs.map((p) => ({
+		name: p.dock.name,
+		quantity: p.dock.quantity,
+		unit: toSupportedUnit(p.dock.unit) as SupportedUnit,
+		domain: p.dock.domain as (typeof ITEM_DOMAINS)[number],
+		tags: p.dock.tags ?? [],
+		expiresAt: p.dock.expiresAt
+			? (toExpiryDate(p.dock.expiresAt) ?? undefined)
+			: undefined,
+		mergeTargetId: p.dock.mergeTargetId,
+	}));
+
+	const ingestResults = await ingestCargoItems(
+		env,
+		organizationId,
+		dockInputs,
+		{
+			strictMergeTarget: false,
+		},
+	);
+
+	let updated = 0;
+	let created = 0;
+	for (const r of ingestResults) {
+		if (r.status === "merged") updated += 1;
+		else if (r.status === "created") created += 1;
+	}
+	const ingestResult = { updated, created };
+
+	const ledgerOps = pairs.map((p) =>
+		d1.insert(ledger).values({
+			organizationId,
+			amount: 0,
+			reason: `dock: ${p.dock.name} (+${p.dock.quantity} ${p.dock.unit})`,
+		}),
+	);
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const batchStmts: any[] = [...ledgerOps];
+	let supplyUpdated = 0;
+	const removeIds = new Set<string>();
+
+	for (const pair of pairs) {
+		if (!pair.supplyItemId) continue;
+		removeIds.add(pair.supplyItemId);
+		if (pair.updateSupply) {
+			supplyUpdated++;
+			batchStmts.push(
+				d1
+					.update(supplyItem)
+					.set({
+						quantity: pair.updateSupply.quantity,
+						unit: pair.updateSupply.unit,
+						isPurchased: true,
+					})
+					.where(
+						and(
+							eq(supplyItem.id, pair.supplyItemId),
+							eq(supplyItem.listId, listId),
+						),
+					),
+			);
+		}
+	}
+
+	for (const itemId of removeIds) {
+		batchStmts.push(
+			d1
+				.delete(supplyItem)
+				.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId))),
+		);
+	}
+
+	batchStmts.push(
+		d1
+			.update(supplyList)
+			.set({ updatedAt: new Date() })
+			.where(eq(supplyList.id, listId)),
+	);
+
+	if (batchStmts.length > 0) {
+		await d1.batch(batchStmts as [any, ...any[]]);
+	}
+
+	return {
+		docked: ingestResult.updated + ingestResult.created,
+		supplyUpdated,
+		supplyRemoved: removeIds.size,
 	};
 }

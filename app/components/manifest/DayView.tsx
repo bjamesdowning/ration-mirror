@@ -3,6 +3,7 @@ import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
+import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
 import { MealSlot } from "./MealSlot";
 
 interface DayViewProps {
@@ -17,6 +18,9 @@ interface DayViewProps {
 	readOnly?: boolean;
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 	readyMealIds?: Record<string, boolean>;
+	includedInSupply?: boolean;
+	onToggleSupplyInclusion?: (date: string) => void;
+	isTogglingSupply?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -46,6 +50,9 @@ export function DayView({
 	readOnly = false,
 	triggeredAllergensByMealId = {},
 	readyMealIds = {},
+	includedInSupply = true,
+	onToggleSupplyInclusion,
+	isTogglingSupply = false,
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
@@ -66,6 +73,14 @@ export function DayView({
 				<p className="text-xs text-muted font-mono">
 					{dayName}, {formattedDate}
 				</p>
+				{onToggleSupplyInclusion && (
+					<ManifestDaySupplyToggle
+						date={date}
+						includedInSupply={includedInSupply}
+						onToggle={onToggleSupplyInclusion}
+						disabled={isTogglingSupply}
+					/>
+				)}
 				{totalCount > 0 && (
 					<>
 						<span className="text-xs text-muted/40 font-mono">·</span>

@@ -19,6 +19,7 @@ interface MealSlotCardProps {
 	triggeredAllergens?: AllergenSlug[];
 	/** Whether this meal currently has all required ingredients in cargo. */
 	isReady?: boolean;
+	mealTags?: string[];
 }
 
 export function MealSlotCard({
@@ -30,6 +31,7 @@ export function MealSlotCard({
 	isConsuming = false,
 	triggeredAllergens = [],
 	isReady,
+	mealTags = [],
 }: MealSlotCardProps) {
 	const fetcher = useFetcher();
 	const isRemoving = fetcher.state !== "idle";
@@ -120,6 +122,19 @@ export function MealSlotCard({
 				{triggeredAllergens.length > 0 && (
 					<div className="mt-1.5">
 						<AllergenWarningBadge triggered={triggeredAllergens} compact />
+					</div>
+				)}
+
+				{mealTags.length > 0 && (
+					<div className="flex flex-wrap gap-1 mt-1.5">
+						{mealTags.slice(0, 4).map((tag) => (
+							<span
+								key={tag}
+								className="text-[10px] px-1.5 py-0.5 rounded-full bg-platinum/80 dark:bg-white/10 text-muted font-mono"
+							>
+								{tag}
+							</span>
+						))}
 					</div>
 				)}
 

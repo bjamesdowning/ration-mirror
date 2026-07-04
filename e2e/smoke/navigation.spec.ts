@@ -6,6 +6,9 @@ test.describe("navigation", () => {
 		authenticatedPage: page,
 	}) => {
 		await page.goto("/hub");
+		await expect(page.locator('aside a[href="/hub/cargo"]')).toBeVisible({
+			timeout: 15000,
+		});
 
 		// Use aside href to target sidebar links (avoids "Manage Cargo →" etc. on hub widgets)
 		await page.locator('aside a[href="/hub/cargo"]').click();
@@ -20,9 +23,14 @@ test.describe("navigation", () => {
 
 		await page.locator('aside a[href="/hub/manifest"]').click();
 		await expect(page).toHaveURL(/\/hub\/manifest/);
+		await expect(
+			page.getByRole("heading", { name: "Manifest", exact: true }),
+		).toBeVisible({ timeout: 10000 });
 
-		await page.locator('aside a[href="/hub/supply"]').click();
-		await expect(page).toHaveURL("/hub/supply");
+		await Promise.all([
+			page.waitForURL("/hub/supply", { timeout: 15000 }),
+			page.locator('aside a[href="/hub/supply"]').click(),
+		]);
 	});
 
 	test("settings link navigates to settings", async ({

@@ -232,6 +232,13 @@
       "when": 1782427980452,
       "tag": "0032_serious_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1783123664502,
+      "tag": "0033_watery_giant_man",
+      "breakpoints": true
     }
   ]
 }

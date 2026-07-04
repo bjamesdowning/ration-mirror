@@ -13,13 +13,11 @@ async function openSupplyQuickAdd(page: Page) {
 
 async function addSupplyItem(page: Page, itemName: string) {
 	await openSupplyQuickAdd(page);
-	await page
-		.locator('[data-testid="supply-quick-add"] #supply-item-name')
-		.fill(itemName);
-	await page
-		.getByTestId("supply-quick-add")
-		.getByRole("button", { name: "Add to Supply" })
-		.click();
+	const quickAdd = page.getByTestId("supply-quick-add");
+	const nameInput = quickAdd.locator("#supply-item-name");
+	await nameInput.click();
+	await nameInput.pressSequentially(itemName, { delay: 10 });
+	await quickAdd.getByRole("button", { name: "Add to Supply" }).click();
 	await expect(supplyRow(page, itemName)).toBeVisible({ timeout: 10000 });
 }
 
@@ -28,6 +26,13 @@ function supplyRow(page: Page, itemName: string) {
 		.getByTestId("supply-item-row")
 		.filter({ hasText: itemName })
 		.first();
+}
+
+async function confirmPurchaseModal(page: Page) {
+	await expect(
+		page.getByRole("heading", { name: "What did you buy?" }),
+	).toBeVisible({ timeout: 5000 });
+	await page.getByRole("button", { name: /Use as listed/i }).click();
 }
 
 function supplyMobileRow(page: Page, itemName: string) {
@@ -71,10 +76,7 @@ test.describe("supply", () => {
 		const row = supplyRow(page, itemName);
 
 		await row.getByRole("button", { name: "Mark as purchased" }).click();
-
-		await expect(
-			page.getByRole("heading", { name: "What did you buy?" }),
-		).toHaveCount(0);
+		await confirmPurchaseModal(page);
 
 		await expect(
 			row.getByRole("button", { name: "Mark as not purchased" }),
@@ -96,6 +98,7 @@ test.describe("supply", () => {
 		await row.getByRole("spinbutton", { name: "Edit quantity" }).press("Enter");
 
 		await row.getByRole("button", { name: "Mark as purchased" }).click();
+		await confirmPurchaseModal(page);
 		await expect(
 			row.getByRole("button", { name: "Mark as not purchased" }),
 		).toBeVisible({ timeout: 5000 });

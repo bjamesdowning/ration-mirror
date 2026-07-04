@@ -71,6 +71,7 @@ export function MealSlot({
 								isConsuming={isConsuming}
 								triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 								isReady={readyMealIds[entry.mealId]}
+								mealTags={entry.mealTags}
 							/>
 						))}
 						{!readOnly && (
@@ -121,6 +122,7 @@ export function MealSlot({
 						isConsuming={isConsuming}
 						triggeredAllergens={triggeredAllergensByMealId[entry.mealId]}
 						isReady={readyMealIds[entry.mealId]}
+						mealTags={entry.mealTags}
 					/>
 				))}
 			</div>

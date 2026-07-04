@@ -174,6 +174,10 @@ export default [
 		"api/meal-plans/:id/plan-week/status/:requestId",
 		"routes/api/meal-plans.$id.plan-week.status.$requestId.ts",
 	),
+	route(
+		"api/meal-plans/supply-days/:date",
+		"routes/api/meal-plans.supply-days.$date.ts",
+	),
 
 	// API - Supply Lists
 	route("api/supply-lists", "routes/api/supply-lists.ts"),
@@ -192,6 +196,14 @@ export default [
 	route(
 		"api/supply-lists/:id/complete",
 		"routes/api/supply-lists.$id.complete.ts",
+	),
+	route(
+		"api/supply-lists/:id/scan-match",
+		"routes/api/supply-lists.$id.scan-match.ts",
+	),
+	route(
+		"api/supply-lists/:id/scan-complete",
+		"routes/api/supply-lists.$id.scan-complete.ts",
 	),
 	route(
 		"api/supply-lists/:id/snoozes",
@@ -376,6 +388,10 @@ export default [
 		"routes/api/mobile/v1.manifest.share.ts",
 	),
 	route(
+		"api/mobile/v1/manifest/supply-days/:date",
+		"routes/api/mobile/v1.manifest.supply-days.$date.ts",
+	),
+	route(
 		"api/mobile/v1/meals/:id/cook",
 		"routes/api/mobile/v1.meals.$id.cook.ts",
 	),
@@ -388,6 +404,7 @@ export default [
 		"api/mobile/v1/supply/complete",
 		"routes/api/mobile/v1.supply.complete.ts",
 	),
+	route("api/mobile/v1/supply/scan", "routes/api/mobile/v1.supply.scan.ts"),
 	route("api/mobile/v1/supply/share", "routes/api/mobile/v1.supply.share.ts"),
 
 	route("api/auth/*", "routes/api.auth.$.ts"),

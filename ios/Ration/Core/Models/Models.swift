@@ -535,6 +535,8 @@ struct ManifestResponse: Codable, Sendable {
     let startDate: String
     let endDate: String
     let entries: [ManifestEntry]
+    /// Dates excluded from Supply sync (`false` = off supply). Omitted dates default to included.
+    let supplyDayInclusion: [String: Bool]?
 }
 
 struct ManifestEntryCreate: Encodable, Sendable {
@@ -551,11 +553,27 @@ struct ManifestEntryCreateResponse: Codable, Sendable {
 
 struct ManifestConsumeRequest: Encodable, Sendable {
     let entryIds: [String]
+    var confirmInsufficient: Bool?
+}
+
+struct MissingIngredientDetail: Codable, Sendable, Identifiable {
+    var id: String { name }
+    let name: String
+    let required: Double
+    let available: Double
+    let unit: String
 }
 
 struct ManifestConsumeResponse: Codable, Sendable {
     let consumed: Int
     let undoToken: String?
+    let requiresConfirmation: Bool?
+    let missingIngredients: [MissingIngredientDetail]?
+}
+
+struct ManifestSupplyDayToggleResponse: Codable, Sendable {
+    let date: String
+    let includedInSupply: Bool
 }
 
 struct UndoActionRequest: Encodable, Sendable {
@@ -957,6 +975,73 @@ struct SupplyCompleteResponse: Codable, Sendable {
     let docked: Int
 }
 
+// MARK: - Supply scan
+
+struct SupplyScanQuantityProposal: Codable, Sendable {
+    let dockQuantity: Double
+    let dockUnit: String
+    let source: String?
+    let supplyQuantity: Double?
+    let supplyUnit: String?
+    let receiptQuantity: Double?
+    let receiptUnit: String?
+    let hasDelta: Bool?
+}
+
+struct SupplyScanPair: Codable, Sendable, Identifiable {
+    var id: String { scanItem.id }
+    let scanItem: ScanResultItem
+    let supplyItem: SupplyItem?
+    let matchScore: Double?
+    let matchType: String?
+    let wasPreChecked: Bool?
+    let quantityProposal: SupplyScanQuantityProposal?
+}
+
+struct SupplyScanMatchResponse: Codable, Sendable {
+    let requestId: String
+    let scanItems: [ScanResultItem]?
+    let pairs: [SupplyScanPair]
+    let receiptOnly: [ScanResultItem]?
+    let supplyOnly: [SupplyItem]?
+}
+
+struct SupplyScanCompleteDock: Encodable, Sendable {
+    let name: String
+    let quantity: Double
+    let unit: String
+    let domain: String
+    var tags: [String] = []
+    var expiresAt: String?
+}
+
+struct SupplyScanCompletePair: Encodable, Sendable {
+    let scanItemId: String
+    let supplyItemId: String?
+    let matchType: String
+    let dock: SupplyScanCompleteDock
+    var updateSupply: SupplyScanUpdateSupply?
+}
+
+struct SupplyScanUpdateSupply: Encodable, Sendable {
+    let quantity: Double
+    let unit: String
+}
+
+struct SupplyScanCompleteRequest: Encodable, Sendable {
+    let listId: String
+    let requestId: String
+    let pairs: [SupplyScanCompletePair]
+    var supplyOnlyIds: [String]?
+}
+
+struct SupplyScanCompleteResponse: Codable, Sendable {
+    let docked: Int
+    let supplyUpdated: Int?
+    let supplyRemoved: Int?
+    let replayed: Bool?
+}
+
 struct AccountDeleteResponse: Codable, Sendable {
     let success: Bool
     let deleted: Bool
@@ -1007,13 +1092,14 @@ struct ScanStatusResponse: Codable, Sendable {
 }
 
 struct ScanResultItem: Codable, Sendable, Identifiable {
-    var id: String { "\(name)-\(unit)-\(quantity)" }
+    let id: String
     let name: String
     let quantity: Double
     let unit: String
     let domain: String?
     let tags: [String]?
     let expiresAt: String?
+    let confidence: Double?
 }
 
 /// Lightweight dynamic JSON value for scan metadata/result payloads.

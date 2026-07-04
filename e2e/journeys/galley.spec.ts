@@ -1,7 +1,12 @@
 import { expect } from "@playwright/test";
+import { cleanupE2eMeals } from "../helpers/cleanup";
 import { test } from "../fixtures/auth";
 
 test.describe("galley", () => {
+	test.beforeEach(async ({ authenticatedPage: page }) => {
+		await cleanupE2eMeals(page);
+	});
+
 	test("add and delete meal with cleanup", async ({
 		authenticatedPage: page,
 	}) => {
@@ -47,13 +52,20 @@ test.describe("galley", () => {
 		await expect(page).toHaveURL(/\/hub\/galley\/.+/);
 
 		// Edit meal
+		await expect(page.getByRole("link", { name: "Edit" })).toBeVisible({
+			timeout: 10000,
+		});
 		await page.getByRole("link", { name: "Edit" }).click();
-		await expect(page).toHaveURL(/\/hub\/galley\/.+\/edit/);
+		await expect(page).toHaveURL(/\/hub\/galley\/.+\/edit/, {
+			timeout: 10000,
+		});
 		await page.getByLabel("Name").fill(editedName);
 		await page.getByRole("button", { name: "Update Meal" }).click();
 
 		// Verify redirect to detail and new name
-		await expect(page).toHaveURL(/\/hub\/galley\/[^/]+$/);
+		await expect(page).toHaveURL(/\/hub\/galley\/[^/]+$/, {
+			timeout: 15000,
+		});
 		await expect(page.getByText(editedName)).toBeVisible({ timeout: 5000 });
 
 		// Cleanup

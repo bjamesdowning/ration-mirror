@@ -1,5 +1,7 @@
 import type { supplyItem } from "~/db/schema";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
+import { resolveSupplyItemTags } from "~/lib/supply-tags";
+import { PurchaseQuantityModal } from "./PurchaseQuantityModal";
 import { SupplyItemActionsSheet } from "./SupplyItemActionsSheet";
 import { SupplyItemDesktop } from "./SupplyItemDesktop";
 import { SupplyItemMobile } from "./SupplyItemMobile";
@@ -14,6 +16,7 @@ interface SupplyItemProps {
 				sourceMealSources?: { id: string; name: string }[];
 		  });
 	listId: string;
+	cargoRows?: Array<{ name: string; tags: unknown }>;
 	onDelete?: () => void;
 	onSnooze?: () => void;
 	onRefresh?: () => void;
@@ -22,6 +25,7 @@ interface SupplyItemProps {
 export function SupplyItem({
 	item,
 	listId,
+	cargoRows = [],
 	onDelete,
 	onSnooze,
 	onRefresh,
@@ -32,6 +36,12 @@ export function SupplyItem({
 		onDelete,
 		onSnooze,
 		onRefresh,
+	});
+
+	const displayTags = resolveSupplyItemTags({
+		itemName: item.name,
+		cargoRows,
+		sourceMealIds: item.sourceMealIds ?? [],
 	});
 
 	const rowClasses = `group py-2 px-1 md:py-3 md:px-4 border-b border-platinum dark:border-white/10 last:border-0 transition-all ${
@@ -56,6 +66,7 @@ export function SupplyItem({
 				<div className="hidden md:block">
 					<SupplyItemDesktop
 						displayName={state.displayName}
+						displayTags={displayTags}
 						mealSourced={state.mealSourced}
 						convertLabel={state.convertLabel}
 						optimisticPurchased={state.optimisticPurchased}
@@ -73,6 +84,17 @@ export function SupplyItem({
 					/>
 				</div>
 			</div>
+
+			{state.showPurchaseModal && (
+				<PurchaseQuantityModal
+					itemName={state.displayName}
+					quantity={state.localQuantity}
+					unit={state.localUnit}
+					isPending={state.isPending}
+					onConfirm={state.submitPurchased}
+					onCancel={() => state.setShowPurchaseModal(false)}
+				/>
+			)}
 
 			{state.showActionsSheet && (
 				<SupplyItemActionsSheet

@@ -76,6 +76,7 @@ export const MCP_TOOL_GROUPS = [
 			"add_meal_plan_entry",
 			"bulk_add_meal_plan_entries",
 			"update_meal_plan_entry",
+			"consume_manifest_entries",
 			"remove_meal_plan_entry",
 		],
 	},

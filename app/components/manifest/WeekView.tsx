@@ -3,6 +3,7 @@ import type { MealPlanEntryWithMeal } from "~/lib/manifest.server";
 import { getDayName } from "~/lib/manifest-dates";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_TYPES } from "~/lib/schemas/manifest";
+import { ManifestDaySupplyToggle } from "./ManifestDaySupplyToggle";
 import { MealSlot } from "./MealSlot";
 
 interface WeekViewProps {
@@ -17,12 +18,13 @@ interface WeekViewProps {
 	today: string;
 	showSnackSlot?: boolean;
 	readOnly?: boolean;
-	/** The currently selected day (used to highlight the active deduct target) */
 	selectedDate?: string;
-	/** Callback to set the selected day */
 	onSelectDate?: (date: string) => void;
 	triggeredAllergensByMealId?: Record<string, AllergenSlug[]>;
 	readyMealIds?: Record<string, boolean>;
+	supplyDayInclusion?: Record<string, boolean>;
+	onToggleSupplyInclusion?: (date: string) => void;
+	isTogglingSupply?: boolean;
 }
 
 export function WeekView({
@@ -41,6 +43,9 @@ export function WeekView({
 	onSelectDate,
 	triggeredAllergensByMealId = {},
 	readyMealIds = {},
+	supplyDayInclusion = {},
+	onToggleSupplyInclusion,
+	isTogglingSupply = false,
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -133,6 +138,18 @@ export function WeekView({
 								</button>
 							)}
 						</div>
+
+						{onToggleSupplyInclusion && (
+							<div className="flex justify-center">
+								<ManifestDaySupplyToggle
+									date={date}
+									includedInSupply={supplyDayInclusion[date] !== false}
+									onToggle={onToggleSupplyInclusion}
+									disabled={isTogglingSupply}
+									compact
+								/>
+							</div>
+						)}
 
 						{/* Slots */}
 						<div

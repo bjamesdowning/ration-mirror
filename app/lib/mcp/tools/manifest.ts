@@ -5,6 +5,7 @@ import { z } from "zod";
 import { mealPlanEntry } from "../../../db/schema";
 import {
 	addEntry,
+	consumeManifestEntries,
 	deleteEntry,
 	ensureMealPlan,
 	updateEntry,
@@ -248,6 +249,47 @@ export function registerManifestTools(
 						servings: updated.servingsOverride ?? updated.mealServings,
 						notes: updated.notes,
 						orderIndex: updated.orderIndex,
+					});
+				},
+			})(env, args),
+	);
+
+	registerMcpTool(
+		server,
+		"consume_manifest_entries",
+		"Mark manifest entries as consumed. Deducts ingredients when available; returns requiresConfirmation when cargo is short.",
+		{
+			entryIds: z.array(z.string().uuid()).min(1).max(50),
+			confirmInsufficient: z.boolean().optional(),
+		},
+		async (args: { entryIds: string[]; confirmInsufficient?: boolean }) =>
+			makeTool({
+				name: "consume_manifest_entries",
+				scopes: ["mcp:manifest:write", "mcp:inventory:write"],
+				rateLimitCategory: "mcp_write",
+				audit: true,
+				handler: async (ctx, a: typeof args) => {
+					const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+					const result = await consumeManifestEntries(
+						env,
+						ctx.organizationId,
+						plan.id,
+						a.entryIds,
+						{ confirmInsufficient: a.confirmInsufficient },
+					);
+					if (result.requiresConfirmation) {
+						return ok("consume_manifest_entries", {
+							consumed: 0,
+							requiresConfirmation: true,
+							missingIngredients: result.missingIngredients,
+						});
+					}
+					return ok("consume_manifest_entries", {
+						consumed: result.consumed,
+						requiresConfirmation: false,
+						missingIngredients: undefined,
+						entryIds: result.entryIds,
+						deductions: result.deductions,
 					});
 				},
 			})(env, args),

@@ -91,4 +91,30 @@ describe("POST /api/mobile/v1/manifest/consume", () => {
 		expect(result.consumed).toBe(1);
 		expect(result.undoToken).toBeUndefined();
 	});
+
+	it("returns requiresConfirmation when cargo is insufficient", async () => {
+		consumeManifestEntries.mockResolvedValue({
+			consumed: 0,
+			requiresConfirmation: true,
+			missingIngredients: [
+				{ name: "chicken", required: 2, available: 0, unit: "lb" },
+			],
+		});
+
+		const { action } = await import("~/routes/api/mobile/v1.manifest.consume");
+		const result = (await action({
+			request: postRequest(),
+			context: ctx,
+			params: {},
+		} as never)) as {
+			consumed: number;
+			requiresConfirmation?: boolean;
+			missingIngredients?: unknown[];
+		};
+
+		expect(result.consumed).toBe(0);
+		expect(result.requiresConfirmation).toBe(true);
+		expect(result.missingIngredients).toHaveLength(1);
+		expect(storeUndoToken).not.toHaveBeenCalled();
+	});
 });

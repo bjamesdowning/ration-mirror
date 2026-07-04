@@ -43,16 +43,17 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				{ status: 400 },
 			);
 		}
-		const { entryIds } = parsed.data;
+		const { entryIds, confirmInsufficient } = parsed.data;
 
 		const result = await consumeManifestEntries(
 			context.cloudflare.env,
 			groupId,
 			planId,
 			entryIds,
+			{ confirmInsufficient },
 		);
 
-		return { consumed: result.consumed };
+		return result;
 	} catch (e) {
 		return handleApiError(e);
 	}

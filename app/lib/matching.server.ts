@@ -705,6 +705,92 @@ export async function checkMealReadiness(
 	return readiness;
 }
 
+export type MissingIngredientDetail = {
+	name: string;
+	required: number;
+	available: number;
+	unit: string;
+};
+
+/**
+ * Returns non-optional ingredients that are short for cooking at the given servings.
+ */
+export async function getMealMissingIngredients(
+	env: Env,
+	organizationId: string,
+	mealId: string,
+	effectiveServings: number,
+): Promise<MissingIngredientDetail[]> {
+	const d1 = drizzle(env.DB);
+	const [mealRow] = await d1
+		.select({ servings: meal.servings })
+		.from(meal)
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)))
+		.limit(1);
+
+	if (!mealRow) return [];
+
+	const ingredients = await d1
+		.select()
+		.from(mealIngredient)
+		.where(eq(mealIngredient.mealId, mealId));
+
+	if (ingredients.length === 0) return [];
+
+	const scaleFactor = getScaleFactor(mealRow.servings ?? 1, effectiveServings);
+	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
+	const cargoIndex = buildCargoIndex(orgCargo);
+
+	const missNames = new Set<string>();
+	for (const ingredient of ingredients) {
+		if (ingredient.isOptional) continue;
+		const normalized = normalizeForCargoDedup(ingredient.ingredientName);
+		if (!cargoIndex.has(normalized)) {
+			missNames.add(ingredient.ingredientName);
+		}
+	}
+
+	const similarityMap =
+		missNames.size > 0
+			? await findSimilarCargoBatch(
+					env,
+					organizationId,
+					Array.from(missNames),
+					{
+						topK: 3,
+						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+					},
+				)
+			: new Map<string, SimilarCargoMatch[]>();
+
+	const missing: MissingIngredientDetail[] = [];
+	for (const ingredient of ingredients) {
+		if (ingredient.isOptional) continue;
+		const targetUnit = toSupportedUnit(ingredient.unit);
+		const required = scaleQuantity(
+			ingredient.quantity,
+			scaleFactor,
+			ingredient.unit,
+		);
+		const available = getAvailableQuantityWithMap(
+			ingredient.ingredientName,
+			targetUnit,
+			cargoIndex,
+			similarityMap,
+		);
+		if (available < required) {
+			missing.push({
+				name: ingredient.ingredientName,
+				required,
+				available,
+				unit: targetUnit,
+			});
+		}
+	}
+
+	return missing;
+}
+
 const MATCH_CACHE_PREFIX = "match:";
 const MATCH_CACHE_TTL = 10; // seconds
 

@@ -121,7 +121,7 @@ final class CargoViewModel {
         }
     }
 
-    func toggleRestock(_ item: CargoItem, api: RationAPI) async {
+    func toggleRestock(_ item: CargoItem, quantity: Double? = nil, api: RationAPI) async {
         let activating = !activeCargoIds.contains(item.id)
         if activating {
             activeCargoIds.insert(item.id)
@@ -129,7 +129,7 @@ final class CargoViewModel {
             activeCargoIds.remove(item.id)
         }
         do {
-            let response = try await api.toggleCargoRestock(id: item.id)
+            let response = try await api.toggleCargoRestock(id: item.id, quantity: quantity)
             if response.isActive {
                 activeCargoIds.insert(item.id)
             } else {

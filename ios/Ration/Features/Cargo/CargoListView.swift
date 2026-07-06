@@ -8,6 +8,7 @@ struct CargoListView: View {
     @State private var showingAdd = false
     @State private var showingFilters = false
     @State private var editingItem: CargoItem?
+    @State private var restockItem: CargoItem?
     @State private var showGroupSettings = false
 
     private var organizationId: String {
@@ -81,6 +82,11 @@ struct CargoListView: View {
                     env.notifyCargoDataChanged()
                 }
             }
+            .sheet(item: $restockItem) { item in
+                CargoRestockQuantitySheet(item: item) { quantity in
+                    await model.toggleRestock(item, quantity: quantity, api: env.api)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
                     Button(action: onScan) {
@@ -152,7 +158,11 @@ struct CargoListView: View {
                         .swipeActions(edge: .leading) {
                             let selected = model.isCargoSelected(item.id)
                             Button {
-                                Task { await model.toggleRestock(item, api: env.api) }
+                                if selected {
+                                    Task { await model.toggleRestock(item, api: env.api) }
+                                } else {
+                                    restockItem = item
+                                }
                             } label: {
                                 Label(
                                     selected ? "Remove" : "Add to Supply",

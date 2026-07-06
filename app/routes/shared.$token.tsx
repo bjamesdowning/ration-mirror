@@ -1,13 +1,25 @@
 import { drizzle } from "drizzle-orm/d1";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { data, Link, useFetcher, useLoaderData, useParams } from "react-router";
+import {
+	data,
+	Link,
+	useFetcher,
+	useLoaderData,
+	useParams,
+	useRevalidator,
+} from "react-router";
 import { ClipboardIcon } from "~/components/icons/PageIcons";
 import { PurchaseQuantityModal } from "~/components/supply/PurchaseQuantityModal";
+import { SupplyItemOriginBadge } from "~/components/supply/SupplyItemOriginBadge";
 import * as schema from "~/db/schema";
 import { getAuth } from "~/lib/auth.server";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { getSupplyListByShareToken } from "~/lib/supply.server";
+import {
+	normalizeSupplyOrigins,
+	type SupplyItemOrigin,
+} from "~/lib/supply-item-origins";
 import type { Route } from "./+types/shared.$token";
 
 interface SharedItem {
@@ -17,6 +29,7 @@ interface SharedItem {
 	unit: string;
 	domain: string;
 	isPurchased: boolean;
+	sourceOrigins?: SupplyItemOrigin[];
 }
 
 interface SharedList {
@@ -202,7 +215,15 @@ function SharedGroceryItem({
 			<span
 				className={`flex-1 ${optimisticPurchased ? "line-through text-muted" : "text-carbon"}`}
 			>
-				{item.name}
+				<span className="flex flex-col gap-1">
+					<span>{item.name}</span>
+					{item.sourceOrigins && item.sourceOrigins.length > 0 && (
+						<SupplyItemOriginBadge
+							origins={normalizeSupplyOrigins(item.sourceOrigins)}
+							compact
+						/>
+					)}
+				</span>
 			</span>
 			{item.quantity > 1 && (
 				<span className="text-sm text-muted">
@@ -305,7 +326,23 @@ export default function SharedListPage() {
 		canAddItems: boolean;
 	}>();
 	const { token } = useParams();
+	const revalidator = useRevalidator();
 	const [items, setItems] = useState<SharedItem[]>(list.items);
+
+	useEffect(() => {
+		setItems(list.items);
+	}, [list.items]);
+
+	useEffect(() => {
+		const handleVisibility = () => {
+			if (document.visibilityState === "visible") {
+				revalidator.revalidate();
+			}
+		};
+		document.addEventListener("visibilitychange", handleVisibility);
+		return () =>
+			document.removeEventListener("visibilitychange", handleVisibility);
+	}, [revalidator]);
 
 	const handleOptimisticToggle = useCallback(
 		(itemId: string, isPurchased: boolean) => {

@@ -25,6 +25,7 @@ export async function toggleCargoSelection(
 	db: D1Database,
 	organizationId: string,
 	cargoId: string,
+	quantityOverride?: number,
 ) {
 	const d1 = drizzle(db);
 
@@ -59,9 +60,10 @@ export async function toggleCargoSelection(
 	await d1.insert(activeCargoSelection).values({
 		organizationId,
 		cargoId,
+		quantityOverride: quantityOverride ?? null,
 	});
 
-	return { isActive: true };
+	return { isActive: true, quantityOverride: quantityOverride ?? null };
 }
 
 export async function clearCargoSelections(

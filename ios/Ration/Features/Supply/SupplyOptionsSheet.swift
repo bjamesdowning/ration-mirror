@@ -68,7 +68,7 @@ struct SupplyOptionsSheet: View {
                     Button {
                         Task { await onRefreshFromMeals() }
                     } label: {
-                        Label(isSyncing ? "Refreshing…" : "Refresh from meals", systemImage: "arrow.triangle.2.circlepath")
+                        Label(isSyncing ? "Refreshing…" : "Refresh list", systemImage: "arrow.triangle.2.circlepath")
                     }
                     .disabled(isSyncing)
                     Button(action: onOpenFilters) {
@@ -186,5 +186,48 @@ struct SnoozedItemsSection: View {
         } else {
             Text(snooze.displayName.capitalized).rationBody()
         }
+    }
+}
+
+struct CargoRestockQuantitySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: CargoItem
+    var onConfirm: (Double) async -> Void
+
+    @State private var quantity: Double = 1
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(item.name.capitalized) {
+                    Stepper(value: $quantity, in: 1...999, step: 1) {
+                        Text("Quantity: \(quantity.formatted())")
+                    }
+                    Text("Unit: \(item.unit)")
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                }
+                Section {
+                    Button("Add to Supply") {
+                        Task {
+                            isSaving = true
+                            await onConfirm(quantity)
+                            isSaving = false
+                            dismiss()
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+            .navigationTitle("Restock quantity")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

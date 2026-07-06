@@ -6,6 +6,7 @@ import {
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { CargoRestockQuantitySchema } from "~/lib/schemas/cargo-selection";
 import type { Route } from "./+types/v1.cargo.$id.toggle-restock";
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -48,10 +49,27 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			);
 		}
 
+		let quantityOverride: number | undefined;
+		const contentType = request.headers.get("content-type") ?? "";
+		if (contentType.includes("application/json")) {
+			let json: unknown;
+			try {
+				json = await request.json();
+			} catch {
+				throw data({ error: "Invalid JSON body" }, { status: 400 });
+			}
+			const parsed = CargoRestockQuantitySchema.safeParse(json);
+			if (!parsed.success) {
+				throw data({ error: "Invalid quantity" }, { status: 400 });
+			}
+			quantityOverride = parsed.data.quantity;
+		}
+
 		const result = await toggleCargoSelection(
 			context.cloudflare.env.DB,
 			organizationId,
 			cargoId,
+			quantityOverride,
 		);
 
 		return { success: true, cargoId, ...result };

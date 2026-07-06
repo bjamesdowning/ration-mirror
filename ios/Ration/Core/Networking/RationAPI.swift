@@ -60,8 +60,14 @@ final class RationAPI {
         let _: EmptyResponse = try await client.delete("cargo/\(id)")
     }
 
-    func toggleCargoRestock(id: String) async throws -> ToggleCargoRestockResponse {
-        try await client.post("cargo/\(id)/toggle-restock", body: EmptyBody())
+    func toggleCargoRestock(id: String, quantity: Double? = nil) async throws -> ToggleCargoRestockResponse {
+        if let quantity {
+            return try await client.post(
+                "cargo/\(id)/toggle-restock",
+                body: CargoRestockBody(quantity: quantity)
+            )
+        }
+        return try await client.post("cargo/\(id)/toggle-restock", body: EmptyBody())
     }
 
     func clearCargoSelections() async throws -> ClearSelectionsResponse {
@@ -421,6 +427,10 @@ final class RationAPI {
 }
 
 struct EmptyBody: Encodable, Sendable {}
+
+struct CargoRestockBody: Encodable, Sendable {
+    let quantity: Double
+}
 
 struct SnoozeRequest: Encodable, Sendable {
     let duration: String

@@ -6,7 +6,11 @@
 
 ## Updating the list
 
-Use **Update list** (or equivalent) on the Supply page to **recompute** from current selections and the plan. This matches ingredient names to pantry items—including **fuzzy** matches—so “cilantro” and “fresh coriander” might resolve correctly.
+Supply **auto-syncs when you open the page** (web and iOS). Use **Refresh list** to recompute manually.
+
+Sync merges demand from **Galley** (selected meals), **Manifest** (current-week plan days marked On Supply), and **Cargo** (restock toggles). Meal ingredients subtract what is already in Cargo (including fuzzy name matches). Cargo restock adds an explicit buy quantity you set when toggling an item on (default 1).
+
+Same ingredient from multiple sources appears as **one line** with origin badges (Manifest, Galley, Cargo) and quantities summed.
 
 ## Snooze
 

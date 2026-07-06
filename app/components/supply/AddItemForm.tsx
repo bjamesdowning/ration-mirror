@@ -22,7 +22,7 @@ export function AddItemForm({
 	const [expanded, setExpanded] = useState(false);
 	const didSubmit = useRef(false);
 
-	const isPending = fetcher.state !== "idle";
+	const isPending = didSubmit.current && fetcher.state !== "idle";
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();

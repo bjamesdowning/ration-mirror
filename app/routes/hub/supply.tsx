@@ -1,11 +1,12 @@
+import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	data,
 	useFetcher,
+	useLocation,
 	useRevalidator,
 	useRouteLoaderData,
 } from "react-router";
-
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
 import {
@@ -54,7 +55,8 @@ import {
 	getActiveSnoozes,
 	getSupplyList,
 } from "~/lib/supply.server";
-import { getOrganizationTags } from "~/lib/tags.server";
+import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
+import { getOrganizationTags, getTagsForMealIds } from "~/lib/tags.server";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -121,6 +123,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getUserSettings(context.cloudflare.env.DB, session.user.id),
 	]);
 
+	const mealIds = [
+		...new Set(
+			list?.items?.flatMap((item) => {
+				const ids = [...(item.sourceMealIds ?? [])];
+				return item.sourceMealId ? [...ids, item.sourceMealId] : ids;
+			}) ?? [],
+		),
+	];
+	const mealTagsById = await getTagsForMealIds(
+		context.cloudflare.env.DB,
+		mealIds,
+	);
+	const mealTagSlugsByMealId: Record<string, string[]> = {};
+	for (const [mealId, tags] of mealTagsById) {
+		mealTagSlugsByMealId[mealId] = tags.map((t) => t.slug);
+	}
+
 	return {
 		list,
 		activeSelectionCount: activeSelections.length,
@@ -129,6 +148,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		cargo: cargoItems,
 		snoozes,
 		unitDisplayMode: resolveUnitDisplayMode(userSettings),
+		mealTagSlugsByMealId,
 	};
 }
 
@@ -233,12 +253,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const {
 		list,
-		activeSelectionCount,
-		manifestWeekMealCount,
 		availableTags,
 		cargo,
 		snoozes = [],
+		mealTagSlugsByMealId = {},
 	} = loaderData;
+	const location = useLocation();
 	type SyncResult = {
 		list?: typeof list;
 		summary?: {
@@ -273,6 +293,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
+	const lastSyncSource = useRef<"background" | "manual" | null>(null);
 	const {
 		activeDomain,
 		currentTags,
@@ -284,6 +305,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		hasActiveFilters,
 	} = usePageFilters({ supportsSupplySort: true });
 
+	const mealTagsByMealId = useMemo(
+		() => new Map(Object.entries(mealTagSlugsByMealId)),
+		[mealTagSlugsByMealId],
+	);
+
 	// Local Search Logic (matches Cargo/Galley pattern)
 	const { filteredItems, progressItems } = useMemo(() => {
 		if (!displayList?.items) return { filteredItems: [], progressItems: [] };
@@ -294,17 +320,8 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			items = items.filter((item) => item.domain === activeDomain);
 		}
 
-		// Filter by Tag: match grocery item names to inventory items with that tag
 		if (currentTags.length > 0 && cargo?.length) {
-			const activeTagSet = new Set(currentTags);
-			const cargoNamesWithTag = new Set(
-				cargo
-					.filter((inv) => inv.tags.some((tag) => activeTagSet.has(tag.slug)))
-					.map((inv) => inv.name.toLowerCase()),
-			);
-			items = items.filter((item) =>
-				cargoNamesWithTag.has(item.name.toLowerCase()),
-			);
+			items = filterSupplyItemsByCargoTags(items, cargo, currentTags);
 		}
 
 		// Filter by search query
@@ -347,6 +364,20 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 			{/* Actions */}
 			<div className="space-y-3 border-t border-platinum dark:border-white/10 pt-6 md:hidden">
+				<button
+					type="button"
+					onClick={() => {
+						handleRefreshList();
+						setIsFilterSheetOpen(false);
+					}}
+					disabled={fetcher.state !== "idle"}
+					className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-platinum text-carbon font-semibold rounded-xl hover:bg-platinum/80 transition-colors disabled:opacity-50"
+				>
+					<RefreshCw
+						className={`w-5 h-5 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
+					/>
+					Refresh list
+				</button>
 				<button
 					type="button"
 					onClick={() => {
@@ -406,32 +437,32 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		);
 	};
 
-	// One-time background sync when page loads with active selections or manifest entries.
-	// The action returns { list } so the component re-renders from fetcher.data directly —
-	// no second revalidator.revalidate() call needed.
-	const hasTriggeredSync = useRef(false);
+	const handleRefreshList = () => {
+		if (fetcher.state !== "idle") return;
+		lastSyncSource.current = "manual";
+		const formData = new FormData();
+		formData.set("intent", "update-list");
+		fetcher.submit(formData, { method: "POST" });
+	};
+
+	// Background sync on each Supply navigation (session-scoped per visit).
+	const lastSyncedPath = useRef<string | null>(null);
 	useEffect(() => {
-		if (
-			(activeSelectionCount === 0 && manifestWeekMealCount === 0) ||
-			hasTriggeredSync.current ||
-			fetcher.state !== "idle"
-		)
-			return;
-		hasTriggeredSync.current = true;
+		if (location.pathname !== "/hub/supply") return;
+		if (lastSyncedPath.current === location.key) return;
+		if (fetcher.state !== "idle") return;
+		lastSyncedPath.current = location.key;
+		lastSyncSource.current = "background";
 		const formData = new FormData();
 		formData.set("intent", "update-list");
 		formData.set("syncSource", "background");
 		fetcher.submit(formData, { method: "POST" });
-	}, [
-		activeSelectionCount,
-		manifestWeekMealCount,
-		fetcher.state,
-		fetcher.submit,
-	]);
+	}, [location.pathname, location.key, fetcher.state, fetcher.submit]);
 
 	// Show summary toast when auto-update or manual update occurs with new items?
 	useEffect(() => {
 		if (!fetcher.data?.summary) return;
+		if (lastSyncSource.current === "background") return;
 		summaryToast.show();
 	}, [fetcher.data?.summary, summaryToast.show]);
 
@@ -494,7 +525,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							aria-live="polite"
 						>
 							<span className="animate-pulse">●</span>
-							Updating list from your meal plan...
+							Updating list from Cargo, Galley, and Manifest...
 						</output>
 					)}
 
@@ -506,6 +537,17 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 						<PanelToolbar
 							primaryAction={
 								<div className="flex gap-2">
+									<button
+										type="button"
+										onClick={handleRefreshList}
+										disabled={fetcher.state !== "idle"}
+										className="flex items-center gap-2 px-4 py-2 font-semibold rounded-lg text-sm transition-all btn-secondary"
+									>
+										<RefreshCw
+											className={`w-4 h-4 ${fetcher.state !== "idle" ? "animate-spin" : ""}`}
+										/>
+										Refresh list
+									</button>
 									<button
 										type="button"
 										onClick={() => setShowReplenishModal(true)}
@@ -572,9 +614,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							key={displayList.id}
 							list={{ ...displayList, items: filteredItems }}
 							cargoRows={cargo ?? []}
+							mealTagsByMealId={mealTagsByMealId}
 							filterDomain="all"
 							filterSearch=""
 							sortMode={sortMode}
+							onRefresh={() => revalidator.revalidate()}
 						/>
 					)}
 
@@ -600,7 +644,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 							<span className="text-hyper-green font-bold">
 								+{fetcher.data.summary.addedItems}
 							</span>{" "}
-							items added from meal plan.
+							supply rows refreshed from Cargo, Galley, and Manifest.
 						</>
 					}
 					onDismiss={summaryToast.hide}

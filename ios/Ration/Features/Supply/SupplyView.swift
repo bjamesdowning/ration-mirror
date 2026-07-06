@@ -398,9 +398,9 @@ struct SupplyView: View {
                         EmptyStateView(
                             icon: "cart",
                             title: "No supply delta yet",
-                            message: "Select meals in Galley and your list will refresh when you open Supply."
+                            message: "Select meals in Galley, mark Cargo for restock, or plan meals in Manifest. Your list refreshes when you open Supply."
                         )
-                        Button("Refresh from meals") {
+                        Button("Refresh list") {
                             Task { await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId) }
                         }
                         .buttonStyle(SecondaryButtonStyle())

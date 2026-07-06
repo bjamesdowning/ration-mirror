@@ -13,6 +13,7 @@ type SupplyListWithItems = typeof supplyList.$inferSelect & {
 interface SupplyListProps {
 	list: SupplyListWithItems;
 	cargoRows?: CargoLinkRow[];
+	mealTagsByMealId?: Map<string, string[]>;
 	onRefresh?: () => void;
 	filterDomain?: (typeof ITEM_DOMAINS)[number] | "all";
 	filterSearch?: string;
@@ -24,6 +25,7 @@ type ItemDomain = (typeof ITEM_DOMAINS)[number];
 export function SupplyList({
 	list,
 	cargoRows = [],
+	mealTagsByMealId,
 	onRefresh,
 	filterDomain = "all",
 	filterSearch = "",
@@ -65,9 +67,8 @@ export function SupplyList({
 					<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-muted" />
 					<p className="text-lg text-muted">No items in this list yet</p>
 					<p className="text-sm text-muted mt-2">
-						Select meals in the Galley or add meals in the Manifest to populate
-						your supply list. You can also add items manually using the form
-						above.
+						Select meals in Galley, plan meals in Manifest, or mark Cargo items
+						for restock. You can also add items manually using the form above.
 					</p>
 				</div>
 			) : (
@@ -108,6 +109,7 @@ export function SupplyList({
 											item={item}
 											listId={list.id}
 											cargoRows={cargoRows}
+											mealTagsByMealId={mealTagsByMealId}
 											onDelete={onRefresh}
 											onSnooze={onRefresh}
 											onRefresh={onRefresh}

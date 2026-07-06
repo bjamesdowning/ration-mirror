@@ -1,4 +1,14 @@
-import { and, desc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -64,8 +74,8 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
-/** supply_item insert: id, listId, name, quantity, unit, domain, sourceMealId, sourceMealIds, sourceOrigins, sourceCargoId = 10 params/row */
-const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 10);
+/** supply_item insert currently binds 12 columns per row. Keep chunks under D1's 100-param limit. */
+const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 12);
 
 async function getGroupSupplyListCapacity(
 	d1: ReturnType<typeof drizzle>,
@@ -483,15 +493,17 @@ export function filterSupplyItemsByCargoTags<T extends { name: string }>(
 ): T[] {
 	if (!supplyTags?.length) return items;
 	const tagSet = new Set(supplyTags);
-	const namesWithTag = new Set(
+	const normalizedNamesWithTag = new Set(
 		cargoRows
 			.filter((row) => {
 				const slugs = tagsToSlugs(row.tags);
 				return slugs.some((slug) => tagSet.has(slug));
 			})
-			.map((row) => row.name.toLowerCase()),
+			.map((row) => normalizeForCargoDedup(row.name)),
 	);
-	return items.filter((item) => namesWithTag.has(item.name.toLowerCase()));
+	return items.filter((item) =>
+		normalizedNamesWithTag.has(normalizeForCargoDedup(item.name)),
+	);
 }
 
 /** Bounds the `supply_item` row fetch — omit both to fetch all rows (default, current behavior). */
@@ -655,6 +667,7 @@ export async function getSupplyListByShareToken(
 				unit: supplyItem.unit,
 				domain: supplyItem.domain,
 				isPurchased: supplyItem.isPurchased,
+				sourceOrigins: supplyItem.sourceOrigins,
 			})
 			.from(supplyItem)
 			.innerJoin(supplyList, eq(supplyItem.listId, supplyList.id))
@@ -1527,7 +1540,7 @@ export async function createSupplyListFromAllMeals(
 		};
 	}
 
-	return syncSupplyFromIngredientRows(
+	return materializeSupplyFromSelections(
 		env,
 		organizationId,
 		allIngredients,
@@ -1634,13 +1647,469 @@ async function buildIngredientRowsFromOccurrences(
 	return result;
 }
 
+/** Virtual row before merge — meal gap qty and/or cargo restock qty. */
+export type SupplyContribution = {
+	name: string;
+	normalizedName: string;
+	baseQuantity: number;
+	baseUnit: BaseUnit;
+	domain: string;
+	sourceOrigins: SupplyItemOrigin[];
+	sourceMealIds: string[];
+	sourceCargoId: string | null;
+};
+
+export function contributionKey(
+	normalizedName: string,
+	domain: string,
+): string {
+	return `${normalizedName}__${domain}`;
+}
+
+function mergeContributionQuantities(
+	existing: {
+		baseQuantity: number;
+		baseUnit: BaseUnit;
+		name: string;
+	},
+	incoming: SupplyContribution,
+): boolean {
+	if (incoming.baseQuantity <= 0) return true;
+
+	if (incoming.baseUnit === existing.baseUnit) {
+		existing.baseQuantity += incoming.baseQuantity;
+		return true;
+	}
+
+	const targetUnit = baseUnitToSupported(existing.baseUnit);
+	const existingInTarget = convertFromBaseUnit(
+		existing.baseQuantity,
+		existing.baseUnit,
+		targetUnit,
+	);
+	if (existingInTarget === null) return false;
+
+	const addedUnit = baseUnitToSupported(incoming.baseUnit);
+	const added = convertIngredientAmount(
+		incoming.baseQuantity,
+		addedUnit,
+		targetUnit,
+		incoming.name,
+	);
+	if (added === null) return false;
+
+	const merged = normalizeToBaseUnit(existingInTarget + added, targetUnit);
+	existing.baseQuantity = merged.quantity;
+	existing.baseUnit = merged.unit;
+	return true;
+}
+
+/** Merges meal and cargo contributions by normalizeForCargoDedup key + domain. */
+export function mergeContributionsByKey(
+	contributions: SupplyContribution[],
+): SupplyContribution[] {
+	const aggregation = new Map<
+		string,
+		{
+			name: string;
+			normalizedName: string;
+			baseQuantity: number;
+			baseUnit: BaseUnit;
+			domain: string;
+			sourceMealIds: Set<string>;
+			sourceOrigins: Set<SupplyItemOrigin>;
+			sourceCargoId: string | null;
+		}
+	>();
+
+	for (const contribution of contributions) {
+		if (contribution.baseQuantity <= 0) continue;
+
+		const key = contributionKey(
+			contribution.normalizedName,
+			contribution.domain,
+		);
+		const existing = aggregation.get(key);
+
+		if (!existing) {
+			aggregation.set(key, {
+				name: contribution.name,
+				normalizedName: contribution.normalizedName,
+				baseQuantity: contribution.baseQuantity,
+				baseUnit: contribution.baseUnit,
+				domain: contribution.domain,
+				sourceMealIds: new Set(contribution.sourceMealIds),
+				sourceOrigins: new Set(contribution.sourceOrigins),
+				sourceCargoId: contribution.sourceCargoId,
+			});
+			continue;
+		}
+
+		const merged = mergeContributionQuantities(existing, contribution);
+		if (!merged) {
+			const fallbackKey = `${key}__${contribution.baseUnit}`;
+			const fallback = aggregation.get(fallbackKey);
+			if (fallback) {
+				mergeContributionQuantities(fallback, contribution);
+				for (const id of contribution.sourceMealIds) {
+					fallback.sourceMealIds.add(id);
+				}
+				for (const origin of contribution.sourceOrigins) {
+					fallback.sourceOrigins.add(origin);
+				}
+			} else {
+				aggregation.set(fallbackKey, {
+					name: contribution.name,
+					normalizedName: contribution.normalizedName,
+					baseQuantity: contribution.baseQuantity,
+					baseUnit: contribution.baseUnit,
+					domain: contribution.domain,
+					sourceMealIds: new Set(contribution.sourceMealIds),
+					sourceOrigins: new Set(contribution.sourceOrigins),
+					sourceCargoId: contribution.sourceCargoId,
+				});
+			}
+			continue;
+		}
+
+		for (const id of contribution.sourceMealIds) {
+			existing.sourceMealIds.add(id);
+		}
+		for (const origin of contribution.sourceOrigins) {
+			existing.sourceOrigins.add(origin);
+		}
+
+		const hasMealOrigin =
+			existing.sourceOrigins.has("manifest") ||
+			existing.sourceOrigins.has("galley");
+		const incomingMealOrigin =
+			contribution.sourceOrigins.includes("manifest") ||
+			contribution.sourceOrigins.includes("galley");
+		if (incomingMealOrigin) {
+			existing.name = contribution.name;
+		}
+
+		if (contribution.sourceCargoId) {
+			existing.sourceCargoId = hasMealOrigin
+				? null
+				: contribution.sourceCargoId;
+		}
+	}
+
+	return Array.from(aggregation.values()).map((entry) => ({
+		name: entry.name,
+		normalizedName: entry.normalizedName,
+		baseQuantity: entry.baseQuantity,
+		baseUnit: entry.baseUnit,
+		domain: entry.domain,
+		sourceMealIds: Array.from(entry.sourceMealIds),
+		sourceOrigins: mergeSupplyOrigins([], Array.from(entry.sourceOrigins)),
+		sourceCargoId: entry.sourceCargoId,
+	}));
+}
+
+async function clearUnpurchasedAutoSourcedItems(
+	d1: ReturnType<typeof drizzle>,
+	listId: string,
+): Promise<void> {
+	await d1
+		.delete(supplyItem)
+		.where(
+			and(
+				eq(supplyItem.listId, listId),
+				eq(supplyItem.isPurchased, false),
+				or(
+					isNotNull(supplyItem.sourceMealId),
+					isNotNull(supplyItem.sourceCargoId),
+				),
+			),
+		);
+}
+
+async function buildMealContributions(
+	env: Env,
+	organizationId: string,
+	allIngredients: IngredientRow[],
+	existingItems: (typeof supplyItem.$inferSelect)[],
+	snoozeKeys: Set<string>,
+	unitMode: UnitDisplayMode,
+): Promise<SupplyContribution[]> {
+	if (allIngredients.length === 0) return [];
+
+	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
+	const aggregatedIngredients = aggregateIngredients(allIngredients, unitMode);
+	const aggregatedNames = aggregatedIngredients.map((a) => a.name);
+	const prefetchedVectors = await findSimilarCargoBatch(
+		env,
+		organizationId,
+		aggregatedNames,
+		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
+	);
+
+	const contributions: SupplyContribution[] = [];
+
+	for (const aggregated of aggregatedIngredients) {
+		const snoozeKey = `${aggregated.normalizedName}__${aggregated.domain}`;
+		if (snoozeKeys.has(snoozeKey)) continue;
+
+		const targetUnit = toSupportedUnit(aggregated.baseUnit);
+		const availableInCargo = getAvailableCargoQuantity(
+			aggregated.name,
+			targetUnit,
+			orgCargo,
+			prefetchedVectors,
+		);
+		const missingAfterCargo = Math.max(
+			0,
+			aggregated.baseQuantity - availableInCargo,
+		);
+		if (missingAfterCargo <= 0) continue;
+
+		const existingQuantityInList = getExistingListQuantity(
+			existingItems,
+			aggregated.normalizedName,
+			targetUnit,
+			aggregated.domain,
+			aggregated.name,
+		);
+		const remainingNeededBase = Math.max(
+			0,
+			missingAfterCargo - existingQuantityInList,
+		);
+		if (remainingNeededBase <= 0) continue;
+
+		contributions.push({
+			name: aggregated.name,
+			normalizedName: aggregated.normalizedName,
+			baseQuantity: remainingNeededBase,
+			baseUnit: aggregated.baseUnit,
+			domain: aggregated.domain,
+			sourceOrigins: aggregated.sourceOrigins,
+			sourceMealIds: aggregated.sourceMealIds,
+			sourceCargoId: null,
+		});
+	}
+
+	return contributions;
+}
+
+async function buildCargoContributions(
+	env: Env,
+	organizationId: string,
+	snoozeKeys: Set<string>,
+): Promise<SupplyContribution[]> {
+	const d1 = drizzle(env.DB);
+	const selections = await getActiveCargoSelections(env.DB, organizationId);
+	if (selections.length === 0) return [];
+
+	const cargoIds = selections.map((s) => s.cargoId);
+	const cargoRows = await chunkedQuery(
+		cargoIds,
+		(chunk) =>
+			d1
+				.select({
+					id: cargo.id,
+					name: cargo.name,
+					unit: cargo.unit,
+					domain: cargo.domain,
+				})
+				.from(cargo)
+				.where(
+					and(
+						eq(cargo.organizationId, organizationId),
+						inArray(cargo.id, chunk),
+					),
+				),
+		99,
+	);
+	const cargoById = new Map(cargoRows.map((c) => [c.id, c]));
+	const selectionByCargoId = new Map(selections.map((s) => [s.cargoId, s]));
+
+	const contributions: SupplyContribution[] = [];
+
+	for (const [cargoId, selection] of selectionByCargoId) {
+		const cargoRow = cargoById.get(cargoId);
+		if (!cargoRow) continue;
+
+		const normalizedName = normalizeForCargoDedup(cargoRow.name);
+		const domain = cargoRow.domain ?? "food";
+		const snoozeKey = `${normalizedName}__${domain}`;
+		if (snoozeKeys.has(snoozeKey)) continue;
+
+		const restockQty = selection.quantityOverride ?? 1;
+		const unit = toSupportedUnit(cargoRow.unit ?? "unit");
+		const base = computeBaseFields(restockQty, unit, cargoRow.name);
+
+		contributions.push({
+			name: cargoRow.name,
+			normalizedName,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit as BaseUnit,
+			domain,
+			sourceOrigins: ["cargo"],
+			sourceMealIds: [],
+			sourceCargoId: cargoId,
+		});
+	}
+
+	return contributions;
+}
+
+function contributionsToSupplyRows(
+	listId: string,
+	merged: SupplyContribution[],
+): (typeof supplyItem.$inferInsert)[] {
+	return merged.map((contribution) => {
+		const readable = chooseReadableUnit(
+			contribution.baseQuantity,
+			contribution.baseUnit,
+		);
+		return {
+			id: crypto.randomUUID(),
+			listId,
+			name: contribution.name,
+			quantity: readable.quantity,
+			unit: readable.unit,
+			baseQuantity: contribution.baseQuantity,
+			baseUnit: contribution.baseUnit,
+			domain: contribution.domain,
+			sourceMealId: contribution.sourceMealIds[0] ?? null,
+			sourceMealIds: contribution.sourceMealIds,
+			sourceOrigins: contribution.sourceOrigins,
+			sourceCargoId: contribution.sourceCargoId,
+		};
+	});
+}
+
+async function materializeSupplyFromSelections(
+	env: Env,
+	organizationId: string,
+	allIngredients: IngredientRow[],
+	mealsProcessed: number,
+	telemetryContext?: SupplySyncTelemetryContext,
+	unitMode: UnitDisplayMode = "metric",
+): Promise<{
+	list: NonNullable<Awaited<ReturnType<typeof getSupplyListById>>>;
+	summary: GenerationSummary;
+}> {
+	const startedAtMs = Date.now();
+	const d1 = drizzle(env.DB);
+
+	emitSupplySyncInfo(
+		"supply_sync.materialize.start",
+		telemetryContext ?? {
+			trigger: "dashboard_grocery_action_update_list",
+			organizationId,
+		},
+		{
+			meals_processed_count: mealsProcessed,
+			ingredient_rows_count: allIngredients.length,
+		},
+	);
+
+	const supplyListData = await ensureSupplyList(env.DB, organizationId);
+	if (!supplyListData) {
+		throw new Error("Failed to ensure supply list");
+	}
+
+	const telemetryWithList = {
+		...(telemetryContext ?? {
+			trigger: "dashboard_grocery_action_update_list",
+		}),
+		organizationId,
+		listId: supplyListData.id,
+	};
+
+	await clearUnpurchasedAutoSourcedItems(d1, supplyListData.id);
+
+	const refreshedList = await getSupplyListById(
+		env.DB,
+		organizationId,
+		supplyListData.id,
+	);
+	if (!refreshedList) throw new Error("List retrieval failed");
+
+	const existingItems = refreshedList.items ?? [];
+	const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
+
+	const [mealContributions, cargoContributions] = await Promise.all([
+		buildMealContributions(
+			env,
+			organizationId,
+			allIngredients,
+			existingItems,
+			snoozeKeys,
+			unitMode,
+		),
+		buildCargoContributions(env, organizationId, snoozeKeys),
+	]);
+
+	const merged = mergeContributionsByKey([
+		...mealContributions,
+		...cargoContributions,
+	]);
+	const itemsToInsert = contributionsToSupplyRows(supplyListData.id, merged);
+
+	const addedCount = itemsToInsert.length;
+	const aggregatedCount =
+		allIngredients.length > 0
+			? aggregateIngredients(allIngredients, unitMode).length
+			: 0;
+	const skippedCount = Math.max(0, aggregatedCount - mealContributions.length);
+
+	if (itemsToInsert.length > 0) {
+		await chunkedInsert(
+			itemsToInsert,
+			D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
+			(insertChunk) => d1.insert(supplyItem).values(insertChunk),
+		);
+		await d1
+			.update(supplyList)
+			.set({ updatedAt: new Date() })
+			.where(eq(supplyList.id, supplyListData.id));
+	}
+
+	const list = await getSupplyListById(
+		env.DB,
+		organizationId,
+		supplyListData.id,
+	);
+	if (!list) throw new Error("List retrieval failed");
+
+	emitSupplySyncInfo("supply_sync.materialize.success", telemetryWithList, {
+		duration_ms: Date.now() - startedAtMs,
+		meals_processed_count: mealsProcessed,
+		ingredient_rows_count: allIngredients.length,
+		meal_contribution_count: mealContributions.length,
+		cargo_contribution_count: cargoContributions.length,
+		merged_row_count: merged.length,
+		added_items_count: addedCount,
+		skipped_items_count: Math.max(0, skippedCount),
+	});
+
+	emitSupplySyncInfo("supply_sync.cargo_restock.success", telemetryWithList, {
+		selection_count: cargoContributions.length,
+		added_items_count: cargoContributions.length,
+		skipped_items_count: 0,
+	});
+
+	return {
+		list,
+		summary: {
+			addedItems: addedCount,
+			skippedItems: Math.max(0, skippedCount),
+			mealsProcessed,
+			totalIngredients: allIngredients.length,
+		},
+	};
+}
+
 /**
  * Creates/updates the Supply list from a UNIFIED list of:
  *   - All Manifest current-week entries (each occurrence counts)
  *   - Plus Galley selections whose mealId does NOT appear in the Manifest week
  *     (prevents double-counting when a user plans a meal AND marks it in Galley)
- *
- * If neither source has meals, returns the Supply list unchanged.
+ *   - Plus Cargo restock selections (active_cargo_selection)
  */
 export async function createSupplyListFromSelectedMeals(
 	env: Env,
@@ -1712,50 +2181,6 @@ export async function createSupplyListFromSelectedMeals(
 
 		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
 
-		if (unified.length === 0) {
-			const cargoSummary = await syncCargoRestockSelections(
-				env,
-				organizationId,
-				telemetry,
-			);
-			const supplyList = await ensureSupplyList(env.DB, organizationId);
-			if (!supplyList) throw new Error("Failed to ensure supply list");
-
-			const list = await getSupplyListById(
-				env.DB,
-				organizationId,
-				supplyList.id,
-			);
-			if (!list) throw new Error("List retrieval failed");
-
-			emitSupplySyncInfo(
-				"supply_sync.create_selected.success",
-				{
-					...(telemetry ?? { trigger: "dashboard_grocery_action_update_list" }),
-					listId: supplyList.id,
-					organizationId,
-				},
-				{
-					duration_ms: Date.now() - startedAtMs,
-					meals_selected_count: 0,
-					ingredient_rows_count: 0,
-					meals_query_duration_ms: mealsQueryDurationMs,
-					cargo_restock_count: cargoSummary.addedItems,
-				},
-			);
-
-			return {
-				list,
-				summary: {
-					addedItems: cargoSummary.addedItems,
-					skippedItems: cargoSummary.skippedItems,
-					mealsProcessed: 0,
-					totalIngredients: 0,
-				},
-			};
-		}
-
-		// Step 2: Build IngredientRow[] from the unified list
 		const ingredientQueryStartedAtMs = Date.now();
 		const allIngredients = await buildIngredientRowsFromOccurrences(
 			d1,
@@ -1764,39 +2189,7 @@ export async function createSupplyListFromSelectedMeals(
 		);
 		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
 
-		if (allIngredients.length === 0) {
-			const supplyList = await ensureSupplyList(env.DB, organizationId);
-			if (!supplyList) throw new Error("Failed to ensure supply list");
-
-			emitSupplySyncInfo(
-				"supply_sync.create_selected.success",
-				{
-					...(telemetry ?? { trigger: "dashboard_grocery_action_update_list" }),
-					listId: supplyList.id,
-					organizationId,
-				},
-				{
-					duration_ms: Date.now() - startedAtMs,
-					meals_selected_count: unified.length,
-					ingredient_rows_count: 0,
-					meals_query_duration_ms: mealsQueryDurationMs,
-					ingredients_query_duration_ms: ingredientQueryDurationMs,
-				},
-			);
-
-			return {
-				list: supplyList,
-				summary: {
-					addedItems: 0,
-					skippedItems: 0,
-					mealsProcessed: unified.length,
-					totalIngredients: 0,
-				},
-			};
-		}
-
-		// Step 3: Meal-derived sync + cargo restock
-		const syncResult = await syncSupplyFromIngredientRows(
+		const syncResult = await materializeSupplyFromSelections(
 			env,
 			organizationId,
 			allIngredients,
@@ -1804,19 +2197,6 @@ export async function createSupplyListFromSelectedMeals(
 			telemetry,
 			unitMode,
 		);
-
-		const cargoSummary = await syncCargoRestockSelections(
-			env,
-			organizationId,
-			telemetry,
-		);
-
-		const list = await getSupplyListById(
-			env.DB,
-			organizationId,
-			syncResult.list?.id ?? "",
-		);
-		if (!list) throw new Error("List retrieval failed");
 
 		emitSupplySyncInfo(
 			"supply_sync.create_selected.success",
@@ -1833,20 +2213,11 @@ export async function createSupplyListFromSelectedMeals(
 				source: "manifest_and_selection",
 				manifest_occurrence_count: manifestOccurrences.length,
 				galley_selection_count: galleySelections.length,
-				cargo_restock_count: cargoSummary.addedItems,
+				added_items_count: syncResult.summary.addedItems,
 			},
 		);
 
-		return {
-			list,
-			summary: {
-				addedItems: syncResult.summary.addedItems + cargoSummary.addedItems,
-				skippedItems:
-					syncResult.summary.skippedItems + cargoSummary.skippedItems,
-				mealsProcessed: syncResult.summary.mealsProcessed,
-				totalIngredients: syncResult.summary.totalIngredients,
-			},
-		};
+		return syncResult;
 	} catch (error) {
 		emitSupplySyncError(
 			"supply_sync.create_selected.error",
@@ -1857,404 +2228,6 @@ export async function createSupplyListFromSelectedMeals(
 			error,
 			{
 				duration_ms: Date.now() - startedAtMs,
-			},
-		);
-		throw error;
-	}
-}
-
-async function syncCargoRestockSelections(
-	env: Env,
-	organizationId: string,
-	telemetryContext?: SupplySyncTelemetryContext,
-): Promise<{ addedItems: number; skippedItems: number }> {
-	const d1 = drizzle(env.DB);
-	const selections = await getActiveCargoSelections(env.DB, organizationId);
-	if (selections.length === 0) {
-		return { addedItems: 0, skippedItems: 0 };
-	}
-
-	const supplyListData = await ensureSupplyList(env.DB, organizationId);
-	if (!supplyListData) {
-		throw new Error("Failed to ensure supply list");
-	}
-
-	await d1
-		.delete(supplyItem)
-		.where(
-			and(
-				eq(supplyItem.listId, supplyListData.id),
-				eq(supplyItem.isPurchased, false),
-				isNotNull(supplyItem.sourceCargoId),
-			),
-		);
-
-	const refreshedList = await getSupplyListById(
-		env.DB,
-		organizationId,
-		supplyListData.id,
-	);
-	if (!refreshedList) throw new Error("List retrieval failed");
-
-	const cargoIds = selections.map((s) => s.cargoId);
-	const cargoRows = await chunkedQuery(
-		cargoIds,
-		(chunk) =>
-			d1
-				.select({
-					id: cargo.id,
-					name: cargo.name,
-					unit: cargo.unit,
-					domain: cargo.domain,
-					quantity: cargo.quantity,
-				})
-				.from(cargo)
-				.where(
-					and(
-						eq(cargo.organizationId, organizationId),
-						inArray(cargo.id, chunk),
-					),
-				),
-		99,
-	);
-	const cargoById = new Map(cargoRows.map((c) => [c.id, c]));
-	const selectionByCargoId = new Map(selections.map((s) => [s.cargoId, s]));
-
-	const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
-	const existingItems = refreshedList.items ?? [];
-	const itemsToInsert: (typeof supplyItem.$inferInsert)[] = [];
-	const itemsToUpdate: Array<{
-		id: string;
-		sourceOrigins: SupplyItemOrigin[];
-		sourceCargoId: string;
-	}> = [];
-	let addedCount = 0;
-	let skippedCount = 0;
-
-	for (const [cargoId, selection] of selectionByCargoId) {
-		const cargoRow = cargoById.get(cargoId);
-		if (!cargoRow) {
-			skippedCount++;
-			continue;
-		}
-
-		const normalizedName = normalizeForCargoDedup(cargoRow.name);
-		const domain = cargoRow.domain ?? "food";
-		const snoozeKey = `${normalizedName}__${domain}`;
-		if (snoozeKeys.has(snoozeKey)) {
-			skippedCount++;
-			continue;
-		}
-
-		const restockQty = selection.quantityOverride ?? 1;
-		const unit = toSupportedUnit(cargoRow.unit ?? "unit");
-
-		const existingMatch = existingItems.find(
-			(item) =>
-				!item.isPurchased &&
-				normalizeForCargoDedup(item.name) === normalizedName &&
-				item.domain === domain,
-		);
-
-		if (existingMatch) {
-			const mergedOrigins = mergeSupplyOrigins(
-				normalizeSupplyOrigins(existingMatch.sourceOrigins),
-				["cargo"],
-			);
-			itemsToUpdate.push({
-				id: existingMatch.id,
-				sourceOrigins: mergedOrigins,
-				sourceCargoId: cargoId,
-			});
-			addedCount++;
-			continue;
-		}
-
-		itemsToInsert.push({
-			id: crypto.randomUUID(),
-			listId: supplyListData.id,
-			name: cargoRow.name,
-			quantity: restockQty,
-			unit,
-			...computeBaseFields(restockQty, unit, cargoRow.name),
-			domain,
-			sourceOrigins: ["cargo"],
-			sourceCargoId: cargoId,
-		});
-		addedCount++;
-	}
-
-	if (itemsToUpdate.length > 0) {
-		const updateStmts = itemsToUpdate.map((update) =>
-			d1
-				.update(supplyItem)
-				.set({
-					sourceOrigins: update.sourceOrigins,
-					sourceCargoId: update.sourceCargoId,
-				})
-				.where(eq(supplyItem.id, update.id)),
-		);
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(updateStmts as [any, ...any[]]);
-	}
-
-	if (itemsToInsert.length > 0 || itemsToUpdate.length > 0) {
-		if (itemsToInsert.length > 0) {
-			await chunkedInsert(
-				itemsToInsert,
-				D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-				(insertChunk) => d1.insert(supplyItem).values(insertChunk),
-			);
-		}
-		await d1
-			.update(supplyList)
-			.set({ updatedAt: new Date() })
-			.where(eq(supplyList.id, supplyListData.id));
-	}
-
-	emitSupplySyncInfo(
-		"supply_sync.cargo_restock.success",
-		{
-			...(telemetryContext ?? {
-				trigger: "dashboard_grocery_action_update_list",
-			}),
-			organizationId,
-			listId: supplyListData.id,
-		},
-		{
-			selection_count: selections.length,
-			added_items_count: addedCount,
-			skipped_items_count: skippedCount,
-		},
-	);
-
-	return { addedItems: addedCount, skippedItems: skippedCount };
-}
-
-async function syncSupplyFromIngredientRows(
-	env: Env,
-	organizationId: string,
-	allIngredients: IngredientRow[],
-	mealsProcessed: number,
-	telemetryContext?: SupplySyncTelemetryContext,
-	unitMode: UnitDisplayMode = "metric",
-): Promise<{
-	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
-		? T
-		: never;
-	summary: GenerationSummary;
-}> {
-	const startedAtMs = Date.now();
-	const d1 = drizzle(env.DB);
-	try {
-		emitSupplySyncInfo(
-			"supply_sync.materialize.start",
-			telemetryContext ?? {
-				trigger: "dashboard_grocery_action_update_list",
-				organizationId,
-			},
-			{
-				meals_processed_count: mealsProcessed,
-				ingredient_rows_count: allIngredients.length,
-			},
-		);
-
-		const ensureListStartedAtMs = Date.now();
-		const supplyListData = await ensureSupplyList(env.DB, organizationId);
-		const ensureListDurationMs = Date.now() - ensureListStartedAtMs;
-
-		if (!supplyListData) {
-			throw new Error("Failed to ensure supply list");
-		}
-
-		const telemetryWithList = {
-			...(telemetryContext ?? {
-				trigger: "dashboard_grocery_action_update_list",
-			}),
-			organizationId,
-			listId: supplyListData.id,
-		};
-
-		const clearStartedAtMs = Date.now();
-		await d1
-			.delete(supplyItem)
-			.where(
-				and(
-					eq(supplyItem.listId, supplyListData.id),
-					eq(supplyItem.isPurchased, false),
-					isNotNull(supplyItem.sourceMealId),
-				),
-			);
-		const clearDurationMs = Date.now() - clearStartedAtMs;
-
-		const refreshListStartedAtMs = Date.now();
-		const refreshedList = await getSupplyListById(
-			env.DB,
-			organizationId,
-			supplyListData.id,
-		);
-		const refreshListDurationMs = Date.now() - refreshListStartedAtMs;
-		if (!refreshedList) throw new Error("List retrieval failed");
-
-		const inventoryFetchStartedAtMs = Date.now();
-		const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
-		const inventoryFetchDurationMs = Date.now() - inventoryFetchStartedAtMs;
-
-		const aggregateStartedAtMs = Date.now();
-		const aggregatedIngredients = aggregateIngredients(
-			allIngredients,
-			unitMode,
-		);
-		const aggregateDurationMs = Date.now() - aggregateStartedAtMs;
-		const existingItems = refreshedList.items ?? [];
-
-		const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
-
-		// Pre-fetch all Vectorize similarity results in one batch call before
-		// entering the per-ingredient loop. This replaces N sequential
-		// Vectorize lookups (one per aggregated ingredient) with a single
-		// batched embedding request + parallel Vectorize queries.
-		const aggregatedNames = aggregatedIngredients.map((a) => a.name);
-		const prefetchedVectors = await findSimilarCargoBatch(
-			env,
-			organizationId,
-			aggregatedNames,
-			{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
-		);
-
-		let addedCount = 0;
-		let skippedCount = 0;
-		const itemsToInsert: (typeof supplyItem.$inferInsert)[] = [];
-
-		for (const aggregated of aggregatedIngredients) {
-			const snoozeKey = `${aggregated.normalizedName}__${aggregated.domain}`;
-			if (snoozeKeys.has(snoozeKey)) {
-				skippedCount++;
-				continue;
-			}
-
-			const targetUnit = toSupportedUnit(aggregated.baseUnit);
-			const availableInCargo = getAvailableCargoQuantity(
-				aggregated.name,
-				targetUnit,
-				orgCargo,
-				prefetchedVectors,
-			);
-			const missingAfterCargo = Math.max(
-				0,
-				aggregated.baseQuantity - availableInCargo,
-			);
-
-			if (missingAfterCargo <= 0) {
-				skippedCount++;
-				continue;
-			}
-
-			const existingQuantityInList = getExistingListQuantity(
-				existingItems,
-				aggregated.normalizedName,
-				targetUnit,
-				aggregated.domain,
-				aggregated.name,
-			);
-			const remainingNeededBase = Math.max(
-				0,
-				missingAfterCargo - existingQuantityInList,
-			);
-
-			if (remainingNeededBase <= 0) {
-				skippedCount++;
-				continue;
-			}
-
-			const readable = chooseReadableUnit(
-				remainingNeededBase,
-				aggregated.baseUnit,
-			);
-
-			itemsToInsert.push({
-				id: crypto.randomUUID(),
-				listId: supplyListData.id,
-				name: aggregated.name,
-				quantity: readable.quantity,
-				unit: readable.unit,
-				baseQuantity: remainingNeededBase,
-				baseUnit: aggregated.baseUnit,
-				domain: aggregated.domain,
-				sourceMealId: aggregated.sourceMealIds[0],
-				sourceMealIds: aggregated.sourceMealIds,
-				sourceOrigins: aggregated.sourceOrigins,
-			});
-			addedCount++;
-		}
-
-		const insertChunkCount = Math.ceil(
-			itemsToInsert.length / D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-		);
-		const insertStartedAtMs = Date.now();
-		if (itemsToInsert.length > 0) {
-			await chunkedInsert(
-				itemsToInsert,
-				D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-				(insertChunk) => d1.insert(supplyItem).values(insertChunk),
-			);
-
-			await d1
-				.update(supplyList)
-				.set({ updatedAt: new Date() })
-				.where(eq(supplyList.id, supplyListData.id));
-		}
-		const insertDurationMs = Date.now() - insertStartedAtMs;
-
-		const finalListFetchStartedAtMs = Date.now();
-		const list = await getSupplyListById(
-			env.DB,
-			organizationId,
-			supplyListData.id,
-		);
-		const finalListFetchDurationMs = Date.now() - finalListFetchStartedAtMs;
-		if (!list) throw new Error("List retrieval failed");
-
-		emitSupplySyncInfo("supply_sync.materialize.success", telemetryWithList, {
-			duration_ms: Date.now() - startedAtMs,
-			meals_processed_count: mealsProcessed,
-			ingredient_rows_count: allIngredients.length,
-			aggregated_ingredients_count: aggregatedIngredients.length,
-			insert_candidate_rows_count: itemsToInsert.length,
-			insert_chunk_count: insertChunkCount,
-			insert_rows_per_statement: D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-			added_items_count: addedCount,
-			skipped_items_count: skippedCount,
-			ensure_list_duration_ms: ensureListDurationMs,
-			clear_generated_items_duration_ms: clearDurationMs,
-			refresh_list_duration_ms: refreshListDurationMs,
-			inventory_fetch_duration_ms: inventoryFetchDurationMs,
-			aggregate_duration_ms: aggregateDurationMs,
-			insert_duration_ms: insertDurationMs,
-			final_list_fetch_duration_ms: finalListFetchDurationMs,
-		});
-
-		return {
-			list,
-			summary: {
-				addedItems: addedCount,
-				skippedItems: skippedCount,
-				mealsProcessed,
-				totalIngredients: allIngredients.length,
-			},
-		};
-	} catch (error) {
-		emitSupplySyncError(
-			"supply_sync.materialize.error",
-			telemetryContext ?? {
-				trigger: "dashboard_grocery_action_update_list",
-				organizationId,
-			},
-			error,
-			{
-				duration_ms: Date.now() - startedAtMs,
-				meals_processed_count: mealsProcessed,
-				ingredient_rows_count: allIngredients.length,
 			},
 		);
 		throw error;

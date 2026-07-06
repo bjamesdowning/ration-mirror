@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
+import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { TagChip } from "~/components/shared/TagChip";
@@ -8,6 +9,7 @@ import type { cargo } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
 import type { TagRecord } from "~/lib/tags";
+import { toSupportedUnit } from "~/lib/units";
 
 type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
@@ -65,6 +67,7 @@ export function CargoDetail({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [localRestockSelected, setLocalRestockSelected] =
 		useState(isRestockSelected);
+	const [showRestockModal, setShowRestockModal] = useState(false);
 	const { confirm } = useConfirm();
 	const tags = item.tags ?? [];
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
@@ -93,11 +96,24 @@ export function CargoDetail({
 	}, [isEditing, fetcher.state, fetcher.data?.success]);
 
 	const handleToggleRestock = () => {
-		const nextActive = !localRestockSelected;
-		setLocalRestockSelected(nextActive);
-		restockFetcher.submit(null, {
+		if (localRestockSelected) {
+			setLocalRestockSelected(false);
+			restockFetcher.submit(null, {
+				method: "post",
+				action: `/api/cargo/${item.id}/toggle-restock`,
+			});
+			return;
+		}
+		setShowRestockModal(true);
+	};
+
+	const handleRestockConfirm = (quantity: number) => {
+		setShowRestockModal(false);
+		setLocalRestockSelected(true);
+		restockFetcher.submit(JSON.stringify({ quantity }), {
 			method: "post",
 			action: `/api/cargo/${item.id}/toggle-restock`,
+			encType: "application/json",
 		});
 	};
 
@@ -278,6 +294,16 @@ export function CargoDetail({
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}
+				/>
+			)}
+			{showRestockModal && (
+				<RestockQuantityModal
+					itemName={item.name}
+					quantity={1}
+					unit={toSupportedUnit(item.unit ?? "unit")}
+					onConfirm={handleRestockConfirm}
+					onCancel={() => setShowRestockModal(false)}
+					isPending={restockFetcher.state !== "idle"}
 				/>
 			)}
 		</div>

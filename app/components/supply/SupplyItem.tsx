@@ -19,6 +19,7 @@ interface SupplyItemProps {
 		  });
 	listId: string;
 	cargoRows?: CargoLinkRow[];
+	mealTagsByMealId?: Map<string, string[]>;
 	onDelete?: () => void;
 	onSnooze?: () => void;
 	onRefresh?: () => void;
@@ -28,6 +29,7 @@ export function SupplyItem({
 	item,
 	listId,
 	cargoRows = [],
+	mealTagsByMealId,
 	onDelete,
 	onSnooze,
 	onRefresh,
@@ -43,6 +45,7 @@ export function SupplyItem({
 	const displayTags = resolveSupplyItemTags({
 		itemName: item.name,
 		cargoRows,
+		mealTagsByMealId,
 		sourceMealIds: item.sourceMealIds ?? [],
 	});
 

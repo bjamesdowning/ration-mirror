@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveSupplyItemTags } from "../supply-tags";
 
 describe("supply-tags", () => {
-	it("prefers cargo tags when names match", () => {
+	it("prefers cargo tags when names match via dedup normalization", () => {
 		const tags = resolveSupplyItemTags({
 			itemName: "Chicken Breast",
 			cargoRows: [

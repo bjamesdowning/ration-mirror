@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
+import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
@@ -11,6 +12,7 @@ import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { formatCargoStatus } from "~/lib/cargo";
 import type { TagRecord } from "~/lib/tags";
+import { toSupportedUnit } from "~/lib/units";
 
 type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
@@ -51,6 +53,7 @@ export function CargoCard({
 	const [localActive, setLocalActive] = useState(isActive);
 	const [promotedId, setPromotedId] = useState<string | null>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
+	const [showRestockModal, setShowRestockModal] = useState(false);
 
 	const successToast = useToast({ duration: 4000 });
 	const alreadyToast = useToast({ duration: 3000 });
@@ -133,12 +136,26 @@ export function CargoCard({
 	};
 
 	const handleToggleRestock = () => {
-		const nextActive = !localActive;
-		setLocalActive(nextActive);
-		onToggleRestock?.(item.id, nextActive);
-		restockFetcher.submit(null, {
+		if (localActive) {
+			setLocalActive(false);
+			onToggleRestock?.(item.id, false);
+			restockFetcher.submit(null, {
+				method: "post",
+				action: `/api/cargo/${item.id}/toggle-restock`,
+			});
+			return;
+		}
+		setShowRestockModal(true);
+	};
+
+	const handleRestockConfirm = (quantity: number) => {
+		setShowRestockModal(false);
+		setLocalActive(true);
+		onToggleRestock?.(item.id, true);
+		restockFetcher.submit(JSON.stringify({ quantity }), {
 			method: "post",
 			action: `/api/cargo/${item.id}/toggle-restock`,
+			encType: "application/json",
 		});
 	};
 
@@ -286,6 +303,16 @@ export function CargoCard({
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}
+				/>
+			)}
+			{showRestockModal && (
+				<RestockQuantityModal
+					itemName={item.name}
+					quantity={1}
+					unit={toSupportedUnit(item.unit ?? "unit")}
+					onConfirm={handleRestockConfirm}
+					onCancel={() => setShowRestockModal(false)}
+					isPending={isTogglingRestock}
 				/>
 			)}
 		</>

@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { data, useFetcher, useRevalidator } from "react-router";
+import {
+	data,
+	useFetcher,
+	useRevalidator,
+	useRouteLoaderData,
+} from "react-router";
 
 import { EmptyPanel } from "~/components/hub/EmptyPanel";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
@@ -28,6 +33,7 @@ import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
 import { ReplenishModal } from "~/components/supply/ReplenishModal";
+import { ReplenishScanIntroModal } from "~/components/supply/ReplenishScanIntroModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
@@ -307,8 +313,15 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const [showShareModal, setShowShareModal] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [showReplenishModal, setShowReplenishModal] = useState(false);
+	const [showReplenishScanIntro, setShowReplenishScanIntro] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const revalidator = useRevalidator();
+	const dashboardData = useRouteLoaderData("routes/hub") as
+		| {
+				balance?: number;
+				aiCosts?: { SCAN: number };
+		  }
+		| undefined;
 	const [displayUnitMode, setDisplayUnitMode] = useState<
 		"cooking" | "metric" | "imperial"
 	>(supplyUnitMode);
@@ -770,8 +783,23 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				purchasedCount={purchasedCount}
 				onClose={() => setShowReplenishModal(false)}
 				onDockPurchased={handleDockCargo}
-				onScanReceipt={() => cameraRef.current?.openCamera()}
+				onScanReceipt={() => {
+					setShowReplenishModal(false);
+					setShowReplenishScanIntro(true);
+				}}
 				isDocking={isDocking}
+				scanCost={dashboardData?.aiCosts?.SCAN}
+			/>
+
+			<ReplenishScanIntroModal
+				open={showReplenishScanIntro}
+				onClose={() => setShowReplenishScanIntro(false)}
+				onConfirm={() => {
+					setShowReplenishScanIntro(false);
+					cameraRef.current?.openCamera();
+				}}
+				credits={dashboardData?.balance ?? 0}
+				costPerScan={dashboardData?.aiCosts?.SCAN ?? 2}
 			/>
 
 			{displayList && (

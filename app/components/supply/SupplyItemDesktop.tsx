@@ -1,6 +1,8 @@
 import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
+import type { SupplyItemOrigin } from "~/lib/supply-item-origins";
 import { SupplyItemCheckbox } from "./SupplyItemCheckbox";
+import { SupplyItemOriginBadge } from "./SupplyItemOriginBadge";
 import { SupplyItemSourceLine } from "./SupplyItemSourceLine";
 import { SupplyQuantityEditor } from "./SupplyQuantityEditor";
 
@@ -21,6 +23,7 @@ interface SupplyItemDesktopProps {
 	sourceMealName: string | null | undefined;
 	sourceMealNames?: string[] | null;
 	sourceMealSources?: { id: string; name: string }[];
+	sourceOrigins?: SupplyItemOrigin[];
 }
 
 export function SupplyItemDesktop({
@@ -40,6 +43,7 @@ export function SupplyItemDesktop({
 	sourceMealName,
 	sourceMealNames,
 	sourceMealSources,
+	sourceOrigins = [],
 }: SupplyItemDesktopProps) {
 	const [showMenu, setShowMenu] = useState(false);
 
@@ -62,6 +66,9 @@ export function SupplyItemDesktop({
 					>
 						{displayName}
 					</span>
+					{sourceOrigins.length > 0 && (
+						<SupplyItemOriginBadge origins={sourceOrigins} compact />
+					)}
 					<SupplyQuantityEditor
 						quantity={localQuantity}
 						unit={localUnit}

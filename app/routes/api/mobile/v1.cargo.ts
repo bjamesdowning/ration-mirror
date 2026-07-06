@@ -4,6 +4,7 @@ import {
 	getCargoCount,
 	getCargoPage,
 } from "~/lib/cargo.server";
+import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import { normalizeTags } from "~/lib/cargo-utils";
 import { handleApiError } from "~/lib/error-handler";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
@@ -43,16 +44,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		});
 
 		const cursorPayload = query.cursor ? decodeCursor(query.cursor) : null;
-		const page = await getCargoPage(context.cloudflare.env.DB, organizationId, {
-			limit: query.limit,
-			cursor: cursorPayload
-				? {
-						createdAt: new Date(cursorPayload.createdAt),
-						id: cursorPayload.id,
-					}
-				: null,
-			domain: query.domain,
-		});
+		const [page, total, activeCargoIds] = await Promise.all([
+			getCargoPage(context.cloudflare.env.DB, organizationId, {
+				limit: query.limit,
+				cursor: cursorPayload
+					? {
+							createdAt: new Date(cursorPayload.createdAt),
+							id: cursorPayload.id,
+						}
+					: null,
+				domain: query.domain,
+			}),
+			getCargoCount(context.cloudflare.env.DB, organizationId, query.domain),
+			getActiveCargoIds(context.cloudflare.env.DB, organizationId),
+		]);
 
 		const nextCursor = page.nextCursor
 			? encodeCursor({
@@ -60,12 +65,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					id: page.nextCursor.id,
 				})
 			: null;
-
-		const total = await getCargoCount(
-			context.cloudflare.env.DB,
-			organizationId,
-			query.domain,
-		);
 
 		// `tags` is a `mode: "json"` column; legacy rows may have been double-encoded
 		// and read back as a JSON string. Normalize to a real array so the typed
@@ -78,6 +77,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		return {
 			...paginatedResponse(items, nextCursor),
 			total,
+			activeCargoIds,
 		};
 	} catch (e) {
 		return handleApiError(e);

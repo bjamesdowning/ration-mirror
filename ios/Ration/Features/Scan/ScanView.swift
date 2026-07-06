@@ -289,11 +289,16 @@ struct ScanView: View {
 }
 
 struct CameraPicker: UIViewControllerRepresentable {
+    var sourceType: UIImagePickerController.SourceType?
     let onResult: (UIImage?) -> Void
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        if let sourceType, UIImagePickerController.isSourceTypeAvailable(sourceType) {
+            picker.sourceType = sourceType
+        } else {
+            picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        }
         picker.delegate = context.coordinator
         return picker
     }

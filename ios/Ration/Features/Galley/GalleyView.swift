@@ -14,6 +14,9 @@ struct GalleyView: View {
     @State private var availableTags: [String] = []
     @State private var generateSuccessMessage: String?
     @State private var showGroupSettings = false
+    @State private var pendingCookMealId: String?
+    @State private var cookConfirmationMessage: String?
+    @State private var showCookConfirmation = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -128,6 +131,17 @@ struct GalleyView: View {
                 availableTags = tags
             }
         }
+        .alert("Insufficient cargo", isPresented: $showCookConfirmation) {
+            Button("Cook anyway") {
+                Task { await confirmCookDespiteShortfall() }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingCookMealId = nil
+                cookConfirmationMessage = nil
+            }
+        } message: {
+            Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
+        }
     }
 
     private func reload() async {
@@ -178,33 +192,53 @@ struct GalleyView: View {
 
     private var mealList: some View {
         List {
+            if model.selectedMealCount > 0 {
+                Section {
+                    SupplySelectionBar(
+                        count: model.selectedMealCount,
+                        itemLabel: model.selectedMealCount == 1 ? "meal" : "meals",
+                        contextLabel: "for Supply list",
+                        isClearing: model.isClearingSelections
+                    ) {
+                        Task { await model.clearSelections(api: env.api) }
+                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
             if !model.isLoading {
                 ListCountHeader(count: galleyCount)
             }
             Section {
                 ForEach(model.displayedMeals) { meal in
                     NavigationLink {
-                        MealDetailView(mealId: meal.id, initialMeal: meal)
+                        MealDetailView(
+                            mealId: meal.id,
+                            initialMeal: meal,
+                            isInitiallySelectedForSupply: model.isMealSelected(meal.id)
+                        )
                     } label: {
                         MealRowView(
                             meal: meal,
                             match: env.network.isOnline ? model.match(for: meal.id) : nil,
-                            showMatchRing: env.network.isOnline
+                            showMatchRing: env.network.isOnline,
+                            isSelectedForSupply: model.isMealSelected(meal.id)
                         )
                     }
                     .listRowBackground(Theme.surface)
                     .swipeActions {
+                        let selected = model.isMealSelected(meal.id)
                         Button {
                             Task { await model.toggleActive(meal.id, api: env.api) }
                         } label: {
-                            Label("Select", systemImage: "checkmark.circle")
+                            Label(
+                                selected ? "Remove" : "Add to Supply",
+                                systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
+                            )
                         }
                         .tint(Theme.hyperGreen)
                         Button {
-                            Task {
-                                await model.cook(meal.id, api: env.api)
-                                env.notifyCargoDataChanged()
-                            }
+                            Task { await handleCook(mealId: meal.id) }
                         } label: {
                             Label("Cook", systemImage: "flame")
                         }
@@ -227,17 +261,51 @@ struct GalleyView: View {
 
     private var matchList: some View {
         List {
+            if model.selectedMealCount > 0 {
+                Section {
+                    SupplySelectionBar(
+                        count: model.selectedMealCount,
+                        itemLabel: model.selectedMealCount == 1 ? "meal" : "meals",
+                        contextLabel: "for Supply list",
+                        isClearing: model.isClearingSelections
+                    ) {
+                        Task { await model.clearSelections(api: env.api) }
+                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
             if !model.isLoading {
                 ListCountHeader(count: galleyCount)
             }
             Section {
                 ForEach(model.displayedMatches) { match in
                     NavigationLink {
-                        MealDetailView(mealId: match.meal.id, initialMeal: match.meal)
+                        MealDetailView(
+                            mealId: match.meal.id,
+                            initialMeal: match.meal,
+                            isInitiallySelectedForSupply: model.isMealSelected(match.meal.id)
+                        )
                     } label: {
-                        MealRowView(meal: match.meal, match: match)
+                        MealRowView(
+                            meal: match.meal,
+                            match: match,
+                            isSelectedForSupply: model.isMealSelected(match.meal.id)
+                        )
                     }
                     .listRowBackground(Theme.surface)
+                    .swipeActions {
+                        let selected = model.isMealSelected(match.meal.id)
+                        Button {
+                            Task { await model.toggleActive(match.meal.id, api: env.api) }
+                        } label: {
+                            Label(
+                                selected ? "Remove" : "Add to Supply",
+                                systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
+                            )
+                        }
+                        .tint(Theme.hyperGreen)
+                    }
                 }
             }
         }
@@ -246,12 +314,46 @@ struct GalleyView: View {
         .background(Theme.ceramic)
         .refreshable { await reload() }
     }
+
+    private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {
+        switch await model.cook(
+            mealId,
+            servings: servings,
+            confirmInsufficient: confirmInsufficient,
+            api: env.api
+        ) {
+        case .success:
+            env.notifyCargoDataChanged()
+        case .needsConfirmation(let missing):
+            pendingCookMealId = mealId
+            cookConfirmationMessage = missingIngredientsMessage(missing)
+            showCookConfirmation = true
+        case .failed:
+            break
+        }
+    }
+
+    private func confirmCookDespiteShortfall() async {
+        guard let mealId = pendingCookMealId else { return }
+        pendingCookMealId = nil
+        cookConfirmationMessage = nil
+        showCookConfirmation = false
+        await handleCook(mealId: mealId, confirmInsufficient: true)
+    }
+
+    private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
+        let lines = missing.map { ingredient in
+            "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
+        }
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway?"
+    }
 }
 
 struct MealDetailView: View {
     @Environment(AppEnvironment.self) private var env
     let mealId: String
     let initialMeal: Meal
+    var isInitiallySelectedForSupply = false
     @State private var meal: Meal?
     @State private var matchResult: MealMatch?
     @State private var desiredServings: Int = 1
@@ -265,6 +367,8 @@ struct MealDetailView: View {
     @State private var isTogglingSupply = false
     @State private var cookUndoToken: String?
     @State private var showCookUndo = false
+    @State private var cookConfirmationMessage: String?
+    @State private var showCookConfirmation = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -340,6 +444,7 @@ struct MealDetailView: View {
             }
         }
         .task {
+            isSelectedForSupply = isInitiallySelectedForSupply
             let base = max(initialMeal.servings ?? 1, 1)
             desiredServings = base
             await load()
@@ -366,6 +471,16 @@ struct MealDetailView: View {
                     }
                 }
             }
+        }
+        .alert("Insufficient cargo", isPresented: $showCookConfirmation) {
+            Button("Cook anyway") {
+                Task { await cook(confirmInsufficient: true) }
+            }
+            Button("Cancel", role: .cancel) {
+                cookConfirmationMessage = nil
+            }
+        } message: {
+            Text(cookConfirmationMessage ?? "Missing ingredients. Cook anyway?")
         }
     }
 
@@ -500,19 +615,40 @@ struct MealDetailView: View {
     }
 
     @MainActor
-    private func cook() async {
+    private func cook(confirmInsufficient: Bool = false) async {
         do {
-            let result = try await env.api.cookMeal(id: mealId, servings: desiredServings)
+            let result = try await env.api.cookMeal(
+                id: mealId,
+                servings: desiredServings,
+                confirmInsufficient: confirmInsufficient ? true : nil
+            )
+            if result.requiresConfirmation == true,
+               let missing = result.missingIngredients,
+               !missing.isEmpty,
+               !confirmInsufficient
+            {
+                cookConfirmationMessage = missingIngredientsMessage(missing)
+                showCookConfirmation = true
+                return
+            }
             Haptics.success()
-            cookMessage = "Cooked \(result.servings) servings · \(result.ingredientsDeducted) deductions"
+            cookMessage = "Cooked \(result.servings ?? desiredServings) servings · \(result.ingredientsDeducted ?? 0) deductions"
             if let token = result.undoToken {
                 cookUndoToken = token
                 showCookUndo = true
             }
+            env.notifyCargoDataChanged()
             await loadAvailability()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
+        let lines = missing.map { ingredient in
+            "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
+        }
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway?"
     }
 
     @MainActor

@@ -5,13 +5,14 @@ enum AIFeature: String {
     case planWeek
     case importRecipe
     case scanReceipt
+    case supplyReplenish
 
     var icon: String {
         switch self {
         case .generateMeals: "sparkles"
         case .planWeek: "calendar"
         case .importRecipe: "link"
-        case .scanReceipt: "camera.viewfinder"
+        case .scanReceipt, .supplyReplenish: "camera.viewfinder"
         }
     }
 
@@ -21,6 +22,7 @@ enum AIFeature: String {
         case .planWeek: "Planning week…"
         case .importRecipe: "Importing recipe…"
         case .scanReceipt: "Scanning receipt…"
+        case .supplyReplenish: "Matching receipt…"
         }
     }
 
@@ -34,6 +36,8 @@ enum AIFeature: String {
             "Reading the recipe page and mapping ingredients to your inventory units."
         case .scanReceipt:
             "Extracting items from your receipt and matching them to Cargo entries."
+        case .supplyReplenish:
+            "Extracting items from your receipt and matching them to your Supply list."
         }
     }
 }

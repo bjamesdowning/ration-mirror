@@ -108,7 +108,15 @@ final class SupplyViewModel {
         guard let current = list else { return }
         let updatedItems = current.items.map { existing in
             existing.id == item.id
-                ? SupplyItem(id: existing.id, name: existing.name, quantity: quantity, unit: unit, domain: existing.domain, isPurchased: true)
+                ? SupplyItem(
+                    id: existing.id,
+                    name: existing.name,
+                    quantity: quantity,
+                    unit: unit,
+                    domain: existing.domain,
+                    isPurchased: true,
+                    sourceOrigins: existing.sourceOrigins
+                )
                 : existing
         }
         list = SupplyList(id: current.id, name: current.name, items: updatedItems)
@@ -174,6 +182,24 @@ final class SupplyViewModel {
         image: UIImage,
         api: RationAPI
     ) async -> SupplyScanReviewContext? {
+        guard let data = image.resizedJPEG(maxDimension: 1024, quality: 0.7) else {
+            errorMessage = "Could not process the image."
+            return nil
+        }
+        return await scanFileAndFetchMatch(
+            data: data,
+            filename: "receipt.jpg",
+            mimeType: "image/jpeg",
+            api: api
+        )
+    }
+
+    func scanFileAndFetchMatch(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        api: RationAPI
+    ) async -> SupplyScanReviewContext? {
         guard let list else { return nil }
         isScanning = true
         scanStatusMessage = "Uploading receipt…"
@@ -183,13 +209,8 @@ final class SupplyViewModel {
             scanStatusMessage = nil
         }
 
-        guard let data = image.resizedJPEG(maxDimension: 1024, quality: 0.7) else {
-            errorMessage = "Could not process the image."
-            return nil
-        }
-
         do {
-            let response = try await api.submitScan(imageData: data)
+            let response = try await api.submitScanFile(data: data, filename: filename, mimeType: mimeType)
             guard let requestId = response.requestId else {
                 errorMessage = "Scan was submitted but no request id was returned."
                 return nil
@@ -291,7 +312,15 @@ final class SupplyViewModel {
 
 private extension SupplyItem {
     func withPurchased(_ value: Bool) -> SupplyItem {
-        SupplyItem(id: id, name: name, quantity: quantity, unit: unit, domain: domain, isPurchased: value)
+        SupplyItem(
+            id: id,
+            name: name,
+            quantity: quantity,
+            unit: unit,
+            domain: domain,
+            isPurchased: value,
+            sourceOrigins: sourceOrigins
+        )
     }
 }
 
@@ -320,10 +349,17 @@ struct SupplyView: View {
     @State private var hasTriggeredAutoSync = false
     @State private var showGroupSettings = false
     @State private var showingReplenishSheet = false
+    @State private var showingReplenishScanIntro = false
+    @State private var showingScanSourceSheet = false
     @State private var showingSupplyScanCamera = false
+    @State private var showingSupplyScanPhotoLibrary = false
     @State private var supplyScanReviewContext: SupplyScanReviewContext?
     @State private var scanConsent = AIConsentCoordinator()
     @State private var showingScanPaywall = false
+
+    private var scanCreditCost: Int {
+        env.session.session?.aiCosts?.scan ?? 1
+    }
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -426,9 +462,10 @@ struct SupplyView: View {
                 ReplenishSheet(
                     purchasedCount: model.purchasedCount,
                     isDocking: model.isDocking,
+                    scanCost: scanCreditCost,
                     onScanReceipt: {
                         showingReplenishSheet = false
-                        proceedToSupplyScan()
+                        showingReplenishScanIntro = true
                     },
                     onDockPurchased: {
                         showingReplenishSheet = false
@@ -441,6 +478,25 @@ struct SupplyView: View {
                             )
                             env.notifyCargoDataChanged()
                         }
+                    }
+                )
+            }
+            .sheet(isPresented: $showingReplenishScanIntro) {
+                ReplenishScanIntroSheet(creditCost: scanCreditCost) {
+                    showingReplenishScanIntro = false
+                    if env.session.credits < scanCreditCost {
+                        showingScanPaywall = true
+                    } else {
+                        proceedToSupplyScan()
+                    }
+                }
+            }
+            .sheet(isPresented: $showingScanSourceSheet) {
+                ReplenishScanSourceSheet(
+                    onCamera: { showingSupplyScanCamera = true },
+                    onPhotoLibrary: { showingSupplyScanPhotoLibrary = true },
+                    onPDF: { data, filename in
+                        Task { await runSupplyScan(data: data, filename: filename, mimeType: "application/pdf") }
                     }
                 )
             }
@@ -468,33 +524,26 @@ struct SupplyView: View {
             }
             .sheet(isPresented: $showingScanPaywall) { PaywallView() }
             .fullScreenCover(isPresented: $showingSupplyScanCamera) {
-                CameraPicker { image in
+                CameraPicker(sourceType: .camera) { image in
                     showingSupplyScanCamera = false
                     guard let image else { return }
-                    Task {
-                        if let context = await model.scanReceiptAndFetchMatch(image: image, api: env.api) {
-                            supplyScanReviewContext = context
-                        }
-                    }
+                    Task { await runSupplyScan(image: image) }
                 }
                 .ignoresSafeArea()
             }
-            .overlay {
-                if model.isScanning {
-                    ZStack {
-                        Color.black.opacity(0.25).ignoresSafeArea()
-                        GlassCard {
-                            VStack(spacing: 12) {
-                                ProgressView().tint(Theme.hyperGreen)
-                                Text(model.scanStatusMessage ?? "Processing receipt…")
-                                    .rationBody()
-                                    .multilineTextAlignment(.center)
-                            }
-                            .padding(8)
-                        }
-                        .padding(32)
-                    }
+            .fullScreenCover(isPresented: $showingSupplyScanPhotoLibrary) {
+                CameraPicker(sourceType: .photoLibrary) { image in
+                    showingSupplyScanPhotoLibrary = false
+                    guard let image else { return }
+                    Task { await runSupplyScan(image: image) }
                 }
+                .ignoresSafeArea()
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { model.isScanning },
+                set: { _ in }
+            )) {
+                AIProcessingView(feature: .supplyReplenish, creditCost: scanCreditCost)
             }
             .overlay(alignment: .bottom) {
                 if let message = model.dockMessage {
@@ -578,10 +627,15 @@ struct SupplyView: View {
                     HStack {
                         Image(systemName: item.isPurchased ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(item.isPurchased ? Theme.hyperGreen : Theme.muted)
-                        Text(item.name.capitalized)
-                            .rationBody()
-                            .strikethrough(item.isPurchased)
-                            .foregroundStyle(item.isPurchased ? Theme.muted : Theme.carbon)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.name.capitalized)
+                                .rationBody()
+                                .strikethrough(item.isPurchased)
+                                .foregroundStyle(item.isPurchased ? Theme.muted : Theme.carbon)
+                            if !item.resolvedSourceOrigins.isEmpty {
+                                SupplyItemOriginBadge(origins: item.resolvedSourceOrigins)
+                            }
+                        }
                         Spacer()
                         Text("\(item.quantity.formatted()) \(item.unit)").rationCaption()
                     }
@@ -661,7 +715,24 @@ struct SupplyView: View {
 
     private func proceedToSupplyScan() {
         scanConsent.presentIfNeeded(session: env.session) {
-            showingSupplyScanCamera = true
+            showingScanSourceSheet = true
+        }
+    }
+
+    private func runSupplyScan(image: UIImage) async {
+        if let context = await model.scanReceiptAndFetchMatch(image: image, api: env.api) {
+            supplyScanReviewContext = context
+        }
+    }
+
+    private func runSupplyScan(data: Data, filename: String, mimeType: String) async {
+        if let context = await model.scanFileAndFetchMatch(
+            data: data,
+            filename: filename,
+            mimeType: mimeType,
+            api: env.api
+        ) {
+            supplyScanReviewContext = context
         }
     }
 }
@@ -670,6 +741,7 @@ struct ReplenishSheet: View {
     @Environment(\.dismiss) private var dismiss
     let purchasedCount: Int
     let isDocking: Bool
+    var scanCost: Int?
     let onScanReceipt: () -> Void
     let onDockPurchased: () -> Void
 
@@ -684,7 +756,7 @@ struct ReplenishSheet: View {
                     replenishOption(
                         icon: "camera.fill",
                         title: "From receipt",
-                        subtitle: "Scan or upload — match to your supply list",
+                        subtitle: scanSubtitle,
                         highlighted: true
                     )
                 }
@@ -717,6 +789,14 @@ struct ReplenishSheet: View {
             .background(Theme.ceramic)
         }
         .presentationDetents([.medium])
+    }
+
+    private var scanSubtitle: String {
+        var text = "Scan or upload — match to your supply list"
+        if let scanCost {
+            text += " · \(scanCost) credit\(scanCost == 1 ? "" : "s")"
+        }
+        return text
     }
 
     @ViewBuilder

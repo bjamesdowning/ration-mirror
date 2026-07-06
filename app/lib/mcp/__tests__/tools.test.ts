@@ -57,6 +57,10 @@ vi.mock("~/lib/meals.server", () => ({
 	deleteMeal: vi.fn(),
 }));
 
+vi.mock("~/lib/cook-confirmation.server", () => ({
+	cookMealWithConfirmation: vi.fn(),
+}));
+
 vi.mock("~/lib/ledger.server", () => ({
 	checkBalance: vi.fn(),
 }));
@@ -108,8 +112,11 @@ const {
 	getWeekEntries,
 } = await import("~/lib/manifest.server");
 const { matchMeals } = await import("~/lib/matching.server");
-const { getMealsPage, cookMeal, updateMeal, createMeal } = await import(
+const { getMealsPage, updateMeal, createMeal } = await import(
 	"~/lib/meals.server"
+);
+const { cookMealWithConfirmation } = await import(
+	"~/lib/cook-confirmation.server"
 );
 const { checkRateLimit } = await import("~/lib/rate-limiter.server");
 const {
@@ -708,11 +715,16 @@ describe("MCP tools", () => {
 				mealId: "00000000-0000-0000-0000-000000000001",
 			});
 			expect(result.content[0]?.text).toContain("Rate limit exceeded");
-			expect(cookMeal).not.toHaveBeenCalled();
+			expect(cookMealWithConfirmation).not.toHaveBeenCalled();
 		});
 
 		it("cooks meal and returns success", async () => {
-			vi.mocked(cookMeal).mockResolvedValueOnce(undefined as never);
+			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+				cooked: true,
+				deductions: [{ cargoId: "c1", quantity: 1 }],
+				servings: 2,
+				ingredientsDeducted: 1,
+			});
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -725,10 +737,15 @@ describe("MCP tools", () => {
 			expect(data.note).toContain("deducted");
 		});
 
-		it("surfaces insufficient-cargo errors via envelope", async () => {
-			vi.mocked(cookMeal).mockRejectedValueOnce(
-				new Error("Insufficient Cargo for: potatoes, bacon lardons"),
-			);
+		it("returns requiresConfirmation when cargo is insufficient", async () => {
+			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+				cooked: false,
+				deductions: [],
+				requiresConfirmation: true,
+				missingIngredients: [
+					{ name: "potatoes", required: 2, available: 0, unit: "lb" },
+				],
+			});
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -736,10 +753,10 @@ describe("MCP tools", () => {
 			)({
 				mealId: "00000000-0000-0000-0000-000000000001",
 			});
-			const env = parseEnvelope(result);
-			expect(env.ok).toBe(false);
-			expect(env.error.code).toBe("insufficient_cargo");
-			expect(env.error.message).toContain("potatoes");
+			const data = parseOk(result);
+			expect(data.consumed).toBe(false);
+			expect(data.requiresConfirmation).toBe(true);
+			expect(data.missingIngredients?.[0]?.name).toBe("potatoes");
 		});
 	});
 

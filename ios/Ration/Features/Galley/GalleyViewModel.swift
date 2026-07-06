@@ -7,12 +7,20 @@ final class GalleyViewModel {
     /// Must stay within `MealMatchQuerySchema.limit` max (100) on the server.
     private static let matchFetchLimit = 100
 
+    enum CookOutcome: Sendable {
+        case success(undoToken: String?, servings: Int, ingredientsDeducted: Int)
+        case needsConfirmation(missing: [MissingIngredientDetail])
+        case failed
+    }
+
     private(set) var meals: [Meal] = []
     private(set) var matches: [MealMatch] = []
     private(set) var matchByMealId: [String: MealMatch] = [:]
     private(set) var mealTotal = 0
     private(set) var matchTotal = 0
+    private(set) var activeMealIds: Set<String> = []
     private(set) var isLoading = false
+    private(set) var isClearingSelections = false
     var errorMessage: String?
 
     var isMatchMode: Bool { filters.matchingEnabled }
@@ -23,6 +31,8 @@ final class GalleyViewModel {
         supportsSearch: true,
         supportsMatching: true
     ))
+
+    var selectedMealCount: Int { activeMealIds.count }
 
     var displayedMeals: [Meal] {
         PageFilterEngine.filterMeals(meals, domain: filters.domain, tag: filters.tag, search: filters.search)
@@ -47,6 +57,10 @@ final class GalleyViewModel {
         isMatchMode ? matchTotal : mealTotal
     }
 
+    func isMealSelected(_ mealId: String) -> Bool {
+        activeMealIds.contains(mealId)
+    }
+
     func match(for mealId: String) -> MealMatch? {
         matchByMealId[mealId]
     }
@@ -59,13 +73,14 @@ final class GalleyViewModel {
         if online {
             if isMatchMode {
                 do {
-                    let response = try await api.matchMeals(
-                        limit: Self.matchFetchLimit,
-                        minMatch: 0
-                    )
+                    async let matchTask = api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
+                    async let mealsTask = api.meals(tag: filters.tag, domain: filters.domain)
+                    let response = try await matchTask
+                    let mealsResponse = try await mealsTask
                     matches = response.matches
                     matchTotal = response.total ?? response.matches.count
                     matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
+                    activeMealIds = Set(mealsResponse.activeMealIds ?? [])
                 } catch {
                     errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
                     restoreSnapshot(snapshots, organizationId: organizationId)
@@ -75,6 +90,7 @@ final class GalleyViewModel {
                     let mealsResponse = try await api.meals(tag: filters.tag, domain: filters.domain)
                     meals = mealsResponse.meals
                     mealTotal = mealsResponse.total ?? mealsResponse.meals.count
+                    activeMealIds = Set(mealsResponse.activeMealIds ?? [])
                     snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
                 } catch {
                     errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -109,23 +125,77 @@ final class GalleyViewModel {
         if let cached = snapshots.load(MealsResponse.self, domain: SnapshotDomain.galley, organizationId: organizationId) {
             meals = cached.payload.meals
             mealTotal = cached.payload.total ?? cached.payload.meals.count
+            activeMealIds = Set(cached.payload.activeMealIds ?? [])
         }
     }
 
-    func cook(_ mealId: String, api: RationAPI) async {
+    func cook(
+        _ mealId: String,
+        servings: Int? = nil,
+        confirmInsufficient: Bool = false,
+        api: RationAPI
+    ) async -> CookOutcome {
         do {
-            _ = try await api.cookMeal(id: mealId)
+            let result = try await api.cookMeal(
+                id: mealId,
+                servings: servings,
+                confirmInsufficient: confirmInsufficient ? true : nil
+            )
+            if result.requiresConfirmation == true,
+               let missing = result.missingIngredients,
+               !missing.isEmpty,
+               !confirmInsufficient
+            {
+                return .needsConfirmation(missing: missing)
+            }
             Haptics.success()
+            return .success(
+                undoToken: result.undoToken,
+                servings: result.servings ?? servings ?? 1,
+                ingredientsDeducted: result.ingredientsDeducted ?? 0
+            )
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return .failed
         }
     }
 
     func toggleActive(_ mealId: String, api: RationAPI) async {
+        let activating = !activeMealIds.contains(mealId)
+        if activating {
+            activeMealIds.insert(mealId)
+        } else {
+            activeMealIds.remove(mealId)
+        }
         do {
-            _ = try await api.toggleMealActive(id: mealId)
+            let response = try await api.toggleMealActive(id: mealId)
+            if response.isActive {
+                activeMealIds.insert(mealId)
+            } else {
+                activeMealIds.remove(mealId)
+            }
             Haptics.light()
         } catch {
+            if activating {
+                activeMealIds.remove(mealId)
+            } else {
+                activeMealIds.insert(mealId)
+            }
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func clearSelections(api: RationAPI) async {
+        guard !activeMealIds.isEmpty else { return }
+        isClearingSelections = true
+        defer { isClearingSelections = false }
+        let previous = activeMealIds
+        activeMealIds = []
+        do {
+            _ = try await api.clearMealSelections()
+            Haptics.light()
+        } catch {
+            activeMealIds = previous
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -133,6 +203,7 @@ final class GalleyViewModel {
     func deleteMeal(_ mealId: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         do {
             try await api.deleteMeal(mealId)
+            activeMealIds.remove(mealId)
             Haptics.light()
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch {

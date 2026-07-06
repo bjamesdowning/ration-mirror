@@ -3,11 +3,13 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import { lockBodyScroll } from "~/lib/body-scroll-lock";
+import type { SupplyItemOrigin } from "~/lib/supply-item-origins";
 import {
 	resolveSupplyItemSources,
 	type SupplyItemSource,
 	type SupplyItemSourceInput,
 } from "~/lib/supply-sources";
+import { SupplyItemOriginBadge } from "./SupplyItemOriginBadge";
 
 interface SupplyItemActionsSheetProps extends SupplyItemSourceInput {
 	itemName: string;
@@ -15,6 +17,7 @@ interface SupplyItemActionsSheetProps extends SupplyItemSourceInput {
 	convertLabel: string;
 	isPending: boolean;
 	isConvertPending: boolean;
+	sourceOrigins?: SupplyItemOrigin[];
 	onClose: () => void;
 	onConvert: () => void;
 	onSnooze: (duration: "24h" | "3d" | "1w") => void;
@@ -61,6 +64,7 @@ export function SupplyItemActionsSheet({
 	sourceMealName,
 	sourceMealNames,
 	sourceMealSources,
+	sourceOrigins = [],
 	onClose,
 	onConvert,
 	onSnooze,
@@ -107,6 +111,11 @@ export function SupplyItemActionsSheet({
 					>
 						{itemName}
 					</h3>
+					{sourceOrigins.length > 0 && (
+						<div className="mb-3">
+							<SupplyItemOriginBadge origins={sourceOrigins} />
+						</div>
+					)}
 					<SourceMealsSection sources={sources} />
 					<div className="space-y-2">
 						<button

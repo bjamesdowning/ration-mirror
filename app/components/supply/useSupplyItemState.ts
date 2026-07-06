@@ -4,6 +4,10 @@ import type { supplyItem } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
 import { toTitleCase } from "~/lib/format-display";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
+import {
+	normalizeSupplyOrigins,
+	type SupplyItemOrigin,
+} from "~/lib/supply-item-origins";
 import { type SupportedUnit, toSupportedUnit } from "~/lib/units";
 
 export type SupplyItemData =
@@ -200,6 +204,12 @@ export function useSupplyItemState({
 
 	const sourceMealSources =
 		"sourceMealSources" in item ? item.sourceMealSources : undefined;
+	const sourceOrigins: SupplyItemOrigin[] =
+		"sourceOrigins" in item && Array.isArray(item.sourceOrigins)
+			? normalizeSupplyOrigins(item.sourceOrigins)
+			: isMealSourced(item)
+				? []
+				: ["manual"];
 
 	return {
 		displayName,
@@ -223,5 +233,6 @@ export function useSupplyItemState({
 		sourceMealName: item.sourceMealName,
 		sourceMealNames: item.sourceMealNames,
 		sourceMealSources,
+		sourceOrigins,
 	};
 }

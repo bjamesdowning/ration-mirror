@@ -4,6 +4,11 @@ const requireMobileActiveGroup = vi.fn();
 const checkRateLimit = vi.fn();
 const getMeals = vi.fn();
 const getMealsCount = vi.fn();
+const getActiveMealIds = vi.fn();
+
+vi.mock("~/lib/meal-selection.server", () => ({
+	getActiveMealIds: (...args: unknown[]) => getActiveMealIds(...args),
+}));
 
 vi.mock("~/lib/mobile/auth.server", () => ({
 	requireMobileActiveGroup: (...args: unknown[]) =>
@@ -37,6 +42,7 @@ describe("GET /api/mobile/v1/meals", () => {
 			checkRateLimit,
 			getMeals,
 			getMealsCount,
+			getActiveMealIds,
 		]) {
 			m.mockReset();
 		}
@@ -47,6 +53,7 @@ describe("GET /api/mobile/v1/meals", () => {
 		checkRateLimit.mockResolvedValue({ allowed: true });
 		getMeals.mockResolvedValue([{ id: "meal_1", name: "pasta" }]);
 		getMealsCount.mockResolvedValue(42);
+		getActiveMealIds.mockResolvedValue(["meal_1"]);
 	});
 
 	it("returns meals and org-wide total in parallel", async () => {
@@ -61,9 +68,11 @@ describe("GET /api/mobile/v1/meals", () => {
 			limit: 50,
 		});
 		expect(getMealsCount).toHaveBeenCalledWith({}, "org_1");
+		expect(getActiveMealIds).toHaveBeenCalledWith({}, "org_1");
 		expect(result).toEqual({
 			meals: [{ id: "meal_1", name: "pasta" }],
 			total: 42,
+			activeMealIds: ["meal_1"],
 		});
 	});
 

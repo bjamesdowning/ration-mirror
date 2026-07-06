@@ -69,5 +69,6 @@ export async function applyUndoRecord(
 
 	if (stmts.length === 0) return;
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(stmts as [any, ...any[]]);
 }

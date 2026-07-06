@@ -10,6 +10,8 @@ import { formatQuantityNumericString } from "~/lib/format-quantity";
 interface CargoListRowProps {
 	item: typeof cargo.$inferSelect;
 	isPromoted?: boolean;
+	isActive?: boolean;
+	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
 	detailHref?: string;
 }
@@ -54,6 +56,8 @@ function formatExpiry(expiresAt?: Date | null): string {
 export function CargoListRow({
 	item,
 	isPromoted: initialIsPromoted = false,
+	isActive = false,
+	onToggleRestock,
 	onUpgradeRequired,
 	detailHref,
 }: CargoListRowProps) {
@@ -63,8 +67,14 @@ export function CargoListRow({
 		provisionId?: string;
 		alreadyExisted?: boolean;
 	}>();
+	const restockFetcher = useFetcher<{
+		success: boolean;
+		cargoId: string;
+		isActive: boolean;
+	}>();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isPromoted, setIsPromoted] = useState(initialIsPromoted);
+	const [localActive, setLocalActive] = useState(isActive);
 	const [promotedId, setPromotedId] = useState<string | null>(null);
 
 	const successToast = useToast({ duration: 4000 });
@@ -112,6 +122,16 @@ export function CargoListRow({
 		setIsPromoted(initialIsPromoted);
 	}, [initialIsPromoted]);
 
+	useEffect(() => {
+		setLocalActive(isActive);
+	}, [isActive]);
+
+	useEffect(() => {
+		if (!restockFetcher.data?.cargoId) return;
+		if (restockFetcher.data.cargoId !== item.id) return;
+		setLocalActive(restockFetcher.data.isActive);
+	}, [restockFetcher.data, item.id]);
+
 	const tags =
 		typeof item.tags === "string" ? JSON.parse(item.tags) : item.tags || [];
 
@@ -128,6 +148,16 @@ export function CargoListRow({
 	const handlePromote = () => {
 		if (isPromoted || isPromoting) return;
 		fetcher.submit({ intent: "promote", itemId: item.id }, { method: "post" });
+	};
+
+	const handleToggleRestock = () => {
+		const nextActive = !localActive;
+		setLocalActive(nextActive);
+		onToggleRestock?.(item.id, nextActive);
+		restockFetcher.submit(null, {
+			method: "post",
+			action: `/api/cargo/${item.id}/toggle-restock`,
+		});
 	};
 
 	if (isDeleting) return null;
@@ -229,11 +259,22 @@ export function CargoListRow({
 						In Galley
 					</span>
 				)}
+				{localActive && (
+					<span className="hidden md:inline text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium shrink-0">
+						On Supply
+					</span>
+				)}
 
 				{/* Action menu — always visible */}
 				<div className="shrink-0">
 					<ActionMenu
 						actions={[
+							{
+								label: localActive
+									? "Remove from Supply list"
+									: "Add to Supply list",
+								onClick: handleToggleRestock,
+							},
 							{
 								label: "Edit",
 								onClick: () => setIsEditing(true),

@@ -184,6 +184,7 @@ struct CargoPage: Codable, Sendable {
     let items: [CargoItem]
     let nextCursor: String?
     let total: Int
+    let activeCargoIds: [String]?
 }
 
 /// `POST /api/mobile/v1/cargo` request body.
@@ -202,6 +203,33 @@ struct CreateCargoResponse: Codable, Sendable {
 
 // MARK: - Supply
 
+enum SupplyItemOrigin: String, Codable, Sendable, Hashable, CaseIterable {
+    case manifest
+    case galley
+    case cargo
+    case manual
+
+    var displayName: String {
+        switch self {
+        case .manifest: "Manifest"
+        case .galley: "Galley"
+        case .cargo: "Cargo"
+        case .manual: "Manual"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .manifest: "calendar"
+        case .galley: "fork.knife"
+        case .cargo: "shippingbox"
+        case .manual: "pencil"
+        }
+    }
+
+    static let displayOrder: [SupplyItemOrigin] = [.manifest, .galley, .cargo, .manual]
+}
+
 struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -209,6 +237,30 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let unit: String
     let domain: String
     let isPurchased: Bool
+    let sourceOrigins: [SupplyItemOrigin]?
+
+    init(
+        id: String,
+        name: String,
+        quantity: Double,
+        unit: String,
+        domain: String,
+        isPurchased: Bool,
+        sourceOrigins: [SupplyItemOrigin]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.quantity = quantity
+        self.unit = unit
+        self.domain = domain
+        self.isPurchased = isPurchased
+        self.sourceOrigins = sourceOrigins
+    }
+
+    var resolvedSourceOrigins: [SupplyItemOrigin] {
+        guard let sourceOrigins else { return [] }
+        return SupplyItemOrigin.displayOrder.filter { sourceOrigins.contains($0) }
+    }
 }
 
 struct SupplyList: Codable, Sendable, Identifiable {
@@ -256,7 +308,8 @@ struct SupplyList: Codable, Sendable, Identifiable {
             quantity: existing.quantity,
             unit: existing.unit,
             domain: existing.domain,
-            isPurchased: isPurchased
+            isPurchased: isPurchased,
+            sourceOrigins: existing.sourceOrigins
         )
 
         var newUnchecked = resolvedUncheckedCount
@@ -320,6 +373,7 @@ struct Meal: Codable, Sendable, Identifiable {
 struct MealsResponse: Codable, Sendable {
     let meals: [Meal]
     let total: Int?
+    let activeMealIds: [String]?
 }
 
 /// `GET /api/mobile/v1/meals/:id`
@@ -617,11 +671,18 @@ struct MealMatchResponse: Codable, Sendable {
     let total: Int?
 }
 
+struct CookMealRequest: Encodable, Sendable {
+    var servings: Int?
+    var confirmInsufficient: Bool?
+}
+
 struct CookMealResponse: Codable, Sendable {
     let cooked: Bool
-    let ingredientsDeducted: Int
-    let servings: Int
+    let ingredientsDeducted: Int?
+    let servings: Int?
     let undoToken: String?
+    let requiresConfirmation: Bool?
+    let missingIngredients: [MissingIngredientDetail]?
 }
 
 struct ToggleActiveResponse: Codable, Sendable {
@@ -629,6 +690,17 @@ struct ToggleActiveResponse: Codable, Sendable {
     let mealId: String?
     let isActive: Bool
     let servingsOverride: Int?
+}
+
+struct ToggleCargoRestockResponse: Codable, Sendable {
+    let success: Bool?
+    let cargoId: String?
+    let isActive: Bool
+}
+
+struct ClearSelectionsResponse: Codable, Sendable {
+    let success: Bool?
+    let cleared: Int
 }
 
 struct TransferCreditsRequest: Encodable, Sendable {

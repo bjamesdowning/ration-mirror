@@ -41,6 +41,8 @@ function supplyItem(
 		sourceMealName: null,
 		sourceMealNames: [],
 		sourceMealSources: [],
+		sourceOrigins: [],
+		sourceCargoId: null,
 		...overrides,
 	};
 }

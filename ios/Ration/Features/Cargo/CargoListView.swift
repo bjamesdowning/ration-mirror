@@ -115,6 +115,20 @@ struct CargoListView: View {
 
     private var list: some View {
         List {
+            if model.selectedCargoCount > 0 {
+                Section {
+                    SupplySelectionBar(
+                        count: model.selectedCargoCount,
+                        itemLabel: model.selectedCargoCount == 1 ? "item" : "items",
+                        contextLabel: "for Supply restock",
+                        isClearing: model.isClearingSelections
+                    ) {
+                        Task { await model.clearSelections(api: env.api) }
+                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
             if !model.isLoading {
                 ListCountHeader(count: model.total)
             }
@@ -128,11 +142,24 @@ struct CargoListView: View {
                         NavigationLink {
                             CargoDetailView(itemId: item.id)
                         } label: {
-                            CargoRowView(item: item)
+                            CargoRowView(
+                                item: item,
+                                isSelectedForRestock: model.isCargoSelected(item.id)
+                            )
                         }
                         .listRowBackground(Theme.surface)
                         .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
                         .swipeActions(edge: .leading) {
+                            let selected = model.isCargoSelected(item.id)
+                            Button {
+                                Task { await model.toggleRestock(item, api: env.api) }
+                            } label: {
+                                Label(
+                                    selected ? "Remove" : "Add to Supply",
+                                    systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
+                                )
+                            }
+                            .tint(Theme.hyperGreen)
                             Button {
                                 editingItem = item
                             } label: {

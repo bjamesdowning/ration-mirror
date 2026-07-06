@@ -136,11 +136,16 @@ export default [
 	route("api/cargo", "routes/api/cargo.ts"),
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
 	route("api/cargo/batch", "routes/api/cargo.batch.tsx"),
+	route("api/cargo/clear-selections", "routes/api/cargo.clear-selections.ts"),
 
 	// API - Galley
 	route("api/galley/export", "routes/api/galley.export.ts"),
 	route("api/galley/import", "routes/api/galley.import.ts"),
 	route("api/cargo/:id", "routes/api/cargo.$id.ts"),
+	route(
+		"api/cargo/:id/toggle-restock",
+		"routes/api/cargo.$id.toggle-restock.ts",
+	),
 
 	// API - v1 programmatic (API key auth)
 	route("api/v1/inventory/export", "routes/api/v1.inventory.export.ts"),
@@ -317,13 +322,25 @@ export default [
 		"api/mobile/v1/cargo/tag-index",
 		"routes/api/mobile/v1.cargo.tag-index.ts",
 	),
+	route(
+		"api/mobile/v1/cargo/clear-selections",
+		"routes/api/mobile/v1.cargo.clear-selections.ts",
+	),
 	route("api/mobile/v1/cargo/:id", "routes/api/mobile/v1.cargo.$id.ts"),
+	route(
+		"api/mobile/v1/cargo/:id/toggle-restock",
+		"routes/api/mobile/v1.cargo.$id.toggle-restock.ts",
+	),
 	route("api/mobile/v1/scan", "routes/api/mobile/v1.scan.ts"),
 	route(
 		"api/mobile/v1/scan/:requestId",
 		"routes/api/mobile/v1.scan.$requestId.ts",
 	),
 	route("api/mobile/v1/meals", "routes/api/mobile/v1.meals.ts"),
+	route(
+		"api/mobile/v1/meals/clear-selections",
+		"routes/api/mobile/v1.meals.clear-selections.ts",
+	),
 	route("api/mobile/v1/provisions", "routes/api/mobile/v1.provisions.ts"),
 	route("api/mobile/v1/meals/match", "routes/api/mobile/v1.meals.match.ts"),
 	route("api/mobile/v1/meals/tags", "routes/api/mobile/v1.meals.tags.ts"),

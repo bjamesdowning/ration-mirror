@@ -20,7 +20,7 @@ interface DayViewProps {
 	readyMealIds?: Record<string, boolean>;
 	includedInSupply?: boolean;
 	onToggleSupplyInclusion?: (date: string) => void;
-	isTogglingSupply?: boolean;
+	togglingSupplyDate?: string | null;
 }
 
 const MONTH_NAMES = [
@@ -52,7 +52,7 @@ export function DayView({
 	readyMealIds = {},
 	includedInSupply = true,
 	onToggleSupplyInclusion,
-	isTogglingSupply = false,
+	togglingSupplyDate = null,
 }: DayViewProps) {
 	const d = new Date(`${date}T00:00:00`);
 	const dayName = getDayName(date);
@@ -78,7 +78,7 @@ export function DayView({
 						date={date}
 						includedInSupply={includedInSupply}
 						onToggle={onToggleSupplyInclusion}
-						disabled={isTogglingSupply}
+						disabled={togglingSupplyDate === date}
 					/>
 				)}
 				{totalCount > 0 && (

@@ -1,13 +1,14 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { cookMealWithConfirmation } from "~/lib/cook-confirmation.server";
 import { handleApiError } from "~/lib/error-handler";
-import { cookMeal } from "~/lib/meals.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.$id.cook";
 
 const CookRequestSchema = z.object({
 	servings: z.coerce.number().int().min(1).optional(),
+	confirmInsufficient: z.boolean().optional(),
 });
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -37,12 +38,16 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 	// Parse optional servings from FormData or JSON body
 	let servings: number | undefined;
+	let confirmInsufficient: boolean | undefined;
 	try {
 		const contentType = request.headers.get("content-type") ?? "";
 		if (contentType.includes("application/json")) {
 			const json = await request.json();
 			const parsed = CookRequestSchema.safeParse(json);
-			if (parsed.success) servings = parsed.data.servings;
+			if (parsed.success) {
+				servings = parsed.data.servings;
+				confirmInsufficient = parsed.data.confirmInsufficient;
+			}
 		} else {
 			const formData = await request.formData();
 			const raw = formData.get("servings");
@@ -50,15 +55,20 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				const parsed = CookRequestSchema.safeParse({ servings: raw });
 				if (parsed.success) servings = parsed.data.servings;
 			}
+			const confirmRaw = formData.get("confirmInsufficient");
+			if (confirmRaw === "true") confirmInsufficient = true;
 		}
 	} catch {
-		// Unparseable body — proceed without servings override
+		// Unparseable body — proceed without overrides
 	}
 
 	try {
-		const result = await cookMeal(context.cloudflare.env, groupId, id, {
-			servings,
-		});
+		const result = await cookMealWithConfirmation(
+			context.cloudflare.env,
+			groupId,
+			id,
+			{ servings, confirmInsufficient },
+		);
 		return { result };
 	} catch (e) {
 		return handleApiError(e);

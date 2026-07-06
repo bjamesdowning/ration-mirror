@@ -2,6 +2,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
+	cargo,
 	ledger,
 	meal,
 	mealIngredient,
@@ -13,6 +14,7 @@ import {
 } from "../db/schema";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
+import { getActiveCargoSelections } from "./cargo-selection.server";
 import { toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
@@ -25,6 +27,11 @@ import {
 	D1_MAX_BOUND_PARAMS,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
+import {
+	mergeSupplyOrigins,
+	normalizeSupplyOrigins,
+	type SupplyItemOrigin,
+} from "./supply-item-origins";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -54,8 +61,8 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
-/** supply_item insert: id, listId, name, quantity, unit, domain, isPurchased, sourceMealId, createdAt = 9 params/row */
-const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 9);
+/** supply_item insert: id, listId, name, quantity, unit, domain, sourceMealId, sourceMealIds, sourceOrigins, sourceCargoId = 10 params/row */
+const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 10);
 
 async function getGroupSupplyListCapacity(
 	d1: ReturnType<typeof drizzle>,
@@ -102,6 +109,7 @@ export type SupplyItemWithSource = typeof supplyItem.$inferSelect & {
 	sourceMealName: string | null;
 	sourceMealNames: string[];
 	sourceMealSources: { id: string; name: string }[];
+	sourceOrigins: SupplyItemOrigin[];
 };
 
 export interface GenerationSummary {
@@ -111,6 +119,8 @@ export interface GenerationSummary {
 	totalIngredients: number;
 }
 
+type MealSupplyOrigin = "manifest" | "galley";
+
 type IngredientRow = {
 	meal_ingredient: {
 		ingredientName: string;
@@ -119,6 +129,7 @@ type IngredientRow = {
 		mealId: string;
 	};
 	meal_domain: string | null;
+	supplyOrigin: MealSupplyOrigin;
 };
 
 type AggregatedIngredient = {
@@ -128,6 +139,7 @@ type AggregatedIngredient = {
 	unit: SupportedUnit;
 	domain: string;
 	sourceMealIds: string[];
+	sourceOrigins: SupplyItemOrigin[];
 };
 
 /**
@@ -216,16 +228,19 @@ function mergeIntoAggregation(
 		baseUnit: BaseUnit;
 		domain: string;
 		sourceMealIds: Set<string>;
+		sourceOrigins: Set<SupplyItemOrigin>;
 	},
 	quantity: number,
 	unit: SupportedUnit,
 	mealId: string,
 	ingredientName: string,
+	supplyOrigin: MealSupplyOrigin,
 ): boolean {
 	const normalized = normalizeToBaseUnit(quantity, unit);
 	if (normalized.unit === existing.baseUnit) {
 		existing.baseQuantity += normalized.quantity;
 		existing.sourceMealIds.add(mealId);
+		existing.sourceOrigins.add(supplyOrigin);
 		return true;
 	}
 
@@ -249,6 +264,7 @@ function mergeIntoAggregation(
 	existing.baseQuantity = merged.quantity;
 	existing.baseUnit = merged.unit;
 	existing.sourceMealIds.add(mealId);
+	existing.sourceOrigins.add(supplyOrigin);
 	return true;
 }
 
@@ -278,6 +294,7 @@ export function aggregateIngredients(
 			baseUnit: BaseUnit;
 			domain: string;
 			sourceMealIds: Set<string>;
+			sourceOrigins: Set<SupplyItemOrigin>;
 		}
 	>();
 
@@ -305,6 +322,7 @@ export function aggregateIngredients(
 				safeUnit,
 				ingredient.mealId,
 				ingredient.ingredientName,
+				row.supplyOrigin,
 			);
 			if (!merged) {
 				// Incompatible units — keep as separate line with disambiguated key
@@ -313,6 +331,7 @@ export function aggregateIngredients(
 				if (fallbackExisting) {
 					fallbackExisting.baseQuantity += normalized.quantity;
 					fallbackExisting.sourceMealIds.add(ingredient.mealId);
+					fallbackExisting.sourceOrigins.add(row.supplyOrigin);
 				} else {
 					aggregation.set(fallbackKey, {
 						name: ingredient.ingredientName,
@@ -321,6 +340,7 @@ export function aggregateIngredients(
 						baseUnit: normalized.unit,
 						domain,
 						sourceMealIds: new Set([ingredient.mealId]),
+						sourceOrigins: new Set([row.supplyOrigin]),
 					});
 				}
 			}
@@ -334,6 +354,7 @@ export function aggregateIngredients(
 			baseUnit: normalized.unit,
 			domain,
 			sourceMealIds: new Set([ingredient.mealId]),
+			sourceOrigins: new Set([row.supplyOrigin]),
 		});
 	}
 
@@ -355,6 +376,7 @@ export function aggregateIngredients(
 			unit: converted.unit,
 			domain: entry.domain,
 			sourceMealIds: Array.from(entry.sourceMealIds),
+			sourceOrigins: Array.from(entry.sourceOrigins),
 		};
 	});
 }
@@ -570,6 +592,7 @@ export async function getSupplyListById(
 			sourceMealName: sourceMealNames[0] ?? null,
 			sourceMealNames,
 			sourceMealSources,
+			sourceOrigins: normalizeSupplyOrigins(item.sourceOrigins),
 		};
 	});
 
@@ -825,6 +848,8 @@ export async function addSupplyItem(
 					: data.sourceMealId
 						? [data.sourceMealId]
 						: [],
+			sourceOrigins:
+				data.sourceMealId || data.sourceMealIds?.length ? [] : ["manual"],
 		}),
 		d1
 			.update(supplyList)
@@ -1450,7 +1475,7 @@ export async function createSupplyListFromAllMeals(
 	}
 
 	// Get all ingredients from all meals
-	const allIngredients = await d1
+	const rawIngredients = await d1
 		.select({
 			meal_ingredient: {
 				ingredientName: mealIngredient.ingredientName,
@@ -1463,6 +1488,11 @@ export async function createSupplyListFromAllMeals(
 		.from(mealIngredient)
 		.innerJoin(meal, eq(mealIngredient.mealId, meal.id))
 		.where(eq(meal.organizationId, organizationId));
+
+	const allIngredients: IngredientRow[] = rawIngredients.map((row) => ({
+		...row,
+		supplyOrigin: "galley",
+	}));
 
 	if (allIngredients.length === 0) {
 		const list = await ensureSupplyList(env.DB, organizationId);
@@ -1495,7 +1525,11 @@ export async function createSupplyListFromAllMeals(
 async function buildIngredientRowsFromOccurrences(
 	d1: ReturnType<typeof drizzle>,
 	organizationId: string,
-	occurrences: Array<{ mealId: string; servingsOverride: number | null }>,
+	occurrences: Array<{
+		mealId: string;
+		servingsOverride: number | null;
+		supplyOrigin: MealSupplyOrigin;
+	}>,
 ): Promise<IngredientRow[]> {
 	if (occurrences.length === 0) return [];
 
@@ -1565,6 +1599,7 @@ async function buildIngredientRowsFromOccurrences(
 					mealId: ing.mealId,
 				},
 				meal_domain: domain,
+				supplyOrigin: occurrence.supplyOrigin,
 			});
 		}
 	}
@@ -1631,14 +1666,40 @@ export async function createSupplyListFromSelectedMeals(
 		);
 
 		// Step 1d: Unified list (manifest occurrences + deduped galley)
-		const unified: Array<{ mealId: string; servingsOverride: number | null }> =
-			[...manifestOccurrences, ...galleySelections];
+		const unified: Array<{
+			mealId: string;
+			servingsOverride: number | null;
+			supplyOrigin: MealSupplyOrigin;
+		}> = [
+			...manifestOccurrences.map((m) => ({
+				mealId: m.mealId,
+				servingsOverride: m.servingsOverride,
+				supplyOrigin: "manifest" as const,
+			})),
+			...galleySelections.map((g) => ({
+				mealId: g.mealId,
+				servingsOverride: g.servingsOverride,
+				supplyOrigin: "galley" as const,
+			})),
+		];
 
 		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
 
 		if (unified.length === 0) {
+			const cargoSummary = await syncCargoRestockSelections(
+				env,
+				organizationId,
+				telemetry,
+			);
 			const supplyList = await ensureSupplyList(env.DB, organizationId);
 			if (!supplyList) throw new Error("Failed to ensure supply list");
+
+			const list = await getSupplyListById(
+				env.DB,
+				organizationId,
+				supplyList.id,
+			);
+			if (!list) throw new Error("List retrieval failed");
 
 			emitSupplySyncInfo(
 				"supply_sync.create_selected.success",
@@ -1652,14 +1713,15 @@ export async function createSupplyListFromSelectedMeals(
 					meals_selected_count: 0,
 					ingredient_rows_count: 0,
 					meals_query_duration_ms: mealsQueryDurationMs,
+					cargo_restock_count: cargoSummary.addedItems,
 				},
 			);
 
 			return {
-				list: supplyList,
+				list,
 				summary: {
-					addedItems: 0,
-					skippedItems: 0,
+					addedItems: cargoSummary.addedItems,
+					skippedItems: cargoSummary.skippedItems,
 					mealsProcessed: 0,
 					totalIngredients: 0,
 				},
@@ -1706,7 +1768,7 @@ export async function createSupplyListFromSelectedMeals(
 			};
 		}
 
-		// Step 3: Reuse existing sync path (unchanged)
+		// Step 3: Meal-derived sync + cargo restock
 		const syncResult = await syncSupplyFromIngredientRows(
 			env,
 			organizationId,
@@ -1715,6 +1777,19 @@ export async function createSupplyListFromSelectedMeals(
 			telemetry,
 			unitMode,
 		);
+
+		const cargoSummary = await syncCargoRestockSelections(
+			env,
+			organizationId,
+			telemetry,
+		);
+
+		const list = await getSupplyListById(
+			env.DB,
+			organizationId,
+			syncResult.list?.id ?? "",
+		);
+		if (!list) throw new Error("List retrieval failed");
 
 		emitSupplySyncInfo(
 			"supply_sync.create_selected.success",
@@ -1731,10 +1806,20 @@ export async function createSupplyListFromSelectedMeals(
 				source: "manifest_and_selection",
 				manifest_occurrence_count: manifestOccurrences.length,
 				galley_selection_count: galleySelections.length,
+				cargo_restock_count: cargoSummary.addedItems,
 			},
 		);
 
-		return syncResult;
+		return {
+			list,
+			summary: {
+				addedItems: syncResult.summary.addedItems + cargoSummary.addedItems,
+				skippedItems:
+					syncResult.summary.skippedItems + cargoSummary.skippedItems,
+				mealsProcessed: syncResult.summary.mealsProcessed,
+				totalIngredients: syncResult.summary.totalIngredients,
+			},
+		};
 	} catch (error) {
 		emitSupplySyncError(
 			"supply_sync.create_selected.error",
@@ -1749,6 +1834,173 @@ export async function createSupplyListFromSelectedMeals(
 		);
 		throw error;
 	}
+}
+
+async function syncCargoRestockSelections(
+	env: Env,
+	organizationId: string,
+	telemetryContext?: SupplySyncTelemetryContext,
+): Promise<{ addedItems: number; skippedItems: number }> {
+	const d1 = drizzle(env.DB);
+	const selections = await getActiveCargoSelections(env.DB, organizationId);
+	if (selections.length === 0) {
+		return { addedItems: 0, skippedItems: 0 };
+	}
+
+	const supplyListData = await ensureSupplyList(env.DB, organizationId);
+	if (!supplyListData) {
+		throw new Error("Failed to ensure supply list");
+	}
+
+	await d1
+		.delete(supplyItem)
+		.where(
+			and(
+				eq(supplyItem.listId, supplyListData.id),
+				eq(supplyItem.isPurchased, false),
+				isNotNull(supplyItem.sourceCargoId),
+			),
+		);
+
+	const refreshedList = await getSupplyListById(
+		env.DB,
+		organizationId,
+		supplyListData.id,
+	);
+	if (!refreshedList) throw new Error("List retrieval failed");
+
+	const cargoIds = selections.map((s) => s.cargoId);
+	const cargoRows = await chunkedQuery(
+		cargoIds,
+		(chunk) =>
+			d1
+				.select({
+					id: cargo.id,
+					name: cargo.name,
+					unit: cargo.unit,
+					domain: cargo.domain,
+					quantity: cargo.quantity,
+				})
+				.from(cargo)
+				.where(
+					and(
+						eq(cargo.organizationId, organizationId),
+						inArray(cargo.id, chunk),
+					),
+				),
+		99,
+	);
+	const cargoById = new Map(cargoRows.map((c) => [c.id, c]));
+	const selectionByCargoId = new Map(selections.map((s) => [s.cargoId, s]));
+
+	const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
+	const existingItems = refreshedList.items ?? [];
+	const itemsToInsert: (typeof supplyItem.$inferInsert)[] = [];
+	const itemsToUpdate: Array<{
+		id: string;
+		sourceOrigins: SupplyItemOrigin[];
+		sourceCargoId: string;
+	}> = [];
+	let addedCount = 0;
+	let skippedCount = 0;
+
+	for (const [cargoId, selection] of selectionByCargoId) {
+		const cargoRow = cargoById.get(cargoId);
+		if (!cargoRow) {
+			skippedCount++;
+			continue;
+		}
+
+		const normalizedName = normalizeForCargoDedup(cargoRow.name);
+		const domain = cargoRow.domain ?? "food";
+		const snoozeKey = `${normalizedName}__${domain}`;
+		if (snoozeKeys.has(snoozeKey)) {
+			skippedCount++;
+			continue;
+		}
+
+		const restockQty = selection.quantityOverride ?? 1;
+		const unit = toSupportedUnit(cargoRow.unit ?? "unit");
+
+		const existingMatch = existingItems.find(
+			(item) =>
+				!item.isPurchased &&
+				normalizeForCargoDedup(item.name) === normalizedName &&
+				item.domain === domain,
+		);
+
+		if (existingMatch) {
+			const mergedOrigins = mergeSupplyOrigins(
+				normalizeSupplyOrigins(existingMatch.sourceOrigins),
+				["cargo"],
+			);
+			itemsToUpdate.push({
+				id: existingMatch.id,
+				sourceOrigins: mergedOrigins,
+				sourceCargoId: cargoId,
+			});
+			addedCount++;
+			continue;
+		}
+
+		itemsToInsert.push({
+			id: crypto.randomUUID(),
+			listId: supplyListData.id,
+			name: cargoRow.name,
+			quantity: restockQty,
+			unit,
+			domain,
+			sourceOrigins: ["cargo"],
+			sourceCargoId: cargoId,
+		});
+		addedCount++;
+	}
+
+	if (itemsToUpdate.length > 0) {
+		const updateStmts = itemsToUpdate.map((update) =>
+			d1
+				.update(supplyItem)
+				.set({
+					sourceOrigins: update.sourceOrigins,
+					sourceCargoId: update.sourceCargoId,
+				})
+				.where(eq(supplyItem.id, update.id)),
+		);
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(updateStmts as [any, ...any[]]);
+	}
+
+	if (itemsToInsert.length > 0 || itemsToUpdate.length > 0) {
+		if (itemsToInsert.length > 0) {
+			await chunkedInsert(
+				itemsToInsert,
+				D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
+				(insertChunk) => d1.insert(supplyItem).values(insertChunk),
+			);
+		}
+		await d1
+			.update(supplyList)
+			.set({ updatedAt: new Date() })
+			.where(eq(supplyList.id, supplyListData.id));
+	}
+
+	emitSupplySyncInfo(
+		"supply_sync.cargo_restock.success",
+		{
+			...(telemetryContext ?? {
+				trigger: "dashboard_grocery_action_update_list",
+			}),
+			organizationId,
+			listId: supplyListData.id,
+		},
+		{
+			selection_count: selections.length,
+			added_items_count: addedCount,
+			skipped_items_count: skippedCount,
+		},
+	);
+
+	return { addedItems: addedCount, skippedItems: skippedCount };
 }
 
 async function syncSupplyFromIngredientRows(
@@ -1895,6 +2147,7 @@ async function syncSupplyFromIngredientRows(
 				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0],
 				sourceMealIds: aggregated.sourceMealIds,
+				sourceOrigins: aggregated.sourceOrigins,
 			});
 			addedCount++;
 		}
@@ -2142,6 +2395,7 @@ export async function completeSupplyFromScan(
 	);
 
 	if (batchStmts.length > 0) {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 		await d1.batch(batchStmts as [any, ...any[]]);
 	}
 

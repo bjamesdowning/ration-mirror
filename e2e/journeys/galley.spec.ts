@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
-import { cleanupE2eMeals } from "../helpers/cleanup";
 import { test } from "../fixtures/auth";
+import { cleanupE2eMeals } from "../helpers/cleanup";
 
 test.describe("galley", () => {
 	test.beforeEach(async ({ authenticatedPage: page }) => {

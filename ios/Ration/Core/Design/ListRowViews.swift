@@ -50,6 +50,7 @@ struct TelemetryQtyPill: View {
 /// Telemetry Strip row — web `CargoListRow` parity.
 struct CargoRowView: View {
     let item: CargoItem
+    var isSelectedForRestock = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -59,9 +60,14 @@ struct CargoRowView: View {
             )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.name.capitalized)
-                    .rationBody()
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(item.name.capitalized)
+                        .rationBody()
+                        .lineLimit(1)
+                    if isSelectedForRestock {
+                        SupplySelectionBadge(compact: true)
+                    }
+                }
                 if !item.tags.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(item.tags.prefix(2), id: \.self) { tag in
@@ -113,6 +119,7 @@ struct MealRowView: View {
     let meal: Meal
     var match: MealMatch?
     var showMatchRing: Bool = true
+    var isSelectedForSupply = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -122,9 +129,14 @@ struct MealRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(meal.name.capitalized)
-                    .rationBody()
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(meal.name.capitalized)
+                        .rationBody()
+                        .lineLimit(1)
+                    if isSelectedForSupply {
+                        SupplySelectionBadge(compact: true)
+                    }
+                }
 
                 HStack(spacing: 6) {
                     TelemetryTypeBadge(label: meal.type.capitalized)

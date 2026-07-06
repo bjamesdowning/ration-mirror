@@ -7,6 +7,8 @@ type ViewMode = "card" | "list";
 interface ManifestGridProps {
 	items: (typeof cargo.$inferSelect)[];
 	promotedCargoIds?: string[];
+	activeCargoIds?: Set<string>;
+	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
 	viewMode?: ViewMode;
 	getDetailHref?: (item: typeof cargo.$inferSelect) => string;
@@ -15,6 +17,8 @@ interface ManifestGridProps {
 export function ManifestGrid({
 	items,
 	promotedCargoIds,
+	activeCargoIds,
+	onToggleRestock,
 	onUpgradeRequired,
 	viewMode = "card",
 	getDetailHref,
@@ -36,6 +40,8 @@ export function ManifestGrid({
 						key={item.id}
 						item={item}
 						isPromoted={promotedCargoIds?.includes(item.id) ?? false}
+						isActive={activeCargoIds?.has(item.id) ?? false}
+						onToggleRestock={onToggleRestock}
 						onUpgradeRequired={onUpgradeRequired}
 						detailHref={getDetailHref?.(item)}
 					/>
@@ -52,6 +58,8 @@ export function ManifestGrid({
 						key={item.id}
 						item={item}
 						isPromoted={promotedCargoIds?.includes(item.id) ?? false}
+						isActive={activeCargoIds?.has(item.id) ?? false}
+						onToggleRestock={onToggleRestock}
 						onUpgradeRequired={onUpgradeRequired}
 						detailHref={getDetailHref?.(item)}
 					/>

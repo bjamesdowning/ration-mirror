@@ -8,6 +8,7 @@ function ingredientRow(
 		quantity: number;
 		unit: string;
 		domain: string;
+		supplyOrigin: "manifest" | "galley";
 	}> = {},
 ) {
 	return {
@@ -18,6 +19,7 @@ function ingredientRow(
 			unit: overrides.unit ?? "g",
 		},
 		meal_domain: overrides.domain ?? "food",
+		supplyOrigin: overrides.supplyOrigin ?? "galley",
 	};
 }
 
@@ -56,6 +58,17 @@ describe("aggregateIngredients", () => {
 		expect(result[0]?.quantity).toBeGreaterThan(0);
 		expect(result[0]?.sourceMealIds).toEqual(
 			expect.arrayContaining(["m1", "m2"]),
+		);
+	});
+
+	it("merges sourceOrigins from manifest and galley rows", () => {
+		const rows = [
+			ingredientRow({ mealId: "m1", supplyOrigin: "manifest" }),
+			ingredientRow({ mealId: "m2", supplyOrigin: "galley" }),
+		];
+		const result = aggregateIngredients(rows, "metric");
+		expect(result[0]?.sourceOrigins).toEqual(
+			expect.arrayContaining(["manifest", "galley"]),
 		);
 	});
 

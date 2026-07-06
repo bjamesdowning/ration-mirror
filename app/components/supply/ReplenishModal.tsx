@@ -7,6 +7,7 @@ interface ReplenishModalProps {
 	onDockPurchased: () => void;
 	onScanReceipt: () => void;
 	isDocking: boolean;
+	scanCost?: number;
 }
 
 export function ReplenishModal({
@@ -16,6 +17,7 @@ export function ReplenishModal({
 	onDockPurchased,
 	onScanReceipt,
 	isDocking,
+	scanCost,
 }: ReplenishModalProps) {
 	if (!open) return null;
 
@@ -40,10 +42,7 @@ export function ReplenishModal({
 					</p>
 					<button
 						type="button"
-						onClick={() => {
-							onClose();
-							onScanReceipt();
-						}}
+						onClick={onScanReceipt}
 						className="w-full flex items-center gap-3 p-4 rounded-xl border border-platinum dark:border-white/10 hover:border-hyper-green/40 hover:bg-hyper-green/5 transition-colors text-left"
 					>
 						<span className="flex h-10 w-10 items-center justify-center rounded-lg bg-hyper-green/15 text-hyper-green">
@@ -53,6 +52,9 @@ export function ReplenishModal({
 							<span className="block font-semibold">From receipt</span>
 							<span className="text-xs text-muted">
 								Scan or upload — match to your supply list
+								{typeof scanCost === "number"
+									? ` · ${scanCost} credit${scanCost === 1 ? "" : "s"}`
+									: ""}
 							</span>
 						</span>
 					</button>

@@ -37,7 +37,18 @@ final class APIClient {
 
     /// Multipart image upload for the scan endpoint.
     func uploadImage<T: Decodable>(_ path: String, imageData: Data, filename: String = "scan.jpg") async throws -> T {
-        try await uploadMultipart(path, fieldName: "image", imageData: imageData, filename: filename, mimeType: "image/jpeg")
+        try await uploadMultipartFile(path, fieldName: "image", fileData: imageData, filename: filename, mimeType: "image/jpeg")
+    }
+
+    /// Multipart file upload for scan (images or PDF receipts).
+    func uploadMultipartFile<T: Decodable>(
+        _ path: String,
+        fieldName: String,
+        fileData: Data,
+        filename: String,
+        mimeType: String
+    ) async throws -> T {
+        try await uploadMultipart(path, fieldName: fieldName, imageData: fileData, filename: filename, mimeType: mimeType)
     }
 
     /// Multipart avatar upload (`avatar` field).

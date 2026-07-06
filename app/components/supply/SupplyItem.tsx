@@ -81,6 +81,7 @@ export function SupplyItem({
 						sourceMealName={state.sourceMealName}
 						sourceMealNames={state.sourceMealNames}
 						sourceMealSources={state.sourceMealSources}
+						sourceOrigins={state.sourceOrigins}
 					/>
 				</div>
 			</div>
@@ -106,6 +107,7 @@ export function SupplyItem({
 					sourceMealName={state.sourceMealName}
 					sourceMealNames={state.sourceMealNames}
 					sourceMealSources={state.sourceMealSources}
+					sourceOrigins={state.sourceOrigins}
 					onClose={() => state.setShowActionsSheet(false)}
 					onConvert={state.handleConvertUnit}
 					onSnooze={state.handleSnooze}

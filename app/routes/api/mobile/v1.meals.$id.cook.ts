@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { z } from "zod";
+import { cookMealWithConfirmation } from "~/lib/cook-confirmation.server";
 import { handleApiError } from "~/lib/error-handler";
-import { cookMeal } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { storeUndoToken } from "~/lib/undo-token.server";
@@ -9,6 +9,7 @@ import type { Route } from "./+types/v1.meals.$id.cook";
 
 const CookRequestSchema = z.object({
 	servings: z.coerce.number().int().min(1).optional(),
+	confirmInsufficient: z.boolean().optional(),
 });
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -38,16 +39,23 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		}
 
 		let servings: number | undefined;
+		let confirmInsufficient: boolean | undefined;
 		const contentType = request.headers.get("content-type") ?? "";
 		if (contentType.includes("application/json")) {
 			const json = await request.json();
 			const parsed = CookRequestSchema.safeParse(json);
-			if (parsed.success) servings = parsed.data.servings;
+			if (parsed.success) {
+				servings = parsed.data.servings;
+				confirmInsufficient = parsed.data.confirmInsufficient;
+			}
 		}
 
-		const result = await cookMeal(context.cloudflare.env, organizationId, id, {
-			servings,
-		});
+		const result = await cookMealWithConfirmation(
+			context.cloudflare.env,
+			organizationId,
+			id,
+			{ servings, confirmInsufficient },
+		);
 
 		let undoToken: string | undefined;
 		if (result.deductions.length > 0) {

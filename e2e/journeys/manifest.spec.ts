@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
-import { cleanupE2eMeals, deleteMealById } from "../helpers/cleanup";
 import { test } from "../fixtures/auth";
+import { cleanupE2eMeals, deleteMealById } from "../helpers/cleanup";
 
 const E2E_MANIFEST_MEAL = `e2e-manifest-meal-${Date.now()}`;
 

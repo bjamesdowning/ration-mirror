@@ -3,18 +3,14 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { activeMealSelection } from "../../../db/schema";
+import { cookMealWithConfirmation } from "../../cook-confirmation.server";
 import {
 	clearMealSelections,
 	getActiveMealSelections,
 	upsertMealSelection,
 	validateMealOwnership,
 } from "../../meal-selection.server";
-import {
-	cookMeal,
-	createMeal,
-	deleteMeal,
-	updateMeal,
-} from "../../meals.server";
+import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
 import { McpCreateMealSchema, McpUpdateMealSchema } from "../../schemas/meal";
 import { err, ok } from "../envelope";
 import { type McpToolsEnv, makeTool, registerMcpTool } from "../tool-runtime";
@@ -223,21 +219,44 @@ export function registerGalleyTools(server: McpServer, env: McpToolsEnv): void {
 		{
 			mealId: z.string().uuid(),
 			servings: z.number().int().positive().optional(),
+			confirmInsufficient: z.boolean().optional(),
 		},
-		async (args: { mealId: string; servings?: number }) =>
+		async (args: {
+			mealId: string;
+			servings?: number;
+			confirmInsufficient?: boolean;
+		}) =>
 			makeTool({
 				name: "consume_meal",
 				scopes: ["mcp:galley:write", "mcp:inventory:write"],
 				rateLimitCategory: "mcp_write",
 				audit: true,
 				handler: async (ctx, a: typeof args) => {
-					await cookMeal(env, ctx.organizationId, a.mealId, {
-						servings: a.servings,
-					});
+					const result = await cookMealWithConfirmation(
+						env,
+						ctx.organizationId,
+						a.mealId,
+						{
+							servings: a.servings,
+							confirmInsufficient: a.confirmInsufficient,
+						},
+					);
+					if (result.requiresConfirmation) {
+						return ok("consume_meal", {
+							consumed: false,
+							requiresConfirmation: true,
+							missingIngredients: result.missingIngredients,
+							mealId: a.mealId,
+							note: "Insufficient cargo. Retry with confirmInsufficient: true to mark cooked without deducting.",
+						});
+					}
 					return ok("consume_meal", {
 						consumed: true,
+						requiresConfirmation: false,
+						missingIngredients: undefined,
 						mealId: a.mealId,
-						servings: a.servings ?? "default",
+						servings: result.servings ?? a.servings ?? "default",
+						deductions: result.deductions,
 						note: "Ingredients have been deducted from your pantry inventory.",
 					});
 				},

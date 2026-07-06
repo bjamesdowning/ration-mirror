@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import type { cargo } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
@@ -27,6 +28,7 @@ type ConnectedMeal = {
 interface CargoDetailProps {
 	item: CargoItem;
 	connectedMeals: ConnectedMeal[];
+	isRestockSelected?: boolean;
 }
 
 function parseTags(tags: unknown): string[] {
@@ -55,10 +57,21 @@ function getConnectionLabel(connectionType: "direct" | "name_match") {
 	return connectionType === "direct" ? "Direct Link" : "Name Match";
 }
 
-export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
+export function CargoDetail({
+	item,
+	connectedMeals,
+	isRestockSelected = false,
+}: CargoDetailProps) {
 	const fetcher = useFetcher<{ success?: boolean; error?: string }>();
+	const restockFetcher = useFetcher<{
+		success: boolean;
+		cargoId: string;
+		isActive: boolean;
+	}>();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
+	const [localRestockSelected, setLocalRestockSelected] =
+		useState(isRestockSelected);
 	const { confirm } = useConfirm();
 	const tags = useMemo(() => parseTags(item.tags), [item.tags]);
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
@@ -71,10 +84,29 @@ export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
 	}, [fetcher.state]);
 
 	useEffect(() => {
+		setLocalRestockSelected(isRestockSelected);
+	}, [isRestockSelected]);
+
+	useEffect(() => {
+		if (!restockFetcher.data?.cargoId) return;
+		if (restockFetcher.data.cargoId !== item.id) return;
+		setLocalRestockSelected(restockFetcher.data.isActive);
+	}, [restockFetcher.data, item.id]);
+
+	useEffect(() => {
 		if (isEditing && fetcher.state === "idle" && fetcher.data?.success) {
 			setIsEditing(false);
 		}
 	}, [isEditing, fetcher.state, fetcher.data?.success]);
+
+	const handleToggleRestock = () => {
+		const nextActive = !localRestockSelected;
+		setLocalRestockSelected(nextActive);
+		restockFetcher.submit(null, {
+			method: "post",
+			action: `/api/cargo/${item.id}/toggle-restock`,
+		});
+	};
 
 	const handleDelete = async () => {
 		if (
@@ -112,6 +144,11 @@ export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
 									{tag}
 								</span>
 							))}
+							{localRestockSelected && (
+								<span className="text-xs px-2 py-1 rounded-full bg-hyper-green/15 text-hyper-green font-medium">
+									On Supply
+								</span>
+							)}
 						</div>
 					</div>
 
@@ -148,6 +185,29 @@ export function CargoDetail({ item, connectedMeals }: CargoDetailProps) {
 					</div>
 				</div>
 			</div>
+
+			<button
+				type="button"
+				onClick={handleToggleRestock}
+				disabled={restockFetcher.state !== "idle"}
+				className={`w-full flex items-center justify-center gap-2 font-semibold px-6 py-3 rounded-xl transition-all ${
+					localRestockSelected
+						? "bg-hyper-green/10 text-hyper-green border border-hyper-green"
+						: "bg-platinum text-carbon border border-platinum hover:border-hyper-green/50"
+				} ${restockFetcher.state !== "idle" ? "opacity-75 cursor-wait" : ""}`}
+			>
+				{localRestockSelected ? (
+					<>
+						<CheckIcon className="w-4 h-4" />
+						Remove from Supply restock
+					</>
+				) : (
+					<>
+						<PlusIcon className="w-4 h-4" />
+						Add to Supply restock
+					</>
+				)}
+			</button>
 
 			<section className="space-y-4">
 				<div className="flex items-center justify-between">

@@ -405,6 +405,44 @@ export const activeMealSelectionRelations = relations(
 	}),
 );
 
+export const activeCargoSelection = sqliteTable(
+	"active_cargo_selection",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		cargoId: text("cargo_id")
+			.notNull()
+			.references(() => cargo.id, { onDelete: "cascade" }),
+		quantityOverride: real("quantity_override"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		index("acs_org_idx").on(table.organizationId),
+		index("acs_cargo_idx").on(table.cargoId),
+		unique("acs_org_cargo_unique").on(table.organizationId, table.cargoId),
+	],
+);
+
+export const activeCargoSelectionRelations = relations(
+	activeCargoSelection,
+	({ one }) => ({
+		organization: one(organization, {
+			fields: [activeCargoSelection.organizationId],
+			references: [organization.id],
+		}),
+		cargo: one(cargo, {
+			fields: [activeCargoSelection.cargoId],
+			references: [cargo.id],
+		}),
+	}),
+);
+
 export const supplyList = sqliteTable(
 	"supply_list",
 	{
@@ -461,6 +499,13 @@ export const supplyItem = sqliteTable(
 			.$type<string[]>()
 			.notNull()
 			.default([]),
+		sourceOrigins: text("source_origins", { mode: "json" })
+			.$type<Array<"manual" | "manifest" | "galley" | "cargo">>()
+			.notNull()
+			.default([]),
+		sourceCargoId: text("source_cargo_id").references(() => cargo.id, {
+			onDelete: "set null",
+		}),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

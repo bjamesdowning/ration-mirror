@@ -10,6 +10,7 @@ import {
 	jettisonItem,
 	updateItem,
 } from "~/lib/cargo.server";
+import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import { ITEM_DOMAINS } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { getMealsForCargo } from "~/lib/meals.server";
@@ -32,7 +33,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const item = await getCargoItem(context.cloudflare.env.DB, groupId, id);
 	if (!item) throw redirect("/hub/cargo");
 
-	const [connectedMeals, adjacent] = await Promise.all([
+	const [connectedMeals, adjacent, activeCargoIds] = await Promise.all([
 		getMealsForCargo(context.cloudflare.env.DB, groupId, id, item.name),
 		getAdjacentCargoIds(
 			context.cloudflare.env.DB,
@@ -40,6 +41,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			{ id: item.id, createdAt: item.createdAt },
 			{ domain },
 		),
+		getActiveCargoIds(context.cloudflare.env.DB, groupId),
 	]);
 
 	return {
@@ -49,6 +51,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		nextId: adjacent.nextId,
 		navTag: tag,
 		navDomain: domain,
+		isRestockSelected: activeCargoIds.includes(id),
 	};
 }
 
@@ -160,8 +163,15 @@ export function HydrateFallback() {
 }
 
 export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
-	const { item, connectedMeals, prevId, nextId, navTag, navDomain } =
-		loaderData;
+	const {
+		item,
+		connectedMeals,
+		prevId,
+		nextId,
+		navTag,
+		navDomain,
+		isRestockSelected,
+	} = loaderData;
 
 	return (
 		<>
@@ -187,7 +197,11 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 					itemLabel="ingredient"
 				/>
 			</div>
-			<CargoDetail item={item} connectedMeals={connectedMeals} />
+			<CargoDetail
+				item={item}
+				connectedMeals={connectedMeals}
+				isRestockSelected={isRestockSelected}
+			/>
 		</>
 	);
 }

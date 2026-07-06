@@ -13,6 +13,14 @@ export async function getActiveMealSelections(
 		.where(eq(activeMealSelection.organizationId, organizationId));
 }
 
+export async function getActiveMealIds(
+	db: D1Database,
+	organizationId: string,
+): Promise<string[]> {
+	const rows = await getActiveMealSelections(db, organizationId);
+	return rows.map((r) => r.mealId);
+}
+
 export async function toggleMealSelection(
 	db: D1Database,
 	organizationId: string,

@@ -60,6 +60,14 @@ final class RationAPI {
         let _: EmptyResponse = try await client.delete("cargo/\(id)")
     }
 
+    func toggleCargoRestock(id: String) async throws -> ToggleCargoRestockResponse {
+        try await client.post("cargo/\(id)/toggle-restock", body: EmptyBody())
+    }
+
+    func clearCargoSelections() async throws -> ClearSelectionsResponse {
+        try await client.post("cargo/clear-selections", body: EmptyBody())
+    }
+
     func batchAddCargo(_ body: BatchCargoRequest) async throws -> BatchCargoResponse {
         try await client.post("cargo/batch", body: body)
     }
@@ -211,11 +219,15 @@ final class RationAPI {
         return try await client.get("meals/match", query: query)
     }
 
-    func cookMeal(id: String, servings: Int? = nil) async throws -> CookMealResponse {
-        if let servings {
-            return try await client.post("meals/\(id)/cook", body: ["servings": servings])
-        }
-        return try await client.post("meals/\(id)/cook", body: EmptyBody())
+    func cookMeal(
+        id: String,
+        servings: Int? = nil,
+        confirmInsufficient: Bool? = nil
+    ) async throws -> CookMealResponse {
+        try await client.post(
+            "meals/\(id)/cook",
+            body: CookMealRequest(servings: servings, confirmInsufficient: confirmInsufficient)
+        )
     }
 
     func toggleMealActive(id: String, servings: Int? = nil) async throws -> ToggleActiveResponse {
@@ -223,6 +235,10 @@ final class RationAPI {
             return try await client.post("meals/\(id)/toggle-active", body: ["servings": servings])
         }
         return try await client.post("meals/\(id)/toggle-active", body: EmptyBody())
+    }
+
+    func clearMealSelections() async throws -> ClearSelectionsResponse {
+        try await client.post("meals/clear-selections", body: EmptyBody())
     }
 
     func transferCredits(
@@ -327,6 +343,10 @@ final class RationAPI {
     // Scan
     func submitScan(imageData: Data) async throws -> ScanSubmitResponse {
         try await client.uploadImage("scan", imageData: imageData)
+    }
+
+    func submitScanFile(data: Data, filename: String, mimeType: String) async throws -> ScanSubmitResponse {
+        try await client.uploadMultipartFile("scan", fieldName: "image", fileData: data, filename: filename, mimeType: mimeType)
     }
 
     func scanStatus(requestId: String) async throws -> ScanStatusResponse {

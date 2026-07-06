@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActionData, useRouteLoaderData } from "react-router";
+import { useActionData, useFetcher, useRouteLoaderData } from "react-router";
 import { z } from "zod";
 import {
 	CsvImportButton,
@@ -47,6 +47,7 @@ import {
 	jettisonItem,
 	updateItem,
 } from "~/lib/cargo.server";
+import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import {
 	createProvisionFromCargo,
@@ -117,7 +118,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [cargo, totalCargo, availableTags, promotedCargoIds] =
+	const [cargo, totalCargo, availableTags, promotedCargoIds, activeCargoIds] =
 		await Promise.all([
 			getCargo(
 				context.cloudflare.env.DB,
@@ -132,6 +133,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			),
 			getCargoTags(context.cloudflare.env.DB, groupId),
 			getPromotedCargoIds(context.cloudflare.env.DB, groupId),
+			getActiveCargoIds(context.cloudflare.env.DB, groupId),
 		]);
 
 	return {
@@ -141,6 +143,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		currentTag: tag,
 		availableTags,
 		promotedCargoIds,
+		activeCargoIds,
 		page,
 		pageSize: CARGO_PAGE_SIZE,
 		defaultViewMode,
@@ -356,6 +359,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 		totalCargo,
 		availableTags,
 		promotedCargoIds,
+		activeCargoIds,
 		page,
 		pageSize,
 		defaultViewMode,
@@ -372,6 +376,10 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const [viewMode, setViewMode] = useState<"card" | "list">(
 		defaultViewMode ?? "card",
 	);
+	const [selectedCargoIds, setSelectedCargoIds] = useState(
+		() => new Set(activeCargoIds),
+	);
+	const clearFetcher = useFetcher<{ success: boolean; cleared: number }>();
 	const dashboardData = useRouteLoaderData("routes/hub") as {
 		balance?: number;
 		aiCosts?: { SCAN: number };
@@ -428,6 +436,28 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 
 		return items;
 	}, [initialCargo, searchQuery, currentTag, activeDomain]);
+
+	const selectedCount = selectedCargoIds.size;
+
+	const handleToggleRestock = (cargoId: string, nextActive: boolean) => {
+		setSelectedCargoIds((prev) => {
+			const next = new Set(prev);
+			if (nextActive) {
+				next.add(cargoId);
+			} else {
+				next.delete(cargoId);
+			}
+			return next;
+		});
+	};
+
+	const handleClearSelections = () => {
+		setSelectedCargoIds(new Set());
+		clearFetcher.submit(null, {
+			method: "post",
+			action: "/api/cargo/clear-selections",
+		});
+	};
 
 	// Handle scan completion - close quick add if open
 	const handleScanComplete = () => {
@@ -574,6 +604,23 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				)}
 
 			<div className="space-y-6 pb-36 md:pb-0">
+				{selectedCount > 0 && (
+					<div className="glass-panel rounded-xl px-4 py-3 flex items-center justify-between">
+						<div className="text-sm text-muted">
+							<span className="text-carbon dark:text-white font-bold">
+								{selectedCount}
+							</span>{" "}
+							items selected for Supply restock
+						</div>
+						<button
+							type="button"
+							onClick={handleClearSelections}
+							className="text-xs font-bold px-3 py-2 border border-hyper-green text-hyper-green hover:bg-hyper-green/10 transition-all rounded-lg"
+						>
+							Clear All
+						</button>
+					</div>
+				)}
 				<div className="hidden md:block">
 					<PanelToolbar
 						primaryAction={
@@ -674,6 +721,8 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 						<ManifestGrid
 							items={filteredCargo}
 							promotedCargoIds={promotedCargoIds}
+							activeCargoIds={selectedCargoIds}
+							onToggleRestock={handleToggleRestock}
 							onUpgradeRequired={() => setShowUpgradePrompt(true)}
 							viewMode={viewMode}
 							getDetailHref={(item) => {

@@ -49,7 +49,7 @@ import {
 	getWeekStart,
 } from "~/lib/manifest.server";
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
-import { getManifestSupplyDayMapForWeek } from "~/lib/manifest-supply.server";
+import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/manifest";
@@ -142,15 +142,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		await Promise.all([
 			resolveReadiness(),
 			getTriggeredAllergens(db, scheduledMealIds, userAllergens),
-			getManifestSupplyDayMapForWeek(db, groupId, weekStartPref).then(
-				(excludedMap) => {
-					const inclusion: Record<string, boolean> = {};
-					for (const date of weekDates) {
-						inclusion[date] = excludedMap[date] !== false;
-					}
-					return inclusion;
-				},
-			),
+			getExcludedManifestDates(
+				db,
+				groupId,
+				currentRangeStart,
+				currentRangeEnd,
+			).then((excludedDates) => {
+				const excludedSet = new Set(excludedDates);
+				const inclusion: Record<string, boolean> = {};
+				for (const date of weekDates) {
+					inclusion[date] = !excludedSet.has(date);
+				}
+				return inclusion;
+			}),
 		]);
 
 	return {
@@ -206,35 +210,59 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [supplyDayInclusion, setSupplyDayInclusion] = useState(
 		initialSupplyDayInclusion,
 	);
+	const pendingSupplyDateRef = useRef<string | null>(null);
+	const lastAppliedToggleRef = useRef<string | null>(null);
+	const [togglingSupplyDate, setTogglingSupplyDate] = useState<string | null>(
+		null,
+	);
+
+	const prevRangeStartRef = useRef(currentRangeStart);
 
 	useEffect(() => {
+		if (prevRangeStartRef.current === currentRangeStart) return;
+		prevRangeStartRef.current = currentRangeStart;
 		setSupplyDayInclusion(initialSupplyDayInclusion);
-	}, [initialSupplyDayInclusion]);
+		pendingSupplyDateRef.current = null;
+		setTogglingSupplyDate(null);
+	}, [currentRangeStart, initialSupplyDayInclusion]);
 
 	useEffect(() => {
 		const data = supplyToggleFetcher.data;
+		if (supplyToggleFetcher.state !== "idle") return;
+		if (data?.date == null || data.includedInSupply == null) return;
+
+		const date = String(data.date);
+		const included = Boolean(data.includedInSupply);
+		const responseKey = `${date}:${included}`;
+		if (lastAppliedToggleRef.current === responseKey) return;
 		if (
-			supplyToggleFetcher.state === "idle" &&
-			data?.date != null &&
-			data.includedInSupply != null
+			pendingSupplyDateRef.current != null &&
+			pendingSupplyDateRef.current !== date
 		) {
-			const date = String(data.date);
-			const included = Boolean(data.includedInSupply);
-			setSupplyDayInclusion((prev) => ({
-				...prev,
-				[date]: included,
-			}));
+			return;
 		}
+
+		lastAppliedToggleRef.current = responseKey;
+		pendingSupplyDateRef.current = null;
+		setTogglingSupplyDate(null);
+		setSupplyDayInclusion((prev) => ({
+			...prev,
+			[date]: included,
+		}));
 	}, [supplyToggleFetcher.state, supplyToggleFetcher.data]);
 
 	const handleToggleSupplyInclusion = (date: string) => {
+		setSupplyDayInclusion((prev) => ({
+			...prev,
+			[date]: prev[date] === false,
+		}));
+		pendingSupplyDateRef.current = date;
+		setTogglingSupplyDate(date);
 		supplyToggleFetcher.submit(null, {
 			method: "POST",
 			action: `/api/meal-plans/supply-days/${date}`,
 		});
 	};
-
-	const isTogglingSupply = supplyToggleFetcher.state !== "idle";
 
 	// Picker meals are loaded client-side from /api/meals. The load is triggered
 	// on mount so data is ready by the time the user opens the meal picker or
@@ -752,7 +780,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 								readyMealIds={readyMealIds}
 								includedInSupply={supplyDayInclusion[activeDay] !== false}
 								onToggleSupplyInclusion={handleToggleSupplyInclusion}
-								isTogglingSupply={isTogglingSupply}
+								togglingSupplyDate={togglingSupplyDate}
 							/>
 						)}
 					</div>
@@ -782,7 +810,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 						readyMealIds={readyMealIds}
 						supplyDayInclusion={supplyDayInclusion}
 						onToggleSupplyInclusion={handleToggleSupplyInclusion}
-						isTogglingSupply={isTogglingSupply}
+						togglingSupplyDate={togglingSupplyDate}
 					/>
 				</div>
 			</div>

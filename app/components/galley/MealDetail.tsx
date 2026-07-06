@@ -1,12 +1,11 @@
 import { ExternalLink, Minus, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
 import { useConfirm } from "~/lib/confirm-context";
-import { getFormActionPath } from "~/lib/form-utils";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
@@ -171,7 +170,12 @@ export function MealDetail({
 	const [localSelectedForSupply, setLocalSelectedForSupply] =
 		useState(isSelectedForSupply);
 	const fetcher = useFetcher<{
-		result?: { cooked: boolean };
+		result?: {
+			cooked: boolean;
+			requiresConfirmation?: boolean;
+			missingIngredients?: { name: string }[];
+			deductions?: unknown[];
+		};
 		error?: string;
 	}>();
 	const isCooking = fetcher.state !== "idle";
@@ -251,9 +255,42 @@ export function MealDetail({
 		}
 	};
 
+	const submitCook = useCallback(
+		(confirmInsufficient = false) => {
+			fetcher.submit(
+				JSON.stringify({
+					servings: desiredServings,
+					confirmInsufficient,
+				}),
+				{
+					method: "POST",
+					action: `/api/meals/${meal.id}/cook`,
+					encType: "application/json",
+				},
+			);
+		},
+		[fetcher, meal.id, desiredServings],
+	);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || !fetcher.data?.result) return;
+		const data = fetcher.data.result;
+		if (!data.requiresConfirmation || !data.missingIngredients?.length) return;
+
+		const names = data.missingIngredients.map((m) => m.name).join(", ");
+		void (async () => {
+			const ok = await confirm({
+				title: "Missing ingredients",
+				message: `You don't have enough: ${names}. Cook anyway without deducting from Cargo?`,
+				confirmLabel: "Cook anyway",
+				variant: "warning",
+			});
+			if (ok) submitCook(true);
+		})();
+	}, [fetcher.state, fetcher.data, confirm, submitCook]);
+
 	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		const form = e.currentTarget;
 		const servingLabel =
 			desiredServings === 1 ? "1 serving" : `${desiredServings} servings`;
 		if (
@@ -265,10 +302,7 @@ export function MealDetail({
 			}))
 		)
 			return;
-		fetcher.submit(new FormData(form), {
-			method: "POST",
-			action: getFormActionPath(form),
-		});
+		submitCook(false);
 	};
 
 	const ingredientNames = meal.ingredients.map((i) => i.ingredientName);

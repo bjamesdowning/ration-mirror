@@ -24,7 +24,7 @@ interface WeekViewProps {
 	readyMealIds?: Record<string, boolean>;
 	supplyDayInclusion?: Record<string, boolean>;
 	onToggleSupplyInclusion?: (date: string) => void;
-	isTogglingSupply?: boolean;
+	togglingSupplyDate?: string | null;
 }
 
 export function WeekView({
@@ -45,7 +45,7 @@ export function WeekView({
 	readyMealIds = {},
 	supplyDayInclusion = {},
 	onToggleSupplyInclusion,
-	isTogglingSupply = false,
+	togglingSupplyDate = null,
 }: WeekViewProps) {
 	const slots = showSnackSlot
 		? SLOT_TYPES
@@ -145,7 +145,7 @@ export function WeekView({
 									date={date}
 									includedInSupply={supplyDayInclusion[date] !== false}
 									onToggle={onToggleSupplyInclusion}
-									disabled={isTogglingSupply}
+									disabled={togglingSupplyDate === date}
 									compact
 								/>
 							</div>

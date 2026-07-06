@@ -3,6 +3,7 @@ import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
+import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
@@ -12,6 +13,8 @@ import { formatQuantityNumericString } from "~/lib/format-quantity";
 interface CargoCardProps {
 	item: typeof cargo.$inferSelect;
 	isPromoted?: boolean;
+	isActive?: boolean;
+	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
 	detailHref?: string;
 }
@@ -19,6 +22,8 @@ interface CargoCardProps {
 export function CargoCard({
 	item,
 	isPromoted: initialIsPromoted = false,
+	isActive = false,
+	onToggleRestock,
 	onUpgradeRequired,
 	detailHref,
 }: CargoCardProps) {
@@ -28,8 +33,14 @@ export function CargoCard({
 		provisionId?: string;
 		alreadyExisted?: boolean;
 	}>();
+	const restockFetcher = useFetcher<{
+		success: boolean;
+		cargoId: string;
+		isActive: boolean;
+	}>();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isPromoted, setIsPromoted] = useState(initialIsPromoted);
+	const [localActive, setLocalActive] = useState(isActive);
 	const [promotedId, setPromotedId] = useState<string | null>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 
@@ -40,6 +51,7 @@ export function CargoCard({
 	const isDeleting = fetcher.state !== "idle" && currentIntent === "delete";
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 	const isPromoting = fetcher.state !== "idle" && currentIntent === "promote";
+	const isTogglingRestock = restockFetcher.state !== "idle";
 
 	// Track the intent while the request is in flight so we can read it on completion
 	useEffect(() => {
@@ -87,6 +99,16 @@ export function CargoCard({
 		setIsPromoted(initialIsPromoted);
 	}, [initialIsPromoted]);
 
+	useEffect(() => {
+		setLocalActive(isActive);
+	}, [isActive]);
+
+	useEffect(() => {
+		if (!restockFetcher.data?.cargoId) return;
+		if (restockFetcher.data.cargoId !== item.id) return;
+		setLocalActive(restockFetcher.data.isActive);
+	}, [restockFetcher.data, item.id]);
+
 	// Parse tags safely
 	const tags =
 		typeof item.tags === "string" ? JSON.parse(item.tags) : item.tags || [];
@@ -103,6 +125,33 @@ export function CargoCard({
 		if (isPromoted || isPromoting) return;
 		fetcher.submit({ intent: "promote", itemId: item.id }, { method: "post" });
 	};
+
+	const handleToggleRestock = () => {
+		const nextActive = !localActive;
+		setLocalActive(nextActive);
+		onToggleRestock?.(item.id, nextActive);
+		restockFetcher.submit(null, {
+			method: "post",
+			action: `/api/cargo/${item.id}/toggle-restock`,
+		});
+	};
+
+	const restockAction = {
+		label: localActive ? "Remove from Supply list" : "Add to Supply list",
+		onClick: handleToggleRestock,
+	};
+	const cardActions = [
+		{ label: "Edit", onClick: () => setIsEditing(true) },
+		{
+			label: isPromoted
+				? "In Galley"
+				: isPromoting
+					? "Adding..."
+					: "Add to Galley",
+			onClick: handlePromote,
+		},
+		{ label: "Delete", onClick: handleDelete, destructive: true },
+	];
 
 	return (
 		<>
@@ -136,70 +185,86 @@ export function CargoCard({
 					onDismiss={alreadyToast.hide}
 				/>
 			)}
-			<StandardCard
-				to={detailHref ?? `/hub/cargo/${item.id}`}
-				actions={[
-					{
-						label: "Edit",
-						onClick: () => setIsEditing(true),
-					},
-					{
-						label: isPromoted
-							? "In Galley"
-							: isPromoting
-								? "Adding..."
-								: "Add to Galley",
-						onClick: handlePromote,
-					},
-					{
-						label: "Delete",
-						onClick: handleDelete,
-						destructive: true,
-					},
-				]}
-			>
-				<div className="flex justify-between items-start mb-2">
-					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-2 flex-wrap">
-							<span
-								className="text-lg font-bold text-carbon truncate group-hover:text-hyper-green transition-colors"
-								title={item.name}
-							>
-								{item.name}
-							</span>
-							{isPromoted && (
-								<span className="shrink-0 text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium">
-									In Galley
+			<div className="relative">
+				<button
+					type="button"
+					onClick={(e) => {
+						e.stopPropagation();
+						handleToggleRestock();
+					}}
+					disabled={isTogglingRestock}
+					aria-pressed={localActive}
+					className={`hidden md:flex absolute top-4 left-4 z-40 items-center justify-center min-w-[44px] min-h-[44px] border text-xs font-bold transition-all shadow-sm ${
+						localActive
+							? "bg-hyper-green text-carbon border-hyper-green"
+							: "bg-platinum/70 text-muted border-carbon/20 hover:bg-platinum"
+					}`}
+					title={
+						localActive ? "Selected for Supply restock" : "Add to Supply list"
+					}
+				>
+					{localActive ? (
+						<CheckIcon className="w-3.5 h-3.5" />
+					) : (
+						<PlusIcon className="w-3.5 h-3.5" />
+					)}
+				</button>
+				<StandardCard
+					to={detailHref ?? `/hub/cargo/${item.id}`}
+					actions={cardActions}
+					mobileActions={[restockAction, ...cardActions]}
+				>
+					<div className="flex justify-between items-start mb-2">
+						<div className="min-w-0 flex-1">
+							<div className="flex items-center gap-2 flex-wrap">
+								<div className="hidden md:block w-11 h-11 flex-shrink-0" />
+								<span
+									className="text-lg font-bold text-carbon truncate group-hover:text-hyper-green transition-colors"
+									title={item.name}
+								>
+									{item.name}
 								</span>
-							)}
+								{isPromoted && (
+									<span className="shrink-0 text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium">
+										In Galley
+									</span>
+								)}
+								{localActive && (
+									<span className="shrink-0 text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium">
+										On Supply
+									</span>
+								)}
+							</div>
+						</div>
+						<div className="text-right">
+							<span className="text-xl font-bold text-data text-carbon">
+								{formatQuantityNumericString(item.quantity, item.unit)}
+							</span>
+							<span className="text-sm ml-1 text-muted">{item.unit}</span>
 						</div>
 					</div>
-					<div className="text-right">
-						<span className="text-xl font-bold text-data text-carbon">
-							{formatQuantityNumericString(item.quantity, item.unit)}
-						</span>
-						<span className="text-sm ml-1 text-muted">{item.unit}</span>
+
+					<div className="flex flex-wrap gap-2 mb-4">
+						{tags.map((tag: string) => (
+							<span
+								key={tag}
+								className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green rounded-md"
+							>
+								{tag}
+							</span>
+						))}
 					</div>
-				</div>
 
-				<div className="flex flex-wrap gap-2 mb-4">
-					{tags.map((tag: string) => (
-						<span
-							key={tag}
-							className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green rounded-md"
-						>
-							{tag}
+					<StatusGauge status={item.status} expiresAt={item.expiresAt} />
+
+					<div className="mt-3 flex justify-between text-sm text-muted">
+						<span>Status</span>
+						<span className="text-carbon">
+							{formatCargoStatus(item.status)}
 						</span>
-					))}
-				</div>
-
-				<StatusGauge status={item.status} expiresAt={item.expiresAt} />
-
-				<div className="mt-3 flex justify-between text-sm text-muted">
-					<span>Status</span>
-					<span className="text-carbon">{formatCargoStatus(item.status)}</span>
-				</div>
-			</StandardCard>
+					</div>
+				</StandardCard>
+			</div>
 
 			{isEditing && (
 				<CargoEditModal

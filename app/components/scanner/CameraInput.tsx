@@ -438,10 +438,16 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 									id="scan-progress-title"
 									className="text-lg font-medium text-carbon dark:text-white"
 								>
-									Analyzing image...
+									{origin === "supply"
+										? isLoadingSupplyMatch
+											? "Matching to supply list..."
+											: "Extracting receipt items..."
+										: "Analyzing image..."}
 								</h4>
 								<p id="scan-progress-desc" className="text-muted text-sm">
-									Identifying items. This may take a moment.
+									{origin === "supply"
+										? "Uploading and matching lines to your Supply list."
+										: "Identifying items. This may take a moment."}
 								</p>
 							</div>
 						</div>

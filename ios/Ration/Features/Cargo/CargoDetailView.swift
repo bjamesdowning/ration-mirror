@@ -346,6 +346,7 @@ struct CargoDetailView: View {
                     id: $0.id,
                     mealId: $0.mealId,
                     cargoId: nil,
+                    resolvedCargoId: nil,
                     ingredientName: $0.ingredientName,
                     quantity: $0.quantity,
                     unit: $0.unit,

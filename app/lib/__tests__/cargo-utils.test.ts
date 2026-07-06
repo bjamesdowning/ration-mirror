@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	calculateInventoryStatus,
+	isCargoUsableForMatching,
 	normalizeForCargoKey,
 	normalizeTags,
 } from "~/lib/cargo-utils";
@@ -161,5 +162,23 @@ describe("calculateInventoryStatus", () => {
 	it("uses current time when 'now' is omitted (smoke test)", () => {
 		const distantFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 		expect(calculateInventoryStatus(distantFuture)).toBe("stable");
+	});
+});
+
+describe("isCargoUsableForMatching", () => {
+	it("returns true when expiresAt is null", () => {
+		expect(isCargoUsableForMatching(null, NOW)).toBe(true);
+	});
+
+	it("returns true when item is stable or decay_imminent", () => {
+		const soonExpiry = new Date("2025-06-17T12:00:00Z");
+		expect(isCargoUsableForMatching(soonExpiry, NOW)).toBe(true);
+		const future = new Date("2025-06-20T12:00:00Z");
+		expect(isCargoUsableForMatching(future, NOW)).toBe(true);
+	});
+
+	it("returns false when item is biohazard (past expiry)", () => {
+		const past = new Date("2025-06-10T12:00:00Z");
+		expect(isCargoUsableForMatching(past, NOW)).toBe(false);
 	});
 });

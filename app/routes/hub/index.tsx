@@ -134,6 +134,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		hubLayout,
 		availableMealTags,
 		availableCargoTags,
+		cargoTagIndex,
 		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
 		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		mealMatches,

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { createCargoIndexRow } from "~/test/helpers/fixtures";
 import { computeBaseFields } from "../base-quantity";
+import {
+	buildCargoIndex,
+	getAvailableQuantityWithMap,
+} from "../matching.server";
 import { aggregateIngredients } from "../supply.server";
 
 function ingredientRow(
@@ -105,5 +110,27 @@ describe("aggregateIngredients", () => {
 		];
 		const result = aggregateIngredients(rows, "metric");
 		expect(result).toHaveLength(2);
+	});
+});
+
+describe("supply cargo skip — expired stock excluded", () => {
+	it("treats expired-only cargo as unavailable so ingredients are not skipped as in-stock", () => {
+		const expired = new Date("2025-06-10T12:00:00Z");
+		const orgCargo = [
+			createCargoIndexRow({
+				name: "salmon",
+				quantity: 500,
+				unit: "g",
+				expiresAt: expired,
+			}),
+		];
+		const index = buildCargoIndex(orgCargo);
+		const available = getAvailableQuantityWithMap(
+			"salmon",
+			"g",
+			index,
+			new Map(),
+		);
+		expect(available).toBe(0);
 	});
 });

@@ -4,21 +4,28 @@ import { Link, useFetcher } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
 import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
+import type { CargoLinkedIngredient } from "~/lib/cargo-links";
 import { useConfirm } from "~/lib/confirm-context";
 import { galleyPartialCookDescription } from "~/lib/cook-feedback";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import { scaleQuantity } from "~/lib/scale";
 import { parseDirections } from "~/lib/schemas/directions";
-import type { MealInput } from "~/lib/schemas/meal";
+import type { MealIngredientInput, MealInput } from "~/lib/schemas/meal";
 import { DirectionsSteps } from "./DirectionsSteps";
 
+type MealDetailIngredient = CargoLinkedIngredient<MealIngredientInput>;
+
 interface MealDetailProps {
-	meal: MealInput & { id: string };
+	meal: Omit<MealInput, "ingredients"> & {
+		id: string;
+		ingredients: MealDetailIngredient[];
+	};
 	isOwner: boolean;
 	/** User's declared allergen slugs — used to display warning banner. */
 	userAllergens?: AllergenSlug[];
@@ -533,16 +540,33 @@ export function MealDetail({
 												/>
 											</div>
 										)}
-										<span
-											className={`text-sm text-carbon ${!isAvailable ? "opacity-60" : ""}`}
-										>
-											{ing.ingredientName}
-											{ing.isOptional && (
-												<span className="text-xs ml-2 text-muted">
-													(optional)
+										{(() => {
+											const cargoId = ing.resolvedCargoId ?? ing.cargoId;
+											const nameClasses = `text-sm text-carbon hover:text-hyper-green ${!isAvailable ? "opacity-60" : ""}`;
+											return cargoId ? (
+												<PrimitiveLink
+													type="cargo"
+													id={cargoId}
+													className={nameClasses}
+												>
+													{ing.ingredientName}
+													{ing.isOptional && (
+														<span className="text-xs ml-2 text-muted">
+															(optional)
+														</span>
+													)}
+												</PrimitiveLink>
+											) : (
+												<span className={nameClasses}>
+													{ing.ingredientName}
+													{ing.isOptional && (
+														<span className="text-xs ml-2 text-muted">
+															(optional)
+														</span>
+													)}
 												</span>
-											)}
-										</span>
+											);
+										})()}
 									</div>
 									<div className="flex flex-col items-end">
 										<span

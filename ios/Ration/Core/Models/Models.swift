@@ -367,6 +367,7 @@ struct MealIngredient: Codable, Sendable, Identifiable {
     let id: String
     let mealId: String
     let cargoId: String?
+    let resolvedCargoId: String?
     let ingredientName: String
     let quantity: Double
     let unit: String
@@ -464,6 +465,7 @@ struct HubResponse: Codable, Sendable {
     let hubLayout: HubLayoutPayload?
     let availableMealTags: [String]
     let availableCargoTags: [String]?
+    let cargoTagIndex: [CargoTagIndexItem]?
     let mealMatches: [MealMatch]
     let partialMealMatches: [MealMatch]
     let snackMatches: [MealMatch]
@@ -780,7 +782,12 @@ struct TagsResponse: Codable, Sendable {
 }
 
 struct CargoTagIndexResponse: Codable, Sendable {
-    let index: [String: [String]]
+    let index: [CargoTagIndexItem]
+}
+
+struct CargoTagIndexItem: Codable, Sendable {
+    let id: String
+    let name: String
 }
 
 struct AIJobSubmitResponse: Codable, Sendable {

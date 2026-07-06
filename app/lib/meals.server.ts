@@ -21,6 +21,7 @@ import {
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
+import { isCargoUsableForMatching } from "./cargo-utils";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForCargoDedup } from "./matching";
 import type { MissingIngredientDetail } from "./matching.server";
@@ -1095,6 +1096,7 @@ export function findCargoForDeduction(
 	for (const item of orgCargo) {
 		const normalizedItem = normalizeForCargoDedup(item.name);
 		if (normalizedItem !== normalizedName) continue;
+		if (!isCargoUsableForMatching(item.expiresAt)) continue;
 
 		const base = effectiveBaseFields(
 			item.quantity,
@@ -1125,6 +1127,7 @@ export function findCargoForDeduction(
 		for (const match of similar) {
 			const item = orgCargo.find((c) => c.id === match.itemId);
 			if (!item) continue;
+			if (!isCargoUsableForMatching(item.expiresAt)) continue;
 			const base = effectiveBaseFields(
 				item.quantity,
 				item.unit,
@@ -1296,6 +1299,7 @@ export async function cookMeal(
 				if (ing.isOptional) return false;
 				const c = cargoById.get(ing.cargoId as string);
 				if (!c) return true;
+				if (!isCargoUsableForMatching(c.expiresAt)) return true;
 				const ingUnit = toSupportedUnit(ing.unit);
 				const cargoUnit = toSupportedUnit(c.unit);
 				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
@@ -1330,6 +1334,19 @@ export async function cookMeal(
 					continue;
 				}
 				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
+			}
+			if (!isCargoUsableForMatching(c.expiresAt)) {
+				if (ing.isOptional) continue;
+				if (allowPartial) {
+					skippedIngredients.push({
+						name: ing.ingredientName,
+						required: scaledQty,
+						available: 0,
+						unit: ing.unit,
+					});
+					continue;
+				}
+				throw new Error(`Insufficient Cargo for: ${ing.ingredientName}`);
 			}
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);

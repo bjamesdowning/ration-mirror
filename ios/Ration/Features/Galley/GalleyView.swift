@@ -566,7 +566,7 @@ struct MealDetailView: View {
                             .frame(width: 8, height: 8)
                             .padding(.top, 6)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(row.ingredient.ingredientName.capitalized).rationBody()
+                            ingredientNameLabel(row.ingredient)
                             let scaled = MealAvailabilityEngine.scaledQuantity(
                                 row.ingredient.quantity,
                                 baseServings: max(meal.servings ?? 1, 1),
@@ -602,6 +602,22 @@ struct MealDetailView: View {
         case .available: Theme.hyperGreen
         case .partial: Theme.warning
         case .missing: Theme.danger
+        }
+    }
+
+    @ViewBuilder
+    private func ingredientNameLabel(_ ingredient: MealIngredient) -> some View {
+        if let cargoId = CargoLinkResolver.resolveCargoId(for: ingredient) {
+            NavigationLink {
+                CargoDetailView(itemId: cargoId)
+            } label: {
+                Text(ingredient.ingredientName.capitalized)
+                    .rationBody()
+                    .foregroundStyle(Theme.carbon)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text(ingredient.ingredientName.capitalized).rationBody()
         }
     }
 

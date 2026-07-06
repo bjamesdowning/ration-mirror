@@ -1,5 +1,8 @@
 import { useEffect } from "react";
 import { useFetcher } from "react-router";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
+import type { CargoLinkRow } from "~/lib/cargo-links";
+import { resolveCargoIdForName } from "~/lib/cargo-links";
 import type { ItemDomain } from "~/lib/domain";
 import { DOMAIN_ICONS } from "~/lib/domain";
 import { formatSnoozeTimeLeft, toTitleCase } from "~/lib/format-display";
@@ -8,12 +11,14 @@ import type { ActiveSnooze } from "~/lib/supply.server";
 interface SnoozedItemRowProps {
 	snooze: ActiveSnooze;
 	listId: string;
+	cargoRows?: CargoLinkRow[];
 	onUnsnooze?: () => void;
 }
 
 export function SnoozedItemRow({
 	snooze,
 	listId,
+	cargoRows = [],
 	onUnsnooze,
 }: SnoozedItemRowProps) {
 	const fetcher = useFetcher<{ unsnoozed?: boolean }>();
@@ -38,6 +43,8 @@ export function SnoozedItemRow({
 		snooze.snoozedUntil instanceof Date
 			? snooze.snoozedUntil
 			: new Date(snooze.snoozedUntil);
+	const displayName = toTitleCase(snooze.normalizedName);
+	const cargoId = resolveCargoIdForName(snooze.normalizedName, cargoRows);
 
 	return (
 		<div
@@ -47,9 +54,17 @@ export function SnoozedItemRow({
 		>
 			<div className="flex items-center gap-3 min-w-0 flex-1">
 				<Icon className="w-5 h-5 flex-shrink-0 text-muted" aria-hidden="true" />
-				<span className="text-carbon truncate">
-					{toTitleCase(snooze.normalizedName)}
-				</span>
+				{cargoId ? (
+					<PrimitiveLink
+						type="cargo"
+						id={cargoId}
+						className="text-carbon hover:text-hyper-green truncate"
+					>
+						{displayName}
+					</PrimitiveLink>
+				) : (
+					<span className="text-carbon truncate">{displayName}</span>
+				)}
 			</div>
 			<span className="text-sm text-muted flex-shrink-0">
 				{formatSnoozeTimeLeft(snoozedUntil)}
@@ -59,7 +74,7 @@ export function SnoozedItemRow({
 				onClick={handleUnsnooze}
 				disabled={isPending}
 				className="flex-shrink-0 px-3 py-1.5 text-sm font-semibold rounded-lg bg-hyper-green/10 text-hyper-green hover:bg-hyper-green/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-				aria-label={`Unsnooze ${toTitleCase(snooze.normalizedName)}`}
+				aria-label={`Unsnooze ${displayName}`}
 			>
 				Unsnooze
 			</button>

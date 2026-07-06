@@ -121,6 +121,7 @@ private extension HubResponse {
             hubLayout: hubLayout,
             availableMealTags: availableMealTags,
             availableCargoTags: availableCargoTags,
+            cargoTagIndex: cargoTagIndex,
             mealMatches: mealMatches,
             partialMealMatches: partialMealMatches,
             snackMatches: snackMatches

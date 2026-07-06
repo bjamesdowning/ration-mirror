@@ -8,5 +8,7 @@ type SupplyListWithItems = typeof supplyList.$inferSelect & {
 
 export function SupplyPreviewWidget({ data }: HubWidgetProps) {
 	const list = data.latestSupplyList as SupplyListWithItems | null;
-	return <SupplyPreviewCard list={list} />;
+	return (
+		<SupplyPreviewCard list={list} cargoTagIndex={data.cargoTagIndex ?? []} />
+	);
 }

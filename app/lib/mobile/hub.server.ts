@@ -190,6 +190,7 @@ export async function getMobileHubData(
 		hubLayout,
 		availableMealTags,
 		availableCargoTags,
+		cargoTagIndex,
 		mealMatches,
 		partialMealMatches,
 		snackMatches,

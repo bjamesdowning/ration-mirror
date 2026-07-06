@@ -46,9 +46,11 @@ struct HubStatsWidget: View {
 
 struct SupplyPreviewWidget: View {
     let list: SupplyList?
+    var cargoLinkRows: [CargoLinkResolver.Row] = []
     var size: String = "md"
     var onToggleItem: ((SupplyItem, Bool) async -> Void)?
     var onOpenSupply: (() -> Void)?
+    var onSelectCargo: ((String) -> Void)?
 
     @State private var checkedAnimationIDs: Set<String> = []
 
@@ -90,40 +92,54 @@ struct SupplyPreviewWidget: View {
                 if !displayItems.isEmpty {
                     ForEach(displayItems) { item in
                         let isChecked = item.isPurchased || checkedAnimationIDs.contains(item.id)
-                        Button {
-                            guard !isChecked else { return }
-                            Task {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    _ = checkedAnimationIDs.insert(item.id)
+                        let cargoId = CargoLinkResolver.resolveCargoId(forName: item.name, in: cargoLinkRows)
+                        HStack(spacing: 10) {
+                            Button {
+                                guard !isChecked else { return }
+                                Task {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        _ = checkedAnimationIDs.insert(item.id)
+                                    }
+                                    await onToggleItem?(item, true)
+                                    try? await Task.sleep(nanoseconds: 400_000_000)
+                                    withAnimation {
+                                        _ = checkedAnimationIDs.remove(item.id)
+                                    }
                                 }
-                                await onToggleItem?(item, true)
-                                try? await Task.sleep(nanoseconds: 400_000_000)
-                                withAnimation {
-                                    _ = checkedAnimationIDs.remove(item.id)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
+                            } label: {
                                 Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(isChecked ? Theme.hyperGreen : Theme.muted)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isChecked)
+
+                            if let cargoId, !isChecked, let onSelectCargo {
+                                Button {
+                                    onSelectCargo(cargoId)
+                                } label: {
+                                    Text(item.name.capitalized)
+                                        .rationBody()
+                                        .foregroundStyle(Theme.carbon)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
                                 Text(item.name.capitalized)
                                     .rationBody()
                                     .strikethrough(isChecked)
                                     .foregroundStyle(isChecked ? Theme.muted : Theme.carbon)
-                                Spacer()
-                                DisplayQuantityLabel(
-                                    quantity: item.quantity,
-                                    unit: item.unit,
-                                    baseQuantity: item.baseQuantity,
-                                    baseUnit: item.baseUnit,
-                                    ingredientName: item.name
-                                )
-                                .rationCaption()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .contentShape(Rectangle())
+
+                            DisplayQuantityLabel(
+                                quantity: item.quantity,
+                                unit: item.unit,
+                                baseQuantity: item.baseQuantity,
+                                baseUnit: item.baseUnit,
+                                ingredientName: item.name
+                            )
+                            .rationCaption()
                         }
-                        .buttonStyle(.plain)
-                        .disabled(isChecked)
                     }
                 }
             }

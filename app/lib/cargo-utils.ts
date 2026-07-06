@@ -59,3 +59,11 @@ export function calculateInventoryStatus(
 	if (daysUntilExpiry < 3) return "decay_imminent";
 	return "stable";
 }
+
+/** Returns false when cargo is past expiry (biohazard) and must not count toward meal availability. */
+export function isCargoUsableForMatching(
+	expiresAt?: Date | null,
+	now = new Date(),
+): boolean {
+	return calculateInventoryStatus(expiresAt, now) !== "biohazard";
+}

@@ -20,7 +20,7 @@ export function parseTagsField(tags: unknown): string[] {
 
 export function resolveSupplyItemTags(input: {
 	itemName: string;
-	cargoRows: Array<{ name: string; tags: unknown }>;
+	cargoRows: Array<{ name: string; tags?: unknown }>;
 	mealTagsByMealId?: Map<string, string[]>;
 	sourceMealIds?: string[];
 }): string[] {

@@ -96,4 +96,26 @@ describe("cookMealWithConfirmation", () => {
 			deductionMode: "strict",
 		});
 	});
+
+	it("returns requiresConfirmation when only expired cargo would satisfy ingredients", async () => {
+		getMealMissingIngredients.mockResolvedValue([
+			{ name: "salmon", required: 200, available: 0, unit: "g" },
+		]);
+
+		const { cookMealWithConfirmation } = await import(
+			"../cook-confirmation.server"
+		);
+		const result = await cookMealWithConfirmation(env, orgId, mealId, {
+			servings: 2,
+		});
+
+		expect(result.requiresConfirmation).toBe(true);
+		expect(result.missingIngredients?.[0]).toEqual({
+			name: "salmon",
+			required: 200,
+			available: 0,
+			unit: "g",
+		});
+		expect(cookMeal).not.toHaveBeenCalled();
+	});
 });

@@ -1,9 +1,11 @@
 import { MoreHorizontal } from "lucide-react";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import { SupplyItemCheckbox } from "./SupplyItemCheckbox";
 import { SupplyQuantityEditor } from "./SupplyQuantityEditor";
 
 interface SupplyItemMobileProps {
 	displayName: string;
+	cargoDetailId?: string | null;
 	optimisticPurchased: boolean;
 	isPending: boolean;
 	localQuantity: number;
@@ -15,6 +17,7 @@ interface SupplyItemMobileProps {
 
 export function SupplyItemMobile({
 	displayName,
+	cargoDetailId,
 	optimisticPurchased,
 	isPending,
 	localQuantity,
@@ -36,12 +39,23 @@ export function SupplyItemMobile({
 				isPending={isPending}
 				onClick={onToggle}
 			/>
-			<span
-				className={`flex-1 min-w-0 text-sm font-medium ${nameClasses}`}
-				title={displayName}
-			>
-				{displayName}
-			</span>
+			{cargoDetailId ? (
+				<PrimitiveLink
+					type="cargo"
+					id={cargoDetailId}
+					className={`flex-1 min-w-0 text-sm font-medium hover:text-hyper-green ${nameClasses}`}
+					title={displayName}
+				>
+					{displayName}
+				</PrimitiveLink>
+			) : (
+				<span
+					className={`flex-1 min-w-0 text-sm font-medium ${nameClasses}`}
+					title={displayName}
+				>
+					{displayName}
+				</span>
+			)}
 			<SupplyQuantityEditor
 				quantity={localQuantity}
 				unit={localUnit}

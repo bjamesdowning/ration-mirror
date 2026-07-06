@@ -112,6 +112,28 @@ describe("sumConvertedToTarget", () => {
 	it("returns 0 for empty matches", () => {
 		expect(sumConvertedToTarget([], "g")).toBe(0);
 	});
+
+	it("ignores expired cargo rows and sums only usable stock", () => {
+		const expired = new Date("2025-06-10T12:00:00Z");
+		const matches = [
+			{
+				original: createCargoIndexRow({
+					unit: "g",
+					quantity: 500,
+					expiresAt: expired,
+				}),
+				totalQuantity: 500,
+				normalizedName: "salmon",
+			},
+			{
+				original: createCargoIndexRow({ unit: "g", quantity: 200 }),
+				totalQuantity: 200,
+				normalizedName: "salmon",
+			},
+		];
+		const total = sumConvertedToTarget(matches, "g", "salmon");
+		expect(total).toBe(200);
+	});
 });
 
 describe("getAvailableQuantityWithMap", () => {
@@ -175,5 +197,23 @@ describe("getAvailableQuantityWithMap", () => {
 			similarityMap,
 		);
 		expect(qty).toBe(300);
+	});
+});
+
+describe("getAvailableQuantityWithMap — expired cargo", () => {
+	const expired = new Date("2025-06-10T12:00:00Z");
+
+	it("returns 0 when only expired stock matches", () => {
+		const items = [
+			createCargoIndexRow({
+				name: "salmon",
+				quantity: 500,
+				unit: "g",
+				expiresAt: expired,
+			}),
+		];
+		const index = buildCargoIndex(items);
+		const qty = getAvailableQuantityWithMap("salmon", "g", index, new Map());
+		expect(qty).toBe(0);
 	});
 });

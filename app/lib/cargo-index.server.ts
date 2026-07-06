@@ -16,6 +16,7 @@ export interface CargoIndexRow {
 	unit: string;
 	baseQuantity?: number;
 	baseUnit?: string;
+	expiresAt?: Date | null;
 }
 
 /**
@@ -37,6 +38,7 @@ export async function fetchOrgCargoIndex(
 			unit: cargo.unit,
 			baseQuantity: cargo.baseQuantity,
 			baseUnit: cargo.baseUnit,
+			expiresAt: cargo.expiresAt,
 		})
 		.from(cargo)
 		.where(eq(cargo.organizationId, organizationId));

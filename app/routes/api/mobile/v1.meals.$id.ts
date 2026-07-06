@@ -1,5 +1,7 @@
 import { data } from "react-router";
 import type { z } from "zod";
+import { getCargoTagIndex } from "~/lib/cargo.server";
+import { enrichIngredientsWithCargoLinks } from "~/lib/cargo-links";
 import type { ItemDomain } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
@@ -53,17 +55,23 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		const id = params.id;
 		if (!id) throw data({ error: "Not Found" }, { status: 404 });
 
-		const meal = await getMeal(context.cloudflare.env.DB, organizationId, id);
+		const [meal, selections, cargoTagIndex] = await Promise.all([
+			getMeal(context.cloudflare.env.DB, organizationId, id),
+			getActiveMealSelections(context.cloudflare.env.DB, organizationId),
+			getCargoTagIndex(context.cloudflare.env.DB, organizationId),
+		]);
 		if (!meal) throw data({ error: "Not Found" }, { status: 404 });
 
-		const selections = await getActiveMealSelections(
-			context.cloudflare.env.DB,
-			organizationId,
-		);
 		const selection = selections.find((s) => s.mealId === id);
 
 		return {
-			meal,
+			meal: {
+				...meal,
+				ingredients: enrichIngredientsWithCargoLinks(
+					meal.ingredients,
+					cargoTagIndex,
+				),
+			},
 			isSelectedForSupply: Boolean(selection),
 			servingsOverride: selection?.servingsOverride ?? null,
 		};

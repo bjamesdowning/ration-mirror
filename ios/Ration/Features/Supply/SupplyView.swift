@@ -12,6 +12,7 @@ final class SupplyViewModel {
     private(set) var isScanning = false
     private(set) var scanStatusMessage: String?
     private(set) var snoozes: [SupplySnooze] = []
+    private(set) var cargoLinkRows: [CargoLinkResolver.Row] = []
     var errorMessage: String?
     var dockMessage: String?
     private var lastHapticMilestone = 0
@@ -59,8 +60,27 @@ final class SupplyViewModel {
         } else {
             restoreSnapshot(snapshots, organizationId: organizationId)
         }
+        await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: online)
         if online {
             await loadSnoozes(api: api)
+        }
+    }
+
+    func loadCargoLinks(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        organizationId: String,
+        online: Bool
+    ) async {
+        if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo, organizationId: organizationId) {
+            cargoLinkRows = cached.payload.items.map { CargoLinkResolver.Row(id: $0.id, name: $0.name) }
+        }
+        guard online else { return }
+        do {
+            let response = try await api.cargoTagIndex()
+            cargoLinkRows = response.index.map { CargoLinkResolver.Row(id: $0.id, name: $0.name) }
+        } catch {
+            // Non-fatal — names stay plain text when unresolved.
         }
     }
 
@@ -152,6 +172,7 @@ final class SupplyViewModel {
             let response = try await api.syncSupply()
             list = response.list
             snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
+            await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: true)
             Haptics.success()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -611,7 +632,10 @@ struct SupplyView: View {
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
             }
-            SnoozedItemsSection(snoozes: model.snoozes) { snooze in
+            SnoozedItemsSection(
+                snoozes: model.snoozes,
+                cargoLinkRows: model.cargoLinkRows
+            ) { snooze in
                 await model.unsnooze(
                     snooze,
                     api: env.api,
@@ -621,67 +645,32 @@ struct SupplyView: View {
                 )
             }
             ForEach(model.displayedItems) { item in
-                Button {
-                    if item.isPurchased {
-                        Task {
-                            await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                        }
-                    } else {
-                        checkOffItem = CheckOffPresentationItem(item: item)
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: item.isPurchased ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(item.isPurchased ? Theme.hyperGreen : Theme.muted)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.name.capitalized)
-                                .rationBody()
-                                .strikethrough(item.isPurchased)
-                                .foregroundStyle(item.isPurchased ? Theme.muted : Theme.carbon)
-                            if !item.resolvedSourceOrigins.isEmpty {
-                                SupplyItemOriginBadge(origins: item.resolvedSourceOrigins)
-                            }
-                        }
-                        Spacer()
-                        DisplayQuantityLabel(
-                            quantity: item.quantity,
-                            unit: item.unit,
-                            baseQuantity: item.baseQuantity,
-                            baseUnit: item.baseUnit,
-                            ingredientName: item.name
-                        )
-                        .rationCaption()
-                    }
-                }
-                .id("\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)")
-                .listRowBackground(Theme.surface)
-                .swipeActions(edge: .leading) {
-                    if !item.isPurchased {
-                        Button {
+                SupplyListItemRow(
+                    item: item,
+                    cargoLinkRows: model.cargoLinkRows,
+                    onCheckOff: {
+                        if item.isPurchased {
                             Task {
                                 await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                             }
-                        } label: {
-                            Label("Check", systemImage: "checkmark")
+                        } else {
+                            checkOffItem = CheckOffPresentationItem(item: item)
                         }
-                        .tint(Theme.hyperGreen)
-                    }
-                }
-                .swipeActions {
-                    if !item.isPurchased {
-                        Button {
-                            snoozeItem = item
-                        } label: {
-                            Label("Snooze", systemImage: "moon.zzz")
+                    },
+                    onCheck: {
+                        Task {
+                            await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                         }
-                        .tint(Theme.carbon.opacity(0.6))
-                    }
-                    Button(role: .destructive) {
+                    },
+                    onSnooze: { snoozeItem = item },
+                    onDelete: {
                         Task {
                             await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                         }
-                    } label: { Label("Delete", systemImage: "trash") }
-                }
+                    }
+                )
+                .id("\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)")
+                .listRowBackground(Theme.surface)
             }
         }
         .listStyle(.insetGrouped)
@@ -844,5 +833,83 @@ struct ReplenishSheet: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Theme.platinum, lineWidth: 1)
         )
+    }
+}
+
+private struct SupplyListItemRow: View {
+    let item: SupplyItem
+    let cargoLinkRows: [CargoLinkResolver.Row]
+    let onCheckOff: () -> Void
+    let onCheck: () -> Void
+    let onSnooze: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: onCheckOff) {
+                Image(systemName: item.isPurchased ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(item.isPurchased ? Theme.hyperGreen : Theme.muted)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(item.isPurchased ? "Mark not purchased" : "Check off item")
+
+            VStack(alignment: .leading, spacing: 4) {
+                supplyItemName
+                if !item.resolvedSourceOrigins.isEmpty {
+                    SupplyItemOriginBadge(origins: item.resolvedSourceOrigins)
+                }
+            }
+
+            Spacer()
+
+            DisplayQuantityLabel(
+                quantity: item.quantity,
+                unit: item.unit,
+                baseQuantity: item.baseQuantity,
+                baseUnit: item.baseUnit,
+                ingredientName: item.name
+            )
+            .rationCaption()
+        }
+        .swipeActions(edge: .leading) {
+            if !item.isPurchased {
+                Button(action: onCheck) {
+                    Label("Check", systemImage: "checkmark")
+                }
+                .tint(Theme.hyperGreen)
+            }
+        }
+        .swipeActions {
+            if !item.isPurchased {
+                Button(action: onSnooze) {
+                    Label("Snooze", systemImage: "moon.zzz")
+                }
+                .tint(Theme.carbon.opacity(0.6))
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var supplyItemName: some View {
+        if let cargoId = CargoLinkResolver.resolveCargoId(forName: item.name, in: cargoLinkRows),
+           !item.isPurchased {
+            NavigationLink {
+                CargoDetailView(itemId: cargoId)
+            } label: {
+                Text(item.name.capitalized)
+                    .rationBody()
+                    .foregroundStyle(Theme.carbon)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text(item.name.capitalized)
+                .rationBody()
+                .strikethrough(item.isPurchased)
+                .foregroundStyle(item.isPurchased ? Theme.muted : Theme.carbon)
+        }
     }
 }

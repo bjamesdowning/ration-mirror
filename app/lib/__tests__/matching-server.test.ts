@@ -182,6 +182,33 @@ describe("strictMatch", () => {
 		expect(results[0].matchPercentage).toBe(100);
 	});
 
+	it("excludes a meal when only expired cargo satisfies a required ingredient", () => {
+		const expired = new Date("2025-06-10T12:00:00Z");
+		const cargo = [
+			{
+				id: "c1",
+				name: "salmon",
+				quantity: 500,
+				unit: "g",
+				domain: "food",
+				expiresAt: expired,
+			},
+		];
+		const index = buildCargoIndex(cargo);
+		const similarityMap = new Map();
+
+		const enrichedMeals = [
+			{
+				meal: makeMeal("m-expired"),
+				ingredients: [makeIngredient("m-expired", "salmon", 200, "g")],
+				tags: [],
+			},
+		];
+
+		const results = strictMatch(enrichedMeals, index, similarityMap);
+		expect(results).toHaveLength(0);
+	});
+
 	it("excludes a meal when a required ingredient is missing", () => {
 		const cargo = [
 			{ id: "c1", name: "pasta", quantity: 500, unit: "g", domain: "food" },

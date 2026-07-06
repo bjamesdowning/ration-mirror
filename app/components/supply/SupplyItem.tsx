@@ -1,4 +1,6 @@
 import type { supplyItem } from "~/db/schema";
+import type { CargoLinkRow } from "~/lib/cargo-links";
+import { resolveCargoIdForName } from "~/lib/cargo-links";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
 import { resolveSupplyItemTags } from "~/lib/supply-tags";
 import { PurchaseQuantityModal } from "./PurchaseQuantityModal";
@@ -16,7 +18,7 @@ interface SupplyItemProps {
 				sourceMealSources?: { id: string; name: string }[];
 		  });
 	listId: string;
-	cargoRows?: Array<{ name: string; tags: unknown }>;
+	cargoRows?: CargoLinkRow[];
 	onDelete?: () => void;
 	onSnooze?: () => void;
 	onRefresh?: () => void;
@@ -44,6 +46,8 @@ export function SupplyItem({
 		sourceMealIds: item.sourceMealIds ?? [],
 	});
 
+	const cargoDetailId = resolveCargoIdForName(item.name, cargoRows);
+
 	const rowClasses = `group py-2 px-1 md:py-3 md:px-4 border-b border-platinum dark:border-white/10 last:border-0 transition-all ${
 		state.isPending ? "opacity-60" : ""
 	} ${state.optimisticPurchased ? "opacity-50" : ""}`;
@@ -54,6 +58,7 @@ export function SupplyItem({
 				<div className="md:hidden">
 					<SupplyItemMobile
 						displayName={state.displayName}
+						cargoDetailId={cargoDetailId}
 						optimisticPurchased={state.optimisticPurchased}
 						isPending={state.isPending}
 						localQuantity={state.localQuantity}
@@ -66,6 +71,7 @@ export function SupplyItem({
 				<div className="hidden md:block">
 					<SupplyItemDesktop
 						displayName={state.displayName}
+						cargoDetailId={cargoDetailId}
 						displayTags={displayTags}
 						mealSourced={state.mealSourced}
 						convertLabel={state.convertLabel}

@@ -214,7 +214,11 @@ struct DashboardView: View {
                 selectedCargoRoute = HubCargoRoute(id: item.id)
             }
         case .supplyPreview:
-            SupplyPreviewWidget(list: data.latestSupplyList, size: size, onToggleItem: { item, purchased in
+            SupplyPreviewWidget(
+                list: data.latestSupplyList,
+                cargoLinkRows: (data.cargoTagIndex ?? []).map { CargoLinkResolver.Row(id: $0.id, name: $0.name) },
+                size: size,
+                onToggleItem: { item, purchased in
                     await model.toggleSupplyItem(
                         item,
                         isPurchased: purchased,
@@ -224,7 +228,10 @@ struct DashboardView: View {
                         organizationId: organizationId
                     )
                 },
-                onOpenSupply: onOpenSupply
+                onOpenSupply: onOpenSupply,
+                onSelectCargo: { cargoId in
+                    selectedCargoRoute = HubCargoRoute(id: cargoId)
+                }
             )
         case .manifestPreview:
             ManifestPreviewWidget(

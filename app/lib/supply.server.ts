@@ -16,6 +16,7 @@ import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { getActiveCargoSelections } from "./cargo-selection.server";
+import { isCargoUsableForMatching } from "./cargo-utils";
 import { toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
@@ -167,6 +168,7 @@ function getAvailableCargoQuantity(
 	for (const item of orgCargo) {
 		const normalizedItem = normalizeForCargoDedup(item.name);
 		if (normalizedItem !== normalizedName) continue;
+		if (!isCargoUsableForMatching(item.expiresAt)) continue;
 
 		const base = effectiveBaseFields(
 			item.quantity,
@@ -193,6 +195,7 @@ function getAvailableCargoQuantity(
 	const matchedName = normalizeForCargoDedup(similar[0].itemName);
 	for (const item of orgCargo) {
 		if (normalizeForCargoDedup(item.name) !== matchedName) continue;
+		if (!isCargoUsableForMatching(item.expiresAt)) continue;
 		const base = effectiveBaseFields(
 			item.quantity,
 			item.unit,

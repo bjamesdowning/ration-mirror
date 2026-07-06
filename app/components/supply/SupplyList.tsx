@@ -1,5 +1,6 @@
 import { ShoppingCart } from "lucide-react";
 import type { supplyList } from "~/db/schema";
+import type { CargoLinkRow } from "~/lib/cargo-links";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
 import { type SupplySortMode, sortSupplyItems } from "~/lib/supply-sort";
@@ -11,7 +12,7 @@ type SupplyListWithItems = typeof supplyList.$inferSelect & {
 
 interface SupplyListProps {
 	list: SupplyListWithItems;
-	cargoRows?: Array<{ name: string; tags: unknown }>;
+	cargoRows?: CargoLinkRow[];
 	onRefresh?: () => void;
 	filterDomain?: (typeof ITEM_DOMAINS)[number] | "all";
 	filterSearch?: string;

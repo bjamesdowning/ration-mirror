@@ -137,6 +137,7 @@ struct SnoozeDurationSheet: View {
 
 struct SnoozedItemsSection: View {
     let snoozes: [SupplySnooze]
+    var cargoLinkRows: [CargoLinkResolver.Row] = []
     var onUnsnooze: (SupplySnooze) async -> Void
 
     @State private var isExpanded = false
@@ -147,7 +148,7 @@ struct SnoozedItemsSection: View {
                 if isExpanded {
                     ForEach(snoozes) { snooze in
                         HStack {
-                            Text(snooze.displayName.capitalized).rationBody()
+                            snoozeNameLabel(snooze)
                             Spacer()
                             Button("Unsnooze") {
                                 Task { await onUnsnooze(snooze) }
@@ -170,6 +171,20 @@ struct SnoozedItemsSection: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func snoozeNameLabel(_ snooze: SupplySnooze) -> some View {
+        if let cargoId = CargoLinkResolver.resolveCargoId(forName: snooze.displayName, in: cargoLinkRows) {
+            NavigationLink {
+                CargoDetailView(itemId: cargoId)
+            } label: {
+                Text(snooze.displayName.capitalized).rationBody()
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text(snooze.displayName.capitalized).rationBody()
         }
     }
 }

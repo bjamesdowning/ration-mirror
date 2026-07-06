@@ -1,5 +1,6 @@
 import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import type { SupplyItemOrigin } from "~/lib/supply-item-origins";
 import { SupplyItemCheckbox } from "./SupplyItemCheckbox";
 import { SupplyItemOriginBadge } from "./SupplyItemOriginBadge";
@@ -8,6 +9,7 @@ import { SupplyQuantityEditor } from "./SupplyQuantityEditor";
 
 interface SupplyItemDesktopProps {
 	displayName: string;
+	cargoDetailId?: string | null;
 	displayTags?: string[];
 	mealSourced: boolean;
 	convertLabel: string;
@@ -28,6 +30,7 @@ interface SupplyItemDesktopProps {
 
 export function SupplyItemDesktop({
 	displayName,
+	cargoDetailId,
 	displayTags = [],
 	mealSourced,
 	convertLabel,
@@ -60,12 +63,23 @@ export function SupplyItemDesktop({
 			/>
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-3">
-					<span
-						className={`flex-1 min-w-0 truncate font-medium ${nameClasses}`}
-						title={displayName}
-					>
-						{displayName}
-					</span>
+					{cargoDetailId ? (
+						<PrimitiveLink
+							type="cargo"
+							id={cargoDetailId}
+							className={`flex-1 min-w-0 truncate font-medium hover:text-hyper-green ${nameClasses}`}
+							title={displayName}
+						>
+							{displayName}
+						</PrimitiveLink>
+					) : (
+						<span
+							className={`flex-1 min-w-0 truncate font-medium ${nameClasses}`}
+							title={displayName}
+						>
+							{displayName}
+						</span>
+					)}
 					{sourceOrigins.length > 0 && (
 						<SupplyItemOriginBadge origins={sourceOrigins} compact />
 					)}

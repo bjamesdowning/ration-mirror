@@ -1,6 +1,9 @@
 import { Link } from "react-router";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import type { supplyItem, supplyList } from "~/db/schema";
+import type { CargoLinkRow } from "~/lib/cargo-links";
+import { resolveCargoIdForName } from "~/lib/cargo-links";
 import { toTitleCase } from "~/lib/format-display";
 import { CheckIcon, GroceryIcon, ListIcon } from "../icons/HubIcons";
 
@@ -10,9 +13,13 @@ type SupplyListWithItems = typeof supplyList.$inferSelect & {
 
 interface SupplyPreviewCardProps {
 	list: SupplyListWithItems | null;
+	cargoTagIndex?: CargoLinkRow[];
 }
 
-export function SupplyPreviewCard({ list }: SupplyPreviewCardProps) {
+export function SupplyPreviewCard({
+	list,
+	cargoTagIndex = [],
+}: SupplyPreviewCardProps) {
 	if (!list) {
 		return (
 			<div className="glass-panel rounded-xl p-6 h-full">
@@ -75,23 +82,10 @@ export function SupplyPreviewCard({ list }: SupplyPreviewCardProps) {
 			{/* Items Preview */}
 			{list.items.length > 0 ? (
 				<ul className="space-y-2">
-					{list.items.slice(0, 5).map((item) => (
-						<li
-							key={item.id}
-							className={`flex items-center gap-2 text-sm ${
-								item.isPurchased ? "line-through text-muted" : "text-carbon"
-							}`}
-						>
-							<span
-								className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-xs ${
-									item.isPurchased
-										? "bg-hyper-green/20 border-hyper-green text-hyper-green"
-										: "border-carbon/30"
-								}`}
-							>
-								{item.isPurchased && <CheckIcon className="w-3 h-3" />}
-							</span>
-							<span className="truncate">
+					{list.items.slice(0, 5).map((item) => {
+						const cargoId = resolveCargoIdForName(item.name, cargoTagIndex);
+						const nameContent = (
+							<>
 								{toTitleCase(item.name)}
 								<span className="text-muted ml-1">
 									(
@@ -104,9 +98,40 @@ export function SupplyPreviewCard({ list }: SupplyPreviewCardProps) {
 									/>
 									)
 								</span>
-							</span>
-						</li>
-					))}
+							</>
+						);
+						return (
+							<li
+								key={item.id}
+								className={`flex items-center gap-2 text-sm ${
+									item.isPurchased ? "line-through text-muted" : "text-carbon"
+								}`}
+							>
+								<span
+									className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-xs ${
+										item.isPurchased
+											? "bg-hyper-green/20 border-hyper-green text-hyper-green"
+											: "border-carbon/30"
+									}`}
+								>
+									{item.isPurchased && <CheckIcon className="w-3 h-3" />}
+								</span>
+								<span className="truncate">
+									{cargoId && !item.isPurchased ? (
+										<PrimitiveLink
+											type="cargo"
+											id={cargoId}
+											className="hover:text-hyper-green"
+										>
+											{nameContent}
+										</PrimitiveLink>
+									) : (
+										nameContent
+									)}
+								</span>
+							</li>
+						);
+					})}
 					{list.items.length > 5 && (
 						<li className="text-xs text-muted pl-6">
 							+{list.items.length - 5} more items

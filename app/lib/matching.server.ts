@@ -4,6 +4,7 @@ import { meal, mealIngredient, mealTag } from "../db/schema";
 import { effectiveBaseFields } from "./base-quantity";
 import type { CargoIndexRow } from "./cargo-index.server";
 import { fetchOrgCargoIndex } from "./cargo-index.server";
+import { isCargoUsableForMatching } from "./cargo-utils";
 import { log, redactId } from "./logging.server";
 import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
@@ -114,6 +115,7 @@ export function sumConvertedToTarget(
 ): number {
 	let total = 0;
 	for (const match of matches) {
+		if (!isCargoUsableForMatching(match.original.expiresAt)) continue;
 		const hasBase =
 			match.original.baseQuantity != null && match.original.baseUnit != null;
 		if (!hasBase) {

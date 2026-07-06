@@ -594,7 +594,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 
 					{/* Snoozed Items (collapsible) */}
 					{snoozes.length > 0 && (
-						<SnoozedItemsPanel snoozes={snoozes} listId={displayList.id} />
+						<SnoozedItemsPanel
+							snoozes={snoozes}
+							listId={displayList.id}
+							cargoRows={cargo ?? []}
+						/>
 					)}
 				</div>
 			)}

@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
+import type { CargoLinkRow } from "~/lib/cargo-links";
 import type { ItemDomain } from "~/lib/domain";
 import { DOMAIN_ICONS, DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { ActiveSnooze } from "~/lib/supply.server";
@@ -8,12 +9,14 @@ import { SnoozedItemRow } from "./SnoozedItemRow";
 interface SnoozedItemsPanelProps {
 	snoozes: ActiveSnooze[];
 	listId: string;
+	cargoRows?: CargoLinkRow[];
 	onUnsnooze?: () => void;
 }
 
 export function SnoozedItemsPanel({
 	snoozes,
 	listId,
+	cargoRows = [],
 	onUnsnooze,
 }: SnoozedItemsPanelProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -80,6 +83,7 @@ export function SnoozedItemsPanel({
 											key={snooze.id}
 											snooze={snooze}
 											listId={listId}
+											cargoRows={cargoRows}
 											onUnsnooze={onUnsnooze}
 										/>
 									))}

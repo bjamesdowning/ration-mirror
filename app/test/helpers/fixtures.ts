@@ -58,6 +58,7 @@ export function createCargoIndexRow(
 		unit,
 		baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
 		baseUnit: overrides.baseUnit ?? base.baseUnit,
+		expiresAt: null,
 		...overrides,
 	};
 }

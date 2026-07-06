@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import type { cargo } from "~/db/schema";
 import { AlertIcon, SuccessIcon } from "../icons/HubIcons";
 
@@ -61,9 +62,14 @@ export function ExpiringCargoCard({
 							key={item.id}
 							className="flex items-center justify-between text-sm"
 						>
-							<span className="text-carbon truncate mr-2" title={item.name}>
+							<PrimitiveLink
+								type="cargo"
+								id={item.id}
+								className="text-carbon hover:text-hyper-green truncate mr-2"
+								title={item.name}
+							>
 								{item.name}
-							</span>
+							</PrimitiveLink>
 							<span
 								className={`text-xs font-medium whitespace-nowrap ${getExpiryStatusColor(item.expiresAt)}`}
 							>

@@ -134,6 +134,7 @@ export interface HubLoaderData {
 	snackMatches: MealMatchResultShim | Promise<MealMatchResultShim>;
 	expirationAlertDays: number;
 	manifestPreview: ManifestPreviewData | null;
+	cargoTagIndex?: { id: string; name: string }[];
 }
 
 /** Props passed to each Hub widget component. */

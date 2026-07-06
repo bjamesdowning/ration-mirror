@@ -627,12 +627,13 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 **Key workflows:**
 - **Add / Merge** — When a new cargo item is submitted, the system checks Vectorize for a similar existing item (`CARGO_MERGE` threshold: 0.78). If a match is found, the user is offered a "merge" (increment quantity) or "add new" choice. This prevents duplicate pantry entries from OCR variations (e.g. "whole milk 2%" vs. "2% milk").
 - **Bulk ingest (scan)** — After a receipt scan, `POST /api/cargo/batch` runs `ingestCargoItems` which applies the same dedup logic for each item in the scan result.
-- **Ingredient detail view** — `GET /hub/cargo/:id` shows full cargo metadata and all linked Galley meals, including whether each link is direct (`cargoId`) or an unlinked name match.
+- **Ingredient detail view** — `GET /hub/cargo/:id` shows full cargo metadata and all linked Galley meals, including whether each link is direct (`cargoId`) or an unlinked name match. Connected meal names link to Galley detail.
+- **Cross-navigation** — Meal ingredient rows, supply list item names, hub expiring-cargo preview lines, and snoozed supply rows link to Cargo detail when a name match exists (`app/lib/cargo-links.ts`). Galley meal detail ingredient names link to Cargo the same way. iOS mirrors this via `CargoLinkResolver` and `resolvedCargoId` on meal ingredients from the API.
 - **Promote to Galley** — A cargo item can be promoted to a single-ingredient Provision (see §4.2) for use in meal planning.
 - **CSV import/export** — Via `POST /api/v1/inventory/import` and `GET /api/cargo/export`. Validated against `CargoCsvRowSchema` (max 500 rows per import).
 - **Vectorize write-through** — Every cargo create/update triggers `upsertCargoVector`, keeping the Vectorize index in sync with D1. Deletes call `deleteCargoVectors`.
 
-**Why `fetchOrgCargoIndex()`?** Matching and dedup only need 5 columns (`id`, `name`, `domain`, `quantity`, `unit`). The full cargo row has ~15 columns including JSON tags and timestamps. Using the narrow index cuts serialisation cost roughly in half and is enforced as a workspace rule.
+**Why `fetchOrgCargoIndex()`?** Matching and dedup need a narrow projection (`id`, `name`, `domain`, `quantity`, `unit`, `base_quantity`, `base_unit`, `expires_at`). Expired rows remain in the index but are excluded from availability math via `isCargoUsableForMatching()`. The full cargo row has ~15 columns including JSON tags and timestamps. Using the narrow index cuts serialisation cost roughly in half and is enforced as a workspace rule.
 
 ---
 
@@ -661,7 +662,7 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 - **AI plan-week** — `POST /api/meal-plans/:id/plan-week` (3 credits) returns `{ status: "processing", requestId }`; client polls `GET /api/meal-plans/:id/plan-week/status/:requestId`. Consumer runs Gemini with the org's meal library and allergen profile, returns a schedule for preview. User confirms → bulk add via `POST /api/meal-plans/:id/entries/bulk`. All `mealId` values are validated against the org's meal whitelist (RLS guard).
 - **Consume** — Marks selected entries as consumed and deducts ingredients from cargo when available. If required ingredients are missing, the API returns `{ requiresConfirmation: true, missingIngredients }` (HTTP 200); the client prompts **Consume anyway?** and retries with `confirmInsufficient: true` to mark eaten and deduct whatever cargo is available (partial deduction).
 - **Day supply inclusion** — Each manifest day can be included or excluded from Supply sync via toggles on day headers (`POST /api/meal-plans/supply-days/:date`). Default: all days included. Excluded days persist in `manifest_supply_day` and filter manifest entries by `meal_plan_entry.date` during sync.
-- **Readiness signal** — Each Manifest meal card shows a subtle availability dot (green = all required ingredients available, amber = missing ingredients) based on current cargo inventory.
+- **Readiness signal** — Each Manifest meal card shows a subtle availability dot (green = all required ingredients available, amber = missing ingredients) based on current cargo inventory. **Expired cargo** (past `expiresAt`) is excluded from availability; items expiring soon still count as available.
 - **Share** — Crew Member only. Generates a `shareToken` (URL-safe, unique). Public read-only at `/shared/manifest/:token`.
 - **Week navigation** — The `?week=` query param shifts the 7-day window. The UI computes ISO week offsets on the client; the loader fetches entries for `startDate`–`endDate`.
 

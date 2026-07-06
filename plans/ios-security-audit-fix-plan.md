@@ -42,11 +42,11 @@ The audit and the planning prompt both hypothesized that CR-2 (AASA 404) is caus
 1. `wrangler deployments list` shows an unbroken chain of successful deployments, one per commit, with deploy timestamps trailing commit timestamps by 2–90 minutes (normal build latency) all the way through the most recent commit on `main`. There is no gap, no stale version pinned at 100% traffic, and no evidence of a rollback event.
 2. The AASA route (`app/routes/well-known.apple-app-site-association.ts` + `app/lib/aasa.ts`) is registered in the **exact same `app/routes.ts` route table**, in the **exact same build**, as five other `.well-known/*` routes — and **every one of those siblings returns `200` in production right now**, on the currently-live Worker version. If the deployed Worker were stale/rolled-back, either all six `.well-known/*` routes would be affected together (they aren't) or none would (also not what we see).
 3. The AASA loader itself is unconditional code with no branch that can produce a 404 (`return Response.json(buildAppleAppSiteAssociation(), {...})`, no error paths).
-4. The 404 response has **no `Content-Type` header and `Content-Length: 0`** — a signature inconsistent with a Worker-generated JSON 404 (React Router / this Worker's error handler always sets a body + content-type) and far more consistent with an **edge-level intercept that short-circuits before the Worker runs**.
+4. The 404 response has **no `Content-Type` header and `Content-Length: 0`** — consistent with the Worker pre-router gate in `workers/app.ts` that returns `new Response(null, { status: 404 })` for unlisted `.well-known/*` paths before React Router runs.
 
-**Corrected root-cause hypothesis (highest confidence, pending human dashboard confirmation — see CR-2 work item):** a Cloudflare **zone-level Rule** (Redirect Rule, Configuration Rule, or legacy Page Rule) matching the literal path `/.well-known/apple-app-site-association`, most likely a leftover from an earlier, pre-Worker attempt to host the AASA file directly at the Cloudflare zone level, is intercepting the request before it reaches the Worker. Cloudflare's own Rules documentation explicitly warns that generic zone-level rules can affect `.well-known/*` paths and recommends excluding them — this is a documented, known class of issue, not a novelty.
+**Corrected root cause (confirmed 2026-07-06, fixed v1.4.48):** `/.well-known/apple-app-site-association` was registered in `app/routes.ts` but **missing from the Worker's `WELL_KNOWN_ALLOW_EXACT` allow list** (now centralized in `app/lib/well-known-routes.ts`). The pre-router gate short-circuited AASA requests before the route loader could run. This explains why sibling `.well-known/*` routes returned 200 while AASA returned an empty 404. A Cloudflare zone-level Rule was initially hypothesized but is not required to explain the observed signature.
 
-This changes CR-2's fix from "redeploy" (the audit's original fix text) to "**a Cloudflare dashboard Rules audit + removal**, which is a human/operator action requiring Cloudflare zone-dashboard access the coding agent does not have in this environment," decoupled from any code change. It also means H-7's "post-deploy smoke test" should not be framed as *the* CR-2 fix (it wouldn't have prevented this, since this isn't a deploy-failure class of bug) but as a **general future-regression detector** that happens to also catch this class of bug going forward, alongside genuine deploy failures.
+**Fix (v1.4.48):** Add AASA to the shared allow list; add `app/lib/__tests__/well-known-routes-sync.test.ts` to prevent drift. Deploy to production.
 
 ---
 
@@ -55,7 +55,7 @@ This changes CR-2's fix from "redeploy" (the audit's original fix text) to "**a 
 **Submission-blocking sequence (must happen before App Store Connect upload):**
 
 1. **CR-1** (privacy manifest) — pure iOS build-config change, no backend dependency, no coordination needed. Ship first.
-2. **CR-2** (AASA 404) — root cause is now believed to be a Cloudflare zone Rule, not code. The *fix* is an operator dashboard action with no version bump. The *verification tooling* (smoke test) ships as part of the H-7 batch and is not itself a submission blocker, but the **AASA fix must land before physical-device Universal Link testing and before final submission**, independent of the code work in this plan.
+2. **CR-2** (AASA 404) — **Fixed v1.4.48:** Worker allow-list omitted AASA path. Deploy + verify origin and Apple CDN before physical-device Universal Link testing and final submission.
 3. **H-1 + H-8** (AI consent symmetry) — the audit's #3 top risk. Ship before submission; consent-gate parity across all four AI entry points is squarely an App Review §5.1.1(i)/§5.1.2 concern.
 4. **H-2** (forced-logout wipe) — the audit's #4 top risk (cross-account data leakage on shared devices). Ship before submission; this is a real security regression on shared/family devices, not just a hardening nice-to-have.
 
@@ -166,32 +166,24 @@ This is necessary because XcodeGen's default handling of `.xcprivacy` files has 
 
 ---
 
-### CR-2 — Production AASA returns HTTP 404
+### CR-2 — Production AASA returns HTTP 404 — **RESOLVED v1.4.48**
 
-**Root cause:** See §0 above for the full evidence trail. **Corrected from the audit's original hypothesis.** The audit assumed a silent Cloudflare Workers Builds rollback; live evidence in this pass refutes that (clean, gap-free deploy history; every sibling `.well-known/*` route on the identical currently-deployed Worker returns 200; the loader code itself is unconditional and correct). The far more likely cause is a **Cloudflare zone-level Rule** (Redirect Rule / Configuration Rule / legacy Page Rule) matching the literal path `/.well-known/apple-app-site-association`, intercepting the request before the Worker ever runs — consistent with the observed response signature (no `Content-Type`, `Content-Length: 0`, unlike a Worker-generated JSON response) and with Cloudflare's own documented caveat that zone-level rules can and do affect `.well-known/*` paths.
+**Root cause:** `workers/app.ts` pre-router gate blocked `/.well-known/apple-app-site-association` because the path was missing from `WELL_KNOWN_ALLOW_EXACT` while the route existed in `app/routes.ts`. See §0 above.
 
-**Proposed fix:**
-1. **Human/operator action (no code, no version bump):** Cloudflare Dashboard → the zone covering `ration.mayutic.com` → **Rules** → inspect **Redirect Rules**, **Configuration Rules**, and legacy **Page Rules** for any rule matching `apple-app-site-association` or a broad pattern that could shadow this one path (e.g. a leftover rule from before the Worker route existed); also check **Caching → Cache Rules** for a rule serving a stale cached response on this exact path. Remove or fix whatever is found.
-2. Cheap diagnostic checks that can be run without dashboard access first, to narrow the search (already run once with no change in result, should be re-run after any dashboard fix): `curl -si -H "Cache-Control: no-cache" https://ration.mayutic.com/.well-known/apple-app-site-association` and the same URL with a cache-busting query string.
-3. Once the origin returns `200` with correct `Content-Type`/body, separately verify Apple's CDN view (`curl -s https://app-site-association.cdn-apple.com/a/v1/ration.mayutic.com`) — a stale/empty result here immediately after the origin fix is expected propagation lag, not a new bug.
-4. Physical-device Universal Link tap test with the production entitlement (`applinks:ration.mayutic.com`, no `?mode=developer`). For faster iteration while still debugging the origin (not for final pre-submission verification), a `?mode=developer`-suffixed entitlement on a Developer-Mode device bypasses Apple's CDN — must be removed before final submission.
-5. Optional device-side confirmation without a full Universal Link tap: macOS `swcutil dl -d ration.mayutic.com` + `swcutil verify` (per Apple TN3155) to independently confirm Apple's format validation passes.
+**Fix (shipped v1.4.48):**
+1. Centralized allow list in `app/lib/well-known-routes.ts` (includes AASA).
+2. Drift-prevention test: `app/lib/__tests__/well-known-routes-sync.test.ts`.
+3. Deploy to production.
 
-**Alternative considered and rejected:** Trigger a manual redeploy ("just push again") as the fix, per the audit's original text. Rejected because the evidence in §0 shows the Worker is already correctly deployed and serving the AASA route's sibling paths successfully — a redeploy would not change anything (the bug is not in what's deployed), and treating it as the fix would mean re-discovering this exact bug at the next audit cycle having wasted a deploy cycle on a no-op.
+**Verification:**
+1. `curl -si https://ration.mayutic.com/.well-known/apple-app-site-association` → `200`, `content-type: application/json`, correct `appID` and `paths`.
+2. Apple CDN: `curl -si https://app-site-association.cdn-apple.com/a/v1/ration.mayutic.com` (allow 24–48h propagation lag after origin fix).
+3. Physical-device Universal Link tap test (interstitial → mobile-callback → Open Ration).
+4. Optional: `swcutil dl -d ration.mayutic.com` + `swcutil verify` (Apple TN3155).
 
-**Guideline/standard mapping:** Universal Links / Associated Domains is required for the app's magic-link auth handoff to function as documented in `plans/app-review-notes.md`; failure here risks App Review Guideline §2.1 (apps that are broken or do not function as expected). OWASP MASVS v2 **MASVS-PLATFORM** deep-link handling controls (MASTG deep-link test area) — the AASA file itself is the platform-level trust anchor for the association, and its correctness is a prerequisite for any deep-link security testing to be meaningful.
+**Files touched:** `app/lib/well-known-routes.ts`, `workers/app.ts`, `app/lib/__tests__/well-known-routes-sync.test.ts`.
 
-**Files touched:** None (application code is already correct). The only repo change in this plan tied to CR-2 is the smoke-test/notifier Worker shipped under H-7 (v1.4.7), which is a detection mechanism, not the fix.
-
-**Test plan:** N/A (no application code change). The "test" is the verification sequence above, run against production.
-
-**Verification step:** `curl -si https://ration.mayutic.com/.well-known/apple-app-site-association` must return `HTTP/2 200`, `content-type: application/json`, and a body with `applinks.details[0].appID == "M2KJH5GDGH.com.mayutic.ration"` and `paths == ["/auth/mobile-callback/open"]`. Then the physical-device tap test per step 4 above.
-
-**Rollback plan:** N/A — this is a dashboard-rule removal, not a code deploy; if removing a rule has an unexpected side effect on another path, re-add the rule via the dashboard's own rule history/audit log (Cloudflare retains rule edit history in most plans) and investigate further before retrying.
-
-**Effort estimate:** S (once dashboard access is available — this is a human action item, not an engineering task; flagged clearly as **not actionable by the coding agent** in this environment; see Open Items below).
-
-**⚠️ Operator action required — this cannot be completed by the coding agent:** Removing/fixing a Cloudflare zone-level Rule requires Cloudflare Dashboard access (Rules tab) or a Zone-scoped API token. The `wrangler` OAuth session available in this environment is Workers/account-scoped only and cannot enumerate or mutate zone Rules. **This is the single highest-priority manual action in this entire plan** — it blocks Universal Links (and therefore the primary, documented magic-link handoff path) regardless of what code ships.
+**Effort estimate:** S (code + deploy).
 
 ---
 

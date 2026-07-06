@@ -4,6 +4,7 @@ import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
+import { isRegisteredWellKnownPath } from "../app/lib/well-known-routes";
 
 // biome-ignore lint/suspicious/noExplicitAny: Build types are handled by framework
 const handleRequest = createRequestHandler({ build: build as any });
@@ -41,23 +42,6 @@ function applySecurityHeaders(response: Response): Response {
 		statusText: response.statusText,
 		headers,
 	});
-}
-
-/** Paths registered in app/routes.ts — must not be short-circuited below. */
-const WELL_KNOWN_ALLOW_EXACT = new Set([
-	"/.well-known/api-catalog",
-	"/.well-known/oauth-protected-resource",
-	"/.well-known/oauth-authorization-server",
-	"/.well-known/oauth-authorization-server/api/auth",
-	"/.well-known/openid-configuration",
-	"/.well-known/openid-configuration/api/auth",
-	"/.well-known/mcp/server-card.json",
-]);
-
-function isRegisteredWellKnownPath(pathname: string): boolean {
-	if (WELL_KNOWN_ALLOW_EXACT.has(pathname)) return true;
-	if (pathname.startsWith("/.well-known/agent-skills/")) return true;
-	return false;
 }
 
 export default {

@@ -1622,6 +1622,7 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 | `/.well-known/oauth-authorization-server` | `application/json` | Better Auth OAuth 2.1 authorization-server metadata (issuer includes `/api/auth`). |
 | `/.well-known/openid-configuration` | `application/json` | OIDC-compatible alias of the authorization-server metadata. |
 | `/.well-known/mcp/server-card.json` | `application/json` | MCP server card with transport (auth: `oauth2`) and tool capability groups. |
+| `/.well-known/apple-app-site-association` | `application/json` | Apple App Site Association for iOS Universal Links (auth handoff path `/auth/mobile-callback/open`). |
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent skills discovery index with SHA-256 digests. |
 | `/.well-known/agent-skills/:skill/SKILL.md` | `text/markdown` | Individual agent skill instructions. |
 | `/auth.md` | `text/markdown` | WorkOS/isitagentready agent registration discovery (Tier 0 anonymous + Tier 1 claim). H1 contains `auth.md`. |

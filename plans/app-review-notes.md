@@ -4,17 +4,17 @@ Use this document when submitting to App Review or TestFlight external testing.
 
 ## Login
 
-- **Method:** Magic link email with PKCE.
-- **Handoff (primary):** Universal Link `https://ration.mayutic.com/auth/mobile-callback/open?code=…` (Associated Domains `applinks:ration.mayutic.com`). A user tap on the "Open Ration" page button opens the app directly.
-- **Handoff (fallback):** Custom URL scheme `ration://auth/callback?code=…`, used only if Universal Links don't fire (app not installed, AASA not yet cached). The code is a single-use, PKCE-bound UUID with a ~60s TTL.
+- **Method:** Magic link email with PKCE. Email links land on a scanner-safe interstitial (`/auth/magic-link/continue`); the user taps **Continue sign-in** before Better Auth verifies the token.
+- **Handoff (primary):** Universal Link `https://ration.mayutic.com/auth/mobile-callback/open?code=…` (Associated Domains `applinks:ration.mayutic.com`). After email verification, the user taps **Open Ration** on `/auth/mobile-callback`; iOS opens the app directly.
+- **Handoff (fallback):** Custom URL scheme `ration://auth/callback?code=…`, used only if Universal Links don't fire (app not installed, AASA not yet cached). The code is a single-use, PKCE-bound UUID with a 300s TTL.
 - **Demo account:** App Review needs a dedicated inbox that actually receives magic-link emails (no password flow exists to bypass this). Provision a real mailbox — e.g. `app-review@mayutic.com` (or a shared alias forwarding to it) — *before* submission, add it as a user in production, and note the exact email in the App Store Connect "Notes for Review" field along with: "Sign-in is passwordless (magic link only); tap **Sign in**, enter the email above, and open the link delivered to that inbox." If App Review's automation cannot click an emailed link, request a temporary pre-authenticated TestFlight build instead (Settings → note the org/session state expected) rather than leaving this inbox undocumented — an inbox nobody monitors during the review window is a guaranteed rejection on the login step. **Status: not yet provisioned — operator action required before submission.**
 
 ### Universal Links operator checklist
 
-- [ ] **Blocked — CR-2 (production AASA 404), operator action required, not resolvable by the coding agent:** `curl -si https://ration.mayutic.com/.well-known/apple-app-site-association` was re-verified on 2026-07-01 and still returns `HTTP/2 404` with **no `Content-Type` header** and `Content-Length: 0`, while the sibling route `https://ration.mayutic.com/.well-known/api-catalog` returns `200` with a correct `Content-Type` on the same deployed Worker — confirming the app code/deploy is not the cause (see `plans/ios-security-audit-fix-plan.md` §0/CR-2). The most likely cause is a Cloudflare **zone-level Rule** (Redirect/Configuration/legacy Page Rule) matching this literal path. **Requires Cloudflare Dashboard → Rules access** (zone-scoped; the `wrangler` session available to the coding agent is account/Workers-scoped only and cannot enumerate or mutate zone Rules). Do not attempt physical-device Universal Link testing or final submission until this returns `200` with `content-type: application/json` and a body containing `applinks.details[0].appID == "M2KJH5GDGH.com.mayutic.ration"` and `paths == ["/auth/mobile-callback/open"]`.
-- [ ] After the above returns `200`: separately verify Apple's CDN view has propagated — `curl -s https://app-site-association.cdn-apple.com/a/v1/ration.mayutic.com` — allowing for normal CDN propagation lag before treating a stale/empty result as a new bug.
+- [x] **CR-2 (production AASA):** Fixed in v1.4.48 — Worker allow-list omission. Verified 2026-07-06: origin and Apple CDN return `200` with `appID: M2KJH5GDGH.com.mayutic.ration` and `paths: ["/auth/mobile-callback/open"]`.
+- [x] Apple CDN propagated — verified 2026-07-06 via `curl -si https://app-site-association.cdn-apple.com/a/v1/ration.mayutic.com`.
 - [ ] App is signed with a provisioning profile that includes the **Associated Domains** capability.
-- [ ] On a physical device, tapping the magic-link "Open Ration" button opens the app (not Safari). **Not yet re-run since this checklist was last verified — re-run after the AASA fix above lands**, using the production entitlement (`applinks:ration.mayutic.com`, no `?mode=developer`).
+- [ ] On a physical device, tapping the magic-link "Open Ration" button opens the app (not Safari). Re-run with production entitlement (`applinks:ration.mayutic.com`, no `?mode=developer`) — AASA origin and Apple CDN verified 2026-07-06.
 - [ ] Custom-scheme fallback still completes sign-in when Universal Links are unavailable.
 
 ## In-App Purchases

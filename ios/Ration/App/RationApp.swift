@@ -46,10 +46,16 @@ struct RationApp: App {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         else { return nil }
 
-        let isUniversalLink =
-            (components.scheme == "https" || components.scheme == "http")
+        var isUniversalLink =
+            components.scheme == "https"
             && components.host == AppConfig.authCallbackHost
             && components.path == "/auth/mobile-callback/open"
+        #if DEBUG
+        isUniversalLink = isUniversalLink
+            || (components.scheme == "http"
+                && components.host == AppConfig.authCallbackHost
+                && components.path == "/auth/mobile-callback/open")
+        #endif
         let isCustomScheme =
             components.scheme == AppConfig.authCallbackScheme && components.host == "auth"
 

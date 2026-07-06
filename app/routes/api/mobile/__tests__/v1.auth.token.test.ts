@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const checkRateLimit = vi.fn();
-const readMobileAuthCode = vi.fn();
-const deleteMobileAuthCode = vi.fn();
+const consumeMobileAuthCode = vi.fn();
 const verifyPkceChallenge = vi.fn();
 const issueMobileTokenPair = vi.fn();
 
@@ -11,8 +10,7 @@ vi.mock("~/lib/rate-limiter.server", () => ({
 }));
 
 vi.mock("~/lib/mobile/token.server", () => ({
-	readMobileAuthCode: (...args: unknown[]) => readMobileAuthCode(...args),
-	deleteMobileAuthCode: (...args: unknown[]) => deleteMobileAuthCode(...args),
+	consumeMobileAuthCode: (...args: unknown[]) => consumeMobileAuthCode(...args),
 	issueMobileTokenPair: (...args: unknown[]) => issueMobileTokenPair(...args),
 	rotateMobileRefreshToken: vi.fn(),
 }));
@@ -42,15 +40,14 @@ describe("POST /api/mobile/v1/auth/token", () => {
 	beforeEach(() => {
 		for (const m of [
 			checkRateLimit,
-			readMobileAuthCode,
-			deleteMobileAuthCode,
+			consumeMobileAuthCode,
 			verifyPkceChallenge,
 			issueMobileTokenPair,
 		]) {
 			m.mockReset();
 		}
 		checkRateLimit.mockResolvedValue({ allowed: true });
-		readMobileAuthCode.mockResolvedValue({
+		consumeMobileAuthCode.mockResolvedValue({
 			userId: "user_1",
 			organizationId: "org_1",
 			codeChallenge: "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHI",
@@ -76,10 +73,10 @@ describe("POST /api/mobile/v1/auth/token", () => {
 		} as never)) as { accessToken: string };
 
 		expect(result.accessToken).toBe("access");
-		expect(deleteMobileAuthCode).toHaveBeenCalledWith(env.RATION_KV, code);
+		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env.RATION_KV, code);
 	});
 
-	it("does not delete the code when PKCE verification fails", async () => {
+	it("does not issue tokens when PKCE verification fails", async () => {
 		verifyPkceChallenge.mockResolvedValue(false);
 		const { action } = await import("~/routes/api/mobile/v1.auth.token");
 		await expect(
@@ -93,6 +90,7 @@ describe("POST /api/mobile/v1/auth/token", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 400 } });
-		expect(deleteMobileAuthCode).not.toHaveBeenCalled();
+		expect(consumeMobileAuthCode).toHaveBeenCalledWith(env.RATION_KV, code);
+		expect(issueMobileTokenPair).not.toHaveBeenCalled();
 	});
 });

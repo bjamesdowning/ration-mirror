@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { mealPlanEntry } from "../../../db/schema";
+import { manifestConsumeNote } from "../../cook-feedback";
 import {
 	addEntry,
 	consumeManifestEntries,
@@ -282,6 +283,7 @@ export function registerManifestTools(
 							consumed: 0,
 							requiresConfirmation: true,
 							missingIngredients: result.missingIngredients,
+							note: "Insufficient cargo. Retry with confirmInsufficient: true to mark eaten and deduct what's available.",
 						});
 					}
 					return ok("consume_manifest_entries", {
@@ -290,6 +292,14 @@ export function registerManifestTools(
 						missingIngredients: undefined,
 						entryIds: result.entryIds,
 						deductions: result.deductions,
+						partialCook: result.partialCook ?? false,
+						skippedIngredients: result.skippedIngredients,
+						note: manifestConsumeNote({
+							consumed: result.consumed,
+							partialCook: result.partialCook,
+							skippedIngredients: result.skippedIngredients,
+							deductionCount: result.deductions.length,
+						}),
 					});
 				},
 			})(env, args),

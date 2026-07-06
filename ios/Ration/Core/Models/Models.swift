@@ -683,6 +683,8 @@ struct CookMealResponse: Codable, Sendable {
     let undoToken: String?
     let requiresConfirmation: Bool?
     let missingIngredients: [MissingIngredientDetail]?
+    let partialCook: Bool?
+    let skippedIngredients: [MissingIngredientDetail]?
 }
 
 struct ToggleActiveResponse: Codable, Sendable {

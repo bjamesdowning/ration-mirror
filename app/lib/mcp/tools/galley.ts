@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { activeMealSelection } from "../../../db/schema";
 import { cookMealWithConfirmation } from "../../cook-confirmation.server";
+import { cookDeductionNote } from "../../cook-feedback";
 import {
 	clearMealSelections,
 	getActiveMealSelections,
@@ -247,7 +248,7 @@ export function registerGalleyTools(server: McpServer, env: McpToolsEnv): void {
 							requiresConfirmation: true,
 							missingIngredients: result.missingIngredients,
 							mealId: a.mealId,
-							note: "Insufficient cargo. Retry with confirmInsufficient: true to mark cooked without deducting.",
+							note: "Insufficient cargo. Retry with confirmInsufficient: true to cook and deduct what's available.",
 						});
 					}
 					return ok("consume_meal", {
@@ -257,7 +258,13 @@ export function registerGalleyTools(server: McpServer, env: McpToolsEnv): void {
 						mealId: a.mealId,
 						servings: result.servings ?? a.servings ?? "default",
 						deductions: result.deductions,
-						note: "Ingredients have been deducted from your pantry inventory.",
+						partialCook: result.partialCook ?? false,
+						skippedIngredients: result.skippedIngredients,
+						note: cookDeductionNote({
+							partialCook: result.partialCook,
+							skippedIngredients: result.skippedIngredients,
+							deductionCount: result.deductions.length,
+						}),
 					});
 				},
 			})(env, args),

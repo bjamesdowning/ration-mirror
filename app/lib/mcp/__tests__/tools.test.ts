@@ -737,6 +737,32 @@ describe("MCP tools", () => {
 			expect(data.note).toContain("deducted");
 		});
 
+		it("returns partial cook note when some ingredients are skipped", async () => {
+			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
+				cooked: true,
+				deductions: [{ cargoId: "c1", quantity: 100 }],
+				servings: 2,
+				ingredientsDeducted: 1,
+				partialCook: true,
+				skippedIngredients: [
+					{ name: "eggs", required: 4, available: 0, unit: "count" },
+				],
+			});
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"consume_meal",
+			)({
+				mealId: "00000000-0000-0000-0000-000000000001",
+				confirmInsufficient: true,
+			});
+			const data = parseOk(result);
+			expect(data.partialCook).toBe(true);
+			expect(data.skippedIngredients).toHaveLength(1);
+			expect(data.note).toContain("eggs");
+			expect(data.note).toContain("Skipped");
+		});
+
 		it("returns requiresConfirmation when cargo is insufficient", async () => {
 			vi.mocked(cookMealWithConfirmation).mockResolvedValueOnce({
 				cooked: false,

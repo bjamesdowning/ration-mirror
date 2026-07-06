@@ -342,6 +342,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 		consumed?: number;
 		error?: string;
 		requiresConfirmation?: boolean;
+		partialCook?: boolean;
 		missingIngredients?: Array<{
 			name: string;
 			required: number;
@@ -521,7 +522,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			void (async () => {
 				const ok = await confirm({
 					title: "Missing ingredients",
-					message: `You don't have enough: ${names}. Mark as eaten without deducting from Cargo?`,
+					message: `You don't have enough: ${names}. Mark as eaten and deduct what's available from Cargo?`,
 					confirmLabel: "Consume anyway",
 					variant: "warning",
 				});
@@ -539,7 +540,7 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			pendingConsumeEntryIds.current = [];
 			const hadDeductions =
 				Array.isArray(data.deductions) && data.deductions.length > 0;
-			if (hadDeductions) {
+			if (hadDeductions || data.partialCook) {
 				consumeToast.show();
 			} else {
 				consumeMarkOnlyToast.show();
@@ -965,7 +966,11 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 					variant="success"
 					position="bottom-right"
 					title="Meals consumed"
-					description="Ingredients deducted from Cargo."
+					description={
+						consumeFetcher.data?.partialCook
+							? "Available ingredients deducted from Cargo."
+							: "Ingredients deducted from Cargo."
+					}
 					onDismiss={consumeToast.hide}
 				/>
 			)}

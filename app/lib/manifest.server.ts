@@ -167,6 +167,13 @@ export interface ConsumeManifestEntriesResult {
 		available: number;
 		unit: string;
 	}>;
+	partialCook?: boolean;
+	skippedIngredients?: Array<{
+		name: string;
+		required: number;
+		available: number;
+		unit: string;
+	}>;
 }
 
 export async function getWeekEntries(
@@ -355,12 +362,25 @@ export async function consumeManifestEntries(
 	}
 
 	const allDeductions: CargoDeduction[] = [];
-	if (!options?.confirmInsufficient) {
-		for (const [mealId, totalServings] of servingsByMeal) {
-			const cookResult = await cookMeal(env, organizationId, mealId, {
-				servings: totalServings,
-			});
-			mergeDeductions(allDeductions, cookResult.deductions);
+	const skippedIngredients: ConsumeManifestEntriesResult["skippedIngredients"] =
+		[];
+	const seenSkipped = new Set<string>();
+	let partialCook = false;
+
+	for (const [mealId, totalServings] of servingsByMeal) {
+		const cookResult = await cookMeal(env, organizationId, mealId, {
+			servings: totalServings,
+			deductionMode: options?.confirmInsufficient ? "partial" : "strict",
+		});
+		mergeDeductions(allDeductions, cookResult.deductions);
+		if (cookResult.partialCook && cookResult.skippedIngredients?.length) {
+			partialCook = true;
+			for (const item of cookResult.skippedIngredients) {
+				const key = item.name.toLowerCase();
+				if (seenSkipped.has(key)) continue;
+				seenSkipped.add(key);
+				skippedIngredients.push(item);
+			}
 		}
 	}
 
@@ -384,6 +404,9 @@ export async function consumeManifestEntries(
 		deductions: allDeductions,
 		entryIds: uniqueEntries.map((e) => e.id),
 		planId,
+		partialCook: partialCook || undefined,
+		skippedIngredients:
+			skippedIngredients.length > 0 ? skippedIngredients : undefined,
 	};
 }
 

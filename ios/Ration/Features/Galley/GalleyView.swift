@@ -17,6 +17,7 @@ struct GalleyView: View {
     @State private var pendingCookMealId: String?
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
+    @State private var cookSuccessMessage: String?
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -121,6 +122,11 @@ struct GalleyView: View {
             if let message = generateSuccessMessage {
                 TransientSuccessToast(message: message) {
                     generateSuccessMessage = nil
+                }
+                .padding(.bottom, 80)
+            } else if let message = cookSuccessMessage {
+                TransientSuccessToast(message: message) {
+                    cookSuccessMessage = nil
                 }
                 .padding(.bottom, 80)
             }
@@ -322,8 +328,16 @@ struct GalleyView: View {
             confirmInsufficient: confirmInsufficient,
             api: env.api
         ) {
-        case .success:
+        case .success(_, let cookedServings, let ingredientsDeducted, let partialCook, let skipped):
             env.notifyCargoDataChanged()
+            if partialCook {
+                cookSuccessMessage = GalleyViewModel.cookSuccessMessage(
+                    servings: cookedServings,
+                    ingredientsDeducted: ingredientsDeducted,
+                    partialCook: partialCook,
+                    skippedIngredients: skipped
+                )
+            }
         case .needsConfirmation(let missing):
             pendingCookMealId = mealId
             cookConfirmationMessage = missingIngredientsMessage(missing)
@@ -345,7 +359,7 @@ struct GalleyView: View {
         let lines = missing.map { ingredient in
             "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
         }
-        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway?"
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway and deduct what's available?"
     }
 }
 
@@ -632,7 +646,12 @@ struct MealDetailView: View {
                 return
             }
             Haptics.success()
-            cookMessage = "Cooked \(result.servings ?? desiredServings) servings · \(result.ingredientsDeducted ?? 0) deductions"
+            cookMessage = GalleyViewModel.cookSuccessMessage(
+                servings: result.servings ?? desiredServings,
+                ingredientsDeducted: result.ingredientsDeducted ?? 0,
+                partialCook: result.partialCook ?? false,
+                skippedIngredients: result.skippedIngredients ?? []
+            )
             if let token = result.undoToken {
                 cookUndoToken = token
                 showCookUndo = true
@@ -648,7 +667,7 @@ struct MealDetailView: View {
         let lines = missing.map { ingredient in
             "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
         }
-        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway?"
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway and deduct what's available?"
     }
 
     @MainActor

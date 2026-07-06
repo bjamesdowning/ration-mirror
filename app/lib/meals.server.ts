@@ -22,6 +22,7 @@ import { checkCapacity } from "./capacity.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForCargoDedup } from "./matching";
+import type { MissingIngredientDetail } from "./matching.server";
 import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -47,6 +48,13 @@ import {
 } from "./vector.server";
 
 export type CargoDeduction = { cargoId: string; quantity: number };
+
+export type CookMealDeductionMode = "strict" | "partial";
+
+export type CargoDeductionPlan = {
+	allocations: { cargoId: string; quantityToDeduct: number }[];
+	shortfallInTargetUnit: number;
+};
 
 function recordCargoDeduction(
 	deductions: CargoDeduction[],
@@ -1045,13 +1053,14 @@ export async function deleteMeal(
  * `prefetchedVectors` via findSimilarCargoBatch before the deduction loop.
  * Returns allocations in cargo's native unit for SQL update.
  */
-function findCargoForDeduction(
+export function findCargoForDeduction(
 	orgCargo: CargoIndexRow[],
 	ingredientName: string,
 	requiredQtyInTargetUnit: number,
 	targetUnit: SupportedUnit,
 	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
-): { cargoId: string; quantityToDeduct: number }[] {
+	allowPartial = false,
+): CargoDeductionPlan {
 	const normalizedName = normalizeForCargoDedup(ingredientName);
 	type Candidate = {
 		cargo: CargoIndexRow;
@@ -1145,7 +1154,10 @@ function findCargoForDeduction(
 		});
 	}
 
-	return remaining <= 0 ? allocations : [];
+	return {
+		allocations: remaining <= 0 || allowPartial ? allocations : [],
+		shortfallInTargetUnit: remaining,
+	};
 }
 
 /**
@@ -1165,8 +1177,9 @@ export async function cookMeal(
 	env: Env,
 	organizationId: string,
 	mealId: string,
-	options?: { servings?: number },
+	options?: { servings?: number; deductionMode?: CookMealDeductionMode },
 ) {
+	const allowPartial = options?.deductionMode === "partial";
 	const d1 = drizzle(env.DB);
 
 	// 1+2+3 in a single D1 batch round-trip: meal record, ingredients, and
@@ -1224,6 +1237,7 @@ export async function cookMeal(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	const updates: any[] = [];
 	const deductions: CargoDeduction[] = [];
+	const skippedIngredients: MissingIngredientDetail[] = [];
 	let cargoById = new Map<string, typeof cargo.$inferSelect>();
 
 	if (linkedIngredients.length > 0) {
@@ -1245,37 +1259,48 @@ export async function cookMeal(
 
 		cargoById = new Map(currentCargo.map((i) => [i.id, i]));
 
-		const insufficient = linkedIngredients.filter((ing) => {
-			if (ing.isOptional) return false;
-			const c = cargoById.get(ing.cargoId as string);
-			if (!c) return true;
-			const ingUnit = toSupportedUnit(ing.unit);
-			const cargoUnit = toSupportedUnit(c.unit);
-			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
-			const deductionInCargoUnit = convertIngredientAmount(
-				scaledQty,
-				ingUnit,
-				cargoUnit,
-				ing.ingredientName,
-			);
-			if (deductionInCargoUnit === null) return true;
-			return c.quantity < deductionInCargoUnit;
-		});
+		if (!allowPartial) {
+			const insufficient = linkedIngredients.filter((ing) => {
+				if (ing.isOptional) return false;
+				const c = cargoById.get(ing.cargoId as string);
+				if (!c) return true;
+				const ingUnit = toSupportedUnit(ing.unit);
+				const cargoUnit = toSupportedUnit(c.unit);
+				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
+				const deductionInCargoUnit = convertIngredientAmount(
+					scaledQty,
+					ingUnit,
+					cargoUnit,
+					ing.ingredientName,
+				);
+				if (deductionInCargoUnit === null) return true;
+				return c.quantity < deductionInCargoUnit;
+			});
 
-		if (insufficient.length > 0) {
-			const names = insufficient.map((i) => i.ingredientName).join(", ");
-			throw new Error(`Insufficient Cargo for: ${names}`);
+			if (insufficient.length > 0) {
+				const names = insufficient.map((i) => i.ingredientName).join(", ");
+				throw new Error(`Insufficient Cargo for: ${names}`);
+			}
 		}
 
 		for (const ing of linkedIngredients) {
 			const c = cargoById.get(ing.cargoId as string);
+			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (!c) {
 				if (ing.isOptional) continue;
+				if (allowPartial) {
+					skippedIngredients.push({
+						name: ing.ingredientName,
+						required: scaledQty,
+						available: 0,
+						unit: ing.unit,
+					});
+					continue;
+				}
 				throw new Error(`Cargo not found for ingredient ${ing.ingredientName}`);
 			}
 			const ingUnit = toSupportedUnit(ing.unit);
 			const cargoUnit = toSupportedUnit(c.unit);
-			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			const deductionInCargoUnit = convertIngredientAmount(
 				scaledQty,
 				ingUnit,
@@ -1284,24 +1309,72 @@ export async function cookMeal(
 			);
 			if (deductionInCargoUnit === null) {
 				if (ing.isOptional) continue;
+				if (allowPartial) {
+					skippedIngredients.push({
+						name: ing.ingredientName,
+						required: scaledQty,
+						available: 0,
+						unit: ing.unit,
+					});
+					continue;
+				}
 				throw new Error(
 					`Cannot convert ${ing.unit} to ${c.unit} for ${ing.ingredientName}`,
 				);
 			}
-			if (c.quantity < deductionInCargoUnit) {
+			const actualDeductionInCargoUnit = allowPartial
+				? Math.min(c.quantity, deductionInCargoUnit)
+				: deductionInCargoUnit;
+			if (!allowPartial && c.quantity < deductionInCargoUnit) {
 				if (ing.isOptional) continue;
 				throw new Error(`Insufficient Cargo for: ${ing.ingredientName}`);
+			}
+			if (allowPartial && actualDeductionInCargoUnit <= 0) {
+				if (ing.isOptional) continue;
+				const availableInIngUnit =
+					convertIngredientAmount(
+						c.quantity,
+						cargoUnit,
+						ingUnit,
+						ing.ingredientName,
+					) ?? 0;
+				skippedIngredients.push({
+					name: ing.ingredientName,
+					required: scaledQty,
+					available: availableInIngUnit,
+					unit: ing.unit,
+				});
+				continue;
+			}
+			if (
+				allowPartial &&
+				actualDeductionInCargoUnit < deductionInCargoUnit &&
+				!ing.isOptional
+			) {
+				const availableInIngUnit =
+					convertIngredientAmount(
+						c.quantity,
+						cargoUnit,
+						ingUnit,
+						ing.ingredientName,
+					) ?? 0;
+				skippedIngredients.push({
+					name: ing.ingredientName,
+					required: scaledQty,
+					available: availableInIngUnit,
+					unit: ing.unit,
+				});
 			}
 			recordCargoDeduction(
 				deductions,
 				ing.cargoId as string,
-				deductionInCargoUnit,
+				actualDeductionInCargoUnit,
 			);
 			updates.push(
 				d1
 					.update(cargo)
 					.set({
-						quantity: sql`${cargo.quantity} - ${deductionInCargoUnit}`,
+						quantity: sql`${cargo.quantity} - ${actualDeductionInCargoUnit}`,
 					})
 					.where(
 						and(
@@ -1321,25 +1394,12 @@ export async function cookMeal(
 		);
 
 		// Adjust effective quantities for linked deductions (same cargo row may be used by both)
-		if (linkedIngredients.length > 0 && cargoById) {
+		if (linkedIngredients.length > 0 && deductions.length > 0) {
 			const linkedDeductions = new Map<string, number>();
-			for (const ing of linkedIngredients) {
-				const c = cargoById.get(ing.cargoId as string);
-				if (!c) continue;
-				const ingUnit = toSupportedUnit(ing.unit);
-				const cargoUnit = toSupportedUnit(c.unit);
-				const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
-				const deduction = convertIngredientAmount(
-					scaledQty,
-					ingUnit,
-					cargoUnit,
-					ing.ingredientName,
-				);
-				if (deduction === null) continue;
-				if (c.quantity < deduction && ing.isOptional) continue;
+			for (const d of deductions) {
 				linkedDeductions.set(
-					c.id,
-					(linkedDeductions.get(c.id) ?? 0) + deduction,
+					d.cargoId,
+					(linkedDeductions.get(d.cargoId) ?? 0) + d.quantity,
 				);
 			}
 			orgCargo = orgCargo.map((item) => ({
@@ -1365,17 +1425,38 @@ export async function cookMeal(
 			const scaledQty = scaleQuantity(ing.quantity, scaleFactor, ing.unit);
 			if (scaledQty <= 0) continue;
 
-			const allocations = findCargoForDeduction(
+			const { allocations, shortfallInTargetUnit } = findCargoForDeduction(
 				orgCargo,
 				ing.ingredientName,
 				scaledQty,
 				targetUnit,
 				prefetchedVectors,
+				allowPartial,
 			);
 
 			if (allocations.length === 0) {
-				if (!ing.isOptional) insufficient.push(ing.ingredientName);
+				if (!ing.isOptional) {
+					if (allowPartial) {
+						skippedIngredients.push({
+							name: ing.ingredientName,
+							required: scaledQty,
+							available: 0,
+							unit: ing.unit,
+						});
+					} else {
+						insufficient.push(ing.ingredientName);
+					}
+				}
 				continue;
+			}
+
+			if (allowPartial && shortfallInTargetUnit > 0 && !ing.isOptional) {
+				skippedIngredients.push({
+					name: ing.ingredientName,
+					required: scaledQty,
+					available: scaledQty - shortfallInTargetUnit,
+					unit: ing.unit,
+				});
 			}
 
 			for (const { cargoId, quantityToDeduct } of allocations) {
@@ -1420,6 +1501,9 @@ export async function cookMeal(
 		ingredientsDeducted: updates.length,
 		servings: effectiveServings,
 		deductions,
+		partialCook: skippedIngredients.length > 0,
+		skippedIngredients:
+			skippedIngredients.length > 0 ? skippedIngredients : undefined,
 	};
 }
 

@@ -14,6 +14,8 @@ export type CookMealWithConfirmationResult = {
 	deductions: CargoDeduction[];
 	requiresConfirmation?: boolean;
 	missingIngredients?: MissingIngredientDetail[];
+	partialCook?: boolean;
+	skippedIngredients?: MissingIngredientDetail[];
 };
 
 async function resolveEffectiveCookServings(
@@ -75,22 +77,16 @@ export async function cookMealWithConfirmation(
 		}
 	}
 
-	if (options?.confirmInsufficient) {
-		return {
-			cooked: true,
-			ingredientsDeducted: 0,
-			servings: effectiveServings,
-			deductions: [],
-		};
-	}
-
 	const result = await cookMeal(env, organizationId, mealId, {
 		servings: effectiveServings,
+		deductionMode: options?.confirmInsufficient ? "partial" : "strict",
 	});
 	return {
 		cooked: true,
 		ingredientsDeducted: result.ingredientsDeducted,
 		servings: result.servings,
 		deductions: result.deductions,
+		partialCook: result.partialCook,
+		skippedIngredients: result.skippedIngredients,
 	};
 }

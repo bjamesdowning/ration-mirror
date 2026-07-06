@@ -8,9 +8,31 @@ final class GalleyViewModel {
     private static let matchFetchLimit = 100
 
     enum CookOutcome: Sendable {
-        case success(undoToken: String?, servings: Int, ingredientsDeducted: Int)
+        case success(
+            undoToken: String?,
+            servings: Int,
+            ingredientsDeducted: Int,
+            partialCook: Bool,
+            skippedIngredients: [MissingIngredientDetail]
+        )
         case needsConfirmation(missing: [MissingIngredientDetail])
         case failed
+    }
+
+    static func cookSuccessMessage(
+        servings: Int,
+        ingredientsDeducted: Int,
+        partialCook: Bool,
+        skippedIngredients: [MissingIngredientDetail]
+    ) -> String {
+        if partialCook, !skippedIngredients.isEmpty {
+            let names = skippedIngredients.map { $0.name.capitalized }.joined(separator: ", ")
+            if ingredientsDeducted > 0 {
+                return "Cooked \(servings) servings. Deducted available cargo; skipped: \(names)."
+            }
+            return "Cooked \(servings) servings. Insufficient stock for: \(names)."
+        }
+        return "Cooked \(servings) servings · \(ingredientsDeducted) deductions"
     }
 
     private(set) var meals: [Meal] = []
@@ -152,7 +174,9 @@ final class GalleyViewModel {
             return .success(
                 undoToken: result.undoToken,
                 servings: result.servings ?? servings ?? 1,
-                ingredientsDeducted: result.ingredientsDeducted ?? 0
+                ingredientsDeducted: result.ingredientsDeducted ?? 0,
+                partialCook: result.partialCook ?? false,
+                skippedIngredients: result.skippedIngredients ?? []
             )
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription

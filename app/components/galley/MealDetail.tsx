@@ -3,9 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
+import { Toast } from "~/components/shell/Toast";
+import { useToast } from "~/hooks/useToast";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
 import { useConfirm } from "~/lib/confirm-context";
+import { galleyPartialCookDescription } from "~/lib/cook-feedback";
 import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
@@ -173,11 +176,15 @@ export function MealDetail({
 		result?: {
 			cooked: boolean;
 			requiresConfirmation?: boolean;
+			partialCook?: boolean;
+			skippedIngredients?: Array<{ name: string }>;
 			missingIngredients?: { name: string }[];
 			deductions?: unknown[];
 		};
 		error?: string;
 	}>();
+	const cookPartialToast = useToast({ duration: 5000 });
+	const lastCookFeedback = useRef<unknown>(null);
 	const isCooking = fetcher.state !== "idle";
 	const isDeleting = deleteFetcher.state !== "idle";
 	const isCooked = fetcher.data?.result?.cooked === true;
@@ -257,6 +264,7 @@ export function MealDetail({
 
 	const submitCook = useCallback(
 		(confirmInsufficient = false) => {
+			lastCookFeedback.current = null;
 			fetcher.submit(
 				JSON.stringify({
 					servings: desiredServings,
@@ -281,13 +289,28 @@ export function MealDetail({
 		void (async () => {
 			const ok = await confirm({
 				title: "Missing ingredients",
-				message: `You don't have enough: ${names}. Cook anyway without deducting from Cargo?`,
+				message: `You don't have enough: ${names}. Cook anyway and deduct what's available from Cargo?`,
 				confirmLabel: "Cook anyway",
 				variant: "warning",
 			});
 			if (ok) submitCook(true);
 		})();
 	}, [fetcher.state, fetcher.data, confirm, submitCook]);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle") return;
+		const result = fetcher.data?.result;
+		if (!result?.cooked || !result.partialCook) return;
+		if (fetcher.data === lastCookFeedback.current) return;
+		lastCookFeedback.current = fetcher.data;
+		cookPartialToast.show();
+	}, [fetcher.state, fetcher.data, cookPartialToast.show]);
+
+	const cookSuccessMessage = isCooked
+		? fetcher.data?.result?.partialCook
+			? galleyPartialCookDescription(fetcher.data?.result?.skippedIngredients)
+			: "Cargo updated successfully"
+		: null;
 
 	const handleCookSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -612,9 +635,9 @@ export function MealDetail({
 										? `Cook × ${desiredServings}`
 										: "Cook Now"}
 						</button>
-						{isCooked && (
+						{isCooked && cookSuccessMessage && (
 							<p className="text-xs text-center mt-2 text-success font-medium">
-								Cargo updated successfully
+								{cookSuccessMessage}
 							</p>
 						)}
 						{!isCooked && !cookError && (
@@ -639,6 +662,17 @@ export function MealDetail({
 					/>
 				</div>
 			</div>
+			{cookPartialToast.isOpen && (
+				<Toast
+					variant="success"
+					position="bottom-right"
+					title="Meal cooked"
+					description={galleyPartialCookDescription(
+						fetcher.data?.result?.skippedIngredients,
+					)}
+					onDismiss={cookPartialToast.hide}
+				/>
+			)}
 		</div>
 	);
 }

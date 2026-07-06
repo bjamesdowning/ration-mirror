@@ -91,12 +91,19 @@ describe("consumeManifestEntries", () => {
 		expect(result.deductions).toHaveLength(1);
 		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
 			servings: 2,
+			deductionMode: "strict",
 		});
 		expect(updateSet).toHaveBeenCalled();
 	});
 
-	it("skips cookMeal when confirmInsufficient is true", async () => {
-		cookMeal.mockResolvedValue({ deductions: [] });
+	it("calls cookMeal with partial deduction when confirmInsufficient is true", async () => {
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 100 }],
+			partialCook: true,
+			skippedIngredients: [
+				{ name: "eggs", required: 4, available: 0, unit: "count" },
+			],
+		});
 
 		const { consumeManifestEntries } = await import("../manifest.server");
 		const result = await consumeManifestEntries(env, orgId, planId, [entryId], {
@@ -104,9 +111,13 @@ describe("consumeManifestEntries", () => {
 		});
 
 		expect(result.consumed).toBe(1);
-		expect(result.deductions).toEqual([]);
+		expect(result.deductions).toHaveLength(1);
+		expect(result.partialCook).toBe(true);
 		expect(getMealMissingIngredients).not.toHaveBeenCalled();
-		expect(cookMeal).not.toHaveBeenCalled();
+		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
+			servings: 2,
+			deductionMode: "partial",
+		});
 		expect(updateSet).toHaveBeenCalled();
 	});
 });

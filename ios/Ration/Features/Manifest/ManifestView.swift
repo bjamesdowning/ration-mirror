@@ -677,7 +677,7 @@ struct ManifestView: View {
         let lines = missing.map { ingredient in
             "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
         }
-        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nConsume anyway?"
+        return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nConsume anyway and deduct what's available?"
     }
 
     private func loadManifestShareStatus() async {

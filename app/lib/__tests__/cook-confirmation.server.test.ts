@@ -41,7 +41,18 @@ describe("cookMealWithConfirmation", () => {
 		expect(cookMeal).not.toHaveBeenCalled();
 	});
 
-	it("skips cook when confirmInsufficient is true", async () => {
+	it("calls cookMeal with partial deduction when confirmInsufficient is true", async () => {
+		cookMeal.mockResolvedValue({
+			cooked: true,
+			ingredientsDeducted: 1,
+			servings: 4,
+			deductions: [{ cargoId: "c1", quantity: 100 }],
+			partialCook: true,
+			skippedIngredients: [
+				{ name: "eggs", required: 4, available: 0, unit: "count" },
+			],
+		});
+
 		const { cookMealWithConfirmation } = await import(
 			"../cook-confirmation.server"
 		);
@@ -51,10 +62,13 @@ describe("cookMealWithConfirmation", () => {
 		});
 
 		expect(result.cooked).toBe(true);
-		expect(result.deductions).toEqual([]);
-		expect(result.ingredientsDeducted).toBe(0);
-		expect(result.servings).toBe(4);
-		expect(cookMeal).not.toHaveBeenCalled();
+		expect(result.deductions).toHaveLength(1);
+		expect(result.partialCook).toBe(true);
+		expect(result.skippedIngredients).toHaveLength(1);
+		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
+			servings: 4,
+			deductionMode: "partial",
+		});
 		expect(getMealMissingIngredients).not.toHaveBeenCalled();
 	});
 
@@ -65,6 +79,7 @@ describe("cookMealWithConfirmation", () => {
 			ingredientsDeducted: 2,
 			servings: 2,
 			deductions: [{ cargoId: "c1", quantity: 1 }],
+			partialCook: false,
 		});
 
 		const { cookMealWithConfirmation } = await import(
@@ -78,6 +93,7 @@ describe("cookMealWithConfirmation", () => {
 		expect(result.deductions).toHaveLength(1);
 		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
 			servings: 2,
+			deductionMode: "strict",
 		});
 	});
 });

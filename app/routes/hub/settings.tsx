@@ -1452,9 +1452,8 @@ function UnitDisplaySection({ settings }: { settings: UserSettings }) {
 			<h3 className="text-xs text-label text-muted mb-1">Unit display</h3>
 			<p className="text-sm text-muted mb-4">
 				Choose how quantities appear across Cargo, Galley, Supply, and Manifest.
-				You can also toggle this quickly from the hub toolbar.
 			</p>
-			<UnitDisplayToggle variant="full" className="mb-4" />
+			<UnitDisplayToggle className="mb-4" />
 			<ul className="space-y-2 text-xs text-muted">
 				{(Object.keys(UNIT_DISPLAY_MODE_LABELS) as UnitDisplayMode[]).map(
 					(mode) => (

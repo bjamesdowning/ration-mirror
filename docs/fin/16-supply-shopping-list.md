@@ -2,7 +2,7 @@
 
 ## Purpose
 
-**Supply** lists what you still need to buy to cook your **selected** Galley meals and your **Manifest** week, compared against **Cargo**. Quantities respect your global **unit display mode** (`original`, `metric`, `imperial`, or `cooking`) — set it in **System → Preferences** or toggle from the hub toolbar. Display uses `presentQuantity()` from canonical `base_quantity` / `base_unit` stored at sync time (authored `quantity` / `unit` remain for Original mode and editing). Liquids stay volume-based; volume-measured solids can use density-backed weight conversions and show an `≈` prefix when approximate.
+**Supply** lists what you still need to buy to cook your **selected** Galley meals and your **Manifest** week, compared against **Cargo**. Quantities respect your global **unit display mode** (`original`, `metric`, `imperial`, or `cooking`) — set it in **System → Preferences**. Display uses `presentQuantity()` from canonical `base_quantity` / `base_unit` stored at sync time (authored `quantity` / `unit` remain for Original mode and editing). Liquids stay volume-based; volume-measured solids can use density-backed weight conversions and show an `≈` prefix when approximate.
 
 ## Updating the list
 

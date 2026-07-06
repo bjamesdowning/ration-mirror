@@ -38,7 +38,7 @@ export function UnitDisplayModeProvider({ children }: { children: ReactNode }) {
 		setOptimisticMode(nextMode);
 		fetcher.submit(
 			{ intent: "update-unit-display-mode", mode: nextMode },
-			{ method: "post", action: "/hub" },
+			{ method: "post", action: "/hub/settings" },
 		);
 	};
 
@@ -66,47 +66,16 @@ const UnitDisplayModeActionsContext = createContext<UnitDisplayModeActions>({
 });
 
 interface UnitDisplayToggleProps {
-	variant?: "toolbar" | "full";
 	className?: string;
 }
 
-export function UnitDisplayToggle({
-	variant = "toolbar",
-	className = "",
-}: UnitDisplayToggleProps) {
+export function UnitDisplayToggle({ className = "" }: UnitDisplayToggleProps) {
 	const activeMode = useUnitDisplayMode();
 	const { submitMode, isPending } = useContext(UnitDisplayModeActionsContext);
 
-	if (variant === "full") {
-		return (
-			<fieldset
-				className={`flex flex-wrap gap-1 rounded-xl border border-platinum/60 bg-platinum/35 p-1 m-0 min-w-0 ${className}`}
-				aria-label="Unit display mode"
-			>
-				<legend className="sr-only">Unit display mode</legend>
-				{MODES.map((mode) => (
-					<button
-						key={mode}
-						type="button"
-						disabled={isPending}
-						onClick={() => submitMode(mode)}
-						className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors min-h-[36px] ${
-							activeMode === mode
-								? "bg-hyper-green text-carbon"
-								: "text-muted hover:text-carbon hover:bg-platinum/70"
-						} ${isPending ? "opacity-60" : ""}`}
-						aria-pressed={activeMode === mode}
-					>
-						{UNIT_DISPLAY_MODE_LABELS[mode]}
-					</button>
-				))}
-			</fieldset>
-		);
-	}
-
 	return (
 		<fieldset
-			className={`flex items-center gap-0.5 rounded-lg border border-platinum/60 bg-platinum/25 p-0.5 m-0 min-w-0 max-w-[min(100%,11rem)] sm:max-w-none overflow-x-auto shrink ${className}`}
+			className={`flex flex-wrap gap-1 rounded-xl border border-platinum/60 bg-platinum/35 p-1 m-0 min-w-0 ${className}`}
 			aria-label="Unit display mode"
 		>
 			<legend className="sr-only">Unit display mode</legend>
@@ -116,15 +85,14 @@ export function UnitDisplayToggle({
 					type="button"
 					disabled={isPending}
 					onClick={() => submitMode(mode)}
-					title={UNIT_DISPLAY_MODE_LABELS[mode]}
-					className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-colors min-h-[32px] ${
+					className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors min-h-[36px] ${
 						activeMode === mode
 							? "bg-hyper-green text-carbon"
 							: "text-muted hover:text-carbon hover:bg-platinum/70"
 					} ${isPending ? "opacity-60" : ""}`}
 					aria-pressed={activeMode === mode}
 				>
-					{mode === "original" ? "Orig" : mode.slice(0, 3)}
+					{UNIT_DISPLAY_MODE_LABELS[mode]}
 				</button>
 			))}
 		</fieldset>

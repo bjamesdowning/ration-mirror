@@ -1,13 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useEffect } from "react";
-import {
-	data,
-	NavLink,
-	Outlet,
-	redirect,
-	useRouteLoaderData,
-} from "react-router";
+import { NavLink, Outlet, redirect, useRouteLoaderData } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
@@ -15,30 +9,20 @@ import { ConfirmDialog } from "~/components/shell/ConfirmDialog";
 import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { PwaInstallPrompt } from "~/components/shell/PwaInstallPrompt";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
-import {
-	UnitDisplayModeProvider,
-	UnitDisplayToggle,
-} from "~/components/shell/UnitDisplayToggle";
+import { UnitDisplayModeProvider } from "~/components/shell/UnitDisplayToggle";
 import { HubIntercomFromRoot } from "~/components/support/HubIntercom";
 import { IntercomLauncherButton } from "~/components/support/IntercomLauncherButton";
 import * as schema from "~/db/schema";
-import {
-	getUserSettings,
-	patchUserSettings,
-	requireActiveGroup,
-} from "~/lib/auth.server";
+import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
 	checkCapacityWithTier,
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { ConfirmProvider } from "~/lib/confirm-context";
-import { handleApiError } from "~/lib/error-handler";
 import { IntercomLauncherProvider } from "~/lib/intercom-launcher-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { registerServiceWorker } from "~/lib/pwa.client";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/hub";
 
@@ -189,51 +173,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	};
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
-	if (request.method !== "POST") {
-		return data({ error: "Method not allowed" }, { status: 405 });
-	}
-
-	try {
-		const { session } = await requireActiveGroup(context, request);
-		const formData = await request.formData();
-		const intent = formData.get("intent");
-
-		if (intent === "update-unit-display-mode") {
-			const rateLimitResult = await checkRateLimit(
-				context.cloudflare.env.RATION_KV,
-				"settings_mutation",
-				session.user.id,
-			);
-			if (!rateLimitResult.allowed) {
-				return data(
-					{ error: "Too many requests. Please try again later." },
-					{ status: 429, headers: { "Retry-After": "60" } },
-				);
-			}
-
-			const parsed = UnitDisplayModeSchema.safeParse(formData.get("mode"));
-			if (!parsed.success) {
-				return data({ error: "Invalid unit display mode" }, { status: 400 });
-			}
-			const mode = parsed.data;
-
-			await patchUserSettings(context.cloudflare.env.DB, session.user.id, {
-				unitDisplayMode: mode,
-				supplyUnitMode:
-					mode === "original"
-						? undefined
-						: (mode as "cooking" | "metric" | "imperial"),
-			});
-			return data({ success: true, mode });
-		}
-
-		return data({ error: "Invalid intent" }, { status: 400 });
-	} catch (error) {
-		return handleApiError(error);
-	}
-}
-
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const { onboardingCompletedAt, onboardingStep } = loaderData;
 
@@ -259,7 +198,6 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							<header className="px-4 md:px-8 py-2 safe-area-pt flex justify-between items-center gap-3 bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
 								<div className="min-w-0 flex-1 flex items-center gap-3">
 									<GroupSwitcher />
-									<UnitDisplayToggle variant="toolbar" />
 								</div>
 								<div
 									className="flex items-center shrink-0 rounded-xl border border-platinum/60 dark:border-white/10 bg-platinum/35 dark:bg-white/[0.06] p-1 shadow-sm"

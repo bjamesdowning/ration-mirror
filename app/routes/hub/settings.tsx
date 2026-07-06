@@ -20,6 +20,7 @@ import { DeveloperSection } from "~/components/settings/developer/DeveloperSecti
 import { GroupAvatar } from "~/components/shell/GroupAvatar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
+import { UnitDisplayToggle } from "~/components/shell/UnitDisplayToggle";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { UserAvatar } from "~/components/shell/UserAvatar";
 import * as schema from "~/db/schema";
@@ -41,8 +42,15 @@ import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
 import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { log } from "~/lib/logging.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
+import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
 import type { UserSettings } from "~/lib/types";
+import {
+	resolveUnitDisplayMode,
+	UNIT_DISPLAY_MODE_LABELS,
+	type UnitDisplayMode,
+} from "~/lib/unit-display-mode";
 import { APP_VERSION } from "~/lib/version";
 import type { Route } from "./+types/settings";
 
@@ -480,6 +488,35 @@ export async function action(args: Route.ActionArgs) {
 		}
 
 		return { success: true };
+	}
+
+	if (intent === "update-unit-display-mode") {
+		const rateLimitResult = await checkRateLimit(
+			env.RATION_KV,
+			"settings_mutation",
+			userId,
+		);
+		if (!rateLimitResult.allowed) {
+			throw data(
+				{ error: "Too many requests. Please try again later." },
+				{ status: 429, headers: { "Retry-After": "60" } },
+			);
+		}
+
+		const parsed = UnitDisplayModeSchema.safeParse(formData.get("mode"));
+		if (!parsed.success) {
+			throw data({ error: "Invalid unit display mode" }, { status: 400 });
+		}
+		const mode = parsed.data;
+
+		await patchUserSettings(env.DB, userId, {
+			unitDisplayMode: mode,
+			supplyUnitMode:
+				mode === "original"
+					? undefined
+					: (mode as "cooking" | "metric" | "imperial"),
+		});
+		return { success: true, mode };
 	}
 
 	if (intent === "update-manifest-calendar-span") {
@@ -1357,6 +1394,8 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 				</Form>
 			</div>
 
+			<UnitDisplaySection settings={settings} />
+
 			{/* Default View */}
 			<ViewModeSection settings={settings} />
 
@@ -1390,6 +1429,49 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 					Customize Hub
 				</Link>
 			</div>
+		</div>
+	);
+}
+
+// ─── Unit Display Section ──────────────────────────────────────────────────────
+
+const UNIT_DISPLAY_MODE_DESCRIPTIONS: Record<UnitDisplayMode, string> = {
+	original: "Show quantities exactly as stored in recipes and inventory.",
+	metric:
+		"Shopping-friendly weights and volumes (grams, kilograms, milliliters).",
+	imperial: "US shopping units (ounces, pounds, cups where appropriate).",
+	cooking:
+		"Recipe-style units (cups, tablespoons) for solids when density is known.",
+};
+
+function UnitDisplaySection({ settings }: { settings: UserSettings }) {
+	const activeMode = resolveUnitDisplayMode(settings);
+
+	return (
+		<div className="glass-panel rounded-xl p-6">
+			<h3 className="text-xs text-label text-muted mb-1">Unit display</h3>
+			<p className="text-sm text-muted mb-4">
+				Choose how quantities appear across Cargo, Galley, Supply, and Manifest.
+				You can also toggle this quickly from the hub toolbar.
+			</p>
+			<UnitDisplayToggle variant="full" className="mb-4" />
+			<ul className="space-y-2 text-xs text-muted">
+				{(Object.keys(UNIT_DISPLAY_MODE_LABELS) as UnitDisplayMode[]).map(
+					(mode) => (
+						<li
+							key={mode}
+							className={
+								activeMode === mode ? "text-carbon font-medium" : undefined
+							}
+						>
+							<span className="font-semibold">
+								{UNIT_DISPLAY_MODE_LABELS[mode]}:
+							</span>{" "}
+							{UNIT_DISPLAY_MODE_DESCRIPTIONS[mode]}
+						</li>
+					),
+				)}
+			</ul>
 		</div>
 	);
 }

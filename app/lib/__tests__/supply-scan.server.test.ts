@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { computeBaseFields } from "../base-quantity";
 import type { ScanResultItem } from "../schemas/scan";
 import type { SupplyItemWithSource } from "../supply.server";
 import {
@@ -27,12 +28,18 @@ function scanItem(overrides: Partial<ScanResultItem> = {}): ScanResultItem {
 function supplyItem(
 	overrides: Partial<SupplyItemWithSource> = {},
 ): SupplyItemWithSource {
+	const quantity = overrides.quantity ?? 2;
+	const unit = overrides.unit ?? "lb";
+	const name = overrides.name ?? "chicken breast";
+	const base = computeBaseFields(quantity, unit, name);
 	return {
 		id: supplyId,
 		listId: "list-1",
-		name: "chicken breast",
-		quantity: 2,
-		unit: "lb",
+		name,
+		quantity,
+		unit,
+		baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
+		baseUnit: overrides.baseUnit ?? base.baseUnit,
 		domain: "food",
 		isPurchased: true,
 		sourceMealId: null,

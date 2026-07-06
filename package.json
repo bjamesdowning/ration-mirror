@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.4.41",
+	"version": "1.4.45",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -13,6 +13,7 @@
 		"dev:remote": "RATION_DEV_MODE=dev CLOUDFLARE_ENV=dev react-router dev",
 		"ios:generate": "cd ios && xcodegen generate",
 		"ios:build": "bash scripts/ios-build.sh",
+		"ios:density": "bun scripts/export-ios-density.ts",
 		"ios:test": "bash scripts/ios-test.sh",
 		"ios:check": "bash scripts/ios-check.sh",
 		"lint": "biome check .",

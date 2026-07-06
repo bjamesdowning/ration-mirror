@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { computeBaseFields } from "../base-quantity";
 import { aggregateIngredients } from "../supply.server";
 
 function ingredientRow(
@@ -7,16 +8,24 @@ function ingredientRow(
 		ingredientName: string;
 		quantity: number;
 		unit: string;
+		baseQuantity: number;
+		baseUnit: string;
 		domain: string;
 		supplyOrigin: "manifest" | "galley";
 	}> = {},
 ) {
+	const quantity = overrides.quantity ?? 1;
+	const unit = overrides.unit ?? "g";
+	const name = overrides.ingredientName ?? "butter";
+	const base = computeBaseFields(quantity, unit, name);
 	return {
 		meal_ingredient: {
 			mealId: overrides.mealId ?? "meal-1",
-			ingredientName: overrides.ingredientName ?? "butter",
-			quantity: overrides.quantity ?? 1,
-			unit: overrides.unit ?? "g",
+			ingredientName: name,
+			quantity,
+			unit,
+			baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
+			baseUnit: overrides.baseUnit ?? base.baseUnit,
 		},
 		meal_domain: overrides.domain ?? "food",
 		supplyOrigin: overrides.supplyOrigin ?? "galley",
@@ -59,6 +68,23 @@ describe("aggregateIngredients", () => {
 		expect(result[0]?.sourceMealIds).toEqual(
 			expect.arrayContaining(["m1", "m2"]),
 		);
+	});
+
+	it("uses persisted base fields instead of authored units", () => {
+		const result = aggregateIngredients(
+			[
+				ingredientRow({
+					ingredientName: "flour",
+					quantity: 1,
+					unit: "cup",
+					baseQuantity: 125,
+					baseUnit: "g",
+				}),
+			],
+			"metric",
+		);
+		expect(result[0]?.baseQuantity).toBe(125);
+		expect(result[0]?.baseUnit).toBe("g");
 	});
 
 	it("merges sourceOrigins from manifest and galley rows", () => {

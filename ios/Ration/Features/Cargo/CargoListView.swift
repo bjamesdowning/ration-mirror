@@ -205,9 +205,15 @@ struct SearchResultRow: View {
                 Text(result.domain.capitalized).rationCaption()
             }
             Spacer()
-            Text("\(result.quantity.formatted()) \(result.unit)")
-                .font(Typography.caption())
-                .foregroundStyle(Theme.carbon)
+            DisplayQuantityLabel(
+                quantity: result.quantity,
+                unit: result.unit,
+                baseQuantity: result.baseQuantity,
+                baseUnit: result.baseUnit,
+                ingredientName: result.name
+            )
+            .font(Typography.caption())
+            .foregroundStyle(Theme.carbon)
         }
         .padding(.vertical, 4)
     }

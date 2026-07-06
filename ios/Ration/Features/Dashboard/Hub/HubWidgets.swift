@@ -111,8 +111,14 @@ struct SupplyPreviewWidget: View {
                                     .strikethrough(isChecked)
                                     .foregroundStyle(isChecked ? Theme.muted : Theme.carbon)
                                 Spacer()
-                                Text("\(item.quantity.formatted()) \(item.unit)")
-                                    .rationCaption()
+                                DisplayQuantityLabel(
+                                    quantity: item.quantity,
+                                    unit: item.unit,
+                                    baseQuantity: item.baseQuantity,
+                                    baseUnit: item.baseUnit,
+                                    ingredientName: item.name
+                                )
+                                .rationCaption()
                             }
                             .contentShape(Rectangle())
                         }

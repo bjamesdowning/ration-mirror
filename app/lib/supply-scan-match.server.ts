@@ -1,12 +1,12 @@
 import { normalizeForMatch, tokenMatchScore } from "./matching";
 import { normalizeForCargoDedup } from "./matching.server";
+import {
+	areIngredientUnitsCompatible,
+	convertForIngredient,
+} from "./present-quantity";
 import type { ScanResultItem } from "./schemas/scan";
 import type { SupplyItemWithSource } from "./supply.server";
-import {
-	getUnitMultiplier,
-	type SupportedUnit,
-	toSupportedUnit,
-} from "./units";
+import { type SupportedUnit, toSupportedUnit } from "./units";
 
 export type SupplyScanQuantityProposal = {
 	dockQuantity: number;
@@ -39,8 +39,12 @@ const FUZZY_THRESHOLD = SUPPLY_SCAN_FUZZY_THRESHOLD;
 const CHECKED_BOOST = 0.15;
 const RECEIPT_CONFIDENCE_MIN = 0.7;
 
-function unitsCompatible(a: string, b: string): boolean {
-	return getUnitMultiplier(toSupportedUnit(a), toSupportedUnit(b)) !== null;
+function unitsCompatible(
+	a: string,
+	b: string,
+	ingredientName: string,
+): boolean {
+	return areIngredientUnitsCompatible(a, b, ingredientName);
 }
 
 /** Scores how well a receipt line matches a supply list row (used on scan-complete). */
@@ -52,11 +56,11 @@ export function scoreScanToSupplyItem(
 	const supplyNorm = normalizeForCargoDedup(supplyItem.name);
 	if (
 		scanNorm === supplyNorm &&
-		unitsCompatible(scanItem.unit, supplyItem.unit)
+		unitsCompatible(scanItem.unit, supplyItem.unit, supplyItem.name)
 	) {
 		return 1;
 	}
-	if (!unitsCompatible(scanItem.unit, supplyItem.unit)) {
+	if (!unitsCompatible(scanItem.unit, supplyItem.unit, supplyItem.name)) {
 		return 0;
 	}
 	const fuzzy = tokenMatchScore(
@@ -79,12 +83,21 @@ function buildQuantityProposal(
 	const receiptQuantity = scanItem.quantity;
 	const receiptConfident =
 		(scanItem.confidence ?? 1) >= RECEIPT_CONFIDENCE_MIN &&
-		unitsCompatible(scanItem.unit, supplyUnit);
+		unitsCompatible(
+			scanItem.unit,
+			supplyUnit,
+			supplyItem?.name ?? scanItem.name,
+		);
 
 	if (receiptConfident) {
-		const multiplier = getUnitMultiplier(receiptUnit, supplyUnit);
-		const dockQuantity =
-			multiplier != null ? receiptQuantity * multiplier : receiptQuantity;
+		const ingredientName = supplyItem?.name ?? scanItem.name;
+		const converted = convertForIngredient(
+			receiptQuantity,
+			receiptUnit,
+			supplyUnit,
+			ingredientName,
+		);
+		const dockQuantity = converted ?? receiptQuantity;
 		const hasDelta =
 			supplyItem != null &&
 			(Math.abs(dockQuantity - supplyQuantity) > 0.01 ||

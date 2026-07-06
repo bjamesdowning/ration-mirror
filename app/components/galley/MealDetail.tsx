@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import type { AllergenSlug } from "~/lib/allergens";
 import { detectAllergens } from "~/lib/allergens";
 import { useConfirm } from "~/lib/confirm-context";
 import { galleyPartialCookDescription } from "~/lib/cook-feedback";
-import { formatQuantity } from "~/lib/format-quantity";
 import { log } from "~/lib/logging.client";
 import type { IngredientMatch, MissingIngredient } from "~/lib/matching.server";
 import { scaleQuantity } from "~/lib/scale";
@@ -50,6 +50,7 @@ export function MealDetail({
 
 	const scaleFactor = baseServings > 0 ? desiredServings / baseServings : 1;
 	const isScaled = desiredServings !== baseServings;
+	const formatQty = useQuantityFormatter();
 
 	const [ingredientAvailability, setIngredientAvailability] = useState<
 		IngredientAvailability[]
@@ -544,20 +545,32 @@ export function MealDetail({
 										</span>
 									</div>
 									<div className="flex flex-col items-end">
-										<span className="text-data font-bold text-carbon">
-											{formatQuantity(displayQty, ing.unit)}
+										<span
+											className="text-data font-bold text-carbon"
+											title={
+												formatQty(displayQty, ing.unit, ing.ingredientName)
+													.tooltip
+											}
+										>
+											{
+												formatQty(displayQty, ing.unit, ing.ingredientName)
+													.formatted
+											}
 										</span>
 										{availability && !availability.available && (
 											<span className="text-xs text-danger">
 												Need:{" "}
-												{formatQuantity(
-													Math.max(
-														0,
-														availability.requiredQuantity -
-															availability.availableQuantity,
-													),
-													ing.unit,
-												)}
+												{
+													formatQty(
+														Math.max(
+															0,
+															availability.requiredQuantity -
+																availability.availableQuantity,
+														),
+														ing.unit,
+														ing.ingredientName,
+													).formatted
+												}
 											</span>
 										)}
 									</div>

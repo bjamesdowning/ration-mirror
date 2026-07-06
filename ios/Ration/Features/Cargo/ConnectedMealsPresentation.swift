@@ -34,14 +34,28 @@ enum ConnectedMealsPresentation {
         needed: Double,
         onHand: Double,
         unit: String,
-        onHandUnit: String
+        onHandUnit: String,
+        ingredientName: String,
+        mode: UnitDisplayMode
     ) -> String {
-        let neededText = "\(needed.formatted()) \(unit) needed"
+        let neededQuantity = QuantityPresenter.present(
+            quantity: needed,
+            unit: unit,
+            ingredientName: ingredientName,
+            mode: mode
+        )
+        let neededText = "\(neededQuantity) needed"
         guard unitsMatch(unit, onHandUnit) else {
             return neededText
         }
         if onHand >= needed {
-            return "\(neededText) · have \(onHand.formatted()) \(onHandUnit)"
+            let onHandQuantity = QuantityPresenter.present(
+                quantity: onHand,
+                unit: onHandUnit,
+                ingredientName: ingredientName,
+                mode: mode
+            )
+            return "\(neededText) · have \(onHandQuantity)"
         }
         return neededText
     }

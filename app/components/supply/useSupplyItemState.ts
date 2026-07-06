@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { useUnitDisplayMode } from "~/components/shell/UnitDisplayToggle";
 import type { supplyItem } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
 import { toTitleCase } from "~/lib/format-display";
@@ -75,6 +76,9 @@ export function useSupplyItemState({
 		currentUnitNorm === "kg" ||
 		currentUnitNorm === "oz" ||
 		currentUnitNorm === "lb";
+	const unitDisplayMode = useUnitDisplayMode();
+	const preferredSystem =
+		unitDisplayMode === "imperial" ? "imperial" : "metric";
 	const convertLabel = isWeightUnit
 		? "Convert to cooking units"
 		: "Convert to shopping units";
@@ -169,7 +173,7 @@ export function useSupplyItemState({
 			JSON.stringify({
 				intent: "convert-unit",
 				mode: isWeightUnit ? "cooking" : "shopping",
-				preferredSystem: "metric",
+				preferredSystem,
 			}),
 			{
 				method: "POST",

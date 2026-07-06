@@ -3,8 +3,8 @@ import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { SupplyUnitModeSchema } from "~/lib/schemas/supply";
 import { createSupplyListFromSelectedMeals } from "~/lib/supply.server";
+import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/v1.supply.sync";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -31,9 +31,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const settings = await getUserSettings(context.cloudflare.env.DB, userId);
-		const supplyUnitMode = SupplyUnitModeSchema.catch("metric").parse(
-			settings.supplyUnitMode,
-		);
+		const unitDisplayMode = resolveUnitDisplayMode(settings);
 
 		const result = await createSupplyListFromSelectedMeals(
 			context.cloudflare.env,
@@ -44,7 +42,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				trigger: "mobile_supply_sync",
 				organizationId,
 			},
-			supplyUnitMode,
+			unitDisplayMode,
 		);
 
 		return { list: result.list, summary: result.summary };

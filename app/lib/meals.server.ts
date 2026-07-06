@@ -18,6 +18,7 @@ import {
 	mealIngredient,
 	mealTag,
 } from "../db/schema";
+import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { ITEM_DOMAINS } from "./domain";
@@ -76,6 +77,33 @@ function chunk<T>(arr: T[], size: number): T[][] {
 		out.push(arr.slice(i, i + size));
 	}
 	return out;
+}
+
+function mealIngredientValues(
+	mealId: string,
+	ing: {
+		cargoId?: string | null;
+		ingredientName: string;
+		quantity: number;
+		unit: string;
+		isOptional?: boolean | null;
+	},
+	orderIndex: number,
+	id?: string,
+) {
+	const base = computeBaseFields(ing.quantity, ing.unit, ing.ingredientName);
+	return {
+		...(id ? { id } : {}),
+		mealId,
+		cargoId: ing.cargoId,
+		ingredientName: ing.ingredientName,
+		quantity: ing.quantity,
+		unit: ing.unit,
+		baseQuantity: base.baseQuantity,
+		baseUnit: base.baseUnit,
+		isOptional: ing.isOptional,
+		orderIndex,
+	};
 }
 
 /** Maximum number of meals allowed in a single batch create. */
@@ -657,17 +685,13 @@ export async function createMeal(
 			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 		)) {
 			batch.push(
-				d1.insert(mealIngredient).values(
-					ingredientChunk.map((ing, i) => ({
-						mealId,
-						cargoId: ing.cargoId,
-						ingredientName: ing.ingredientName,
-						quantity: ing.quantity,
-						unit: ing.unit,
-						isOptional: ing.isOptional,
-						orderIndex: baseIndex + i,
-					})),
-				),
+				d1
+					.insert(mealIngredient)
+					.values(
+						ingredientChunk.map((ing, i) =>
+							mealIngredientValues(mealId, ing, baseIndex + i),
+						),
+					),
 			);
 			baseIndex += ingredientChunk.length;
 		}
@@ -767,17 +791,13 @@ export async function createMeals(
 				D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 			)) {
 				batch.push(
-					d1.insert(mealIngredient).values(
-						ingredientChunk.map((ing, i) => ({
-							mealId,
-							cargoId: ing.cargoId,
-							ingredientName: ing.ingredientName,
-							quantity: ing.quantity,
-							unit: ing.unit,
-							isOptional: ing.isOptional,
-							orderIndex: baseIndex + i,
-						})),
-					),
+					d1
+						.insert(mealIngredient)
+						.values(
+							ingredientChunk.map((ing, i) =>
+								mealIngredientValues(mealId, ing, baseIndex + i),
+							),
+						),
 				);
 				baseIndex += ingredientChunk.length;
 			}
@@ -865,17 +885,13 @@ export async function updateMeal(
 			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 		)) {
 			batch.push(
-				d1.insert(mealIngredient).values(
-					ingredientChunk.map((ing, i) => ({
-						mealId,
-						cargoId: ing.cargoId,
-						ingredientName: ing.ingredientName,
-						quantity: ing.quantity,
-						unit: ing.unit,
-						isOptional: ing.isOptional,
-						orderIndex: baseIndex + i,
-					})),
-				),
+				d1
+					.insert(mealIngredient)
+					.values(
+						ingredientChunk.map((ing, i) =>
+							mealIngredientValues(mealId, ing, baseIndex + i),
+						),
+					),
 			);
 			baseIndex += ingredientChunk.length;
 		}
@@ -933,14 +949,18 @@ export async function createProvision(
 			type: "provision",
 			servings: 1,
 		}),
-		d1.insert(mealIngredient).values({
-			id: ingredientId,
-			mealId,
-			ingredientName: data.name,
-			quantity: data.quantity,
-			unit: data.unit,
-			orderIndex: 0,
-		}),
+		d1.insert(mealIngredient).values(
+			mealIngredientValues(
+				mealId,
+				{
+					ingredientName: data.name,
+					quantity: data.quantity,
+					unit: data.unit,
+				},
+				0,
+				ingredientId,
+			),
+		),
 	];
 
 	if (data.tags.length > 0) {
@@ -1073,13 +1093,19 @@ export function findCargoForDeduction(
 	// Exact name match candidates — use canonical conversion so cross-family
 	// (e.g. cargo in grams, recipe in cups) is resolved via ingredient density.
 	for (const item of orgCargo) {
-		const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
 		const normalizedItem = normalizeForCargoDedup(item.name);
 		if (normalizedItem !== normalizedName) continue;
 
-		const qtyInTargetUnit = convertIngredientAmount(
+		const base = effectiveBaseFields(
 			item.quantity,
-			itemUnit,
+			item.unit,
+			item.baseQuantity ?? item.quantity,
+			item.baseUnit ?? item.unit,
+			ingredientName,
+		);
+		const qtyInTargetUnit = convertIngredientAmount(
+			base.baseQuantity,
+			toSupportedUnit(base.baseUnit),
 			targetUnit,
 			ingredientName,
 		);
@@ -1099,10 +1125,16 @@ export function findCargoForDeduction(
 		for (const match of similar) {
 			const item = orgCargo.find((c) => c.id === match.itemId);
 			if (!item) continue;
-			const itemUnit = toSupportedUnit(item.unit) as SupportedUnit;
-			const qtyInTargetUnit = convertIngredientAmount(
+			const base = effectiveBaseFields(
 				item.quantity,
-				itemUnit,
+				item.unit,
+				item.baseQuantity ?? item.quantity,
+				item.baseUnit ?? item.unit,
+				ingredientName,
+			);
+			const qtyInTargetUnit = convertIngredientAmount(
+				base.baseQuantity,
+				toSupportedUnit(base.baseUnit),
 				targetUnit,
 				ingredientName,
 			);
@@ -1584,15 +1616,19 @@ export async function createProvisionFromCargo(
 			type: "provision",
 			servings: 1,
 		}),
-		d1.insert(mealIngredient).values({
-			id: ingredientId,
-			mealId,
-			cargoId,
-			ingredientName: cargoItem.name,
-			quantity: cargoItem.quantity,
-			unit: cargoItem.unit,
-			orderIndex: 0,
-		}),
+		d1.insert(mealIngredient).values(
+			mealIngredientValues(
+				mealId,
+				{
+					cargoId,
+					ingredientName: cargoItem.name,
+					quantity: cargoItem.quantity,
+					unit: cargoItem.unit,
+				},
+				0,
+				ingredientId,
+			),
+		),
 	];
 
 	if (tags.length > 0) {

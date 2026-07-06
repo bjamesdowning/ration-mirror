@@ -266,6 +266,11 @@ const DENSITY_CANONICAL: Record<string, DensityGPerMl> = {
 	sugar: 0.85,
 };
 
+/** Codegen-only export: keep iOS density data generated from this table. */
+export function getDensityTableForCodegen(): Record<string, DensityGPerMl> {
+	return { ...DENSITY_CANONICAL };
+}
+
 /**
  * Aliases: normalized variant -> canonical key.
  * Use when the exact string isn't in DENSITY_CANONICAL but a synonym is.

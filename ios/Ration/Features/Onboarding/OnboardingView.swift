@@ -5,7 +5,7 @@ import Observation
 @Observable
 final class OnboardingViewModel {
     var step = 0
-    var supplyUnitMode = "metric"
+    var unitDisplayMode = "metric"
     var isSaving = false
     var errorMessage: String?
 
@@ -25,7 +25,8 @@ final class OnboardingViewModel {
         let iso = ISO8601DateFormatter().string(from: Date())
         var patch = SettingsPatch(onboardingStep: step + 1)
         if step == 0 {
-            patch.supplyUnitMode = supplyUnitMode
+            patch.unitDisplayMode = unitDisplayMode
+            patch.supplyUnitMode = unitDisplayMode == "original" ? nil : unitDisplayMode
         }
         if step >= steps.count - 1 {
             patch.onboardingCompletedAt = iso
@@ -62,7 +63,8 @@ struct OnboardingView: View {
                 }
 
                 if model.step == 0 {
-                    Picker("Units", selection: $model.supplyUnitMode) {
+                    Picker("Units", selection: $model.unitDisplayMode) {
+                        Text("Original").tag("original")
                         Text("Metric").tag("metric")
                         Text("Imperial").tag("imperial")
                         Text("Cooking").tag("cooking")

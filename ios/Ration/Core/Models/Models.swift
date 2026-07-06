@@ -154,6 +154,8 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     let name: String
     let quantity: Double
     let unit: String
+    let baseQuantity: Double
+    let baseUnit: String
     let tags: [String]
     let domain: String
     let status: String
@@ -168,6 +170,8 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         name = try c.decode(String.self, forKey: .name)
         quantity = try c.decode(Double.self, forKey: .quantity)
         unit = try c.decode(String.self, forKey: .unit)
+        baseQuantity = try c.decodeIfPresent(Double.self, forKey: .baseQuantity) ?? quantity
+        baseUnit = try c.decodeIfPresent(String.self, forKey: .baseUnit) ?? unit
         // `tags` may arrive as a real array or, for legacy double-encoded rows,
         // a JSON/CSV string. Decode tolerantly so the list never hard-fails.
         tags = c.decodeTolerantStringArray(forKey: .tags)
@@ -235,6 +239,8 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
     let name: String
     let quantity: Double
     let unit: String
+    let baseQuantity: Double
+    let baseUnit: String
     let domain: String
     let isPurchased: Bool
     let sourceOrigins: [SupplyItemOrigin]?
@@ -246,15 +252,32 @@ struct SupplyItem: Codable, Sendable, Identifiable, Hashable {
         unit: String,
         domain: String,
         isPurchased: Bool,
-        sourceOrigins: [SupplyItemOrigin]? = nil
+        sourceOrigins: [SupplyItemOrigin]? = nil,
+        baseQuantity: Double? = nil,
+        baseUnit: String? = nil
     ) {
         self.id = id
         self.name = name
         self.quantity = quantity
         self.unit = unit
+        self.baseQuantity = baseQuantity ?? quantity
+        self.baseUnit = baseUnit ?? unit
         self.domain = domain
         self.isPurchased = isPurchased
         self.sourceOrigins = sourceOrigins
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        quantity = try c.decode(Double.self, forKey: .quantity)
+        unit = try c.decode(String.self, forKey: .unit)
+        baseQuantity = try c.decodeIfPresent(Double.self, forKey: .baseQuantity) ?? quantity
+        baseUnit = try c.decodeIfPresent(String.self, forKey: .baseUnit) ?? unit
+        domain = try c.decode(String.self, forKey: .domain)
+        isPurchased = try c.decode(Bool.self, forKey: .isPurchased)
+        sourceOrigins = try c.decodeIfPresent([SupplyItemOrigin].self, forKey: .sourceOrigins)
     }
 
     var resolvedSourceOrigins: [SupplyItemOrigin] {
@@ -347,6 +370,8 @@ struct MealIngredient: Codable, Sendable, Identifiable {
     let ingredientName: String
     let quantity: Double
     let unit: String
+    let baseQuantity: Double?
+    let baseUnit: String?
     let isOptional: Bool?
     let orderIndex: Int?
 }
@@ -456,6 +481,7 @@ struct ManifestSettings: Codable, Sendable {
 struct UserSettings: Codable, Sendable {
     var theme: String?
     var supplyUnitMode: String?
+    var unitDisplayMode: String?
     var allergens: [String]?
     var aiConsentAt: String?
     var onboardingCompletedAt: String?
@@ -473,6 +499,7 @@ struct SettingsResponse: Codable, Sendable {
 struct SettingsPatch: Encodable, Sendable {
     var theme: String?
     var supplyUnitMode: String?
+    var unitDisplayMode: String?
     var allergens: [String]?
     var aiConsentAt: String?
     var onboardingCompletedAt: String?
@@ -490,6 +517,8 @@ struct SearchResult: Codable, Sendable, Identifiable {
     let name: String
     let quantity: Double
     let unit: String
+    let baseQuantity: Double?
+    let baseUnit: String?
     let domain: String
 }
 

@@ -4,11 +4,11 @@ import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { formatCargoStatus } from "~/lib/cargo";
-import { formatQuantityNumericString } from "~/lib/format-quantity";
 
 interface CargoCardProps {
 	item: typeof cargo.$inferSelect;
@@ -237,10 +237,14 @@ export function CargoCard({
 							</div>
 						</div>
 						<div className="text-right">
-							<span className="text-xl font-bold text-data text-carbon">
-								{formatQuantityNumericString(item.quantity, item.unit)}
-							</span>
-							<span className="text-sm ml-1 text-muted">{item.unit}</span>
+							<DisplayQuantity
+								quantity={item.quantity}
+								unit={item.unit}
+								baseQuantity={item.baseQuantity}
+								baseUnit={item.baseUnit}
+								ingredientName={item.name}
+								className="text-xl font-bold text-data text-carbon"
+							/>
 						</div>
 					</div>
 

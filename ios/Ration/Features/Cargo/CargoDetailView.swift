@@ -127,7 +127,14 @@ struct CargoDetailView: View {
                 HStack {
                     Text(item.domain.capitalized).rationCaption()
                     Spacer()
-                    Text("\(item.quantity.formatted()) \(item.unit)").rationHeadline()
+                    DisplayQuantityLabel(
+                        quantity: item.quantity,
+                        unit: item.unit,
+                        baseQuantity: item.baseQuantity,
+                        baseUnit: item.baseUnit,
+                        ingredientName: item.name
+                    )
+                    .rationHeadline()
                 }
                 statusRow(item)
                 if let expires = item.expiresAt {
@@ -298,7 +305,9 @@ struct CargoDetailView: View {
                                 needed: ingredient.quantity,
                                 onHand: onHand,
                                 unit: ingredient.unit,
-                                onHandUnit: onHandUnit
+                                onHandUnit: onHandUnit,
+                                ingredientName: ingredient.ingredientName,
+                                mode: env.unitDisplayMode.mode
                             ))
                             .rationCaption()
                             .multilineTextAlignment(.trailing)
@@ -340,6 +349,8 @@ struct CargoDetailView: View {
                     ingredientName: $0.ingredientName,
                     quantity: $0.quantity,
                     unit: $0.unit,
+                    baseQuantity: nil,
+                    baseUnit: nil,
                     isOptional: $0.isOptional ?? false,
                     orderIndex: $0.orderIndex ?? 0
                 )

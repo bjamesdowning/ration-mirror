@@ -14,6 +14,8 @@ export interface CargoIndexRow {
 	domain: string;
 	quantity: number;
 	unit: string;
+	baseQuantity?: number;
+	baseUnit?: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export async function fetchOrgCargoIndex(
 			domain: cargo.domain,
 			quantity: cargo.quantity,
 			unit: cargo.unit,
+			baseQuantity: cargo.baseQuantity,
+			baseUnit: cargo.baseUnit,
 		})
 		.from(cargo)
 		.where(eq(cargo.organizationId, organizationId));

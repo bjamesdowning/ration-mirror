@@ -208,6 +208,8 @@ export const cargo = sqliteTable(
 		name: text("name").notNull(),
 		quantity: real("quantity").notNull(),
 		unit: text("unit").notNull(), // See app/lib/units.ts for supported units
+		baseQuantity: real("base_quantity").notNull().default(1),
+		baseUnit: text("base_unit").notNull().default("unit"),
 		tags: text("tags", { mode: "json" }).notNull().default("[]"), // Array of strings
 		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
@@ -322,6 +324,8 @@ export const mealIngredient = sqliteTable(
 		ingredientName: text("ingredient_name").notNull(),
 		quantity: real("quantity").notNull(),
 		unit: text("unit").notNull(),
+		baseQuantity: real("base_quantity").notNull().default(1),
+		baseUnit: text("base_unit").notNull().default("unit"),
 		isOptional: integer("is_optional", { mode: "boolean" }).default(false),
 		orderIndex: integer("order_index").default(0),
 	},
@@ -488,6 +492,8 @@ export const supplyItem = sqliteTable(
 		name: text("name").notNull(),
 		quantity: real("quantity").notNull().default(1),
 		unit: text("unit").notNull().default("unit"),
+		baseQuantity: real("base_quantity").notNull().default(1),
+		baseUnit: text("base_unit").notNull().default("unit"),
 		domain: text("domain").notNull().default("food"),
 		isPurchased: integer("is_purchased", { mode: "boolean" })
 			.notNull()

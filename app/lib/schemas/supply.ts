@@ -66,6 +66,13 @@ export const SnoozeItemSchema = z.object({
 
 export const SupplyUnitModeSchema = z.enum(["cooking", "metric", "imperial"]);
 
+export const UnitDisplayModeSchema = z.enum([
+	"original",
+	"cooking",
+	"metric",
+	"imperial",
+]);
+
 export const ConvertSupplyUnitSchema = z.object({
 	intent: z.literal("convert-unit"),
 	mode: z.enum(["cooking", "shopping"]).default("shopping"),

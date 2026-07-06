@@ -51,6 +51,7 @@ struct TelemetryQtyPill: View {
 struct CargoRowView: View {
     let item: CargoItem
     var isSelectedForRestock = false
+    @Environment(AppEnvironment.self) private var env
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -85,10 +86,19 @@ struct CargoRowView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
-                TelemetryQtyPill(
-                    quantity: item.quantity.formatted(),
-                    unit: item.unit
+                DisplayQuantityLabel(
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    baseQuantity: item.baseQuantity,
+                    baseUnit: item.baseUnit,
+                    ingredientName: item.name
                 )
+                .font(Typography.dataCaption())
+                .foregroundStyle(Theme.carbon)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Theme.platinum)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 if let expiresAt = item.expiresAt {
                     HubUrgencyLabel(date: expiresAt, isExpired: item.status == "expired")
@@ -101,7 +111,13 @@ struct CargoRowView: View {
     }
 
     private var cargoAccessibilityLabel: String {
-        var parts = [item.name.capitalized, "\(item.quantity.formatted()) \(item.unit)"]
+        let quantity = QuantityPresenter.present(
+            quantity: env.unitDisplayMode.mode == .original ? item.quantity : item.baseQuantity,
+            unit: env.unitDisplayMode.mode == .original ? item.unit : item.baseUnit,
+            ingredientName: item.name,
+            mode: env.unitDisplayMode.mode
+        )
+        var parts = [item.name.capitalized, quantity]
         if let expiresAt = item.expiresAt {
             parts.append("expires \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
         }

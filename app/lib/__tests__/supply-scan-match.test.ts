@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { computeBaseFields } from "../base-quantity";
 import type { ScanResultItem } from "../schemas/scan";
 import type { SupplyItemWithSource } from "../supply.server";
 import { matchScanToSupply } from "../supply-scan-match.server";
@@ -24,12 +25,18 @@ function scanItem(overrides: Partial<ScanResultItem>): ScanResultItem {
 function supplyItem(
 	overrides: Partial<SupplyItemWithSource>,
 ): SupplyItemWithSource {
+	const quantity = overrides.quantity ?? 2;
+	const unit = overrides.unit ?? "lb";
+	const name = overrides.name ?? "item";
+	const base = computeBaseFields(quantity, unit, name);
 	return {
 		id: supplyId,
 		listId: "list-1",
-		name: "item",
-		quantity: 2,
-		unit: "lb",
+		name,
+		quantity,
+		unit,
+		baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
+		baseUnit: overrides.baseUnit ?? base.baseUnit,
 		domain: "food",
 		isPurchased: false,
 		sourceMealId: null,
@@ -88,5 +95,29 @@ describe("matchScanToSupply", () => {
 		expect(result.pairs).toHaveLength(0);
 		expect(result.receiptOnly).toHaveLength(1);
 		expect(result.supplyOnly).toHaveLength(1);
+	});
+
+	it("matches cross-family units via ingredient density (g receipt vs cup supply)", () => {
+		const result = matchScanToSupply(
+			[
+				scanItem({
+					name: "all purpose flour",
+					quantity: 500,
+					unit: "g",
+					confidence: 0.95,
+				}),
+			],
+			[
+				supplyItem({
+					name: "all purpose flour",
+					quantity: 4,
+					unit: "cup",
+				}),
+			],
+		);
+		expect(result.pairs).toHaveLength(1);
+		expect(result.pairs[0]?.matchScore).toBe(1);
+		expect(result.pairs[0]?.quantityProposal.dockUnit).toBe("cup");
+		expect(result.pairs[0]?.quantityProposal.dockQuantity).toBeCloseTo(4, 0);
 	});
 });

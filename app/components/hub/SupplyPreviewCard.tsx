@@ -1,7 +1,7 @@
 import { Link } from "react-router";
+import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import type { supplyItem, supplyList } from "~/db/schema";
 import { toTitleCase } from "~/lib/format-display";
-import { formatQuantity } from "~/lib/format-quantity";
 import { CheckIcon, GroceryIcon, ListIcon } from "../icons/HubIcons";
 
 type SupplyListWithItems = typeof supplyList.$inferSelect & {
@@ -94,7 +94,15 @@ export function SupplyPreviewCard({ list }: SupplyPreviewCardProps) {
 							<span className="truncate">
 								{toTitleCase(item.name)}
 								<span className="text-muted ml-1">
-									({formatQuantity(item.quantity, item.unit ?? "unit")})
+									(
+									<DisplayQuantity
+										quantity={item.quantity}
+										unit={item.unit ?? "unit"}
+										baseQuantity={item.baseQuantity}
+										baseUnit={item.baseUnit}
+										ingredientName={item.name}
+									/>
+									)
 								</span>
 							</span>
 						</li>

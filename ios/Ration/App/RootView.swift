@@ -40,6 +40,7 @@ struct RootView: View {
             let settings = try await env.api.settings().settings
             env.session.applyConsent(settings)
             env.theme.syncFromServer(settings)
+            env.unitDisplayMode.syncFromServer(settings)
             let completed = settings.onboardingCompletedAt?.isEmpty == false
             showOnboarding = !completed
         } catch {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { MobileSettingsPatchSchema } from "../mobile/auth";
+import {
+	MobileSettingsPatchSchema,
+	normalizeMobileSettingsPatch,
+} from "../mobile/auth";
 
 describe("MobileSettingsPatchSchema", () => {
 	it("accepts AI consent and onboarding timestamps", () => {
@@ -16,6 +19,34 @@ describe("MobileSettingsPatchSchema", () => {
 	it("rejects empty patch objects", () => {
 		const result = MobileSettingsPatchSchema.safeParse({});
 		expect(result.success).toBe(false);
+	});
+
+	it("accepts unitDisplayMode patch", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			unitDisplayMode: "cooking",
+		});
+		expect(parsed.unitDisplayMode).toBe("cooking");
+	});
+
+	it("normalizes original display mode by clearing legacy supply mode", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			unitDisplayMode: "original",
+			supplyUnitMode: "metric",
+		});
+		expect(normalizeMobileSettingsPatch(parsed)).toEqual({
+			unitDisplayMode: "original",
+			supplyUnitMode: undefined,
+		});
+	});
+
+	it("promotes legacy supply mode patches into global display mode", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			supplyUnitMode: "imperial",
+		});
+		expect(normalizeMobileSettingsPatch(parsed)).toEqual({
+			supplyUnitMode: "imperial",
+			unitDisplayMode: "imperial",
+		});
 	});
 
 	it("accepts manifest settings partial patch", () => {

@@ -43,6 +43,9 @@ export const MobileSettingsPatchSchema = z
 	.object({
 		theme: z.enum(["light", "dark"]).optional(),
 		supplyUnitMode: z.enum(["cooking", "metric", "imperial"]).optional(),
+		unitDisplayMode: z
+			.enum(["original", "cooking", "metric", "imperial"])
+			.optional(),
 		allergens: z.array(z.enum(ALLERGEN_SLUGS)).optional(),
 		/** ISO timestamp when the user consented to AI/receipt processing. */
 		aiConsentAt: isoTimestamp.optional(),
@@ -65,3 +68,26 @@ export const MobileSettingsPatchSchema = z
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",
 	});
+
+export type MobileSettingsPatch = z.infer<typeof MobileSettingsPatchSchema>;
+
+export function normalizeMobileSettingsPatch(
+	patch: MobileSettingsPatch,
+): MobileSettingsPatch {
+	if (patch.unitDisplayMode !== undefined) {
+		return {
+			...patch,
+			supplyUnitMode:
+				patch.unitDisplayMode === "original"
+					? undefined
+					: patch.unitDisplayMode,
+		};
+	}
+	if (patch.supplyUnitMode !== undefined) {
+		return {
+			...patch,
+			unitDisplayMode: patch.supplyUnitMode,
+		};
+	}
+	return patch;
+}

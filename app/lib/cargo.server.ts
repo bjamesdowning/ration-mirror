@@ -22,6 +22,10 @@ import { ITEM_DOMAINS } from "./domain";
 import { log } from "./logging.server";
 import { normalizeForCargoDedup } from "./matching";
 import {
+	areIngredientUnitsCompatible,
+	convertForIngredient,
+} from "./present-quantity";
+import {
 	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
@@ -29,7 +33,6 @@ import {
 import { UnitSchema } from "./schemas/units";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
-	convertQuantity,
 	getUnitMultiplier,
 	normalizeUnitAlias,
 	type SupportedUnit,
@@ -49,6 +52,7 @@ export {
 	normalizeTags,
 } from "./cargo-utils";
 
+import { computeBaseFields } from "./base-quantity";
 import {
 	calculateInventoryStatus,
 	normalizeForCargoKey,
@@ -369,8 +373,26 @@ export interface AddOrMergeItemOptions {
 	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
-function isCompatibleUnit(a: string, b: string): boolean {
-	return getUnitMultiplier(a as SupportedUnit, b as SupportedUnit) !== null;
+function isCompatibleUnit(
+	a: string,
+	b: string,
+	ingredientName?: string,
+): boolean {
+	if (getUnitMultiplier(a as SupportedUnit, b as SupportedUnit) !== null) {
+		return true;
+	}
+	if (!ingredientName) return false;
+	return areIngredientUnitsCompatible(a, b, ingredientName);
+}
+
+function convertForMerge(
+	quantity: number,
+	from: SupportedUnit,
+	to: SupportedUnit,
+	ingredientName: string,
+): number | null {
+	const direct = convertForIngredient(quantity, from, to, ingredientName);
+	return direct;
 }
 
 export interface IngestItem {
@@ -462,12 +484,13 @@ export async function ingestCargoItems(
 			if (
 				target &&
 				target.domain === it.domain &&
-				isCompatibleUnit(target.unit, it.unit)
+				isCompatibleUnit(target.unit, it.unit, it.name)
 			) {
-				const converted = convertQuantity(
+				const converted = convertForMerge(
 					it.quantity,
 					unit,
 					target.unit as SupportedUnit,
+					it.name,
 				);
 				if (converted !== null) {
 					resolved[i] = {
@@ -493,12 +516,15 @@ export async function ingestCargoItems(
 		}
 
 		const exactBucket = cargoByKey.get(key) ?? [];
-		const exact = exactBucket.find((c) => isCompatibleUnit(c.unit, it.unit));
+		const exact = exactBucket.find((c) =>
+			isCompatibleUnit(c.unit, it.unit, it.name),
+		);
 		if (exact) {
-			const converted = convertQuantity(
+			const converted = convertForMerge(
 				it.quantity,
 				unit,
 				exact.unit as SupportedUnit,
+				it.name,
 			);
 			if (converted !== null) {
 				resolved[i] = {
@@ -544,12 +570,13 @@ export async function ingestCargoItems(
 				if (
 					target &&
 					target.domain === it.domain &&
-					isCompatibleUnit(target.unit, it.unit)
+					isCompatibleUnit(target.unit, it.unit, it.name)
 				) {
-					const converted = convertQuantity(
+					const converted = convertForMerge(
 						it.quantity,
 						it.unit as SupportedUnit,
 						target.unit as SupportedUnit,
+						it.name,
 					);
 					if (converted !== null) {
 						if (options?.returnMergeCandidateOnFuzzy) {
@@ -645,10 +672,16 @@ export async function ingestCargoItems(
 			if (!target || newQty === undefined) continue;
 			if (!mergedTargetIds.has(r.targetId)) {
 				mergedTargetIds.add(r.targetId);
+				const mergedBase = computeBaseFields(newQty, target.unit, target.name);
 				batchOps.push(
 					d1
 						.update(cargo)
-						.set({ quantity: newQty, updatedAt: now })
+						.set({
+							quantity: newQty,
+							baseQuantity: mergedBase.baseQuantity,
+							baseUnit: mergedBase.baseUnit,
+							updatedAt: now,
+						})
 						.where(
 							and(
 								eq(cargo.id, r.targetId),
@@ -671,6 +704,7 @@ export async function ingestCargoItems(
 
 		const newId = crypto.randomUUID();
 		const normalizedQty = normalizeCargoQuantity(it.quantity, it.unit);
+		const base = computeBaseFields(normalizedQty, it.unit, it.name);
 		// The `tags` column is `mode: "json"` — Drizzle JSON-encodes on write.
 		// Pass a real array, never a pre-stringified string, or it double-encodes
 		// (stored as `"[\"x\"]"`) and reads back as a string instead of an array.
@@ -682,6 +716,8 @@ export async function ingestCargoItems(
 				name: it.name,
 				quantity: normalizedQty,
 				unit: it.unit,
+				baseQuantity: base.baseQuantity,
+				baseUnit: base.baseUnit,
 				domain: it.domain,
 				tags: normalizedTags,
 				status: calculateInventoryStatus(it.expiresAt),
@@ -856,6 +892,11 @@ export async function updateItem(
 		tags: nextTags,
 		expiresAt: nextExpiresAt ?? undefined,
 	};
+	const base = computeBaseFields(
+		nextData.quantity,
+		nextData.unit,
+		nextData.name,
+	);
 
 	const [updatedItem] = await d1
 		.update(cargo)
@@ -863,6 +904,8 @@ export async function updateItem(
 			name: nextData.name,
 			quantity: nextData.quantity,
 			unit: nextData.unit,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit,
 			domain: nextData.domain,
 			status: nextStatus,
 			tags: nextData.tags,
@@ -1128,10 +1171,11 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 			for (const candidate of bucket) {
 				if (candidate.id === primary.id || processed.has(candidate.id))
 					continue;
-				const converted = convertQuantity(
+				const converted = convertForMerge(
 					candidate.quantity,
 					candidate.unit as SupportedUnit,
 					primary.unit as SupportedUnit,
+					primary.name,
 				);
 				if (converted === null) continue;
 

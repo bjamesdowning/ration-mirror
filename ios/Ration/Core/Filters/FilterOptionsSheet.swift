@@ -115,10 +115,10 @@ struct FilterOptionsSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Unit display").rationHeadline()
             FlowLayout(spacing: 8) {
-                ForEach(["cooking", "metric", "imperial"], id: \.self) { mode in
-                    FilterChip(label: mode.capitalized, isActive: filters.supplyUnitMode == mode) {
-                        filters.supplyUnitMode = mode
-                        onApplySupplyUnitMode?(mode)
+                ForEach(UnitDisplayMode.allCases) { mode in
+                    FilterChip(label: mode.label, isActive: filters.supplyUnitMode == mode.rawValue) {
+                        filters.supplyUnitMode = mode.rawValue
+                        onApplySupplyUnitMode?(mode.rawValue)
                     }
                 }
             }

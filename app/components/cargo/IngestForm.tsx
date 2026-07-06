@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { presentQuantity } from "~/lib/present-quantity";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -276,8 +277,14 @@ export function IngestForm({
 							{pendingMerge.candidate.quantity} {pendingMerge.candidate.unit}).
 							Add{" "}
 							<strong>
-								{pendingMerge.candidate.convertedQuantity.toFixed(2)}{" "}
-								{pendingMerge.candidate.unit}
+								{
+									presentQuantity({
+										quantity: pendingMerge.candidate.convertedQuantity,
+										unit: pendingMerge.candidate.unit,
+										ingredientName: pendingMerge.candidate.name,
+										mode: "original",
+									}).formatted
+								}
 							</strong>{" "}
 							to the existing item, or create a new row?
 						</p>

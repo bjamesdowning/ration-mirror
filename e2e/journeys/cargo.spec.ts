@@ -15,7 +15,7 @@ test.describe("cargo", () => {
 		// Add item
 		await page.getByLabel("Item Name").fill(E2E_CARGO_NAME);
 		await page.getByLabel("Quantity").fill("1");
-		await page.getByLabel("Unit").selectOption("unit");
+		await page.getByLabel("Unit", { exact: true }).selectOption("unit");
 		await page.getByRole("button", { name: "Add Item" }).click();
 
 		// Wait for item to appear (handle merge modal if duplicate exists)

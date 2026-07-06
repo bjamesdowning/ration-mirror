@@ -166,9 +166,15 @@ struct SupplyScanReviewView: View {
                                 Text(item.name.capitalized)
                                     .rationBody()
                                 Spacer()
-                                Text("\(item.quantity.formatted()) \(item.unit)")
-                                    .rationCaption()
-                                    .foregroundStyle(Theme.muted)
+                                DisplayQuantityLabel(
+                                    quantity: item.quantity,
+                                    unit: item.unit,
+                                    baseQuantity: item.baseQuantity,
+                                    baseUnit: item.baseUnit,
+                                    ingredientName: item.name
+                                )
+                                .rationCaption()
+                                .foregroundStyle(Theme.muted)
                             }
                         }
                     }
@@ -220,9 +226,13 @@ struct SupplyScanReviewView: View {
                         .textCase(.uppercase)
                     Text(row.scanItem.name.capitalized)
                         .rationBody()
-                    Text("\(row.scanItem.quantity.formatted()) \(row.scanItem.unit)")
-                        .rationCaption()
-                        .foregroundStyle(Theme.muted)
+                    DisplayQuantityLabel(
+                        quantity: row.scanItem.quantity,
+                        unit: row.scanItem.unit,
+                        ingredientName: row.scanItem.name
+                    )
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
 
                     if let supplyItem = row.supplyItem {
                         HStack(spacing: 4) {
@@ -232,9 +242,15 @@ struct SupplyScanReviewView: View {
                             Text("Supply: \(supplyItem.name.capitalized)")
                                 .rationCaption()
                         }
-                        Text("\(supplyItem.quantity.formatted()) \(supplyItem.unit)")
-                            .rationCaption()
-                            .foregroundStyle(Theme.muted)
+                        DisplayQuantityLabel(
+                            quantity: supplyItem.quantity,
+                            unit: supplyItem.unit,
+                            baseQuantity: supplyItem.baseQuantity,
+                            baseUnit: supplyItem.baseUnit,
+                            ingredientName: supplyItem.name
+                        )
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
                     } else {
                         Text("Receipt only")
                             .rationCaption()

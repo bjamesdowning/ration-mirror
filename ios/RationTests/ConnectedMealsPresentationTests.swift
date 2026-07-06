@@ -24,7 +24,9 @@ final class ConnectedMealsPresentationTests: XCTestCase {
             needed: 1,
             onHand: 2,
             unit: "lb",
-            onHandUnit: "lb"
+            onHandUnit: "lb",
+            ingredientName: "chicken",
+            mode: .original
         )
         XCTAssertTrue(label.contains("have 2"))
         XCTAssertTrue(label.contains("needed"))
@@ -35,9 +37,11 @@ final class ConnectedMealsPresentationTests: XCTestCase {
             needed: 2,
             onHand: 5,
             unit: "tbsp",
-            onHandUnit: "lb"
+            onHandUnit: "lb",
+            ingredientName: "butter",
+            mode: .original
         )
-        XCTAssertEqual(label, "2 tbsp needed")
+        XCTAssertEqual(label, "2.00 tbsp needed")
         XCTAssertFalse(label.contains("have"))
     }
 

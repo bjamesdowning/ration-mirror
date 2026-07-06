@@ -240,8 +240,12 @@ struct ScanView: View {
                                         }
                                     }
                                     Spacer()
-                                    Text("\(item.quantity.formatted()) \(item.unit)")
-                                        .rationCaption()
+                                    DisplayQuantityLabel(
+                                        quantity: item.quantity,
+                                        unit: item.unit,
+                                        ingredientName: item.name
+                                    )
+                                    .rationCaption()
                                 }
                             }
                         }

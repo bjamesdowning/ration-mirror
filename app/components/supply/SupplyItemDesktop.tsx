@@ -72,6 +72,7 @@ export function SupplyItemDesktop({
 					<SupplyQuantityEditor
 						quantity={localQuantity}
 						unit={localUnit}
+						ingredientName={displayName}
 						onChange={onQuantityChange}
 						disabled={optimisticPurchased || isPending}
 						variant="inline"

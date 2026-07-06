@@ -41,6 +41,8 @@ final class MealAvailabilityEngineTests: XCTestCase {
                 ingredientName: "chicken",
                 quantity: 1,
                 unit: "lb",
+                baseQuantity: nil,
+                baseUnit: nil,
                 isOptional: false,
                 orderIndex: 0
             ),
@@ -64,6 +66,8 @@ final class MealAvailabilityEngineTests: XCTestCase {
                 ingredientName: "chicken",
                 quantity: 2,
                 unit: "lb",
+                baseQuantity: nil,
+                baseUnit: nil,
                 isOptional: false,
                 orderIndex: 0
             ),
@@ -74,6 +78,8 @@ final class MealAvailabilityEngineTests: XCTestCase {
                 ingredientName: "rice",
                 quantity: 1,
                 unit: "cup",
+                baseQuantity: nil,
+                baseUnit: nil,
                 isOptional: false,
                 orderIndex: 1
             ),

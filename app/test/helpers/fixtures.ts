@@ -1,3 +1,4 @@
+import { computeBaseFields } from "~/lib/base-quantity";
 import type { CargoIndexRow } from "~/lib/cargo-index.server";
 
 // ---------------------------------------------------------------------------
@@ -20,12 +21,18 @@ export interface CargoItemOverrides {
 
 export function createCargoItem(overrides: CargoItemOverrides = {}) {
 	const now = new Date("2025-01-01T00:00:00Z");
+	const quantity = overrides.quantity ?? 1;
+	const unit = overrides.unit ?? "g";
+	const name = overrides.name ?? "Test Item";
+	const base = computeBaseFields(quantity, unit, name);
 	return {
 		id: crypto.randomUUID(),
 		organizationId: crypto.randomUUID(),
-		name: "Test Item",
-		quantity: 1,
-		unit: "g",
+		name,
+		quantity,
+		unit,
+		baseQuantity: base.baseQuantity,
+		baseUnit: base.baseUnit,
 		tags: [] as string[],
 		domain: "food",
 		status: "stable",
@@ -39,12 +46,18 @@ export function createCargoItem(overrides: CargoItemOverrides = {}) {
 export function createCargoIndexRow(
 	overrides: Partial<CargoIndexRow> = {},
 ): CargoIndexRow {
+	const quantity = overrides.quantity ?? 100;
+	const unit = overrides.unit ?? "g";
+	const name = overrides.name ?? "Test Item";
+	const base = computeBaseFields(quantity, unit, name);
 	return {
 		id: crypto.randomUUID(),
-		name: "Test Item",
+		name,
 		domain: "food",
-		quantity: 100,
-		unit: "g",
+		quantity,
+		unit,
+		baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
+		baseUnit: overrides.baseUnit ?? base.baseUnit,
 		...overrides,
 	};
 }

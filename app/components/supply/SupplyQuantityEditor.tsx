@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { formatQuantity } from "~/lib/format-quantity";
+import { useUnitDisplayMode } from "~/components/shell/UnitDisplayToggle";
+import { presentQuantity } from "~/lib/present-quantity";
 import {
 	SUPPORTED_UNITS,
 	type SupportedUnit,
@@ -9,6 +10,8 @@ import {
 interface SupplyQuantityEditorProps {
 	quantity: number;
 	unit: string;
+	/** Ingredient name for density-aware display conversion */
+	ingredientName?: string;
 	onChange: (quantity: number, unit: string) => void;
 	disabled?: boolean;
 	/** Compact pill style for mobile stacked layout */
@@ -19,6 +22,7 @@ interface SupplyQuantityEditorProps {
 export function SupplyQuantityEditor({
 	quantity,
 	unit,
+	ingredientName,
 	onChange,
 	disabled = false,
 	variant = "pill",
@@ -96,7 +100,13 @@ export function SupplyQuantityEditor({
 		setIsEditing(true);
 	}
 
-	const displayLabel = formatQuantity(quantity, normalizedUnit);
+	const unitMode = useUnitDisplayMode();
+	const displayLabel = presentQuantity({
+		quantity,
+		unit: normalizedUnit,
+		ingredientName: ingredientName ?? unit,
+		mode: unitMode,
+	}).formatted;
 
 	const pillClasses =
 		variant === "pill"

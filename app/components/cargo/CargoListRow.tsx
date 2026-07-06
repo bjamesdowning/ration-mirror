@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
+import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
-import { formatQuantityNumericString } from "~/lib/format-quantity";
 
 interface CargoListRowProps {
 	item: typeof cargo.$inferSelect;
@@ -246,11 +246,14 @@ export function CargoListRow({
 				</span>
 
 				{/* Qty + Unit */}
-				<span className="text-sm font-bold text-carbon dark:text-white shrink-0 w-16 text-right">
-					{formatQuantityNumericString(item.quantity, item.unit)}
-					<span className="text-xs font-normal text-muted ml-1">
-						{item.unit}
-					</span>
+				<span className="text-sm font-bold text-carbon dark:text-white shrink-0 min-w-16 text-right">
+					<DisplayQuantity
+						quantity={item.quantity}
+						unit={item.unit}
+						baseQuantity={item.baseQuantity}
+						baseUnit={item.baseUnit}
+						ingredientName={item.name}
+					/>
 				</span>
 
 				{/* Promoted badge (desktop) */}

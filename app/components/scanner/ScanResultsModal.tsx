@@ -3,8 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
+import {
+	areIngredientUnitsCompatible,
+	convertForIngredient,
+} from "~/lib/present-quantity";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
-import { getUnitMultiplier, type SupportedUnit } from "~/lib/units";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -21,10 +24,7 @@ interface MergeMatch {
 	displayDelta: string;
 }
 
-function formatQuantity(value: number): string {
-	const rounded = Number.isInteger(value) ? value : Number(value.toFixed(2));
-	return `${rounded}`;
-}
+import { presentQuantity } from "~/lib/present-quantity";
 
 interface ScanResultsModalProps {
 	result: ScanResult;
@@ -98,11 +98,11 @@ export function ScanResultsModal({
 			let bestScore = 0;
 
 			for (const candidate of existingInventory) {
-				const multiplier = getUnitMultiplier(
-					item.unit as SupportedUnit,
-					candidate.unit as SupportedUnit,
-				);
-				if (multiplier === null) continue;
+				if (
+					!areIngredientUnitsCompatible(item.unit, candidate.unit, item.name)
+				) {
+					continue;
+				}
 				const normalizedCandidate = normalizeForMatch(candidate.name);
 
 				const exact = normalizedItem === normalizedCandidate;
@@ -110,11 +110,24 @@ export function ScanResultsModal({
 
 				if (score >= 0.8 && score > bestScore) {
 					bestScore = score;
-					const convertedQuantity = item.quantity * multiplier;
+					const convertedQuantity =
+						convertForIngredient(
+							item.quantity,
+							item.unit,
+							candidate.unit,
+							item.name,
+						) ?? item.quantity;
 					bestMatch = {
 						target: candidate,
 						convertedQuantity,
-						displayDelta: `+${formatQuantity(convertedQuantity)} ${candidate.unit}`,
+						displayDelta: `+${
+							presentQuantity({
+								quantity: convertedQuantity,
+								unit: candidate.unit,
+								ingredientName: item.name,
+								mode: "original",
+							}).formatted
+						}`,
 					};
 				}
 			}

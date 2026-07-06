@@ -12,6 +12,7 @@ import {
 	supplySnooze,
 	user,
 } from "../db/schema";
+import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { getActiveCargoSelections } from "./cargo-selection.server";
@@ -38,6 +39,7 @@ import {
 	type SupplySyncTelemetryContext,
 } from "./telemetry.server";
 import { TIER_LIMITS } from "./tiers.server";
+import type { UnitDisplayMode } from "./unit-display-mode";
 import {
 	type BaseUnit,
 	chooseReadableUnit,
@@ -46,7 +48,6 @@ import {
 	convertQuantity,
 	getUnitMultiplier,
 	normalizeToBaseUnit,
-	type SupplyUnitMode,
 	type SupportedUnit,
 	toCookingUnit,
 	toShoppingUnit,
@@ -126,6 +127,8 @@ type IngredientRow = {
 		ingredientName: string;
 		quantity: number;
 		unit: string;
+		baseQuantity: number;
+		baseUnit: string;
 		mealId: string;
 	};
 	meal_domain: string | null;
@@ -137,6 +140,8 @@ type AggregatedIngredient = {
 	normalizedName: string;
 	quantity: number;
 	unit: SupportedUnit;
+	baseQuantity: number;
+	baseUnit: BaseUnit;
 	domain: string;
 	sourceMealIds: string[];
 	sourceOrigins: SupplyItemOrigin[];
@@ -163,9 +168,16 @@ function getAvailableCargoQuantity(
 		const normalizedItem = normalizeForCargoDedup(item.name);
 		if (normalizedItem !== normalizedName) continue;
 
-		const itemUnit = toSupportedUnit(item.unit);
-		const converted = convertIngredientAmount(
+		const base = effectiveBaseFields(
 			item.quantity,
+			item.unit,
+			item.baseQuantity ?? item.quantity,
+			item.baseUnit ?? item.unit,
+			name,
+		);
+		const itemUnit = toSupportedUnit(base.baseUnit);
+		const converted = convertIngredientAmount(
+			base.baseQuantity,
 			itemUnit,
 			targetUnit,
 			name,
@@ -181,9 +193,16 @@ function getAvailableCargoQuantity(
 	const matchedName = normalizeForCargoDedup(similar[0].itemName);
 	for (const item of orgCargo) {
 		if (normalizeForCargoDedup(item.name) !== matchedName) continue;
-		const itemUnit = toSupportedUnit(item.unit);
-		const converted = convertIngredientAmount(
+		const base = effectiveBaseFields(
 			item.quantity,
+			item.unit,
+			item.baseQuantity ?? item.quantity,
+			item.baseUnit ?? item.unit,
+			name,
+		);
+		const itemUnit = toSupportedUnit(base.baseUnit);
+		const converted = convertIngredientAmount(
+			base.baseQuantity,
 			itemUnit,
 			targetUnit,
 			name,
@@ -207,9 +226,16 @@ function getExistingListQuantity(
 		if (typeof item.name !== "string" || item.name.length === 0) continue;
 		if (normalizeForCargoDedup(item.name) !== normalizedName) continue;
 
-		const itemUnit = toSupportedUnit(item.unit);
-		const converted = convertIngredientAmount(
+		const base = effectiveBaseFields(
 			item.quantity,
+			item.unit,
+			item.baseQuantity ?? item.quantity,
+			item.baseUnit ?? item.unit,
+			ingredientName ?? normalizedName,
+		);
+		const itemUnit = toSupportedUnit(base.baseUnit);
+		const converted = convertIngredientAmount(
+			base.baseQuantity,
 			itemUnit,
 			targetUnit,
 			ingredientName ?? normalizedName,
@@ -230,15 +256,14 @@ function mergeIntoAggregation(
 		sourceMealIds: Set<string>;
 		sourceOrigins: Set<SupplyItemOrigin>;
 	},
-	quantity: number,
-	unit: SupportedUnit,
+	baseQuantity: number,
+	baseUnit: BaseUnit,
 	mealId: string,
 	ingredientName: string,
 	supplyOrigin: MealSupplyOrigin,
 ): boolean {
-	const normalized = normalizeToBaseUnit(quantity, unit);
-	if (normalized.unit === existing.baseUnit) {
-		existing.baseQuantity += normalized.quantity;
+	if (baseUnit === existing.baseUnit) {
+		existing.baseQuantity += baseQuantity;
 		existing.sourceMealIds.add(mealId);
 		existing.sourceOrigins.add(supplyOrigin);
 		return true;
@@ -252,9 +277,10 @@ function mergeIntoAggregation(
 	);
 	if (existingInTarget === null) return false;
 
+	const addedUnit = baseUnitToSupported(baseUnit);
 	const added = convertIngredientAmount(
-		quantity,
-		unit,
+		baseQuantity,
+		addedUnit,
 		targetUnit,
 		ingredientName,
 	);
@@ -283,7 +309,7 @@ function baseUnitToSupported(baseUnit: BaseUnit): SupportedUnit {
 
 export function aggregateIngredients(
 	rows: IngredientRow[],
-	unitMode: SupplyUnitMode = "metric",
+	_unitMode: UnitDisplayMode = "metric",
 ): AggregatedIngredient[] {
 	const aggregation = new Map<
 		string,
@@ -311,33 +337,39 @@ export function aggregateIngredients(
 				ingredientName: ingredient.ingredientName,
 			});
 		}
-		const normalized = normalizeToBaseUnit(ingredient.quantity, safeUnit);
+		const base = effectiveBaseFields(
+			ingredient.quantity,
+			safeUnit,
+			ingredient.baseQuantity,
+			ingredient.baseUnit,
+			ingredient.ingredientName,
+		);
 		const key = `${normalizedName}__${domain}`;
 
 		const existing = aggregation.get(key);
 		if (existing) {
 			const merged = mergeIntoAggregation(
 				existing,
-				ingredient.quantity,
-				safeUnit,
+				base.baseQuantity,
+				base.baseUnit,
 				ingredient.mealId,
 				ingredient.ingredientName,
 				row.supplyOrigin,
 			);
 			if (!merged) {
 				// Incompatible units — keep as separate line with disambiguated key
-				const fallbackKey = `${key}__${normalized.unit}`;
+				const fallbackKey = `${key}__${base.baseUnit}`;
 				const fallbackExisting = aggregation.get(fallbackKey);
 				if (fallbackExisting) {
-					fallbackExisting.baseQuantity += normalized.quantity;
+					fallbackExisting.baseQuantity += base.baseQuantity;
 					fallbackExisting.sourceMealIds.add(ingredient.mealId);
 					fallbackExisting.sourceOrigins.add(row.supplyOrigin);
 				} else {
 					aggregation.set(fallbackKey, {
 						name: ingredient.ingredientName,
 						normalizedName,
-						baseQuantity: normalized.quantity,
-						baseUnit: normalized.unit,
+						baseQuantity: base.baseQuantity,
+						baseUnit: base.baseUnit,
 						domain,
 						sourceMealIds: new Set([ingredient.mealId]),
 						sourceOrigins: new Set([row.supplyOrigin]),
@@ -350,8 +382,8 @@ export function aggregateIngredients(
 		aggregation.set(key, {
 			name: ingredient.ingredientName,
 			normalizedName,
-			baseQuantity: normalized.quantity,
-			baseUnit: normalized.unit,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit,
 			domain,
 			sourceMealIds: new Set([ingredient.mealId]),
 			sourceOrigins: new Set([row.supplyOrigin]),
@@ -360,20 +392,13 @@ export function aggregateIngredients(
 
 	return Array.from(aggregation.values()).map((entry) => {
 		const readable = chooseReadableUnit(entry.baseQuantity, entry.baseUnit);
-		const converted =
-			unitMode === "cooking"
-				? toCookingUnit(readable.quantity, readable.unit, entry.name)
-				: toShoppingUnit(
-						readable.quantity,
-						readable.unit,
-						entry.name,
-						unitMode,
-					);
 		return {
 			name: entry.name,
 			normalizedName: entry.normalizedName,
-			quantity: converted.quantity,
-			unit: converted.unit,
+			quantity: readable.quantity,
+			unit: readable.unit,
+			baseQuantity: entry.baseQuantity,
+			baseUnit: entry.baseUnit,
 			domain: entry.domain,
 			sourceMealIds: Array.from(entry.sourceMealIds),
 			sourceOrigins: Array.from(entry.sourceOrigins),
@@ -840,6 +865,7 @@ export async function addSupplyItem(
 			name: data.name,
 			quantity: data.quantity || 1,
 			unit: data.unit || "unit",
+			...computeBaseFields(data.quantity || 1, data.unit || "unit", data.name),
 			domain: data.domain || "food",
 			sourceMealId: data.sourceMealId,
 			sourceMealIds:
@@ -898,13 +924,20 @@ export async function updateSupplyItem(
 
 	if (!existing) throw new Error("Supply item not found");
 
+	const nextQuantity = data.quantity ?? existing.quantity;
+	const nextUnit = data.unit ?? existing.unit;
+	const nextName = data.name ?? existing.name;
+	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
+
 	await d1.batch([
 		d1
 			.update(supplyItem)
 			.set({
-				name: data.name ?? existing.name,
-				quantity: data.quantity ?? existing.quantity,
-				unit: data.unit ?? existing.unit,
+				name: nextName,
+				quantity: nextQuantity,
+				unit: nextUnit,
+				baseQuantity: base.baseQuantity,
+				baseUnit: base.baseUnit,
 				domain: data.domain ?? existing.domain,
 				isPurchased: data.isPurchased ?? existing.isPurchased,
 			})
@@ -1445,7 +1478,7 @@ export async function createSupplyListFromAllMeals(
 	env: Env,
 	organizationId: string,
 	_listName?: string,
-	unitMode: SupplyUnitMode = "metric",
+	unitMode: UnitDisplayMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -1481,6 +1514,8 @@ export async function createSupplyListFromAllMeals(
 				ingredientName: mealIngredient.ingredientName,
 				quantity: mealIngredient.quantity,
 				unit: mealIngredient.unit,
+				baseQuantity: mealIngredient.baseQuantity,
+				baseUnit: mealIngredient.baseUnit,
 				mealId: mealIngredient.mealId,
 			},
 			meal_domain: meal.domain,
@@ -1561,6 +1596,8 @@ async function buildIngredientRowsFromOccurrences(
 						ingredientName: mealIngredient.ingredientName,
 						quantity: mealIngredient.quantity,
 						unit: mealIngredient.unit,
+						baseQuantity: mealIngredient.baseQuantity,
+						baseUnit: mealIngredient.baseUnit,
 						isOptional: mealIngredient.isOptional,
 					})
 					.from(mealIngredient)
@@ -1596,6 +1633,12 @@ async function buildIngredientRowsFromOccurrences(
 					ingredientName: ing.ingredientName,
 					quantity: scaleQuantity(ing.quantity, scaleFactor, ing.unit),
 					unit: ing.unit,
+					baseQuantity: scaleQuantity(
+						ing.baseQuantity,
+						scaleFactor,
+						ing.baseUnit,
+					),
+					baseUnit: ing.baseUnit,
 					mealId: ing.mealId,
 				},
 				meal_domain: domain,
@@ -1620,7 +1663,7 @@ export async function createSupplyListFromSelectedMeals(
 	organizationId: string,
 	_listName?: string,
 	telemetryContext?: SupplySyncTelemetryContext,
-	unitMode: SupplyUnitMode = "metric",
+	unitMode: UnitDisplayMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -1949,6 +1992,7 @@ async function syncCargoRestockSelections(
 			name: cargoRow.name,
 			quantity: restockQty,
 			unit,
+			...computeBaseFields(restockQty, unit, cargoRow.name),
 			domain,
 			sourceOrigins: ["cargo"],
 			sourceCargoId: cargoId,
@@ -2009,7 +2053,7 @@ async function syncSupplyFromIngredientRows(
 	allIngredients: IngredientRow[],
 	mealsProcessed: number,
 	telemetryContext?: SupplySyncTelemetryContext,
-	unitMode: SupplyUnitMode = "metric",
+	unitMode: UnitDisplayMode = "metric",
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -2105,15 +2149,16 @@ async function syncSupplyFromIngredientRows(
 				continue;
 			}
 
+			const targetUnit = toSupportedUnit(aggregated.baseUnit);
 			const availableInCargo = getAvailableCargoQuantity(
 				aggregated.name,
-				aggregated.unit,
+				targetUnit,
 				orgCargo,
 				prefetchedVectors,
 			);
 			const missingAfterCargo = Math.max(
 				0,
-				aggregated.quantity - availableInCargo,
+				aggregated.baseQuantity - availableInCargo,
 			);
 
 			if (missingAfterCargo <= 0) {
@@ -2124,26 +2169,33 @@ async function syncSupplyFromIngredientRows(
 			const existingQuantityInList = getExistingListQuantity(
 				existingItems,
 				aggregated.normalizedName,
-				aggregated.unit,
+				targetUnit,
 				aggregated.domain,
 				aggregated.name,
 			);
-			const remainingNeeded = Math.max(
+			const remainingNeededBase = Math.max(
 				0,
 				missingAfterCargo - existingQuantityInList,
 			);
 
-			if (remainingNeeded <= 0) {
+			if (remainingNeededBase <= 0) {
 				skippedCount++;
 				continue;
 			}
+
+			const readable = chooseReadableUnit(
+				remainingNeededBase,
+				aggregated.baseUnit,
+			);
 
 			itemsToInsert.push({
 				id: crypto.randomUUID(),
 				listId: supplyListData.id,
 				name: aggregated.name,
-				quantity: remainingNeeded,
-				unit: aggregated.unit,
+				quantity: readable.quantity,
+				unit: readable.unit,
+				baseQuantity: remainingNeededBase,
+				baseUnit: aggregated.baseUnit,
 				domain: aggregated.domain,
 				sourceMealId: aggregated.sourceMealIds[0],
 				sourceMealIds: aggregated.sourceMealIds,

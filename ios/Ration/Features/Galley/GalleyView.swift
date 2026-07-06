@@ -357,7 +357,19 @@ struct GalleyView: View {
 
     private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
         let lines = missing.map { ingredient in
-            "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
+            let required = QuantityPresenter.present(
+                quantity: ingredient.required,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: env.unitDisplayMode.mode
+            )
+            let available = QuantityPresenter.present(
+                quantity: ingredient.available,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: env.unitDisplayMode.mode
+            )
+            return "\(ingredient.name.capitalized): need \(required), have \(available)"
         }
         return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway and deduct what's available?"
     }
@@ -560,8 +572,20 @@ struct MealDetailView: View {
                                 baseServings: max(meal.servings ?? 1, 1),
                                 desiredServings: desiredServings
                             )
-                            Text("\(scaled.formatted()) \(row.ingredient.unit)")
-                                .rationCaption()
+                            DisplayQuantityLabel(
+                                quantity: scaled,
+                                unit: row.ingredient.unit,
+                                baseQuantity: row.ingredient.baseQuantity.map {
+                                    MealAvailabilityEngine.scaledQuantity(
+                                        $0,
+                                        baseServings: max(meal.servings ?? 1, 1),
+                                        desiredServings: desiredServings
+                                    )
+                                },
+                                baseUnit: row.ingredient.baseUnit,
+                                ingredientName: row.ingredient.ingredientName
+                            )
+                            .rationCaption()
                             if let subtitle = row.subtitle {
                                 Text(subtitle).rationCaption().foregroundStyle(Theme.muted)
                             }
@@ -665,7 +689,19 @@ struct MealDetailView: View {
 
     private func missingIngredientsMessage(_ missing: [MissingIngredientDetail]) -> String {
         let lines = missing.map { ingredient in
-            "\(ingredient.name.capitalized): need \(ingredient.required.formatted()) \(ingredient.unit), have \(ingredient.available.formatted())"
+            let required = QuantityPresenter.present(
+                quantity: ingredient.required,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: env.unitDisplayMode.mode
+            )
+            let available = QuantityPresenter.present(
+                quantity: ingredient.available,
+                unit: ingredient.unit,
+                ingredientName: ingredient.name,
+                mode: env.unitDisplayMode.mode
+            )
+            return "\(ingredient.name.capitalized): need \(required), have \(available)"
         }
         return "Missing \(missing.count) ingredient\(missing.count == 1 ? "" : "s").\n\(lines.joined(separator: "\n"))\n\nCook anyway and deduct what's available?"
     }

@@ -47,6 +47,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				name: cargo.name,
 				quantity: cargo.quantity,
 				unit: cargo.unit,
+				baseQuantity: cargo.baseQuantity,
+				baseUnit: cargo.baseUnit,
 				domain: cargo.domain,
 			})
 			.from(cargo)

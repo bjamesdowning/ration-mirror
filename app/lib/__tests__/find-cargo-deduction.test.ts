@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { computeBaseFields } from "../base-quantity";
 import type { CargoIndexRow } from "../cargo-index.server";
 import { findCargoForDeduction } from "../meals.server";
 
@@ -6,8 +7,15 @@ function cargoRow(
 	overrides: Partial<CargoIndexRow> &
 		Pick<CargoIndexRow, "id" | "name" | "quantity" | "unit">,
 ): CargoIndexRow {
+	const base = computeBaseFields(
+		overrides.quantity,
+		overrides.unit,
+		overrides.name,
+	);
 	return {
 		domain: "food",
+		baseQuantity: overrides.baseQuantity ?? base.baseQuantity,
+		baseUnit: overrides.baseUnit ?? base.baseUnit,
 		...overrides,
 	};
 }

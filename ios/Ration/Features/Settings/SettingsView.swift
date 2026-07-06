@@ -99,6 +99,7 @@ struct SettingsView: View {
             if let settings = model.settings {
                 AppearanceSettingsSection(settings: settings, api: env.api)
                     .id(settings.theme ?? "dark")
+                MeasurementsSettingsSection(settings: settings)
             }
 
             SettingsHelpSection()
@@ -124,6 +125,7 @@ struct SettingsView: View {
             await model.load(api: env.api)
             if let settings = model.settings {
                 env.theme.syncFromServer(settings)
+                env.unitDisplayMode.syncFromServer(settings)
             }
         }
     }

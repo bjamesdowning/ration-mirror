@@ -71,6 +71,12 @@ describe("formatQuantity", () => {
 		expect(formatQuantity(1.567, "ml")).toBe("1.57 ml");
 	});
 
+	it("decomposes 17 tbsp into cup + tbsp", () => {
+		const result = formatQuantity(17, "tbsp");
+		expect(result).toContain("cup");
+		expect(result).toContain("tbsp");
+	});
+
 	it("handles large integer values (< 1000 fast path)", () => {
 		expect(formatQuantity(999, "g")).toBe("999 g");
 	});

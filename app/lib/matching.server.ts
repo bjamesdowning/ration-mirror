@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal, mealIngredient, mealTag } from "../db/schema";
+import { effectiveBaseFields } from "./base-quantity";
 import type { CargoIndexRow } from "./cargo-index.server";
 import { fetchOrgCargoIndex } from "./cargo-index.server";
 import { log, redactId } from "./logging.server";
@@ -113,9 +114,29 @@ export function sumConvertedToTarget(
 ): number {
 	let total = 0;
 	for (const match of matches) {
-		const fromUnit = toSupportedUnit(match.original.unit);
+		const hasBase =
+			match.original.baseQuantity != null && match.original.baseUnit != null;
+		if (!hasBase) {
+			const fromUnit = toSupportedUnit(match.original.unit);
+			const converted = convertIngredientAmount(
+				match.totalQuantity,
+				fromUnit,
+				targetUnit,
+				ingredientName,
+			);
+			if (converted !== null) total += converted;
+			continue;
+		}
+		const base = effectiveBaseFields(
+			match.original.quantity,
+			match.original.unit,
+			match.original.baseQuantity as number,
+			match.original.baseUnit as string,
+			ingredientName ?? match.original.name,
+		);
+		const fromUnit = toSupportedUnit(base.baseUnit);
 		const converted = convertIngredientAmount(
-			match.totalQuantity,
+			base.baseQuantity,
 			fromUnit,
 			targetUnit,
 			ingredientName,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { computeBaseFields } from "~/lib/base-quantity";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import {
 	buildCargoIndex,
@@ -134,16 +135,21 @@ describe("strictMatch", () => {
 		quantity: number,
 		unit: string,
 		isOptional = false,
-	) => ({
-		id: `${mealId}-${name}`,
-		mealId,
-		cargoId: null,
-		ingredientName: name,
-		quantity,
-		unit,
-		isOptional,
-		orderIndex: 0,
-	});
+	) => {
+		const base = computeBaseFields(quantity, unit, name);
+		return {
+			id: `${mealId}-${name}`,
+			mealId,
+			cargoId: null,
+			ingredientName: name,
+			quantity,
+			unit,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit,
+			isOptional,
+			orderIndex: 0,
+		};
+	};
 
 	it("includes a meal when all required ingredients are available", () => {
 		const cargo = [

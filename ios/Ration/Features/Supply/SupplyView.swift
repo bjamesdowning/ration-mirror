@@ -427,7 +427,11 @@ struct SupplyView: View {
                     filters: model.filters,
                     onApplySupplyUnitMode: { mode in
                         Task {
-                            _ = try? await env.api.patchSettings(SettingsPatch(supplyUnitMode: mode))
+                            let displayMode = UnitDisplayMode(rawValue: mode) ?? .metric
+                            env.unitDisplayMode.apply(displayMode)
+                            _ = try? await env.api.patchSettings(
+                                env.unitDisplayMode.settingsPatch(for: displayMode)
+                            )
                         }
                     }
                 )
@@ -571,8 +575,10 @@ struct SupplyView: View {
         }
         .task(id: organizationId) {
             await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-            if let mode = try? await env.api.settings().settings.supplyUnitMode {
-                model.filters.supplyUnitMode = mode
+            if let settings = try? await env.api.settings().settings {
+                let mode = UnitDisplayMode.resolve(from: settings)
+                env.unitDisplayMode.apply(mode)
+                model.filters.supplyUnitMode = mode.rawValue
             }
             supplyShareURL = try? await env.api.supplyShareStatus().shareUrl
             supplyShareExpiresAt = try? await env.api.supplyShareStatus().shareExpiresAt
@@ -637,7 +643,14 @@ struct SupplyView: View {
                             }
                         }
                         Spacer()
-                        Text("\(item.quantity.formatted()) \(item.unit)").rationCaption()
+                        DisplayQuantityLabel(
+                            quantity: item.quantity,
+                            unit: item.unit,
+                            baseQuantity: item.baseQuantity,
+                            baseUnit: item.baseUnit,
+                            ingredientName: item.name
+                        )
+                        .rationCaption()
                     }
                 }
                 .id("\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)")

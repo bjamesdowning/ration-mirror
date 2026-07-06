@@ -3,7 +3,10 @@ import { getUserSettings, patchUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { MobileSettingsPatchSchema } from "~/lib/schemas/mobile/auth";
+import {
+	MobileSettingsPatchSchema,
+	normalizeMobileSettingsPatch,
+} from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.settings";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -40,7 +43,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const patch = MobileSettingsPatchSchema.parse(body);
 
 		const settingsPatch = {
-			...patch,
+			...normalizeMobileSettingsPatch(patch),
 			...(patch.hubProfile && patch.hubProfile !== "custom"
 				? { hubLayout: undefined }
 				: {}),

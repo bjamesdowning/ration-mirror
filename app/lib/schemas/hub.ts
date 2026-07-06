@@ -29,6 +29,8 @@ export const HubWidgetFiltersSchema = z.object({
 		.optional(),
 	/** Cargo tag slugs for supply-preview (OR logic). Max 5 tags. */
 	supplyTags: z.array(z.string().min(1).max(50)).max(5).optional(),
+	/** Tag filter combination mode for multi-tag widget filters. Default OR. */
+	tagFilterMode: z.enum(["or", "and"]).optional(),
 });
 
 export const HubWidgetLayoutSchema = z.object({

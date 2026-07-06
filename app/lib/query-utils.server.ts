@@ -16,11 +16,10 @@ export const D1_MAX_INGREDIENT_ROWS_PER_STATEMENT = Math.floor(
 );
 
 /**
- * Max meal_tag rows per INSERT.
- * Includes generated id from $defaultFn, so each row binds 3 params.
+ * Max cargo_tag / meal_tag rows per INSERT (composite PK: 2 columns per row).
  */
 export const D1_MAX_TAG_ROWS_PER_STATEMENT = Math.floor(
-	D1_MAX_BOUND_PARAMS / 3,
+	D1_MAX_BOUND_PARAMS / 2,
 );
 
 /**

@@ -5,17 +5,23 @@ import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { StandardCard } from "~/components/common/StandardCard";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
+import { TagChip } from "~/components/shared/TagChip";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { formatCargoStatus } from "~/lib/cargo";
+import type { TagRecord } from "~/lib/tags";
+
+type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
 interface CargoCardProps {
-	item: typeof cargo.$inferSelect;
+	item: CargoWithTags;
 	isPromoted?: boolean;
 	isActive?: boolean;
 	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	detailHref?: string;
 }
 
@@ -25,6 +31,8 @@ export function CargoCard({
 	isActive = false,
 	onToggleRestock,
 	onUpgradeRequired,
+	onTagClick,
+	tagSuggestions = [],
 	detailHref,
 }: CargoCardProps) {
 	const fetcher = useFetcher<{
@@ -52,6 +60,8 @@ export function CargoCard({
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 	const isPromoting = fetcher.state !== "idle" && currentIntent === "promote";
 	const isTogglingRestock = restockFetcher.state !== "idle";
+
+	const tags = item.tags ?? [];
 
 	// Track the intent while the request is in flight so we can read it on completion
 	useEffect(() => {
@@ -108,10 +118,6 @@ export function CargoCard({
 		if (restockFetcher.data.cargoId !== item.id) return;
 		setLocalActive(restockFetcher.data.isActive);
 	}, [restockFetcher.data, item.id]);
-
-	// Parse tags safely
-	const tags =
-		typeof item.tags === "string" ? JSON.parse(item.tags) : item.tags || [];
 
 	if (isDeleting) {
 		return null;
@@ -248,16 +254,18 @@ export function CargoCard({
 						</div>
 					</div>
 
-					<div className="flex flex-wrap gap-2 mb-4">
-						{tags.map((tag: string) => (
-							<span
-								key={tag}
-								className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green rounded-md"
-							>
-								{tag}
-							</span>
-						))}
-					</div>
+					{tags.length > 0 && (
+						<div className="flex flex-wrap gap-2 mb-4">
+							{tags.map((tag) => (
+								<TagChip
+									key={tag.id}
+									tag={tag}
+									onClick={onTagClick}
+									size="sm"
+								/>
+							))}
+						</div>
+					)}
 
 					<StatusGauge status={item.status} expiresAt={item.expiresAt} />
 
@@ -273,7 +281,8 @@ export function CargoCard({
 			{isEditing && (
 				<CargoEditModal
 					item={item}
-					tags={tags}
+					tagSlugs={tags.map((t) => t.slug)}
+					tagSuggestions={tagSuggestions}
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}

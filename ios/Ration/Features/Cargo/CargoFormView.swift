@@ -41,7 +41,7 @@ struct CargoFormView: View {
             _quantity = State(initialValue: String(item.quantity))
             _unit = State(initialValue: item.unit)
             _domain = State(initialValue: item.domain)
-            _tags = State(initialValue: item.tags)
+            _tags = State(initialValue: item.tagSlugs)
             _hasExpiry = State(initialValue: item.expiresAt != nil)
             _expiresAt = State(initialValue: item.expiresAt ?? Date())
         }

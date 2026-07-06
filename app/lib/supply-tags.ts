@@ -1,26 +1,11 @@
+import type { TagRecord } from "./tags";
+
 /**
  * Resolves display tags for supply list rows at read time (cargo match + meal fallback).
  */
-export function parseTagsField(tags: unknown): string[] {
-	if (Array.isArray(tags)) {
-		return tags.filter((t): t is string => typeof t === "string");
-	}
-	if (typeof tags === "string") {
-		try {
-			const parsed = JSON.parse(tags) as unknown;
-			return Array.isArray(parsed)
-				? parsed.filter((t): t is string => typeof t === "string")
-				: [];
-		} catch {
-			return [];
-		}
-	}
-	return [];
-}
-
 export function resolveSupplyItemTags(input: {
 	itemName: string;
-	cargoRows: Array<{ name: string; tags?: unknown }>;
+	cargoRows: Array<{ name: string; tags?: TagRecord[] }>;
 	mealTagsByMealId?: Map<string, string[]>;
 	sourceMealIds?: string[];
 }): string[] {
@@ -29,14 +14,14 @@ export function resolveSupplyItemTags(input: {
 		(row) => row.name.toLowerCase().trim() === normalized,
 	);
 	if (cargoMatch) {
-		const tags = parseTagsField(cargoMatch.tags);
-		if (tags.length > 0) return [...new Set(tags)].sort();
+		const slugs = (cargoMatch.tags ?? []).map((tag) => tag.slug);
+		if (slugs.length > 0) return [...new Set(slugs)].sort();
 	}
 
 	const mealTags = new Set<string>();
 	for (const mealId of input.sourceMealIds ?? []) {
-		for (const tag of input.mealTagsByMealId?.get(mealId) ?? []) {
-			mealTags.add(tag);
+		for (const slug of input.mealTagsByMealId?.get(mealId) ?? []) {
+			mealTags.add(slug);
 		}
 	}
 	return [...mealTags].sort();

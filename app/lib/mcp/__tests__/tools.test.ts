@@ -15,6 +15,12 @@ vi.mock("~/lib/cargo.server", () => ({
 	updateItem: vi.fn(),
 }));
 
+vi.mock("~/lib/tags.server", () => ({
+	getTagsForCargoIds: vi.fn().mockResolvedValue(new Map()),
+	getTagsForMealIds: vi.fn().mockResolvedValue(new Map()),
+	tagsToSlugs: vi.fn((tags: { slug: string }[]) => tags.map((t) => t.slug)),
+}));
+
 vi.mock("~/lib/auth.server", () => ({
 	getUserSettings: vi.fn().mockResolvedValue({}),
 	patchUserSettings: vi.fn(),

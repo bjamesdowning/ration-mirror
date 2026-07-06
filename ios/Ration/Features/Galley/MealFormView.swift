@@ -54,7 +54,7 @@ struct MealFormView: View {
             let parsed = DirectionsParser.parseDirections(meal.directions)
             _directionSteps = State(initialValue: parsed.isEmpty ? [RecipeStep(position: 1, text: "")] : parsed)
             _ingredients = State(initialValue: meal.ingredients.map { EditableMealIngredient(from: $0) })
-            _tags = State(initialValue: meal.tags)
+            _tags = State(initialValue: meal.tagSlugs)
         }
     }
 

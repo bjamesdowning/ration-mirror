@@ -30,6 +30,7 @@ import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 } from "./query-utils.server";
+import { TagSlugsInputSchema } from "./schemas/tag";
 import { UnitSchema } from "./schemas/units";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
@@ -49,16 +50,20 @@ import {
 export {
 	calculateInventoryStatus,
 	normalizeForCargoKey,
-	normalizeTags,
 } from "./cargo-utils";
 
+export {
+	getCargoTagIndex,
+	getOrganizationTagSlugs as getCargoTags,
+	getTagsForCargoIds,
+	setCargoTags,
+} from "./tags.server";
+
 import { computeBaseFields } from "./base-quantity";
-import {
-	calculateInventoryStatus,
-	normalizeForCargoKey,
-	normalizeTags,
-} from "./cargo-utils";
+import { calculateInventoryStatus, normalizeForCargoKey } from "./cargo-utils";
 import { normalizeCargoQuantity } from "./format-quantity";
+import { dedupeTagSlugs, type TagRecord } from "./tags";
+import { getTagsForCargoIds, setCargoTags } from "./tags.server";
 
 const CargoItemBaseSchema = z.object({
 	name: z
@@ -68,13 +73,14 @@ const CargoItemBaseSchema = z.object({
 	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
 	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
-	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
+	tags: TagSlugsInputSchema,
 	expiresAt: z.coerce.date().optional(),
 });
 
 export const CargoItemSchema = CargoItemBaseSchema.transform((data) => ({
 	...data,
 	quantity: normalizeCargoQuantity(data.quantity, data.unit),
+	tags: dedupeTagSlugs(data.tags),
 }));
 
 export const PartialCargoItemSchema = CargoItemBaseSchema.partial();
@@ -166,25 +172,6 @@ export async function getCargoPage(
 	const nextCursor =
 		hasMore && last ? { createdAt: last.createdAt, id: last.id } : null;
 	return { items, nextCursor };
-}
-
-/**
- * Narrow tag-index fetch: returns only `id`, `name`, and `tags` for every
- * cargo item belonging to the organisation. Used by Supply's tag filter which
- * needs to cross-reference cargo item names against their tags but has no
- * need for quantity, unit, domain, or timestamps. ~60 % smaller payload than
- * a full getCargo() call.
- */
-export async function getCargoTagIndex(
-	db: D1Database,
-	organizationId: string,
-): Promise<{ id: string; name: string; tags: unknown }[]> {
-	const d1 = drizzle(db);
-	return d1
-		.select({ id: cargo.id, name: cargo.name, tags: cargo.tags })
-		.from(cargo)
-		.where(eq(cargo.organizationId, organizationId))
-		.orderBy(asc(cargo.name));
 }
 
 /**
@@ -316,27 +303,31 @@ export async function getCargoByIds(
 	);
 }
 
-/**
- * Retrieves all unique tags for an organization's inventory.
- * Uses SQLite json_each() to extract tags inline — only distinct tag strings
- * cross the network instead of every cargo row's full payload.
- */
-export async function getCargoTags(
+/** Attach junction-table tags to cargo rows by id. */
+export async function attachTagsToCargo<T extends { id: string }>(
+	db: D1Database,
+	items: T[],
+): Promise<(T & { tags: TagRecord[] })[]> {
+	if (items.length === 0) return [];
+	const tagMap = await getTagsForCargoIds(
+		db,
+		items.map((item) => item.id),
+	);
+	return items.map((item) => ({
+		...item,
+		tags: tagMap.get(item.id) ?? [],
+	}));
+}
+
+/** getCargo with tags from the centralized tag registry. */
+export async function getCargoWithTags(
 	db: D1Database,
 	organizationId: string,
-): Promise<string[]> {
-	const d1 = drizzle(db);
-
-	const rows = await d1.all<{ tag: string }>(
-		sql`SELECT DISTINCT j.value AS tag
-		    FROM cargo c, json_each(c.tags) j
-		    WHERE c.organization_id = ${organizationId}
-		      AND j.value IS NOT NULL
-		      AND j.value != ''
-		    ORDER BY j.value`,
-	);
-
-	return rows.map((r) => r.tag);
+	domain?: (typeof ITEM_DOMAINS)[number],
+	options?: { limit?: number; offset?: number },
+) {
+	const items = await getCargo(db, organizationId, domain, options);
+	return attachTagsToCargo(db, items);
 }
 
 type MergeCandidate = {
@@ -662,6 +653,11 @@ export async function ingestCargoItems(
 		[];
 	const results: IngestItemResult[] = [];
 	const mergedTargetIds = new Set<string>();
+	const pendingTagSets: Array<{
+		resultIndex: number;
+		cargoId: string;
+		slugs: string[];
+	}> = [];
 
 	for (let i = 0; i < items.length; i++) {
 		const it = items[i];
@@ -705,10 +701,7 @@ export async function ingestCargoItems(
 		const newId = crypto.randomUUID();
 		const normalizedQty = normalizeCargoQuantity(it.quantity, it.unit);
 		const base = computeBaseFields(normalizedQty, it.unit, it.name);
-		// The `tags` column is `mode: "json"` — Drizzle JSON-encodes on write.
-		// Pass a real array, never a pre-stringified string, or it double-encodes
-		// (stored as `"[\"x\"]"`) and reads back as a string instead of an array.
-		const normalizedTags = normalizeTags(it.tags);
+		const tagSlugs = dedupeTagSlugs(it.tags);
 		batchOps.push(
 			d1.insert(cargo).values({
 				id: newId,
@@ -719,7 +712,6 @@ export async function ingestCargoItems(
 				baseQuantity: base.baseQuantity,
 				baseUnit: base.baseUnit,
 				domain: it.domain,
-				tags: normalizedTags,
 				status: calculateInventoryStatus(it.expiresAt),
 				expiresAt: it.expiresAt ?? null,
 				createdAt: now,
@@ -733,7 +725,6 @@ export async function ingestCargoItems(
 			quantity: normalizedQty,
 			unit: it.unit,
 			domain: it.domain,
-			tags: normalizedTags,
 			status: calculateInventoryStatus(it.expiresAt),
 			expiresAt: it.expiresAt ?? null,
 			createdAt: now,
@@ -751,6 +742,11 @@ export async function ingestCargoItems(
 			domain: it.domain ?? "food",
 		});
 		results.push({ status: "created", item: newRow });
+		pendingTagSets.push({
+			resultIndex: results.length - 1,
+			cargoId: newId,
+			slugs: tagSlugs,
+		});
 	}
 
 	if (batchOps.length > 0) {
@@ -765,6 +761,14 @@ export async function ingestCargoItems(
 				organizationRef: organizationId,
 			},
 		);
+	}
+
+	for (const { resultIndex, cargoId, slugs } of pendingTagSets) {
+		const tags = await setCargoTags(env.DB, organizationId, cargoId, slugs);
+		const result = results[resultIndex];
+		if (result?.item) {
+			result.item = { ...result.item, tags } as typeof cargo.$inferSelect;
+		}
 	}
 
 	if (newCargoForVector.length > 0) {
@@ -873,8 +877,6 @@ export async function updateItem(
 		return null;
 	}
 
-	const nextTags =
-		data.tags !== undefined ? data.tags : normalizeTags(existing.tags);
 	const nextExpiresAt =
 		data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt;
 	const nextName = data.name ?? existing.name;
@@ -884,36 +886,34 @@ export async function updateItem(
 			? normalizeCargoQuantity(data.quantity, nextUnit)
 			: existing.quantity;
 	const nextStatus = calculateInventoryStatus(nextExpiresAt);
-	const nextData: CargoItemInput = {
-		name: nextName,
-		quantity: nextQuantity,
-		unit: nextUnit,
-		domain: data.domain ?? (existing.domain as CargoItemInput["domain"]),
-		tags: nextTags,
-		expiresAt: nextExpiresAt ?? undefined,
-	};
-	const base = computeBaseFields(
-		nextData.quantity,
-		nextData.unit,
-		nextData.name,
-	);
+	const nextDomain =
+		data.domain ?? (existing.domain as CargoItemInput["domain"]);
+	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
 
 	const [updatedItem] = await d1
 		.update(cargo)
 		.set({
-			name: nextData.name,
-			quantity: nextData.quantity,
-			unit: nextData.unit,
+			name: nextName,
+			quantity: nextQuantity,
+			unit: nextUnit,
 			baseQuantity: base.baseQuantity,
 			baseUnit: base.baseUnit,
-			domain: nextData.domain,
+			domain: nextDomain,
 			status: nextStatus,
-			tags: nextData.tags,
-			expiresAt: nextData.expiresAt,
+			expiresAt: nextExpiresAt,
 			updatedAt: new Date(),
 		})
 		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)))
 		.returning();
+
+	if (updatedItem && data.tags !== undefined) {
+		await setCargoTags(
+			env.DB,
+			organizationId,
+			itemId,
+			dedupeTagSlugs(data.tags),
+		);
+	}
 
 	if (updatedItem && data.name !== undefined) {
 		upsertCargoVector(env, organizationId, {
@@ -923,7 +923,12 @@ export async function updateItem(
 		}).catch((err) => log.error("[Vector] upsert failed for update:", err));
 	}
 
-	return updatedItem;
+	if (!updatedItem) {
+		return null;
+	}
+
+	const tagMap = await getTagsForCargoIds(env.DB, [itemId]);
+	return { ...updatedItem, tags: tagMap.get(itemId) ?? [] };
 }
 
 /**

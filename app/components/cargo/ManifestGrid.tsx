@@ -1,17 +1,22 @@
 import { CargoCard } from "~/components/cargo/CargoCard";
 import { CargoListRow } from "~/components/cargo/CargoListRow";
 import type { cargo } from "~/db/schema";
+import type { TagRecord } from "~/lib/tags";
+
+type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
 type ViewMode = "card" | "list";
 
 interface ManifestGridProps {
-	items: (typeof cargo.$inferSelect)[];
+	items: CargoWithTags[];
 	promotedCargoIds?: string[];
 	activeCargoIds?: Set<string>;
 	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	viewMode?: ViewMode;
-	getDetailHref?: (item: typeof cargo.$inferSelect) => string;
+	getDetailHref?: (item: CargoWithTags) => string;
 }
 
 export function ManifestGrid({
@@ -20,6 +25,8 @@ export function ManifestGrid({
 	activeCargoIds,
 	onToggleRestock,
 	onUpgradeRequired,
+	onTagClick,
+	tagSuggestions,
 	viewMode = "card",
 	getDetailHref,
 }: ManifestGridProps) {
@@ -43,6 +50,8 @@ export function ManifestGrid({
 						isActive={activeCargoIds?.has(item.id) ?? false}
 						onToggleRestock={onToggleRestock}
 						onUpgradeRequired={onUpgradeRequired}
+						onTagClick={onTagClick}
+						tagSuggestions={tagSuggestions}
 						detailHref={getDetailHref?.(item)}
 					/>
 				))}
@@ -61,6 +70,8 @@ export function ManifestGrid({
 						isActive={activeCargoIds?.has(item.id) ?? false}
 						onToggleRestock={onToggleRestock}
 						onUpgradeRequired={onUpgradeRequired}
+						onTagClick={onTagClick}
+						tagSuggestions={tagSuggestions}
 						detailHref={getDetailHref?.(item)}
 					/>
 				))}

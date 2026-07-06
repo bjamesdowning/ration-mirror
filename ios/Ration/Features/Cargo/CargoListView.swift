@@ -51,7 +51,7 @@ struct CargoListView: View {
             .searchable(text: $model.filters.search, prompt: "Search cargo")
             .onSubmit(of: .search) { Task { await reload() } }
             .onChange(of: model.filters.domain) { _, _ in model.applyClientFilters() }
-            .onChange(of: model.filters.tag) { _, _ in model.applyClientFilters() }
+            .onChange(of: model.filters.selectedTags) { _, _ in model.applyClientFilters() }
             .background(Theme.ceramic)
             .toolbar {
                 GlobalPageToolbar(

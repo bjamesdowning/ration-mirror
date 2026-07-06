@@ -68,14 +68,17 @@ struct FilterOptionsSheet: View {
 
     private var tagSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tag").rationHeadline()
+            Text("Tags").rationHeadline()
             FlowLayout(spacing: 8) {
-                FilterChip(label: "All", isActive: filters.tag == nil) {
-                    filters.tag = nil
+                FilterChip(label: "All", isActive: filters.selectedTags.isEmpty) {
+                    filters.selectedTags = []
                 }
                 ForEach(availableTags, id: \.self) { tag in
-                    FilterChip(label: tag, isActive: filters.tag == tag) {
-                        filters.tag = filters.tag == tag ? nil : tag
+                    FilterChip(
+                        label: Tag.displayName(from: tag),
+                        isActive: filters.selectedTags.contains(tag)
+                    ) {
+                        filters.toggleTag(tag)
                     }
                 }
             }

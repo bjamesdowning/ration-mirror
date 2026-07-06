@@ -9,6 +9,8 @@ import { enrichIngredientsWithCargoLinks } from "~/lib/cargo-links";
 import { ITEM_DOMAINS, type ItemDomain } from "~/lib/domain";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { deleteMeal, getAdjacentMealIds, getMeal } from "~/lib/meals.server";
+import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
+import { tagsToSlugs } from "~/lib/tags.server";
 import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/galley.$id";
 
@@ -18,7 +20,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	if (!id) throw redirect("/hub/galley");
 
 	const url = new URL(request.url);
-	const tag = url.searchParams.get("tag")?.trim().slice(0, 100) ?? undefined;
+	const tagSlugs = tagsFromSearchParam(url.searchParams.get("tags"));
 	const domainParam = url.searchParams.get("domain");
 	const domain =
 		domainParam &&
@@ -45,7 +47,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			context.cloudflare.env.DB,
 			groupId,
 			{ id: meal.id, createdAt: meal.createdAt },
-			{ tag, domain },
+			{ tag: tagSlugs[0], domain },
 		),
 		getCargoTagIndex(context.cloudflare.env.DB, groupId),
 	]);
@@ -70,6 +72,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			? (meal.equipment as string[])
 			: [],
 		customFields: (meal.customFields as Record<string, string>) || {},
+		tags: tagsToSlugs(meal.tags ?? []),
 		ingredients: enrichIngredientsWithCargoLinks(
 			meal.ingredients.map((i) => ({
 				...i,
@@ -88,7 +91,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 		isSelectedForSupply,
 		prevId: adjacent.prevId,
 		nextId: adjacent.nextId,
-		navTag: tag,
+		navTags: tagSlugs.length > 0 ? tagsToSearchParam(tagSlugs) : undefined,
 		navDomain: domain,
 	};
 }
@@ -114,7 +117,7 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 		isSelectedForSupply,
 		prevId,
 		nextId,
-		navTag,
+		navTags,
 		navDomain,
 	} = loaderData;
 
@@ -137,7 +140,7 @@ export default function MealDetailRoute({ loaderData }: Route.ComponentProps) {
 					prevId={prevId}
 					nextId={nextId}
 					basePath="/hub/galley"
-					tag={navTag}
+					tags={navTags}
 					domain={navDomain}
 					itemLabel="recipe"
 				/>

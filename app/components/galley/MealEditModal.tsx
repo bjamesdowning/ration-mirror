@@ -3,6 +3,8 @@ import { MealBuilder } from "~/components/galley/MealBuilder";
 import { WarningIcon } from "~/components/icons/PageIcons";
 import type { meal } from "~/db/schema";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
+import type { TagRecord } from "~/lib/tags";
+import { toTagRecords } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
 // Helper type matching MealBuilder's expectation
@@ -15,7 +17,7 @@ type InventoryItem = {
 
 interface MealEditModalProps {
 	meal: typeof meal.$inferSelect & {
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: {
 			cargoId?: string | null;
 			ingredientName: string;
@@ -28,6 +30,7 @@ interface MealEditModalProps {
 		customFields?: Record<string, unknown> | null;
 	};
 	availableIngredients: InventoryItem[];
+	tagSuggestions?: string[];
 	onClose: () => void;
 	fetcher: ReturnType<typeof useFetcher<unknown>>;
 	isUpdating: boolean;
@@ -36,6 +39,7 @@ interface MealEditModalProps {
 export function MealEditModal({
 	meal,
 	availableIngredients,
+	tagSuggestions = [],
 	onClose,
 	fetcher,
 }: MealEditModalProps) {
@@ -58,7 +62,7 @@ export function MealEditModal({
 		servings: meal.servings || 1,
 		prepTime: meal.prepTime || undefined,
 		cookTime: meal.cookTime || undefined,
-		tags: meal.tags || [],
+		tags: toTagRecords(meal.tags).map((t) => t.slug),
 		equipment: meal.equipment || [],
 		customFields: normalizeCustomFields(
 			meal.customFields as Record<string, unknown> | null,
@@ -98,6 +102,7 @@ export function MealEditModal({
 				<MealBuilder
 					availableIngredients={availableIngredients}
 					defaultValue={defaultValues}
+					tagSuggestions={tagSuggestions}
 					method="post"
 					fetcher={fetcher}
 					submitLabel="Save Changes"

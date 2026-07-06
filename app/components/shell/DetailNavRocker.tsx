@@ -8,14 +8,14 @@ interface DetailNavRockerProps {
 	prevId: string | null;
 	nextId: string | null;
 	basePath: string;
-	tag?: string;
+	tags?: string;
 	domain?: string;
 	itemLabel: string;
 }
 
-function buildSearchParams(tag?: string, domain?: string): string {
+function buildSearchParams(tags?: string, domain?: string): string {
 	const params = new URLSearchParams();
-	if (tag) params.set("tag", tag);
+	if (tags) params.set("tags", tags);
 	if (domain) params.set("domain", domain);
 	const qs = params.toString();
 	return qs ? `?${qs}` : "";
@@ -25,11 +25,11 @@ export function DetailNavRocker({
 	prevId,
 	nextId,
 	basePath,
-	tag,
+	tags,
 	domain,
 	itemLabel,
 }: DetailNavRockerProps) {
-	const search = buildSearchParams(tag, domain);
+	const search = buildSearchParams(tags, domain);
 
 	return (
 		<nav

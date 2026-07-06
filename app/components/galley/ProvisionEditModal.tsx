@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { type useFetcher, useRevalidator } from "react-router";
+import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import type { meal } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import type { TagRecord } from "~/lib/tags";
+import { toTagRecords } from "~/lib/tags";
 import { SUPPORTED_UNITS } from "~/lib/units";
 
 interface ProvisionEditModalProps {
 	meal: typeof meal.$inferSelect & {
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: { ingredientName: string; quantity: number; unit: string }[];
 	};
+	tagSuggestions?: string[];
 	onClose: () => void;
 	fetcher: ReturnType<
 		typeof useFetcher<{ provision?: unknown; error?: string }>
@@ -17,6 +21,7 @@ interface ProvisionEditModalProps {
 
 export function ProvisionEditModal({
 	meal,
+	tagSuggestions = [],
 	onClose,
 	fetcher,
 }: ProvisionEditModalProps) {
@@ -27,7 +32,9 @@ export function ProvisionEditModal({
 	);
 	const [unit, setUnit] = useState(meal.ingredients?.[0]?.unit ?? "unit");
 	const [domain, setDomain] = useState(meal.domain ?? "food");
-	const [tagsStr, setTagsStr] = useState((meal.tags ?? []).join(", "));
+	const [tagSlugs, setTagSlugs] = useState(() =>
+		toTagRecords(meal.tags).map((t) => t.slug),
+	);
 
 	const isSubmitting = fetcher.state !== "idle";
 
@@ -40,17 +47,13 @@ export function ProvisionEditModal({
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		const tags = tagsStr
-			.split(",")
-			.map((t) => t.trim().toLowerCase())
-			.filter(Boolean);
 		fetcher.submit(
 			JSON.stringify({
 				name: name.trim().toLowerCase(),
 				quantity: Number(quantity) || 1,
 				unit: unit || "unit",
 				domain: domain || "food",
-				tags,
+				tags: tagSlugs,
 			}),
 			{
 				method: "PATCH",
@@ -82,56 +85,47 @@ export function ProvisionEditModal({
 				)}
 
 				<form onSubmit={handleSubmit} className="space-y-4">
-					<div>
-						<label
-							htmlFor="provision-name"
-							className="block text-sm font-medium text-muted mb-1"
-						>
+					<div className="flex flex-col gap-2">
+						<label htmlFor="provision-name" className="text-label text-muted">
 							Name
 						</label>
 						<input
 							id="provision-name"
 							type="text"
-							inputMode="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							required
-							className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						/>
 					</div>
 
 					<div className="grid grid-cols-2 gap-4">
-						<div>
+						<div className="flex flex-col gap-2">
 							<label
 								htmlFor="provision-quantity"
-								className="block text-sm font-medium text-muted mb-1"
+								className="text-label text-muted"
 							>
 								Quantity
 							</label>
 							<input
 								id="provision-quantity"
 								type="number"
-								inputMode="decimal"
-								min="0.01"
+								min={0}
 								step="any"
 								value={quantity}
-								onChange={(e) => setQuantity(Number(e.target.value) || 0)}
-								required
-								className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								onChange={(e) => setQuantity(Number(e.target.value))}
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							/>
 						</div>
-						<div>
-							<label
-								htmlFor="provision-unit"
-								className="block text-sm font-medium text-muted mb-1"
-							>
+						<div className="flex flex-col gap-2">
+							<label htmlFor="provision-unit" className="text-label text-muted">
 								Unit
 							</label>
 							<select
 								id="provision-unit"
 								value={unit}
 								onChange={(e) => setUnit(e.target.value)}
-								className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 							>
 								{SUPPORTED_UNITS.map((u) => (
 									<option key={u} value={u}>
@@ -142,18 +136,15 @@ export function ProvisionEditModal({
 						</div>
 					</div>
 
-					<div>
-						<label
-							htmlFor="provision-domain"
-							className="block text-sm font-medium text-muted mb-1"
-						>
+					<div className="flex flex-col gap-2">
+						<label htmlFor="provision-domain" className="text-label text-muted">
 							Domain
 						</label>
 						<select
 							id="provision-domain"
 							value={domain}
 							onChange={(e) => setDomain(e.target.value)}
-							className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
 						>
 							{ITEM_DOMAINS.map((d) => (
 								<option key={d} value={d}>
@@ -163,38 +154,30 @@ export function ProvisionEditModal({
 						</select>
 					</div>
 
-					<div>
-						<label
-							htmlFor="provision-tags"
-							className="block text-sm font-medium text-muted mb-1"
-						>
-							Tags (comma-separated)
-						</label>
-						<input
-							id="provision-tags"
-							type="text"
-							inputMode="text"
-							value={tagsStr}
-							onChange={(e) => setTagsStr(e.target.value)}
-							placeholder="e.g. snack, staple"
-							className="w-full bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
+					<div className="flex flex-col gap-2">
+						<span className="text-label text-muted">Tags</span>
+						<TagChipEditor
+							value={tagSlugs}
+							onChange={setTagSlugs}
+							suggestions={tagSuggestions}
+							name=""
 						/>
 					</div>
 
-					<div className="flex gap-3 pt-2">
+					<div className="flex justify-end gap-3 pt-4 border-t border-platinum">
 						<button
 							type="button"
 							onClick={onClose}
-							className="flex-1 py-2.5 rounded-xl font-medium border border-platinum text-carbon hover:bg-platinum/50 transition-colors"
+							className="btn-secondary px-4 py-2.5 rounded-lg"
 						>
 							Cancel
 						</button>
 						<button
 							type="submit"
 							disabled={isSubmitting}
-							className="flex-1 py-3 bg-hyper-green text-carbon font-semibold rounded-xl shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+							className="bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
-							{isSubmitting ? "Saving…" : "Save"}
+							{isSubmitting ? "Saving..." : "Save Changes"}
 						</button>
 					</div>
 				</form>

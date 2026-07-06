@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 import { normalizeUnitAlias } from "../units";
 import { parseDirections, serializeDirections } from "./directions";
+import { TagSlugsInputSchema } from "./tag";
 import { UnitSchema } from "./units";
 
 /** Rejects common prompt injection patterns before user customization reaches the LLM */
@@ -81,7 +82,7 @@ export const MealSchema = z.object({
 	cookTime: z.coerce.number().int().nonnegative().optional(),
 	customFields: z.record(z.string(), z.string()).default({}),
 	ingredients: z.array(MealIngredientSchema).default([]),
-	tags: z.array(z.string().transform((v) => v.toLowerCase())).default([]),
+	tags: TagSlugsInputSchema,
 });
 
 export type MealInput = z.infer<typeof MealSchema>;
@@ -143,9 +144,7 @@ export const ProvisionSchema = z.object({
 	unit: z
 		.union([UnitSchema, z.string().min(1)])
 		.transform((v) => normalizeUnitAlias(typeof v === "string" ? v : v)),
-	tags: z
-		.array(z.string().transform((v) => v.toLowerCase().trim()))
-		.default([]),
+	tags: TagSlugsInputSchema,
 });
 
 export type ProvisionInput = z.infer<typeof ProvisionSchema>;

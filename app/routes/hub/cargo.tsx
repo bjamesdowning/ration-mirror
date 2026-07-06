@@ -24,6 +24,7 @@ import {
 	type CameraInputHandle,
 } from "~/components/scanner/CameraInput";
 import { ScanIntroModal } from "~/components/scanner/ScanIntroModal";
+import { TagFilterChips } from "~/components/shared/TagFilterChips";
 import { ApiHint } from "~/components/shell/ApiHint";
 import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
@@ -33,7 +34,6 @@ import {
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { PaginationBar } from "~/components/shell/PaginationBar";
-import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { requireActiveGroup } from "~/lib/auth.server";
@@ -41,9 +41,8 @@ import { CapacityExceededError } from "~/lib/capacity.server";
 import {
 	addOrMergeItem,
 	CargoItemSchema,
-	getCargo,
 	getCargoCount,
-	getCargoTags,
+	getCargoWithTags,
 	jettisonItem,
 	updateItem,
 } from "~/lib/cargo.server";
@@ -53,6 +52,11 @@ import {
 	createProvisionFromCargo,
 	getPromotedCargoIds,
 } from "~/lib/meals.server";
+import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
+import {
+	filterCargoIdsByTagSlugs,
+	getOrganizationTags,
+} from "~/lib/tags.server";
 import type { Route } from "./+types/cargo";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -74,7 +78,7 @@ const CreateMergeIntentSchema = z
 
 const CARGO_PAGE_SIZE = 200;
 
-/** Skip revalidation when only tag filter changes — Cargo tag filter is client-side; domain and page are server-consumed. */
+/** Skip revalidation when only tag filter changes — domain, tags, and page are server-consumed. */
 export function shouldRevalidate({
 	currentUrl,
 	nextUrl,
@@ -88,14 +92,14 @@ export function shouldRevalidate({
 }) {
 	if (formAction) return defaultShouldRevalidate;
 	if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
-	// If domain or page changed, we must revalidate (server-consumed)
 	if (
 		currentUrl.searchParams.get("domain") !== nextUrl.searchParams.get("domain")
 	)
 		return defaultShouldRevalidate;
+	if (currentUrl.searchParams.get("tags") !== nextUrl.searchParams.get("tags"))
+		return defaultShouldRevalidate;
 	if (currentUrl.searchParams.get("page") !== nextUrl.searchParams.get("page"))
 		return defaultShouldRevalidate;
-	// Only tag changed — client-side filter, skip revalidation
 	return false;
 }
 
@@ -104,7 +108,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
 	const domain = url.searchParams.get("domain") || undefined;
-	const tag = url.searchParams.get("tag") || undefined;
+	const tagSlugs = tagsFromSearchParam(url.searchParams.get("tags"));
 	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
 
 	// Parse user settings to get view mode preference
@@ -118,30 +122,44 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		} catch {}
 	}
 
-	const [cargo, totalCargo, availableTags, promotedCargoIds, activeCargoIds] =
-		await Promise.all([
-			getCargo(
-				context.cloudflare.env.DB,
-				groupId,
-				domain as ItemDomain | undefined,
-				{ limit: CARGO_PAGE_SIZE, offset: page * CARGO_PAGE_SIZE },
-			),
-			getCargoCount(
-				context.cloudflare.env.DB,
-				groupId,
-				domain as ItemDomain | undefined,
-			),
-			getCargoTags(context.cloudflare.env.DB, groupId),
-			getPromotedCargoIds(context.cloudflare.env.DB, groupId),
-			getActiveCargoIds(context.cloudflare.env.DB, groupId),
+	const db = context.cloudflare.env.DB;
+	const domainFilter = domain as ItemDomain | undefined;
+
+	let cargo: Awaited<ReturnType<typeof getCargoWithTags>>;
+	let totalCargo: number;
+
+	if (tagSlugs.length > 0) {
+		const matchingIds = await filterCargoIdsByTagSlugs(db, groupId, tagSlugs);
+		const matchingIdSet = new Set(matchingIds);
+		const allWithTags = await getCargoWithTags(db, groupId, domainFilter);
+		const filtered = allWithTags.filter((item) => matchingIdSet.has(item.id));
+		totalCargo = filtered.length;
+		cargo = filtered.slice(
+			page * CARGO_PAGE_SIZE,
+			(page + 1) * CARGO_PAGE_SIZE,
+		);
+	} else {
+		[cargo, totalCargo] = await Promise.all([
+			getCargoWithTags(db, groupId, domainFilter, {
+				limit: CARGO_PAGE_SIZE,
+				offset: page * CARGO_PAGE_SIZE,
+			}),
+			getCargoCount(db, groupId, domainFilter),
 		]);
+	}
+
+	const [availableTags, promotedCargoIds, activeCargoIds] = await Promise.all([
+		getOrganizationTags(db, groupId),
+		getPromotedCargoIds(db, groupId),
+		getActiveCargoIds(db, groupId),
+	]);
 
 	return {
 		cargo,
 		totalCargo,
 		currentDomain: domain,
-		currentTag: tag,
-		availableTags,
+		currentTags: tagSlugs,
+		availableTags: availableTags.filter((t) => t.cargoCount > 0),
 		promotedCargoIds,
 		activeCargoIds,
 		page,
@@ -392,42 +410,30 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 	const importRef = useRef<CsvImportButtonHandle>(null);
 	const {
 		activeDomain,
-		currentTag,
+		currentTags,
 		handleDomainChange,
-		handleTagChange,
+		toggleTag,
 		clearAllFilters,
 		hasActiveFilters,
 	} = usePageFilters();
 
-	// Local Search Logic
+	const tagSuggestions = availableTags.map((t) => t.slug);
+
+	// Local search only — tag/domain/page filtering is server-side
 	const filteredCargo = useMemo(() => {
-		let items: typeof initialCargo = initialCargo;
+		let items = initialCargo;
 
-		const parseTags = (raw: unknown): string[] => {
-			if (Array.isArray(raw)) return raw.filter((t) => typeof t === "string");
-			if (typeof raw === "string") {
-				try {
-					const parsed = JSON.parse(raw);
-					if (Array.isArray(parsed))
-						return parsed.filter((t) => typeof t === "string");
-				} catch {}
-			}
-			return [];
-		};
-
-		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
 			items = items.filter(
 				(item) =>
 					item.name.toLowerCase().includes(query) ||
-					parseTags(item.tags).some((tag) => tag.toLowerCase().includes(query)),
+					item.tags.some(
+						(tag) =>
+							tag.name.toLowerCase().includes(query) ||
+							tag.slug.toLowerCase().includes(query),
+					),
 			);
-		}
-
-		// Filter by tag
-		if (currentTag) {
-			items = items.filter((item) => parseTags(item.tags).includes(currentTag));
 		}
 
 		if (activeDomain !== "all") {
@@ -435,7 +441,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 		}
 
 		return items;
-	}, [initialCargo, searchQuery, currentTag, activeDomain]);
+	}, [initialCargo, searchQuery, activeDomain]);
 
 	const selectedCount = selectedCargoIds.size;
 
@@ -516,12 +522,11 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				onDomainChange={handleDomainChange}
 			/>
 
-			<TagFilterDropdown
-				label="Tag"
-				emptyLabel="All Items"
-				currentTag={currentTag}
-				availableTags={availableTags}
-				onTagChange={handleTagChange}
+			<TagFilterChips
+				label="Tags"
+				tags={availableTags}
+				activeSlugs={currentTags}
+				onToggle={toggleTag}
 			/>
 
 			{/* Clear filters */}
@@ -662,6 +667,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								defaultDomain={
 									activeDomain === "all" ? undefined : activeDomain
 								}
+								tagSuggestions={tagSuggestions}
 								onUpgradeRequired={() => setShowUpgradePrompt(true)}
 							/>
 						}
@@ -673,6 +679,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 					<div className="glass-panel rounded-xl p-6 md:hidden animate-fade-in">
 						<IngestForm
 							defaultDomain={activeDomain === "all" ? undefined : activeDomain}
+							tagSuggestions={tagSuggestions}
 							onUpgradeRequired={() => setShowUpgradePrompt(true)}
 						/>
 					</div>
@@ -729,10 +736,13 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								const params = new URLSearchParams();
 								if (activeDomain && activeDomain !== "all")
 									params.set("domain", activeDomain);
-								if (currentTag) params.set("tag", currentTag);
+								if (currentTags.length > 0)
+									params.set("tags", tagsToSearchParam(currentTags));
 								const qs = params.toString();
 								return `/hub/cargo/${item.id}${qs ? `?${qs}` : ""}`;
 							}}
+							onTagClick={toggleTag}
+							tagSuggestions={tagSuggestions}
 						/>
 						{totalCargo > pageSize && (
 							<PaginationBar

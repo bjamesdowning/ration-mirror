@@ -623,7 +623,7 @@ On success the client redirects to the new meal. Duplicate URLs return `DUPLICAT
 
 ### 4.1 Cargo (Inventory)
 
-Cargo is the core inventory primitive. Each item belongs to an organization and carries: `name`, `quantity`, `unit`, `domain` (food / household / alcohol), `tags` (JSON array), `status`, and optional `expiresAt`.
+Cargo is the core inventory primitive. Each item belongs to an organization and carries: `name`, `quantity`, `unit`, `domain` (food / household / alcohol), `status`, optional `expiresAt`, and **tags** via the org-wide `tag` registry (see [Tagging](#tagging) below).
 
 **Key workflows:**
 - **Add / Merge** — When a new cargo item is submitted, the system checks Vectorize for a similar existing item (`CARGO_MERGE` threshold: 0.78). If a match is found, the user is offered a "merge" (increment quantity) or "add new" choice. This prevents duplicate pantry entries from OCR variations (e.g. "whole milk 2%" vs. "2% milk").
@@ -634,7 +634,16 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 - **CSV import/export** — Via `POST /api/v1/inventory/import` and `GET /api/cargo/export`. Validated against `CargoCsvRowSchema` (max 500 rows per import).
 - **Vectorize write-through** — Every cargo create/update triggers `upsertCargoVector`, keeping the Vectorize index in sync with D1. Deletes call `deleteCargoVectors`.
 
-**Why `fetchOrgCargoIndex()`?** Matching and dedup need a narrow projection (`id`, `name`, `domain`, `quantity`, `unit`, `base_quantity`, `base_unit`, `expires_at`). Expired rows remain in the index but are excluded from availability math via `isCargoUsableForMatching()`. The full cargo row has ~15 columns including JSON tags and timestamps. Using the narrow index cuts serialisation cost roughly in half and is enforced as a workspace rule.
+**Why `fetchOrgCargoIndex()`?** Matching and dedup need a narrow projection (`id`, `name`, `domain`, `quantity`, `unit`, `base_quantity`, `base_unit`, `expires_at`). Expired rows remain in the index but are excluded from availability math via `isCargoUsableForMatching()`. Tags live in junction tables, not on the cargo row. Using the narrow index cuts serialisation cost and is enforced as a workspace rule.
+
+#### Tagging
+
+Tags are **organization-wide** labels stored in the `tag` registry (`drizzle/0036_tag_registry.sql`) and linked to cargo and meals via `cargo_tag` / `meal_tag` join tables. Each cargo item or meal supports up to **10 tags**. Slugs are normalized (`gluten-free`) with optional display name, color, and category.
+
+- **Create on use** — Assigning a tag on any cargo or meal form auto-creates the registry entry (`resolveTagIds` in `app/lib/tags.server.ts`).
+- **Filter** — Cargo and Galley support multi-tag filters (OR by default; AND mode available for hub widgets via `tagFilterMode`).
+- **Manage** — **Settings → Group → Tags** lists all org tags with usage counts. Owners/admins can rename, recolor, categorize, merge duplicates, delete unused tags, or run bulk unused cleanup.
+- **API** — Web: `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/tags/:id/merge`. Mobile: `GET/POST /api/mobile/v1/tags` plus matching `:id` routes.
 
 ---
 
@@ -648,7 +657,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 - **URL import** — `POST /api/meals/import` (1 credit) returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch or Browser Rendering fallback), runs Gemini 3.5 Flash via AI Gateway for extraction, creates the meal in D1. On success the client redirects to the meal. Duplicate URLs return `DUPLICATE_URL` synchronously (409) or from the poll. HTTPS-only URLs are enforced (SSRF guard). Browser Rendering is used when plain fetch yields 429/403, insufficient content, or AI returns `NOT_A_RECIPE`. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
-- **Tags** — Stored in a separate `meal_tag` join table (unique per meal+tag). Used for filtering in the Galley view and the MCP `list_meals` tool.
+- **Tags** — Shared org-wide registry via `tag` + `meal_tag` junction (same tags as cargo). Used for filtering in Galley, Manifest, Supply, and MCP `list_meals`.
 - **Export/import** — JSON manifest format (`GalleyManifestSchema`) via `/api/galley/export` and `/api/galley/import`. Import is validated against a discriminated union of recipe and provision schemas.
 
 ---
@@ -918,7 +927,6 @@ erDiagram
         text name
         real quantity
         text unit
-        json tags
         text domain
         text status
         timestamp expires_at
@@ -1076,11 +1084,13 @@ erDiagram
 | `organization` | — | Groups/teams with pooled credit balance | `slug` (unique) |
 | `member` | org + user | Membership join table with roles (owner/admin/member) | `(org_id, user_id)` unique |
 | `invitation` | org | Shareable group invitation tokens (7-day expiry) | `token` (unique), `org_id` |
-| `cargo` | org | Pantry/inventory items with quantity, unit, domain, tags | `(org_id, domain)` |
+| `cargo` | org | Pantry/inventory items with quantity, unit, domain | `(org_id, domain)` |
+| `tag` | org | Org-wide tag registry (slug, name, color, category) | `(org_id, slug)` unique |
+| `cargo_tag` | cargo + tag | Junction: cargo ↔ tag | `(cargo_id, tag_id)` PK |
 | `ledger` | org | Immutable credit transaction log (debits + credits) | `org_id`, `user_id` |
 | `meal` | org | Recipes and provisions; `type` discriminates them | `(org_id, domain)`, `(org_id, type)` |
 | `meal_ingredient` | meal | Ingredient list with optional soft FK to cargo | `meal_id`, `ingredient_name` |
-| `meal_tag` | meal | Categorisation tags, unique per meal+tag | `(meal_id, tag)` unique |
+| `meal_tag` | meal + tag | Junction: meal ↔ tag | `(meal_id, tag_id)` PK |
 | `active_meal_selection` | org + meal | Currently "selected" meals for supply list generation | `(org_id, meal_id)` unique |
 | `supply_list` | org | Shopping/supply lists with optional share token | `org_id`, `share_token` |
 | `supply_item` | supply_list | Individual items; `source_meal_ids` (JSON) tracks multiple sources | `list_id`, `(list_id, domain)` |
@@ -1700,7 +1710,10 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/session` | User, org, credits, tier, `aiCosts` |
 | `GET` | `/api/mobile/v1/hub` | Widget grid data + resolved layout |
 | `GET` / `POST` | `/api/mobile/v1/cargo` | Paginated inventory / create item |
-| `GET` | `/api/mobile/v1/cargo/tags` | Distinct cargo tags (filter picker) |
+| `GET` | `/api/mobile/v1/cargo/tags` | Distinct cargo tag slugs (filter picker; org registry) |
+| `GET` / `POST` | `/api/mobile/v1/tags` | List org tags with usage counts / create tag |
+| `PATCH` / `DELETE` | `/api/mobile/v1/tags/:id` | Update or delete registry tag |
+| `POST` | `/api/mobile/v1/tags/:id/merge` | Merge tag into target |
 | `GET` | `/api/mobile/v1/cargo/tag-index` | Cargo name→tag index (supply filter) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/cargo/:id` | Cargo detail / update / delete |
 | `POST` | `/api/mobile/v1/cargo/batch` | Batch add cargo (scan confirm) |

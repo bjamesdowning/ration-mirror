@@ -16,6 +16,7 @@ import {
 	mealPlanEntry,
 	mealTag,
 	member,
+	tag,
 	user,
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
@@ -24,6 +25,7 @@ import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
+import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
 import type { ManifestPreviewData } from "./types";
 import { mergeDeductions } from "./undo-token.server";
 
@@ -233,22 +235,10 @@ async function attachMealTagsToEntries(
 ): Promise<MealPlanEntryWithMeal[]> {
 	if (entries.length === 0) return entries;
 	const mealIds = [...new Set(entries.map((e) => e.mealId))];
-	const d1 = drizzle(db);
-	const tagRows = await chunkedQuery(mealIds, (chunk) =>
-		d1
-			.select({ mealId: mealTag.mealId, tag: mealTag.tag })
-			.from(mealTag)
-			.where(inArray(mealTag.mealId, chunk)),
-	);
-	const tagsByMealId = new Map<string, string[]>();
-	for (const { mealId, tag } of tagRows) {
-		const existing = tagsByMealId.get(mealId) ?? [];
-		existing.push(tag);
-		tagsByMealId.set(mealId, existing);
-	}
+	const tagsByMealId = await getTagsForMealIds(db, mealIds);
 	return entries.map((entry) => ({
 		...entry,
-		mealTags: tagsByMealId.get(entry.mealId) ?? [],
+		mealTags: tagsToSlugs(tagsByMealId.get(entry.mealId) ?? []),
 	}));
 }
 
@@ -896,7 +886,8 @@ export async function getManifestPreview(
 			d1
 				.selectDistinct({ mealId: mealTag.mealId })
 				.from(mealTag)
-				.where(and(inArray(mealTag.mealId, chunk), inArray(mealTag.tag, tags))),
+				.innerJoin(tag, eq(mealTag.tagId, tag.id))
+				.where(and(inArray(mealTag.mealId, chunk), inArray(tag.slug, tags))),
 		);
 		const allowed = new Set(taggedRows.map((r) => r.mealId));
 		return {
@@ -921,14 +912,15 @@ export async function getDistinctMealTags(
 	const d1 = drizzle(db);
 
 	const rows = await d1
-		.selectDistinct({ tag: mealTag.tag })
+		.selectDistinct({ slug: tag.slug })
 		.from(mealTag)
+		.innerJoin(tag, eq(mealTag.tagId, tag.id))
 		.innerJoin(meal, eq(mealTag.mealId, meal.id))
 		.where(eq(meal.organizationId, organizationId))
-		.orderBy(asc(mealTag.tag))
+		.orderBy(asc(tag.slug))
 		.limit(200);
 
-	return rows.map((r) => r.tag);
+	return rows.map((r) => r.slug);
 }
 
 // ---------------------------------------------------------------------------
@@ -968,31 +960,14 @@ export async function getMealsForPicker(
 		return [];
 	}
 
-	// Batch-load tags to avoid N+1 queries. D1 SQLite limit is 100 params
-	// per query, so we chunk the IDs.
+	// Batch-load tags via junction table
 	const mealIds = rows.map((r) => r.id);
-	const CHUNK_SIZE = 90;
-	const tagRows: { mealId: string; tag: string }[] = [];
-	for (let i = 0; i < mealIds.length; i += CHUNK_SIZE) {
-		const chunk = mealIds.slice(i, i + CHUNK_SIZE);
-		const chunkTags = await d1
-			.select({ mealId: mealTag.mealId, tag: mealTag.tag })
-			.from(mealTag)
-			.where(inArray(mealTag.mealId, chunk));
-		tagRows.push(...chunkTags);
-	}
-
-	const tagsByMealId = new Map<string, string[]>();
-	for (const { mealId, tag } of tagRows) {
-		const existing = tagsByMealId.get(mealId) ?? [];
-		existing.push(tag);
-		tagsByMealId.set(mealId, existing);
-	}
+	const tagsByMealId = await getTagsForMealIds(db, mealIds);
 
 	return rows.map((r) => ({
 		...r,
 		servings: r.servings ?? 1,
-		tags: tagsByMealId.get(r.id) ?? [],
+		tags: tagsToSlugs(tagsByMealId.get(r.id) ?? []),
 		type: r.type ?? "recipe",
 	}));
 }

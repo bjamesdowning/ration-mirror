@@ -132,6 +132,11 @@ export default [
 	route("api/provisions", "routes/api/provisions.ts"),
 	route("api/provisions/:id", "routes/api/provisions.$id.ts"),
 
+	// API - Tag registry
+	route("api/tags", "routes/api/tags.ts"),
+	route("api/tags/:id/merge", "routes/api/tags.$id.merge.ts"),
+	route("api/tags/:id", "routes/api/tags.$id.ts"),
+
 	// API - Cargo (static paths before :id)
 	route("api/cargo", "routes/api/cargo.ts"),
 	route("api/cargo/export", "routes/api/cargo.export.ts"),
@@ -311,6 +316,12 @@ export default [
 	),
 	route("api/mobile/v1/hub", "routes/api/mobile/v1.hub.ts"),
 	route("api/mobile/v1/settings", "routes/api/mobile/v1.settings.ts"),
+	route("api/mobile/v1/tags", "routes/api/mobile/v1.tags.ts"),
+	route(
+		"api/mobile/v1/tags/:id/merge",
+		"routes/api/mobile/v1.tags.$id.merge.ts",
+	),
+	route("api/mobile/v1/tags/:id", "routes/api/mobile/v1.tags.$id.ts"),
 	route("api/mobile/v1/user/avatar", "routes/api/mobile/v1.user.avatar.ts"),
 	route(
 		"api/mobile/v1/organization/avatar",

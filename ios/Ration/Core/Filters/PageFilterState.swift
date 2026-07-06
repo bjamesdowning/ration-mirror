@@ -27,7 +27,7 @@ struct PageFilterConfiguration: Sendable {
 @Observable
 final class PageFilterState {
     var domain: CargoDomain?
-    var tag: String?
+    var selectedTags: [String] = []
     var search = ""
     var matchingEnabled = false
     var supplySort: SupplySortMode = .alpha
@@ -42,7 +42,7 @@ final class PageFilterState {
 
     var hasActiveFilters: Bool {
         if configuration.supportsDomain, domain != nil { return true }
-        if configuration.supportsTags, tag?.isEmpty == false { return true }
+        if configuration.supportsTags, !selectedTags.isEmpty { return true }
         if configuration.supportsSearch, !search.trimmingCharacters(in: .whitespaces).isEmpty { return true }
         if configuration.supportsMatching, matchingEnabled { return true }
         if configuration.supportsSupplySort {
@@ -54,10 +54,18 @@ final class PageFilterState {
 
     func clearAll() {
         domain = nil
-        tag = nil
+        selectedTags = []
         search = ""
         matchingEnabled = false
         supplySort = .alpha
         hidePurchased = false
+    }
+
+    func toggleTag(_ tag: String) {
+        if selectedTags.contains(tag) {
+            selectedTags.removeAll { $0 == tag }
+        } else {
+            selectedTags.append(tag)
+        }
     }
 }

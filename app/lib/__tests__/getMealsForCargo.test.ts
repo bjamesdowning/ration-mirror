@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const batchMock = vi.fn();
 const chunkedQueryMock = vi.fn();
+const getTagsForMealIdsMock = vi.fn();
 
 vi.mock("drizzle-orm/d1", () => {
 	const queryBuilder = {
@@ -25,13 +26,19 @@ vi.mock("../query-utils.server", () => ({
 	chunkedQuery: chunkedQueryMock,
 	D1_MAX_BOUND_PARAMS: 100,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT: 12,
-	D1_MAX_TAG_ROWS_PER_STATEMENT: 33,
+	D1_MAX_TAG_ROWS_PER_STATEMENT: 50,
+}));
+
+vi.mock("../tags.server", () => ({
+	getTagsForMealIds: (...args: unknown[]) => getTagsForMealIdsMock(...args),
+	getOrganizationTagSlugs: vi.fn(async () => []),
 }));
 
 describe("getMealsForCargo", () => {
 	beforeEach(() => {
 		batchMock.mockReset();
 		chunkedQueryMock.mockReset();
+		getTagsForMealIdsMock.mockReset();
 	});
 
 	it("returns meals matched by direct cargoId and ingredient name", async () => {
@@ -64,25 +71,27 @@ describe("getMealsForCargo", () => {
 			],
 		]);
 
-		chunkedQueryMock
-			.mockResolvedValueOnce([
-				{
-					id: "meal-1",
-					name: "Overnight Oats",
-					description: "Quick breakfast",
-					createdAt: new Date("2026-01-01T00:00:00Z"),
-				},
-				{
-					id: "meal-2",
-					name: "White Sauce",
-					description: "Pan sauce",
-					createdAt: new Date("2026-01-02T00:00:00Z"),
-				},
-			])
-			.mockResolvedValueOnce([
-				{ mealId: "meal-1", tag: "breakfast" },
-				{ mealId: "meal-2", tag: "sauce" },
-			]);
+		chunkedQueryMock.mockResolvedValueOnce([
+			{
+				id: "meal-1",
+				name: "Overnight Oats",
+				description: "Quick breakfast",
+				createdAt: new Date("2026-01-01T00:00:00Z"),
+			},
+			{
+				id: "meal-2",
+				name: "White Sauce",
+				description: "Pan sauce",
+				createdAt: new Date("2026-01-02T00:00:00Z"),
+			},
+		]);
+
+		getTagsForMealIdsMock.mockResolvedValue(
+			new Map([
+				["meal-1", [{ id: "tag-1", slug: "breakfast", name: "Breakfast" }]],
+				["meal-2", [{ id: "tag-2", slug: "sauce", name: "Sauce" }]],
+			]),
+		);
 
 		const result = await getMealsForCargo(
 			{} as D1Database,
@@ -96,6 +105,7 @@ describe("getMealsForCargo", () => {
 		expect(result[1].id).toBe("meal-1");
 		expect(result[0].connectedIngredients[0].connectionType).toBe("name_match");
 		expect(result[1].connectedIngredients[0].connectionType).toBe("direct");
+		expect(result[0].tags[0].slug).toBe("sauce");
 	});
 
 	it("deduplicates meal rows when direct and name matches hit same meal", async () => {
@@ -128,16 +138,18 @@ describe("getMealsForCargo", () => {
 			],
 		]);
 
-		chunkedQueryMock
-			.mockResolvedValueOnce([
-				{
-					id: "meal-1",
-					name: "Cream Soup",
-					description: null,
-					createdAt: new Date("2026-01-02T00:00:00Z"),
-				},
-			])
-			.mockResolvedValueOnce([{ mealId: "meal-1", tag: "soup" }]);
+		chunkedQueryMock.mockResolvedValueOnce([
+			{
+				id: "meal-1",
+				name: "Cream Soup",
+				description: null,
+				createdAt: new Date("2026-01-02T00:00:00Z"),
+			},
+		]);
+
+		getTagsForMealIdsMock.mockResolvedValue(
+			new Map([["meal-1", [{ id: "tag-1", slug: "soup", name: "Soup" }]]]),
+		);
 
 		const result = await getMealsForCargo(
 			{} as D1Database,
@@ -167,5 +179,6 @@ describe("getMealsForCargo", () => {
 
 		expect(result).toEqual([]);
 		expect(chunkedQueryMock).not.toHaveBeenCalled();
+		expect(getTagsForMealIdsMock).not.toHaveBeenCalled();
 	});
 });

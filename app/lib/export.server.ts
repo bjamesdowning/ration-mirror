@@ -1,8 +1,9 @@
 import type { cargo, supplyItem, supplyList } from "../db/schema";
 import { DOMAIN_LABELS } from "./domain";
 import type { GalleyManifest } from "./schemas/galley-manifest";
+import { type TagRecord, tagsToSlugs } from "./tags.server";
 
-type CargoItem = typeof cargo.$inferSelect;
+type CargoItem = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
 function escapeCsvCell(value: string): string {
 	if (/[",\r\n]/.test(value)) {
@@ -26,15 +27,7 @@ export function exportCargoAsCsv(items: CargoItem[]): string {
 		"expires_at",
 	];
 	const rows = items.map((item) => {
-		const tagsRaw = item.tags;
-		const tagsStr =
-			typeof tagsRaw === "string"
-				? Array.isArray(JSON.parse(tagsRaw || "[]"))
-					? (JSON.parse(tagsRaw) as string[]).join(",")
-					: tagsRaw
-				: Array.isArray(tagsRaw)
-					? (tagsRaw as string[]).join(",")
-					: "";
+		const tagsStr = tagsToSlugs(item.tags).join(",");
 		const expiresAt =
 			item.expiresAt instanceof Date
 				? item.expiresAt.toISOString().slice(0, 10)

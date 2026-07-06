@@ -15,6 +15,7 @@ import { addDays } from "../../manifest-dates";
 import { matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
+import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { MCP_SERVER_VERSION } from "../../version";
 import { decodeCursor, encodeCursor, err, ok } from "../envelope";
@@ -177,13 +178,17 @@ export function registerReadTools(server: McpServer, env: McpToolsEnv): void {
 						ctx.organizationId,
 						{ limit, cursor, domain: a.domain },
 					);
+					const tagMap = await getTagsForCargoIds(
+						env.DB,
+						items.map((c) => c.id),
+					);
 					const mapped = items.map((c) => ({
 						id: c.id,
 						name: c.name,
 						quantity: c.quantity,
 						unit: c.unit,
 						domain: c.domain,
-						tags: c.tags,
+						tags: tagsToSlugs(tagMap.get(c.id) ?? []),
 						expiresAt: c.expiresAt,
 					}));
 					return ok("list_inventory", mapped, {

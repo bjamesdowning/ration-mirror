@@ -165,13 +165,13 @@ struct CargoDetailView: View {
         }
     }
 
-    private func tagsSection(_ tags: [String]) -> some View {
+    private func tagsSection(_ tags: [Tag]) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Tags").rationHeadline()
                 FlowLayout(spacing: 8) {
-                    ForEach(tags, id: \.self) { tag in
-                        Text(tag)
+                    ForEach(tags) { tag in
+                        Text(tag.name)
                             .rationCaption()
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -340,7 +340,7 @@ struct CargoDetailView: View {
             cookTime: nil,
             createdAt: Date(),
             updatedAt: Date(),
-            tags: connected.tags,
+            tags: connected.tags.map { Tag(slug: $0) },
             ingredients: connected.connectedIngredients.map {
                 MealIngredient(
                     id: $0.id,

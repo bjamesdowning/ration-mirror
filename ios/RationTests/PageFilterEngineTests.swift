@@ -32,7 +32,7 @@ final class PageFilterEngineTests: XCTestCase {
             cargoItem(name: "rice", domain: "food"),
             cargoItem(name: "soap", domain: "household"),
         ]
-        let filtered = PageFilterEngine.filterCargo(items, domain: .food, tag: nil, search: "")
+        let filtered = PageFilterEngine.filterCargo(items, domain: .food, tags: [], search: "")
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered[0].name, "rice")
     }
@@ -42,13 +42,13 @@ final class PageFilterEngineTests: XCTestCase {
             cargoItem(name: "rice", tags: ["pantry"]),
             cargoItem(name: "milk", tags: ["dairy"]),
         ]
-        let filtered = PageFilterEngine.filterCargo(items, domain: nil, tag: "pantry", search: "")
+        let filtered = PageFilterEngine.filterCargo(items, domain: nil, tags: ["pantry"], search: "")
         XCTAssertEqual(filtered.map(\.name), ["rice"])
     }
 
     func testFilterCargoBySearch() {
         let items = [cargoItem(name: "brown rice"), cargoItem(name: "salt")]
-        let filtered = PageFilterEngine.filterCargo(items, domain: nil, tag: nil, search: "rice")
+        let filtered = PageFilterEngine.filterCargo(items, domain: nil, tags: [], search: "rice")
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered[0].name, "brown rice")
     }
@@ -87,14 +87,14 @@ final class PageFilterEngineTests: XCTestCase {
             cookTime: nil,
             createdAt: Date(),
             updatedAt: Date(),
-            tags: tags,
+            tags: tags.map { Tag(slug: $0) },
             ingredients: []
         )
     }
 
     func testFilterMealsBySearch() {
         let meals = [mealItem(name: "potato salad"), mealItem(name: "pasta")]
-        let filtered = PageFilterEngine.filterMeals(meals, domain: nil, tag: nil, search: "potato")
+        let filtered = PageFilterEngine.filterMeals(meals, domain: nil, tags: [], search: "potato")
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered[0].name, "potato salad")
     }

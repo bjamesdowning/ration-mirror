@@ -16,6 +16,7 @@ import type {
 	ManifestProvision,
 	ManifestRecipe,
 } from "./schemas/galley-manifest";
+import { tagsToSlugs } from "./tags.server";
 import { normalizeUnitAlias } from "./units";
 
 type MealWithIngredients = Awaited<ReturnType<typeof getMeals>>[number];
@@ -42,7 +43,7 @@ function mealsToManifest(meals: MealWithIngredients[]): GalleyManifest {
 				domain: m.domain as "food" | "household" | "alcohol",
 				quantity: ing ? ing.quantity : 1,
 				unit: normalizeUnitAlias(ing ? ing.unit : "unit"),
-				tags: m.tags,
+				tags: tagsToSlugs(m.tags),
 			};
 		}
 		return {
@@ -63,7 +64,7 @@ function mealsToManifest(meals: MealWithIngredients[]): GalleyManifest {
 				isOptional: ing.isOptional ?? false,
 				orderIndex: i,
 			})),
-			tags: m.tags,
+			tags: tagsToSlugs(m.tags),
 		};
 	});
 

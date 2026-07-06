@@ -29,6 +29,7 @@ import {
 	SearchIcon,
 	SparkleIcon,
 } from "~/components/icons/PageIcons";
+import { TagFilterChips } from "~/components/shared/TagFilterChips";
 import { ApiHint } from "~/components/shell/ApiHint";
 import { CapacityIndicator } from "~/components/shell/CapacityIndicator";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
@@ -38,7 +39,6 @@ import {
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { PaginationBar } from "~/components/shell/PaginationBar";
-import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { usePageFilters } from "~/hooks/usePageFilters";
 import { parseAllergens } from "~/lib/allergens";
@@ -46,11 +46,12 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
 import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
+import { getMeals, getMealsCount } from "~/lib/meals.server";
+import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
 import {
-	getMeals,
-	getMealsCount,
-	getOrganizationMealTags,
-} from "~/lib/meals.server";
+	filterMealIdsByTagSlugs,
+	getOrganizationTags,
+} from "~/lib/tags.server";
 import type { Route } from "./+types/galley";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
@@ -60,7 +61,7 @@ const GALLEY_PAGE_SIZE = 100;
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const { session, groupId } = await requireActiveGroup(context, request);
 	const url = new URL(request.url);
-	const tag = url.searchParams.get("tag") || undefined;
+	const tagSlugs = tagsFromSearchParam(url.searchParams.get("tags"));
 	const domain = url.searchParams.get("domain") || undefined;
 	const page = Math.max(0, Number(url.searchParams.get("page") ?? "0"));
 
@@ -81,27 +82,42 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	// needed when the user activates match mode or opens the recipe quick-add
 	// form. Lazy-loading it client-side via /api/cargo on first need saves every
 	// Galley page view from serialising an extra ~200-row payload.
-	const [meals, totalMeals, availableTags, activeSelections] =
-		await Promise.all([
-			getMeals(context.cloudflare.env.DB, groupId, tag, domain as ItemDomain, {
+	const db = context.cloudflare.env.DB;
+	const domainFilter = domain as ItemDomain | undefined;
+
+	let meals: Awaited<ReturnType<typeof getMeals>>;
+	let totalMeals: number;
+
+	if (tagSlugs.length > 0) {
+		const matchingIds = await filterMealIdsByTagSlugs(db, groupId, tagSlugs);
+		const matchingIdSet = new Set(matchingIds);
+		const allMeals = await getMeals(db, groupId, undefined, domainFilter);
+		const filtered = allMeals.filter((meal) => matchingIdSet.has(meal.id));
+		totalMeals = filtered.length;
+		meals = filtered.slice(
+			page * GALLEY_PAGE_SIZE,
+			(page + 1) * GALLEY_PAGE_SIZE,
+		);
+	} else {
+		[meals, totalMeals] = await Promise.all([
+			getMeals(db, groupId, undefined, domainFilter, {
 				limit: GALLEY_PAGE_SIZE,
 				offset: page * GALLEY_PAGE_SIZE,
 			}),
-			getMealsCount(
-				context.cloudflare.env.DB,
-				groupId,
-				tag,
-				domain as ItemDomain | undefined,
-			),
-			getOrganizationMealTags(context.cloudflare.env.DB, groupId),
-			getActiveMealSelections(context.cloudflare.env.DB, groupId),
+			getMealsCount(db, groupId, undefined, domainFilter),
 		]);
+	}
+
+	const [availableTags, activeSelections] = await Promise.all([
+		getOrganizationTags(db, groupId),
+		getActiveMealSelections(db, groupId),
+	]);
 	const activeMealIds = activeSelections.map((selection) => selection.mealId);
 	return {
 		meals,
 		totalMeals,
-		availableTags,
-		currentTag: tag,
+		availableTags: availableTags.filter((t) => t.mealCount > 0),
+		currentTags: tagSlugs,
 		currentDomain: domain,
 		activeMealIds,
 		page,
@@ -219,11 +235,12 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 	const generateRef = useRef<GenerateMealButtonHandle>(null);
 	const importRef = useRef<ImportRecipeButtonHandle>(null);
 	const galleyImportRef = useRef<GalleyImportButtonHandle>(null);
+	const tagSuggestions = availableTags.map((t) => t.slug);
 	const {
 		activeDomain,
-		currentTag,
+		currentTags,
 		handleDomainChange,
-		handleTagChange,
+		toggleTag,
 		clearAllFilters,
 		hasActiveFilters,
 	} = usePageFilters({ extraActiveCheck: () => matchingEnabled });
@@ -240,7 +257,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			(meal) =>
 				meal.name.toLowerCase().includes(query) ||
 				meal.description?.toLowerCase().includes(query) ||
-				meal.tags?.some((tag) => tag.toLowerCase().includes(query)),
+				meal.tags?.some(
+					(tag) =>
+						tag.name.toLowerCase().includes(query) ||
+						tag.slug.toLowerCase().includes(query),
+				),
 		);
 	}, [meals, searchQuery, activeDomain]);
 
@@ -333,12 +354,11 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				onDomainChange={handleDomainChange}
 			/>
 
-			<TagFilterDropdown
-				label="Meal Tag"
-				emptyLabel="All Recipes"
-				currentTag={currentTag}
-				availableTags={availableTags}
-				onTagChange={handleTagChange}
+			<TagFilterChips
+				label="Meal Tags"
+				tags={availableTags}
+				activeSlugs={currentTags}
+				onToggle={toggleTag}
 			/>
 
 			{/* Clear filters */}
@@ -603,11 +623,14 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							onToggleMealActive={handleToggleActive}
 							viewMode={viewMode}
 							userAllergens={userAllergens}
+							tagSuggestions={tagSuggestions}
+							onTagClick={toggleTag}
 							getDetailHref={(meal) => {
 								const params = new URLSearchParams();
 								if (activeDomain && activeDomain !== "all")
 									params.set("domain", activeDomain);
-								if (currentTag) params.set("tag", currentTag);
+								if (currentTags.length > 0)
+									params.set("tags", tagsToSearchParam(currentTags));
 								const qs = params.toString();
 								return `/hub/galley/${meal.id}${qs ? `?${qs}` : ""}`;
 							}}

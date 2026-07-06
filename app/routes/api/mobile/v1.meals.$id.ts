@@ -11,6 +11,8 @@ import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MobileUpdateMealSchema } from "~/lib/schemas/mobile/meals";
 import { UnitSchema } from "~/lib/schemas/units";
+import { toTagRecords } from "~/lib/tags";
+import { tagsToSlugs } from "~/lib/tags.server";
 import type { Route } from "./+types/v1.meals.$id";
 
 type MobileUpdateMealPatch = z.infer<typeof MobileUpdateMealSchema>;
@@ -45,7 +47,7 @@ function mergeMealPatch(
 				isOptional: ing.isOptional ?? false,
 				orderIndex: ing.orderIndex ?? 0,
 			})),
-		tags: patch.tags ?? existing.tags,
+		tags: patch.tags ?? tagsToSlugs(toTagRecords(existing.tags)),
 	};
 }
 

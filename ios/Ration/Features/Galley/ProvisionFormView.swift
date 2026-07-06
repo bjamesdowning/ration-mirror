@@ -10,7 +10,8 @@ struct ProvisionFormView: View {
     @State private var quantity = "1"
     @State private var unit = "unit"
     @State private var domain = "food"
-    @State private var tagsText = ""
+    @State private var tags: [String] = []
+    @State private var tagSuggestions: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showingPaywall = false
@@ -35,9 +36,8 @@ struct ProvisionFormView: View {
                         Text("Alcohol").tag("alcohol")
                     }
                 }
-                Section("Tags (optional, comma-separated)") {
-                    TextField("e.g. snack, staple", text: $tagsText)
-                        .textInputAutocapitalization(.never)
+                Section("Tags (optional)") {
+                    TagChipEditor(tags: $tags, suggestions: tagSuggestions)
                 }
             }
             .navigationTitle("Add provision")
@@ -51,14 +51,12 @@ struct ProvisionFormView: View {
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .task {
+                if let response = try? await env.api.cargoTags() {
+                    tagSuggestions = response.tags
+                }
+            }
         }
-    }
-
-    private var parsedTags: [String] {
-        tagsText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            .filter { !$0.isEmpty }
     }
 
     @MainActor
@@ -73,7 +71,7 @@ struct ProvisionFormView: View {
             domain: domain,
             quantity: qty,
             unit: unit.isEmpty ? "unit" : unit,
-            tags: parsedTags
+            tags: tags
         )
 
         do {

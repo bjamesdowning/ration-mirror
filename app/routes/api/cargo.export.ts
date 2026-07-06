@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getCargo } from "~/lib/cargo.server";
+import { getCargoWithTags } from "~/lib/cargo.server";
 import { exportCargoAsCsv } from "~/lib/export.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/cargo.export";
@@ -34,7 +34,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 	}
 
-	const items = await getCargo(context.cloudflare.env.DB, groupId);
+	const items = await getCargoWithTags(context.cloudflare.env.DB, groupId);
 	const csv = exportCargoAsCsv(items);
 	const date = new Date().toISOString().slice(0, 10);
 

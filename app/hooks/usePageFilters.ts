@@ -1,6 +1,11 @@
 import { useSearchParams } from "react-router";
 import { ITEM_DOMAINS } from "~/lib/domain";
 import type { SupplySortMode } from "~/lib/supply-sort";
+import {
+	normalizeTagSlug,
+	tagsFromSearchParam,
+	tagsToSearchParam,
+} from "~/lib/tags";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -27,9 +32,9 @@ export function usePageFilters(options: UsePageFiltersOptions = {}) {
 		? (activeDomainParam as ItemDomain)
 		: "all";
 
-	const currentTag: string | undefined = supportsTags
-		? searchParams.get("tag") || undefined
-		: undefined;
+	const currentTags: string[] = supportsTags
+		? tagsFromSearchParam(searchParams.get("tags"))
+		: [];
 
 	const sortParam = searchParams.get("sort") || "alpha";
 	const sortMode: SupplySortMode = SUPPLY_SORT_MODES.includes(
@@ -52,14 +57,28 @@ export function usePageFilters(options: UsePageFiltersOptions = {}) {
 		setSearchParams(nextParams);
 	};
 
-	const handleTagChange = (tag: string) => {
+	const toggleTag = (rawSlug: string) => {
+		if (!supportsTags) return;
+		const slug = normalizeTagSlug(rawSlug);
+		if (!slug) return;
+
+		const nextParams = new URLSearchParams(searchParams);
+		const nextTags = currentTags.includes(slug)
+			? currentTags.filter((t) => t !== slug)
+			: [...currentTags, slug];
+
+		if (nextTags.length === 0) {
+			nextParams.delete("tags");
+		} else {
+			nextParams.set("tags", tagsToSearchParam(nextTags));
+		}
+		setSearchParams(nextParams);
+	};
+
+	const clearTags = () => {
 		if (!supportsTags) return;
 		const nextParams = new URLSearchParams(searchParams);
-		if (tag) {
-			nextParams.set("tag", tag);
-		} else {
-			nextParams.delete("tag");
-		}
+		nextParams.delete("tags");
 		setSearchParams(nextParams);
 	};
 
@@ -88,7 +107,7 @@ export function usePageFilters(options: UsePageFiltersOptions = {}) {
 	const clearAllFilters = () => {
 		const nextParams = new URLSearchParams(searchParams);
 		nextParams.delete("domain");
-		nextParams.delete("tag");
+		nextParams.delete("tags");
 		if (supportsSupplySort) {
 			nextParams.delete("sort");
 			nextParams.delete("hidePurchased");
@@ -98,18 +117,19 @@ export function usePageFilters(options: UsePageFiltersOptions = {}) {
 
 	const hasActiveFilters =
 		activeDomain !== "all" ||
-		(!!currentTag && supportsTags) ||
+		(currentTags.length > 0 && supportsTags) ||
 		(supportsSupplySort && sortMode !== "alpha") ||
 		(supportsSupplySort && hidePurchased) ||
 		(extraActiveCheck?.() ?? false);
 
 	return {
 		activeDomain,
-		currentTag,
+		currentTags,
 		sortMode,
 		hidePurchased,
 		handleDomainChange,
-		handleTagChange,
+		toggleTag,
+		clearTags,
 		handleSortChange,
 		handleHidePurchasedChange,
 		clearAllFilters,

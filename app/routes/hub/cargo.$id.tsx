@@ -4,6 +4,7 @@ import { HubHeader } from "~/components/hub/HubHeader";
 import { DetailNavRocker } from "~/components/shell/DetailNavRocker";
 import { requireActiveGroup } from "~/lib/auth.server";
 import {
+	attachTagsToCargo,
 	CargoItemSchema,
 	getAdjacentCargoIds,
 	getCargoItem,
@@ -14,6 +15,8 @@ import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import { ITEM_DOMAINS } from "~/lib/domain";
 import { handleApiError } from "~/lib/error-handler";
 import { getMealsForCargo } from "~/lib/meals.server";
+import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
+import { getOrganizationTags } from "~/lib/tags.server";
 import type { Route } from "./+types/cargo.$id";
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
@@ -22,7 +25,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	if (!id) throw redirect("/hub/cargo");
 
 	const url = new URL(request.url);
-	const tag = url.searchParams.get("tag")?.trim().slice(0, 100) ?? undefined;
+	const tagSlugs = tagsFromSearchParam(url.searchParams.get("tags"));
 	const domainParam = url.searchParams.get("domain");
 	const domain =
 		domainParam &&
@@ -30,27 +33,33 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			? domainParam
 			: undefined;
 
-	const item = await getCargoItem(context.cloudflare.env.DB, groupId, id);
-	if (!item) throw redirect("/hub/cargo");
+	const rawItem = await getCargoItem(context.cloudflare.env.DB, groupId, id);
+	if (!rawItem) throw redirect("/hub/cargo");
 
-	const [connectedMeals, adjacent, activeCargoIds] = await Promise.all([
-		getMealsForCargo(context.cloudflare.env.DB, groupId, id, item.name),
-		getAdjacentCargoIds(
-			context.cloudflare.env.DB,
-			groupId,
-			{ id: item.id, createdAt: item.createdAt },
-			{ domain },
-		),
-		getActiveCargoIds(context.cloudflare.env.DB, groupId),
-	]);
+	const [item] = await attachTagsToCargo(context.cloudflare.env.DB, [rawItem]);
+
+	const [connectedMeals, adjacent, activeCargoIds, orgTags] = await Promise.all(
+		[
+			getMealsForCargo(context.cloudflare.env.DB, groupId, id, item.name),
+			getAdjacentCargoIds(
+				context.cloudflare.env.DB,
+				groupId,
+				{ id: item.id, createdAt: item.createdAt },
+				{ domain },
+			),
+			getActiveCargoIds(context.cloudflare.env.DB, groupId),
+			getOrganizationTags(context.cloudflare.env.DB, groupId),
+		],
+	);
 
 	return {
 		item,
 		connectedMeals,
 		prevId: adjacent.prevId,
 		nextId: adjacent.nextId,
-		navTag: tag,
+		navTags: tagSlugs.length > 0 ? tagsToSearchParam(tagSlugs) : undefined,
 		navDomain: domain,
+		tagSuggestions: orgTags.map((t) => t.slug),
 		isRestockSelected: activeCargoIds.includes(id),
 	};
 }
@@ -168,8 +177,9 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 		connectedMeals,
 		prevId,
 		nextId,
-		navTag,
+		navTags,
 		navDomain,
+		tagSuggestions,
 		isRestockSelected,
 	} = loaderData;
 
@@ -192,7 +202,7 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 					prevId={prevId}
 					nextId={nextId}
 					basePath="/hub/cargo"
-					tag={navTag}
+					tags={navTags}
 					domain={navDomain}
 					itemLabel="ingredient"
 				/>
@@ -200,6 +210,7 @@ export default function CargoDetailRoute({ loaderData }: Route.ComponentProps) {
 			<CargoDetail
 				item={item}
 				connectedMeals={connectedMeals}
+				tagSuggestions={tagSuggestions}
 				isRestockSelected={isRestockSelected}
 			/>
 		</>

@@ -1,11 +1,11 @@
 import { data } from "react-router";
 import {
 	addOrMergeItem,
+	attachTagsToCargo,
 	getCargoCount,
 	getCargoPage,
 } from "~/lib/cargo.server";
 import { getActiveCargoIds } from "~/lib/cargo-selection.server";
-import { normalizeTags } from "~/lib/cargo-utils";
 import { handleApiError } from "~/lib/error-handler";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -15,6 +15,7 @@ import {
 	MobileCargoListQuerySchema,
 	MobileCreateCargoSchema,
 } from "~/lib/schemas/mobile/cargo";
+import { tagsToSlugs } from "~/lib/tags.server";
 import type { Route } from "./+types/v1.cargo";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -66,12 +67,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				})
 			: null;
 
-		// `tags` is a `mode: "json"` column; legacy rows may have been double-encoded
-		// and read back as a JSON string. Normalize to a real array so the typed
-		// mobile contract (`tags: [String]`) always decodes.
-		const items = page.items.map((item) => ({
+		const itemsWithTags = await attachTagsToCargo(
+			context.cloudflare.env.DB,
+			page.items,
+		);
+		const items = itemsWithTags.map((item) => ({
 			...item,
-			tags: normalizeTags(item.tags),
+			tags: tagsToSlugs(item.tags),
 		}));
 
 		return {
@@ -136,7 +138,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		return { item: { ...result.item, tags: normalizeTags(result.item.tags) } };
+		const [withTags] = await attachTagsToCargo(context.cloudflare.env.DB, [
+			result.item,
+		]);
+		return {
+			item: { ...withTags, tags: tagsToSlugs(withTags.tags) },
+		};
 	} catch (e) {
 		return handleApiError(e);
 	}

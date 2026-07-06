@@ -1,6 +1,7 @@
 import { normalizeForCargoDedup } from "./matching";
+import type { TagRecord } from "./tags";
 
-export type CargoLinkRow = { id: string; name: string; tags?: unknown };
+export type CargoLinkRow = { id: string; name: string; tags?: TagRecord[] };
 
 export type CargoLinkedIngredient<
 	T extends { ingredientName: string; cargoId?: string | null },

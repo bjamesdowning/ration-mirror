@@ -141,6 +141,85 @@ struct CargoStats: Codable, Sendable {
     let expiredCount: Int
 }
 
+// MARK: - Tags
+
+struct Tag: Codable, Sendable, Hashable, Identifiable {
+    let id: String
+    let slug: String
+    let name: String
+    let color: String?
+    let category: String?
+
+    init(id: String, slug: String, name: String, color: String? = nil, category: String? = nil) {
+        self.id = id
+        self.slug = slug
+        self.name = name
+        self.color = color
+        self.category = category
+    }
+
+    init(slug: String) {
+        id = slug
+        self.slug = slug
+        name = Tag.displayName(from: slug)
+        color = nil
+        category = nil
+    }
+
+    static func displayName(from slug: String) -> String {
+        slug
+            .split(separator: "-")
+            .filter { !$0.isEmpty }
+            .map { word in
+                word.prefix(1).uppercased() + word.dropFirst()
+            }
+            .joined(separator: " ")
+    }
+}
+
+struct TagWithCounts: Codable, Sendable, Identifiable {
+    let id: String
+    let slug: String
+    let name: String
+    let color: String?
+    let category: String?
+    let cargoCount: Int
+    let mealCount: Int
+}
+
+struct OrganizationTagsResponse: Codable, Sendable {
+    let tags: [TagWithCounts]
+}
+
+struct CreateTagRequest: Encodable, Sendable {
+    let slug: String
+    var name: String?
+    var color: String?
+    var category: String?
+}
+
+struct UpdateTagRequest: Encodable, Sendable {
+    var name: String?
+    var color: String?
+    var category: String?
+}
+
+struct TagMutationResponse: Codable, Sendable {
+    let tag: TagRecord
+}
+
+struct TagRecord: Codable, Sendable, Identifiable {
+    let id: String
+    let slug: String
+    let name: String
+    let color: String?
+    let category: String?
+}
+
+struct MergeTagRequest: Encodable, Sendable {
+    let targetId: String
+}
+
 // MARK: - Cargo
 
 enum CargoDomain: String, Codable, Sendable, CaseIterable {
@@ -156,7 +235,7 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
     let unit: String
     let baseQuantity: Double
     let baseUnit: String
-    let tags: [String]
+    let tags: [Tag]
     let domain: String
     let status: String
     let expiresAt: Date?
@@ -172,15 +251,15 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         unit = try c.decode(String.self, forKey: .unit)
         baseQuantity = try c.decodeIfPresent(Double.self, forKey: .baseQuantity) ?? quantity
         baseUnit = try c.decodeIfPresent(String.self, forKey: .baseUnit) ?? unit
-        // `tags` may arrive as a real array or, for legacy double-encoded rows,
-        // a JSON/CSV string. Decode tolerantly so the list never hard-fails.
-        tags = c.decodeTolerantStringArray(forKey: .tags)
+        tags = c.decodeTolerantTags(forKey: .tags)
         domain = try c.decode(String.self, forKey: .domain)
         status = try c.decode(String.self, forKey: .status)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
+
+    var tagSlugs: [String] { tags.map(\.slug) }
 }
 
 /// `GET /api/mobile/v1/cargo`
@@ -391,8 +470,63 @@ struct Meal: Codable, Sendable, Identifiable {
     let cookTime: Int?
     let createdAt: Date
     let updatedAt: Date
-    let tags: [String]
+    let tags: [Tag]
     let ingredients: [MealIngredient]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        organizationId = try c.decode(String.self, forKey: .organizationId)
+        name = try c.decode(String.self, forKey: .name)
+        domain = try c.decode(String.self, forKey: .domain)
+        type = try c.decode(String.self, forKey: .type)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        directions = try c.decodeIfPresent(String.self, forKey: .directions)
+        equipment = try c.decodeIfPresent([String].self, forKey: .equipment)
+        servings = try c.decodeIfPresent(Int.self, forKey: .servings)
+        prepTime = try c.decodeIfPresent(Int.self, forKey: .prepTime)
+        cookTime = try c.decodeIfPresent(Int.self, forKey: .cookTime)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        tags = c.decodeTolerantTags(forKey: .tags)
+        ingredients = try c.decodeIfPresent([MealIngredient].self, forKey: .ingredients) ?? []
+    }
+
+    init(
+        id: String,
+        organizationId: String,
+        name: String,
+        domain: String,
+        type: String,
+        description: String?,
+        directions: String?,
+        equipment: [String]?,
+        servings: Int?,
+        prepTime: Int?,
+        cookTime: Int?,
+        createdAt: Date,
+        updatedAt: Date,
+        tags: [Tag],
+        ingredients: [MealIngredient]
+    ) {
+        self.id = id
+        self.organizationId = organizationId
+        self.name = name
+        self.domain = domain
+        self.type = type
+        self.description = description
+        self.directions = directions
+        self.equipment = equipment
+        self.servings = servings
+        self.prepTime = prepTime
+        self.cookTime = cookTime
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.tags = tags
+        self.ingredients = ingredients
+    }
+
+    var tagSlugs: [String] { tags.map(\.slug) }
 }
 
 /// `GET /api/mobile/v1/meals`
@@ -1270,5 +1404,13 @@ extension KeyedDecodingContainer {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    /// Decodes `[Tag]` objects or legacy `[String]` slug arrays.
+    func decodeTolerantTags(forKey key: Key) -> [Tag] {
+        if let tags = try? decode([Tag].self, forKey: key) {
+            return tags
+        }
+        return decodeTolerantStringArray(forKey: key).map { Tag(slug: $0) }
     }
 }

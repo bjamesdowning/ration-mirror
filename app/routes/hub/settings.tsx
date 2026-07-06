@@ -17,6 +17,7 @@ import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
 import { CalendarSpanPicker } from "~/components/manifest/CalendarSpanPicker";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { DeveloperSection } from "~/components/settings/developer/DeveloperSection";
+import { TagsSettingsSection } from "~/components/settings/TagsSettingsSection";
 import { GroupAvatar } from "~/components/shell/GroupAvatar";
 import { PageHeader } from "~/components/shell/PageHeader";
 import { Toast } from "~/components/shell/Toast";
@@ -45,6 +46,8 @@ import { listConnectedAgentGrants } from "~/lib/oauth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
+import type { TagWithCounts } from "~/lib/tags";
+import { getOrganizationTags, getUnusedTags } from "~/lib/tags.server";
 import type { UserSettings } from "~/lib/types";
 import {
 	resolveUnitDisplayMode,
@@ -284,6 +287,11 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
+		const [organizationTags, unusedTags] = await Promise.all([
+			getOrganizationTags(env.DB, groupId),
+			getUnusedTags(env.DB, groupId),
+		]);
+
 		// Groups the user owns with no other members (will be deleted on account purge)
 		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
 		const ownedGroupsWithNoOtherMembers: string[] = [];
@@ -320,6 +328,8 @@ export async function loader(args: Route.LoaderArgs) {
 			agentKitchens,
 			origin: url.origin,
 			ownedGroupsWithNoOtherMembers,
+			organizationTags,
+			unusedTags,
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -697,6 +707,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							organizationId={organizationId}
 							organizationName={loaderData.organizationName ?? "Unknown Group"}
 							organizationLogo={loaderData.organizationLogo ?? null}
+							organizationTags={loaderData.organizationTags ?? []}
+							unusedTags={loaderData.unusedTags ?? []}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -1086,6 +1098,8 @@ function GroupSection({
 	organizationId,
 	organizationName,
 	organizationLogo,
+	organizationTags,
+	unusedTags,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
@@ -1102,6 +1116,8 @@ function GroupSection({
 	organizationId: string;
 	organizationName: string;
 	organizationLogo: string | null;
+	organizationTags: TagWithCounts[];
+	unusedTags: TagWithCounts[];
 }) {
 	const revalidator = useRevalidator();
 	const successToast = useToast({ duration: 3000 });
@@ -1121,6 +1137,7 @@ function GroupSection({
 
 	const canEditGroupImage =
 		currentUserRole === "owner" || currentUserRole === "admin";
+	const canManageTags = canEditGroupImage;
 
 	const displayImage = pendingUploadUrl ?? organizationLogo;
 
@@ -1234,6 +1251,11 @@ function GroupSection({
 				members={members}
 				currentUserRole={currentUserRole}
 				groupCanInviteMembers={groupCanInviteMembers}
+			/>
+			<TagsSettingsSection
+				tags={organizationTags}
+				unusedTags={unusedTags}
+				canManage={canManageTags}
 			/>
 			<RoleDescriptions />
 			<DefaultGroupCard

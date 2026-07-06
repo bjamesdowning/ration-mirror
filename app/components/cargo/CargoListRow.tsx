@@ -3,16 +3,22 @@ import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
+import { TagChip } from "~/components/shared/TagChip";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
+import type { TagRecord } from "~/lib/tags";
+
+type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
 interface CargoListRowProps {
-	item: typeof cargo.$inferSelect;
+	item: CargoWithTags;
 	isPromoted?: boolean;
 	isActive?: boolean;
 	onToggleRestock?: (cargoId: string, nextActive: boolean) => void;
 	onUpgradeRequired?: () => void;
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	detailHref?: string;
 }
 
@@ -59,6 +65,8 @@ export function CargoListRow({
 	isActive = false,
 	onToggleRestock,
 	onUpgradeRequired,
+	onTagClick,
+	tagSuggestions = [],
 	detailHref,
 }: CargoListRowProps) {
 	const fetcher = useFetcher<{
@@ -132,14 +140,12 @@ export function CargoListRow({
 		setLocalActive(restockFetcher.data.isActive);
 	}, [restockFetcher.data, item.id]);
 
-	const tags =
-		typeof item.tags === "string" ? JSON.parse(item.tags) : item.tags || [];
-
+	const tags = item.tags ?? [];
 	const parsedExpiry = parseDate(item.expiresAt);
 	const statusColor = getStatusColor(item.status, parsedExpiry);
 	const expiryLabel = formatExpiry(parsedExpiry);
-	const visibleTags = (tags as string[]).slice(0, 2);
-	const extraTagCount = Math.max(0, (tags as string[]).length - 2);
+	const visibleTags = tags.slice(0, 2);
+	const extraTagCount = Math.max(0, tags.length - 2);
 
 	const handleDelete = () => {
 		fetcher.submit({ intent: "delete", itemId: item.id }, { method: "post" });
@@ -217,13 +223,8 @@ export function CargoListRow({
 
 				{/* Tags (up to 2, hidden on very small screens) */}
 				<div className="hidden sm:flex items-center gap-1 shrink-0">
-					{visibleTags.map((tag: string) => (
-						<span
-							key={tag}
-							className="text-xs px-1.5 py-0.5 bg-hyper-green/10 text-hyper-green rounded"
-						>
-							{tag}
-						</span>
+					{visibleTags.map((tag) => (
+						<TagChip key={tag.id} tag={tag} onClick={onTagClick} size="sm" />
 					))}
 					{extraTagCount > 0 && (
 						<span className="text-xs text-muted">+{extraTagCount}</span>
@@ -303,7 +304,8 @@ export function CargoListRow({
 			{isEditing && (
 				<CargoEditModal
 					item={item}
-					tags={tags}
+					tagSlugs={tags.map((t) => t.slug)}
+					tagSuggestions={tagSuggestions}
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}

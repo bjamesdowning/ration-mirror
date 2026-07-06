@@ -17,8 +17,8 @@ describe("constants", () => {
 		expect(D1_MAX_INGREDIENT_ROWS_PER_STATEMENT).toBe(12);
 	});
 
-	it("D1_MAX_TAG_ROWS_PER_STATEMENT is floor(100/3) = 33", () => {
-		expect(D1_MAX_TAG_ROWS_PER_STATEMENT).toBe(33);
+	it("D1_MAX_TAG_ROWS_PER_STATEMENT is floor(100/2) = 50", () => {
+		expect(D1_MAX_TAG_ROWS_PER_STATEMENT).toBe(50);
 	});
 });
 

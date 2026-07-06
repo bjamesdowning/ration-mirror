@@ -34,6 +34,7 @@ import {
 	normalizeSupplyOrigins,
 	type SupplyItemOrigin,
 } from "./supply-item-origins";
+import { type TagRecord, tagsToSlugs } from "./tags.server";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -477,7 +478,7 @@ export async function ensureSupplyList(
  */
 export function filterSupplyItemsByCargoTags<T extends { name: string }>(
 	items: T[],
-	cargoRows: { name: string; tags: unknown }[],
+	cargoRows: { name: string; tags: TagRecord[] }[],
 	supplyTags: string[] | undefined,
 ): T[] {
 	if (!supplyTags?.length) return items;
@@ -485,32 +486,12 @@ export function filterSupplyItemsByCargoTags<T extends { name: string }>(
 	const namesWithTag = new Set(
 		cargoRows
 			.filter((row) => {
-				const tags = parseSupplyCargoTags(row.tags);
-				return tags.some((tag) => tagSet.has(tag));
+				const slugs = tagsToSlugs(row.tags);
+				return slugs.some((slug) => tagSet.has(slug));
 			})
 			.map((row) => row.name.toLowerCase()),
 	);
 	return items.filter((item) => namesWithTag.has(item.name.toLowerCase()));
-}
-
-function parseSupplyCargoTags(tags: unknown): string[] {
-	if (Array.isArray(tags)) {
-		return tags.filter((tag): tag is string => typeof tag === "string");
-	}
-	if (typeof tags === "string") {
-		try {
-			const parsed: unknown = JSON.parse(tags);
-			if (Array.isArray(parsed)) {
-				return parsed.filter((tag): tag is string => typeof tag === "string");
-			}
-		} catch {
-			return tags
-				.split(",")
-				.map((tag) => tag.trim())
-				.filter(Boolean);
-		}
-	}
-	return [];
 }
 
 /** Bounds the `supply_item` row fetch — omit both to fetch all rows (default, current behavior). */

@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	index,
 	integer,
+	primaryKey,
 	real,
 	sqliteTable,
 	text,
@@ -136,6 +137,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	members: many(member),
 	cargo: many(cargo),
 	meals: many(meal),
+	tags: many(tag),
 	activeMealSelections: many(activeMealSelection),
 	supplyLists: many(supplyList),
 	mealPlans: many(mealPlan),
@@ -196,6 +198,45 @@ export const invitation = sqliteTable(
 	],
 );
 
+export const tag = sqliteTable(
+	"tag",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		slug: text("slug").notNull(),
+		name: text("name").notNull(),
+		color: text("color"),
+		category: text("category"),
+		createdBy: text("created_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+	},
+	(table) => [
+		unique("tag_org_slug_unique").on(table.organizationId, table.slug),
+		index("tag_org_idx").on(table.organizationId),
+	],
+);
+
+export const tagRelations = relations(tag, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [tag.organizationId],
+		references: [organization.id],
+	}),
+	createdByUser: one(user, {
+		fields: [tag.createdBy],
+		references: [user.id],
+	}),
+	cargoTags: many(cargoTag),
+	mealTags: many(mealTag),
+}));
+
 export const cargo = sqliteTable(
 	"cargo",
 	{
@@ -210,7 +251,6 @@ export const cargo = sqliteTable(
 		unit: text("unit").notNull(), // See app/lib/units.ts for supported units
 		baseQuantity: real("base_quantity").notNull().default(1),
 		baseUnit: text("base_unit").notNull().default("unit"),
-		tags: text("tags", { mode: "json" }).notNull().default("[]"), // Array of strings
 		domain: text("domain").notNull().default("food"),
 		status: text("status").notNull().default("stable"),
 		expiresAt: integer("expires_at", { mode: "timestamp" }),
@@ -228,10 +268,38 @@ export const cargo = sqliteTable(
 	],
 );
 
-export const cargoRelations = relations(cargo, ({ one }) => ({
+export const cargoRelations = relations(cargo, ({ one, many }) => ({
 	organization: one(organization, {
 		fields: [cargo.organizationId],
 		references: [organization.id],
+	}),
+	cargoTags: many(cargoTag),
+}));
+
+export const cargoTag = sqliteTable(
+	"cargo_tag",
+	{
+		cargoId: text("cargo_id")
+			.notNull()
+			.references(() => cargo.id, { onDelete: "cascade" }),
+		tagId: text("tag_id")
+			.notNull()
+			.references(() => tag.id, { onDelete: "cascade" }),
+	},
+	(table) => [
+		primaryKey({ columns: [table.cargoId, table.tagId] }),
+		index("cargo_tag_tag_idx").on(table.tagId),
+	],
+);
+
+export const cargoTagRelations = relations(cargoTag, ({ one }) => ({
+	cargo: one(cargo, {
+		fields: [cargoTag.cargoId],
+		references: [cargo.id],
+	}),
+	tag: one(tag, {
+		fields: [cargoTag.tagId],
+		references: [tag.id],
 	}),
 }));
 
@@ -349,18 +417,16 @@ export const mealIngredientRelations = relations(mealIngredient, ({ one }) => ({
 export const mealTag = sqliteTable(
 	"meal_tag",
 	{
-		id: text("id")
-			.primaryKey()
-			.$defaultFn(() => crypto.randomUUID()),
 		mealId: text("meal_id")
 			.notNull()
 			.references(() => meal.id, { onDelete: "cascade" }),
-		tag: text("tag").notNull(),
+		tagId: text("tag_id")
+			.notNull()
+			.references(() => tag.id, { onDelete: "cascade" }),
 	},
 	(table) => [
-		index("meal_tag_meal_idx").on(table.mealId),
-		index("meal_tag_tag_idx").on(table.tag),
-		unique("meal_tag_unique").on(table.mealId, table.tag),
+		primaryKey({ columns: [table.mealId, table.tagId] }),
+		index("meal_tag_tag_idx").on(table.tagId),
 	],
 );
 
@@ -368,6 +434,10 @@ export const mealTagRelations = relations(mealTag, ({ one }) => ({
 	meal: one(meal, {
 		fields: [mealTag.mealId],
 		references: [meal.id],
+	}),
+	tag: one(tag, {
+		fields: [mealTag.tagId],
+		references: [tag.id],
 	}),
 }));
 

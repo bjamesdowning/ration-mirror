@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { meal, mealIngredient, mealTag } from "../db/schema";
+import { meal, mealIngredient, mealTag, tag } from "../db/schema";
 import { effectiveBaseFields } from "./base-quantity";
 import type { CargoIndexRow } from "./cargo-index.server";
 import { fetchOrgCargoIndex } from "./cargo-index.server";
@@ -9,6 +9,7 @@ import { log, redactId } from "./logging.server";
 import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
+import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
 import {
 	convertIngredientAmount,
 	type SupportedUnit,
@@ -399,7 +400,7 @@ export async function matchMeals(
 	const needsTagJoin = tagFilter.length > 0;
 	const baseConditions = [
 		eq(meal.organizationId, organizationId),
-		...(needsTagJoin ? [inArray(mealTag.tag, tagFilter)] : []),
+		...(needsTagJoin ? [inArray(tag.slug, tagFilter)] : []),
 		...(type ? [eq(meal.type, type)] : []),
 		...(domain ? [eq(meal.domain, domain)] : []),
 	];
@@ -424,6 +425,7 @@ export async function matchMeals(
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+				.innerJoin(tag, eq(mealTag.tagId, tag.id))
 				.where(and(...baseConditions))
 		: d1
 				.select()
@@ -449,35 +451,26 @@ export async function matchMeals(
 		return [];
 	}
 
-	const [ingredientsData, tagsData] = await Promise.all([
+	const [ingredientsData, tagsByMealId] = await Promise.all([
 		chunkedQuery(mealIds, (chunk) =>
 			d1
 				.select()
 				.from(mealIngredient)
 				.where(inArray(mealIngredient.mealId, chunk)),
 		),
-		chunkedQuery(mealIds, (chunk) =>
-			d1.select().from(mealTag).where(inArray(mealTag.mealId, chunk)),
-		),
+		getTagsForMealIds(env.DB, mealIds),
 	]);
 
-	// Group ingredients and tags by meal ID
+	// Group ingredients by meal ID
 	const ingredientsByMeal = new Map<
 		string,
 		(typeof mealIngredient.$inferSelect)[]
 	>();
-	const tagsByMeal = new Map<string, string[]>();
 
 	for (const ing of ingredientsData) {
 		const existing = ingredientsByMeal.get(ing.mealId) || [];
 		existing.push(ing);
 		ingredientsByMeal.set(ing.mealId, existing);
-	}
-
-	for (const tag of tagsData) {
-		const existing = tagsByMeal.get(tag.mealId) || [];
-		existing.push(tag.tag);
-		tagsByMeal.set(tag.mealId, existing);
 	}
 
 	// 3. Fetch lightweight cargo projection for matching
@@ -490,7 +483,7 @@ export async function matchMeals(
 	const enrichedMeals = meals.map((m) => ({
 		meal: m,
 		ingredients: ingredientsByMeal.get(m.id) || [],
-		tags: tagsByMeal.get(m.id) || [],
+		tags: tagsToSlugs(tagsByMealId.get(m.id) ?? []),
 	}));
 
 	// 6. Batch vector lookup: collect ingredient names that need fallback, call findSimilarCargoBatch once

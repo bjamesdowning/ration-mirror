@@ -8,6 +8,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { parseFormData } from "~/lib/form-utils";
 import { getMeal, updateMeal } from "~/lib/meals.server";
 import { MealSchema } from "~/lib/schemas/meal";
+import { getOrganizationTags, tagsToSlugs } from "~/lib/tags.server";
 import { toSupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/galley.$id.edit";
 
@@ -16,10 +17,12 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 	const { id } = params;
 	if (!id) throw redirect("/hub/galley");
 
-	const meal = await getMeal(context.cloudflare.env.DB, groupId, id);
+	const [meal, cargo, orgTags] = await Promise.all([
+		getMeal(context.cloudflare.env.DB, groupId, id),
+		getCargo(context.cloudflare.env.DB, groupId),
+		getOrganizationTags(context.cloudflare.env.DB, groupId),
+	]);
 	if (!meal) throw redirect("/hub/galley");
-
-	const cargo = await getCargo(context.cloudflare.env.DB, groupId);
 
 	// Sanitize for frontend types (null -> undefined)
 	const sanitizedMeal = {
@@ -43,9 +46,14 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 			isOptional: i.isOptional ?? false,
 			orderIndex: i.orderIndex ?? 0,
 		})),
+		tags: tagsToSlugs(meal.tags ?? []),
 	};
 
-	return { meal: sanitizedMeal, cargo };
+	return {
+		meal: sanitizedMeal,
+		cargo,
+		tagSuggestions: orgTags.map((t) => t.slug),
+	};
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
@@ -83,6 +91,7 @@ export default function EditMeal({ loaderData }: Route.ComponentProps) {
 				<MealBuilder
 					defaultValue={meal}
 					availableIngredients={loaderData.cargo}
+					tagSuggestions={loaderData.tagSuggestions}
 					method="post"
 					submitLabel="Update Meal"
 				/>

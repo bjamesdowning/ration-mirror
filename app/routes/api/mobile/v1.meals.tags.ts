@@ -1,8 +1,8 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { getOrganizationMealTags } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { getOrganizationTagSlugs } from "~/lib/tags.server";
 import type { Route } from "./+types/v1.meals.tags";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -24,7 +24,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 
-		const tags = await getOrganizationMealTags(
+		const tags = await getOrganizationTagSlugs(
 			context.cloudflare.env.DB,
 			organizationId,
 		);

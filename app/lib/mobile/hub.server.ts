@@ -1,11 +1,6 @@
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
-import {
-	getCargoStats,
-	getCargoTagIndex,
-	getCargoTags,
-	getExpiringCargo,
-} from "~/lib/cargo.server";
+import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { matchMeals } from "~/lib/matching.server";
 import {
@@ -13,6 +8,7 @@ import {
 	getSupplyItemStats,
 	getSupplyList,
 } from "~/lib/supply.server";
+import { getCargoTagIndex, getOrganizationTags } from "~/lib/tags.server";
 
 /**
  * Meal-matching pre-fetch bound shared across the hub widgets and
@@ -106,7 +102,7 @@ export async function getMobileHubData(
 			manifestTags,
 		),
 		getDistinctMealTags(db, organizationId),
-		getCargoTags(db, organizationId),
+		getOrganizationTags(db, organizationId),
 		getCargoTagIndex(db, organizationId),
 		matchMeals(env, organizationId, {
 			mode: "delta",
@@ -189,7 +185,7 @@ export async function getMobileHubData(
 		hubProfile,
 		hubLayout,
 		availableMealTags,
-		availableCargoTags,
+		availableCargoTags: availableCargoTags.map((t) => t.slug).sort(),
 		cargoTagIndex,
 		mealMatches,
 		partialMealMatches,

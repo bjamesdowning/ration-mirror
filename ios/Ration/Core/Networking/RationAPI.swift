@@ -80,6 +80,26 @@ final class RationAPI {
         try await client.get("cargo/tags")
     }
 
+    func organizationTags() async throws -> OrganizationTagsResponse {
+        try await client.get("tags")
+    }
+
+    func createOrganizationTag(_ body: CreateTagRequest) async throws -> TagMutationResponse {
+        try await client.post("tags", body: body)
+    }
+
+    func updateOrganizationTag(id: String, _ body: UpdateTagRequest) async throws -> TagMutationResponse {
+        try await client.patch("tags/\(id)", body: body)
+    }
+
+    func deleteOrganizationTag(id: String) async throws {
+        let _: EmptyResponse = try await client.delete("tags/\(id)")
+    }
+
+    func mergeOrganizationTag(id: String, targetId: String) async throws -> TagMutationResponse {
+        try await client.post("tags/\(id)/merge", body: MergeTagRequest(targetId: targetId))
+    }
+
     func cargoTagIndex() async throws -> CargoTagIndexResponse {
         try await client.get("cargo/tag-index")
     }

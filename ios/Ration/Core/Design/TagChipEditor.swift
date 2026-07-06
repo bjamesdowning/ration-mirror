@@ -4,6 +4,7 @@ import SwiftUI
 struct TagChipEditor: View {
     @Binding var tags: [String]
     let suggestions: [String]
+    var maxTags: Int = 10
     @State private var draft = ""
 
     private var filteredSuggestions: [String] {
@@ -21,7 +22,7 @@ struct TagChipEditor: View {
                 FlowLayout(spacing: 6) {
                     ForEach(tags, id: \.self) { tag in
                         HStack(spacing: 4) {
-                            Text(tag)
+                            Text(Tag.displayName(from: tag))
                                 .font(Typography.caption())
                             Button {
                                 tags.removeAll { $0 == tag }
@@ -40,16 +41,18 @@ struct TagChipEditor: View {
                 }
             }
 
-            TextField("Add tag", text: $draft)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .onSubmit { commitDraft() }
+            if tags.count < maxTags {
+                TextField("Add tag", text: $draft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit { commitDraft() }
+            }
 
             if !filteredSuggestions.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(filteredSuggestions, id: \.self) { suggestion in
-                            Button(suggestion) {
+                            Button(Tag.displayName(from: suggestion)) {
                                 addTag(suggestion)
                                 draft = ""
                             }
@@ -62,19 +65,31 @@ struct TagChipEditor: View {
                     }
                 }
             }
+
+            Text("\(tags.count)/\(maxTags) tags")
+                .font(Typography.caption())
+                .foregroundStyle(Theme.muted)
         }
     }
 
     private func commitDraft() {
-        let tag = draft.trimmingCharacters(in: .whitespaces).lowercased()
+        let tag = normalize(draft)
         guard !tag.isEmpty else { return }
         addTag(tag)
         draft = ""
     }
 
     private func addTag(_ tag: String) {
-        let normalized = tag.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !normalized.isEmpty, !tags.contains(normalized) else { return }
+        let normalized = normalize(tag)
+        guard !normalized.isEmpty, !tags.contains(normalized), tags.count < maxTags else { return }
         tags.append(normalized)
+    }
+
+    private func normalize(_ raw: String) -> String {
+        raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
     }
 }

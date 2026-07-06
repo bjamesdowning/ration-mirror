@@ -34,7 +34,7 @@ final class CargoViewModel {
     private var rawItems: [CargoItem] = []
 
     var displayedInventory: [CargoItem] {
-        PageFilterEngine.filterCargo(rawItems, domain: filters.domain, tag: filters.tag, search: filters.search)
+        PageFilterEngine.filterCargo(rawItems, domain: filters.domain, tags: filters.selectedTags, search: filters.search)
     }
 
     func isCargoSelected(_ cargoId: String) -> Bool {

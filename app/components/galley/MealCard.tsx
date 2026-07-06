@@ -4,8 +4,11 @@ import { StandardCard } from "~/components/common/StandardCard";
 import { MealEditModal } from "~/components/galley/MealEditModal";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
 import { AllergenWarningBadge } from "~/components/shared/AllergenWarningBadge";
+import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
 import { type AllergenSlug, detectAllergens } from "~/lib/allergens";
+import type { TagRecord } from "~/lib/tags";
+import { toTagRecords } from "~/lib/tags";
 import type { MealCustomFields } from "~/lib/types";
 
 // Helper type for inventory item from DB
@@ -18,7 +21,7 @@ type InventoryItem = {
 
 interface MealCardProps {
 	meal: typeof meal.$inferSelect & {
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: {
 			inventoryId?: string | null;
 			ingredientName: string;
@@ -35,6 +38,8 @@ interface MealCardProps {
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
 	/** User's declared allergen slugs — used to display warning badges. */
 	userAllergens?: AllergenSlug[];
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	detailHref?: string;
 }
 
@@ -44,6 +49,8 @@ export function MealCard({
 	isActive = false,
 	onToggleActive,
 	userAllergens = [],
+	onTagClick,
+	tagSuggestions = [],
 	detailHref,
 }: MealCardProps) {
 	const fetcher = useFetcher();
@@ -84,6 +91,8 @@ export function MealCard({
 		setLocalActive(next);
 		// Note: Parent is already notified optimistically in handleToggleActive
 	}, [toggleFetcher.data, meal.id]);
+
+	const displayTags = toTagRecords(meal.tags);
 
 	if (isDeleting) return null;
 
@@ -165,16 +174,18 @@ export function MealCard({
 						</div>
 					</div>
 
-					<div className="flex flex-wrap gap-2 mb-3">
-						{(meal.tags || []).map((tag) => (
-							<span
-								key={tag}
-								className="bg-hyper-green/10 text-hyper-green text-xs px-2 py-1 rounded-md"
-							>
-								{tag}
-							</span>
-						))}
-					</div>
+					{displayTags.length > 0 && (
+						<div className="flex flex-wrap gap-2 mb-3">
+							{displayTags.map((tag) => (
+								<TagChip
+									key={tag.id}
+									tag={tag}
+									onClick={onTagClick}
+									size="sm"
+								/>
+							))}
+						</div>
+					)}
 
 					{triggeredAllergens.length > 0 && (
 						<div className="mb-3">
@@ -228,6 +239,7 @@ export function MealCard({
 				<MealEditModal
 					meal={meal}
 					availableIngredients={availableIngredients}
+					tagSuggestions={tagSuggestions}
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}

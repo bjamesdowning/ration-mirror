@@ -1,20 +1,28 @@
-// @ts-nocheck
 import type { useFetcher } from "react-router";
+import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import type { cargo } from "~/db/schema";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { formatQuantityNumericString } from "~/lib/format-quantity";
 
 interface CargoEditModalProps {
 	item: typeof cargo.$inferSelect;
-	tags: string[];
+	tagSlugs: string[];
+	tagSuggestions?: string[];
 	onClose: () => void;
-	fetcher: ReturnType<typeof useFetcher<unknown>>;
+	fetcher: ReturnType<
+		typeof useFetcher<{
+			success?: boolean;
+			error?: string;
+			errors?: { fieldErrors?: Record<string, string[]> };
+		}>
+	>;
 	isUpdating: boolean;
 }
 
 export function CargoEditModal({
 	item,
-	tags,
+	tagSlugs,
+	tagSuggestions = [],
 	onClose,
 	fetcher,
 	isUpdating,
@@ -127,20 +135,10 @@ export function CargoEditModal({
 					</div>
 
 					<div className="flex flex-col gap-2">
-						<label
-							htmlFor={`tags-${item.id}`}
-							className="text-label text-muted"
-						>
-							Tags (comma separated)
-						</label>
-						<input
-							type="text"
-							inputMode="text"
-							name="tags"
-							id={`tags-${item.id}`}
-							defaultValue={tags.join(", ")}
-							className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-							placeholder="e.g. perishable, dairy"
+						<span className="text-label text-muted">Tags</span>
+						<TagChipEditor
+							defaultSlugs={tagSlugs}
+							suggestions={tagSuggestions}
 						/>
 					</div>
 

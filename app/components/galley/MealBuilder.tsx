@@ -1,4 +1,5 @@
 import { Form, type useFetcher } from "react-router";
+import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import type { MealInput } from "~/lib/schemas/meal"; // Implied type
 import { DirectionsEditor } from "./DirectionsEditor";
@@ -15,6 +16,7 @@ type InventoryItem = {
 interface MealBuilderProps {
 	availableIngredients?: InventoryItem[];
 	defaultValue?: Partial<MealInput>;
+	tagSuggestions?: string[];
 	actionUrl?: string;
 	method?: "post" | "put";
 	fetcher?: ReturnType<typeof useFetcher<unknown>>;
@@ -25,6 +27,7 @@ interface MealBuilderProps {
 export function MealBuilder({
 	availableIngredients = [],
 	defaultValue = {},
+	tagSuggestions = [],
 	method = "post",
 	fetcher,
 	children,
@@ -114,21 +117,11 @@ export function MealBuilder({
 					</div>
 
 					<div className="flex flex-col gap-2">
-						<label htmlFor="tags" className="text-label text-muted text-sm">
-							Tags
-						</label>
-						<input
-							type="text"
-							inputMode="text"
-							name="tags"
-							id="tags"
-							defaultValue={defaultValue.tags?.join(", ")}
-							className="bg-platinum rounded-lg px-4 py-3 text-carbon placeholder:text-muted/50 focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-							placeholder="e.g. breakfast, quick, vegetarian (comma separated)"
+						<span className="text-label text-muted text-sm">Tags</span>
+						<TagChipEditor
+							defaultSlugs={defaultValue.tags ?? []}
+							suggestions={tagSuggestions}
 						/>
-						<span className="text-xs text-muted">
-							Comma-separated list for filtering
-						</span>
 					</div>
 
 					<div className="flex flex-col gap-2">

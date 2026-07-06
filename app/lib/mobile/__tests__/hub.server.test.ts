@@ -25,7 +25,10 @@ vi.mock("~/lib/auth.server", () => ({
 vi.mock("~/lib/cargo.server", () => ({
 	getExpiringCargo: () => getExpiringCargo(),
 	getCargoStats: () => getCargoStats(),
-	getCargoTags: vi.fn(async () => []),
+}));
+
+vi.mock("~/lib/tags.server", () => ({
+	getOrganizationTags: vi.fn(async () => []),
 	getCargoTagIndex: vi.fn(async () => []),
 }));
 

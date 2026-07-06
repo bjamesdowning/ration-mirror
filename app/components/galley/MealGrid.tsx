@@ -3,6 +3,7 @@ import type { meal } from "~/db/schema";
 import type { AllergenSlug } from "~/lib/allergens";
 import { log } from "~/lib/logging.client";
 import type { MealMatchResult } from "~/lib/matching.server";
+import type { TagRecord } from "~/lib/tags";
 import type { MealCustomFields } from "~/lib/types";
 import { MealCard } from "./MealCard";
 import { MealListRow } from "./MealListRow";
@@ -14,7 +15,7 @@ type ViewMode = "card" | "list";
 interface MealGridProps {
 	meals: (typeof meal.$inferSelect & {
 		type?: string;
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: {
 			inventoryId?: string | null;
 			ingredientName: string;
@@ -38,6 +39,8 @@ interface MealGridProps {
 	viewMode?: ViewMode;
 	/** User's declared allergen slugs — propagated to MealCard for warning badges. */
 	userAllergens?: AllergenSlug[];
+	tagSuggestions?: string[];
+	onTagClick?: (slug: string) => void;
 	getDetailHref?: (meal: { id: string }) => string;
 }
 
@@ -49,6 +52,8 @@ export function MealGrid({
 	onToggleMealActive,
 	viewMode = "card",
 	userAllergens = [],
+	tagSuggestions = [],
+	onTagClick,
 	getDetailHref,
 }: MealGridProps) {
 	const [matchMode, setMatchMode] = useState<"strict" | "delta">("delta");
@@ -226,6 +231,8 @@ export function MealGrid({
 											availableIngredients={inventory}
 											isActive={activeMealIds?.has(result.meal.id)}
 											onToggleActive={onToggleMealActive}
+											tagSuggestions={tagSuggestions}
+											onTagClick={onTagClick}
 											detailHref={getDetailHref?.(result.meal)}
 										/>
 										<div className="absolute top-3 right-12">
@@ -247,6 +254,8 @@ export function MealGrid({
 												meal={result.meal}
 												isActive={activeMealIds?.has(result.meal.id)}
 												onToggleActive={onToggleMealActive}
+												tagSuggestions={tagSuggestions}
+												onTagClick={onTagClick}
 												detailHref={getDetailHref?.(result.meal)}
 											/>
 										) : (
@@ -255,6 +264,8 @@ export function MealGrid({
 												availableIngredients={inventory}
 												isActive={activeMealIds?.has(result.meal.id)}
 												onToggleActive={onToggleMealActive}
+												tagSuggestions={tagSuggestions}
+												onTagClick={onTagClick}
 												userAllergens={userAllergens}
 												detailHref={getDetailHref?.(result.meal)}
 											/>
@@ -300,6 +311,8 @@ export function MealGrid({
 						availableIngredients={inventory}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						tagSuggestions={tagSuggestions}
+						onTagClick={onTagClick}
 						detailHref={getDetailHref?.(mealItem)}
 					/>
 				))}
@@ -317,6 +330,8 @@ export function MealGrid({
 						meal={mealItem}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						tagSuggestions={tagSuggestions}
+						onTagClick={onTagClick}
 						detailHref={getDetailHref?.(mealItem)}
 					/>
 				) : (
@@ -326,6 +341,8 @@ export function MealGrid({
 						availableIngredients={inventory}
 						isActive={activeMealIds?.has(mealItem.id)}
 						onToggleActive={onToggleMealActive}
+						tagSuggestions={tagSuggestions}
+						onTagClick={onTagClick}
 						userAllergens={userAllergens}
 						detailHref={getDetailHref?.(mealItem)}
 					/>

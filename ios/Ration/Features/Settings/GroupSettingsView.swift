@@ -87,6 +87,14 @@ struct GroupSettingsView: View {
 
             membersSection
 
+            if env.session.activeOrg?.canManageLogo == true {
+                Section("Organization") {
+                    NavigationLink("Manage tags") {
+                        TagsSettingsView()
+                    }
+                }
+            }
+
             if let session = model.session,
                GroupSettingsSupport.canTransferCredits(organizations: session.organizations)
             {

@@ -71,8 +71,8 @@ struct CargoRowView: View {
                 }
                 if !item.tags.isEmpty {
                     HStack(spacing: 4) {
-                        ForEach(item.tags.prefix(2), id: \.self) { tag in
-                            TelemetryTagChip(tag: tag)
+                        ForEach(item.tags.prefix(2)) { tag in
+                            TelemetryTagChip(tag: tag.name)
                         }
                         if item.tags.count > 2 {
                             Text("+\(item.tags.count - 2)")
@@ -172,8 +172,8 @@ struct MealRowView: View {
 
                 if !meal.tags.isEmpty {
                     HStack(spacing: 4) {
-                        ForEach(meal.tags.prefix(2), id: \.self) { tag in
-                            TelemetryTagChip(tag: tag)
+                        ForEach(meal.tags.prefix(2)) { tag in
+                            TelemetryTagChip(tag: tag.name)
                         }
                         if meal.tags.count > 2 {
                             Text("+\(meal.tags.count - 2)")

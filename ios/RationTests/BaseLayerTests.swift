@@ -48,7 +48,7 @@ final class BaseLayerTests: XCTestCase {
 
         let item = try JSON.decoder.decode(CargoItem.self, from: data)
 
-        XCTAssertEqual(item.tags, ["dry", "pantry"])
+        XCTAssertEqual(item.tagSlugs, ["dry", "pantry"])
     }
 
     func testCargoItemDecodesEmptyTagsString() throws {
@@ -70,7 +70,7 @@ final class BaseLayerTests: XCTestCase {
 
         let item = try JSON.decoder.decode(CargoItem.self, from: data)
 
-        XCTAssertEqual(item.tags, [])
+        XCTAssertEqual(item.tagSlugs, [])
     }
 
     func testAPIErrorCodeExposesServerCodeOnly() {

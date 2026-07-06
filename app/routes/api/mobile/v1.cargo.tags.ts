@@ -1,8 +1,8 @@
 import { data } from "react-router";
-import { getCargoTags } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { getOrganizationTagSlugs } from "~/lib/tags.server";
 import type { Route } from "./+types/v1.cargo.tags";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -24,7 +24,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			);
 		}
 
-		const tags = await getCargoTags(context.cloudflare.env.DB, organizationId);
+		const tags = await getOrganizationTagSlugs(
+			context.cloudflare.env.DB,
+			organizationId,
+		);
 		return { tags };
 	} catch (e) {
 		return handleApiError(e);

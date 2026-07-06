@@ -21,13 +21,13 @@ import {
 	CameraInput,
 	type CameraInputHandle,
 } from "~/components/scanner/CameraInput";
+import { TagFilterChips } from "~/components/shared/TagFilterChips";
 import { DomainFilterChips } from "~/components/shell/DomainFilterChips";
 import {
 	type FloatingAction,
 	FloatingActionBar,
 } from "~/components/shell/FloatingActionBar";
 import { PageHeader } from "~/components/shell/PageHeader";
-import { TagFilterDropdown } from "~/components/shell/TagFilterDropdown";
 import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
@@ -42,7 +42,7 @@ import { usePageFilters } from "~/hooks/usePageFilters";
 import { useToast } from "~/hooks/useToast";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
-import { getCargoTagIndex, getCargoTags } from "~/lib/cargo.server";
+import { getCargoTagIndex } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
@@ -54,6 +54,7 @@ import {
 	getActiveSnoozes,
 	getSupplyList,
 } from "~/lib/supply.server";
+import { getOrganizationTags } from "~/lib/tags.server";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -85,7 +86,7 @@ export function shouldRevalidate({
 	for (const key of allKeys) {
 		if (
 			key === "domain" ||
-			key === "tag" ||
+			key === "tags" ||
 			key === "sort" ||
 			key === "hidePurchased"
 		)
@@ -114,7 +115,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getCargoTagIndex(context.cloudflare.env.DB, groupId),
-		getCargoTags(context.cloudflare.env.DB, groupId),
+		getOrganizationTags(context.cloudflare.env.DB, groupId),
 		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
 		getUserSettings(context.cloudflare.env.DB, session.user.id),
@@ -124,7 +125,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		list,
 		activeSelectionCount: activeSelections.length,
 		manifestWeekMealCount: manifestWeekMeals.length,
-		availableTags,
+		availableTags: availableTags.filter((t) => t.cargoCount > 0),
 		cargo: cargoItems,
 		snoozes,
 		unitDisplayMode: resolveUnitDisplayMode(userSettings),
@@ -274,11 +275,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const dockToast = useToast({ duration: 4000 });
 	const {
 		activeDomain,
-		currentTag,
+		currentTags,
 		sortMode,
 		hidePurchased,
 		handleDomainChange,
-		handleTagChange,
+		toggleTag,
 		clearAllFilters,
 		hasActiveFilters,
 	} = usePageFilters({ supportsSupplySort: true });
@@ -294,25 +295,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		}
 
 		// Filter by Tag: match grocery item names to inventory items with that tag
-		if (currentTag && cargo?.length) {
-			const parseTags = (t: unknown): string[] => {
-				if (Array.isArray(t))
-					return t.filter((x): x is string => typeof x === "string");
-				if (typeof t === "string") {
-					try {
-						const p = JSON.parse(t) as unknown;
-						return Array.isArray(p)
-							? p.filter((x): x is string => typeof x === "string")
-							: [];
-					} catch {
-						return [];
-					}
-				}
-				return [];
-			};
+		if (currentTags.length > 0 && cargo?.length) {
+			const activeTagSet = new Set(currentTags);
 			const cargoNamesWithTag = new Set(
 				cargo
-					.filter((inv) => parseTags(inv.tags).includes(currentTag))
+					.filter((inv) => inv.tags.some((tag) => activeTagSet.has(tag.slug)))
 					.map((inv) => inv.name.toLowerCase()),
 			);
 			items = items.filter((item) =>
@@ -336,7 +323,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		displayList?.items,
 		searchQuery,
 		activeDomain,
-		currentTag,
+		currentTags,
 		cargo,
 		hidePurchased,
 	]);
@@ -350,12 +337,11 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{availableTags.length > 0 && (
-				<TagFilterDropdown
+				<TagFilterChips
 					label="Filter by tag"
-					emptyLabel="All tags"
-					currentTag={currentTag}
-					availableTags={availableTags}
-					onTagChange={handleTagChange}
+					tags={availableTags}
+					activeSlugs={currentTags}
+					onToggle={toggleTag}
 				/>
 			)}
 

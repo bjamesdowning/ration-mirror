@@ -7,6 +7,15 @@ import type { AllergenSlug } from "./allergens";
 
 export type TierSlug = "free" | "crew_member";
 
+export interface SavedView {
+	id: string;
+	name: string;
+	page: "cargo" | "galley";
+	tags?: string[];
+	tagFilterMode?: "or" | "and";
+	domain?: "food" | "household" | "alcohol";
+}
+
 // User settings stored in user.settings JSON field
 export interface UserSettings {
 	expirationAlertDays?: number;
@@ -49,6 +58,8 @@ export interface UserSettings {
 	lastActiveAt?: string;
 	/** ISO timestamp when the 30-day inactivity re-engagement email was last sent. */
 	reengagementEmailSentAt?: string;
+	/** Saved filter views for Cargo/Galley (schema stub — UI coming soon). */
+	savedViews?: SavedView[];
 	[key: string]: unknown; // Index signature for database compatibility
 }
 
@@ -87,6 +98,8 @@ export interface HubWidgetFilters {
 	daySpan?: 1 | 3 | 7 | 14;
 	/** Cargo tag slugs for supply-preview widget (OR logic). */
 	supplyTags?: string[];
+	/** Multi-tag filter mode for hub widgets (default OR). */
+	tagFilterMode?: "or" | "and";
 }
 
 export interface HubWidgetLayout {

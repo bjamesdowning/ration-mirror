@@ -3,9 +3,43 @@ import { filterSupplyItemsByCargoTags } from "~/lib/supply.server";
 
 describe("filterSupplyItemsByCargoTags", () => {
 	const cargo = [
-		{ name: "Milk", tags: ["costco"] },
-		{ name: "Bread", tags: ["local"] },
-		{ name: "Eggs", tags: JSON.stringify(["costco", "organic"]) },
+		{
+			name: "Milk",
+			tags: [
+				{
+					id: "1",
+					slug: "costco",
+					name: "Costco",
+					color: null,
+					category: null,
+				},
+			],
+		},
+		{
+			name: "Bread",
+			tags: [
+				{ id: "2", slug: "local", name: "Local", color: null, category: null },
+			],
+		},
+		{
+			name: "Eggs",
+			tags: [
+				{
+					id: "3",
+					slug: "costco",
+					name: "Costco",
+					color: null,
+					category: null,
+				},
+				{
+					id: "4",
+					slug: "organic",
+					name: "Organic",
+					color: null,
+					category: null,
+				},
+			],
+		},
 	];
 
 	it("returns all items when no supply tags", () => {

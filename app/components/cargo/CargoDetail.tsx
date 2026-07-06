@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { TagChip } from "~/components/shared/TagChip";
 import type { cargo } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
 import { formatQuantity } from "~/lib/format-quantity";
+import type { TagRecord } from "~/lib/tags";
 
-type CargoItem = typeof cargo.$inferSelect;
+type CargoWithTags = typeof cargo.$inferSelect & { tags: TagRecord[] };
 
 type ConnectedIngredient = {
 	id: string;
@@ -21,25 +23,15 @@ type ConnectedMeal = {
 	id: string;
 	name: string;
 	description: string | null;
-	tags: string[];
+	tags: TagRecord[];
 	connectedIngredients: ConnectedIngredient[];
 };
 
 interface CargoDetailProps {
-	item: CargoItem;
+	item: CargoWithTags;
 	connectedMeals: ConnectedMeal[];
+	tagSuggestions?: string[];
 	isRestockSelected?: boolean;
-}
-
-function parseTags(tags: unknown): string[] {
-	if (Array.isArray(tags)) return tags;
-	if (typeof tags !== "string") return [];
-	try {
-		const parsed = JSON.parse(tags);
-		return Array.isArray(parsed) ? parsed : [];
-	} catch {
-		return [];
-	}
 }
 
 function formatExpiryDate(expiresAt: Date | null): string {
@@ -60,6 +52,7 @@ function getConnectionLabel(connectionType: "direct" | "name_match") {
 export function CargoDetail({
 	item,
 	connectedMeals,
+	tagSuggestions = [],
 	isRestockSelected = false,
 }: CargoDetailProps) {
 	const fetcher = useFetcher<{ success?: boolean; error?: string }>();
@@ -73,7 +66,7 @@ export function CargoDetail({
 	const [localRestockSelected, setLocalRestockSelected] =
 		useState(isRestockSelected);
 	const { confirm } = useConfirm();
-	const tags = useMemo(() => parseTags(item.tags), [item.tags]);
+	const tags = item.tags ?? [];
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 
@@ -137,12 +130,7 @@ export function CargoDetail({
 								{item.domain}
 							</span>
 							{tags.map((tag) => (
-								<span
-									key={tag}
-									className="text-xs px-2 py-1 bg-hyper-green/10 text-hyper-green rounded-md"
-								>
-									{tag}
-								</span>
+								<TagChip key={tag.id} tag={tag} size="sm" />
 							))}
 							{localRestockSelected && (
 								<span className="text-xs px-2 py-1 rounded-full bg-hyper-green/15 text-hyper-green font-medium">
@@ -247,12 +235,7 @@ export function CargoDetail({
 										)}
 										<div className="flex flex-wrap gap-2">
 											{connectedMeal.tags.map((tag) => (
-												<span
-													key={tag}
-													className="text-xs px-2 py-0.5 bg-platinum rounded-md text-muted"
-												>
-													{tag}
-												</span>
+												<TagChip key={tag.id} tag={tag} size="sm" />
 											))}
 										</div>
 									</div>
@@ -290,7 +273,8 @@ export function CargoDetail({
 			{isEditing && (
 				<CargoEditModal
 					item={item}
-					tags={tags}
+					tagSlugs={tags.map((t) => t.slug)}
+					tagSuggestions={tagSuggestions}
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 					isUpdating={isUpdating}

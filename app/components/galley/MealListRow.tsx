@@ -4,7 +4,10 @@ import { MealEditModal } from "~/components/galley/MealEditModal";
 import { ProvisionEditModal } from "~/components/galley/ProvisionEditModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
+import type { TagRecord } from "~/lib/tags";
+import { toTagRecords } from "~/lib/tags";
 import type { MealCustomFields } from "~/lib/types";
 
 type InventoryItem = {
@@ -17,7 +20,7 @@ type InventoryItem = {
 interface MealListRowProps {
 	meal: typeof meal.$inferSelect & {
 		type?: string;
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: {
 			inventoryId?: string | null;
 			ingredientName: string;
@@ -32,6 +35,8 @@ interface MealListRowProps {
 	availableIngredients?: InventoryItem[];
 	isActive?: boolean;
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	detailHref?: string;
 }
 
@@ -40,6 +45,8 @@ export function MealListRow({
 	availableIngredients = [],
 	isActive = false,
 	onToggleActive,
+	onTagClick,
+	tagSuggestions = [],
 	detailHref,
 }: MealListRowProps) {
 	const navigate = useNavigate();
@@ -59,7 +66,7 @@ export function MealListRow({
 	const isToggling = toggleFetcher.state !== "idle";
 
 	const isProvision = meal.type === "provision";
-	const tags = meal.tags ?? [];
+	const tags = toTagRecords(meal.tags);
 	const visibleTags = tags.slice(0, 2);
 	const extraTagCount = Math.max(0, tags.length - 2);
 
@@ -152,12 +159,7 @@ export function MealListRow({
 				{/* Tags (up to 2, hidden on very small screens) */}
 				<div className="hidden sm:flex items-center gap-1 shrink-0">
 					{visibleTags.map((tag) => (
-						<span
-							key={tag}
-							className="text-xs px-1.5 py-0.5 bg-hyper-green/10 text-hyper-green rounded"
-						>
-							{tag}
-						</span>
+						<TagChip key={tag.id} tag={tag} onClick={onTagClick} size="sm" />
 					))}
 					{extraTagCount > 0 && (
 						<span className="text-xs text-muted">+{extraTagCount}</span>
@@ -196,6 +198,7 @@ export function MealListRow({
 				(isProvision ? (
 					<ProvisionEditModal
 						meal={meal}
+						tagSuggestions={tagSuggestions}
 						onClose={() => setIsEditing(false)}
 						fetcher={fetcher}
 					/>
@@ -203,6 +206,7 @@ export function MealListRow({
 					<MealEditModal
 						meal={meal}
 						availableIngredients={availableIngredients}
+						tagSuggestions={tagSuggestions}
 						onClose={() => setIsEditing(false)}
 						fetcher={fetcher}
 						isUpdating={isUpdating}

@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS } from "~/lib/domain";
+import type { TagRecord } from "~/lib/tags";
+import { toTagRecords } from "~/lib/tags";
 import { ProvisionEditModal } from "./ProvisionEditModal";
 
 interface ProvisionCardProps {
 	meal: typeof meal.$inferSelect & {
-		tags?: string[];
+		tags?: TagRecord[] | string[];
 		ingredients?: {
 			ingredientName: string;
 			quantity: number;
@@ -17,6 +20,8 @@ interface ProvisionCardProps {
 	};
 	isActive?: boolean;
 	onToggleActive?: (mealId: string, nextActive: boolean) => void;
+	onTagClick?: (slug: string) => void;
+	tagSuggestions?: string[];
 	detailHref?: string;
 }
 
@@ -24,6 +29,8 @@ export function ProvisionCard({
 	meal,
 	isActive = false,
 	onToggleActive,
+	onTagClick,
+	tagSuggestions = [],
 	detailHref,
 }: ProvisionCardProps) {
 	const fetcher = useFetcher();
@@ -48,6 +55,8 @@ export function ProvisionCard({
 		if (toggleFetcher.data.mealId !== meal.id) return;
 		setLocalActive(toggleFetcher.data.isActive);
 	}, [toggleFetcher.data, meal.id]);
+
+	const displayTags = toTagRecords(meal.tags);
 
 	if (isDeleting) return null;
 
@@ -145,13 +154,8 @@ export function ProvisionCard({
 					</div>
 
 					<div className="flex flex-wrap gap-2 mb-2">
-						{(meal.tags || []).map((tag) => (
-							<span
-								key={tag}
-								className="bg-hyper-green/10 text-hyper-green text-xs px-2 py-1 rounded-md"
-							>
-								{tag}
-							</span>
+						{displayTags.map((tag) => (
+							<TagChip key={tag.id} tag={tag} onClick={onTagClick} size="sm" />
 						))}
 					</div>
 
@@ -162,6 +166,7 @@ export function ProvisionCard({
 			{isEditing && (
 				<ProvisionEditModal
 					meal={meal}
+					tagSuggestions={tagSuggestions}
 					onClose={() => setIsEditing(false)}
 					fetcher={fetcher}
 				/>

@@ -57,14 +57,14 @@ final class GalleyViewModel {
     var selectedMealCount: Int { activeMealIds.count }
 
     var displayedMeals: [Meal] {
-        PageFilterEngine.filterMeals(meals, domain: filters.domain, tag: filters.tag, search: filters.search)
+        PageFilterEngine.filterMeals(meals, domain: filters.domain, tags: filters.selectedTags, search: filters.search)
     }
 
     var displayedMatches: [MealMatch] {
         let filtered = PageFilterEngine.filterMeals(
             matches.map(\.meal),
             domain: filters.domain,
-            tag: filters.tag,
+            tags: filters.selectedTags,
             search: filters.search
         )
         let ids = Set(filtered.map(\.id))
@@ -87,6 +87,10 @@ final class GalleyViewModel {
         matchByMealId[mealId]
     }
 
+    private var serverTagFilter: String? {
+        filters.selectedTags.count == 1 ? filters.selectedTags.first : nil
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
@@ -96,7 +100,7 @@ final class GalleyViewModel {
             if isMatchMode {
                 do {
                     async let matchTask = api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
-                    async let mealsTask = api.meals(tag: filters.tag, domain: filters.domain)
+                    async let mealsTask = api.meals(tag: serverTagFilter, domain: filters.domain)
                     let response = try await matchTask
                     let mealsResponse = try await mealsTask
                     matches = response.matches
@@ -109,7 +113,7 @@ final class GalleyViewModel {
                 }
             } else {
                 do {
-                    let mealsResponse = try await api.meals(tag: filters.tag, domain: filters.domain)
+                    let mealsResponse = try await api.meals(tag: serverTagFilter, domain: filters.domain)
                     meals = mealsResponse.meals
                     mealTotal = mealsResponse.total ?? mealsResponse.meals.count
                     activeMealIds = Set(mealsResponse.activeMealIds ?? [])

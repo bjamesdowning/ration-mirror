@@ -17,6 +17,7 @@ import {
 	meal,
 	mealIngredient,
 	mealTag,
+	tag as tagTable,
 } from "../db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
@@ -37,6 +38,14 @@ import type {
 	ProvisionInput,
 	ProvisionUpdateInput,
 } from "./schemas/meal";
+import {
+	getOrganizationTagSlugs,
+	getTagsForCargoIds,
+	getTagsForMealIds,
+	resolveTagIds,
+	type TagRecord,
+	tagsToSlugs,
+} from "./tags.server";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import {
 	convertIngredientAmount,
@@ -48,6 +57,8 @@ import {
 	SIMILARITY_THRESHOLDS,
 	type SimilarCargoMatch,
 } from "./vector.server";
+
+export type { TagRecord };
 
 export type CargoDeduction = { cargoId: string; quantity: number };
 
@@ -132,7 +143,8 @@ export async function getMealsCount(
 			})
 			.from(meal)
 			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
-			.where(and(...conditions, eq(mealTag.tag, tag)));
+			.innerJoin(tagTable, eq(mealTag.tagId, tagTable.id))
+			.where(and(...conditions, eq(tagTable.slug, tag)));
 		return Number(row?.count ?? 0);
 	}
 	const [row] = await d1
@@ -158,15 +170,16 @@ export async function getMeals(
 ) {
 	const d1 = drizzle(db);
 	const conditions = [eq(meal.organizationId, organizationId)];
-	if (tag) {
-		conditions.push(eq(mealTag.tag, tag));
+	const tagSlug = tag;
+	if (tagSlug) {
+		conditions.push(eq(tagTable.slug, tagSlug));
 	}
 	if (domain) {
 		conditions.push(eq(meal.domain, domain));
 	}
 
 	// Base query to get meals
-	const meals = tag
+	const meals = tagSlug
 		? await d1
 				.select({
 					id: meal.id,
@@ -186,6 +199,7 @@ export async function getMeals(
 				})
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+				.innerJoin(tagTable, eq(mealTag.tagId, tagTable.id))
 				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt))
 				.$dynamic()
@@ -221,16 +235,8 @@ export async function getMeals(
 
 	// Fetch all tags and ingredients for the organization's meals in one query each
 	const mealIds = meals.map((m) => m.id);
-	const [allTags, allIngredients] = await Promise.all([
-		chunkedQuery(mealIds, (chunk) =>
-			d1
-				.select({
-					mealId: mealTag.mealId,
-					tag: mealTag.tag,
-				})
-				.from(mealTag)
-				.where(inArray(mealTag.mealId, chunk)),
-		),
+	const [tagsByMealId, allIngredients] = await Promise.all([
+		getTagsForMealIds(db, mealIds),
 		chunkedQuery(mealIds, (chunk) =>
 			d1
 				.select()
@@ -239,14 +245,6 @@ export async function getMeals(
 				.orderBy(mealIngredient.orderIndex),
 		),
 	]);
-
-	// Group tags by meal ID
-	const tagsByMealId = new Map<string, string[]>();
-	for (const t of allTags) {
-		const existing = tagsByMealId.get(t.mealId) || [];
-		existing.push(t.tag);
-		tagsByMealId.set(t.mealId, existing);
-	}
 
 	// Group ingredients by meal ID
 	const ingredientsByMealId = new Map<
@@ -291,7 +289,8 @@ export async function getMealsPage(
 	const d1 = drizzle(db);
 	const includeIngredients = options.includeIngredients ?? true;
 	const conditions = [eq(meal.organizationId, organizationId)];
-	if (options.tag) conditions.push(eq(mealTag.tag, options.tag));
+	const tagSlug = options.tag;
+	if (tagSlug) conditions.push(eq(tagTable.slug, tagSlug));
 	if (options.domain) conditions.push(eq(meal.domain, options.domain));
 	if (options.cursor) {
 		const cursorClause = or(
@@ -321,11 +320,12 @@ export async function getMealsPage(
 		updatedAt: meal.updatedAt,
 	} as const;
 
-	const rows = options.tag
+	const rows = tagSlug
 		? await d1
 				.select(projection)
 				.from(meal)
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+				.innerJoin(tagTable, eq(mealTag.tagId, tagTable.id))
 				.where(and(...conditions))
 				.orderBy(desc(meal.createdAt), asc(meal.id))
 				.limit(options.limit + 1)
@@ -346,7 +346,7 @@ export async function getMealsPage(
 		return {
 			items: [] as Array<
 				(typeof meals)[number] & {
-					tags: string[];
+					tags: TagRecord[];
 					ingredients: (typeof mealIngredient.$inferSelect)[];
 				}
 			>,
@@ -355,13 +355,8 @@ export async function getMealsPage(
 	}
 
 	const mealIds = meals.map((m) => m.id);
-	const [allTags, allIngredients] = await Promise.all([
-		chunkedQuery(mealIds, (chunk) =>
-			d1
-				.select({ mealId: mealTag.mealId, tag: mealTag.tag })
-				.from(mealTag)
-				.where(inArray(mealTag.mealId, chunk)),
-		),
+	const [tagsByMealId, allIngredients] = await Promise.all([
+		getTagsForMealIds(db, mealIds),
 		includeIngredients
 			? chunkedQuery(mealIds, (chunk) =>
 					d1
@@ -373,12 +368,6 @@ export async function getMealsPage(
 			: Promise.resolve([] as (typeof mealIngredient.$inferSelect)[]),
 	]);
 
-	const tagsByMealId = new Map<string, string[]>();
-	for (const t of allTags) {
-		const existing = tagsByMealId.get(t.mealId) || [];
-		existing.push(t.tag);
-		tagsByMealId.set(t.mealId, existing);
-	}
 	const ingredientsByMealId = new Map<
 		string,
 		(typeof mealIngredient.$inferSelect)[]
@@ -408,7 +397,7 @@ export async function getMeal(
 ) {
 	const d1 = drizzle(db);
 
-	const [mealResults, ingredients, tags] = await d1.batch([
+	const [mealResults, ingredients] = await d1.batch([
 		d1
 			.select()
 			.from(meal)
@@ -418,16 +407,17 @@ export async function getMeal(
 			.from(mealIngredient)
 			.where(eq(mealIngredient.mealId, mealId))
 			.orderBy(mealIngredient.orderIndex),
-		d1.select().from(mealTag).where(eq(mealTag.mealId, mealId)),
 	]);
 
 	const foundMeal = mealResults[0];
 	if (!foundMeal) return null;
 
+	const tagsByMealId = await getTagsForMealIds(db, [mealId]);
+
 	return {
 		...foundMeal,
 		ingredients,
-		tags: tags.map((t) => t.tag),
+		tags: tagsByMealId.get(mealId) ?? [],
 	};
 }
 
@@ -443,7 +433,7 @@ export async function getAdjacentMealIds(
 	filters: { tag?: string; domain?: string },
 ): Promise<{ prevId: string | null; nextId: string | null }> {
 	const d1 = drizzle(db);
-	const tag = filters.tag?.trim().slice(0, 100);
+	const tagSlug = filters.tag?.trim().slice(0, 100);
 	const domain =
 		filters.domain &&
 		ITEM_DOMAINS.includes(filters.domain as (typeof ITEM_DOMAINS)[number])
@@ -454,8 +444,8 @@ export async function getAdjacentMealIds(
 	if (domain) {
 		baseConditions.push(eq(meal.domain, domain));
 	}
-	if (tag) {
-		baseConditions.push(eq(mealTag.tag, tag));
+	if (tagSlug) {
+		baseConditions.push(eq(tagTable.slug, tagSlug));
 	}
 	const baseWhere = and(...baseConditions);
 
@@ -468,11 +458,12 @@ export async function getAdjacentMealIds(
 		and(eq(meal.createdAt, current.createdAt), gt(meal.id, current.id)),
 	);
 
-	if (tag) {
+	if (tagSlug) {
 		const prevQuery = d1
 			.select({ id: meal.id })
 			.from(meal)
 			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+			.innerJoin(tagTable, eq(mealTag.tagId, tagTable.id))
 			.where(and(baseWhere, prevCursorCondition))
 			.orderBy(asc(meal.createdAt), desc(meal.id))
 			.limit(1);
@@ -480,6 +471,7 @@ export async function getAdjacentMealIds(
 			.select({ id: meal.id })
 			.from(meal)
 			.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
+			.innerJoin(tagTable, eq(mealTag.tagId, tagTable.id))
 			.where(and(baseWhere, nextCursorCondition))
 			.orderBy(desc(meal.createdAt), asc(meal.id))
 			.limit(1);
@@ -591,7 +583,7 @@ export async function getMealsForCargo(
 	}
 
 	const mealIds = [...new Set(allConnections.map((row) => row.mealId))];
-	const [meals, allTags] = await Promise.all([
+	const [meals, tagsByMealId] = await Promise.all([
 		chunkedQuery(mealIds, (chunk) =>
 			d1
 				.select()
@@ -600,23 +592,8 @@ export async function getMealsForCargo(
 					and(eq(meal.organizationId, organizationId), inArray(meal.id, chunk)),
 				),
 		),
-		chunkedQuery(mealIds, (chunk) =>
-			d1
-				.select({
-					mealId: mealTag.mealId,
-					tag: mealTag.tag,
-				})
-				.from(mealTag)
-				.where(inArray(mealTag.mealId, chunk)),
-		),
+		getTagsForMealIds(db, mealIds),
 	]);
-
-	const tagsByMealId = new Map<string, string[]>();
-	for (const t of allTags) {
-		const existing = tagsByMealId.get(t.mealId) ?? [];
-		existing.push(t.tag);
-		tagsByMealId.set(t.mealId, existing);
-	}
 
 	const connectionsByMealId = new Map<string, ConnectedMealIngredient[]>();
 	for (const connection of allConnections) {
@@ -662,6 +639,12 @@ export async function createMeal(
 	const d1 = drizzle(db);
 	const mealId = crypto.randomUUID();
 
+	let mealTagRows: { mealId: string; tagId: string }[] = [];
+	if (data.tags.length > 0) {
+		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
+	}
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1.insert(meal).values({
@@ -698,16 +681,9 @@ export async function createMeal(
 		}
 	}
 
-	if (data.tags.length > 0) {
-		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-			batch.push(
-				d1.insert(mealTag).values(
-					tagChunk.map((tag) => ({
-						mealId,
-						tag,
-					})),
-				),
-			);
+	if (mealTagRows.length > 0) {
+		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
 
@@ -805,15 +781,12 @@ export async function createMeals(
 		}
 
 		if (data.tags.length > 0) {
-			for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-				batch.push(
-					d1.insert(mealTag).values(
-						tagChunk.map((tag) => ({
-							mealId,
-							tag,
-						})),
-					),
-				);
+			const tagIds = await resolveTagIds(db, organizationId, data.tags);
+			for (const tagChunk of chunk(
+				tagIds.map((tagId) => ({ mealId, tagId })),
+				D1_MAX_TAG_ROWS_PER_STATEMENT,
+			)) {
+				batch.push(d1.insert(mealTag).values(tagChunk));
 			}
 		}
 	}
@@ -858,6 +831,12 @@ export async function updateMeal(
 
 	if (!existing) throw new Error("Meal not found or unauthorized");
 
+	let mealTagRows: { mealId: string; tagId: string }[] = [];
+	if (data.tags.length > 0) {
+		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
+	}
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1
@@ -898,16 +877,9 @@ export async function updateMeal(
 		}
 	}
 
-	if (data.tags.length > 0) {
-		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-			batch.push(
-				d1.insert(mealTag).values(
-					tagChunk.map((tag) => ({
-						mealId,
-						tag,
-					})),
-				),
-			);
+	if (mealTagRows.length > 0) {
+		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
 
@@ -940,6 +912,12 @@ export async function createProvision(
 	const mealId = crypto.randomUUID();
 	const ingredientId = crypto.randomUUID();
 
+	let mealTagRows: { mealId: string; tagId: string }[] = [];
+	if (data.tags.length > 0) {
+		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
+	}
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1.insert(meal).values({
@@ -964,16 +942,9 @@ export async function createProvision(
 		),
 	];
 
-	if (data.tags.length > 0) {
-		for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-			batch.push(
-				d1.insert(mealTag).values(
-					tagChunk.map((tag) => ({
-						mealId,
-						tag,
-					})),
-				),
-			);
+	if (mealTagRows.length > 0) {
+		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
 
@@ -1027,6 +998,12 @@ export async function updateProvision(
 	if (data.quantity !== undefined) ingUpdates.quantity = data.quantity;
 	if (data.unit !== undefined) ingUpdates.unit = data.unit;
 
+	let mealTagRows: { mealId: string; tagId: string }[] = [];
+	if (data.tags !== undefined && data.tags.length > 0) {
+		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
+	}
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
 		d1.update(meal).set(mealUpdates).where(eq(meal.id, mealId)),
@@ -1038,11 +1015,12 @@ export async function updateProvision(
 
 	if (data.tags !== undefined) {
 		batch.push(d1.delete(mealTag).where(eq(mealTag.mealId, mealId)));
-		if (data.tags.length > 0) {
-			for (const tagChunk of chunk(data.tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-				batch.push(
-					d1.insert(mealTag).values(tagChunk.map((tag) => ({ mealId, tag }))),
-				);
+		if (mealTagRows.length > 0) {
+			for (const tagChunk of chunk(
+				mealTagRows,
+				D1_MAX_TAG_ROWS_PER_STATEMENT,
+			)) {
+				batch.push(d1.insert(mealTag).values(tagChunk));
 			}
 		}
 	}
@@ -1619,9 +1597,14 @@ export async function createProvisionFromCargo(
 
 	const mealId = crypto.randomUUID();
 	const ingredientId = crypto.randomUUID();
-	const tags = Array.isArray(cargoItem.tags)
-		? (cargoItem.tags as string[])
-		: [];
+	const cargoTagsMap = await getTagsForCargoIds(db, [cargoId]);
+	const tagSlugs = tagsToSlugs(cargoTagsMap.get(cargoId) ?? []);
+
+	let mealTagRows: { mealId: string; tagId: string }[] = [];
+	if (tagSlugs.length > 0) {
+		const tagIds = await resolveTagIds(db, organizationId, tagSlugs);
+		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
+	}
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types complex
 	const batch: any[] = [
@@ -1648,16 +1631,9 @@ export async function createProvisionFromCargo(
 		),
 	];
 
-	if (tags.length > 0) {
-		for (const tagChunk of chunk(tags, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
-			batch.push(
-				d1.insert(mealTag).values(
-					tagChunk.map((tag) => ({
-						mealId,
-						tag,
-					})),
-				),
-			);
+	if (mealTagRows.length > 0) {
+		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
 
@@ -1690,21 +1666,10 @@ export async function getPromotedCargoIds(
 }
 
 /**
- * Retrieves all unique tags for an organization's meals.
+ * Retrieves all unique tag slugs for an organization.
  * Useful for populating tag filter dropdowns.
  */
-export async function getOrganizationMealTags(
-	db: D1Database,
-	organizationId: string,
-) {
-	const d1 = drizzle(db);
+export const getOrganizationMealTags = getOrganizationTagSlugs;
 
-	const tags = await d1
-		.selectDistinct({ tag: mealTag.tag })
-		.from(mealTag)
-		.innerJoin(meal, eq(mealTag.mealId, meal.id))
-		.where(eq(meal.organizationId, organizationId))
-		.orderBy(mealTag.tag);
-
-	return tags.map((t) => t.tag);
-}
+/** Alias for org tag slug list (autocomplete). */
+export const getMealTags = getOrganizationTagSlugs;

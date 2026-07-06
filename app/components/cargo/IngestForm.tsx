@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
+import { TagChipEditor } from "~/components/shared/TagChipEditor";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
 import { presentQuantity } from "~/lib/present-quantity";
 
@@ -7,6 +8,7 @@ type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
 interface IngestFormProps {
 	defaultDomain?: ItemDomain;
+	tagSuggestions?: string[];
 	/** Called when the action returns capacity_exceeded so the parent can show UpgradePrompt */
 	onUpgradeRequired?: () => void;
 }
@@ -31,6 +33,7 @@ interface PendingMergeState {
 
 export function IngestForm({
 	defaultDomain,
+	tagSuggestions = [],
 	onUpgradeRequired,
 }: IngestFormProps) {
 	const fetcher = useFetcher();
@@ -254,17 +257,8 @@ export function IngestForm({
 
 						{/* Tags */}
 						<div className="flex flex-col">
-							<label htmlFor="item-tags" className="text-label text-muted mb-2">
-								Tags (Comma Separated)
-							</label>
-							<input
-								id="item-tags"
-								type="text"
-								inputMode="text"
-								name="tags"
-								placeholder="e.g. Dry, Italian, Snack"
-								className="bg-platinum rounded-lg px-4 py-3 text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none placeholder-muted/50"
-							/>
+							<span className="text-label text-muted mb-2">Tags</span>
+							<TagChipEditor suggestions={tagSuggestions} />
 						</div>
 					</div>
 				)}

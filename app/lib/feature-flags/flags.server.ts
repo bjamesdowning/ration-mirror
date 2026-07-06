@@ -31,6 +31,24 @@ function getEnvOverride(env: Env, flag: string): boolean | undefined {
 	return overrides[flag];
 }
 
+async function evaluateFlagBinding(
+	env: Env,
+	flag: string,
+	defaultEnabled: boolean,
+	context: FlagshipEvaluationContext,
+): Promise<boolean> {
+	if (!env.FLAGS) {
+		return defaultEnabled;
+	}
+
+	try {
+		return await env.FLAGS.getBooleanValue(flag, defaultEnabled, context);
+	} catch {
+		// Local Vite dev / Miniflare may expose FLAGS but require remote execution.
+		return defaultEnabled;
+	}
+}
+
 export async function isFeatureEnabled(
 	env: Env,
 	flag: string,
@@ -54,7 +72,7 @@ export async function isFeatureEnabled(
 		return entry.defaultEnabled;
 	}
 
-	return env.FLAGS.getBooleanValue(flag, entry.defaultEnabled, context);
+	return evaluateFlagBinding(env, flag, entry.defaultEnabled, context);
 }
 
 /** Evaluate all registry flags marked clientVisible — once per request. */

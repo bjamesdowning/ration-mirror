@@ -1106,9 +1106,19 @@ erDiagram
 
 ### 7.1 Authentication Flow
 
-Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
+Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. **Sign in with Apple on web** is available when Apple web secrets are configured and the `apple-web-login` Flagship flag is enabled (default off — see [Feature flags](docs/dev/feature-flags.md)). Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
+
+**Cross-platform identity:** One Ration account per person. Google and magic link unify by verified email. Apple (including Hide My Email on iOS) unifies by Apple `sub` when the user signs in with the **same Apple ID** on web via Sign in with Apple.
+
+| Mobile sign-up | Web sign-in | Same account when |
+|----------------|-------------|-------------------|
+| Apple (incl. Hide My Email) | Sign in with Apple | Same Apple ID |
+| Google | Google or magic link | Same verified email |
+| Magic link | Magic link | Same email |
 
 **Native iOS (v1.4.49+):** The SwiftUI app supports **Sign in with Apple** and **Google Sign-In** via native SDKs. The app sends provider ID tokens to `POST /api/mobile/v1/auth/social`; the server verifies them through Better Auth and returns the same mobile JWT + refresh token pair as magic-link auth. Required Worker secrets: `GOOGLE_IOS_CLIENT_ID` (GCP iOS OAuth client), `APPLE_APP_BUNDLE_IDENTIFIER` (`com.mayutic.ration`), plus existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for web and ID-token audience verification. App Store Guideline 4.8 requires Sign in with Apple whenever Google social login is offered on iOS.
+
+**Web Apple (operator setup):** Create an Apple **Services ID**, configure return URL `https://ration.mayutic.com/api/auth/callback/apple`, domain verification for `ration.mayutic.com`, and a Sign in with Apple `.p8` key. Set Worker secrets: `APPLE_SERVICES_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`. Create boolean flag `apple-web-login` in Cloudflare Flagship (disabled). Because web auth starts signed out, `userId` targeting cannot reveal the login button; test on staging/dev or with non-production `FEATURE_FLAG_OVERRIDES`, then use a small production percentage rollout. Apple does not support `localhost` return URLs — test on production/staging HTTPS.
 
 **Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Transactional emails (magic link, welcome, agent OTP, 30-day inactivity re-engagement) are skipped locally when the `EMAIL` send binding is unavailable.
 

@@ -19,6 +19,7 @@ import "./app.css";
 import { WebMcpProvider } from "./components/agent/WebMcpProvider";
 import * as schema from "./db/schema";
 import { AGENT_DISCOVERY_LINK_HEADER } from "./lib/agent-readiness";
+import { hasAppleWebCredentials } from "./lib/apple-web-login.server";
 import { createAuth } from "./lib/auth.server";
 import {
 	buildFlagContext,
@@ -100,6 +101,8 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	const url = new URL(request.url);
 	const flagContext = buildFlagContext(request, env, session);
 	const clientFlags = await getClientSafeFlags(env, flagContext);
+	clientFlags.appleWebLogin =
+		clientFlags.appleWebLogin === true && hasAppleWebCredentials(env);
 
 	return {
 		user: session?.user,

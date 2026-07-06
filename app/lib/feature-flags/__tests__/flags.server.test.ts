@@ -73,4 +73,18 @@ describe("isFeatureEnabled", () => {
 		);
 		expect(enabled).toBe(false);
 	});
+
+	it("falls back to registry default when binding throws locally", async () => {
+		const getBooleanValue = vi
+			.fn()
+			.mockRejectedValue(new Error("Binding FLAGS needs to be run remotely"));
+		const env = {
+			...createMockEnv(),
+			FLAGS: { getBooleanValue } as unknown as Flagship,
+		};
+		const enabled = await isFeatureEnabled(env, "smoke-test" as never, {
+			userId: "u1",
+		});
+		expect(enabled).toBe(false);
+	});
 });

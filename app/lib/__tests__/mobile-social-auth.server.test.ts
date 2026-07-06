@@ -92,6 +92,7 @@ describe("authenticateMobileSocial", () => {
 						name: { firstName: "Ada", lastName: "Lovelace" },
 					},
 				},
+				requestSignUp: true,
 			},
 		});
 		expect(issueMobileTokenPair).toHaveBeenCalledWith(env, "user-1", "org-1");

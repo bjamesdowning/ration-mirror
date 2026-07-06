@@ -149,6 +149,12 @@ struct SignInView: View {
                 )
             }
             .disabled(!tosAccepted || socialLoading != nil || isSending)
+
+            Text("If you use Apple here, sign in on the web with the same Apple ID.")
+                .font(Typography.caption())
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+                .padding(.top, 4)
         }
     }
 

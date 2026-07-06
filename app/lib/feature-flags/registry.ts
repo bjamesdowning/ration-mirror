@@ -8,7 +8,14 @@ export type FlagRegistryEntry = {
 };
 
 /** Add entries when gating a feature. Keys must match Flagship dashboard (kebab-case). */
-export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {};
+export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
+	"apple-web-login": {
+		defaultEnabled: false,
+		description: "Sign in with Apple on web",
+		clientVisible: true,
+		clientKey: "appleWebLogin",
+	},
+};
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */
 export type FlagKey = keyof typeof FLAG_REGISTRY & string;

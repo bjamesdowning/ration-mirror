@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import { log } from "~/lib/logging.client";
+import type { loader as rootLoader } from "~/root";
 
 type FlowState = "idle" | "sending" | "sent" | "error";
 type AuthMode = "signUp" | "signIn";
+type SocialProvider = "google" | "apple";
 
 interface AuthWidgetProps {
 	/** Default mode to display. Defaults to signUp for homepage. */
@@ -30,12 +32,18 @@ export function AuthWidget({
 	const [email, setEmail] = useState("");
 	const [flowState, setFlowState] = useState<FlowState>("idle");
 	const [errorMsg, setErrorMsg] = useState("");
-	const [socialLoading, setSocialLoading] = useState(false);
+	const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
+		null,
+	);
 	const [devLoginLoading, setDevLoginLoading] = useState(false);
 	const [tosConsent, setTosConsent] = useState(false);
 
+	const rootData = useRouteLoaderData<typeof rootLoader>("root");
+	const appleWebLogin = rootData?.clientFlags?.appleWebLogin === true;
+
 	const isDev = import.meta.env.DEV;
-	const isLoading = flowState === "sending" || socialLoading || devLoginLoading;
+	const isLoading =
+		flowState === "sending" || socialLoading !== null || devLoginLoading;
 	const consentBlocked = mode === "signUp" && !tosConsent;
 
 	/** RFC 5322–style regex for basic email validation (relaxed for real-world use) */
@@ -82,7 +90,7 @@ export function AuthWidget({
 
 	const handleGoogleAuth = async () => {
 		if (consentBlocked) return;
-		setSocialLoading(true);
+		setSocialLoading("google");
 		setErrorMsg("");
 		try {
 			await authClient.signIn.social({
@@ -91,7 +99,28 @@ export function AuthWidget({
 			});
 		} catch {
 			setErrorMsg("Google sign-in failed. Please try again.");
-			setSocialLoading(false);
+			setSocialLoading(null);
+		}
+	};
+
+	const handleAppleAuth = async () => {
+		if (consentBlocked) return;
+		setSocialLoading("apple");
+		setErrorMsg("");
+		try {
+			await authClient.signIn.social({
+				provider: "apple",
+				callbackURL,
+				...(mode === "signUp"
+					? {
+							requestSignUp: true,
+							additionalData: { tosAccepted: true },
+						}
+					: {}),
+			});
+		} catch {
+			setErrorMsg("Apple sign-in failed. Please try again.");
+			setSocialLoading(null);
 		}
 	};
 
@@ -280,6 +309,38 @@ export function AuthWidget({
 						</div>
 					)}
 
+					{mode === "signUp" && (
+						<label className="mb-5 flex items-start gap-2 cursor-pointer group">
+							<input
+								type="checkbox"
+								className="mt-0.5 h-4 w-4 shrink-0 rounded border border-carbon/20 accent-hyper-green cursor-pointer"
+								checked={tosConsent}
+								onChange={(e) => setTosConsent(e.target.checked)}
+								aria-label="I agree to the Terms of Service and Privacy Policy"
+							/>
+							<span className="text-xs text-muted leading-relaxed">
+								I have read and agree to the{" "}
+								<Link
+									to="/legal/terms"
+									className="text-hyper-green hover:text-hyper-green/80 underline"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Terms of Service
+								</Link>{" "}
+								and{" "}
+								<Link
+									to="/legal/privacy"
+									className="text-hyper-green hover:text-hyper-green/80 underline"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Privacy Policy
+								</Link>
+							</span>
+						</label>
+					)}
+
 					{/* Magic Link Form */}
 					<form onSubmit={handleMagicLink} className="space-y-3">
 						<div>
@@ -376,7 +437,7 @@ export function AuthWidget({
 						</>
 					)}
 
-					{/* Google OAuth — always shown when auth is available */}
+					{/* Social OAuth */}
 					<div className="relative my-5">
 						<div className="absolute inset-0 flex items-center">
 							<div className="w-full border-t border-carbon/10" />
@@ -387,13 +448,51 @@ export function AuthWidget({
 							</span>
 						</div>
 					</div>
+					{appleWebLogin && (
+						<>
+							<p className="text-xs text-muted text-center mb-3 leading-relaxed">
+								Signed up in the app? Use Sign in with Apple with the same Apple
+								ID.
+							</p>
+							<button
+								type="button"
+								onClick={handleAppleAuth}
+								disabled={isLoading || consentBlocked}
+								className="w-full bg-carbon text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-carbon/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 focus-ring mb-3"
+							>
+								{socialLoading === "apple" ? (
+									<>
+										<span
+											className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+											aria-hidden="true"
+										/>
+										Connecting...
+									</>
+								) : (
+									<>
+										<svg
+											viewBox="0 0 24 24"
+											className="w-4 h-4"
+											xmlns="http://www.w3.org/2000/svg"
+											aria-hidden="true"
+											fill="currentColor"
+										>
+											<title>Apple</title>
+											<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+										</svg>
+										Continue with Apple
+									</>
+								)}
+							</button>
+						</>
+					)}
 					<button
 						type="button"
 						onClick={handleGoogleAuth}
 						disabled={isLoading || consentBlocked}
 						className="w-full border border-carbon/10 bg-white/60 text-carbon py-3 px-4 rounded-xl text-sm font-semibold hover:bg-platinum transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 focus-ring"
 					>
-						{socialLoading ? (
+						{socialLoading === "google" ? (
 							<>
 								<span
 									className="w-4 h-4 border-2 border-carbon/20 border-t-carbon rounded-full animate-spin"
@@ -419,38 +518,6 @@ export function AuthWidget({
 							</>
 						)}
 					</button>
-
-					{mode === "signUp" && (
-						<label className="mt-5 flex items-start gap-2 cursor-pointer group">
-							<input
-								type="checkbox"
-								className="mt-0.5 h-4 w-4 shrink-0 rounded border border-carbon/20 accent-hyper-green cursor-pointer"
-								checked={tosConsent}
-								onChange={(e) => setTosConsent(e.target.checked)}
-								aria-label="I agree to the Terms of Service and Privacy Policy"
-							/>
-							<span className="text-xs text-muted leading-relaxed">
-								I have read and agree to the{" "}
-								<Link
-									to="/legal/terms"
-									className="text-hyper-green hover:text-hyper-green/80 underline"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									Terms of Service
-								</Link>{" "}
-								and{" "}
-								<Link
-									to="/legal/privacy"
-									className="text-hyper-green hover:text-hyper-green/80 underline"
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									Privacy Policy
-								</Link>
-							</span>
-						</label>
-					)}
 				</div>
 			</div>
 

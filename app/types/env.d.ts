@@ -9,6 +9,10 @@ declare namespace Cloudflare {
 		GOOGLE_CLIENT_SECRET?: string;
 		GOOGLE_IOS_CLIENT_ID?: string;
 		APPLE_APP_BUNDLE_IDENTIFIER?: string;
+		APPLE_SERVICES_ID?: string;
+		APPLE_TEAM_ID?: string;
+		APPLE_KEY_ID?: string;
+		APPLE_PRIVATE_KEY?: string;
 		STRIPE_SECRET_KEY?: string;
 		STRIPE_PUBLISHABLE_KEY?: string;
 		STRIPE_WEBHOOK_SECRET?: string;

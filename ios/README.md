@@ -104,6 +104,11 @@ before any method. Configure:
   (`com.googleusercontent.apps.<prefix>` — see `AppConfig.googleIOSURLScheme`).
   This populates `GIDClientID` and the Google callback URL scheme in `Info.plist`.
 
+**Cross-platform sign-in:** One Ration account per person. After signing up on iOS with
+Apple (including Hide My Email), sign in on [ration.mayutic.com](https://ration.mayutic.com)
+with **Sign in with Apple** using the same Apple ID — not Google or a different email.
+Google and magic link unify by verified email when the addresses match.
+
 **Magic link (PKCE):** The flow uses **PKCE** so the one-time code is bound to this app — an app that
 hijacks the `ration://` scheme cannot redeem an intercepted code without the
 verifier.

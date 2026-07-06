@@ -17,6 +17,11 @@ import { redirect } from "react-router";
 import * as schema from "../db/schema";
 import { buildPersonalOrgRecords } from "./agent/org-records.server";
 import {
+	hasAppleNativeCredentials,
+	hasAppleWebCredentials,
+	resolveAppleSocialProvider,
+} from "./apple-web-login.server";
+import {
 	buildMagicLinkEmail,
 	buildWelcomeEmail,
 	sendEmail,
@@ -85,8 +90,11 @@ export function createAuth(env: Cloudflare.Env) {
 		!!authEnv.GOOGLE_CLIENT_SECRET &&
 		authEnv.GOOGLE_CLIENT_SECRET.trim() !== "";
 
-	const appleBundleId = authEnv.APPLE_APP_BUNDLE_IDENTIFIER?.trim() ?? "";
-	const hasAppleOAuth = appleBundleId.length > 0;
+	const appleProvider = resolveAppleSocialProvider(authEnv);
+	const hasAppleOAuth =
+		appleProvider !== undefined ||
+		hasAppleNativeCredentials(authEnv) ||
+		hasAppleWebCredentials(authEnv);
 
 	// Dev-only: enable email/password for Dev Login (dev@ration.app / ration-dev).
 	// Only when BETTER_AUTH_URL is localhost — never in production.
@@ -254,12 +262,9 @@ export function createAuth(env: Cloudflare.Env) {
 						},
 					}
 				: {}),
-			...(hasAppleOAuth
+			...(appleProvider
 				? {
-						apple: {
-							clientId: appleBundleId,
-							appBundleIdentifier: appleBundleId,
-						},
+						apple: appleProvider,
 					}
 				: {}),
 		},

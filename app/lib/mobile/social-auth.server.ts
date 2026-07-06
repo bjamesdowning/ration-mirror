@@ -171,6 +171,7 @@ export async function authenticateMobileSocial(
 			body: {
 				provider: input.provider,
 				idToken: idTokenBody,
+				...(input.provider === "apple" ? { requestSignUp: true } : {}),
 			},
 		});
 	} catch {

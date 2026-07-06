@@ -2021,7 +2021,7 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 - **Developer guide:** [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md)
 - **Add a flag to a feature:** `/add-feature-flag` Cursor command
 - **Validate registry:** `bun run flag:check`
-- **Setup:** Replace `REPLACE_WITH_*_FLAGSHIP_APP_ID` in wrangler configs after creating Flagship apps `ration` / `ration-dev`
+- **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, and `wrangler.local.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
 **Manual deploy (local):**
 

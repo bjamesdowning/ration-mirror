@@ -34,3 +34,9 @@ alwaysApply: true
 - **Storage:** Use `wrangler secret put` for sensitive values (Stripe Keys, Better Auth Secret)
 - **Access:** Access environment variables via `context.cloudflare.env` (in Loaders/Actions) or `env` (in generic Workers)
 - Never log secrets
+
+## Feature flags
+
+- Auth and safety-critical paths gated by Flagship must default **off** and enforce server-side (`isFeatureEnabled`) — UI-only gating is insufficient
+- Do not put secrets or unnecessary PII in Flagship evaluation context
+- Emergency kill: `FEATURE_FLAG_OVERRIDES` via `wrangler secret put`

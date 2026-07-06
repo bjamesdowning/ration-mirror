@@ -277,6 +277,7 @@ export default [
 		"api/mobile/v1/auth/magic-link",
 		"routes/api/mobile/v1.auth.magic-link.ts",
 	),
+	route("api/mobile/v1/auth/social", "routes/api/mobile/v1.auth.social.ts"),
 	route("api/mobile/v1/auth/token", "routes/api/mobile/v1.auth.token.ts"),
 	route("api/mobile/v1/auth/session", "routes/api/mobile/v1.auth.session.ts"),
 	route("api/mobile/v1/session", "routes/api/mobile/v1.session.ts"),

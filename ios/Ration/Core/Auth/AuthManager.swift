@@ -63,6 +63,43 @@ final class AuthManager {
         }
     }
 
+    // MARK: Social sign-in
+
+    func signInWithSocial(
+        provider: String,
+        idToken: String,
+        nonce: String? = nil,
+        accessToken: String? = nil,
+        givenName: String? = nil,
+        familyName: String? = nil,
+        tosAccepted: Bool
+    ) async throws {
+        clearAuthError()
+        var body: [String: Any] = [
+            "provider": provider,
+            "idToken": idToken,
+        ]
+        if tosAccepted {
+            body["tosAccepted"] = true
+        }
+        if let nonce {
+            body["nonce"] = nonce
+        }
+        if let accessToken {
+            body["accessToken"] = accessToken
+        }
+        if provider == "apple", givenName != nil || familyName != nil {
+            var fullName: [String: String] = [:]
+            if let givenName { fullName["givenName"] = givenName }
+            if let familyName { fullName["familyName"] = familyName }
+            body["fullName"] = fullName
+        }
+
+        let pair = try await postTokenDictionary(body: body, endpoint: "auth/social")
+        apply(pair)
+        phase = .signedIn
+    }
+
     // MARK: Magic link + code exchange
 
     func requestMagicLink(email: String) async throws {
@@ -183,10 +220,14 @@ final class AuthManager {
     }
 
     private func postToken(body: [String: String]) async throws -> TokenPair {
-        var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "auth/token"))
+        try await postTokenDictionary(body: body, endpoint: "auth/token")
+    }
+
+    private func postTokenDictionary(body: [String: Any], endpoint: String) async throws -> TokenPair {
+        var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: endpoint))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSON.encoder.encode(body)
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: req)
         try Self.ensureOK(data: data, response: response)
         do {

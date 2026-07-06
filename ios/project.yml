@@ -16,11 +16,18 @@ settings:
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"
+    # Google Sign-In iOS OAuth client ID (public). Override locally or in CI.
+    GOOGLE_IOS_CLIENT_ID: ""
+    # Reversed client ID URL scheme — com.googleusercontent.apps.<id-prefix>
+    GOOGLE_IOS_URL_SCHEME: ""
 
 packages:
   RevenueCat:
     url: https://github.com/RevenueCat/purchases-ios
     from: "5.0.0"
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "8.0.0"
 
 targets:
   Ration:
@@ -33,6 +40,8 @@ targets:
       properties:
         com.apple.developer.associated-domains:
           - applinks:ration.mayutic.com
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mayutic.ration
@@ -43,6 +52,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - package: RevenueCat
+      - package: GoogleSignIn
+        product: GoogleSignIn
   RationTests:
     type: bundle.unit-test
     platform: iOS

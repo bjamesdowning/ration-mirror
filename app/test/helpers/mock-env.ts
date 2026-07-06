@@ -49,6 +49,28 @@ export function createMockVectorize(): VectorizeIndex {
 }
 
 /**
+ * Stub Flagship binding for feature-flag unit tests.
+ */
+export function createMockFlagship(
+	overrides?: Partial<{
+		getBooleanValue: ReturnType<typeof vi.fn>;
+	}>,
+): Flagship {
+	return {
+		get: vi.fn().mockResolvedValue(undefined),
+		getBooleanValue: vi.fn().mockResolvedValue(false),
+		getStringValue: vi.fn().mockResolvedValue(""),
+		getNumberValue: vi.fn().mockResolvedValue(0),
+		getObjectValue: vi.fn().mockResolvedValue({}),
+		getBooleanDetails: vi.fn(),
+		getStringDetails: vi.fn(),
+		getNumberDetails: vi.fn(),
+		getObjectDetails: vi.fn(),
+		...overrides,
+	} as unknown as Flagship;
+}
+
+/**
  * Minimal Env stub for server functions that accept an Env-like object.
  */
 export function createMockEnv(): Env {
@@ -57,6 +79,7 @@ export function createMockEnv(): Env {
 		RATION_KV: createMockKV(),
 		STORAGE: createMockR2(),
 		VECTORIZE: createMockVectorize(),
+		FLAGS: createMockFlagship(),
 		AI: {} as Ai,
 		BETTER_AUTH_URL: "http://localhost",
 		BETTER_AUTH_SECRET: "test-secret",
@@ -75,5 +98,6 @@ export function createMockEnv(): Env {
 		STRIPE_PRICE_CREW_MEMBER_ANNUAL: "price_1T1r4zFX10NMafIY7ZFHe8xE",
 		STRIPE_PRICE_CREW_MEMBER_MONTHLY: "price_1T6fBlFX10NMafIYHEbyNKwN",
 		STRIPE_PROMO_WELCOME65: "promo_1T7CtfFX10NMafIYkyQyhzO6",
+		RATION_ENV: "development",
 	} as unknown as Env;
 }

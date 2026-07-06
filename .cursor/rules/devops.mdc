@@ -22,6 +22,7 @@ description: CI/CD pipeline patterns, deployment workflows, quality gates, and r
 - **Migrations:** Database migrations (`bun run db:migrate:prod`) must run **successfully** before the new code is promoted
 - **Secrets:** Inject sensitive config via Masked/Protected CI Variables. Never log these
 - **Order:** Always run migrations before deploying new code that depends on schema changes
+- **Feature flags:** Ship flag-gated code with the Flagship dashboard flag **disabled** first. Push to `main` deploys code (Workers Builds) but Flagship controls exposure. No Flagship API calls in `.gitlab-ci.yml`. Emergency kill: `FEATURE_FLAG_OVERRIDES` secret (JSON)
 
 ## Deployment Workflow
 

@@ -20,6 +20,10 @@ import { WebMcpProvider } from "./components/agent/WebMcpProvider";
 import * as schema from "./db/schema";
 import { AGENT_DISCOVERY_LINK_HEADER } from "./lib/agent-readiness";
 import { createAuth } from "./lib/auth.server";
+import {
+	buildFlagContext,
+	getClientSafeFlags,
+} from "./lib/feature-flags/flags.server";
 import { signIntercomJwt } from "./lib/intercom.server";
 import { buildIntercomAttributes } from "./lib/intercom-attributes.server";
 import { checkBalance } from "./lib/ledger.server";
@@ -94,6 +98,9 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 	}
 
 	const url = new URL(request.url);
+	const flagContext = buildFlagContext(request, env, session);
+	const clientFlags = await getClientSafeFlags(env, flagContext);
+
 	return {
 		user: session?.user,
 		theme: resolvedTheme,
@@ -101,6 +108,7 @@ export const loader = async ({ request, context }: Route.LoaderArgs) => {
 		intercomAppId,
 		intercomUserJwt,
 		activeOrganizationId,
+		clientFlags,
 	};
 };
 

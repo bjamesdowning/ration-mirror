@@ -47,6 +47,7 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
 - [11. Public REST API (v1)](#11-public-rest-api-v1)
 - [12. Testing](#12-testing)
 - [13. Local Development & Deployment](#13-local-development--deployment)
+  - [13.1 Feature flags (Flagship)](#131-feature-flags-flagship)
 - [14. Fin knowledge hub (support)](#14-fin-knowledge-hub-support)
 
 ---
@@ -1107,6 +1108,8 @@ erDiagram
 
 Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
 
+**Native iOS (v1.4.49+):** The SwiftUI app supports **Sign in with Apple** and **Google Sign-In** via native SDKs. The app sends provider ID tokens to `POST /api/mobile/v1/auth/social`; the server verifies them through Better Auth and returns the same mobile JWT + refresh token pair as magic-link auth. Required Worker secrets: `GOOGLE_IOS_CLIENT_ID` (GCP iOS OAuth client), `APPLE_APP_BUNDLE_IDENTIFIER` (`com.mayutic.ration`), plus existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for web and ID-token audience verification. App Store Guideline 4.8 requires Sign in with Apple whenever Google social login is offered on iOS.
+
 **Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Transactional emails (magic link, welcome, agent OTP, 30-day inactivity re-engagement) are skipped locally when the `EMAIL` send binding is unavailable.
 
 ```mermaid
@@ -2010,6 +2013,15 @@ bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.mcp.json
 ```
 
 `postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts) (cf-typegen via `wrangler types` when dependencies are intact). The MCP worker does not need `bun run build` — Wrangler bundles `workers/mcp.ts` directly.
+
+### 13.1 Feature flags (Flagship)
+
+Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/flagship/) via the `env.FLAGS` Worker binding. Flag keys live in [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts); values are toggled in the Cloudflare dashboard.
+
+- **Developer guide:** [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md)
+- **Add a flag to a feature:** `/add-feature-flag` Cursor command
+- **Validate registry:** `bun run flag:check`
+- **Setup:** Replace `REPLACE_WITH_*_FLAGSHIP_APP_ID` in wrangler configs after creating Flagship apps `ration` / `ration-dev`
 
 **Manual deploy (local):**
 

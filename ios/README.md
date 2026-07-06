@@ -70,7 +70,7 @@ Ration/
 │   ├── Billing/    # RevenueCat SDK boundary
 │   └── Models/     # Codable types matching mobile API responses
 └── Features/
-    ├── Auth/       # Magic-link sign-in
+    ├── Auth/       # Magic-link + Apple/Google social sign-in
     ├── Dashboard/  # Hub widget grid (GET /hub), customize layout
     ├── Cargo/      # Paginated list + filters + FAB
     ├── Supply/     # Shopping list with filters + dock FAB
@@ -91,7 +91,20 @@ Ration/
 
 ### Auth flow
 
-The flow uses **PKCE** so the one-time code is bound to this app — an app that
+**Social sign-in (v1.4.49+):** Sign in with Apple (`AuthenticationServices`) and
+Google (`GoogleSignIn-iOS` SPM) obtain provider ID tokens natively. The app calls
+`POST /auth/social` with the token (and Apple nonce); the server verifies via Better
+Auth and returns the same JWT pair as magic-link auth. ToS acceptance is required
+before any method. Configure:
+
+- **Apple:** Enable Sign in with Apple on App ID `com.mayutic.ration` in the Apple
+  Developer portal (entitlement `com.apple.developer.applesignin` is in `project.yml`).
+- **Google:** Set `GOOGLE_IOS_CLIENT_ID` and `GOOGLE_IOS_URL_SCHEME` in `project.yml`
+  (or scheme env vars). `GOOGLE_IOS_URL_SCHEME` is the reversed client ID
+  (`com.googleusercontent.apps.<prefix>` — see `AppConfig.googleIOSURLScheme`).
+  This populates `GIDClientID` and the Google callback URL scheme in `Info.plist`.
+
+**Magic link (PKCE):** The flow uses **PKCE** so the one-time code is bound to this app — an app that
 hijacks the `ration://` scheme cannot redeem an intercepted code without the
 verifier.
 
@@ -114,6 +127,9 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 
 | Route | Method | Purpose |
 |-------|--------|---------|
+| `/auth/social` | POST | Apple/Google ID token → mobile JWT pair |
+| `/auth/magic-link` | POST | Request magic link (PKCE challenge) |
+| `/auth/token` | POST | Exchange auth code or refresh token |
 | `/session` | GET | User, org, credits, tier, `aiCosts` |
 | `/cargo`, `/cargo/:id`, `/cargo/batch` | GET/POST/PATCH/DELETE | Inventory CRUD |
 | `/meals`, `/meals/:id`, `/meals/match` | GET | Galley browse + match |

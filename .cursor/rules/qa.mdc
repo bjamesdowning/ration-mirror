@@ -35,6 +35,7 @@ You are the gatekeeper. Reject any "Solution" that breaks the build.
 - **Framework:** Vitest (Unit/Integration)
 - **Location:** Test files in `app/**/*.test.ts` and `app/**/*.test.tsx`
 - **Coverage:** Aim for meaningful test coverage, especially for critical paths
+- **Feature flags:** Flag-gated features require unit tests with mock `env.FLAGS.getBooleanValue`; test both enabled and disabled paths
 - **E2E:** Playwright (if applicable) for end-to-end testing
 - **iOS:** XCTest + Xcode build/test via `bun run ios:check`. SwiftUI/UIKit/RevenueCat changes require Xcode build evidence; `swiftc -parse` is only a lightweight syntax smoke check.
 
@@ -44,6 +45,7 @@ You are the gatekeeper. Reject any "Solution" that breaks the build.
 - `bun run lint:fix` - Auto-fix linting issues
 - `bun run typecheck` - Full type checking pipeline
 - `bun run test:unit` - Run unit tests
+- `bun run flag:check` - Validate feature flag registry conventions
 - `bun run ios:generate` - Generate `ios/Ration.xcodeproj` from XcodeGen
 - `bun run ios:build` - Build the iOS app with `xcodebuild`
 - `bun run ios:test` - Run iOS XCTest target

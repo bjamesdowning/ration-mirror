@@ -17,4 +17,9 @@
 ## Alternatives Considered
 <!-- Did you consider any other solutions? Why were they rejected? -->
 
+## Rollout
+
+- [ ] Ship behind Cloudflare Flagship feature flag (see [docs/dev/feature-flags.md](../docs/dev/feature-flags.md))
+- [ ] Not needed — safe to ship to all users immediately
+
 /label ~"feature request"

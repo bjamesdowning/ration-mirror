@@ -29,8 +29,19 @@
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_usd": "price_1T7CWSFXiYOz9MqX3BF5QpXq",
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_eur": "price_1T7CWTFXiYOz9MqXC656bUrY",
 		"STRIPE_PROMO_WELCOME65": "promo_1T7nAjFXiYOz9MqXAH5mtles",
-		"INTERCOM_APP_ID": "uhj7gydt"
+		"INTERCOM_APP_ID": "uhj7gydt",
+		"RATION_ENV": "production"
 	},
+	/**
+	 * Cloudflare Flagship — replace app_id after creating the `ration` app in
+	 * Dashboard → Compute → Flagship. See docs/dev/feature-flags.md
+	 */
+	"flagship": [
+		{
+			"binding": "FLAGS",
+			"app_id": "REPLACE_WITH_RATION_FLAGSHIP_APP_ID"
+		}
+	],
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -194,6 +205,7 @@
 			"name": "ration-dev",
 			"vars": {
 				"BETTER_AUTH_URL": "http://localhost:8787",
+				"RATION_ENV": "development",
 				"AI_GATEWAY_ACCOUNT_ID": "841fa4c177353aa4844f0c7439b59f86",
 				"AI_GATEWAY_ID": "ration-gateway",
 				"STRIPE_PRICE_TASTE_TEST": "price_1T6fQ3FX10NMafIYI3DG2jeb",
@@ -242,6 +254,12 @@
 				{
 					"name": "EMAIL",
 					"allowed_sender_addresses": ["noreply@mayutic.com"]
+				}
+			],
+			"flagship": [
+				{
+					"binding": "FLAGS",
+					"app_id": "REPLACE_WITH_RATION_DEV_FLAGSHIP_APP_ID"
 				}
 			]
 		}

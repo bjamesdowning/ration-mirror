@@ -1,3 +1,4 @@
+import GoogleSignIn
 import SwiftUI
 
 @main
@@ -20,6 +21,9 @@ struct RationApp: App {
                     }
                 }
                 .onOpenURL { url in
+                    if GIDSignIn.sharedInstance.handle(url) {
+                        return
+                    }
                     handleAuthHandoff(url)
                 }
         }

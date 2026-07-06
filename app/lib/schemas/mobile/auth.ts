@@ -33,6 +33,31 @@ export const MobileTokenRequestSchema = z.discriminatedUnion("grantType", [
 	}),
 ]);
 
+const AppleFullNameSchema = z.object({
+	givenName: z.string().optional(),
+	familyName: z.string().optional(),
+});
+
+const MobileSocialTosSchema = z.object({
+	tosAccepted: z.literal(true),
+});
+
+export const MobileSocialAuthSchema = z.discriminatedUnion("provider", [
+	MobileSocialTosSchema.extend({
+		provider: z.literal("google"),
+		idToken: z.string().min(1),
+		accessToken: z.string().min(1).optional(),
+	}),
+	MobileSocialTosSchema.extend({
+		provider: z.literal("apple"),
+		idToken: z.string().min(1),
+		nonce: z.string().min(1),
+		fullName: AppleFullNameSchema.optional(),
+	}),
+]);
+
+export type MobileSocialAuthInput = z.infer<typeof MobileSocialAuthSchema>;
+
 export const MobileActivateOrgSchema = z.object({
 	organizationId: z.string().min(1),
 });

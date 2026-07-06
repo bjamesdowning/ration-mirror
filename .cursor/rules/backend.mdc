@@ -56,3 +56,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
 - **Access:** Access environment variables via `context.cloudflare.env` (in Loaders/Actions) or `env` (in generic Workers)
 - **Security:** Never log secrets
 - See `wrangler.jsonc` for binding configuration
+
+## Feature flags (Flagship)
+
+When gating a feature behind a gradual rollout:
+
+- Import `buildFlagContext` and `isFeatureEnabled` from `~/lib/feature-flags/flags.server`
+- Evaluate in loader/action at the lowest enforcement point; never rely on UI-only gating
+- Register keys in `app/lib/feature-flags/registry.ts` with `defaultEnabled: false`
+- See `docs/dev/feature-flags.md` and `/add-feature-flag` Cursor command

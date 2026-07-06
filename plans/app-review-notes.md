@@ -4,10 +4,12 @@ Use this document when submitting to App Review or TestFlight external testing.
 
 ## Login
 
-- **Method:** Magic link email with PKCE. Email links land on a scanner-safe interstitial (`/auth/magic-link/continue`); the user taps **Continue sign-in** before Better Auth verifies the token.
+- **Methods:** Sign in with Apple, Google Sign-In, or magic-link email with PKCE (App Store Guideline 4.8 — Apple is offered alongside Google).
+- **Social (iOS):** Native SDKs obtain provider ID tokens; the app calls `POST /api/mobile/v1/auth/social` and receives the standard mobile JWT pair. ToS acceptance is required before any sign-in method.
+- **Magic link:** Email links land on a scanner-safe interstitial (`/auth/magic-link/continue`); the user taps **Continue sign-in** before Better Auth verifies the token.
 - **Handoff (primary):** Universal Link `https://ration.mayutic.com/auth/mobile-callback/open?code=…` (Associated Domains `applinks:ration.mayutic.com`). After email verification, the user taps **Open Ration** on `/auth/mobile-callback`; iOS opens the app directly.
 - **Handoff (fallback):** Custom URL scheme `ration://auth/callback?code=…`, used only if Universal Links don't fire (app not installed, AASA not yet cached). The code is a single-use, PKCE-bound UUID with a 300s TTL.
-- **Demo account:** App Review needs a dedicated inbox that actually receives magic-link emails (no password flow exists to bypass this). Provision a real mailbox — e.g. `app-review@mayutic.com` (or a shared alias forwarding to it) — *before* submission, add it as a user in production, and note the exact email in the App Store Connect "Notes for Review" field along with: "Sign-in is passwordless (magic link only); tap **Sign in**, enter the email above, and open the link delivered to that inbox." If App Review's automation cannot click an emailed link, request a temporary pre-authenticated TestFlight build instead (Settings → note the org/session state expected) rather than leaving this inbox undocumented — an inbox nobody monitors during the review window is a guaranteed rejection on the login step. **Status: not yet provisioned — operator action required before submission.**
+- **Demo account:** App Review can use **Sign in with Apple** or **Google** on a review device without provisioning a magic-link inbox. For magic-link testing, provision a real mailbox — e.g. `app-review@mayutic.com` — and note it in App Store Connect "Notes for Review". **Status: social sign-in available in v1.4.49+; dedicated magic-link inbox still not provisioned.**
 
 ### Universal Links operator checklist
 

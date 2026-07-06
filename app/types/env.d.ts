@@ -5,6 +5,10 @@ declare namespace Cloudflare {
 		CF_BROWSER_RENDERING_TOKEN?: string;
 		// Secrets (set via wrangler secret put; not in wrangler.jsonc)
 		BETTER_AUTH_SECRET?: string;
+		GOOGLE_CLIENT_ID?: string;
+		GOOGLE_CLIENT_SECRET?: string;
+		GOOGLE_IOS_CLIENT_ID?: string;
+		APPLE_APP_BUNDLE_IDENTIFIER?: string;
 		STRIPE_SECRET_KEY?: string;
 		STRIPE_PUBLISHABLE_KEY?: string;
 		STRIPE_WEBHOOK_SECRET?: string;
@@ -48,6 +52,8 @@ declare namespace Cloudflare {
 		FIN_DELEGATION_CLIENT_IDS?: string;
 		/** When "false", MCP worker rejects non-API-key credentials. Default: enabled. */
 		MCP_OAUTH_ENABLED?: string;
+		/** Emergency kill switch JSON, e.g. {"some-flag":false}. */
+		FEATURE_FLAG_OVERRIDES?: string;
 	}
 }
 

@@ -70,11 +70,23 @@ export function createAuth(env: Cloudflare.Env) {
 	const authEnv = env as Cloudflare.Env & {
 		GOOGLE_CLIENT_ID?: string;
 		GOOGLE_CLIENT_SECRET?: string;
+		GOOGLE_IOS_CLIENT_ID?: string;
+		APPLE_APP_BUNDLE_IDENTIFIER?: string;
 	};
+
+	const googleClientIds = [
+		authEnv.GOOGLE_CLIENT_ID,
+		authEnv.GOOGLE_IOS_CLIENT_ID,
+	].filter((id): id is string => !!id && id.trim() !== "");
 
 	// Google OAuth is optional — falls back to magic-link-only when not configured
 	const hasGoogleOAuth =
-		!!authEnv.GOOGLE_CLIENT_ID && authEnv.GOOGLE_CLIENT_ID.trim() !== "";
+		googleClientIds.length > 0 &&
+		!!authEnv.GOOGLE_CLIENT_SECRET &&
+		authEnv.GOOGLE_CLIENT_SECRET.trim() !== "";
+
+	const appleBundleId = authEnv.APPLE_APP_BUNDLE_IDENTIFIER?.trim() ?? "";
+	const hasAppleOAuth = appleBundleId.length > 0;
 
 	// Dev-only: enable email/password for Dev Login (dev@ration.app / ration-dev).
 	// Only when BETTER_AUTH_URL is localhost — never in production.
@@ -229,19 +241,31 @@ export function createAuth(env: Cloudflare.Env) {
 				},
 			}),
 		],
-		socialProviders: hasGoogleOAuth
-			? {
-					google: {
-						clientId: (env as Cloudflare.Env & { GOOGLE_CLIENT_ID: string })
-							.GOOGLE_CLIENT_ID,
-						clientSecret: (
-							env as Cloudflare.Env & { GOOGLE_CLIENT_SECRET: string }
-						).GOOGLE_CLIENT_SECRET,
-					},
-				}
-			: {},
+		socialProviders: {
+			...(hasGoogleOAuth
+				? {
+						google: {
+							clientId:
+								googleClientIds.length === 1
+									? googleClientIds[0]
+									: googleClientIds,
+							clientSecret: authEnv.GOOGLE_CLIENT_SECRET as string,
+							prompt: "select_account" as const,
+						},
+					}
+				: {}),
+			...(hasAppleOAuth
+				? {
+						apple: {
+							clientId: appleBundleId,
+							appBundleIdentifier: appleBundleId,
+						},
+					}
+				: {}),
+		},
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
+		trustedOrigins: hasAppleOAuth ? ["https://appleid.apple.com"] : undefined,
 		databaseHooks: {
 			user: {
 				create: {

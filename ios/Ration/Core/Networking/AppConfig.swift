@@ -46,6 +46,30 @@ enum AppConfig {
 
     /// RevenueCat consumable product id prefix (`credits_s`, `credits_m`, …).
     static let creditPackProductPrefix = "credits_"
+
+    /// Google OAuth iOS client ID — public value from GCP. Override via scheme env
+    /// `GOOGLE_IOS_CLIENT_ID` or `GIDClientID` in Info.plist.
+    static var googleIOSClientID: String? {
+        if let override = ProcessInfo.processInfo.environment["GOOGLE_IOS_CLIENT_ID"],
+           !override.isEmpty {
+            return override
+        }
+        if let plist = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
+           !plist.isEmpty,
+           !plist.hasPrefix("$(") {
+            return plist
+        }
+        return nil
+    }
+
+    /// Reversed Google iOS client ID for `CFBundleURLSchemes` (derived from `GIDClientID`).
+    static var googleIOSURLScheme: String? {
+        guard let clientID = googleIOSClientID else { return nil }
+        let suffix = ".apps.googleusercontent.com"
+        guard clientID.hasSuffix(suffix) else { return nil }
+        let idPart = String(clientID.dropLast(suffix.count))
+        return "com.googleusercontent.apps.\(idPart)"
+    }
 }
 
 /// Shared JSON coders with lenient ISO-8601 date handling.

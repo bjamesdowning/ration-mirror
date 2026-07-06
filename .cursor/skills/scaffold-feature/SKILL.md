@@ -151,6 +151,10 @@ If new tables are required:
 - Test loader/action functions
 - Test component rendering
 
+### 9. Feature flag (if requested)
+
+If the feature needs gradual rollout or a dashboard kill-switch, run **`/add-feature-flag`** (see `docs/dev/feature-flags.md`). Do not use wrangler vars alone for percent rollouts.
+
 ## Reference Examples
 
 - **Route with loader:** `app/routes/dashboard/index.tsx`
@@ -169,4 +173,5 @@ If new tables are required:
 - [ ] Database schema updated (if needed)
 - [ ] Migrations generated and applied
 - [ ] Tests written
+- [ ] Feature flag (if requested) — see `/add-feature-flag`
 - [ ] Code passes lint and typecheck

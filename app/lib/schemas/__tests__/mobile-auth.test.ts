@@ -1,8 +1,46 @@
 import { describe, expect, it } from "vitest";
 import {
 	MobileSettingsPatchSchema,
+	MobileSocialAuthSchema,
 	normalizeMobileSettingsPatch,
 } from "../mobile/auth";
+
+describe("MobileSocialAuthSchema", () => {
+	it("requires tosAccepted for all social sign-in payloads", () => {
+		const withoutTos = MobileSocialAuthSchema.safeParse({
+			provider: "google",
+			idToken: "token",
+		});
+		expect(withoutTos.success).toBe(false);
+	});
+
+	it("accepts Google idToken payloads with ToS", () => {
+		const parsed = MobileSocialAuthSchema.parse({
+			provider: "google",
+			idToken: "token",
+			tosAccepted: true,
+		});
+		expect(parsed.provider).toBe("google");
+	});
+
+	it("requires nonce for Apple sign-in", () => {
+		const result = MobileSocialAuthSchema.safeParse({
+			provider: "apple",
+			idToken: "token",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("accepts Apple idToken with nonce", () => {
+		const parsed = MobileSocialAuthSchema.parse({
+			provider: "apple",
+			idToken: "token",
+			nonce: "raw-nonce",
+			tosAccepted: true,
+		});
+		expect(parsed.provider).toBe("apple");
+	});
+});
 
 describe("MobileSettingsPatchSchema", () => {
 	it("accepts AI consent and onboarding timestamps", () => {

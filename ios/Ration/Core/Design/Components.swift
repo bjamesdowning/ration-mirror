@@ -60,6 +60,7 @@ struct ErrorBanner: View {
             .font(Typography.caption())
             .foregroundStyle(Theme.danger)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(12)
             .background(Theme.danger.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

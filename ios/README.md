@@ -94,8 +94,9 @@ Ration/
 **Social sign-in (v1.4.49+):** Sign in with Apple (`AuthenticationServices`) and
 Google (`GoogleSignIn-iOS` SPM) obtain provider ID tokens natively. The app calls
 `POST /auth/social` with the token (and Apple nonce); the server verifies via Better
-Auth and returns the same JWT pair as magic-link auth. ToS acceptance is required
-before any method. Configure:
+Auth and returns the same JWT pair as magic-link auth. The auth screen offers **Sign In**
+and **Create Account** modes: returning users sign in without a ToS checkbox; new
+accounts must accept Terms of Service and Privacy Policy before any method. Configure:
 
 - **Apple:** Enable Sign in with Apple on App ID `com.mayutic.ration` in the Apple
   Developer portal (entitlement `com.apple.developer.applesignin` is in `project.yml`).

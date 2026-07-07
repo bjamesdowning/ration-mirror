@@ -2,6 +2,7 @@ import AuthenticationServices
 import SwiftUI
 
 private struct AppleSignInButton: UIViewRepresentable {
+    let buttonType: ASAuthorizationAppleIDButton.ButtonType
     let isEnabled: Bool
     let onTap: () -> Void
 
@@ -10,7 +11,7 @@ private struct AppleSignInButton: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
-        let button = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
+        let button = ASAuthorizationAppleIDButton(type: buttonType, style: .black)
         button.cornerRadius = 12
         button.addTarget(
             context.coordinator,
@@ -38,9 +39,39 @@ private struct AppleSignInButton: UIViewRepresentable {
     }
 }
 
+private struct AuthModePicker: View {
+    @Binding var mode: AuthFlowMode
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(AuthFlowMode.allCases) { option in
+                Button {
+                    mode = option
+                } label: {
+                    Text(option.pickerLabel)
+                        .font(Typography.headline())
+                        .foregroundStyle(mode == option ? Color.black : Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(mode == option ? Theme.hyperGreen : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(mode == option ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Theme.platinum.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Authentication mode")
+    }
+}
+
 struct SignInView: View {
     @Environment(AppEnvironment.self) private var env
 
+    @State private var mode: AuthFlowMode = .signIn
     @State private var email = ""
     @State private var isSending = false
     @State private var linkSent = false
@@ -58,71 +89,101 @@ struct SignInView: View {
         ZStack {
             Theme.ceramic.ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                Spacer()
+            ScrollView {
+                VStack(spacing: 24) {
+                    brandHeader
+                        .padding(.top, 32)
 
-                VStack(spacing: 8) {
-                    Image(systemName: "circle.hexagongrid.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(Theme.hyperGreen)
-                    Text("RATION").rationDisplay()
-                    Text("Orbital supply chain").rationCaption()
+                    if linkSent {
+                        sentState
+                    } else {
+                        AuthModePicker(mode: $mode)
+                            .onChange(of: mode) { _, _ in
+                                resetFormForModeChange()
+                            }
+
+                        formState
+                    }
                 }
-
-                if linkSent {
-                    sentState
-                } else {
-                    formState
-                }
-
-                Spacer()
-                Spacer()
+                .padding(24)
+                .padding(.bottom, 16)
             }
-            .padding(24)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+
+    private var brandHeader: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "circle.hexagongrid.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(Theme.hyperGreen)
+            Text("RATION").rationDisplay()
+            Text("Orbital supply chain").rationCaption()
         }
     }
 
     private var formState: some View {
-        VStack(spacing: 16) {
-            Text("Sign in to Ration")
-                .rationHeadline()
+        GlassCard {
+            VStack(spacing: 16) {
+                VStack(spacing: 4) {
+                    Text(mode.title)
+                        .rationHeadline()
+                        .frame(maxWidth: .infinity)
+                    Text(mode.subtitle)
+                        .rationCaption()
+                        .multilineTextAlignment(.center)
+                }
 
-            tosConsentRow
+                socialButtons
 
-            socialButtons
+                dividerLabel("or continue with email")
 
-            dividerLabel("or continue with email")
+                TextField("you@example.com", text: $email)
+                    .font(Typography.body())
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(Theme.ceramic)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Theme.platinum, lineWidth: 1)
+                    )
 
-            TextField("you@example.com", text: $email)
-                .font(Typography.body())
-                .textInputAutocapitalization(.never)
-                .keyboardType(.emailAddress)
-                .autocorrectionDisabled()
-                .padding(14)
-                .background(Theme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Theme.platinum, lineWidth: 1)
-                )
+                if let visibleError {
+                    ErrorBanner(message: visibleError)
+                }
 
-            if let visibleError {
-                ErrorBanner(message: visibleError)
+                if mode.requiresTosConsent {
+                    tosConsentRow
+                }
+
+                Button(mode.magicLinkButtonTitle) { Task { await sendLink() } }
+                    .buttonStyle(PrimaryButtonStyle(isLoading: isSending))
+                    .disabled(isSending || socialLoading != nil || !canSubmitMagicLink)
+
+                if mode == .signIn {
+                    signInFooterHint
+                } else {
+                    signUpFooterLinks
+                }
             }
-
-            Button("Send magic link") { Task { await sendLink() } }
-                .buttonStyle(PrimaryButtonStyle(isLoading: isSending))
-                .disabled(isSending || socialLoading != nil || !isValidEmail || !tosAccepted)
         }
     }
 
     private var socialButtons: some View {
         VStack(spacing: 12) {
-            AppleSignInButton(isEnabled: tosAccepted && socialLoading == nil && !isSending) {
+            AppleSignInButton(
+                buttonType: mode == .signUp ? .signUp : .signIn,
+                isEnabled: canProceed && socialLoading == nil && !isSending
+            ) {
                 Task { await signInWithApple() }
             }
             .frame(height: 50)
-            .opacity(tosAccepted ? 1 : 0.5)
+            .opacity(canProceed ? 1 : 0.5)
+            // ASAuthorizationAppleIDButton's type is fixed at init; recreate on mode change.
+            .id(mode)
 
             Button {
                 Task { await signInWithGoogle() }
@@ -140,7 +201,7 @@ struct SignInView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Theme.surface)
+                .background(Theme.ceramic)
                 .foregroundStyle(Theme.carbon)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
@@ -148,13 +209,8 @@ struct SignInView: View {
                         .stroke(Theme.platinum, lineWidth: 1)
                 )
             }
-            .disabled(!tosAccepted || socialLoading != nil || isSending)
-
-            Text("If you use Apple here, sign in on the web with the same Apple ID.")
-                .font(Typography.caption())
-                .foregroundStyle(Theme.muted)
-                .multilineTextAlignment(.center)
-                .padding(.top, 4)
+            .disabled(!canProceed || socialLoading != nil || isSending)
+            .opacity(canProceed ? 1 : 0.5)
         }
     }
 
@@ -164,19 +220,44 @@ struct SignInView: View {
                 tosAccepted.toggle()
             } label: {
                 Image(systemName: tosAccepted ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20))
                     .foregroundStyle(tosAccepted ? Theme.hyperGreen : Theme.muted)
             }
-            .accessibilityLabel("Agree to Terms of Service")
+            .accessibilityLabel("Agree to Terms of Service and Privacy Policy")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("I agree to the")
-                    .font(Typography.caption())
-                    .foregroundStyle(Theme.muted)
-                Link("Terms of Service", destination: AppConfig.termsURL)
-                    .font(Typography.caption().weight(.semibold))
-            }
+            Text(
+                "I have read and agree to the [Terms of Service](\(AppConfig.termsURL.absoluteString)) and [Privacy Policy](\(AppConfig.privacyURL.absoluteString))."
+            )
+            .font(Typography.caption())
+            .foregroundStyle(Theme.muted)
+            .tint(Theme.hyperGreen)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var signInFooterHint: some View {
+        Text("Use the same Apple ID on ration.mayutic.com.")
+            .font(Typography.caption())
+            .foregroundStyle(Theme.muted)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+    }
+
+    private var signUpFooterLinks: some View {
+        HStack(spacing: 16) {
+            Link("Terms of Service", destination: AppConfig.termsURL)
+            Text("·").foregroundStyle(Theme.muted)
+            Link("Privacy Policy", destination: AppConfig.privacyURL)
+        }
+        .font(Typography.caption())
+        .foregroundStyle(Theme.muted)
+        .tint(Theme.hyperGreen)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 
     private func dividerLabel(_ text: String) -> some View {
@@ -197,6 +278,7 @@ struct SignInView: View {
                 Text("Tap the link in the email we sent to \(email). It opens Ration and signs you in.")
                     .rationCaption()
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let visibleError {
                     ErrorBanner(message: visibleError)
                 }
@@ -214,11 +296,31 @@ struct SignInView: View {
         email.contains("@") && email.contains(".")
     }
 
+    private var canProceed: Bool {
+        AuthFlowMode.canProceed(tosAccepted: tosAccepted, mode: mode)
+    }
+
+    private var canSubmitMagicLink: Bool {
+        AuthFlowMode.canSubmitMagicLink(
+            emailValid: isValidEmail,
+            tosAccepted: tosAccepted,
+            mode: mode
+        )
+    }
+
     private var visibleError: String? {
         errorMessage ?? env.auth.authErrorMessage
     }
 
+    private func resetFormForModeChange() {
+        linkSent = false
+        errorMessage = nil
+        env.auth.clearAuthError()
+        tosAccepted = false
+    }
+
     private func sendLink() async {
+        guard canSubmitMagicLink else { return }
         errorMessage = nil
         env.auth.clearAuthError()
         isSending = true
@@ -232,7 +334,7 @@ struct SignInView: View {
     }
 
     private func signInWithApple() async {
-        guard tosAccepted else { return }
+        guard canProceed else { return }
         errorMessage = nil
         env.auth.clearAuthError()
         socialLoading = .apple
@@ -255,7 +357,7 @@ struct SignInView: View {
     }
 
     private func signInWithGoogle() async {
-        guard tosAccepted else { return }
+        guard canProceed else { return }
         errorMessage = nil
         env.auth.clearAuthError()
         socialLoading = .google

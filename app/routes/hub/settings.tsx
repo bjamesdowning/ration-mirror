@@ -38,9 +38,6 @@ import { getGroupTierLimits } from "~/lib/capacity.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
-import { RATION_INTERCOM_LAUNCHER_CLASS } from "~/lib/intercom-hub-settings";
-import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
-import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { log } from "~/lib/logging.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -1615,21 +1612,19 @@ function ManifestCalendarSection({ settings }: { settings: UserSettings }) {
 
 // ─── Help Section ──────────────────────────────────────────────────────────────
 
-type RootLoaderIntercomSlice = {
+type RootLoaderAskSlice = {
 	user?: { id: string } | null;
-	intercomAppId: string | null;
+	clientFlags?: { rationCopilot?: boolean };
 };
 
 function HelpSection() {
 	const bugUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=bug`;
 	const featureUrl = `${GITLAB_ISSUES_BASE}/-/issues/new?issuable_template=feature-request`;
 	const [howItWorksExpanded, setHowItWorksExpanded] = useState(false);
-	const root = useRouteLoaderData("root") as
-		| RootLoaderIntercomSlice
-		| undefined;
-	const { hasUnread } = useIntercomLauncher();
-	const showAskRation = Boolean(root?.user?.id && root?.intercomAppId);
-	const askRationAriaLabel = intercomLauncherButtonAriaLabel(hasUnread);
+	const root = useRouteLoaderData("root") as RootLoaderAskSlice | undefined;
+	const showAskRation = Boolean(
+		root?.user?.id && root?.clientFlags?.rationCopilot,
+	);
 
 	return (
 		<div className="space-y-4">
@@ -1645,14 +1640,16 @@ function HelpSection() {
 								<strong className="font-medium text-carbon dark:text-ceramic">
 									Ask Ration
 								</strong>{" "}
-								— chat in the messenger with our team and Fin (automated
-								assistant). You can also use the Ask Ration control in the hub
+								— open the first-party copilot for help or deterministic app
+								changes. You can also use the Ask Ration control in the hub
 								header.
 							</p>
-							<a
-								href="mailto:support@mayutic.com"
+							<button
+								type="button"
+								onClick={() =>
+									window.dispatchEvent(new Event("ration:open-ask"))
+								}
 								className={[
-									RATION_INTERCOM_LAUNCHER_CLASS,
 									"group relative inline-flex min-h-[44px] w-fit items-center justify-center gap-1.5",
 									"rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors",
 									"border border-hyper-green/80 bg-hyper-green text-carbon shadow-sm",
@@ -1662,24 +1659,15 @@ function HelpSection() {
 									"dark:border-hyper-green dark:bg-hyper-green dark:text-carbon",
 									"dark:hover:bg-hyper-green/90 dark:hover:brightness-[1.03]",
 									"dark:focus-visible:ring-offset-carbon",
-									hasUnread
-										? "shadow-[0_0_0_2px_rgba(0,224,136,0.45),0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-carbon/10 dark:ring-white/20"
-										: "",
 								].join(" ")}
-								aria-label={askRationAriaLabel}
+								aria-label="Ask Ration"
 							>
 								<MessageCircle
 									className="size-4 shrink-0 text-carbon"
 									aria-hidden
 								/>
 								Ask Ration
-								{hasUnread ? (
-									<span
-										className="absolute top-1.5 right-1.5 size-2 rounded-full bg-carbon ring-2 ring-white dark:bg-white dark:ring-carbon pointer-events-none"
-										aria-hidden
-									/>
-								) : null}
-							</a>
+							</button>
 							<p className="text-sm text-muted mt-3">
 								Prefer email?{" "}
 								<a

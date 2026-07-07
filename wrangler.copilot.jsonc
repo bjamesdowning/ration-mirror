@@ -1,0 +1,140 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ration-copilot",
+	"main": "workers/copilot.ts",
+	"compatibility_date": "2026-03-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	},
+	"routes": [
+		{
+			"pattern": "copilot.ration.mayutic.com",
+			"custom_domain": true
+		}
+	],
+	"placement": {
+		"mode": "smart"
+	},
+	"vars": {
+		"BETTER_AUTH_URL": "https://ration.mayutic.com",
+		"RATION_ENV": "production"
+	},
+	/**
+	 * Secrets (set via CLI, not in this file):
+	 *   - BETTER_AUTH_SECRET
+	 *   - COPILOT_PURGE_SECRET (dedicated internal purge token; falls back to BETTER_AUTH_SECRET if absent)
+	 */
+	"durable_objects": {
+		"bindings": [{ "name": "PROJECT_THINK", "class_name": "ProjectThinkAgent" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectThinkAgent"] }],
+	"flagship": [
+		{
+			"binding": "FLAGS",
+			"app_id": "4400dc10-dd7a-44b2-9905-7037fbd26f33"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ration-db",
+			"database_id": "41e98836-d752-4bbe-a14f-68e802c72c10"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "STORAGE",
+			"bucket_name": "ration-storage"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "RATION_KV",
+			"id": "afafb8640ed44b6e9cfe5df204eb6a74"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"ai_search_namespaces": [
+		{
+			"binding": "AI_SEARCH",
+			"namespace": "default"
+		}
+	],
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "ration-cargo"
+		}
+	],
+	"analytics_engine_datasets": [
+		{
+			"binding": "COPILOT_ANALYTICS",
+			"dataset": "ration_copilot"
+		}
+	],
+	"env": {
+		"dev": {
+			"name": "ration-copilot-dev",
+			"vars": {
+				"BETTER_AUTH_URL": "http://localhost:8787",
+				"RATION_ENV": "development"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "ration-db-dev",
+					"database_id": "eec9f2f0-5d34-4392-89dd-317f373bf1e9",
+					"remote": true
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "STORAGE",
+					"bucket_name": "ration-storage-dev",
+					"remote": true
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "RATION_KV",
+					"id": "060a0f82bdff4a95a89ded794f877ad7",
+					"remote": true
+				}
+			],
+			"ai": {
+				"binding": "AI",
+				"remote": true
+			},
+			"ai_search_namespaces": [
+				{
+					"binding": "AI_SEARCH",
+					"namespace": "default",
+					"remote": true
+				}
+			],
+			"vectorize": [
+				{
+					"binding": "VECTORIZE",
+					"index_name": "ration-cargo-dev",
+					"remote": true
+				}
+			],
+			"flagship": [
+				{
+					"binding": "FLAGS",
+					"app_id": "4400dc10-dd7a-44b2-9905-7037fbd26f33",
+					"remote": true
+				}
+			],
+			"analytics_engine_datasets": [
+				{
+					"binding": "COPILOT_ANALYTICS",
+					"dataset": "ration_copilot_dev"
+				}
+			]
+		}
+	}
+}

@@ -29,7 +29,6 @@
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_usd": "price_1T7CWSFXiYOz9MqX3BF5QpXq",
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_eur": "price_1T7CWTFXiYOz9MqXC656bUrY",
 		"STRIPE_PROMO_WELCOME65": "promo_1T7nAjFXiYOz9MqXAH5mtles",
-		"INTERCOM_APP_ID": "uhj7gydt",
 		"RATION_ENV": "production"
 	},
 	/**
@@ -48,6 +47,15 @@
 	 */
 	"placement": {
 		"mode": "smart"
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "PROJECT_THINK",
+				"class_name": "ProjectThinkAgent",
+				"script_name": "ration-copilot"
+			}
+		]
 	},
 	/**
 	 * Bindings
@@ -100,9 +108,6 @@
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
 	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
 	 *     (optional; when absent, recipe import uses plain fetch only)
-	 *   - FIN_MCP_DELEGATION_SECRET: HS256 key for Fin per-user MCP delegation JWTs
-	 *   - FIN_INTERCOM_CONNECTOR_SECRET: Fin billing connector auth
-	 *   - INTERCOM_MESSENGER_JWT_SECRET: Intercom Messenger Security JWT
 	 */
 	/*
 	 * Static Assets
@@ -261,7 +266,16 @@
 					"binding": "FLAGS",
 					"app_id": "d2623663-dabd-4f7e-87a9-29339ddef4e6"
 				}
-			]
+			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "PROJECT_THINK",
+						"class_name": "ProjectThinkAgent",
+						"script_name": "ration-copilot-dev"
+					}
+				]
+			}
 		}
 	}
 }

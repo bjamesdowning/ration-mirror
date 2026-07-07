@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { purgeCopilotConversationsForOrganization } from "~/lib/copilot/purge.server";
 import { log, redactId } from "~/lib/logging.server";
 import { deleteR2Prefix } from "~/lib/r2-cleanup.server";
 import { deleteCargoVectors } from "~/lib/vector.server";
@@ -57,6 +58,7 @@ export async function deleteOrganization(
 	if (!options?.skipVectorize) {
 		await deleteOrganizationCargoVectors(env, organizationId);
 	}
+	await purgeCopilotConversationsForOrganization(env, organizationId);
 
 	await db
 		.delete(schema.queueJob)

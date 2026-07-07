@@ -132,20 +132,10 @@ export default function PrivacyPolicy() {
 				privacy-preserving.
 			</p>
 			<p className="mt-3">
-				<strong>Intercom Messenger</strong> — When you are signed in and using
-				the main in-app experience, we may load{" "}
-				<a
-					href="https://www.intercom.com/legal/privacy"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="text-hyper-green hover:underline"
-				>
-					Intercom
-				</a>{" "}
-				to provide customer support and (where enabled) AI-assisted help
-				(&quot;Fin&quot;). Intercom may set its own cookies or use similar
-				storage on your device to operate the messenger. See Section 9 for
-				categories of data shared with Intercom.
+				<strong>Ration Copilot</strong> — When you are signed in and use Ask
+				Ration, your messages are processed by our first-party copilot running
+				on Cloudflare Workers, Workers AI, Durable Objects, and AI Search. The
+				copilot does not require a third-party messenger cookie.
 			</p>
 
 			<h2>4. Children's Privacy</h2>
@@ -308,29 +298,14 @@ export default function PrivacyPolicy() {
 					magic link verification, OAuth).
 				</li>
 				<li>
-					<strong>Intercom:</strong> In-app customer support and (where enabled)
-					automated assistance (Fin) for authenticated users in the main product
-					workspace. We share identifiers and profile data with Intercom to
-					recognise your account in the messenger, such as your user id, email
-					address, name, account creation time, and (for workspace context) your
-					active group identifier and product attributes we configure, including
-					effective subscription tier, tier status and expiry, credit balance,
-					stripe customer identifier, cancellation status, first paid date,
-					welcome voucher redemption status, admin flag, active organization
-					role, accepted terms version, theme preference, and (where Fin MCP
-					delegation is enabled) a short-lived signed token that lets Fin call
-					our MCP server on your behalf for pantry questions in support chat.
-					Support conversations you start are processed by Intercom under their
-					terms. See{" "}
-					<a
-						href="https://www.intercom.com/legal/privacy"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-hyper-green hover:underline"
-					>
-						Intercom&apos;s Privacy Policy
-					</a>
-					.
+					<strong>
+						Cloudflare Workers AI, Durable Objects, and AI Search:
+					</strong>{" "}
+					Ask Ration copilot inference, conversation state, and support-document
+					retrieval. We process your copilot messages, relevant account and
+					group context, and tool results needed to answer questions or make
+					changes you request. Copilot analytics are aggregated and do not
+					include message text or unnecessary personal data.
 				</li>
 				<li>
 					<strong>
@@ -437,17 +412,6 @@ export default function PrivacyPolicy() {
 						Data Processing Agreement
 					</a>
 				</li>
-				<li>
-					<strong>Intercom:</strong>{" "}
-					<a
-						href="https://www.intercom.com/legal/data-processing-agreement"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-hyper-green hover:underline"
-					>
-						Data Processing Agreement
-					</a>
-				</li>
 			</ul>
 			<p>
 				Ration Operating Company is established in the United States. We have
@@ -469,19 +433,10 @@ export default function PrivacyPolicy() {
 				<strong>Right to be Forgotten:</strong> You have the right to request
 				the deletion of your account and all associated data. Upon such request,
 				we will permanently purge your Personal Data, Usage Data, Cargo Data,
-				and Visual Data from our systems (D1 Databases, Vectorize Indexes, R2
-				Storage). You can initiate this process through the "Purge Account"
-				function in your profile settings.
-			</p>
-			<p>
-				<strong>Third-party support records:</strong> Data held in Intercom
-				(e.g. support conversations and contact records tied to your user id) is
-				retained under Intercom&apos;s policies and product settings, which may
-				differ from our purge timelines for Ration systems. After you delete
-				your Ration account, you may contact us at{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> to request that
-				we coordinate deletion or suppression of your Intercom profile where
-				applicable.
+				Visual Data, and copilot conversation state from our systems (D1
+				Databases, Vectorize Indexes, R2 Storage, and copilot Durable Objects).
+				You can initiate this process through the "Purge Account" function in
+				your profile settings.
 			</p>
 			<p>
 				<strong>Groups you own:</strong> For groups where other members have

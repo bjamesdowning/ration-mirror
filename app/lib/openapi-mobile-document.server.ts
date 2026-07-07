@@ -1,3 +1,9 @@
+import { ref, zodOpenApiComponent } from "~/lib/openapi/json-schema";
+import {
+	CopilotMessageSchema,
+	CopilotStatusResponseSchema,
+	CopilotStreamEventSchema,
+} from "~/lib/schemas/copilot";
 import { APP_VERSION } from "~/lib/version";
 
 /** OpenAPI 3.1 document for the mobile REST API (`/api/mobile/v1/*`). */
@@ -80,6 +86,18 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 						"billingUnavailable",
 					],
 				},
+				CopilotMessage: zodOpenApiComponent(
+					"CopilotMessage",
+					CopilotMessageSchema,
+				),
+				CopilotStreamEvent: zodOpenApiComponent(
+					"CopilotStreamEvent",
+					CopilotStreamEventSchema,
+				),
+				CopilotStatusResponse: zodOpenApiComponent(
+					"CopilotStatusResponse",
+					CopilotStatusResponseSchema,
+				),
 			},
 		},
 		paths: {
@@ -199,6 +217,72 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					summary: "Active supply list with items",
 					security: [{ bearerAuth: [] }],
 					responses: { "200": { description: "Supply list" } },
+				},
+			},
+			"/api/mobile/v1/copilot/status": {
+				get: {
+					summary: "Copilot allowance and credit status",
+					description:
+						"Returns the per-conversation copilot allowance, credit balance, auto-deduct consent, idle timeout, and token brackets for the active organization.",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": {
+							description: "Copilot status",
+							content: {
+								"application/json": {
+									schema: ref("CopilotStatusResponse"),
+								},
+							},
+						},
+						"401": {
+							description: "Unauthorized",
+							content: {
+								"application/json": {
+									schema: { $ref: "#/components/schemas/ApiError" },
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/mobile/v1/copilot/consent": {
+				post: {
+					summary: "Update Copilot credit auto-deduct consent",
+					description:
+						"Stores whether the active user allows Copilot to use the active organization's credit balance after the Crew daily allowance is exhausted.",
+					security: [{ bearerAuth: [] }],
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									required: ["autoDeductConsent"],
+									properties: {
+										autoDeductConsent: { type: "boolean" },
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Updated Copilot status",
+							content: {
+								"application/json": {
+									schema: ref("CopilotStatusResponse"),
+								},
+							},
+						},
+						"401": {
+							description: "Unauthorized",
+							content: {
+								"application/json": {
+									schema: { $ref: "#/components/schemas/ApiError" },
+								},
+							},
+						},
+					},
 				},
 			},
 			"/api/mobile/v1/billing/status": {

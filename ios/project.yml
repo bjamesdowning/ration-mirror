@@ -28,6 +28,9 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "8.0.0"
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    from: "2.4.1"
 
 targets:
   Ration:
@@ -54,6 +57,7 @@ targets:
       - package: RevenueCat
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: MarkdownUI
   RationTests:
     type: bundle.unit-test
     platform: iOS

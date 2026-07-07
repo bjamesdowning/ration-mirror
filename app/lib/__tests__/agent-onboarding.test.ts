@@ -81,7 +81,7 @@ describe("agent onboarding discovery", () => {
 		expect(prm.agent_auth).toBe("https://ration.mayutic.com/auth.md");
 	});
 
-	it("public discovery metadata excludes Fin-only mcp:delegate", () => {
+	it("public discovery metadata excludes removed mcp:delegate scope", () => {
 		const appPrm = buildProtectedResourceMetadata(request, env);
 		const mcpPrm = buildMcpProtectedResourceMetadata(
 			new Request(

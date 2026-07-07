@@ -30,11 +30,11 @@ Add the same MCP URL in your Claude MCP configuration. On first connect, complet
 | Wrong pantry data | Revoke and reconnect; pick the correct household at selection |
 | Client reconnect loop | Client must support OAuth 2.1 / protected-resource discovery; restart connection from client (not an old browser tab) |
 | **Unable to complete authorization** after household pick | Usually a stale OAuth tab or pre-1.6.10 consent loop — revoke grant, remove MCP server, reconnect in one fresh tab |
-| **Warp / DCR `invalid_scope: mcp:delegate`** | Public discovery must not advertise Fin-only `mcp:delegate` (fixed in v1.3.1+). Remove and re-add the MCP server in Warp after deploy; verify `scopes_supported` on MCP PRM and AS metadata omit `mcp:delegate`. |
+| Client requests an unknown `mcp:*` scope | Remove and re-add the MCP server after deploy; public discovery advertises only currently supported scopes. |
 
-### Fin service agent (`mcp:delegate`)
+### First-party Copilot
 
-The `mcp:delegate` scope is **not** available via open Dynamic Client Registration. Fin connectors are provisioned as trusted OAuth clients out-of-band.
+Ask Ration is first-party and does not use delegated MCP actor tokens. Native app and web copilot traffic authenticates as the signed-in user, then uses the same organization-scoped server logic as MCP tools.
 
 Support can correlate OAuth failures via Worker logs: `event=oauth_flow`, fields `step`, `outcome`, `error_code` (no tokens or signed query payloads).
 

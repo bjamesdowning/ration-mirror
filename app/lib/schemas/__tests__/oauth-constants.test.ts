@@ -11,7 +11,9 @@ import {
 } from "../../oauth.constants";
 
 describe("oauth.constants scope policy", () => {
-	it("excludes mcp:delegate from open DCR scopes", () => {
+	it("does not include removed delegated actor-token scopes", () => {
+		expect(OAUTH_MCP_SCOPES).not.toContain("mcp:delegate");
+		expect(OAUTH_PROVIDER_SCOPES).not.toContain("mcp:delegate");
 		expect(OAUTH_REGISTRATION_SCOPES).not.toContain("mcp:delegate");
 		expect(OAUTH_DCR_MCP_SCOPES).not.toContain("mcp:delegate");
 	});
@@ -30,11 +32,7 @@ describe("oauth.constants scope policy", () => {
 		}
 	});
 
-	it("includes mcp:delegate in full provider vocabulary", () => {
-		expect(OAUTH_PROVIDER_SCOPES).toContain("mcp:delegate");
-	});
-
-	it("defaults DCR clients to all granular MCP scopes except delegate", () => {
+	it("defaults DCR clients to all granular MCP scopes", () => {
 		for (const scope of OAUTH_DCR_MCP_SCOPES) {
 			expect(OAUTH_REGISTRATION_DEFAULT_SCOPES).toContain(scope);
 		}

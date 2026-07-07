@@ -1,6 +1,7 @@
 import { eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { log, redactId } from "~/lib/logging.server";
 import { revokeMobileRefreshFamilies } from "~/lib/mobile/token.server";
 import { deleteOrganization } from "~/lib/organizations.server";
@@ -66,6 +67,7 @@ export async function purgeUserAccount(
 	}
 
 	await revokeMobileRefreshFamilies(env, userId);
+	await purgeCopilotConversationsForUser(env, userId);
 
 	await db.batch([
 		db.delete(schema.member).where(eq(schema.member.userId, userId)),

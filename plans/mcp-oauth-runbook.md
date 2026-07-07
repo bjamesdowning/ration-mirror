@@ -21,8 +21,8 @@
 
 - Rate limit: `oauth_register` (10/min per IP).
 - Monitor logs for `oauth_grant_revoked` and failed token validation spikes.
-- Open DCR allows granular `mcp:*` scopes **except** `mcp:delegate` (Fin service agent only). Provision Fin clients out-of-band with the full `OAUTH_PROVIDER_SCOPES` vocabulary.
-- Public `scopes_supported` in AS metadata (`advertisedMetadata.scopes_supported`) and MCP PRM (`OAUTH_ADVERTISED_MCP_SCOPES`) must stay aligned with `clientRegistrationAllowedScopes` — never advertise `mcp:delegate` via open discovery.
+- Open DCR allows the supported granular `mcp:*` scopes; delegated actor-token scopes are no longer part of the provider vocabulary.
+- Public `scopes_supported` in AS metadata (`advertisedMetadata.scopes_supported`) and MCP PRM (`OAUTH_ADVERTISED_MCP_SCOPES`) must stay aligned with `clientRegistrationAllowedScopes`.
 
 ## Consent loop / redirect_missing
 

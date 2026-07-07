@@ -31,14 +31,6 @@ export function auditMcpWrite(
 		userId: redactId(ctx.userId),
 		apiKeyId: redactId(ctx.apiKeyId),
 		keyPrefix: redactId(ctx.keyPrefix),
-		...(ctx.delegation
-			? {
-					delegated: true,
-					actorClientId: redactId(ctx.delegation.actorClientId),
-					subjectUserId: redactId(ctx.delegation.subjectUserId),
-					subjectOrganizationId: redactId(ctx.delegation.subjectOrganizationId),
-				}
-			: {}),
 		...fields,
 	});
 }

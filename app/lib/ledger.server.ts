@@ -21,6 +21,7 @@ export const AI_COSTS = {
 	IMPORT_URL: 1,
 	ORGANIZE_CARGO: 2,
 	MEAL_PLAN_WEEKLY: 3,
+	COPILOT_TURN: 1,
 } as const;
 
 export class InsufficientCreditsError extends Error {

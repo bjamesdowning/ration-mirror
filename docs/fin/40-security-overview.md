@@ -20,16 +20,15 @@ Programmatic keys are stored as **hashes**; you see the plaintext **once** at cr
 
 Sensitive endpoints (AI, search, auth, public share links, MCP) use **rate limits** backed by global counters so abuse cannot silently exhaust your bill or neighbors’ stability. Some layers **fail open** if the counter store is unavailable—availability first, with logging for operators.
 
-## Fin MCP delegation
+## Ask Ration copilot
 
-When Fin is connected to the Ration MCP server, two independent proofs are required on every tool call:
+Ask Ration is first-party. It runs on Cloudflare Workers, Workers AI, Durable Objects, and AI Search rather than a third-party messenger. Each connection is authenticated as the signed-in user:
 
-1. **Fin's workspace OAuth token** — must carry `mcp:delegate` and match an allowlisted client ID.
-2. **Per-user `actor_token`** — a Ration-signed delegation JWT (`ration_mcp_delegation`) minted for the signed-in Messenger user.
+- Web uses the existing Better Auth session cookie.
+- iOS uses the mobile Bearer token issued by Ration.
+- Every tool call is scoped to the verified active organization and audited without message text.
 
-Fin's service-account identity is never used for pantry data. Delegated calls are audited (redacted identifiers) and rate-limited per end-user.
-
-**Known limitation:** Delegation JWTs (`actor_token`) are valid for up to 24 hours and are not yet single-use (JTI replay store deferred). Revoking org membership invalidates tokens on the next MCP call; shortening the delegation TTL or adding a replay cache is on the security backlog ([`plans/mcp-security-audit-2026-06.md`](../../plans/mcp-security-audit-2026-06.md)).
+The copilot cannot perform AI receipt scanning, recipe generation, URL import, or week planning inside chat. Those paid AI flows stay on their native screens with the existing consent, rate-limit, and credit gates.
 
 ## Payments
 

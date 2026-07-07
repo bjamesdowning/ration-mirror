@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, redirect, useRouteLoaderData } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
@@ -10,8 +10,8 @@ import { GroupSwitcher } from "~/components/shell/GroupSwitcher";
 import { PwaInstallPrompt } from "~/components/shell/PwaInstallPrompt";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { UnitDisplayModeProvider } from "~/components/shell/UnitDisplayToggle";
-import { HubIntercomFromRoot } from "~/components/support/HubIntercom";
-import { IntercomLauncherButton } from "~/components/support/IntercomLauncherButton";
+import { AskLauncherButton } from "~/components/support/AskLauncherButton";
+import { AskPanel } from "~/components/support/AskPanel";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
@@ -19,7 +19,6 @@ import {
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { ConfirmProvider } from "~/lib/confirm-context";
-import { IntercomLauncherProvider } from "~/lib/intercom-launcher-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { registerServiceWorker } from "~/lib/pwa.client";
@@ -28,7 +27,7 @@ import type { Route } from "./+types/hub";
 
 type RootLoaderHeaderSlice = {
 	user?: { id: string } | null;
-	intercomAppId: string | null;
+	clientFlags?: { rationCopilot?: boolean };
 };
 
 export function shouldRevalidate({
@@ -175,84 +174,91 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const { onboardingCompletedAt, onboardingStep } = loaderData;
+	const [isAskOpen, setIsAskOpen] = useState(false);
 
 	const root = useRouteLoaderData("root") as RootLoaderHeaderSlice | undefined;
-	const showIntercomLauncher = Boolean(root?.user?.id && root?.intercomAppId);
+	const showAskLauncher = Boolean(
+		root?.user?.id && root?.clientFlags?.rationCopilot,
+	);
 
 	useEffect(() => {
 		registerServiceWorker();
 	}, []);
 
+	useEffect(() => {
+		const openAsk = () => setIsAskOpen(true);
+		window.addEventListener("ration:open-ask", openAsk);
+		return () => window.removeEventListener("ration:open-ask", openAsk);
+	}, []);
+
 	return (
 		<ConfirmProvider>
-			<IntercomLauncherProvider>
-				<UnitDisplayModeProvider>
-					<HubIntercomFromRoot />
-					<div className="flex min-h-screen bg-ceramic">
-						{/* Desktop Rail Sidebar */}
-						<RailSidebar />
+			<UnitDisplayModeProvider>
+				<div className="flex min-h-screen bg-ceramic">
+					{/* Desktop Rail Sidebar */}
+					<RailSidebar />
 
-						{/* Main Content Area */}
-						<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
-							{/* Global Top Bar (Group Context) */}
-							<header className="px-4 md:px-8 py-2 safe-area-pt flex justify-between items-center gap-3 bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
-								<div className="min-w-0 flex-1 flex items-center gap-3">
-									<GroupSwitcher />
-								</div>
-								<div
-									className="flex items-center shrink-0 rounded-xl border border-platinum/60 dark:border-white/10 bg-platinum/35 dark:bg-white/[0.06] p-1 shadow-sm"
-									role="toolbar"
-									aria-label="Hub actions"
-								>
-									{showIntercomLauncher ? (
-										<>
-											<IntercomLauncherButton />
-											<span
-												className="w-px h-7 shrink-0 self-center bg-platinum/90 dark:bg-white/15 mx-1"
-												aria-hidden
-											/>
-										</>
-									) : null}
-									<NavLink
-										to="/hub/settings"
-										className={({ isActive }) =>
-											`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
-												isActive
-													? "text-hyper-green bg-hyper-green/15"
-													: "text-muted hover:text-carbon hover:bg-platinum/70 dark:hover:bg-white/10"
-											}`
-										}
-										aria-label="System settings"
-									>
-										<SettingsIcon className="w-4 h-4" />
-									</NavLink>
-									<span
-										className="hidden md:block w-px h-7 shrink-0 self-center bg-platinum/90 dark:bg-white/15 mx-1"
-										aria-hidden
-									/>
-									<div className="hidden md:flex items-center pr-0.5">
-										<ThemeToggle variant="toolbar" />
-									</div>
-								</div>
-							</header>
-
-							{/* Content */}
-							<div className="px-4 md:px-8 py-6">
-								<Outlet />
+					{/* Main Content Area */}
+					<main className="flex-1 pb-20 md:pb-0 pt-0 min-w-0">
+						{/* Global Top Bar (Group Context) */}
+						<header className="px-4 md:px-8 py-2 safe-area-pt flex justify-between items-center gap-3 bg-ceramic/80 backdrop-blur-md sticky top-0 z-40 border-b border-platinum/50 min-h-[3rem]">
+							<div className="min-w-0 flex-1 flex items-center gap-3">
+								<GroupSwitcher />
 							</div>
-						</main>
+							<div
+								className="flex items-center shrink-0 rounded-xl border border-platinum/60 dark:border-white/10 bg-platinum/35 dark:bg-white/[0.06] p-1 shadow-sm"
+								role="toolbar"
+								aria-label="Hub actions"
+							>
+								{showAskLauncher ? (
+									<>
+										<AskLauncherButton onClick={() => setIsAskOpen(true)} />
+										<span
+											className="w-px h-7 shrink-0 self-center bg-platinum/90 dark:bg-white/15 mx-1"
+											aria-hidden
+										/>
+									</>
+								) : null}
+								<NavLink
+									to="/hub/settings"
+									className={({ isActive }) =>
+										`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+											isActive
+												? "text-hyper-green bg-hyper-green/15"
+												: "text-muted hover:text-carbon hover:bg-platinum/70 dark:hover:bg-white/10"
+										}`
+									}
+									aria-label="System settings"
+								>
+									<SettingsIcon className="w-4 h-4" />
+								</NavLink>
+								<span
+									className="hidden md:block w-px h-7 shrink-0 self-center bg-platinum/90 dark:bg-white/15 mx-1"
+									aria-hidden
+								/>
+								<div className="hidden md:flex items-center pr-0.5">
+									<ThemeToggle variant="toolbar" />
+								</div>
+							</div>
+						</header>
 
-						{/* Mobile Bottom Nav */}
-						<BottomNav />
-						<PwaInstallPrompt />
-					</div>
-					<ConfirmDialog />
-					<OnboardingTour
-						initialStep={onboardingStep}
-						isCompleted={Boolean(onboardingCompletedAt)}
-					/>
-				</UnitDisplayModeProvider>
-			</IntercomLauncherProvider>
+						{/* Content */}
+						<div className="px-4 md:px-8 py-6">
+							<Outlet />
+						</div>
+					</main>
+
+					{/* Mobile Bottom Nav */}
+					<BottomNav />
+					<PwaInstallPrompt />
+				</div>
+				<ConfirmDialog />
+				<OnboardingTour
+					initialStep={onboardingStep}
+					isCompleted={Boolean(onboardingCompletedAt)}
+				/>
+				<AskPanel isOpen={isAskOpen} onClose={() => setIsAskOpen(false)} />
+			</UnitDisplayModeProvider>
 		</ConfirmProvider>
 	);
 }

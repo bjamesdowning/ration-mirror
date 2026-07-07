@@ -13,7 +13,7 @@ struct AccountDeletionView: View {
     var body: some View {
         Form {
             Section {
-                Text("Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, API keys, and sessions. Financial ledger records may be anonymized where required by law.")
+                Text("Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, and sessions. Financial ledger records may be anonymized where required by law.")
                     .font(Typography.body())
             }
 

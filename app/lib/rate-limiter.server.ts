@@ -117,6 +117,16 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 10,
 		keyPrefix: "rate:recipe_import",
 	},
+	copilot_connect: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 20,
+		keyPrefix: "rate:copilot_connect",
+	},
+	copilot: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 30,
+		keyPrefix: "rate:copilot",
+	},
 	group_create: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 5, // Very restrictive to prevent spam
@@ -313,17 +323,6 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000,
 		maxRequests: 10,
 		keyPrefix: "rate:interest_signup",
-	},
-	fin_billing: {
-		windowMs: 60_000, // 1 minute
-		maxRequests: 30, // Fin retries and conversational turns can fan out quickly
-		keyPrefix: "rate:fin_billing",
-	},
-	/** Fin subscription cancel/resume — tighter than read-only billing summary */
-	fin_billing_write: {
-		windowMs: 60_000,
-		maxRequests: 8,
-		keyPrefix: "rate:fin_billing_write",
 	},
 	admin_search: {
 		windowMs: 60_000,

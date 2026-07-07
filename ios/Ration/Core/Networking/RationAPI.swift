@@ -22,6 +22,17 @@ final class RationAPI {
         try await client.delete("account")
     }
 
+    func copilotStatus() async throws -> CopilotStatusResponse {
+        try await client.get("copilot/status")
+    }
+
+    func updateCopilotConsent(autoDeductConsent: Bool) async throws -> CopilotStatusResponse {
+        try await client.post(
+            "copilot/consent",
+            body: CopilotConsentRequest(autoDeductConsent: autoDeductConsent)
+        )
+    }
+
     // Settings
     func settings() async throws -> SettingsResponse {
         try await client.get("settings")

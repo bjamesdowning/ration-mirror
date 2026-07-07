@@ -44,15 +44,15 @@ MCP is the **deterministic** surface for agents. By design it never charges Rati
 
 If you want these AI capabilities, use the web app. If you want to drive everything from your own LLM, MCP is the surface for you.
 
-## Fin (Intercom) delegated access
+## First-party copilot
 
-Intercom Fin uses a **workspace-level** MCP OAuth grant (one service account connects once). Per-end-user pantry access uses a **signed delegation JWT**:
+Ask Ration replaces the old third-party support assistant. It does not use delegated MCP actor tokens. Instead:
 
-1. Ration signs `ration_mcp_delegation` into the Intercom Messenger JWT on each authenticated page load.
-2. Fin passes that value as the **`actor_token`** tool parameter on every MCP call.
-3. The MCP worker verifies Fin's Bearer token (`mcp:delegate` + allowlisted client) **and** the delegation JWT (live org membership check).
+1. Web users authenticate with their existing Ration session.
+2. iOS users authenticate with their mobile Bearer token.
+3. The copilot reuses the same org-scoped server logic and audit patterns as MCP tools.
 
-Fin's connecting identity is never used for data — only the delegated end-user subject. See [plans/fin-mcp-delegation-runbook.md](../../plans/fin-mcp-delegation-runbook.md).
+MCP remains available for external agents and API-key/OAuth clients. The copilot is the native Ration-owned chat surface.
 
 ## Security expectation
 

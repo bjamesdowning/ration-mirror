@@ -1,10 +1,10 @@
-# Fin knowledge hub (maintainer guide)
+# Copilot knowledge hub (maintainer guide)
 
-This folder holds **customer-facing** Markdown articles for **Intercom Fin** (support) and related sales enablement. They are distilled from the product implementation and [README.md](../../README.md); the app and README remain the source of truth for engineering.
+This folder holds **customer-facing** Markdown articles for Ration Copilot grounding and related sales enablement. They are distilled from the product implementation and [README.md](../../README.md); the app and README remain the source of truth for engineering.
 
-## Collections (Intercom)
+## Collections
 
-Map article groups to Intercom collections for navigation and Fin grounding:
+Map article groups to Ration Copilot knowledge sources for navigation and retrieval:
 
 | Collection | Articles |
 |------------|----------|
@@ -21,12 +21,12 @@ Map article groups to Intercom collections for navigation and Fin grounding:
 
 - Prefer **Settings** and **screen names** over repository file paths in article bodies. Reserve file paths for advanced MCP/API articles if needed.
 - Keep **credit costs**, **tier limits**, **API scopes** (`inventory` / `galley` / `supply` / `mcp` / `mcp:*`), and **MCP tool names** in small tables so retrieval stays precise.
-- When user-visible behavior changes, update the relevant `docs/fin/*.md` in the same change as README or product updates when possible.
+- When user-visible behavior changes, update the relevant `docs/fin/*.md` in the same change as README or product updates when possible, then sync the Copilot AI Search indexes.
 - **Do not** paste internal-only paths or secrets to customers during support unless troubleshooting with a technical user.
 
 ## Release cadence
 
-After releases that affect onboarding, billing, MCP, or security posture, diff [README.md](../../README.md) sections 3–11 and adjust matching articles. [INDEX.md](./INDEX.md) lists example questions for spot-checks.
+After releases that affect onboarding, billing, MCP, Copilot, or security posture, diff [README.md](../../README.md) sections 3–11 and adjust matching articles. [INDEX.md](./INDEX.md) lists example questions for spot-checks.
 
 ## Canonical compliance text
 

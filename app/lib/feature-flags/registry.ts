@@ -15,6 +15,12 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "appleWebLogin",
 	},
+	"ration-copilot": {
+		defaultEnabled: false,
+		description: "Native Ration Copilot chat on web and iOS",
+		clientVisible: true,
+		clientKey: "rationCopilot",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

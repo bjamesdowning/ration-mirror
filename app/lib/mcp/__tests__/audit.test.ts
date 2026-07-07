@@ -38,27 +38,4 @@ describe("auditMcpWrite", () => {
 			}),
 		);
 	});
-
-	it("redacts delegation actor and subject ids", () => {
-		auditMcpWrite(
-			makeCtx({
-				delegation: {
-					actorClientId: "fin-client-abcdefghijklmnop",
-					subjectUserId: "subject-user-abcdefghijklmnop",
-					subjectOrganizationId: "subject-org-abcdefghijklmnop",
-				},
-			}),
-			{ tool: "list_inventory", outcome: "ok" },
-		);
-
-		expect(log.info).toHaveBeenCalledWith(
-			"mcp_audit",
-			expect.objectContaining({
-				delegated: true,
-				actorClientId: "redacted:fin-client-abcdefghijklmnop",
-				subjectUserId: "redacted:subject-user-abcdefghijklmnop",
-				subjectOrganizationId: "redacted:subject-org-abcdefghijklmnop",
-			}),
-		);
-	});
 });

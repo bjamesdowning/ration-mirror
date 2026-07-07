@@ -16,8 +16,8 @@ function ctx(scopes: string[]): McpToolContext {
 }
 
 describe("MCP_SCOPES", () => {
-	it("lists mcp:delegate for provider vocabulary", () => {
-		expect(MCP_SCOPES).toContain("mcp:delegate");
+	it("does not expose delegated actor-token scopes", () => {
+		expect(MCP_SCOPES).not.toContain("mcp:delegate");
 	});
 });
 
@@ -59,12 +59,5 @@ describe("requireScope", () => {
 describe("hasScope", () => {
 	it("returns true for legacy mcp on any narrow scope check", () => {
 		expect(hasScope(ctx(["mcp"]), "mcp:read")).toBe(true);
-		expect(hasScope(ctx(["mcp"]), "mcp:delegate")).toBe(true);
-	});
-
-	it("returns false for mcp:delegate without explicit or legacy grant", () => {
-		expect(
-			hasScope(ctx(["mcp:read", "mcp:inventory:write"]), "mcp:delegate"),
-		).toBe(false);
 	});
 });

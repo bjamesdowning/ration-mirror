@@ -1,24 +1,24 @@
-# Fin chat: capability rollout (roadmap)
+# Copilot chat: capability rollout (roadmap)
 
-Internal sequencing for **Intercom Fin** data connectors after billing **cancel at period end** and **resume** are live. Each item should reuse the same security model: shared connector secret, **`user_id` only** from the verified contact (never client-supplied Stripe IDs), tight rate limits on writes, and minimal JSON safe for support.
+Internal sequencing for first-party **Ask Ration** capabilities after the Option A Copilot foundation is live. Each item should reuse the same security model: authenticated Ration session or mobile Bearer token, organization-scoped tools, server-side feature flag checks, tight rate limits on expensive actions, and minimal JSON safe for support.
 
 ## Shipped (baseline)
 
-1. **Billing read** — `GET /api/fin/billing-summary?user_id=…`
-2. **Cancel at period end** — `POST /api/fin/subscription-cancel` with `{ "user_id", "confirm": true }`
-3. **Resume renewal** — `POST /api/fin/subscription-resume` with the same body
-4. **MCP pantry access (delegated)** — Fin Custom MCP at `https://mcp.ration.mayutic.com/mcp` with workspace OAuth + per-user `actor_token` from signed `ration_mcp_delegation` attribute. Runbook: [plans/fin-mcp-delegation-runbook.md](../../plans/fin-mcp-delegation-runbook.md).
+1. **Dedicated Copilot Worker** — `ration-copilot` serves Project Think / Agents Durable Object chat over WebSocket.
+2. **Knowledge grounding** — Cloudflare AI Search indexes Ration docs and blog content for support Q&A.
+3. **Pantry-aware tools** — Copilot reuses the MCP tool runtime for inventory, meals, supply, manifest, and cargo updates.
+4. **Allowance and credits** — Crew daily Copilot conversations are tracked separately; extra usage can reconcile into the existing credit ledger.
 
 ## Recommended next (by value vs risk)
 
-1. **Credit balance (org)** — read-only connector: current AI credits for the user’s **active organization** (same rules as in-app display; no ledger PII).
-2. **Group / tier context** — read-only: active org name, whether the user is owner/admin/member, and whether the **owner’s** tier explains invite/share gates (no enumeration of other users’ emails).
-3. **Deep-link help** — read-only or static: return canonical paths (`/hub/settings`, `/hub/pricing`, etc.) for “where do I …?” questions; keep answers aligned with [INDEX.md](./INDEX.md) articles.
+1. **Billing portal guidance** — explain subscription state and route users to **Manage billing** for Stripe-hosted changes.
+2. **Group / tier context** — read-only: active org name, whether the user is owner/admin/member, and whether the owner’s tier explains invite/share gates (no enumeration of other users’ emails).
+3. **Deep-link help** — return canonical destinations (`/hub/settings`, `/hub/pricing`, `ration://ask`, etc.) for “where do I …?” questions; keep answers aligned with [INDEX.md](./INDEX.md) articles.
 4. **Ledger summary (optional)** — read-only recent credit movements for support debugging; requires strict field allowlisting and privacy review.
 5. **Invoice / payment failure narrative (optional)** — Stripe-safe fields only; legal/support review before enabling.
 
 ## Principles
 
-- **App wins** over Fin copy: if the product changes, update articles and connectors first.
-- **No Fin writes** beyond the explicitly reviewed mutation endpoints.
-- **Rate limit** every connector; writes stricter than reads.
+- **App wins** over Copilot copy: if the product changes, update articles and AI Search indexes first.
+- **Human-in-the-loop** for destructive writes; the agent must collect explicit user confirmation before mutation tools that delete or materially change data.
+- **Rate limit** every Copilot entry point; writes stricter than reads.

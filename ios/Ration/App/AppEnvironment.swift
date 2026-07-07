@@ -6,6 +6,14 @@ import Observation
 @MainActor
 @Observable
 final class AppEnvironment {
+    enum DeepLinkDestination: Equatable {
+        case ask
+        case scan
+        case galleyGenerate
+        case galleyImport
+        case manifestPlanWeek
+    }
+
     let auth: AuthManager
     let api: RationAPI
     let billing: BillingManager
@@ -15,6 +23,7 @@ final class AppEnvironment {
     let nextActionDismiss: NextActionDismissStore
     let theme: ThemeStore
     let unitDisplayMode: UnitDisplayModeStore
+    private(set) var deepLinkDestination: DeepLinkDestination?
     private(set) var cargoDataRevision = 0
 
     init() {
@@ -47,5 +56,13 @@ final class AppEnvironment {
 
     func notifyCargoDataChanged() {
         cargoDataRevision += 1
+    }
+
+    func openDeepLink(_ destination: DeepLinkDestination) {
+        deepLinkDestination = destination
+    }
+
+    func consumeDeepLink() {
+        deepLinkDestination = nil
     }
 }

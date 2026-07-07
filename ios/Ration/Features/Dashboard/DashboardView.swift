@@ -4,6 +4,7 @@ import Observation
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     var onScan: () -> Void = {}
+    var onAsk: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenSupply: () -> Void = {}
     var onOpenCargo: () -> Void = {}
@@ -86,12 +87,20 @@ struct DashboardView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 if !model.isEditMode {
-                    IconFABButton(
-                        systemImage: "camera.viewfinder",
-                        accessibilityLabel: "Scan receipt",
-                        isAI: true,
-                        action: onScan
-                    )
+                    HStack(spacing: 12) {
+                        IconFABButton(
+                            systemImage: "bubble.left.and.bubble.right",
+                            accessibilityLabel: "Ask Ration",
+                            isAI: true,
+                            action: onAsk
+                        )
+                        IconFABButton(
+                            systemImage: "camera.viewfinder",
+                            accessibilityLabel: "Scan receipt",
+                            isAI: true,
+                            action: onScan
+                        )
+                    }
                 }
             }
             .sheet(item: $selectedCargoRoute) { route in

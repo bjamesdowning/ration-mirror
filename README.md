@@ -48,13 +48,13 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
 - [12. Testing](#12-testing)
 - [13. Local Development & Deployment](#13-local-development--deployment)
   - [13.1 Feature flags (Flagship)](#131-feature-flags-flagship)
-- [14. Fin knowledge hub (support)](#14-fin-knowledge-hub-support)
+- [14. Copilot knowledge hub (support)](#14-copilot-knowledge-hub-support)
 
 ---
 
 ## 1. Infrastructure Overview
 
-The entire application runs on Cloudflare's edge network as a single Worker (`ration`) with bindings to D1, R2, KV, Queues, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol. Both Workers share the same D1/KV/R2/AI/Vectorize bindings in production.
+The application runs on Cloudflare's edge network with the main Worker (`ration`) bound to D1, R2, KV, Queues, Workers AI, and Vectorize. A separate `ration-mcp` Worker exposes the pantry to AI agents via the Model Context Protocol, and `ration-copilot` powers the first-party Ask experience with Project Think, Workers AI, Durable Objects, and AI Search. These Workers share the same D1/KV/R2/AI/Vectorize resources in production where appropriate.
 
 #### 1.1 Traffic flow — Users and AI agents
 
@@ -192,28 +192,11 @@ npx wrangler r2 bucket lifecycle add ration-storage \
 
 Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
 
-**Vars:** `INTERCOM_APP_ID` — public Intercom workspace app id; set in `wrangler.jsonc` / `wrangler.dev.jsonc` / `wrangler.local.jsonc`. The Intercom Messenger loads only on authenticated `/hub/*` routes (see `app/components/support/HubIntercom.tsx`). The default floating launcher is hidden; support opens from the hub header **Ask Ration** primary control inside the grouped actions toolbar (`app/components/support/IntercomLauncherButton.tsx`, composed in `app/routes/hub.tsx`) so it does not cover the mobile bottom nav. `custom_launcher_selector` targets the shared class `ration-intercom-launcher` (`app/lib/intercom-hub-settings.ts`), also used on the **Ask Ration** link in **Help & Feedback** under System settings (`/hub/settings#help`, `HelpSection` in `app/routes/hub/settings.tsx`). On narrow viewports the header label shortens to **Ask** while the accessible name stays “Ask Ration (support chat)”. Theme switching stays in the header on `md+` and remains available under **Settings** on smaller viewports. The app **Content-Security-Policy** in `app/root.tsx` includes Intercom script/connect/img/font/media/frame/form-action sources required by their widget.
+**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status.
 
-**Secrets (optional):** `INTERCOM_MESSENGER_JWT_SECRET` — `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET`; when set, the root loader signs a short-lived HS256 JWT and the hub Messenger boots with `intercom_user_jwt` (Messenger Security / Fin). Generate the secret in Intercom under **Settings → Messenger → Security**. See [Authenticating users in the Messenger with JWTs](https://www.intercom.com/help/en/articles/10589769-authenticating-users-in-the-messenger-with-json-web-tokens-jwts).
+**Copilot billing:** Billing is per conversation, not per message. Crew orgs receive 3 free copilot conversations per UTC day via KV allowance; after that, or for free-tier orgs from the first conversation, the existing ledger charges `AI_COSTS.COPILOT_TURN` as a 1-credit floor and reconciles upward by cumulative token brackets. The server enforces the `ration-copilot` Flagship flag and `copilot_connect`/`copilot` rate limits.
 
-**Secrets (optional):** `FIN_INTERCOM_CONNECTOR_SECRET` — shared secret between Intercom Fin Data Connectors and the Fin billing API routes. Store with `wrangler secret put FIN_INTERCOM_CONNECTOR_SECRET` (and in local `.dev.vars`). Intercom sends this as either `Authorization: Bearer <token>` or `x-intercom-token`; the Worker validates the token before reading or mutating user billing state in D1/Stripe.
-
-**Fin billing endpoints (server-to-server only):**
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/fin/billing-summary?user_id=…` | Read-only summary (plan, renewal, cancel-at-period-end). |
-| `POST` | `/api/fin/subscription-cancel` | JSON body `{ "user_id": "…", "confirm": true }` — set **cancel at period end** on the user’s active Stripe subscription. Stricter rate limit than GET. |
-| `POST` | `/api/fin/subscription-resume` | Same body shape — clear **cancel at period end** so the subscription renews. |
-
-Configure each path as its own Fin Data Connector action. Never expose the connector secret to clients.
-
-**JWT-only verification checklist (post-enforcement):**
-- Hub requests contain `intercom_user_jwt`
-- Intercom Security logs show accepted JWT requests
-- No `user_hash` is present in Messenger payloads
-
-**Operations note:** If you rotate `INTERCOM_MESSENGER_JWT_SECRET`, redeploy/restart the environment before validating new JWT traffic.
+**AI Search:** Copilot grounds docs/blog answers through Cloudflare AI Search via the `AI_SEARCH` namespace binding. Create `ration-docs` and `ration-blog` and trigger sync jobs with Wrangler; see [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Retrieval, chunking, embeddings, hybrid BM25/vector search, and reranking are managed by Cloudflare AI Search, not app code.
 
 **Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, guardrails, spend limits, retries/timeouts, model fallback, and unified billing — configurable from the Cloudflare dashboard and via per-request `cf-aig-*` headers. All four AI consumers (`scan`, `meal_generate`, `plan_week`, `import_url`) route through a centralized client ([`app/lib/ai-gateway.server.ts`](app/lib/ai-gateway.server.ts)) that applies feature-specific timeouts, retries, caching policy, and observability metadata. The Google API key stays on the gateway; Workers authenticate with `CF_AIG_TOKEN` only.
 
@@ -1522,8 +1505,6 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
-| MCP delegated read (Fin `actor_token`) | subjectUserId | 60s | 20 | Per end-user cap (mcp_delegated_read) |
-| MCP delegated write (Fin `actor_token`) | subjectUserId | 60s | 6 | Per end-user cap (mcp_delegated_write) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---
@@ -1534,9 +1515,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Authentication:** The MCP Worker accepts **OAuth 2.1 bearer tokens** (delegated user consent via Better Auth on the app domain) or **organization API keys** (`rtn_live_*`). OAuth tokens are short-lived JWTs bound to a single household (`https://ration.mayutic.com/org` claim) and granular `mcp:*` scopes; the resource server validates signatures via JWKS (cached in KV for **10 minutes**, with a one-shot refetch on signing-key rotation), then re-checks org membership **and an active consent grant** on every request — so revoking a grant takes effect immediately rather than waiting out the token TTL. API keys use `authenticateMcp()` → `verifyApiKey()` with legacy `mcp` or fine-grained `mcp:*` scopes. Set `MCP_OAUTH_ENABLED=false` to disable OAuth and require API keys only.
 
-**Fin delegated access:** Intercom Fin uses one workspace-level OAuth grant (`mcp:delegate` on an allowlisted client). End-user pantry data requires a signed **`actor_token`** (delegation JWT shipped as `ration_mcp_delegation` in the Intercom Messenger JWT). Secrets: `FIN_MCP_DELEGATION_SECRET` (both workers), `FIN_DELEGATION_CLIENT_IDS` (MCP worker). See [plans/fin-mcp-delegation-runbook.md](plans/fin-mcp-delegation-runbook.md).
-
-**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. After sign-in, the browser resumes via native `/api/auth/oauth2/authorize`. Better Auth (`@better-auth/oauth-provider` 1.6.16+) holds authorization state via the signed `oauth_query`, session, and `ba_pl` postLogin marker; Ration adds a short-lived `ration_oauth_org_selected` cookie so multi-household users advance past the picker after Continue (stripped on fresh authorize). OIDC-compatible discovery aliases live at `/.well-known/openid-configuration` (+ `/api/auth` issuer-path variant). Dynamic client registration defaults to all granular `mcp:*` scopes except `mcp:delegate` (Fin only); public `scopes_supported` in discovery omits `mcp:delegate` so DCR clients (e.g. Warp) do not request a blocked scope; consent pre-checks read, with write scopes optional. Revoke grants in Hub → Settings → Developer → MCP. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
+**OAuth discovery (MCP 2025-06-18):** `GET /.well-known/oauth-protected-resource` on the MCP host advertises `authorization_servers`; clients complete browser login at `/oauth/sign-in`, household selection at `/oauth/select-org` (`oauth2Continue`), then consent at `/oauth/consent`. After sign-in, the browser resumes via native `/api/auth/oauth2/authorize`. Better Auth (`@better-auth/oauth-provider` 1.6.16+) holds authorization state via the signed `oauth_query`, session, and `ba_pl` postLogin marker; Ration adds a short-lived `ration_oauth_org_selected` cookie so multi-household users advance past the picker after Continue (stripped on fresh authorize). OIDC-compatible discovery aliases live at `/.well-known/openid-configuration` (+ `/api/auth` issuer-path variant). Dynamic client registration defaults to all granular `mcp:*` scopes; consent pre-checks read, with write scopes optional. Revoke grants in Hub → Settings → Developer → MCP. See [plans/oauth-flow-contract.md](plans/oauth-flow-contract.md).
 
 **Agent-first onboarding (v1.3.8):** Agents can self-register without human signup via `POST /api/agent/auth` (`{ "type": "anonymous" }`), receiving a **full-write** pre-claim API key (`AGENT_API_KEY_SCOPES`) and a human claim URL. Tier 1 claim verifies email via OTP plus mandatory ToS acceptance (`/api/agent/auth/claim` + `/claim/complete`); claim transfers ownership (scopes unchanged) and merges stub org data when the email matches an existing user. Claim recovery: Option B slides `claimTokenExpiresAt` on each API/MCP auth; Option A reissues via `POST /api/agent/auth/claim/reissue` with the agent API key. Unclaimed idle kitchens purge after 180 days (cron). Discovery: [`/auth.md`](/auth.md) (retention table + recovery), WorkOS/isitagentready `agent_auth` block (`skill`, `register_uri`, `claim_uri`, `reissue_uri`, …), enriched app-domain PRM. Public connect landing: [`/connect`](/connect); claim UI: [`/connect/claim`](/connect/claim). Blog walkthrough: [/blog/agent-first-mcp-onboarding](/blog/agent-first-mcp-onboarding). Contract: [plans/agent-onboarding-contract.md](plans/agent-onboarding-contract.md).
 
@@ -2037,6 +2016,7 @@ bun run test:unit
 |---------|--------|----------|
 | `bun run dev:local` | [`wrangler.local.jsonc`](wrangler.local.jsonc) via `RATION_DEV_MODE=local` | Local Miniflare (D1/KV/R2/queues). AI and Vectorize are unavailable — use `dev:remote` for scan/semantic search. |
 | `bun run dev:remote` | [`wrangler.dev.jsonc`](wrangler.dev.jsonc) | Remote Cloudflare resources (`remote: true` on D1/KV/R2/AI/Vectorize). |
+| `bun run dev:copilot` | [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc) | Remote D1/KV/R2/AI/Vectorize/AI Search bindings for the Think Durable Object worker. |
 
 `dev:local` sets `remoteBindings: false` in [`vite.config.ts`](vite.config.ts) so Wrangler does not open an edge-preview proxy (required for remote AI). Do **not** set `CLOUDFLARE_ENV=local` for local dev — the Cloudflare Vite plugin maps that variable to `wrangler --env local`, which expects an `env.local` section and duplicates binding config.
 
@@ -2056,7 +2036,13 @@ bun install --frozen-lockfile && bun run build && bunx wrangler deploy
 bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.mcp.jsonc
 ```
 
-`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts) (cf-typegen via `wrangler types` when dependencies are intact). The MCP worker does not need `bun run build` — Wrangler bundles `workers/mcp.ts` directly.
+**Copilot worker (`ration-copilot`, [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc)):**
+
+```bash
+bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.copilot.jsonc
+```
+
+`postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts) (cf-typegen via `wrangler types` when dependencies are intact). The MCP and Copilot workers do not need `bun run build` — Wrangler bundles `workers/mcp.ts` and `workers/copilot.ts` directly.
 
 ### 13.1 Feature flags (Flagship)
 
@@ -2073,10 +2059,11 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 bun run db:migrate:prod   # run before schema-dependent releases
 bun run deploy            # main worker
 bun run deploy:mcp        # MCP worker
+bun run deploy:copilot    # Copilot worker
 ```
 
 ---
 
-## 14. Fin knowledge hub (support)
+## 14. Copilot knowledge hub (support)
 
-Customer-facing Markdown for **Intercom Fin** (and similar) lives in [`docs/fin/`](docs/fin/). See [`docs/fin/README.md`](docs/fin/README.md) for collection mapping, [`docs/fin/INDEX.md`](docs/fin/INDEX.md) for article titles and example questions, and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md) for post-import golden questions. Keep articles aligned with sections 3–11 of this README when user-visible behavior changes.
+Customer-facing Markdown for **Ration Copilot** lives in [`docs/fin/`](docs/fin/) for continuity with the original support corpus. See [`docs/fin/README.md`](docs/fin/README.md), [`docs/fin/INDEX.md`](docs/fin/INDEX.md), and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md). AI Search setup lives in [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Keep articles aligned with sections 3–11 of this README when user-visible behavior changes.

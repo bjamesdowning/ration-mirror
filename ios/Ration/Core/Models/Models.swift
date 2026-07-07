@@ -72,6 +72,88 @@ struct SessionResponse: Codable, Sendable {
     var isCrewMember: Bool { tier == "crew_member" && !isTierExpired }
 }
 
+// MARK: - Copilot
+
+/// `GET /api/mobile/v1/copilot/status`
+struct CopilotStatusResponse: Codable, Sendable {
+    let tier: String
+    let freeConversationsRemaining: Int
+    let allowanceResetAt: Date
+    let creditBalance: Int
+    let autoDeductConsent: Bool
+    let conversationFloorCost: Int
+    let sessionIdleMs: Int
+    let brackets: [CopilotCostBracket]
+}
+
+struct CopilotConsentRequest: Encodable {
+    let autoDeductConsent: Bool
+}
+
+struct CopilotCostBracket: Codable, Sendable, Identifiable {
+    let maxTokens: Int?
+    let credits: Int
+
+    var id: String { "\(maxTokens.map(String.init) ?? "max")-\(credits)" }
+}
+
+struct CopilotMessage: Codable, Sendable, Identifiable, Equatable {
+    let id: String
+    let role: String
+    var content: String
+    let createdAt: Date?
+    let toolCallId: String?
+
+    init(
+        id: String = UUID().uuidString,
+        role: String,
+        content: String,
+        createdAt: Date? = Date(),
+        toolCallId: String? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.createdAt = createdAt
+        self.toolCallId = toolCallId
+    }
+}
+
+struct CopilotToolStatus: Codable, Sendable, Equatable {
+    let toolCallId: String
+    let toolName: String
+    let label: String
+}
+
+struct CopilotBlockedFeature: Codable, Sendable, Equatable {
+    let feature: String
+    let message: String
+    let deepLink: String
+}
+
+struct CopilotToolError: Codable, Sendable, Equatable {
+    let code: String
+    let message: String
+}
+
+/// Streaming event envelope from the copilot socket. Unknown fields are ignored.
+struct CopilotStreamEvent: Codable, Sendable {
+    let type: String
+    let message: CopilotMessage?
+    let messageId: String?
+    let text: String?
+    let usageTokens: Int?
+    let status: CopilotToolStatus?
+    let toolCallId: String?
+    let ok: Bool?
+    let error: CopilotToolError?
+    let approvalId: String?
+    let toolName: String?
+    let title: String?
+    let description: String?
+    let blocked: CopilotBlockedFeature?
+}
+
 // MARK: - Groups
 
 struct GroupMemberUser: Codable, Sendable {

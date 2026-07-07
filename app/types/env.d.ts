@@ -47,18 +47,18 @@ declare namespace Cloudflare {
 		STRIPE_PRICE_CREW_MEMBER_ANNUAL?: string;
 		STRIPE_PRICE_CREW_MEMBER_MONTHLY?: string;
 		STRIPE_PROMO_WELCOME65?: string;
-		/** Public Intercom workspace app id (wrangler vars). */
-		INTERCOM_APP_ID?: string;
-		/** Intercom Messenger Security — HS256 JWT signing secret. `wrangler secret put INTERCOM_MESSENGER_JWT_SECRET` */
-		INTERCOM_MESSENGER_JWT_SECRET?: string;
-		/** Shared secret for Intercom Fin Data Connector -> Ration billing endpoint auth. */
-		FIN_INTERCOM_CONNECTOR_SECRET?: string;
-		/** HS256 secret for Fin MCP per-user delegation JWTs (main + MCP workers). */
-		FIN_MCP_DELEGATION_SECRET?: string;
-		/** Comma-separated OAuth client IDs allowed to use mcp:delegate + actor_token. */
-		FIN_DELEGATION_CLIENT_IDS?: string;
 		/** When "false", MCP worker rejects non-API-key credentials. Default: enabled. */
 		MCP_OAUTH_ENABLED?: string;
+		/** Cloudflare AI Search binding used by the copilot worker. */
+		AI_SEARCH?: {
+			search?: (request: unknown) => Promise<unknown>;
+		};
+		/** Optional dedicated secret for main-worker-to-copilot DO purge calls. */
+		COPILOT_PURGE_SECRET?: string;
+		/** Durable Object namespace for Project Think conversations. */
+		PROJECT_THINK?: DurableObjectNamespace;
+		/** Optional Analytics Engine dataset for copilot metrics. */
+		COPILOT_ANALYTICS?: AnalyticsEngineDataset;
 		/** Emergency kill switch JSON, e.g. {"some-flag":false}. */
 		FEATURE_FLAG_OVERRIDES?: string;
 	}

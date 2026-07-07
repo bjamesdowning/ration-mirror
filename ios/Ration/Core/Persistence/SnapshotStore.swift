@@ -96,4 +96,5 @@ enum SnapshotDomain {
     static let galley = "galley"
     static let manifest = "manifest"
     static let supply = "supply"
+    static let ask = "ask"
 }

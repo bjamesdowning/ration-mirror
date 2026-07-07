@@ -54,6 +54,7 @@ struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showingSettings = false
     @State private var showingScan = false
+    @State private var showingAsk = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var manifestSuccessMessage: String?
@@ -62,6 +63,7 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             DashboardView(
                 onScan: { showingScan = true },
+                onAsk: { showingAsk = true },
                 onOpenSettings: { showingSettings = true },
                 onOpenSupply: { selectedTab = 4 },
                 onOpenCargo: { selectedTab = 1 },
@@ -104,6 +106,9 @@ struct MainTabView: View {
         .sheet(isPresented: $showingScan) {
             ScanView()
         }
+        .sheet(isPresented: $showingAsk) {
+            AskView()
+        }
         .overlay(alignment: .top) {
             if !env.network.isOnline {
                 OfflineBanner(label: "Offline — showing cached data where available")
@@ -122,6 +127,20 @@ struct MainTabView: View {
         }
         .onChange(of: env.session.orgGeneration) { _, newValue in
             orgGeneration = newValue
+        }
+        .onChange(of: env.deepLinkDestination) { _, destination in
+            guard let destination else { return }
+            switch destination {
+            case .ask:
+                showingAsk = true
+            case .scan:
+                showingScan = true
+            case .galleyGenerate, .galleyImport:
+                selectedTab = 2
+            case .manifestPlanWeek:
+                selectedTab = 3
+            }
+            env.consumeDeepLink()
         }
     }
 }

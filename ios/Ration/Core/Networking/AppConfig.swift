@@ -26,6 +26,14 @@ enum AppConfig {
         return origin
     }
 
+    static var copilotBaseURL: URL {
+        if let override = ProcessInfo.processInfo.environment["RATION_COPILOT_BASE"],
+           let url = URL(string: override) {
+            return url
+        }
+        return URL(string: "wss://copilot.ration.mayutic.com/copilot")!
+    }
+
     /// Allow `http://localhost` avatar URLs when the web origin is local dev.
     static var allowsInsecureLocalhost: Bool {
         guard let host = webOrigin.host?.lowercased() else { return false }

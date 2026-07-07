@@ -10,18 +10,14 @@ export const OAUTH_MCP_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
-	/** Fin service agent — may act on behalf of end-users via signed actor_token. */
-	"mcp:delegate",
 ] as const;
 
 export type OAuthMcpScope = (typeof OAUTH_MCP_SCOPES)[number];
 
-/** Granular MCP scopes available via open DCR (excludes Fin-only `mcp:delegate`). */
-export const OAUTH_DCR_MCP_SCOPES = OAUTH_MCP_SCOPES.filter(
-	(s): s is Exclude<OAuthMcpScope, "mcp:delegate"> => s !== "mcp:delegate",
-);
+/** Granular MCP scopes available via open DCR. */
+export const OAUTH_DCR_MCP_SCOPES = [...OAUTH_MCP_SCOPES] as const;
 
-/** Scopes allowed at dynamic client registration (no `mcp:delegate`). */
+/** Scopes allowed at dynamic client registration. */
 export const OAUTH_REGISTRATION_SCOPES = [
 	...OAUTH_DCR_MCP_SCOPES,
 	"offline_access",
@@ -33,13 +29,13 @@ export const OAUTH_REGISTRATION_DEFAULT_SCOPES = [
 	"offline_access",
 ] as const;
 
-/** Full OAuth provider vocabulary (includes Fin `mcp:delegate` for trusted clients). */
+/** Full OAuth provider vocabulary. */
 export const OAUTH_PROVIDER_SCOPES = [
 	...OAUTH_MCP_SCOPES,
 	"offline_access",
 ] as const;
 
-/** Scopes advertised in public OAuth/PRM discovery (DCR-safe; no Fin delegate). */
+/** Scopes advertised in public OAuth/PRM discovery. */
 export const OAUTH_ADVERTISED_MCP_SCOPES = [...OAUTH_DCR_MCP_SCOPES] as const;
 
 /** AS metadata scopes_supported (resource scopes + offline_access). */
@@ -130,8 +126,6 @@ export const OAUTH_SCOPE_LABELS: Record<OAuthMcpScope, string> = {
 	"mcp:manifest:write": "Manage meal plan entries",
 	"mcp:supply:write": "Manage Supply shopping lists",
 	"mcp:preferences:write": "Update account preferences",
-	"mcp:delegate":
-		"Act on behalf of verified end-users (Fin service agent only)",
 };
 
 export function isApiKeyCredential(raw: string): boolean {

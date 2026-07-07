@@ -30,12 +30,6 @@ export type McpAuthMethod = "api_key" | "oauth";
  * read scopes, the API key identity (for audit logs), and the user/org/tier
  * surface without re-parsing on every call.
  */
-export interface McpDelegationContext {
-	actorClientId: string;
-	subjectUserId: string;
-	subjectOrganizationId: string;
-}
-
 export interface McpToolContext {
 	organizationId: string;
 	userId: string;
@@ -49,8 +43,6 @@ export interface McpToolContext {
 	oauthClientId?: string;
 	/** Unclaimed agent kitchen — tighter write rate limits and claim nudges. */
 	preClaim: boolean;
-	/** Set when a Fin delegate-scoped call acts on behalf of an end-user. */
-	delegation?: McpDelegationContext;
 }
 
 function isOAuthEnabled(env: Cloudflare.Env): boolean {

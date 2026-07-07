@@ -1,14 +1,4 @@
-import {
-	and,
-	desc,
-	eq,
-	gt,
-	inArray,
-	isNotNull,
-	lte,
-	or,
-	sql,
-} from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
 	activeMealSelection,
@@ -25,24 +15,30 @@ import {
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
-import { getActiveCargoSelections } from "./cargo-selection.server";
+import {
+	fulfillCargoSelectionsFromDockedSupplyItems,
+	getActiveCargoSelections,
+} from "./cargo-selection.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
+import { retryOnD1Contention } from "./error-handler";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
-	chunkedInsert,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
+import type { DockedSupplyItemForReconcile } from "./supply-dock-reconcile";
 import {
+	isManualOnlySupplyItem,
 	mergeSupplyOrigins,
 	normalizeSupplyOrigins,
 	type SupplyItemOrigin,
+	shouldClearUnpurchasedSupplyItemOnSync,
 } from "./supply-item-origins";
 import { type TagRecord, tagsToSlugs } from "./tags.server";
 import {
@@ -224,6 +220,26 @@ function getAvailableCargoQuantity(
 		if (converted !== null) return converted;
 	}
 	return 0;
+}
+
+/** Quantities already on the list that should reduce meal gap math after a sync clear. */
+function getPersistedListQuantityForGapMath(
+	items: (typeof supplyItem.$inferSelect)[],
+	normalizedName: string,
+	targetUnit: SupportedUnit,
+	domain: string,
+	ingredientName?: string,
+): number {
+	const persistedItems = items.filter(
+		(item) => item.isPurchased || isManualOnlySupplyItem(item),
+	);
+	return getExistingListQuantity(
+		persistedItems,
+		normalizedName,
+		targetUnit,
+		domain,
+		ingredientName,
+	);
 }
 
 function getExistingListQuantity(
@@ -1808,22 +1824,27 @@ export function mergeContributionsByKey(
 	}));
 }
 
-async function clearUnpurchasedAutoSourcedItems(
+async function getUnpurchasedSupplyItemIdsToClear(
 	d1: ReturnType<typeof drizzle>,
 	listId: string,
-): Promise<void> {
-	await d1
-		.delete(supplyItem)
+): Promise<string[]> {
+	const unpurchased = await d1
+		.select({
+			id: supplyItem.id,
+			isPurchased: supplyItem.isPurchased,
+			sourceMealId: supplyItem.sourceMealId,
+			sourceCargoId: supplyItem.sourceCargoId,
+			sourceMealIds: supplyItem.sourceMealIds,
+			sourceOrigins: supplyItem.sourceOrigins,
+		})
+		.from(supplyItem)
 		.where(
-			and(
-				eq(supplyItem.listId, listId),
-				eq(supplyItem.isPurchased, false),
-				or(
-					isNotNull(supplyItem.sourceMealId),
-					isNotNull(supplyItem.sourceCargoId),
-				),
-			),
+			and(eq(supplyItem.listId, listId), eq(supplyItem.isPurchased, false)),
 		);
+
+	return unpurchased
+		.filter(shouldClearUnpurchasedSupplyItemOnSync)
+		.map((row) => row.id);
 }
 
 async function buildMealContributions(
@@ -1865,7 +1886,7 @@ async function buildMealContributions(
 		);
 		if (missingAfterCargo <= 0) continue;
 
-		const existingQuantityInList = getExistingListQuantity(
+		const existingQuantityInList = getPersistedListQuantityForGapMath(
 			existingItems,
 			aggregated.normalizedName,
 			targetUnit,
@@ -2020,16 +2041,22 @@ async function materializeSupplyFromSelections(
 		listId: supplyListData.id,
 	};
 
-	await clearUnpurchasedAutoSourcedItems(d1, supplyListData.id);
-
-	const refreshedList = await getSupplyListById(
+	const listBeforeSync = await getSupplyListById(
 		env.DB,
 		organizationId,
 		supplyListData.id,
 	);
-	if (!refreshedList) throw new Error("List retrieval failed");
+	if (!listBeforeSync) throw new Error("List retrieval failed");
 
-	const existingItems = refreshedList.items ?? [];
+	const idsToClear = await getUnpurchasedSupplyItemIdsToClear(
+		d1,
+		supplyListData.id,
+	);
+	const idsToClearSet = new Set(idsToClear);
+	const existingItems = (listBeforeSync.items ?? []).filter(
+		(item) => !idsToClearSet.has(item.id),
+	);
+
 	const snoozeKeys = await getActiveSnoozeKeys(d1, organizationId);
 
 	const [mealContributions, cargoContributions] = await Promise.all([
@@ -2057,16 +2084,33 @@ async function materializeSupplyFromSelections(
 			: 0;
 	const skippedCount = Math.max(0, aggregatedCount - mealContributions.length);
 
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const writeStatements: any[] = [];
+
+	for (const idChunk of chunkArray(idsToClear, D1_MAX_BOUND_PARAMS)) {
+		writeStatements.push(
+			d1.delete(supplyItem).where(inArray(supplyItem.id, idChunk)),
+		);
+	}
+
 	if (itemsToInsert.length > 0) {
-		await chunkedInsert(
+		for (const insertChunk of chunkArray(
 			itemsToInsert,
 			D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-			(insertChunk) => d1.insert(supplyItem).values(insertChunk),
+		)) {
+			writeStatements.push(d1.insert(supplyItem).values(insertChunk));
+		}
+	}
+
+	if (writeStatements.length > 0) {
+		writeStatements.push(
+			d1
+				.update(supplyList)
+				.set({ updatedAt: new Date() })
+				.where(eq(supplyList.id, supplyListData.id)),
 		);
-		await d1
-			.update(supplyList)
-			.set({ updatedAt: new Date() })
-			.where(eq(supplyList.id, supplyListData.id));
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch(writeStatements as [any, ...any[]]);
 	}
 
 	const list = await getSupplyListById(
@@ -2234,6 +2278,67 @@ export async function createSupplyListFromSelectedMeals(
 	}
 }
 
+function supplyRowToDockedReconcile(
+	row: typeof supplyItem.$inferSelect,
+	quantityOverride?: number,
+	unitOverride?: string,
+): DockedSupplyItemForReconcile {
+	const quantity = quantityOverride ?? row.quantity;
+	const unit = unitOverride ?? row.unit;
+	const base = effectiveBaseFields(
+		quantity,
+		unit,
+		row.baseQuantity ?? quantity,
+		row.baseUnit ?? unit,
+		row.name,
+	);
+	return {
+		name: row.name,
+		domain: row.domain ?? "food",
+		quantity,
+		unit,
+		baseQuantity: base.baseQuantity,
+		baseUnit: base.baseUnit,
+		sourceCargoId: row.sourceCargoId,
+		sourceOrigins: row.sourceOrigins,
+	};
+}
+
+/** Re-sync supply and reconcile cargo restock toggles after docking to Cargo. */
+export async function reconcileSupplyAfterDock(
+	env: Env,
+	organizationId: string,
+	dockedItems: DockedSupplyItemForReconcile[],
+	unitMode: UnitDisplayMode = "metric",
+): Promise<{
+	cargoSelectionsCleared: number;
+	cargoSelectionsReduced: number;
+}> {
+	return retryOnD1Contention(async () => {
+		const cargoResult = await fulfillCargoSelectionsFromDockedSupplyItems(
+			env.DB,
+			organizationId,
+			dockedItems,
+		);
+
+		await createSupplyListFromSelectedMeals(
+			env,
+			organizationId,
+			undefined,
+			{
+				trigger: "dashboard_grocery_action_update_list",
+				organizationId,
+			},
+			unitMode,
+		);
+
+		return {
+			cargoSelectionsCleared: cargoResult.cleared,
+			cargoSelectionsReduced: cargoResult.reduced,
+		};
+	});
+}
+
 /**
  * Docks all purchased items from the list into cargo and removes them from the list.
  */
@@ -2241,8 +2346,24 @@ export async function completeSupplyList(
 	env: Env,
 	organizationId: string,
 	listId: string,
+	options?: { unitMode?: UnitDisplayMode },
 ) {
 	const d1 = drizzle(env.DB);
+
+	const [list] = await d1
+		.select({ id: supplyList.id })
+		.from(supplyList)
+		.where(
+			and(
+				eq(supplyList.id, listId),
+				eq(supplyList.organizationId, organizationId),
+			),
+		)
+		.limit(1);
+
+	if (!list) {
+		throw new Error("Supply list not found or unauthorized");
+	}
 
 	// 1. Get purchased items
 	const purchasedItems = await d1
@@ -2263,7 +2384,19 @@ export async function completeSupplyList(
 	// 2. Dock them
 	const results = await dockSupplyItems(env, organizationId, purchasedItems);
 
-	// 3. Remove them from the list (cleanup)
+	const dockedForReconcile = purchasedItems.map((item) =>
+		supplyRowToDockedReconcile(item),
+	);
+
+	// 3. Reconcile before list cleanup so a failed resync leaves purchased rows for retry
+	const reconcileResult = await reconcileSupplyAfterDock(
+		env,
+		organizationId,
+		dockedForReconcile,
+		options?.unitMode ?? "metric",
+	);
+
+	// 4. Remove purchased rows from the list
 	for (const deleteChunk of chunkArray(purchasedItems, D1_MAX_BOUND_PARAMS)) {
 		const deleteOps = deleteChunk.map((item) =>
 			d1.delete(supplyItem).where(eq(supplyItem.id, item.id)),
@@ -2277,6 +2410,8 @@ export async function completeSupplyList(
 	return {
 		docked: results.updated + results.created,
 		summary: results,
+		cargoSelectionsCleared: reconcileResult.cargoSelectionsCleared,
+		cargoSelectionsReduced: reconcileResult.cargoSelectionsReduced,
 	};
 }
 
@@ -2303,6 +2438,7 @@ export async function completeSupplyFromScan(
 	organizationId: string,
 	listId: string,
 	pairs: SupplyScanCompleteInput[],
+	options?: { unitMode?: UnitDisplayMode },
 ) {
 	if (pairs.length === 0) {
 		return { docked: 0, supplyUpdated: 0, supplyRemoved: 0 };
@@ -2322,6 +2458,22 @@ export async function completeSupplyFromScan(
 		.limit(1);
 
 	if (!list) throw new Error("Supply list not found or unauthorized");
+
+	const linkedIds = pairs
+		.map((p) => p.supplyItemId)
+		.filter((id): id is string => Boolean(id));
+	const linkedRows =
+		linkedIds.length > 0
+			? await chunkedQuery(linkedIds, (chunk) =>
+					d1
+						.select()
+						.from(supplyItem)
+						.where(
+							and(eq(supplyItem.listId, listId), inArray(supplyItem.id, chunk)),
+						),
+				)
+			: [];
+	const rowById = new Map(linkedRows.map((row) => [row.id, row]));
 
 	const dockInputs = pairs.map((p) => ({
 		name: p.dock.name,
@@ -2351,6 +2503,23 @@ export async function completeSupplyFromScan(
 		else if (r.status === "created") created += 1;
 	}
 	const ingestResult = { updated, created };
+
+	const dockedForReconcile: DockedSupplyItemForReconcile[] = [];
+	for (const pair of pairs) {
+		if (!pair.supplyItemId) continue;
+		const row = rowById.get(pair.supplyItemId);
+		if (!row) continue;
+		dockedForReconcile.push(
+			supplyRowToDockedReconcile(row, pair.dock.quantity, pair.dock.unit),
+		);
+	}
+
+	const reconcileResult = await reconcileSupplyAfterDock(
+		env,
+		organizationId,
+		dockedForReconcile,
+		options?.unitMode ?? "metric",
+	);
 
 	const ledgerOps = pairs.map((p) =>
 		d1.insert(ledger).values({
@@ -2412,5 +2581,7 @@ export async function completeSupplyFromScan(
 		docked: ingestResult.updated + ingestResult.created,
 		supplyUpdated,
 		supplyRemoved: removeIds.size,
+		cargoSelectionsCleared: reconcileResult.cargoSelectionsCleared,
+		cargoSelectionsReduced: reconcileResult.cargoSelectionsReduced,
 	};
 }

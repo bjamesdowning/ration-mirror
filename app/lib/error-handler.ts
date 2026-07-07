@@ -26,6 +26,28 @@ export function isD1ContentionError(error: unknown): boolean {
 	);
 }
 
+/** Retries transient D1 failures (contention, timeouts) with linear backoff. */
+export async function retryOnD1Contention<T>(
+	fn: () => Promise<T>,
+	options?: { maxAttempts?: number; delayMs?: number },
+): Promise<T> {
+	const maxAttempts = options?.maxAttempts ?? 3;
+	const delayMs = options?.delayMs ?? 100;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			return await fn();
+		} catch (error) {
+			if (!isD1ContentionError(error) || attempt === maxAttempts) {
+				throw error;
+			}
+			await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+		}
+	}
+
+	throw new Error("retryOnD1Contention exhausted attempts");
+}
+
 /**
  * Standardized error handler for API and Action routes.
  * Ensures consistent error responses and logging.

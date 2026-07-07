@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getUserSettings } from "../../auth.server";
 import {
 	addSupplyItem,
 	completeSupplyList,
@@ -9,6 +10,7 @@ import {
 	getSupplyListById,
 	updateSupplyItem,
 } from "../../supply.server";
+import { resolveUnitDisplayMode } from "../../unit-display-mode";
 import { err, ok } from "../envelope";
 import { type McpToolsEnv, makeTool, registerMcpTool } from "../tool-runtime";
 
@@ -263,10 +265,13 @@ export function registerSupplyTools(server: McpServer, env: McpToolsEnv): void {
 							"Could not locate supply list.",
 						);
 					}
+					const userSettings = await getUserSettings(env.DB, ctx.userId);
+					const unitDisplayMode = resolveUnitDisplayMode(userSettings);
 					const result = await completeSupplyList(
 						env,
 						ctx.organizationId,
 						list.id,
+						{ unitMode: unitDisplayMode },
 					);
 					return ok("complete_supply_list", result);
 				},

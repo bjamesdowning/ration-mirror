@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CapacityExceededError, getEffectiveTier } from "~/lib/capacity.server";
 import { handleApiError, isD1ContentionError } from "~/lib/error-handler";
 
@@ -85,6 +85,32 @@ describe("isD1ContentionError", () => {
 		).toBe(false);
 		expect(isD1ContentionError(new Error("fetch failed"))).toBe(false);
 		expect(isD1ContentionError(new Error("404 not found"))).toBe(false);
+	});
+});
+
+describe("retryOnD1Contention", () => {
+	it("returns the result on first success", async () => {
+		const { retryOnD1Contention } = await import("~/lib/error-handler");
+		const fn = vi.fn().mockResolvedValue("ok");
+		await expect(retryOnD1Contention(fn)).resolves.toBe("ok");
+		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("retries transient D1 errors then succeeds", async () => {
+		const { retryOnD1Contention } = await import("~/lib/error-handler");
+		const fn = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("SQLITE_BUSY: database is busy"))
+			.mockResolvedValue("ok");
+		await expect(retryOnD1Contention(fn, { delayMs: 0 })).resolves.toBe("ok");
+		expect(fn).toHaveBeenCalledTimes(2);
+	});
+
+	it("rethrows non-contention errors immediately", async () => {
+		const { retryOnD1Contention } = await import("~/lib/error-handler");
+		const fn = vi.fn().mockRejectedValue(new Error("validation failed"));
+		await expect(retryOnD1Contention(fn)).rejects.toThrow("validation failed");
+		expect(fn).toHaveBeenCalledTimes(1);
 	});
 });
 

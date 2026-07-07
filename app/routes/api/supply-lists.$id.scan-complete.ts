@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { requireActiveGroup } from "~/lib/auth.server";
+import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
@@ -9,6 +9,7 @@ import {
 	SupplyScanError,
 	validateSupplyOnlyIds,
 } from "~/lib/supply-scan.server";
+import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/supply-lists.$id.scan-complete";
 
 /**
@@ -55,11 +56,18 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			parsed.data.supplyOnlyIds,
 		);
 
+		const userSettings = await getUserSettings(
+			context.cloudflare.env.DB,
+			user.id,
+		);
+		const unitDisplayMode = resolveUnitDisplayMode(userSettings);
+
 		return await completeSupplyScan(
 			context.cloudflare.env,
 			groupId,
 			listId,
 			parsed.data,
+			{ unitMode: unitDisplayMode },
 		);
 	} catch (e) {
 		if (e instanceof SupplyScanError) {

@@ -220,11 +220,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 				return { error: "Invalid or missing list ID" };
 			}
 			const { listId } = parsed.data;
+			const userSettings = await getUserSettings(
+				context.cloudflare.env.DB,
+				userId,
+			);
+			const unitDisplayMode = resolveUnitDisplayMode(userSettings);
 
 			const result = await completeSupplyList(
 				context.cloudflare.env,
 				groupId,
 				listId,
+				{ unitMode: unitDisplayMode },
 			);
 			return { success: true, docked: result.docked };
 		}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
 	humanizeSupplyOrigins,
+	isManualOnlySupplyItem,
 	mergeSupplyOrigins,
 	normalizeSupplyOrigins,
 	SUPPLY_ORIGIN_ORDER,
+	shouldClearUnpurchasedSupplyItemOnSync,
 } from "../supply-item-origins";
 
 describe("supply-item-origins", () => {
@@ -36,5 +38,57 @@ describe("supply-item-origins", () => {
 			"cargo",
 			"manual",
 		]);
+	});
+
+	it("isManualOnlySupplyItem accepts unpurchased quick-add rows", () => {
+		expect(
+			isManualOnlySupplyItem({
+				sourceMealId: null,
+				sourceCargoId: null,
+				sourceMealIds: [],
+				sourceOrigins: ["manual"],
+			}),
+		).toBe(true);
+	});
+
+	it("isManualOnlySupplyItem rejects auto-sourced rows without FK ids", () => {
+		expect(
+			isManualOnlySupplyItem({
+				sourceMealId: null,
+				sourceCargoId: null,
+				sourceMealIds: [],
+				sourceOrigins: ["manifest"],
+			}),
+		).toBe(false);
+		expect(
+			isManualOnlySupplyItem({
+				sourceMealId: null,
+				sourceCargoId: null,
+				sourceMealIds: ["meal-1"],
+				sourceOrigins: [],
+			}),
+		).toBe(false);
+	});
+
+	it("shouldClearUnpurchasedSupplyItemOnSync clears auto rows and keeps manual or purchased", () => {
+		expect(
+			shouldClearUnpurchasedSupplyItemOnSync({
+				isPurchased: false,
+				sourceOrigins: ["cargo"],
+			}),
+		).toBe(true);
+		expect(
+			shouldClearUnpurchasedSupplyItemOnSync({
+				isPurchased: false,
+				sourceOrigins: ["manual"],
+			}),
+		).toBe(false);
+		expect(
+			shouldClearUnpurchasedSupplyItemOnSync({
+				isPurchased: true,
+				sourceOrigins: ["manifest"],
+				sourceMealId: "meal-1",
+			}),
+		).toBe(false);
 	});
 });

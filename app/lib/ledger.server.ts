@@ -281,6 +281,62 @@ export async function withCreditGate<T>(
 	}
 }
 
+/**
+ * Refund credits when an async AI queue job fails after enqueue-time deduction.
+ * Mirrors withCreditGate refund semantics; safe to call once per handled failure.
+ */
+export async function refundAiJobCredits(
+	env: Env,
+	options: {
+		requestId: string;
+		organizationId: string;
+		userId: string;
+		cost: number;
+		reason: string;
+	},
+): Promise<void> {
+	const { requestId, organizationId, userId, cost, reason } = options;
+	if (cost <= 0) {
+		return;
+	}
+
+	try {
+		await addCredits(env, organizationId, userId, cost, `Refund: ${reason}`, {
+			idempotencyKey: `ai-refund:${requestId}`,
+		});
+	} catch (refundError) {
+		log.critical("Credit refund failed", refundError, {
+			organizationId,
+			amount: cost,
+			reason,
+		});
+	}
+}
+
+/**
+ * Write a failed queue job result and refund enqueue-time credits.
+ */
+export async function failAiJobWithRefund(
+	env: Env,
+	options: {
+		requestId: string;
+		organizationId: string;
+		userId: string;
+		cost: number;
+		reason: string;
+		writeStatus: () => Promise<void>;
+	},
+): Promise<void> {
+	await options.writeStatus();
+	await refundAiJobCredits(env, {
+		requestId: options.requestId,
+		organizationId: options.organizationId,
+		userId: options.userId,
+		cost: options.cost,
+		reason: options.reason,
+	});
+}
+
 export async function processCheckoutSession(
 	env: Env,
 	sessionId: string,

@@ -6,9 +6,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
-import { extractModelText } from "~/lib/ai.server";
-import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
+import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { parseAllergens } from "~/lib/allergens";
+import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { getMealsForPicker } from "~/lib/manifest.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
@@ -40,14 +40,38 @@ export interface PlanWeekJobResult {
 	error?: string;
 }
 
+const PLAN_WEEK_CREDIT_REASON = "Weekly Meal Plan";
+
+const PLAN_WEEK_GATEWAY_MESSAGES = {
+	timeout: "Meal planning took too long. Try again.",
+	rateLimited:
+		"Meal planning is temporarily unavailable. Please try again later.",
+	blocked: "Meal planning could not be completed due to content restrictions.",
+	configMissing: "Meal planning configuration missing",
+	error: "Meal planning failed",
+} as const;
+
 export async function runPlanWeekConsumerJob(
 	env: Env,
 	message: PlanWeekQueueMessage,
 ): Promise<void> {
-	const { requestId, planId, organizationId, userId, config } = message;
+	const { requestId, planId, organizationId, userId, config, cost } = message;
 
-	const writeStatus = async (result: PlanWeekJobResult) => {
-		await updateQueueJobResult(env.DB, requestId, result.status, result);
+	const failJob = async (error: string) => {
+		await failAiJobWithRefund(env, {
+			requestId,
+			organizationId,
+			userId,
+			cost,
+			reason: PLAN_WEEK_CREDIT_REASON,
+			writeStatus: async () => {
+				await updateQueueJobResult(env.DB, requestId, "failed", {
+					status: "failed",
+					organizationId,
+					error,
+				});
+			},
+		});
 	};
 
 	try {
@@ -68,11 +92,7 @@ export async function runPlanWeekConsumerJob(
 			.limit(1);
 
 		if (!planRow) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Meal plan not found",
-			});
+			await failJob("Meal plan not found");
 			return;
 		}
 
@@ -91,12 +111,9 @@ export async function runPlanWeekConsumerJob(
 		);
 
 		if (allMeals.length === 0) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error:
-					"No meals in your Galley. Add some recipes before planning your week.",
-			});
+			await failJob(
+				"No meals in your Galley. Add some recipes before planning your week.",
+			);
 			return;
 		}
 
@@ -117,16 +134,6 @@ export async function runPlanWeekConsumerJob(
 
 		const validMealIds = new Set(mealsForPrompt.map((m) => m.id));
 
-		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
-		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Meal planning configuration missing",
-			});
-			return;
-		}
-
 		const { systemPrompt, userPrompt } = buildWeekPlanPrompt({
 			meals: mealsForPrompt.map(toPromptMeal),
 			config,
@@ -134,53 +141,20 @@ export async function runPlanWeekConsumerJob(
 			userAllergens,
 		});
 
-		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
+		const gatewayResult = await callGemini(env, {
+			feature: "plan_week",
+			parts: [{ text: systemPrompt }, { text: userPrompt }],
+			metadata: { organizationId, userId },
+		});
 
-		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
-				},
-				body: JSON.stringify({
-					contents: [
-						{
-							parts: [{ text: systemPrompt }, { text: userPrompt }],
-						},
-					],
-					...getGenerationConfig("MEDIUM"),
-				}),
-			},
-		);
-
-		if (!response.ok) {
-			await response.text();
-			const isTimeout =
-				response.status === 408 ||
-				response.status === 504 ||
-				response.status === 524;
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: isTimeout
-					? "Meal planning took too long. Try again."
-					: "Meal planning failed",
-			});
+		if (!gatewayResult.ok) {
+			await failJob(
+				gatewayFailureMessage(gatewayResult.reason, PLAN_WEEK_GATEWAY_MESSAGES),
+			);
 			return;
 		}
 
-		const payload = (await response.json()) as unknown;
-		const modelText = extractModelText(payload);
-		if (!modelText) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Meal planning failed",
-			});
-			return;
-		}
+		const modelText = gatewayResult.text;
 
 		let aiResponse: {
 			schedule: Array<{
@@ -203,11 +177,7 @@ export async function runPlanWeekConsumerJob(
 			aiResponse = parseResult.data;
 		} catch (e) {
 			log.error("Failed to parse AI week plan response", e);
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "AI planning failed due to a formatting error. Try again.",
-			});
+			await failJob("AI planning failed due to a formatting error. Try again.");
 			return;
 		}
 
@@ -222,12 +192,9 @@ export async function runPlanWeekConsumerJob(
 		});
 
 		if (schedule.length === 0) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error:
-					"Could not generate a valid schedule from your meal library. Try adjusting your preferences.",
-			});
+			await failJob(
+				"Could not generate a valid schedule from your meal library. Try adjusting your preferences.",
+			);
 			return;
 		}
 
@@ -249,17 +216,13 @@ export async function runPlanWeekConsumerJob(
 			mealName: mealNameById.get(entry.mealId) ?? "Unknown Meal",
 		}));
 
-		await writeStatus({
+		await updateQueueJobResult(env.DB, requestId, "completed", {
 			status: "completed",
 			organizationId,
 			schedule: enrichedSchedule,
 		});
 	} catch (err) {
 		log.error("Plan week consumer job failed", err);
-		await writeStatus({
-			status: "failed",
-			organizationId,
-			error: err instanceof Error ? err.message : "Meal planning failed",
-		});
+		await failJob(err instanceof Error ? err.message : "Meal planning failed");
 	}
 }

@@ -5,10 +5,10 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo } from "~/db/schema";
-import { extractModelText } from "~/lib/ai.server";
-import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
+import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
 import { getUserSettings } from "~/lib/auth.server";
+import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
@@ -38,14 +38,39 @@ export interface MealGenerateJobResult {
 	error?: string;
 }
 
+const MEAL_GENERATE_CREDIT_REASON = "Meal Generation";
+
+const MEAL_GENERATE_GATEWAY_MESSAGES = {
+	timeout: "Meal generation took too long. Try again.",
+	rateLimited:
+		"Meal generation is temporarily unavailable. Please try again later.",
+	blocked:
+		"Meal generation could not be completed due to content restrictions.",
+	configMissing: "Meal generation configuration missing",
+	error: "Meal generation failed",
+} as const;
+
 export async function runMealGenerateConsumerJob(
 	env: Env,
 	message: MealGenerateQueueMessage,
 ): Promise<void> {
-	const { requestId, organizationId, userId, customization } = message;
+	const { requestId, organizationId, userId, customization, cost } = message;
 
-	const writeStatus = async (result: MealGenerateJobResult) => {
-		await updateQueueJobResult(env.DB, requestId, result.status, result);
+	const failJob = async (error: string) => {
+		await failAiJobWithRefund(env, {
+			requestId,
+			organizationId,
+			userId,
+			cost,
+			reason: MEAL_GENERATE_CREDIT_REASON,
+			writeStatus: async () => {
+				await updateQueueJobResult(env.DB, requestId, "failed", {
+					status: "failed",
+					organizationId,
+					error,
+				});
+			},
+		});
 	};
 
 	try {
@@ -67,11 +92,7 @@ export async function runMealGenerateConsumerJob(
 		const userAllergens = parseAllergens(userSettings.allergens);
 
 		if (pantryItems.length === 0) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Pantry is empty. Add items before generating meals.",
-			});
+			await failJob("Pantry is empty. Add items before generating meals.");
 			return;
 		}
 
@@ -137,62 +158,23 @@ ${customization}
 </preference>`;
 		}
 
-		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
-		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Meal generation configuration missing",
-			});
+		const gatewayResult = await callGemini(env, {
+			feature: "meal_generate",
+			parts: [{ text: systemPrompt }, { text: userPrompt }],
+			metadata: { organizationId, userId },
+		});
+
+		if (!gatewayResult.ok) {
+			await failJob(
+				gatewayFailureMessage(
+					gatewayResult.reason,
+					MEAL_GENERATE_GATEWAY_MESSAGES,
+				),
+			);
 			return;
 		}
 
-		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
-
-		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
-				},
-				body: JSON.stringify({
-					contents: [
-						{
-							parts: [{ text: systemPrompt }, { text: userPrompt }],
-						},
-					],
-					...getGenerationConfig("MEDIUM"),
-				}),
-			},
-		);
-
-		if (!response.ok) {
-			await response.text();
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error:
-					response.status === 408 ||
-					response.status === 504 ||
-					response.status === 524
-						? "Meal generation took too long. Try again."
-						: "Meal generation failed",
-			});
-			return;
-		}
-
-		const payload = (await response.json()) as unknown;
-		const modelText = extractModelText(payload);
-		if (!modelText) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Meal generation failed",
-			});
-			return;
-		}
+		const modelText = gatewayResult.text;
 
 		let recipes: AIResponse["recipes"] = [];
 		try {
@@ -209,11 +191,7 @@ ${customization}
 			recipes = parsedResult.data.recipes;
 		} catch (e) {
 			log.error("Failed to parse AI meal response", e);
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "AI generation failed due to formatting error.",
-			});
+			await failJob("AI generation failed due to formatting error.");
 			return;
 		}
 
@@ -297,12 +275,9 @@ ${customization}
 			.filter((r) => r.missingIngredients.length === 0);
 
 		if (verifiedRecipes.length === 0) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error:
-					"Could not generate recipes using only your current inventory. Try adding more items to your Cargo.",
-			});
+			await failJob(
+				"Could not generate recipes using only your current inventory. Try adding more items to your Cargo.",
+			);
 			return;
 		}
 
@@ -323,18 +298,16 @@ ${customization}
 			}),
 		);
 
-		await writeStatus({
+		await updateQueueJobResult(env.DB, requestId, "completed", {
 			status: "completed",
 			organizationId,
 			recipes: recipesForStatus,
 		});
 	} catch (err) {
 		log.error("Meal generate consumer job failed", err);
-		await writeStatus({
-			status: "failed",
-			organizationId,
-			error: err instanceof Error ? err.message : "Meal generation failed",
-		});
+		await failJob(
+			err instanceof Error ? err.message : "Meal generation failed",
+		);
 		// Do not rethrow — status is stored; user can retry manually
 	}
 }

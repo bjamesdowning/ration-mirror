@@ -1,6 +1,9 @@
 declare namespace Cloudflare {
 	interface Env {
 		CF_AIG_TOKEN: string;
+		AI_GATEWAY_ACCOUNT_ID: string;
+		AI_GATEWAY_ID: string;
+		RATION_ENV?: string;
 		/** Browser Rendering API token (optional); when absent, recipe import falls back to plain fetch */
 		CF_BROWSER_RENDERING_TOKEN?: string;
 		// Secrets (set via wrangler secret put; not in wrangler.jsonc)

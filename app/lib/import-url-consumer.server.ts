@@ -7,12 +7,12 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal } from "~/db/schema";
-import { extractModelText } from "~/lib/ai.server";
-import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
+import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import {
 	fetchPageAsMarkdown,
 	MIN_CONTENT_LENGTH,
 } from "~/lib/browser-rendering.server";
+import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
 import { isBlockedImportUrl } from "~/lib/recipe-import-submit.server";
@@ -48,6 +48,17 @@ const MAX_HTML_CHARS = 15_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const USER_AGENT =
 	"RationRecipeImport/1.0 (https://ration.mayutic.com; pantry recipe importer)";
+
+const IMPORT_URL_CREDIT_REASON = "Import URL";
+
+const IMPORT_URL_GATEWAY_MESSAGES = {
+	timeout: "Import took too long. Try again.",
+	rateLimited:
+		"Recipe import is temporarily unavailable. Please try again later.",
+	blocked: "This page could not be processed due to content restrictions.",
+	configMissing: "Import configuration missing",
+	error: "Import processing failed",
+} as const;
 
 export interface ImportUrlQueueMessage {
 	requestId: string;
@@ -260,52 +271,28 @@ async function fetchPageContentForImport(
 async function runRecipeExtractionAIForImport(
 	env: Env,
 	pageContent: string,
+	metadata: { organizationId: string; userId: string },
 ): Promise<
 	| { ok: true; result: RecipeImportAIResponse }
 	| { ok: false; error: string; code?: string }
 > {
-	const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
-	if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-		return { ok: false, error: "Import configuration missing" };
-	}
+	const gatewayResult = await callGemini(env, {
+		feature: "import_url",
+		parts: [{ text: SYSTEM_PROMPT }, { text: pageContent }],
+		metadata,
+	});
 
-	const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
-	const response = await fetch(
-		`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
-		{
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
-			},
-			body: JSON.stringify({
-				contents: [
-					{
-						parts: [{ text: SYSTEM_PROMPT }, { text: pageContent }],
-					},
-				],
-				...getGenerationConfig("LOW"),
-			}),
-		},
-	);
-
-	if (!response.ok) {
+	if (!gatewayResult.ok) {
 		return {
 			ok: false,
-			error:
-				response.status === 408 ||
-				response.status === 504 ||
-				response.status === 524
-					? "Import took too long. Try again."
-					: "Import processing failed",
+			error: gatewayFailureMessage(
+				gatewayResult.reason,
+				IMPORT_URL_GATEWAY_MESSAGES,
+			),
 		};
 	}
 
-	const payload = (await response.json()) as unknown;
-	const modelText = extractModelText(payload);
-	if (!modelText) {
-		return { ok: false, error: "Import processing failed" };
-	}
+	const modelText = gatewayResult.text;
 
 	let aiResult: unknown;
 	try {
@@ -348,28 +335,33 @@ export async function runImportUrlConsumerJob(
 	env: Env,
 	message: ImportUrlQueueMessage,
 ): Promise<void> {
-	const { requestId, organizationId, url } = message;
+	const { requestId, organizationId, userId, url, cost } = message;
 
 	const writeResult = async (result: ImportUrlJobResult) => {
 		await updateQueueJobResult(env.DB, requestId, result.status, result);
 	};
 
-	try {
-		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
-		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-			await writeResult({
-				status: "failed",
-				success: false,
-				error: "Import configuration missing",
-			});
-			return;
-		}
+	const failJob = async (result: Omit<ImportUrlJobResult, "status">) => {
+		await failAiJobWithRefund(env, {
+			requestId,
+			organizationId,
+			userId,
+			cost,
+			reason: IMPORT_URL_CREDIT_REASON,
+			writeStatus: async () => {
+				await writeResult({
+					status: "failed",
+					success: false,
+					...result,
+				});
+			},
+		});
+	};
 
+	try {
 		const fetchResult = await fetchPageContentForImport(url, env);
 		if (!fetchResult.ok) {
-			await writeResult({
-				status: "failed",
-				success: false,
+			await failJob({
 				error: fetchResult.error,
 				code: fetchResult.code,
 			});
@@ -377,7 +369,10 @@ export async function runImportUrlConsumerJob(
 		}
 
 		const { content: pageContent, source } = fetchResult;
-		let aiResult = await runRecipeExtractionAIForImport(env, pageContent);
+		let aiResult = await runRecipeExtractionAIForImport(env, pageContent, {
+			organizationId,
+			userId,
+		});
 
 		// NOT_A_RECIPE retry with Browser Rendering when plain fetch gave non-recipe
 		if (
@@ -394,7 +389,11 @@ export async function runImportUrlConsumerJob(
 				const markdown = await fetchPageAsMarkdown(url, env);
 				if (markdown.length >= MIN_CONTENT_LENGTH) {
 					const brContent = `<page_content>\n${markdown}\n</page_content>`;
-					const brResult = await runRecipeExtractionAIForImport(env, brContent);
+					const brResult = await runRecipeExtractionAIForImport(
+						env,
+						brContent,
+						{ organizationId, userId },
+					);
 					if (brResult.ok && brResult.result.status === "ok") {
 						aiResult = brResult;
 					}
@@ -405,9 +404,7 @@ export async function runImportUrlConsumerJob(
 		}
 
 		if (!aiResult.ok) {
-			await writeResult({
-				status: "failed",
-				success: false,
+			await failJob({
 				error: aiResult.error,
 				code: aiResult.code,
 			});
@@ -416,9 +413,7 @@ export async function runImportUrlConsumerJob(
 
 		const result = aiResult.result;
 		if (result.status === "error") {
-			await writeResult({
-				status: "failed",
-				success: false,
+			await failJob({
 				code: result.code,
 				error: result.message,
 			});
@@ -490,9 +485,7 @@ export async function runImportUrlConsumerJob(
 		});
 	} catch (err) {
 		log.error("Import URL consumer job failed", err);
-		await writeResult({
-			status: "failed",
-			success: false,
+		await failJob({
 			error: err instanceof Error ? err.message : "Import failed",
 		});
 	}

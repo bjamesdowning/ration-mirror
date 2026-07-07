@@ -6,6 +6,19 @@ vi.mock("~/lib/queue-job.server", () => ({
 	updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
 }));
 
+vi.mock("~/lib/ledger.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../ledger.server")>();
+	return {
+		...actual,
+		failAiJobWithRefund: async (
+			_env: Cloudflare.Env,
+			options: { writeStatus: () => Promise<void> },
+		) => {
+			await options.writeStatus();
+		},
+	};
+});
+
 const baseEnv = {
 	DB: {},
 	AI_GATEWAY_ACCOUNT_ID: "acct",

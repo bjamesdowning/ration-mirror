@@ -215,7 +215,26 @@ Configure each path as its own Fin Data Connector action. Never expose the conne
 
 **Operations note:** If you rotate `INTERCOM_MESSENGER_JWT_SECRET`, redeploy/restart the environment before validating new JWT traffic.
 
-**Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, and configurable retry/fallback — all from the Cloudflare dashboard with zero code changes. It also means the Google API key never needs to be rotated into application secrets; only the gateway ID is referenced.
+**Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, guardrails, spend limits, retries/timeouts, model fallback, and unified billing — configurable from the Cloudflare dashboard and via per-request `cf-aig-*` headers. All four AI consumers (`scan`, `meal_generate`, `plan_week`, `import_url`) route through a centralized client ([`app/lib/ai-gateway.server.ts`](app/lib/ai-gateway.server.ts)) that applies feature-specific timeouts, retries, caching policy, and observability metadata. The Google API key stays on the gateway; Workers authenticate with `CF_AIG_TOKEN` only.
+
+**AI Gateway configuration (dashboard — manual):** Roll out in monitor-first order on the `ration-gateway` instance:
+
+1. **Guardrails** — enable on prompts + responses; start with content **flagged, not blocked**. Review analytics for false positives on food scans and recipe URLs before switching categories to block.
+2. **Spend limits** — set generously above normal usage as a backstop behind app credits + KV rate limits. Scope by `cf-aig-metadata` dimensions (`userId`, `feature`, `organizationId`). Trips return HTTP 429.
+3. **Model fallback (Dynamic Routing)** — primary `gemini-3.5-flash` with a **Gemini-family** fallback that supports vision (for scan). Non-Gemini fallbacks require response-format changes and are out of scope.
+4. **Analytics** — use metadata-tagged logs for per-feature/per-user cost visibility.
+
+**Per-request control-plane headers** (set in code via [`GATEWAY_FEATURE_CONFIG`](app/lib/ai-config.server.ts)):
+
+| Header | Purpose |
+|--------|---------|
+| `cf-aig-request-timeout` | Per-feature timeout (ms); scan uses the longest window |
+| `cf-aig-max-attempts` / `cf-aig-retry-delay` / `cf-aig-backoff` | Automatic retries on transient provider errors |
+| `cf-aig-skip-cache` | Scan, meal-generate, plan-week — always skip (live pantry/config state) |
+| `cf-aig-cache-ttl` | Import-url only — 1 hour cache for repeated recipe domains |
+| `cf-aig-metadata` | `{ organizationId, userId, feature, env }` for analytics and spend-limit scoping |
+
+**Async credit refunds:** Credits are deducted at enqueue time via `withCreditGate`. If the queue consumer fails (AI timeout, guardrail block, parse error, etc.), `failAiJobWithRefund` returns credits automatically. Web and iOS share the same queue consumers and status payloads — no client changes required.
 
 **Why Smart Placement?** Without it, a Worker isolate spun up at a PoP near the user (e.g. Tokyo) would make every D1 read across the Atlantic to the D1 primary (~100ms per query). Smart Placement relocates the isolate to the PoP closest to D1, reducing per-query latency to ~5ms at the cost of slightly higher initial connection time.
 
@@ -327,10 +346,11 @@ sequenceDiagram
 
 **PDF receipts**: When a PDF is uploaded the consumer selects a receipt-specific prompt optimised for parsing grocery receipt line items (item name, weight/count columns, brand-name stripping). The metadata `source` field is set to `"pdf"` to distinguish PDF scans from image scans.
 
-**AI Gateway routing:**
+**AI Gateway routing** (via [`callGemini`](app/lib/ai-gateway.server.ts)):
 ```
 https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/google-ai-studio
   → /v1beta/models/gemini-3.5-flash:generateContent
+  + cf-aig-* headers (timeout, retries, cache, metadata)
 ```
 
 ---
@@ -1463,7 +1483,7 @@ flowchart TB
 | **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec per namespace; 60s eventual consistency on reads. | Rate limit windows use TTL-expiring keys (self-cleaning). Fails open on KV errors. |
 | **Workers AI** | Metered per token, Workers-native. | Embedding throughput (100 texts per batch). | KV embedding cache eliminates repeat calls. Batch embedding for all ingredients in a single AI call. |
 | **Vectorize** | Distributed ANN index. Namespaced per org. | Parallel query concurrency limits. | All ingredient names for a single resolution are batched into one `findSimilarCargoBatch` call with `Promise.all` per name. |
-| **AI Gateway** | Managed proxy with queuing, retry, caching. | Upstream Google AI Studio rate limits. | Credit system prevents unbounded usage. Per-user rate limits on all AI endpoints. Automatic refunds on failure. |
+| **AI Gateway** | Managed proxy with queuing, retry, caching, guardrails, spend limits. | Upstream Google AI Studio rate limits. | Centralized `callGemini` client with per-feature `cf-aig-*` headers. Credit system + KV rate limits. Async consumer failures refund credits via `failAiJobWithRefund`. |
 | **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
 | **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
 

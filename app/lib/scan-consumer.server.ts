@@ -2,9 +2,9 @@
  * Scan queue consumer logic.
  * Runs AI vision on an image from R2, parses results, stores status in D1 for polling.
  */
-import { extractModelText } from "~/lib/ai.server";
-import { AI_MODEL, getGenerationConfig } from "~/lib/ai-config.server";
+import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
+import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
 import {
@@ -122,24 +122,52 @@ export interface ScanJobResult {
 	error?: string;
 }
 
+const SCAN_CREDIT_REASON = "Visual Scan";
+
+const SCAN_GATEWAY_MESSAGES = {
+	timeout: "The image took too long to process.",
+	rateLimited:
+		"Scan service is temporarily unavailable. Please try again later.",
+	blocked: "This image could not be processed due to content restrictions.",
+	configMissing: "Scan configuration missing",
+	error: "Scan processing failed",
+} as const;
+
 export async function runScanConsumerJob(
 	env: Env,
 	message: ScanQueueMessage,
 ): Promise<void> {
-	const { requestId, organizationId, imageKey, mimeType, filename } = message;
+	const {
+		requestId,
+		organizationId,
+		userId,
+		imageKey,
+		mimeType,
+		filename,
+		cost,
+	} = message;
 
-	const writeStatus = async (result: ScanJobResult) => {
-		await updateQueueJobResult(env.DB, requestId, result.status, result);
+	const failJob = async (error: string) => {
+		await failAiJobWithRefund(env, {
+			requestId,
+			organizationId,
+			userId,
+			cost,
+			reason: SCAN_CREDIT_REASON,
+			writeStatus: async () => {
+				await updateQueueJobResult(env.DB, requestId, "failed", {
+					status: "failed",
+					organizationId,
+					error,
+				});
+			},
+		});
 	};
 
 	try {
 		const imageObj = await env.STORAGE.get(imageKey);
 		if (!imageObj) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Image not found in storage",
-			});
+			await failJob("Image not found in storage");
 			return;
 		}
 
@@ -152,79 +180,34 @@ export async function runScanConsumerJob(
 		}
 		const base64Image = btoa(binary);
 
-		const { AI_GATEWAY_ACCOUNT_ID, AI_GATEWAY_ID, CF_AIG_TOKEN } = env;
-		if (!AI_GATEWAY_ACCOUNT_ID || !AI_GATEWAY_ID || !CF_AIG_TOKEN) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Scan configuration missing",
-			});
-			return;
-		}
-
-		const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${AI_GATEWAY_ACCOUNT_ID}/${AI_GATEWAY_ID}/google-ai-studio`;
 		const todayIso = new Date().toISOString().slice(0, 10);
 		const isPdf = mimeType === "application/pdf";
 		const prompt = isPdf
 			? buildReceiptPdfPrompt(todayIso)
 			: buildScanPrompt(todayIso);
 
-		const response = await fetch(
-			`${gatewayUrl}/v1beta/models/${AI_MODEL}:generateContent`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"cf-aig-authorization": `Bearer ${CF_AIG_TOKEN}`,
+		const gatewayResult = await callGemini(env, {
+			feature: "scan",
+			parts: [
+				{
+					inlineData: {
+						mimeType,
+						data: base64Image,
+					},
 				},
-				body: JSON.stringify({
-					contents: [
-						{
-							parts: [
-								{
-									inlineData: {
-										mimeType,
-										data: base64Image,
-									},
-								},
-								{ text: prompt },
-							],
-						},
-					],
-					...getGenerationConfig("HIGH"),
-				}),
-			},
-		);
+				{ text: prompt },
+			],
+			metadata: { organizationId, userId },
+		});
 
-		if (!response.ok) {
-			await response.text();
-			const status =
-				response.status === 408 ||
-				response.status === 504 ||
-				response.status === 524
-					? 422
-					: 500;
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error:
-					status === 422
-						? "The image took too long to process."
-						: "Scan processing failed",
-			});
+		if (!gatewayResult.ok) {
+			await failJob(
+				gatewayFailureMessage(gatewayResult.reason, SCAN_GATEWAY_MESSAGES),
+			);
 			return;
 		}
 
-		const payload = (await response.json()) as unknown;
-		const modelText = extractModelText(payload);
-		if (!modelText) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Scan processing failed",
-			});
-			return;
-		}
+		const modelText = gatewayResult.text;
 
 		const cleanedText = modelText
 			.replace(/^```(?:json)?\s*\n?/i, "")
@@ -233,11 +216,7 @@ export async function runScanConsumerJob(
 		const parsedJson = JSON.parse(cleanedText);
 		const parsedResult = ScanAIResponseSchema.safeParse(parsedJson);
 		if (!parsedResult.success) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Scan processing failed",
-			});
+			await failJob("Scan processing failed");
 			return;
 		}
 
@@ -290,17 +269,13 @@ export async function runScanConsumerJob(
 
 		const validatedScan = ScanResultSchema.safeParse(scanResultCandidate);
 		if (!validatedScan.success) {
-			await writeStatus({
-				status: "failed",
-				organizationId,
-				error: "Scan processing failed",
-			});
+			await failJob("Scan processing failed");
 			return;
 		}
 
 		const existingInventory = await fetchOrgCargoIndex(env.DB, organizationId);
 
-		await writeStatus({
+		await updateQueueJobResult(env.DB, requestId, "completed", {
 			status: "completed",
 			organizationId,
 			items: validatedScan.data.items,
@@ -313,14 +288,23 @@ export async function runScanConsumerJob(
 			metadata: validatedScan.data.metadata,
 		});
 
-		await env.STORAGE.delete(imageKey);
+		try {
+			await env.STORAGE.delete(imageKey);
+		} catch (cleanupError) {
+			log.warn("Scan image cleanup failed", {
+				requestId,
+				organizationId,
+				error:
+					cleanupError instanceof Error
+						? cleanupError.message
+						: "Unknown cleanup error",
+			});
+		}
 	} catch (err) {
 		log.error("Scan consumer job failed", err);
-		await writeStatus({
-			status: "failed",
-			organizationId,
-			error: err instanceof Error ? err.message : "Scan processing failed",
-		});
+		await failJob(
+			err instanceof Error ? err.message : "Scan processing failed",
+		);
 		// Do not rethrow — status is stored; user can retry manually
 	}
 }

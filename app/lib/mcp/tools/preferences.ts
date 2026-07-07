@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { ALLERGEN_SLUGS, type AllergenSlug } from "../../allergens";
 import { getUserSettings, patchUserSettings } from "../../auth.server";
 import { err, ok } from "../envelope";
 import { type McpToolsEnv, makeTool, registerMcpTool } from "../tool-runtime";
@@ -31,12 +32,12 @@ export function registerPreferencesTools(
 		"update_user_preferences",
 		"Patch the calling user's settings (allergens, expirationAlertDays, theme, manifestSettings). Only provided fields are updated.",
 		{
-			allergens: z.array(z.string()).optional(),
+			allergens: z.array(z.enum(ALLERGEN_SLUGS)).optional(),
 			expirationAlertDays: z.number().int().min(0).max(365).optional(),
 			theme: z.enum(["light", "dark"]).optional(),
 		},
 		async (args: {
-			allergens?: string[];
+			allergens?: AllergenSlug[];
 			expirationAlertDays?: number;
 			theme?: "light" | "dark";
 		}) =>
@@ -46,7 +47,6 @@ export function registerPreferencesTools(
 				rateLimitCategory: "mcp_write",
 				audit: true,
 				handler: async (ctx, a: typeof args) => {
-					// We trust types but cast allergens for compatibility with AllergenSlug.
 					const patch: Record<string, unknown> = {};
 					if (a.allergens !== undefined) patch.allergens = a.allergens;
 					if (a.expirationAlertDays !== undefined)

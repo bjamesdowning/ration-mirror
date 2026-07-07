@@ -1,21 +1,29 @@
 import AuthenticationServices
 import CryptoKit
+import Security
 import UIKit
 
 enum AppleSignInNonce {
-    /// RFC 7636-style random nonce for Sign in with Apple (base64url).
+    /// RFC 7636-style random nonce for Sign in with Apple (base64url charset).
+    ///
+    /// Entropy is drawn from `SecRandomCopyBytes` (matching `PKCE.makeVerifier`)
+    /// rather than `UInt8.random`, with a fallback only if the CSPRNG is
+    /// unavailable. Bytes are rejection-sampled into the charset so the output
+    /// is exactly `length` characters.
     static func randomNonceString(length: Int = 32) -> String {
         precondition(length > 0)
-        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._")
         var result = ""
         result.reserveCapacity(length)
-        var remaining = length
-        while remaining > 0 {
-            let randoms = (0..<16).map { _ in UInt8.random(in: 0...255) }
-            for random in randoms where remaining > 0 {
+        while result.count < length {
+            var randoms = [UInt8](repeating: 0, count: 16)
+            let status = SecRandomCopyBytes(kSecRandomDefault, randoms.count, &randoms)
+            if status != errSecSuccess {
+                for i in randoms.indices { randoms[i] = UInt8.random(in: .min ... .max) }
+            }
+            for random in randoms where result.count < length {
                 if random < charset.count {
                     result.append(charset[Int(random)])
-                    remaining -= 1
                 }
             }
         }
@@ -101,13 +109,6 @@ extension AppleSignInCoordinator: ASAuthorizationControllerDelegate {
 
 extension AppleSignInCoordinator: ASAuthorizationControllerPresentationContextProviding {
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        if let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) {
-            return window
-        }
-        if let window = scenes.flatMap(\.windows).first {
-            return window
-        }
-        return ASPresentationAnchor()
+        PresentationAnchorProvider.keyWindow() ?? ASPresentationAnchor()
     }
 }

@@ -14,6 +14,11 @@ export async function sanitizeMcpHandlerResponse(
 		return response;
 	}
 
+	// Clone headers and drop Content-Length: the sanitized body differs in size
+	// from the original, so a stale Content-Length would corrupt the response.
+	const sanitizedHeaders = new Headers(response.headers);
+	sanitizedHeaders.delete("Content-Length");
+
 	const body = await response.text();
 	try {
 		const parsed = JSON.parse(body) as {
@@ -26,7 +31,7 @@ export async function sanitizeMcpHandlerResponse(
 			return new Response(JSON.stringify(parsed), {
 				status: response.status,
 				statusText: response.statusText,
-				headers: response.headers,
+				headers: sanitizedHeaders,
 			});
 		}
 	} catch {
@@ -42,7 +47,7 @@ export async function sanitizeMcpHandlerResponse(
 		{
 			status: response.status,
 			statusText: response.statusText,
-			headers: response.headers,
+			headers: sanitizedHeaders,
 		},
 	);
 }

@@ -14,7 +14,7 @@ enum GoogleSignInService {
 
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
 
-        guard let presenter = presentationAnchor() else {
+        guard let presenter = PresentationAnchorProvider.rootViewController() else {
             throw APIError.transport("No presentation anchor for Google Sign-In.")
         }
 
@@ -27,14 +27,5 @@ enum GoogleSignInService {
             )
         }
         return (idToken, result.user.accessToken.tokenString)
-    }
-
-    @MainActor
-    private static func presentationAnchor() -> UIViewController? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        if let root = scenes.flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController {
-            return root
-        }
-        return scenes.flatMap(\.windows).first?.rootViewController
     }
 }

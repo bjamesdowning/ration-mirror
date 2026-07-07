@@ -32,8 +32,8 @@ export class McpScopeError extends Error {
 }
 
 /**
- * Throws `McpScopeError` if the context does not satisfy any of the required
- * scopes. Legacy `mcp` scope satisfies any narrow scope.
+ * Throws `McpScopeError` unless the context satisfies ALL of the listed scopes
+ * (AND semantics). Legacy `mcp` scope satisfies any narrow scope.
  */
 export function requireScope(ctx: McpToolContext, needed: McpScope[]): void {
 	const hasLegacy = ctx.scopes.includes("mcp");

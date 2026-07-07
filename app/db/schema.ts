@@ -868,7 +868,6 @@ export const agentRegistrationRelations = relations(
 	}),
 );
 
-// Pre-launch interest signup (temporary — remove when no longer needed)
 export const mobileRefreshToken = sqliteTable(
 	"mobile_refresh_token",
 	{
@@ -895,6 +894,7 @@ export const mobileRefreshToken = sqliteTable(
 	],
 );
 
+// Pre-launch interest signup (temporary — remove when no longer needed)
 export const interestSignup = sqliteTable(
 	"interest_signup",
 	{

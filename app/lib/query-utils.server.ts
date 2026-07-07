@@ -9,10 +9,11 @@ const SQLITE_SAFE_VARIABLE_LIMIT = D1_MAX_BOUND_PARAMS;
 
 /**
  * Max meal_ingredient rows per INSERT.
- * Includes generated id from $defaultFn, so each row binds 8 params.
+ * Includes generated id from $defaultFn plus base_quantity/base_unit,
+ * so each row binds 10 params.
  */
 export const D1_MAX_INGREDIENT_ROWS_PER_STATEMENT = Math.floor(
-	D1_MAX_BOUND_PARAMS / 8,
+	D1_MAX_BOUND_PARAMS / 10,
 );
 
 /**

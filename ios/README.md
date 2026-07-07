@@ -86,7 +86,6 @@ Ration/
 
 - **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap pushes **Group Settings** (members, invite, create group, transfer credits, danger zone).
 - **Trailing:** `PageOptionsButton` (filters/options sheet) + `ProfileAvatarButton` (tap opens **Account Settings** sheet).
-- **Bottom:** `FloatingActionBar` — thumb-zone page actions above the tab bar.
 - **Org switch:** invalidates org-scoped snapshots and reloads all tabs via `orgGeneration`.
 
 ### Auth flow

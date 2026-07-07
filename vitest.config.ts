@@ -9,8 +9,15 @@ export default defineConfig({
 		include: ["app/**/*.test.ts", "app/**/*.test.tsx"],
 		setupFiles: ["app/test/helpers/setup.ts"],
 		testTimeout: 10000,
+		reporters: process.env.CI
+			? ["default", ["junit", { suiteName: "Ration unit" }]]
+			: ["default"],
+		outputFile: {
+			junit: "./reports/junit.xml",
+		},
 		coverage: {
 			provider: "v8",
+			reporter: ["text", "cobertura", "html"],
 			include: ["app/lib/**/*.ts"],
 			exclude: [
 				"app/lib/**/*.server.ts",

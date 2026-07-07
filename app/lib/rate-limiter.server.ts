@@ -251,6 +251,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 1,
 		keyPrefix: "rate:user_purge",
 	},
+	api_key_create: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 5, // minting credentials — keep tight
+		keyPrefix: "rate:api_key_create",
+	},
 	avatar_upload: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

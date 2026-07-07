@@ -13,7 +13,7 @@ import { AGENT_API_SCOPES, MCP_TOOL_GROUPS } from "../agent-readiness";
 import { ITEM_DOMAINS } from "../domain";
 import { getInventoryImportSchema } from "../inventory-import.server";
 import { SUPPORTED_UNITS } from "../units";
-import { APP_VERSION } from "../version";
+import { MCP_SERVER_VERSION } from "../version";
 import { formatMcpConnectPlainText } from "./connect-copy";
 import { MCP_SCOPES } from "./scopes";
 
@@ -113,7 +113,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 	sv.resource("ration_capabilities", "ration://capabilities", async () => ({
 		contents: [
 			jsonResource("ration://capabilities", {
-				version: APP_VERSION,
+				version: MCP_SERVER_VERSION,
 				scopes: {
 					api: AGENT_API_SCOPES,
 					mcp: MCP_SCOPES,

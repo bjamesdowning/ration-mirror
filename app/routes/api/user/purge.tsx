@@ -1,5 +1,7 @@
 import { data, redirect } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
+import { handleApiError, retryOnD1Contention } from "~/lib/error-handler";
+import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { purgeUserAccount } from "~/lib/user-purge.server";
 import type { Route } from "./+types/purge";
@@ -21,18 +23,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		await purgeUserAccount(context.cloudflare.env, {
-			userId,
-			email: user.email,
-		});
-	} catch (_error) {
-		throw data(
-			{
-				error:
-					"Account deletion failed. Please try again later or contact support.",
-			},
-			{ status: 500 },
+		await retryOnD1Contention(() =>
+			purgeUserAccount(context.cloudflare.env, {
+				userId,
+				email: user.email,
+			}),
 		);
+	} catch (error) {
+		log.error("[Purge] account deletion failed", {
+			userId: redactId(userId),
+			errorMessage: error instanceof Error ? error.message : String(error),
+		});
+		return handleApiError(error);
 	}
 
 	return redirect("/");

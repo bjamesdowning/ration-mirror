@@ -13,8 +13,8 @@ describe("constants", () => {
 		expect(D1_MAX_BOUND_PARAMS).toBe(100);
 	});
 
-	it("D1_MAX_INGREDIENT_ROWS_PER_STATEMENT is floor(100/8) = 12", () => {
-		expect(D1_MAX_INGREDIENT_ROWS_PER_STATEMENT).toBe(12);
+	it("D1_MAX_INGREDIENT_ROWS_PER_STATEMENT is floor(100/10) = 10", () => {
+		expect(D1_MAX_INGREDIENT_ROWS_PER_STATEMENT).toBe(10);
 	});
 
 	it("D1_MAX_TAG_ROWS_PER_STATEMENT is floor(100/2) = 50", () => {

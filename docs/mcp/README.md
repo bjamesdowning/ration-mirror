@@ -138,7 +138,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
 | `toggle_meal_active` | `mcp:galley:write` | Toggle a meal in the Galley active selection (drives supply sync). |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
-| `consume_meal` | `mcp:galley:write` | Mark cooked and deduct ingredients from pantry via semantic matching. |
+| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Mark cooked and deduct ingredients from pantry via semantic matching. Requires **both** scopes. |
 
 ### Manifest (meal plan)
 
@@ -148,6 +148,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Add up to 50 plan entries in one atomic batch. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark manifest entries consumed and deduct ingredients from pantry. Requires **both** scopes. |
 
 ### Supply (shopping list)
 
@@ -158,7 +159,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `remove_supply_item` | `mcp:supply:write` | Remove a supply list line. |
 | `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased / unpurchased on a supply line. |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |
-| `complete_supply_list` | `mcp:supply:write` | Dock purchased items into pantry and archive the list. **Requires `confirm: true`.** |
+| `complete_supply_list` | `mcp:supply:write` + `mcp:inventory:write` | Dock purchased items into pantry and archive the list. Requires **both** scopes. **Requires `confirm: true`.** |
 
 Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.well-known/mcp/server-card.json) · Full API reference: [docs/api](https://ration.mayutic.com/docs/api#mcp-tools)
 

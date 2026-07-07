@@ -151,21 +151,19 @@ describe("verifyMcpOAuthToken", () => {
 		);
 	});
 
-	it("rejects when the token audience is the MCP origin without the /mcp path", async () => {
-		jwtVerifyMock.mockResolvedValueOnce({
-			payload: validPayload({ aud: "https://mcp.ration.mayutic.com" }),
-		});
-		await expect(verifyMcpOAuthToken(makeEnv(), "a.b.c")).rejects.toThrow(
-			"OAuth token audience mismatch",
+	it("enforces the audience via jwtVerify (jose rejects on mismatch)", async () => {
+		// jose's jwtVerify is called with { audience } and rejects on mismatch;
+		// the wrapper normalizes that to "Invalid OAuth access token".
+		jwtVerifyMock.mockRejectedValueOnce(
+			new Error('unexpected "aud" claim value'),
 		);
-	});
-
-	it("rejects when the token audience does not match the MCP resource", async () => {
-		jwtVerifyMock.mockResolvedValueOnce({
-			payload: validPayload({ aud: "https://evil.example.com/mcp" }),
-		});
 		await expect(verifyMcpOAuthToken(makeEnv(), "a.b.c")).rejects.toThrow(
-			"OAuth token audience mismatch",
+			"Invalid OAuth access token",
+		);
+		expect(jwtVerifyMock).toHaveBeenCalledWith(
+			"a.b.c",
+			"jwks-fn",
+			expect.objectContaining({ audience: AUDIENCE }),
 		);
 	});
 

@@ -12,7 +12,7 @@ import {
 	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "./oauth.constants";
-import { APP_VERSION } from "./version";
+import { MCP_SERVER_VERSION } from "./version";
 
 export const AGENT_DISCOVERY_LINK_HEADER = [
 	'</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
@@ -393,7 +393,7 @@ export function buildMcpServerCard(request: Request) {
 		serverInfo: {
 			name: "Ration MCP",
 			title: "Ration Kitchen Agent Server",
-			version: APP_VERSION,
+			version: MCP_SERVER_VERSION,
 			description:
 				"Control Ration inventory, meals, meal plans, shopping lists, and credits from an MCP-compatible AI client.",
 		},

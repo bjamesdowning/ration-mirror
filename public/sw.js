@@ -34,8 +34,11 @@ self.addEventListener("fetch", (event) => {
 	if (url.pathname.startsWith("/api/")) return;
 
 	if (request.mode === "navigate") {
+		const fallbackUrl = url.pathname.startsWith("/hub") ? "/hub" : "/";
 		event.respondWith(
-			fetch(request).catch(() => caches.match("/") ?? Response.error()),
+			fetch(request).catch(
+				async () => (await caches.match(fallbackUrl)) ?? Response.error(),
+			),
 		);
 		return;
 	}

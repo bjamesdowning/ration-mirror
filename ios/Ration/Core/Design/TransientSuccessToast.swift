@@ -44,9 +44,11 @@ struct TransientSuccessToast: View {
             withAnimation(.linear(duration: 5)) {
                 progress = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                onDismiss()
-            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            onDismiss()
         }
     }
 }

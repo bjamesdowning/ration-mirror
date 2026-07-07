@@ -24,7 +24,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "Token required" }, { status: 400 });
 	}
 
-	// Optional auth — return 401 if not authenticated
+	// Auth required — return 401 if not authenticated
 	const auth = getAuth(context.cloudflare.env);
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session) {

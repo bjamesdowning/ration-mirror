@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { handleApiError } from "~/lib/error-handler";
+import { handleApiError, retryOnD1Contention } from "~/lib/error-handler";
+import { log, redactId } from "~/lib/logging.server";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { purgeUserAccount } from "~/lib/user-purge.server";
@@ -37,10 +38,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw data({ error: "Not Found" }, { status: 404 });
 		}
 
-		await purgeUserAccount(context.cloudflare.env, {
-			userId: user.id,
-			email: user.email,
-		});
+		try {
+			await retryOnD1Contention(() =>
+				purgeUserAccount(context.cloudflare.env, {
+					userId: user.id,
+					email: user.email,
+				}),
+			);
+		} catch (error) {
+			log.error("[Purge] account deletion failed", {
+				userId: redactId(userId),
+				errorMessage: error instanceof Error ? error.message : String(error),
+			});
+			return handleApiError(error);
+		}
 
 		return { success: true, deleted: true };
 	} catch (e) {

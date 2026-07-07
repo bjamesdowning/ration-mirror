@@ -78,12 +78,6 @@ function extractScopes(payload: JWTPayload): string[] {
 	return [];
 }
 
-function extractAudience(payload: JWTPayload): string[] {
-	const aud = payload.aud;
-	if (!aud) return [];
-	return Array.isArray(aud) ? aud.map(String) : [String(aud)];
-}
-
 function extractMcpScopes(scopes: string[]): string[] {
 	return scopes.filter((s) => s.startsWith("mcp:"));
 }
@@ -229,10 +223,7 @@ async function verifyJwtMcpAccessToken(
 		throw new Error("Invalid OAuth access token");
 	}
 
-	const audiences = extractAudience(payload);
-	if (!audiences.includes(audience)) {
-		throw new Error("OAuth token audience mismatch");
-	}
+	// Audience is already enforced by jwtVerify({ audience }) above.
 
 	const orgClaim = payload[RATION_ORG_CLAIM];
 	const organizationId =

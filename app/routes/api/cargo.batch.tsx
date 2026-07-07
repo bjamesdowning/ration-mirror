@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
-import { log } from "~/lib/logging.server";
+import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
 import type { SupportedUnit } from "~/lib/units";
@@ -112,10 +112,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 		return response;
 	} catch (error) {
-		log.error("Batch add failed", error);
-		if (error instanceof Response) {
-			throw error;
-		}
-		throw data({ error: "Failed to add items" }, { status: 500 });
+		return handleApiError(error);
 	}
 }

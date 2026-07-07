@@ -27,6 +27,7 @@ import { ITEM_DOMAINS } from "./domain";
 import { normalizeForCargoDedup } from "./matching";
 import type { MissingIngredientDetail } from "./matching.server";
 import {
+	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
@@ -81,14 +82,6 @@ function recordCargoDeduction(
 	} else {
 		deductions.push({ cargoId, quantity });
 	}
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-	const out: T[][] = [];
-	for (let i = 0; i < arr.length; i += size) {
-		out.push(arr.slice(i, i + size));
-	}
-	return out;
 }
 
 function mealIngredientValues(
@@ -664,7 +657,7 @@ export async function createMeal(
 
 	if (data.ingredients.length > 0) {
 		let baseIndex = 0;
-		for (const ingredientChunk of chunk(
+		for (const ingredientChunk of chunkArray(
 			data.ingredients,
 			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 		)) {
@@ -682,7 +675,10 @@ export async function createMeal(
 	}
 
 	if (mealTagRows.length > 0) {
-		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+		for (const tagChunk of chunkArray(
+			mealTagRows,
+			D1_MAX_TAG_ROWS_PER_STATEMENT,
+		)) {
 			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
@@ -763,7 +759,7 @@ export async function createMeals(
 
 		if (data.ingredients.length > 0) {
 			let baseIndex = 0;
-			for (const ingredientChunk of chunk(
+			for (const ingredientChunk of chunkArray(
 				data.ingredients,
 				D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 			)) {
@@ -782,7 +778,7 @@ export async function createMeals(
 
 		if (data.tags.length > 0) {
 			const tagIds = await resolveTagIds(db, organizationId, data.tags);
-			for (const tagChunk of chunk(
+			for (const tagChunk of chunkArray(
 				tagIds.map((tagId) => ({ mealId, tagId })),
 				D1_MAX_TAG_ROWS_PER_STATEMENT,
 			)) {
@@ -860,7 +856,7 @@ export async function updateMeal(
 
 	if (data.ingredients.length > 0) {
 		let baseIndex = 0;
-		for (const ingredientChunk of chunk(
+		for (const ingredientChunk of chunkArray(
 			data.ingredients,
 			D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 		)) {
@@ -878,7 +874,10 @@ export async function updateMeal(
 	}
 
 	if (mealTagRows.length > 0) {
-		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+		for (const tagChunk of chunkArray(
+			mealTagRows,
+			D1_MAX_TAG_ROWS_PER_STATEMENT,
+		)) {
 			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
@@ -943,7 +942,10 @@ export async function createProvision(
 	];
 
 	if (mealTagRows.length > 0) {
-		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+		for (const tagChunk of chunkArray(
+			mealTagRows,
+			D1_MAX_TAG_ROWS_PER_STATEMENT,
+		)) {
 			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}
@@ -1016,7 +1018,7 @@ export async function updateProvision(
 	if (data.tags !== undefined) {
 		batch.push(d1.delete(mealTag).where(eq(mealTag.mealId, mealId)));
 		if (mealTagRows.length > 0) {
-			for (const tagChunk of chunk(
+			for (const tagChunk of chunkArray(
 				mealTagRows,
 				D1_MAX_TAG_ROWS_PER_STATEMENT,
 			)) {
@@ -1632,7 +1634,10 @@ export async function createProvisionFromCargo(
 	];
 
 	if (mealTagRows.length > 0) {
-		for (const tagChunk of chunk(mealTagRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+		for (const tagChunk of chunkArray(
+			mealTagRows,
+			D1_MAX_TAG_ROWS_PER_STATEMENT,
+		)) {
 			batch.push(d1.insert(mealTag).values(tagChunk));
 		}
 	}

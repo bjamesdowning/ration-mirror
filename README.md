@@ -1104,7 +1104,7 @@ erDiagram
 
 | Constant | Value | Columns | Table |
 |----------|-------|---------|-------|
-| `D1_MAX_INGREDIENT_ROWS_PER_STATEMENT` | 12 | 8 | `meal_ingredient` |
+| `D1_MAX_INGREDIENT_ROWS_PER_STATEMENT` | 10 | 10 | `meal_ingredient` |
 | `D1_MAX_TAG_ROWS_PER_STATEMENT` | 33 | 3 | `meal_tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
 

@@ -188,7 +188,6 @@ describe("MCP_AUTH_ERRORS", () => {
 			"Invalid API key",
 			"Insufficient scope: API key must include 'mcp' or a granular 'mcp:*' scope",
 			"Invalid OAuth access token",
-			"OAuth token audience mismatch",
 			"OAuth token missing organization binding",
 			"OAuth token organization access revoked",
 			"OAuth token missing MCP scopes",

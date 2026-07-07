@@ -5,6 +5,7 @@ import * as schema from "~/db/schema";
 import { createApiKey } from "~/lib/api-key.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { checkRateLimit } from "~/lib/rate-limiter.server";
 import { CreateApiKeySchema } from "~/lib/schemas/api-keys";
 import type { Route } from "./+types/api-keys";
 
@@ -48,6 +49,35 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	if (request.method !== "POST") {
 		throw data({ error: "Method not allowed" }, { status: 405 });
+	}
+
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		"api_key_create",
+		session.user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		throw data(
+			{ error: "Too many API key requests. Please try again later." },
+			{
+				status: 429,
+				headers: {
+					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
+				},
+			},
+		);
+	}
+
+	const db = drizzle(context.cloudflare.env.DB, { schema });
+	const actorMembership = await db.query.member.findFirst({
+		where: (m, { and, eq }) =>
+			and(eq(m.organizationId, groupId), eq(m.userId, session.user.id)),
+	});
+	if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+		throw data(
+			{ error: "You don't have permission to create API keys" },
+			{ status: 403 },
+		);
 	}
 
 	let rawName: string;

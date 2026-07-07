@@ -22,7 +22,7 @@ cache:
     - node_modules/
 
 # Install Dependencies
-.install_dependencies:
+install_dependencies:
   stage: install
   script:
     # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
@@ -34,10 +34,49 @@ cache:
   artifacts:
     paths:
       - node_modules/
+      - worker-configuration.d.ts
     expire_in: 1 hour
 
-.test_unit:
+test_unit:
   stage: verify
-  needs: []
+  needs:
+    - install_dependencies
   script:
-    - bun run test:unit
+    - bun run test:unit --coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+      - reports/
+    expire_in: 1 week
+  allow_failure: true
+
+lint:
+  stage: verify
+  needs:
+    - install_dependencies
+  script:
+    - bun run lint
+  allow_failure: true
+
+typecheck:
+  stage: verify
+  needs:
+    - install_dependencies
+  script:
+    - bun run typecheck
+  allow_failure: true
+
+flag_check:
+  stage: verify
+  needs:
+    - install_dependencies
+  script:
+    - bun run flag:check
+  allow_failure: true

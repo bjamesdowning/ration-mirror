@@ -6,8 +6,10 @@ import {
 	normalizeTagSlug,
 	parseTagSlugsInput,
 	sanitizeTagColor,
+	type TagRecord,
 	tagsFromSearchParam,
 	tagsToSearchParam,
+	toTagSlugs,
 } from "../tags";
 
 describe("normalizeTagSlug", () => {
@@ -57,6 +59,40 @@ describe("isValidTagSlug", () => {
 		expect(isValidTagSlug("")).toBe(false);
 		expect(isValidTagSlug("Bad Slug")).toBe(false);
 		expect(isValidTagSlug("good-slug")).toBe(true);
+	});
+});
+
+describe("toTagSlugs", () => {
+	it("extracts slugs from TagRecord objects", () => {
+		const tags: TagRecord[] = [
+			{
+				id: "1",
+				slug: "italian",
+				name: "Italian",
+				color: null,
+				category: null,
+			},
+			{
+				id: "2",
+				slug: "vegan",
+				name: "Vegan",
+				color: "#00E088",
+				category: "diet",
+			},
+		];
+		expect(toTagSlugs(tags)).toEqual(["italian", "vegan"]);
+	});
+
+	it("passes through legacy string-slug arrays", () => {
+		expect(toTagSlugs(["weeknight", "freezer"])).toEqual([
+			"weeknight",
+			"freezer",
+		]);
+	});
+
+	it("returns an empty array for undefined or empty input", () => {
+		expect(toTagSlugs(undefined)).toEqual([]);
+		expect(toTagSlugs([])).toEqual([]);
 	});
 });
 

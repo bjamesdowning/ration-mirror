@@ -52,6 +52,7 @@ import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import type { SlotType } from "~/lib/schemas/manifest";
+import { type TagRecord, toTagSlugs } from "~/lib/tags";
 import type { Route } from "./+types/manifest";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -268,8 +269,18 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	// on mount so data is ready by the time the user opens the meal picker or
 	// the PlanWeekButton modal (which uses the meal tag list to populate its
 	// tag-filter dropdown). Subsequent opens reuse the cached fetcher result.
-	const pickerFetcher = useFetcher<{ meals: MealForPicker[] }>();
-	const pickerMeals = (pickerFetcher.data?.meals ?? []) as MealForPicker[];
+	// /api/meals returns full meal rows whose `tags` are TagRecord objects, not
+	// slug strings. Normalize to MealForPicker (slug strings) so downstream tag
+	// rendering (e.g. PlanWeekButton's tag-filter dropdown) never receives an
+	// object as a React child.
+	const pickerFetcher = useFetcher<{
+		meals: Array<
+			Omit<MealForPicker, "tags"> & { tags: TagRecord[] | string[] }
+		>;
+	}>();
+	const pickerMeals: MealForPicker[] = (pickerFetcher.data?.meals ?? []).map(
+		(meal) => ({ ...meal, tags: toTagSlugs(meal.tags) }),
+	);
 	const pickerMealsLoading =
 		pickerFetcher.state !== "idle" && !pickerFetcher.data;
 

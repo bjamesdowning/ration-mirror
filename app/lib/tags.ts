@@ -87,6 +87,12 @@ export function tagsToSearchParam(tags: string[]): string {
 	return dedupeTagSlugs(tags).join(",");
 }
 
+/** Normalize legacy string tags or TagRecord[] down to slug strings. */
+export function toTagSlugs(tags: TagRecord[] | string[] | undefined): string[] {
+	if (!tags?.length) return [];
+	return tags.map((tag) => (typeof tag === "string" ? tag : tag.slug));
+}
+
 /** Normalize legacy string tags or TagRecord[] for display. */
 export function toTagRecords(
 	tags: TagRecord[] | string[] | undefined,

@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SharedItemUpdateSchema } from "~/lib/schemas/supply";
 import { updateSharedItemPurchased } from "~/lib/supply.server";
 import type { Route } from "./+types/shared.$token.items.$itemId";
@@ -21,17 +21,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests");
 	}
 
 	const token = params.token;

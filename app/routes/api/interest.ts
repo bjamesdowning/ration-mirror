@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { InterestSignupSchema } from "~/lib/schemas/interest";
 import type { Route } from "./+types/interest";
 
@@ -36,17 +36,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests");
 	}
 
 	try {

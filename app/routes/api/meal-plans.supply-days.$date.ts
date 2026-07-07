@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { toggleManifestDaySupply } from "~/lib/manifest-supply.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meal-plans.supply-days.$date";
 
 const DateParamSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -28,9 +28,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

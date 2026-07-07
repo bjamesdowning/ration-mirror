@@ -8,7 +8,7 @@ import { AGENT_API_KEY_SCOPES } from "~/lib/agent/scopes";
 import { verifyApiKey } from "~/lib/api-key.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/auth.claim.reissue";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -38,13 +38,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			record.keyPrefix,
 		);
 		if (!rateLimit.allowed) {
-			return data(
-				{ error: "Too many reissue requests" },
-				{
-					status: 429,
-					headers: { "Retry-After": String(rateLimit.retryAfter ?? 3600) },
-				},
-			);
+			return rateLimitResponse(rateLimit, "Too many reissue requests");
 		}
 
 		const ipLimit = await checkRateLimit(
@@ -53,13 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			getClientIp(request),
 		);
 		if (!ipLimit.allowed) {
-			return data(
-				{ error: "Too many requests" },
-				{
-					status: 429,
-					headers: { "Retry-After": String(ipLimit.retryAfter ?? 3600) },
-				},
-			);
+			return rateLimitResponse(ipLimit, "Too many requests");
 		}
 
 		const result = await reissueClaimToken(env, record, request);

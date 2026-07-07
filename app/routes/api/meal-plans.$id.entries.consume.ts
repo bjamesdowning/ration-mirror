@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { consumeManifestEntries } from "~/lib/manifest.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { ConsumeEntriesRequestSchema } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/meal-plans.$id.entries.consume";
 
@@ -28,9 +28,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

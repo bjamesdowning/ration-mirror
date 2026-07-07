@@ -3,7 +3,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import { consumeManifestEntries, ensureMealPlan } from "~/lib/manifest.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { ConsumeEntriesRequestSchema } from "~/lib/schemas/manifest";
 import { storeUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.manifest.consume";
@@ -25,9 +25,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

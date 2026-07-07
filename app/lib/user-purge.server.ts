@@ -3,8 +3,8 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { log, redactId } from "~/lib/logging.server";
 import { revokeMobileRefreshFamilies } from "~/lib/mobile/token.server";
+import { deleteOrganization } from "~/lib/organizations.server";
 import { deleteR2Prefix } from "~/lib/r2-cleanup.server";
-import { deleteCargoVectors } from "~/lib/vector.server";
 
 export interface PurgeUserInput {
 	userId: string;
@@ -51,54 +51,7 @@ export async function purgeUserAccount(
 		const otherMembers = allMembers.filter((m) => m.userId !== userId);
 
 		if (otherMembers.length === 0) {
-			await db
-				.update(schema.session)
-				.set({ activeOrganizationId: null })
-				.where(eq(schema.session.activeOrganizationId, orgId));
-
-			await db
-				.delete(schema.queueJob)
-				.where(eq(schema.queueJob.organizationId, orgId));
-
-			const orgCargoRows = await db
-				.select({ id: schema.cargo.id })
-				.from(schema.cargo)
-				.where(eq(schema.cargo.organizationId, orgId));
-			const orgCargoIds = orgCargoRows.map((r) => r.id);
-			if (orgCargoIds.length > 0) {
-				await deleteCargoVectors(env, orgCargoIds);
-			}
-
-			await db.batch([
-				db.delete(schema.cargo).where(eq(schema.cargo.organizationId, orgId)),
-				db.delete(schema.meal).where(eq(schema.meal.organizationId, orgId)),
-				db
-					.delete(schema.activeMealSelection)
-					.where(eq(schema.activeMealSelection.organizationId, orgId)),
-				db
-					.delete(schema.supplyList)
-					.where(eq(schema.supplyList.organizationId, orgId)),
-				db
-					.delete(schema.supplySnooze)
-					.where(eq(schema.supplySnooze.organizationId, orgId)),
-				db
-					.delete(schema.mealPlan)
-					.where(eq(schema.mealPlan.organizationId, orgId)),
-				db.delete(schema.ledger).where(eq(schema.ledger.organizationId, orgId)),
-				db
-					.delete(schema.invitation)
-					.where(eq(schema.invitation.organizationId, orgId)),
-				db
-					.delete(schema.agentRegistration)
-					.where(eq(schema.agentRegistration.organizationId, orgId)),
-				db.delete(schema.member).where(eq(schema.member.organizationId, orgId)),
-				db.delete(schema.organization).where(eq(schema.organization.id, orgId)),
-				// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-			] as [any, ...any[]]);
-
-			if (storage) {
-				await deleteR2Prefix(storage, `organizations/${orgId}/`);
-			}
+			await deleteOrganization(env, orgId);
 		} else {
 			const newOwner =
 				otherMembers.find((m) => m.role === "admin") || otherMembers[0];

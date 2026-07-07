@@ -3,7 +3,7 @@ import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { completeSupplyList } from "~/lib/supply.server";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/supply-lists.$id.complete";
@@ -30,9 +30,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

@@ -6,7 +6,7 @@ import {
 	issueMobileTokenPair,
 	rotateMobileRefreshToken,
 } from "~/lib/mobile/token.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileTokenRequestSchema } from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.auth.token";
 
@@ -25,9 +25,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		ip,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

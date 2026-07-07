@@ -1,6 +1,6 @@
 import { API_SCOPES, requireApiKey } from "~/lib/api-key.server";
 import { exportSupplyAsCsv } from "~/lib/export.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getSupplyList } from "~/lib/supply.server";
 import type { Route } from "./+types/v1.supply.export";
 
@@ -20,19 +20,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		apiKeyId,
 	);
 	if (!rateLimitResult.allowed) {
-		return new Response(
-			JSON.stringify({
-				error: "Too many requests",
-				retryAfter: rateLimitResult.retryAfter,
-			}),
-			{
-				status: 429,
-				headers: {
-					"Content-Type": "application/json",
-					"Retry-After": String(rateLimitResult.retryAfter ?? 60),
-				},
-			},
-		);
+		return rateLimitResponse(rateLimitResult, "Too many requests", {
+			includeBodyMetadata: true,
+		});
 	}
 
 	const list = await getSupplyList(context.cloudflare.env.DB, organizationId);

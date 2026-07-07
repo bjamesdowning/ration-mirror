@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { createApiKey } from "~/lib/api-key.server";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CreateApiKeySchema } from "~/lib/schemas/api-keys";
 import type { Route } from "./+types/api-keys";
 
@@ -57,14 +57,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		session.user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many API key requests. Please try again later." },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many API key requests. Please try again later.",
 		);
 	}
 

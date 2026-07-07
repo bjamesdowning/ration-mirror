@@ -3,6 +3,7 @@
  * Uses Cloudflare Workers AI (@cf/google/embeddinggemma-300m) for embeddings and Vectorize for storage.
  */
 
+import { sha256Hex } from "./crypto.server";
 import { log } from "./logging.server";
 
 const EMBEDDING_MODEL = "@cf/google/embeddinggemma-300m";
@@ -22,16 +23,6 @@ export const SIMILARITY_THRESHOLDS = {
 	 */
 	CARGO_DEDUCTION: 0.78,
 } as const;
-
-function sha256(text: string): string {
-	let h = 0;
-	for (let i = 0; i < text.length; i++) {
-		const c = text.charCodeAt(i);
-		h = (h << 5) - h + c;
-		h = h & h;
-	}
-	return Math.abs(h).toString(36);
-}
 
 /** Generate embedding for a single text via Workers AI */
 export async function embed(ai: Ai, text: string): Promise<number[] | null> {
@@ -107,7 +98,7 @@ export async function embedBatchWithCache(
 
 	const cacheResults = await Promise.all(
 		order.map(async (s) => {
-			const key = EMBED_CACHE_PREFIX + sha256(s);
+			const key = EMBED_CACHE_PREFIX + (await sha256Hex(s));
 			try {
 				const cached = env.RATION_KV
 					? await env.RATION_KV.get(key, "json")
@@ -139,7 +130,7 @@ export async function embedBatchWithCache(
 			for (let i = 0; i < toEmbed.length; i++) {
 				const vec = missVectors[i];
 				if (vec && vec.length === 768) {
-					const key = EMBED_CACHE_PREFIX + sha256(toEmbed[i]);
+					const key = EMBED_CACHE_PREFIX + (await sha256Hex(toEmbed[i]));
 					env.RATION_KV.put(key, JSON.stringify(vec), {
 						expirationTtl: EMBED_CACHE_TTL,
 					}).catch(() => {});

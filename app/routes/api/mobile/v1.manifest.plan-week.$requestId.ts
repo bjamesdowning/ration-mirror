@@ -3,7 +3,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getQueueJob } from "~/lib/queue-job.server";
 import { NO_STORE, parseJobResultJson } from "~/lib/queue-status-loader.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { RequestIdSchema } from "~/lib/schemas/queue";
 import type { Route } from "./+types/v1.manifest.plan-week.$requestId";
 
@@ -20,9 +20,9 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many status poll requests. Please try again later." },
-				{ status: 429, headers: { ...NO_STORE, "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many status poll requests. Please try again later.",
 			);
 		}
 

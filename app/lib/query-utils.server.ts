@@ -24,7 +24,14 @@ export const D1_MAX_TAG_ROWS_PER_STATEMENT = Math.floor(
 );
 
 /**
- * Max meal_plan_entry rows per INSERT.
+ * Max tag registry rows per INSERT.
+ * Columns bound: id, organizationId, slug, name, color, category, createdBy = 7.
+ */
+export const D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT = Math.floor(
+	D1_MAX_BOUND_PARAMS / 7,
+);
+
+/**
  * Columns bound: id, planId, mealId, date, slotType, orderIndex,
  * servingsOverride, notes = 8 params per row.
  */

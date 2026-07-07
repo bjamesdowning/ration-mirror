@@ -1,4 +1,4 @@
-import { data } from "react-router";
+import { rateLimitResponse } from "~/lib/rate-limiter.server";
 import { assertAppleWebLoginAllowed } from "../lib/apple-web-login.server";
 import { getAuth } from "../lib/auth.server";
 import { buildFlagContext } from "../lib/feature-flags/flags.server";
@@ -34,17 +34,7 @@ async function enforceAuthRateLimit(
 	const category = oauthCategory ?? "auth_public";
 	const rateLimitResult = await checkRateLimit(env.RATION_KV, category, ip);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests");
 	}
 }
 

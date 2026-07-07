@@ -4,21 +4,24 @@ const requireMobileActiveGroup = vi.fn();
 const checkRateLimit = vi.fn();
 const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
-const dbBatch = vi.fn();
-const deleteCargoVectors = vi.fn();
-const cargoSelect = vi.fn();
+const deleteOrganization = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
 	requireMobileActiveGroup: (...args: unknown[]) =>
 		requireMobileActiveGroup(...args),
 }));
 
-vi.mock("~/lib/rate-limiter.server", () => ({
-	checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
-}));
+vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/rate-limiter.server")>();
+	return {
+		...actual,
+		checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
+	};
+});
 
-vi.mock("~/lib/vector.server", () => ({
-	deleteCargoVectors: (...args: unknown[]) => deleteCargoVectors(...args),
+vi.mock("~/lib/organizations.server", () => ({
+	deleteOrganization: (...args: unknown[]) => deleteOrganization(...args),
 }));
 
 vi.mock("drizzle-orm/d1", () => ({
@@ -27,16 +30,6 @@ vi.mock("drizzle-orm/d1", () => ({
 			member: { findFirst: (...a: unknown[]) => findFirstMember(...a) },
 			organization: { findFirst: (...a: unknown[]) => findFirstOrg(...a) },
 		},
-		select: () => ({
-			from: () => ({
-				where: (...a: unknown[]) => cargoSelect(...a),
-			}),
-		}),
-		batch: (...a: unknown[]) => dbBatch(...a),
-		update: () => ({
-			set: () => ({ where: () => ({}) }),
-		}),
-		delete: () => ({ where: () => ({}) }),
 	}),
 }));
 
@@ -61,9 +54,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 			checkRateLimit,
 			findFirstMember,
 			findFirstOrg,
-			dbBatch,
-			deleteCargoVectors,
-			cargoSelect,
+			deleteOrganization,
 		]) {
 			m.mockReset();
 		}
@@ -71,9 +62,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 		checkRateLimit.mockResolvedValue({ allowed: true });
 		findFirstMember.mockResolvedValue({ role: "owner" });
 		findFirstOrg.mockResolvedValue({ slug: "home-kitchen" });
-		cargoSelect.mockResolvedValue([]);
-		deleteCargoVectors.mockResolvedValue(undefined);
-		dbBatch.mockResolvedValue(undefined);
+		deleteOrganization.mockResolvedValue(undefined);
 	});
 
 	it("deletes a group when the caller is owner", async () => {
@@ -87,7 +76,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 		expect(result.success).toBe(true);
 		expect(requireMobileActiveGroup).toHaveBeenCalled();
 		expect(findFirstMember).toHaveBeenCalled();
-		expect(dbBatch).toHaveBeenCalled();
+		expect(deleteOrganization).toHaveBeenCalledWith(env, orgId);
 	});
 
 	it("rejects non-owners with 403", async () => {
@@ -100,7 +89,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 403 } });
-		expect(dbBatch).not.toHaveBeenCalled();
+		expect(deleteOrganization).not.toHaveBeenCalled();
 	});
 
 	it("rejects when rate limited with 429", async () => {
@@ -113,6 +102,6 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 429 } });
-		expect(dbBatch).not.toHaveBeenCalled();
+		expect(deleteOrganization).not.toHaveBeenCalled();
 	});
 });

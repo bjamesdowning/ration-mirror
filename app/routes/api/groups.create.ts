@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
 import { log } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.create";
 
 /** GET is not supported; this route is action-only (POST). */
@@ -27,17 +27,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		return data(
-			{
-				error: "Too many group creation requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		return rateLimitResponse(
+			rateLimitResult,
+			"Too many group creation requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

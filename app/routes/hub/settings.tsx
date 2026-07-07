@@ -43,7 +43,7 @@ import { intercomLauncherButtonAriaLabel } from "~/lib/intercom-launcher-aria";
 import { useIntercomLauncher } from "~/lib/intercom-launcher-context";
 import { log } from "~/lib/logging.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
 import type { TagWithCounts } from "~/lib/tags";
@@ -507,9 +507,9 @@ export async function action(args: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

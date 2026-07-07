@@ -14,7 +14,7 @@ import { SupplyItemOriginBadge } from "~/components/supply/SupplyItemOriginBadge
 import * as schema from "~/db/schema";
 import { getAuth } from "~/lib/auth.server";
 import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { getSupplyListByShareToken } from "~/lib/supply.server";
 import {
 	normalizeSupplyOrigins,
@@ -58,17 +58,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		clientIp,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests");
 	}
 
 	const token = params.token;

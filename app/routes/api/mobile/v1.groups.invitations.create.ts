@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/v1.groups.invitations.create";
 
 const MAX_ACTIVE_INVITATIONS_PER_GROUP = 10;
@@ -29,17 +29,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{
-					error: "Too many invitation requests. Please try again later.",
-					retryAfter: rateLimitResult.retryAfter,
-				},
-				{
-					status: 429,
-					headers: {
-						"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					},
-				},
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many invitation requests. Please try again later.",
+				{ includeBodyMetadata: true },
 			);
 		}
 

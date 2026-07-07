@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { cargo, ledger, type supplyItem } from "../db/schema";
+import { cargo, cargoTag, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import type { ParsedCsvItem } from "./csv-parser";
@@ -29,6 +29,7 @@ import {
 	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
+	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
 import { TagSlugsInputSchema } from "./schemas/tag";
 import { UnitSchema } from "./schemas/units";
@@ -63,7 +64,7 @@ import { computeBaseFields } from "./base-quantity";
 import { calculateInventoryStatus, normalizeForCargoKey } from "./cargo-utils";
 import { normalizeCargoQuantity } from "./format-quantity";
 import { dedupeTagSlugs, type TagRecord } from "./tags";
-import { getTagsForCargoIds, setCargoTags } from "./tags.server";
+import { getTagsForCargoIds, resolveTagIds, setCargoTags } from "./tags.server";
 
 const CargoItemBaseSchema = z.object({
 	name: z
@@ -1041,6 +1042,190 @@ export async function getCargoStats(db: D1Database, organizationId: string) {
 }
 
 const APPLY_IMPORT_MAX_ROWS = 500;
+const CARGO_IMPORT_UPDATE_BATCH_SIZE = 20;
+
+type CargoRow = typeof cargo.$inferSelect;
+
+function buildCargoImportUpdateSet(
+	existing: CargoRow,
+	item: ParsedCsvItem,
+): {
+	set: {
+		name: string;
+		quantity: number;
+		unit: string;
+		baseQuantity: number;
+		baseUnit: string;
+		domain: string;
+		status: string;
+		expiresAt: Date | null;
+		updatedAt: Date;
+	};
+	vectorPayload?: { id: string; name: string; domain: string };
+} {
+	const nextExpiresAt = item.expiresAt
+		? new Date(`${item.expiresAt}T00:00:00Z`)
+		: existing.expiresAt;
+	const nextName = item.name;
+	const nextUnit = normalizeUnitAlias(item.unit);
+	const nextQuantity = normalizeCargoQuantity(item.quantity, nextUnit);
+	const nextStatus = calculateInventoryStatus(nextExpiresAt);
+	const nextDomain =
+		(item.domain as CargoItemInput["domain"]) ??
+		(existing.domain as CargoItemInput["domain"]);
+	const base = computeBaseFields(nextQuantity, nextUnit, nextName);
+
+	return {
+		set: {
+			name: nextName,
+			quantity: nextQuantity,
+			unit: nextUnit,
+			baseQuantity: base.baseQuantity,
+			baseUnit: base.baseUnit,
+			domain: nextDomain,
+			status: nextStatus,
+			expiresAt: nextExpiresAt,
+			updatedAt: new Date(),
+		},
+		vectorPayload:
+			nextName !== existing.name
+				? {
+						id: existing.id,
+						name: nextName,
+						domain: nextDomain ?? "food",
+					}
+				: undefined,
+	};
+}
+
+async function applyCargoTagsForImportBatch(
+	db: D1Database,
+	updates: Array<{ cargoId: string; tagIds: string[] }>,
+): Promise<void> {
+	if (updates.length === 0) return;
+	const d1 = drizzle(db);
+	const cargoIds = updates.map((row) => row.cargoId);
+
+	for (const idChunk of chunkArray(cargoIds, 99)) {
+		await d1.delete(cargoTag).where(inArray(cargoTag.cargoId, idChunk));
+	}
+
+	const junctionRows = updates.flatMap((row) =>
+		row.tagIds.map((tagId) => ({ cargoId: row.cargoId, tagId })),
+	);
+	for (const chunk of chunkArray(junctionRows, D1_MAX_TAG_ROWS_PER_STATEMENT)) {
+		await d1.insert(cargoTag).values(chunk);
+	}
+}
+
+async function bulkUpdateCargoImportItems(
+	env: Env,
+	organizationId: string,
+	items: ParsedCsvItem[],
+	existingById: Map<string, CargoRow>,
+	tagIdsBySlug: Map<string, string>,
+): Promise<{
+	updated: number;
+	errors: Array<{ name: string; error: string }>;
+}> {
+	const result = {
+		updated: 0,
+		errors: [] as Array<{ name: string; error: string }>,
+	};
+	const d1 = drizzle(env.DB);
+
+	for (const batch of chunkArray(items, CARGO_IMPORT_UPDATE_BATCH_SIZE)) {
+		const validItems = batch.filter(
+			(item): item is ParsedCsvItem & { id: string } =>
+				!!item.id && existingById.has(item.id),
+		);
+		if (validItems.length === 0) continue;
+
+		try {
+			const updateStmts = validItems.map((item) => {
+				const { set } = buildCargoImportUpdateSet(
+					existingById.get(item.id) as CargoRow,
+					item,
+				);
+				return d1
+					.update(cargo)
+					.set(set)
+					.where(
+						and(
+							eq(cargo.id, item.id),
+							eq(cargo.organizationId, organizationId),
+						),
+					);
+			});
+
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch(updateStmts as [any, ...any[]]);
+
+			const tagUpdates = validItems.map((item) => {
+				const slugs = dedupeTagSlugs(item.tags ?? []);
+				const tagIds = slugs.map((slug) => {
+					const id = tagIdsBySlug.get(slug);
+					if (!id) throw new Error(`tag_not_resolved:${slug}`);
+					return id;
+				});
+				return { cargoId: item.id, tagIds };
+			});
+			await applyCargoTagsForImportBatch(env.DB, tagUpdates);
+
+			const vectorPayloads = validItems
+				.map(
+					(item) =>
+						buildCargoImportUpdateSet(
+							existingById.get(item.id) as CargoRow,
+							item,
+						).vectorPayload,
+				)
+				.filter((payload): payload is NonNullable<typeof payload> => !!payload);
+
+			if (vectorPayloads.length > 0) {
+				upsertCargoVectors(env, organizationId, vectorPayloads).catch((err) =>
+					log.error("[Vector] bulk upsert failed for import update:", err),
+				);
+			}
+
+			result.updated += validItems.length;
+		} catch (batchError) {
+			for (const item of validItems) {
+				try {
+					const updateData: CargoItemUpdateInput = {
+						name: item.name,
+						quantity: item.quantity,
+						unit: normalizeUnitAlias(item.unit) as CargoItemInput["unit"],
+						domain: (item.domain as CargoItemInput["domain"]) ?? "food",
+						tags: item.tags ?? [],
+						expiresAt: item.expiresAt
+							? new Date(`${item.expiresAt}T00:00:00Z`)
+							: undefined,
+					};
+					const updated = await updateItem(
+						env,
+						organizationId,
+						item.id,
+						updateData,
+					);
+					if (updated) result.updated += 1;
+				} catch (e) {
+					result.errors.push({
+						name: item.name,
+						error:
+							e instanceof Error
+								? e.message
+								: batchError instanceof Error
+									? batchError.message
+									: String(e),
+					});
+				}
+			}
+		}
+	}
+
+	return result;
+}
 
 export interface ApplyCargoImportResult {
 	imported: number;
@@ -1081,32 +1266,47 @@ export async function applyCargoImport(
 		}
 	}
 
-	for (const item of toUpdate) {
-		if (!item.id) continue;
-		try {
-			const updateData: CargoItemUpdateInput = {
-				name: item.name,
-				quantity: item.quantity,
-				unit: normalizeUnitAlias(item.unit) as CargoItemInput["unit"],
-				domain: (item.domain as CargoItemInput["domain"]) ?? "food",
-				tags: item.tags ?? [],
-				expiresAt: item.expiresAt
-					? new Date(`${item.expiresAt}T00:00:00Z`)
-					: undefined,
-			};
-			const updated = await updateItem(
-				env,
+	if (toUpdate.length > 0) {
+		const updateIds = toUpdate
+			.map((item) => item.id)
+			.filter((id): id is string => !!id);
+		const existingCargoRows = await chunkedQuery(updateIds, (chunk) =>
+			d1
+				.select()
+				.from(cargo)
+				.where(
+					and(
+						eq(cargo.organizationId, organizationId),
+						inArray(cargo.id, chunk),
+					),
+				),
+		);
+		const existingById = new Map(existingCargoRows.map((row) => [row.id, row]));
+
+		const allTagSlugs = dedupeTagSlugs(
+			toUpdate.flatMap((item) => item.tags ?? []),
+		);
+		const tagIdsBySlug = new Map<string, string>();
+		if (allTagSlugs.length > 0) {
+			const resolvedTagIds = await resolveTagIds(
+				env.DB,
 				organizationId,
-				item.id,
-				updateData,
+				allTagSlugs,
 			);
-			if (updated) result.updated += 1;
-		} catch (e) {
-			result.errors.push({
-				name: item.name,
-				error: e instanceof Error ? e.message : String(e),
-			});
+			for (let i = 0; i < allTagSlugs.length; i++) {
+				tagIdsBySlug.set(allTagSlugs[i], resolvedTagIds[i]);
+			}
 		}
+
+		const bulkResult = await bulkUpdateCargoImportItems(
+			env,
+			organizationId,
+			toUpdate,
+			existingById,
+			tagIdsBySlug,
+		);
+		result.updated += bulkResult.updated;
+		result.errors.push(...bulkResult.errors);
 	}
 
 	if (toCreate.length > 0) {

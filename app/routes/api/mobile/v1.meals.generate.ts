@@ -6,7 +6,7 @@ import {
 } from "~/lib/meal-generate-submit.server";
 import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealGenerateRequestSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/v1.meals.generate";
 
@@ -30,9 +30,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many generation requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many generation requests. Please try again later.",
 			);
 		}
 

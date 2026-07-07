@@ -1,10 +1,9 @@
-import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import type { MealMatchQuery } from "~/lib/matching.server";
 import { matchMeals } from "~/lib/matching.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { MOBILE_PRE_LIMIT } from "~/lib/mobile/hub.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealMatchQuerySchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/v1.meals.match";
 
@@ -21,9 +20,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many meal match requests. Please wait and try again." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many meal match requests. Please wait and try again.",
 			);
 		}
 

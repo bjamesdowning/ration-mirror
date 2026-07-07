@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireMobileActiveGroup = vi.fn();
+const checkRateLimit = vi.fn();
 const getCargoItem = vi.fn();
 const getMealsForCargo = vi.fn();
 
@@ -20,9 +21,14 @@ vi.mock("~/lib/meals.server", () => ({
 	getMealsForCargo: (...args: unknown[]) => getMealsForCargo(...args),
 }));
 
-vi.mock("~/lib/rate-limiter.server", () => ({
-	checkRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
-}));
+vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/rate-limiter.server")>();
+	return {
+		...actual,
+		checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
+	};
+});
 
 const ctx = { cloudflare: { env: { DB: {} } } } as never;
 

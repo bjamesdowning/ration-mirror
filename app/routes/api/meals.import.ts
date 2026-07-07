@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	mapRecipeImportSubmitError,
 	submitRecipeImport,
@@ -22,20 +22,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		return data(
-			{
-				error: "Too many import requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-				resetAt: rateLimitResult.resetAt,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
+		return rateLimitResponse(
+			rateLimitResult,
+			"Too many import requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

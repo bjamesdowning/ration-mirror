@@ -9,7 +9,7 @@ import {
 	parseJobResultJson,
 	requireQueueJobForStatus,
 } from "~/lib/queue-status-loader.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meal-plans.$id.plan-week.status.$requestId";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
@@ -20,21 +20,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 		session.user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many status poll requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-				resetAt: rateLimitResult.resetAt,
-			},
-			{
-				status: 429,
-				headers: {
-					...NO_STORE,
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many status poll requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

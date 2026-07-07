@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { applyUndoRecord } from "~/lib/cook-reversal.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { UndoActionSchema } from "~/lib/schemas/mobile/undo";
 import { consumeUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.undo";
@@ -24,9 +24,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

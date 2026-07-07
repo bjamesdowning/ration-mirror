@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { createSupplyListFromSelectedMeals } from "~/lib/supply.server";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/v1.supply.sync";
@@ -24,9 +24,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

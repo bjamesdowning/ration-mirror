@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { mapScanSubmitError, submitVisualScan } from "~/lib/scan-submit.server";
 import type { Route } from "./+types/scan";
 
@@ -19,20 +19,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many scan requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-				resetAt: rateLimitResult.resetAt,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many scan requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

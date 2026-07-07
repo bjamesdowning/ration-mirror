@@ -6,7 +6,7 @@ import {
 	upsertMealSelection,
 	validateMealOwnership,
 } from "~/lib/meal-selection.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.$id.toggle-active";
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -26,9 +26,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

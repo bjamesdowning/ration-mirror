@@ -6,6 +6,7 @@ import {
 	CLAIM_TOKEN_SLIDE_MS,
 } from "./agent/claim.constants";
 import { AGENT_API_KEY_SCOPES } from "./agent/scopes";
+import { sha256Hex } from "./crypto.server";
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_ADVERTISED_MCP_SCOPES,
@@ -424,7 +425,7 @@ export async function buildAgentSkillsIndex(request: Request) {
 				request,
 				`/.well-known/agent-skills/${skill.slug}/SKILL.md`,
 			),
-			sha256: await sha256Hex(buildAgentSkillMarkdown(skill.slug)),
+			sha256: await sha256Hex(buildAgentSkillMarkdown(skill.slug), 0),
 		})),
 	);
 	return {
@@ -464,14 +465,6 @@ ${toolList}
 
 Only perform mutating actions when the user has clearly requested the change. Never expose API keys, session cookies, or private household data in logs or messages.
 `;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-	const data = new TextEncoder().encode(value);
-	const digest = await crypto.subtle.digest("SHA-256", data);
-	return Array.from(new Uint8Array(digest))
-		.map((byte) => byte.toString(16).padStart(2, "0"))
-		.join("");
 }
 
 export const HOME_MARKDOWN = `# Ration

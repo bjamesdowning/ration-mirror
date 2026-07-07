@@ -3,7 +3,7 @@ import { checkCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { createProvision } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileProvisionSchema } from "~/lib/schemas/mobile/meals";
 import type { Route } from "./+types/v1.provisions";
 
@@ -24,9 +24,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

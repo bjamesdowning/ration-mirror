@@ -14,7 +14,7 @@ import {
 } from "~/lib/email.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { agentClaimStartSchema } from "~/lib/schemas/agent-auth";
 import type { Route } from "./+types/auth.claim";
 
@@ -40,13 +40,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			clientIp,
 		);
 		if (!ipLimit.allowed) {
-			return data(
-				{ error: "Too many requests" },
-				{
-					status: 429,
-					headers: { "Retry-After": String(ipLimit.retryAfter ?? 60) },
-				},
-			);
+			return rateLimitResponse(ipLimit, "Too many requests");
 		}
 
 		const body = await request.json();

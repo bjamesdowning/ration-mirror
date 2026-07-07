@@ -5,7 +5,7 @@ import { z } from "zod";
 import * as schema from "~/db/schema";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/v1.user.avatar";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -43,14 +43,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		userId,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many avatar upload requests. Please try again later." },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many avatar upload requests. Please try again later.",
 		);
 	}
 

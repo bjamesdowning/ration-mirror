@@ -3,7 +3,7 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { checkCapacity } from "~/lib/capacity.server";
 import { type IngestItem, ingestCargoItems } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { BatchAddCargoSchema } from "~/lib/schemas/scan";
 import type { SupportedUnit } from "~/lib/units";
 import type { Route } from "./+types/cargo.batch";
@@ -22,17 +22,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many batch requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many batch requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

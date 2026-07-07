@@ -4,7 +4,7 @@ import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { RoleUpdateSchema } from "~/lib/schemas/mobile/groups";
 import type { Route } from "./+types/v1.groups.members.$memberId.role";
 
@@ -28,14 +28,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			actorId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{
-					status: 429,
-					headers: {
-						"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					},
-				},
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { API_SCOPES, requireApiKey } from "~/lib/api-key.server";
 import { handleApiError } from "~/lib/error-handler";
 import { applyGalleyImport } from "~/lib/galley.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { GalleyManifestSchema } from "~/lib/schemas/galley-manifest";
 import type { Route } from "./+types/v1.galley.import";
 
@@ -24,18 +24,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		apiKeyId,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many requests",
-				retryAfter: rateLimitResult.retryAfter,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": String(rateLimitResult.retryAfter ?? 60),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests", {
+			includeBodyMetadata: true,
+		});
 	}
 
 	const contentType = request.headers.get("Content-Type") ?? "";

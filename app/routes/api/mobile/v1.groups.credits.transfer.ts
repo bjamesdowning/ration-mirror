@@ -5,7 +5,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { InsufficientCreditsError, transferCredits } from "~/lib/ledger.server";
 import { log, redactId } from "~/lib/logging.server";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { TransferCreditsSchema } from "~/lib/schemas/credits-transfer";
 import type { Route } from "./+types/v1.groups.credits.transfer";
 
@@ -25,9 +25,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

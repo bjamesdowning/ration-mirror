@@ -10,13 +10,14 @@ import {
 	updateMeal,
 	updateProvision,
 } from "./meals.server";
-import { chunkArray } from "./query-utils.server";
+import { chunkedQuery } from "./query-utils.server";
 import type {
 	GalleyManifest,
 	ManifestProvision,
 	ManifestRecipe,
 } from "./schemas/galley-manifest";
-import { tagsToSlugs } from "./tags.server";
+import { dedupeTagSlugs } from "./tags";
+import { resolveTagIds, tagsToSlugs } from "./tags.server";
 import { normalizeUnitAlias } from "./units";
 
 type MealWithIngredients = Awaited<ReturnType<typeof getMeals>>[number];
@@ -116,18 +117,31 @@ export async function applyGalleyImport(
 	];
 	const existingIds = new Set<string>();
 	if (idsToCheck.length > 0) {
-		// D1 limits 100 bound params; inArray uses 1 per id + orgId = idsToCheck.length + 1
-		const chunks = chunkArray(idsToCheck, 99);
-		for (const chunk of chunks) {
-			const rows = await d1
+		const rows = await chunkedQuery(idsToCheck, (chunk) =>
+			d1
 				.select({ id: meal.id })
 				.from(meal)
 				.where(
 					and(eq(meal.organizationId, organizationId), inArray(meal.id, chunk)),
-				);
-			for (const r of rows) existingIds.add(r.id);
+				),
+		);
+		for (const r of rows) existingIds.add(r.id);
+	}
+
+	const allTagSlugs = dedupeTagSlugs(
+		meals.flatMap((m) => ("tags" in m && m.tags ? m.tags : [])),
+	);
+	const tagIdsBySlug = new Map<string, string>();
+	if (allTagSlugs.length > 0) {
+		const resolvedIds = await resolveTagIds(db, organizationId, allTagSlugs);
+		for (let i = 0; i < allTagSlugs.length; i++) {
+			tagIdsBySlug.set(allTagSlugs[i], resolvedIds[i]);
 		}
 	}
+	const writeOptions = {
+		tagIdsBySlug,
+		skipReturnRead: true as const,
+	};
 
 	const toCreate = meals.filter((m) => !m.id || !existingIds.has(m.id));
 	if (toCreate.length > 0 && env) {
@@ -153,13 +167,19 @@ export async function applyGalleyImport(
 			if (m.type === "provision") {
 				const prov = m as ManifestProvision;
 				if (prov.id && existingIds.has(prov.id)) {
-					await updateProvision(db, organizationId, prov.id, {
-						name: prov.name,
-						domain: prov.domain,
-						quantity: prov.quantity,
-						unit: prov.unit,
-						tags: prov.tags,
-					});
+					await updateProvision(
+						db,
+						organizationId,
+						prov.id,
+						{
+							name: prov.name,
+							domain: prov.domain,
+							quantity: prov.quantity,
+							unit: prov.unit,
+							tags: prov.tags,
+						},
+						writeOptions,
+					);
 					result.updated += 1;
 				} else {
 					await createProvision(
@@ -173,6 +193,7 @@ export async function applyGalleyImport(
 							tags: prov.tags,
 						},
 						env,
+						writeOptions,
 					);
 					result.imported += 1;
 				}
@@ -200,10 +221,10 @@ export async function applyGalleyImport(
 				};
 
 				if (rec.id && existingIds.has(rec.id)) {
-					await updateMeal(db, organizationId, rec.id, mealInput);
+					await updateMeal(db, organizationId, rec.id, mealInput, writeOptions);
 					result.updated += 1;
 				} else {
-					await createMeal(db, organizationId, mealInput, env);
+					await createMeal(db, organizationId, mealInput, env, writeOptions);
 					result.imported += 1;
 				}
 			}

@@ -5,6 +5,7 @@ import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "~/lib/query-utils.server";
 
@@ -19,6 +20,10 @@ describe("constants", () => {
 
 	it("D1_MAX_TAG_ROWS_PER_STATEMENT is floor(100/2) = 50", () => {
 		expect(D1_MAX_TAG_ROWS_PER_STATEMENT).toBe(50);
+	});
+
+	it("D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT is floor(100/7) = 14", () => {
+		expect(D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT).toBe(14);
 	});
 });
 

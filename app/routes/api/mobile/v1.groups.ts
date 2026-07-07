@@ -5,7 +5,7 @@ import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log } from "~/lib/logging.server";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileCreateGroupSchema } from "~/lib/schemas/mobile/groups";
 import type { Route } from "./+types/v1.groups";
 
@@ -32,17 +32,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{
-					error: "Too many group creation requests. Please try again later.",
-					retryAfter: rateLimitResult.retryAfter,
-				},
-				{
-					status: 429,
-					headers: {
-						"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					},
-				},
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many group creation requests. Please try again later.",
+				{ includeBodyMetadata: true },
 			);
 		}
 

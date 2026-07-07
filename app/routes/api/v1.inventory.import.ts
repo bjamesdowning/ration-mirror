@@ -3,7 +3,7 @@ import { requireApiKey } from "~/lib/api-key.server";
 import { applyCargoImport } from "~/lib/cargo.server";
 import { parseInventoryCsv } from "~/lib/csv-parser";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/v1.inventory.import";
 
 /**
@@ -22,18 +22,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		apiKeyId,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many requests",
-				retryAfter: rateLimitResult.retryAfter,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": String(rateLimitResult.retryAfter ?? 60),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests", {
+			includeBodyMetadata: true,
+		});
 	}
 
 	const contentType = request.headers.get("Content-Type") ?? "";

@@ -5,7 +5,7 @@ import {
 	mapMealGenerateSubmitError,
 	submitMealGenerate,
 } from "~/lib/meal-generate-submit.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealGenerateRequestSchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/meals.generate";
 
@@ -22,11 +22,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many generation requests. Please try again later.",
-			},
-			{ status: 429 },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many generation requests. Please try again later.",
 		);
 	}
 

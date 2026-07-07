@@ -3,7 +3,7 @@ import { getClientIp } from "~/lib/agent/claim.server";
 import { provisionAgentUser } from "~/lib/agent/provision.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { agentAnonRegisterSchema } from "~/lib/schemas/agent-auth";
 import type { Route } from "./+types/auth";
 
@@ -22,13 +22,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			clientIp,
 		);
 		if (!rateLimit.allowed) {
-			return data(
-				{ error: "Too many registration attempts" },
-				{
-					status: 429,
-					headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) },
-				},
-			);
+			return rateLimitResponse(rateLimit, "Too many registration attempts");
 		}
 
 		const body = await request.json();

@@ -4,6 +4,7 @@ import { cargo, cargoTag, meal, mealTag, tag } from "../db/schema";
 import {
 	chunkArray,
 	chunkedQuery,
+	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
 import {
@@ -179,10 +180,46 @@ export async function resolveTagIds(
 
 	const bySlug = new Map(existingRows.map((row) => [row.slug, row.id]));
 
-	for (const slug of normalized) {
-		if (bySlug.has(slug)) continue;
-		const record = await createTag(db, organizationId, { slug }, userId);
-		bySlug.set(slug, record.id);
+	const missing = normalized.filter((slug) => !bySlug.has(slug));
+	if (missing.length > 0) {
+		const insertRows = missing.map((slug) => ({
+			id: crypto.randomUUID(),
+			organizationId,
+			slug,
+			name: formatTagName(slug),
+			color: null as string | null,
+			category: null as string | null,
+			createdBy: userId ?? null,
+		}));
+
+		const insertStmts = chunkArray(
+			insertRows,
+			D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
+		).map((chunk) => d1.insert(tag).values(chunk).onConflictDoNothing());
+
+		if (insertStmts.length > 0) {
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch(insertStmts as [any, ...any[]]);
+		}
+
+		const resolvedRows = await chunkedQuery(missing, (chunk) =>
+			d1
+				.select({ id: tag.id, slug: tag.slug })
+				.from(tag)
+				.where(
+					and(eq(tag.organizationId, organizationId), inArray(tag.slug, chunk)),
+				),
+		);
+
+		for (const row of resolvedRows) {
+			bySlug.set(row.slug, row.id);
+		}
+
+		for (const slug of missing) {
+			if (!bySlug.has(slug)) {
+				throw new Error("tag_create_failed");
+			}
+		}
 	}
 
 	return normalized.map((slug) => bySlug.get(slug) as string);

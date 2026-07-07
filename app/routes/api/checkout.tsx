@@ -8,7 +8,7 @@ import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import { assertCanPurchaseStripeSubscription } from "~/lib/billing.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CheckoutFormSchema } from "~/lib/schemas/checkout";
 import {
 	CREDIT_PACKS,
@@ -38,20 +38,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many checkout requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-				resetAt: rateLimitResult.resetAt,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": rateLimitResult.resetAt.toString(),
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many checkout requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

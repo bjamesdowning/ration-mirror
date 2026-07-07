@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MergeTagSchema } from "~/lib/schemas/tag";
 import { getTagById, mergeTags } from "~/lib/tags.server";
 import type { Route } from "./+types/tags.$id.merge";
@@ -19,10 +19,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			session.user.id,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests." },
-				{ status: 429, headers: { "Retry-After": "60" } },
-			);
+			throw rateLimitResponse(rateLimitResult, "Too many requests.");
 		}
 
 		const tagId = params.id;

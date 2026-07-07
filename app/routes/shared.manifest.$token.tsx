@@ -6,7 +6,7 @@ import {
 	getWeekDates,
 	getWeekStart,
 } from "~/lib/manifest.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { SLOT_LABELS, SLOT_TYPES } from "~/lib/schemas/manifest";
 import type { Route } from "./+types/shared.manifest.$token";
@@ -37,15 +37,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests" },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() ?? "60",
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests");
 	}
 
 	const token = params.token;

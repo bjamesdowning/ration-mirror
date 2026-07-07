@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { getAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { storeMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileMagicLinkSchema } from "~/lib/schemas/mobile/auth";
 import type { Route } from "./+types/v1.auth.magic-link";
 
@@ -22,9 +22,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		ip,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

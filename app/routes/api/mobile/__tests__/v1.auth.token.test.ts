@@ -5,9 +5,14 @@ const consumeMobileAuthCode = vi.fn();
 const verifyPkceChallenge = vi.fn();
 const issueMobileTokenPair = vi.fn();
 
-vi.mock("~/lib/rate-limiter.server", () => ({
-	checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
-}));
+vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/rate-limiter.server")>();
+	return {
+		...actual,
+		checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
+	};
+});
 
 vi.mock("~/lib/mobile/token.server", () => ({
 	consumeMobileAuthCode: (...args: unknown[]) => consumeMobileAuthCode(...args),

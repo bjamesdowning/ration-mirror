@@ -3,7 +3,7 @@ import { getCargoItem, jettisonItem, updateItem } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
 import { getMealsForCargo } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileUpdateCargoSchema } from "~/lib/schemas/mobile/cargo";
 import type { Route } from "./+types/v1.cargo.$id";
 
@@ -49,9 +49,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

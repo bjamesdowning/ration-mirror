@@ -1,26 +1,27 @@
-import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data, redirect } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
+import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
-import { deleteCargoVectors } from "~/lib/vector.server";
+import { deleteOrganization } from "~/lib/organizations.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.delete";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const db = drizzle(context.cloudflare.env.DB, { schema });
+	const env = context.cloudflare.env;
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
-		"group_create",
+		env.RATION_KV,
+		"group_delete",
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many group deletion requests. Please try again later.",
 		);
 	}
 
@@ -31,7 +32,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw data({ error: "Organization ID is required" }, { status: 400 });
 	}
 
-	// 1. Verify ownership
 	const membership = await db.query.member.findFirst({
 		where: (m, { and, eq }) =>
 			and(eq(m.organizationId, organizationId), eq(m.userId, user.id)),
@@ -44,77 +44,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// 2. Perform deletion
 	log.info("[DeleteGroup] Request to delete org", {
 		orgId: redactId(organizationId),
 		userId: redactId(user.id),
 	});
 
 	try {
-		// Fetch cargo IDs before deletion so Vectorize can be cleaned up.
-		// Must happen before the D1 batch since the batch removes the rows.
-		const cargoRows = await db
-			.select({ id: schema.cargo.id })
-			.from(schema.cargo)
-			.where(eq(schema.cargo.organizationId, organizationId));
-		const cargoIds = cargoRows.map((r) => r.id);
-
-		if (cargoIds.length > 0) {
-			await deleteCargoVectors(context.cloudflare.env, cargoIds);
-			log.info("[DeleteGroup] Cleaned up Vectorize vectors", {
-				count: cargoIds.length,
-				orgId: redactId(organizationId),
-			});
-		}
-
-		// Execute all D1 deletions atomically via D1 batch API
-		log.info("[DeleteGroup] Executing atomic deletion", {
-			orgId: redactId(organizationId),
-		});
-
-		await db.batch([
-			// 1. Clear active org for all sessions
-			db
-				.update(schema.session)
-				.set({ activeOrganizationId: null })
-				.where(eq(schema.session.activeOrganizationId, organizationId)),
-
-			// 2. Delete inventory
-			db
-				.delete(schema.cargo)
-				.where(eq(schema.cargo.organizationId, organizationId)),
-
-			// 3. Delete grocery lists (cascade deletes grocery items)
-			db
-				.delete(schema.supplyList)
-				.where(eq(schema.supplyList.organizationId, organizationId)),
-
-			// 4. Delete meals (cascade deletes meal ingredients and tags)
-			db
-				.delete(schema.meal)
-				.where(eq(schema.meal.organizationId, organizationId)),
-
-			// 5. Delete memberships
-			db
-				.delete(schema.member)
-				.where(eq(schema.member.organizationId, organizationId)),
-
-			// 6. Delete ledger entries
-			db
-				.delete(schema.ledger)
-				.where(eq(schema.ledger.organizationId, organizationId)),
-
-			// 7. Delete invitations
-			db
-				.delete(schema.invitation)
-				.where(eq(schema.invitation.organizationId, organizationId)),
-
-			// 8. Delete organization record
-			db
-				.delete(schema.organization)
-				.where(eq(schema.organization.id, organizationId)),
-		]);
-
+		await deleteOrganization(env, organizationId);
 		log.info("[DeleteGroup] Successfully deleted org", {
 			orgId: redactId(organizationId),
 		});
@@ -122,13 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		log.error("[DeleteGroup] FATAL: Failed to delete group", error, {
 			orgId: redactId(organizationId),
 		});
-		throw data(
-			{
-				error:
-					"Failed to delete group. Please try again later or contact support.",
-			},
-			{ status: 500 },
-		);
+		return handleApiError(error);
 	}
 
 	return redirect("/select-group");

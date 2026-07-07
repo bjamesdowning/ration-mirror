@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CreateTagSchema } from "~/lib/schemas/tag";
 import { createTag, getOrganizationTags } from "~/lib/tags.server";
 import type { Route } from "./+types/tags";
@@ -15,10 +15,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			session.user.id,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests." },
-				{ status: 429, headers: { "Retry-After": "60" } },
-			);
+			throw rateLimitResponse(rateLimitResult, "Too many requests.");
 		}
 		const tags = await getOrganizationTags(context.cloudflare.env.DB, groupId);
 		return { tags };
@@ -40,10 +37,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			session.user.id,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests." },
-				{ status: 429, headers: { "Retry-After": "60" } },
-			);
+			throw rateLimitResponse(rateLimitResult, "Too many requests.");
 		}
 
 		const body = await request.json();

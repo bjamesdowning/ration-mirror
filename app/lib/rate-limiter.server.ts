@@ -1,3 +1,4 @@
+import { data } from "react-router";
 import { log } from "./logging.server";
 
 /**
@@ -26,7 +27,7 @@ interface RateLimitConfig {
 	keyPrefix: string; // KV key prefix for this limit type
 }
 
-interface RateLimitResult {
+export interface RateLimitResult {
 	allowed: boolean; // Whether the request should be allowed
 	remaining: number; // Remaining requests in current window
 	resetAt: number; // Unix timestamp when window resets
@@ -120,6 +121,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 5, // Very restrictive to prevent spam
 		keyPrefix: "rate:group_create",
+	},
+	group_delete: {
+		windowMs: 60_000, // 1 minute
+		maxRequests: 5,
+		keyPrefix: "rate:group_delete",
 	},
 	group_invite: {
 		windowMs: 60_000, // 1 minute
@@ -621,4 +627,34 @@ export async function getRateLimitStatus(
 		resetAt,
 		retryAfter: allowed ? undefined : Math.ceil((resetAt - now) / 1000),
 	};
+}
+
+export interface RateLimitResponseOptions {
+	includeBodyMetadata?: boolean;
+	extraHeaders?: Record<string, string>;
+}
+
+/**
+ * Standard 429 response for blocked rate-limit checks.
+ * Uses dynamic Retry-After from the limiter result (fixes hardcoded "60" bug).
+ */
+export function rateLimitResponse(
+	result: RateLimitResult,
+	message = "Too many requests. Please try again later.",
+	options?: RateLimitResponseOptions,
+) {
+	const body: Record<string, unknown> = { error: message };
+	if (options?.includeBodyMetadata) {
+		body.retryAfter = result.retryAfter;
+		body.resetAt = result.resetAt;
+	}
+	return data(body, {
+		status: 429,
+		headers: {
+			"Retry-After": String(result.retryAfter ?? 60),
+			"X-RateLimit-Remaining": "0",
+			"X-RateLimit-Reset": String(result.resetAt),
+			...options?.extraHeaders,
+		},
+	});
 }

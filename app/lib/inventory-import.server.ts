@@ -15,6 +15,7 @@
  */
 
 import { applyCargoImport } from "./cargo.server";
+import { sha256Hex } from "./crypto.server";
 import { type ParsedCsvItem, parseInventoryCsv } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
 import { SUPPORTED_UNITS } from "./units";
@@ -56,20 +57,7 @@ async function hashItems(items: InventoryImportItem[]): Promise<string> {
 		expiresAt: i.expiresAt ?? null,
 	}));
 	const json = JSON.stringify(canonical);
-	if (typeof crypto !== "undefined" && crypto.subtle) {
-		const buf = new TextEncoder().encode(json);
-		const digest = await crypto.subtle.digest("SHA-256", buf);
-		return Array.from(new Uint8Array(digest))
-			.map((b) => b.toString(16).padStart(2, "0"))
-			.join("")
-			.slice(0, 32);
-	}
-	// Fallback (test environments without WebCrypto): non-cryptographic.
-	let h = 0;
-	for (let i = 0; i < json.length; i++) {
-		h = (h * 31 + json.charCodeAt(i)) | 0;
-	}
-	return `f${(h >>> 0).toString(16)}`;
+	return sha256Hex(json, 32);
 }
 
 export interface InventoryImportPreviewRow {

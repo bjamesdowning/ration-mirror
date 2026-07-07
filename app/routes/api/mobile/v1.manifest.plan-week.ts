@@ -7,7 +7,7 @@ import {
 	mapPlanWeekSubmitError,
 	submitPlanWeek,
 } from "~/lib/plan-week-submit.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileWeekPlanRequestSchema } from "~/lib/schemas/mobile/manifest";
 import type { Route } from "./+types/v1.manifest.plan-week";
 
@@ -31,9 +31,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many planning requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many planning requests. Please try again later.",
 			);
 		}
 

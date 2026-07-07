@@ -1,6 +1,6 @@
-import { data, redirect } from "react-router";
+import { redirect } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { createSupplyListFromAllMeals } from "~/lib/supply.server";
 import type { Route } from "./+types/trigger";
 
@@ -15,17 +15,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many automation requests. Please try again later.",
-				retryAfter: rateLimitResult.retryAfter,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many automation requests. Please try again later.",
+			{ includeBodyMetadata: true },
 		);
 	}
 

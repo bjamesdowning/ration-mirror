@@ -1,11 +1,10 @@
 import { and, desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { data } from "react-router";
 import { cargo } from "~/db/schema";
 import { handleApiError } from "~/lib/error-handler";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SearchQuerySchema } from "~/lib/schemas/search";
 import type { Route } from "./+types/v1.search";
 
@@ -33,9 +32,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many search requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "10" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many search requests. Please try again later.",
 			);
 		}
 

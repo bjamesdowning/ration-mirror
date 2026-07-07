@@ -12,7 +12,7 @@ import {
 import { AGENT_API_KEY_SCOPES } from "~/lib/agent/scopes";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { agentClaimCompleteSchema } from "~/lib/schemas/agent-auth";
 import type { Route } from "./+types/auth.claim.complete";
 
@@ -33,13 +33,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			parsed.claim_token.slice(0, 32),
 		);
 		if (!tokenLimit.allowed) {
-			return data(
-				{ error: "Too many verification attempts" },
-				{
-					status: 429,
-					headers: { "Retry-After": String(tokenLimit.retryAfter ?? 300) },
-				},
-			);
+			return rateLimitResponse(tokenLimit, "Too many verification attempts");
 		}
 
 		const registration = await findRegistrationByClaimToken(

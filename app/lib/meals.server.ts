@@ -39,6 +39,7 @@ import type {
 	ProvisionInput,
 	ProvisionUpdateInput,
 } from "./schemas/meal";
+import { dedupeTagSlugs } from "./tags";
 import {
 	getOrganizationTagSlugs,
 	getTagsForCargoIds,
@@ -64,6 +65,33 @@ export type { TagRecord };
 export type CargoDeduction = { cargoId: string; quantity: number };
 
 export type CookMealDeductionMode = "strict" | "partial";
+
+export type MealWriteOptions = {
+	/** Pre-resolved slug → tag id map from a bulk resolveTagIds call. */
+	tagIdsBySlug?: Map<string, string>;
+	/** Skip trailing getMeal() when the caller only needs success/failure. */
+	skipReturnRead?: boolean;
+};
+
+async function resolveMealTagIds(
+	db: D1Database,
+	organizationId: string,
+	slugs: string[],
+	options?: MealWriteOptions,
+): Promise<string[]> {
+	if (slugs.length === 0) return [];
+	if (options?.tagIdsBySlug) {
+		const normalized = dedupeTagSlugs(slugs);
+		return normalized.map((slug) => {
+			const id = options.tagIdsBySlug?.get(slug);
+			if (!id) {
+				throw new Error(`tag_not_resolved:${slug}`);
+			}
+			return id;
+		});
+	}
+	return resolveTagIds(db, organizationId, slugs);
+}
 
 export type CargoDeductionPlan = {
 	allocations: { cargoId: string; quantityToDeduct: number }[];
@@ -619,6 +647,7 @@ export async function createMeal(
 	organizationId: string,
 	data: MealInput,
 	env?: Env,
+	options?: MealWriteOptions,
 ) {
 	if (env) {
 		const capacity = await checkCapacity(env, organizationId, "meals", 1);
@@ -634,7 +663,12 @@ export async function createMeal(
 
 	let mealTagRows: { mealId: string; tagId: string }[] = [];
 	if (data.tags.length > 0) {
-		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		const tagIds = await resolveMealTagIds(
+			db,
+			organizationId,
+			data.tags,
+			options,
+		);
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
@@ -696,7 +730,9 @@ export async function createMeal(
 		},
 	);
 
-	return await getMeal(db, organizationId, mealId);
+	return options?.skipReturnRead
+		? null
+		: await getMeal(db, organizationId, mealId);
 }
 
 /**
@@ -816,6 +852,7 @@ export async function updateMeal(
 	organizationId: string,
 	mealId: string,
 	data: MealInput,
+	options?: MealWriteOptions,
 ) {
 	const d1 = drizzle(db);
 
@@ -829,7 +866,12 @@ export async function updateMeal(
 
 	let mealTagRows: { mealId: string; tagId: string }[] = [];
 	if (data.tags.length > 0) {
-		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		const tagIds = await resolveMealTagIds(
+			db,
+			organizationId,
+			data.tags,
+			options,
+		);
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
@@ -885,7 +927,9 @@ export async function updateMeal(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
-	return await getMeal(db, organizationId, mealId);
+	return options?.skipReturnRead
+		? null
+		: await getMeal(db, organizationId, mealId);
 }
 
 /**
@@ -897,6 +941,7 @@ export async function createProvision(
 	organizationId: string,
 	data: ProvisionInput,
 	env?: Env,
+	options?: MealWriteOptions,
 ) {
 	if (env) {
 		const capacity = await checkCapacity(env, organizationId, "meals", 1);
@@ -913,7 +958,12 @@ export async function createProvision(
 
 	let mealTagRows: { mealId: string; tagId: string }[] = [];
 	if (data.tags.length > 0) {
-		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		const tagIds = await resolveMealTagIds(
+			db,
+			organizationId,
+			data.tags,
+			options,
+		);
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
@@ -953,7 +1003,9 @@ export async function createProvision(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
-	return await getMeal(db, organizationId, mealId);
+	return options?.skipReturnRead
+		? null
+		: await getMeal(db, organizationId, mealId);
 }
 
 /**
@@ -965,6 +1017,7 @@ export async function updateProvision(
 	organizationId: string,
 	mealId: string,
 	data: ProvisionUpdateInput,
+	options?: MealWriteOptions,
 ) {
 	const d1 = drizzle(db);
 
@@ -1002,7 +1055,12 @@ export async function updateProvision(
 
 	let mealTagRows: { mealId: string; tagId: string }[] = [];
 	if (data.tags !== undefined && data.tags.length > 0) {
-		const tagIds = await resolveTagIds(db, organizationId, data.tags);
+		const tagIds = await resolveMealTagIds(
+			db,
+			organizationId,
+			data.tags,
+			options,
+		);
 		mealTagRows = tagIds.map((tagId) => ({ mealId, tagId }));
 	}
 
@@ -1030,7 +1088,9 @@ export async function updateProvision(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(batch as [any, ...any[]]);
 
-	return await getMeal(db, organizationId, mealId);
+	return options?.skipReturnRead
+		? null
+		: await getMeal(db, organizationId, mealId);
 }
 
 /**

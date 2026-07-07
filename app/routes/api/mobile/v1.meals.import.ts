@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	mapRecipeImportSubmitError,
 	submitRecipeImport,
@@ -30,9 +30,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many import requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many import requests. Please try again later.",
 			);
 		}
 

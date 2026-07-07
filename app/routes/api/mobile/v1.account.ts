@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { handleApiError, retryOnD1Contention } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { purgeUserAccount } from "~/lib/user-purge.server";
 import type { Route } from "./+types/v1.account";
 
@@ -23,9 +23,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Account deletion is rate limited. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "300" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Account deletion is rate limited. Please try again later.",
 			);
 		}
 

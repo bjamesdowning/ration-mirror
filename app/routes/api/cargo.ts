@@ -1,8 +1,7 @@
-import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { getCargo } from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/cargo";
 
 /**
@@ -22,14 +21,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			session.user.id,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please slow down." },
-				{
-					status: 429,
-					headers: {
-						"Retry-After": String(rateLimitResult.retryAfter ?? 60),
-					},
-				},
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please slow down.",
 			);
 		}
 

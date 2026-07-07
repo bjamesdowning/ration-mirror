@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { cookMealWithConfirmation } from "~/lib/cook-confirmation.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/meals.$id.cook";
 
 const CookRequestSchema = z.object({
@@ -26,9 +26,9 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{ status: 429, headers: { "Retry-After": "60" } },
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

@@ -10,9 +10,14 @@ vi.mock("~/lib/mobile/auth.server", () => ({
 		requireMobileActiveGroup(...args),
 }));
 
-vi.mock("~/lib/rate-limiter.server", () => ({
-	checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
-}));
+vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/rate-limiter.server")>();
+	return {
+		...actual,
+		checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
+	};
+});
 
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: () => ({

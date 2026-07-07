@@ -8,7 +8,7 @@ import {
 	parseFinUserId,
 } from "~/lib/fin-connector.server";
 import { log } from "~/lib/logging.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/fin.billing-summary";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -34,21 +34,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		userId,
 	);
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{
-				error: "Too many requests",
-				retryAfter: rateLimitResult.retryAfter,
-				resetAt: rateLimitResult.resetAt,
-			},
-			{
-				status: 429,
-				headers: {
-					"Retry-After": String(rateLimitResult.retryAfter ?? 60),
-					"X-RateLimit-Remaining": "0",
-					"X-RateLimit-Reset": String(rateLimitResult.resetAt),
-				},
-			},
-		);
+		throw rateLimitResponse(rateLimitResult, "Too many requests", {
+			includeBodyMetadata: true,
+		});
 	}
 
 	const db = drizzle(context.cloudflare.env.DB, { schema });

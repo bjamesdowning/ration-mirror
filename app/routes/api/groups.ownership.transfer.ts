@@ -5,7 +5,7 @@ import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { invalidateTierCache } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { TransferOwnershipSchema } from "~/lib/schemas/groups";
 import type { Route } from "./+types/groups.ownership.transfer";
 
@@ -31,14 +31,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	);
 
 	if (!rateLimitResult.allowed) {
-		throw data(
-			{ error: "Too many requests. Please try again later." },
-			{
-				status: 429,
-				headers: {
-					"Retry-After": rateLimitResult.retryAfter?.toString() || "60",
-				},
-			},
+		throw rateLimitResponse(
+			rateLimitResult,
+			"Too many requests. Please try again later.",
 		);
 	}
 

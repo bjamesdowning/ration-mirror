@@ -1105,7 +1105,8 @@ erDiagram
 | Constant | Value | Columns | Table |
 |----------|-------|---------|-------|
 | `D1_MAX_INGREDIENT_ROWS_PER_STATEMENT` | 10 | 10 | `meal_ingredient` |
-| `D1_MAX_TAG_ROWS_PER_STATEMENT` | 33 | 3 | `meal_tag` |
+| `D1_MAX_TAG_ROWS_PER_STATEMENT` | 50 | 2 | `cargo_tag` / `meal_tag` |
+| `D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT` | 14 | 7 | `tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
 
 **Why `db.batch()` for multi-statement writes?** D1 is accessed over HTTP (not a local socket). Each `await db.insert(...)` is a separate HTTP round-trip. `db.batch([stmt1, stmt2, ...])` is a single round-trip regardless of statement count, and executes the statements atomically server-side. Sequential `await` loops are explicitly forbidden in the codebase for independent writes.

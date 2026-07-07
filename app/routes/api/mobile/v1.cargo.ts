@@ -10,7 +10,7 @@ import { handleApiError } from "~/lib/error-handler";
 import { decodeCursor, encodeCursor } from "~/lib/mcp/envelope";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { paginatedResponse } from "~/lib/mobile/responses.server";
-import { checkRateLimit } from "~/lib/rate-limiter.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	MobileCargoListQuerySchema,
 	MobileCreateCargoSchema,
@@ -31,9 +31,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please slow down." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please slow down.",
 			);
 		}
 
@@ -103,9 +103,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 		);
 		if (!rateLimitResult.allowed) {
-			throw data(
-				{ error: "Too many requests. Please try again later." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
 			);
 		}
 

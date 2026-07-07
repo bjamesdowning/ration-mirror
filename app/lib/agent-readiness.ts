@@ -6,7 +6,7 @@ import {
 	CLAIM_TOKEN_SLIDE_MS,
 } from "./agent/claim.constants";
 import { AGENT_API_KEY_SCOPES } from "./agent/scopes";
-import { sha256Hex } from "./crypto.server";
+import { sha256Hex } from "./crypto";
 import { formatMcpConnectMarkdown, MCP_ENDPOINT_URL } from "./mcp/connect-copy";
 import {
 	OAUTH_ADVERTISED_MCP_SCOPES,

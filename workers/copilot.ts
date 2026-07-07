@@ -434,7 +434,11 @@ export default {
 			);
 			writeCopilotMetric(env, "conversation_open", identity, conversationId);
 			const routedUrl = new URL(request.url);
-			routedUrl.pathname = `/agents/project-think-agent/${agentName}`;
+			// PartyServer resolves the namespace segment via
+			// camelCaseToKebabCase(bindingName). The Durable Object binding is
+			// "PROJECT_THINK", which maps to "project-think". This must match the
+			// binding name (not the class name) or routing returns 400.
+			routedUrl.pathname = `/agents/project-think/${agentName}`;
 			const routedRequest = new Request(routedUrl, request);
 			const response = await routeAgentRequest(routedRequest, env, {
 				cors: true,
@@ -446,6 +450,14 @@ export default {
 					request,
 					env,
 					{ error: "copilot_consent_required", resetAt: error.resetAt },
+					{ status: 402 },
+				);
+			}
+			if (error instanceof InsufficientCreditsError) {
+				return jsonResponse(
+					request,
+					env,
+					{ error: "insufficient_credits", required: error.required },
 					{ status: 402 },
 				);
 			}
@@ -480,9 +492,7 @@ export default {
 					{ status: 403 },
 				);
 			}
-			log.error("[Copilot] Worker error", {
-				error: error instanceof Error ? error.message : "unknown",
-			});
+			log.error("[Copilot] Worker error", error);
 			return jsonResponse(
 				request,
 				env,

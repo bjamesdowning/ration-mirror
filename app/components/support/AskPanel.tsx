@@ -324,10 +324,21 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setDraft("");
 		try {
 			const socket = await connectSocket();
+			// Think is server-authoritative: submitting a turn uses the AI SDK
+			// "use chat request" envelope (a POST with the messages in the body),
+			// not a flat "cf_agent_chat_messages" transcript overwrite (which the
+			// server ignores).
 			socket.send(
 				JSON.stringify({
-					type: "cf_agent_chat_messages",
-					messages: toAgentMessages(nextMessages),
+					type: "cf_agent_use_chat_request",
+					id: crypto.randomUUID(),
+					init: {
+						method: "POST",
+						body: JSON.stringify({
+							messages: toAgentMessages(nextMessages),
+							trigger: "submit-message",
+						}),
+					},
 				}),
 			);
 		} catch (e) {

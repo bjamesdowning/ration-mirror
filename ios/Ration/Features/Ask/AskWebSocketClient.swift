@@ -56,14 +56,25 @@ final class AskWebSocketClient {
 
     func send(_ messages: [CopilotMessage]) async throws {
         guard let task else { throw ClientError.notConnected }
-        let payload = AgentChatMessagesPayload(
-            messages: messages.map { message in
-                AgentChatMessage(
-                    id: message.id,
-                    role: message.role,
-                    parts: [AgentChatPart(type: "text", text: message.content)]
-                )
-            }
+        // Think is server-authoritative: submitting a turn uses the AI SDK
+        // "use chat request" envelope (a POST with the messages in the body),
+        // not a flat "cf_agent_chat_messages" transcript overwrite (ignored by
+        // the server).
+        let uiMessages = messages.map { message in
+            AgentChatMessage(
+                id: message.id,
+                role: message.role,
+                parts: [AgentChatPart(type: "text", text: message.content)]
+            )
+        }
+        let bodyPayload = AgentChatRequestBody(messages: uiMessages, trigger: "submit-message")
+        let bodyData = try JSON.encoder.encode(bodyPayload)
+        guard let bodyString = String(data: bodyData, encoding: .utf8) else {
+            throw ClientError.invalidMessage
+        }
+        let payload = AgentUseChatRequestPayload(
+            id: UUID().uuidString,
+            requestInit: AgentRequestInit(method: "POST", body: bodyString)
         )
         let data = try JSON.encoder.encode(payload)
         guard let json = String(data: data, encoding: .utf8) else {
@@ -204,9 +215,26 @@ private struct ApprovalResponsePayload: Encodable {
     }
 }
 
-private struct AgentChatMessagesPayload: Encodable {
-    let type = "cf_agent_chat_messages"
+private struct AgentUseChatRequestPayload: Encodable {
+    let type = "cf_agent_use_chat_request"
+    let id: String
+    let requestInit: AgentRequestInit
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case id
+        case requestInit = "init"
+    }
+}
+
+private struct AgentRequestInit: Encodable {
+    let method: String
+    let body: String
+}
+
+private struct AgentChatRequestBody: Encodable {
     let messages: [AgentChatMessage]
+    let trigger: String
 }
 
 private struct AgentChatMessage: Encodable {

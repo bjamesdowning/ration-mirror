@@ -9,11 +9,11 @@ final class TabDockContext {
     private var actionFactories: [Int: () -> AnyView] = [:]
 
     func setAction<Content: View>(for tag: Int, @ViewBuilder content: @escaping () -> Content) {
-        let isNew = actionFactories[tag] == nil
+        // Idempotent — re-registering the same tab on every SwiftUI body pass
+        // would otherwise ping @Observable and re-render the tab shell in a loop.
+        guard actionFactories[tag] == nil else { return }
         actionFactories[tag] = { AnyView(content()) }
-        if isNew {
-            revision += 1
-        }
+        revision += 1
     }
 
     func clearAction(for tag: Int) {
@@ -37,19 +37,18 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
     @ViewBuilder let action: () -> Action
 
     func body(content: Content) -> some View {
-        let _ = sync()
-        return content
+        content
+            .onAppear { sync() }
+            .onChange(of: isActive) { _, _ in sync() }
             .onDisappear { tabDock.clearAction(for: tag) }
     }
 
-    @discardableResult
-    private func sync() -> Bool {
+    private func sync() {
         if isActive {
             tabDock.setAction(for: tag, content: action)
         } else {
             tabDock.clearAction(for: tag)
         }
-        return true
     }
 }
 

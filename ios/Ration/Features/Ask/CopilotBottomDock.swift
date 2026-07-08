@@ -20,6 +20,8 @@ struct CopilotBottomDock: View {
     ]
 
     var body: some View {
+        // Align to the bottom without expanding hit testing across the full
+        // TabView overlay (which would swallow tab-bar and content taps).
         VStack(spacing: 0) {
             dockContent
                 .padding(.horizontal, CopilotDockLayout.dockHorizontalPadding)
@@ -27,6 +29,8 @@ struct CopilotBottomDock: View {
 
             bottomFade
         }
+        .frame(maxWidth: .infinity, alignment: .bottom)
+        .fixedSize(horizontal: false, vertical: true)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: scrollContext.isExpanded)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: tabDock.revision)
         .task(id: placeholderIndex) {

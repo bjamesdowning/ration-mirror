@@ -1629,6 +1629,7 @@ Only `/mcp` requires authentication; discovery endpoints under `/.well-known/...
 **Troubleshooting MCP connections:**
 
 - **Browser shows "No authorization code received":** The MCP client callback opened without `?code=` — usually **Deny** was clicked, the flow expired (~10 minutes), or a stale browser tab was reused. Remove and re-add the MCP server in Cursor, then complete **sign-in → select household → Authorize** in one fresh tab. Prefer native URL config (`url` only) over `mcp-remote` when Cursor supports it.
+- **Authorize does nothing (console `form-action` on `/oauth/consent`):** CSP blocks the redirect to `http://localhost:PORT/callback` used by mcp-remote. Deploy >= v1.5.14, which routes localhost callbacks through `/oauth/return` before returning to the MCP client. Do not relax CSP manually.
 - **OAuth authorization failed / reconnect loop:** Revoke the grant in Hub → Settings → Developer → MCP, remove and re-add the MCP server in your client, then complete **sign-in → select household → authorize** in a single browser tab within ~10 minutes. Ensure the client supports OAuth 2.1 / protected-resource discovery (`oauth2` on the server card).
 - **Observability:** Production Worker logs emit structured `oauth_flow` events (`step`, `outcome`, `error_code`, `correlation_id`) and MCP RS `mcp_oauth_verify_failed` events — no tokens or `oauth_query` payloads.
 - **ServerError / Connection closed (API key):** Ensure `Authorization` is exactly `Bearer ` + your full key (e.g. `Bearer rtn_live_xxxxx`).

@@ -122,6 +122,18 @@ function isMcpClientCallbackHost(hostname: string): boolean {
 	return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
+/** mcp-remote and similar bridges use http://localhost or 127.0.0.1 callback URIs. */
+export function isLocalhostHttpMcpClientRedirectUrl(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		return (
+			parsed.protocol === "http:" && isMcpClientCallbackHost(parsed.hostname)
+		);
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Classify Better Auth redirect targets before sending the browser to an MCP
  * client callback. Cursor and mcp-remote show "No authorization code received"

@@ -38,6 +38,13 @@
 - Fix: `/oauth/select-org` sets `ration_oauth_org_selected`, merges it into continue headers, and rejects continue responses that still target `/oauth/select-org` (`error_code=flow_step_mismatch`). Fresh `GET /oauth2/authorize` strips the cookie.
 - Confirm via logs: `event=oauth_flow step=select_org outcome=success detail=redirect_target=consent`. If `redirect_target=select_org` or `error_code=flow_step_mismatch`, the loop is still present.
 
+## Silent consent failure / form-action block
+
+- Symptom: Clicking **Authorize** on `/oauth/consent` does nothing; browser console shows `form-action 'self'` violation naming the consent URL (first hop in the redirect chain).
+- Cause: Chrome/Safari block form-POST redirect chains to `http://localhost:PORT/callback` (mcp-remote) when CSP `form-action` is `'self'` only. Native schemes (`cursor://`, `warp://`) already route via `/oauth/return`.
+- Fix: Consent success redirects localhost HTTP callbacks through `/oauth/return` (JS navigation bypasses `form-action`). Deploy >= v1.5.14. Do not relax global CSP to allow localhost.
+- Confirm: After Authorize, browser briefly shows `/oauth/return` then lands on the MCP client callback with `?code=`.
+
 ## Never log
 
 - Access tokens, refresh tokens, client secrets, or magic link URLs.

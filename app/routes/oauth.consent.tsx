@@ -14,7 +14,10 @@ import {
 	clearOAuthCorrelationCookie,
 	getOAuthCorrelationId,
 } from "~/lib/oauth-correlation.server";
-import { buildNativeCallbackHandoffPath } from "~/lib/oauth-native-handoff.server";
+import {
+	buildNativeCallbackHandoffPath,
+	shouldUseClientCallbackHandoff,
+} from "~/lib/oauth-native-handoff.server";
 import {
 	buildConsentScopeForSubmit,
 	buildOAuthPageUrl,
@@ -26,7 +29,6 @@ import {
 import {
 	classifyOAuthClientRedirect,
 	getSafeAuthRedirectUrl,
-	isNativeMcpClientRedirectUrl,
 	mapOAuthCallbackError,
 } from "~/lib/oauth-redirect.server";
 import {
@@ -191,7 +193,7 @@ export async function action({
 		const redirectHeaders = new Headers();
 		clearOAuthCorrelationCookie(redirectHeaders, request);
 		appendClearOAuthOrgSelectedCookie(redirectHeaders, request);
-		const destination = isNativeMcpClientRedirectUrl(redirectUrl)
+		const destination = shouldUseClientCallbackHandoff(redirectUrl)
 			? buildNativeCallbackHandoffPath(redirectUrl)
 			: redirectUrl;
 		throw redirect(destination, { headers: redirectHeaders });

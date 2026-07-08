@@ -1,10 +1,11 @@
 import {
 	classifyOAuthClientRedirect,
 	getSafeAuthRedirectUrl,
+	isLocalhostHttpMcpClientRedirectUrl,
 	isNativeMcpClientRedirectUrl,
 } from "./oauth-redirect.server";
 
-/** Base64url-encode a native client callback for the handoff page query param. */
+/** Base64url-encode a client callback for the handoff page query param. */
 export function encodeNativeCallbackTarget(url: string): string {
 	const bytes = new TextEncoder().encode(url);
 	let binary = "";
@@ -34,10 +35,18 @@ export function buildNativeCallbackHandoffPath(nativeUrl: string): string {
 	return `/oauth/return?to=${encodeNativeCallbackTarget(nativeUrl)}`;
 }
 
-export function validateNativeCallbackHandoffTarget(
+/** Native schemes and http localhost callbacks need /oauth/return to bypass CSP form-action. */
+export function shouldUseClientCallbackHandoff(url: string): boolean {
+	return (
+		isNativeMcpClientRedirectUrl(url) ||
+		isLocalhostHttpMcpClientRedirectUrl(url)
+	);
+}
+
+export function validateClientCallbackHandoffTarget(
 	target: string | null,
 ): string | null {
-	if (!target || !isNativeMcpClientRedirectUrl(target)) {
+	if (!target || !shouldUseClientCallbackHandoff(target)) {
 		return null;
 	}
 	if (!getSafeAuthRedirectUrl({ redirect: true, url: target })) {
@@ -48,6 +57,10 @@ export function validateNativeCallbackHandoffTarget(
 	}
 	return target;
 }
+
+/** @deprecated Use validateClientCallbackHandoffTarget */
+export const validateNativeCallbackHandoffTarget =
+	validateClientCallbackHandoffTarget;
 
 export function buildNativeCallbackHandoffHtml(targetUrl: string): string {
 	const escaped = targetUrl
@@ -60,6 +73,7 @@ export function buildNativeCallbackHandoffHtml(targetUrl: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="0;url=${escaped}" />
   <title>Returning to your app</title>
   <style>
     body { font-family: ui-monospace, monospace; background: #f8f9fa; color: #111; display: flex; min-height: 100vh; align-items: center; justify-content: center; margin: 0; }

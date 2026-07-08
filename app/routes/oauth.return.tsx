@@ -2,12 +2,12 @@ import { data } from "react-router";
 import {
 	buildNativeCallbackHandoffHtml,
 	decodeNativeCallbackTarget,
-	validateNativeCallbackHandoffTarget,
+	validateClientCallbackHandoffTarget,
 } from "~/lib/oauth-native-handoff.server";
 
 export async function loader({ request }: { request: Request }) {
 	const encoded = new URL(request.url).searchParams.get("to");
-	const target = validateNativeCallbackHandoffTarget(
+	const target = validateClientCallbackHandoffTarget(
 		encoded ? decodeNativeCallbackTarget(encoded) : null,
 	);
 

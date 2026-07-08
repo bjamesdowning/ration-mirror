@@ -10,7 +10,6 @@ import {
 	clearCopilotSession,
 	loadCopilotSession,
 	resolveCopilotOrgHydration,
-	saveCopilotSession,
 	touchCopilotSession,
 } from "~/lib/copilot/session-storage.client";
 import { AssistantMarkdown } from "./AssistantMarkdown";
@@ -472,12 +471,14 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		};
 	}, [clearToolLinger]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages stream or turn phase changes
 	useEffect(() => {
+		if (!isOpen) return;
 		messagesEndRef.current?.scrollIntoView({
 			behavior: "smooth",
 			block: "end",
 		});
-	});
+	}, [isOpen, messages.length, turnPhase]);
 
 	async function send() {
 		const text = draft.trim();

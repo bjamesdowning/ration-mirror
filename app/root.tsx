@@ -19,6 +19,7 @@ import { WebMcpProvider } from "./components/agent/WebMcpProvider";
 import { AGENT_DISCOVERY_LINK_HEADER } from "./lib/agent-readiness";
 import { hasAppleWebCredentials } from "./lib/apple-web-login.server";
 import { createAuth } from "./lib/auth.server";
+import { runRouteLoader } from "./lib/error-handler";
 import {
 	buildFlagContext,
 	getClientSafeFlags,
@@ -35,44 +36,47 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export const loader = async ({ request, context }: Route.LoaderArgs) => {
-	// Fast path: read theme from cookie (no DB hit)
-	const cookieHeader = request.headers.get("Cookie") || "";
-	const cookieTheme = cookieHeader.match(/theme=(light|dark)/)?.[1] as
-		| "light"
-		| "dark"
-		| undefined;
+	return runRouteLoader(async () => {
+		// Fast path: read theme from cookie (no DB hit)
+		const cookieHeader = request.headers.get("Cookie") || "";
+		const cookieTheme = cookieHeader.match(/theme=(light|dark)/)?.[1] as
+			| "light"
+			| "dark"
+			| undefined;
 
-	const auth = createAuth(context.cloudflare.env);
-	const session = await auth.api.getSession({ headers: request.headers });
+		const auth = createAuth(context.cloudflare.env);
+		const session = await auth.api.getSession({ headers: request.headers });
 
-	// Session theme as fallback (now available via additionalFields)
-	const sessionTheme = (session?.user?.settings as { theme?: "light" | "dark" })
-		?.theme;
+		// Session theme as fallback (now available via additionalFields)
+		const sessionTheme = (
+			session?.user?.settings as { theme?: "light" | "dark" }
+		)?.theme;
 
-	// Logged-in users: DB/session is source of truth (mobile PATCH may update
-	// theme without refreshing the web cookie). Guests rely on cookie only.
-	const resolvedTheme = resolveAppTheme({
-		isAuthenticated: session?.user != null,
-		sessionTheme,
-		cookieTheme,
+		// Logged-in users: DB/session is source of truth (mobile PATCH may update
+		// theme without refreshing the web cookie). Guests rely on cookie only.
+		const resolvedTheme = resolveAppTheme({
+			isAuthenticated: session?.user != null,
+			sessionTheme,
+			cookieTheme,
+		});
+
+		const env = context.cloudflare.env;
+		const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
+
+		const url = new URL(request.url);
+		const flagContext = buildFlagContext(request, env, session);
+		const clientFlags = await getClientSafeFlags(env, flagContext);
+		clientFlags.appleWebLogin =
+			clientFlags.appleWebLogin === true && hasAppleWebCredentials(env);
+
+		return {
+			user: session?.user,
+			theme: resolvedTheme,
+			origin: url.origin,
+			activeOrganizationId,
+			clientFlags,
+		};
 	});
-
-	const env = context.cloudflare.env;
-	const activeOrganizationId = session?.session?.activeOrganizationId ?? null;
-
-	const url = new URL(request.url);
-	const flagContext = buildFlagContext(request, env, session);
-	const clientFlags = await getClientSafeFlags(env, flagContext);
-	clientFlags.appleWebLogin =
-		clientFlags.appleWebLogin === true && hasAppleWebCredentials(env);
-
-	return {
-		user: session?.user,
-		theme: resolvedTheme,
-		origin: url.origin,
-		activeOrganizationId,
-		clientFlags,
-	};
 };
 
 /** Merged with Stripe, Cloudflare Insights, and Ration Copilot. */
@@ -152,10 +156,17 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
 	if (isRouteErrorResponse(error)) {
 		message = error.status === 404 ? "404 :: NOT FOUND" : "SYSTEM ERROR";
+		const loaderMessage =
+			typeof error.data === "object" &&
+			error.data !== null &&
+			"error" in error.data &&
+			typeof (error.data as { error?: unknown }).error === "string"
+				? (error.data as { error: string }).error
+				: null;
 		details =
 			error.status === 404
 				? "THE REQUESTED RESOURCE COULD NOT BE LOCATED IN THE DATABANKS."
-				: error.statusText || details;
+				: (loaderMessage ?? error.statusText ?? details);
 	} else if (import.meta.env.DEV && error && error instanceof Error) {
 		details = error.message;
 		stack = error.stack;

@@ -143,6 +143,7 @@ struct MainTabView: View {
         .overlay(alignment: .bottom) {
             if showCopilotBar {
                 CopilotFloatingBar(
+                    scrollContext: env.copilotScroll,
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         Task {
@@ -157,7 +158,7 @@ struct MainTabView: View {
                         }
                     }
                 )
-                .frame(maxWidth: .infinity, alignment: env.copilotScroll.isExpanded ? .center : .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, 56)
             }
         }

@@ -135,6 +135,7 @@ final class AskViewModel {
                 isConnected = true
                 observe(socket)
             }
+            clearTransientError()
             messages.append(CopilotMessage(role: "user", content: trimmed))
             state = .streaming
             turnPhase = .thinking
@@ -213,11 +214,13 @@ final class AskViewModel {
             } else {
                 messages.append(CopilotMessage(id: event.messageId ?? UUID().uuidString, role: "assistant", content: text))
             }
+            clearTransientError()
             state = .streaming
             turnPhase = .streaming
             persistSnapshot()
         case "message_end":
             activeTool = nil
+            clearTransientError()
             state = .idle
             turnPhase = .idle
             persistSnapshot()
@@ -288,5 +291,11 @@ final class AskViewModel {
             organizationId: organizationId
         )
         lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
+    }
+
+    private func clearTransientError() {
+        if case .error = state {
+            state = .idle
+        }
     }
 }

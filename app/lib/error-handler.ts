@@ -26,6 +26,15 @@ export function isD1ContentionError(error: unknown): boolean {
 	);
 }
 
+function isDataWithResponseInit(error: unknown): boolean {
+	return (
+		error !== null &&
+		typeof error === "object" &&
+		"type" in error &&
+		(error as { type: string }).type === "DataWithResponseInit"
+	);
+}
+
 /** Retries transient D1 failures (contention, timeouts) with linear backoff. */
 export async function retryOnD1Contention<T>(
 	fn: () => Promise<T>,
@@ -49,6 +58,47 @@ export async function retryOnD1Contention<T>(
 }
 
 /**
+ * Run a route loader with D1 retry and map transient infrastructure failures to
+ * a 503 `data()` response instead of an opaque "Unexpected Server Error".
+ */
+export async function runRouteLoader<T>(fn: () => Promise<T>): Promise<T> {
+	try {
+		return await retryOnD1Contention(fn);
+	} catch (error) {
+		rethrowRouteLoaderError(error);
+	}
+}
+
+export function rethrowRouteLoaderError(error: unknown): never {
+	if (error instanceof Response) {
+		throw error;
+	}
+
+	if (isDataWithResponseInit(error)) {
+		throw error;
+	}
+
+	if (isD1ContentionError(error)) {
+		log.warn("[loader] D1 contention or timeout", {
+			errorMessage: error instanceof Error ? error.message : String(error),
+		});
+		throw data(
+			{
+				error:
+					"The server is under heavy load. Please wait a moment and try again.",
+				code: "server_busy" as const,
+			},
+			{
+				status: 503,
+				headers: { "Retry-After": "5" },
+			},
+		);
+	}
+
+	throw error;
+}
+
+/**
  * Standardized error handler for API and Action routes.
  * Ensures consistent error responses and logging.
  * Re-throws DataWithResponseInit so React Router handles them correctly.
@@ -66,12 +116,7 @@ export function handleApiError(error: unknown) {
 	}
 
 	// Re-throw RR data() responses so the framework handles them
-	if (
-		error &&
-		typeof error === "object" &&
-		"type" in error &&
-		(error as { type: string }).type === "DataWithResponseInit"
-	) {
+	if (isDataWithResponseInit(error)) {
 		throw error;
 	}
 

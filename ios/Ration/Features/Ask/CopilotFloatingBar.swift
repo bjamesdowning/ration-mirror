@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CopilotFloatingBar: View {
-    @Environment(CopilotScrollContext.self) private var scrollContext
+    @Bindable var scrollContext: CopilotScrollContext
 
     let onOpenSheet: () -> Void
     let onSend: (String) -> Void
@@ -17,15 +17,21 @@ struct CopilotFloatingBar: View {
     ]
 
     var body: some View {
-        Group {
-            if scrollContext.isExpanded {
-                expandedBar
-            } else {
-                collapsedButton
+        HStack(alignment: .bottom, spacing: 0) {
+            Group {
+                if scrollContext.isExpanded {
+                    expandedBar
+                } else {
+                    collapsedButton
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: CopilotDockLayout.fabGutter)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: scrollContext.isExpanded)
         .task(id: placeholderIndex) {
             guard !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -65,26 +71,35 @@ struct CopilotFloatingBar: View {
         .padding(.vertical, 10)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1))
+        .mask(trailingFadeMask)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var collapsedButton: some View {
-        HStack {
-            Button {
-                scrollContext.expandManually()
-            } label: {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.black)
-                    .frame(width: 48, height: 48)
-                    .background(Theme.hyperGreen, in: Circle())
-                    .overlay(Circle().stroke(Theme.hyperGreen, lineWidth: 1))
-            }
-            .accessibilityLabel("Ask Ration")
-
-            Spacer()
+        Button {
+            scrollContext.expandManually()
+        } label: {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Color.black)
+                .frame(width: 48, height: 48)
+                .background(Theme.hyperGreen, in: Circle())
+                .overlay(Circle().stroke(Theme.hyperGreen, lineWidth: 1))
         }
+        .accessibilityLabel("Ask Ration")
         .transition(.scale.combined(with: .opacity))
+    }
+
+    private var trailingFadeMask: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .white, location: 0),
+                .init(color: .white, location: 0.82),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     private func submitDraft() {

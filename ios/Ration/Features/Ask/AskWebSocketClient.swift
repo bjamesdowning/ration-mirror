@@ -108,8 +108,10 @@ final class AskWebSocketClient {
         do {
             while self.task === task {
                 let message = try await task.receive()
-                let event = try decode(message)
-                continuation?.yield(event)
+                let event = decode(message)
+                if event.type != "noop" {
+                    continuation?.yield(event)
+                }
             }
         } catch {
             continuation?.yield(
@@ -133,7 +135,7 @@ final class AskWebSocketClient {
         }
     }
 
-    private func decode(_ message: URLSessionWebSocketTask.Message) throws -> CopilotStreamEvent {
+    private func decode(_ message: URLSessionWebSocketTask.Message) -> CopilotStreamEvent {
         let data: Data
         switch message {
         case .data(let incoming):
@@ -141,17 +143,6 @@ final class AskWebSocketClient {
         case .string(let incoming):
             data = Data(incoming.utf8)
         @unknown default:
-            throw ClientError.invalidMessage
-        }
-
-        if let frame = try? JSON.decoder.decode(AgentFrameProbe.self, from: data),
-           frame.type.hasPrefix("cf_agent_") {
-            return try decodeAgentFrame(data)
-        }
-        if let event = try? JSON.decoder.decode(CopilotStreamEvent.self, from: data) {
-            return event
-        }
-        if let text = String(data: data, encoding: .utf8) {
             return CopilotStreamEvent(
                 type: "error",
                 message: nil,
@@ -161,7 +152,7 @@ final class AskWebSocketClient {
                 status: nil,
                 toolCallId: nil,
                 ok: nil,
-                error: CopilotToolError(code: "invalid_message", message: "Copilot sent an unsupported message: \(text.prefix(80))"),
+                error: CopilotToolError(code: "invalid_message", message: ClientError.invalidMessage.errorDescription ?? "Unsupported message."),
                 approvalId: nil,
                 toolName: nil,
                 title: nil,
@@ -169,37 +160,8 @@ final class AskWebSocketClient {
                 blocked: nil
             )
         }
-        throw ClientError.invalidMessage
-    }
 
-    private func decodeAgentFrame(_ data: Data) throws -> CopilotStreamEvent {
-        let frame = try JSON.decoder.decode(AgentResponseFrame.self, from: data)
-        if frame.type != "cf_agent_use_chat_response" {
-            return CopilotStreamEvent(type: "message_end", message: nil, messageId: frame.id, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        }
-        if frame.error == true {
-            return CopilotStreamEvent(type: "error", message: nil, messageId: frame.id, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: CopilotToolError(code: "agent_error", message: frame.body ?? "Copilot hit an error."), approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        }
-        guard let body = frame.body, let bodyData = body.data(using: .utf8) else {
-            return CopilotStreamEvent(type: "message_end", message: nil, messageId: frame.id, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        }
-        let chunk = try JSON.decoder.decode(AgentChunk.self, from: bodyData)
-        switch chunk.type {
-        case "text-delta":
-            return CopilotStreamEvent(type: "text_delta", message: nil, messageId: chunk.id ?? frame.id ?? "assistant", text: chunk.delta ?? chunk.text ?? "", usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        case "tool-input-start", "tool-input-available":
-            return CopilotStreamEvent(type: "tool_start", message: nil, messageId: nil, text: nil, usageTokens: nil, status: CopilotToolStatus(toolCallId: chunk.toolCallId ?? chunk.id ?? UUID().uuidString, toolName: chunk.toolName ?? "tool", label: chunk.toolName ?? "Running tool"), toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        case "approval-requested":
-            let toolCallId = chunk.toolCallId ?? chunk.id ?? UUID().uuidString
-            let toolName = chunk.toolName ?? "Copilot action"
-            return CopilotStreamEvent(type: "approval_request", message: nil, messageId: nil, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: toolCallId, toolName: toolName, title: "Confirm action", description: "Copilot wants to run \(toolName).", blocked: nil)
-        case "tool-output-available", "tool-output-error", "tool-output-denied":
-            return CopilotStreamEvent(type: "tool_end", message: nil, messageId: nil, text: nil, usageTokens: nil, status: nil, toolCallId: chunk.toolCallId ?? chunk.id, ok: chunk.type == "tool-output-available", error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        case "finish":
-            return CopilotStreamEvent(type: "message_end", message: nil, messageId: frame.id, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        default:
-            return CopilotStreamEvent(type: "message_end", message: nil, messageId: frame.id, text: nil, usageTokens: nil, status: nil, toolCallId: nil, ok: nil, error: nil, approvalId: nil, toolName: nil, title: nil, description: nil, blocked: nil)
-        }
+        return CopilotWebSocketDecoder.decode(data: data)
     }
 }
 
@@ -246,25 +208,4 @@ private struct AgentChatMessage: Encodable {
 private struct AgentChatPart: Encodable {
     let type: String
     let text: String
-}
-
-private struct AgentFrameProbe: Decodable {
-    let type: String
-}
-
-private struct AgentResponseFrame: Decodable {
-    let type: String
-    let id: String?
-    let body: String?
-    let done: Bool?
-    let error: Bool?
-}
-
-private struct AgentChunk: Decodable {
-    let type: String
-    let id: String?
-    let delta: String?
-    let text: String?
-    let toolName: String?
-    let toolCallId: String?
 }

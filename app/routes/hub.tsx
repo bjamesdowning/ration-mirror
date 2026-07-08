@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, redirect, useRouteLoaderData } from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
@@ -11,7 +11,6 @@ import { PwaInstallPrompt } from "~/components/shell/PwaInstallPrompt";
 import { ThemeToggle } from "~/components/shell/ThemeToggle";
 import { UnitDisplayModeProvider } from "~/components/shell/UnitDisplayToggle";
 import { AskLauncherButton } from "~/components/support/AskLauncherButton";
-import { AskPanel } from "~/components/support/AskPanel";
 import * as schema from "~/db/schema";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import {
@@ -19,11 +18,18 @@ import {
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { ConfirmProvider } from "~/lib/confirm-context";
+import { runRouteLoader } from "~/lib/error-handler";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { registerServiceWorker } from "~/lib/pwa.client";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/hub";
+
+const AskPanel = lazy(() =>
+	import("~/components/support/AskPanel").then((module) => ({
+		default: module.AskPanel,
+	})),
+);
 
 type RootLoaderHeaderSlice = {
 	user?: { id: string } | null;
@@ -72,109 +78,113 @@ export function shouldRevalidate({
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	const { groupId, session } = await requireActiveGroup(context, request);
+	return runRouteLoader(async () => {
+		const { groupId, session } = await requireActiveGroup(context, request);
 
-	// Run checkout fulfillment before tier/capacity fetch when on return URL.
-	// Layout runs before child loaders, so fulfillment would otherwise run too late.
-	const url = new URL(request.url);
-	const sessionId = url.searchParams.get("session_id");
-	if (sessionId && url.pathname.endsWith("/checkout/return")) {
-		try {
-			const { processCheckoutSession, processSubscriptionCheckoutSession } =
-				await import("~/lib/ledger.server");
-			const { getStripe } = await import("~/lib/stripe.server");
-			const stripe = getStripe(context.cloudflare.env);
-			const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-			const checkoutType = stripeSession.metadata?.type ?? "credits";
-			if (checkoutType === "subscription") {
-				await processSubscriptionCheckoutSession(
-					context.cloudflare.env,
-					sessionId,
-				);
-			} else {
-				await processCheckoutSession(context.cloudflare.env, sessionId);
+		// Run checkout fulfillment before tier/capacity fetch when on return URL.
+		// Layout runs before child loaders, so fulfillment would otherwise run too late.
+		const url = new URL(request.url);
+		const sessionId = url.searchParams.get("session_id");
+		if (sessionId && url.pathname.endsWith("/checkout/return")) {
+			try {
+				const { processCheckoutSession, processSubscriptionCheckoutSession } =
+					await import("~/lib/ledger.server");
+				const { getStripe } = await import("~/lib/stripe.server");
+				const stripe = getStripe(context.cloudflare.env);
+				const stripeSession =
+					await stripe.checkout.sessions.retrieve(sessionId);
+				const checkoutType = stripeSession.metadata?.type ?? "credits";
+				if (checkoutType === "subscription") {
+					await processSubscriptionCheckoutSession(
+						context.cloudflare.env,
+						sessionId,
+					);
+				} else {
+					await processCheckoutSession(context.cloudflare.env, sessionId);
+				}
+			} catch (error) {
+				log.error("Checkout fulfillment failed", error);
+				throw redirect("/hub/settings?transaction=failed");
 			}
-		} catch (error) {
-			log.error("Checkout fulfillment failed", error);
-			throw redirect("/hub/settings?transaction=failed");
 		}
-	}
 
-	const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
-	const db = drizzle(context.cloudflare.env.DB, { schema });
-	const [
-		orgRow,
-		balance,
-		cargoCapacity,
-		mealsCapacity,
-		listCapacity,
-		userSettings,
-	] = await Promise.all([
-		db
-			.select({ logo: schema.organization.logo })
-			.from(schema.organization)
-			.where(eq(schema.organization.id, groupId))
-			.limit(1)
-			.then((rows) => rows[0]),
-		checkBalance(context.cloudflare.env, groupId),
-		checkCapacityWithTier(
-			context.cloudflare.env,
-			groupId,
-			"cargo",
-			tierInfo,
-			0,
-		),
-		checkCapacityWithTier(
-			context.cloudflare.env,
-			groupId,
-			"meals",
-			tierInfo,
-			0,
-		),
-		checkCapacityWithTier(
-			context.cloudflare.env,
-			groupId,
-			"supplyLists",
-			tierInfo,
-			0,
-		),
-		getUserSettings(context.cloudflare.env.DB, session.user.id),
-	]);
+		const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
+		const db = drizzle(context.cloudflare.env.DB, { schema });
+		const [
+			orgRow,
+			balance,
+			cargoCapacity,
+			mealsCapacity,
+			listCapacity,
+			userSettings,
+		] = await Promise.all([
+			db
+				.select({ logo: schema.organization.logo })
+				.from(schema.organization)
+				.where(eq(schema.organization.id, groupId))
+				.limit(1)
+				.then((rows) => rows[0]),
+			checkBalance(context.cloudflare.env, groupId),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"cargo",
+				tierInfo,
+				0,
+			),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"meals",
+				tierInfo,
+				0,
+			),
+			checkCapacityWithTier(
+				context.cloudflare.env,
+				groupId,
+				"supplyLists",
+				tierInfo,
+				0,
+			),
+			getUserSettings(context.cloudflare.env.DB, session.user.id),
+		]);
 
-	return {
-		activeOrganizationLogo: orgRow?.logo ?? null,
-		balance,
-		/** Credit cost per AI feature; keep in sync with ledger.server.ts AI_COSTS */
-		aiCosts: {
-			SCAN: AI_COSTS.SCAN,
-			MEAL_GENERATE: AI_COSTS.MEAL_GENERATE,
-			IMPORT_URL: AI_COSTS.IMPORT_URL,
-		},
-		tier: tierInfo.tier,
-		isTierExpired: tierInfo.isExpired,
-		capacity: {
-			cargo: {
-				current: cargoCapacity.current,
-				limit: cargoCapacity.limit,
+		return {
+			activeOrganizationLogo: orgRow?.logo ?? null,
+			balance,
+			/** Credit cost per AI feature; keep in sync with ledger.server.ts AI_COSTS */
+			aiCosts: {
+				SCAN: AI_COSTS.SCAN,
+				MEAL_GENERATE: AI_COSTS.MEAL_GENERATE,
+				IMPORT_URL: AI_COSTS.IMPORT_URL,
 			},
-			meals: {
-				current: mealsCapacity.current,
-				limit: mealsCapacity.limit,
+			tier: tierInfo.tier,
+			isTierExpired: tierInfo.isExpired,
+			capacity: {
+				cargo: {
+					current: cargoCapacity.current,
+					limit: cargoCapacity.limit,
+				},
+				meals: {
+					current: mealsCapacity.current,
+					limit: mealsCapacity.limit,
+				},
+				supplyLists: {
+					current: listCapacity.current,
+					limit: listCapacity.limit,
+				},
 			},
-			supplyLists: {
-				current: listCapacity.current,
-				limit: listCapacity.limit,
-			},
-		},
-		onboardingCompletedAt: userSettings.onboardingCompletedAt ?? null,
-		onboardingStep: userSettings.onboardingStep ?? 0,
-		unitDisplayMode: resolveUnitDisplayMode(userSettings),
-	};
+			onboardingCompletedAt: userSettings.onboardingCompletedAt ?? null,
+			onboardingStep: userSettings.onboardingStep ?? 0,
+			unitDisplayMode: resolveUnitDisplayMode(userSettings),
+		};
+	});
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const { onboardingCompletedAt, onboardingStep } = loaderData;
 	const [isAskOpen, setIsAskOpen] = useState(false);
+	const [hasAskMounted, setHasAskMounted] = useState(false);
 
 	const root = useRouteLoaderData("root") as RootLoaderHeaderSlice | undefined;
 	const showAskLauncher = Boolean(
@@ -184,6 +194,10 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	useEffect(() => {
 		registerServiceWorker();
 	}, []);
+
+	useEffect(() => {
+		if (isAskOpen) setHasAskMounted(true);
+	}, [isAskOpen]);
 
 	useEffect(() => {
 		const openAsk = () => setIsAskOpen(true);
@@ -257,7 +271,11 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					initialStep={onboardingStep}
 					isCompleted={Boolean(onboardingCompletedAt)}
 				/>
-				<AskPanel isOpen={isAskOpen} onClose={() => setIsAskOpen(false)} />
+				{hasAskMounted ? (
+					<Suspense fallback={null}>
+						<AskPanel isOpen={isAskOpen} onClose={() => setIsAskOpen(false)} />
+					</Suspense>
+				) : null}
 			</UnitDisplayModeProvider>
 		</ConfirmProvider>
 	);

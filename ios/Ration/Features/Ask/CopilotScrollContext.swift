@@ -121,21 +121,50 @@ private struct CopilotScrollTracker: UIViewRepresentable {
 
         private func attach(from view: UIView) {
             if observation != nil { return }
-            var current: UIView? = view.superview
-            while let node = current {
-                if let scrollView = node as? UIScrollView {
-                    self.scrollView = scrollView
-                    observation = scrollView.observe(
-                        \.contentOffset,
-                        options: [.new]
-                    ) { [weak self] scrollView, _ in
-                        self?.onOffsetChange(scrollView.contentOffset.y)
-                    }
-                    onOffsetChange(scrollView.contentOffset.y)
-                    return
-                }
-                current = node.superview
+
+            if let scrollView = findScrollView(from: view) {
+                bind(to: scrollView)
             }
+        }
+
+        private func findScrollView(from view: UIView) -> UIScrollView? {
+            var ancestor: UIView? = view
+            while let current = ancestor {
+                if let scrollView = searchScrollView(in: current) {
+                    return scrollView
+                }
+                ancestor = current.superview
+            }
+            return nil
+        }
+
+        private func searchScrollView(in view: UIView) -> UIScrollView? {
+            if let tableView = view as? UITableView {
+                return tableView
+            }
+            if let collectionView = view as? UICollectionView {
+                return collectionView
+            }
+            if let scrollView = view as? UIScrollView {
+                return scrollView
+            }
+            for subview in view.subviews {
+                if let found = searchScrollView(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+
+        private func bind(to scrollView: UIScrollView) {
+            self.scrollView = scrollView
+            observation = scrollView.observe(
+                \.contentOffset,
+                options: [.new]
+            ) { [weak self] scrollView, _ in
+                self?.onOffsetChange(scrollView.contentOffset.y)
+            }
+            onOffsetChange(scrollView.contentOffset.y)
         }
 
         func detach() {
@@ -168,6 +197,6 @@ extension View {
     }
 
     func copilotBarBottomPadding(isExpanded: Bool) -> some View {
-        padding(.bottom, isExpanded ? 72 : 56)
+        padding(.bottom, CopilotDockLayout.bottomContentPadding(isExpanded: isExpanded))
     }
 }

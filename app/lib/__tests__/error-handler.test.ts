@@ -114,6 +114,45 @@ describe("retryOnD1Contention", () => {
 	});
 });
 
+describe("runRouteLoader", () => {
+	it("returns loader data on success", async () => {
+		const { runRouteLoader } = await import("~/lib/error-handler");
+		await expect(runRouteLoader(async () => ({ ok: true }))).resolves.toEqual({
+			ok: true,
+		});
+	});
+
+	it("throws a 503 data response for D1 contention after retries", async () => {
+		const { runRouteLoader } = await import("~/lib/error-handler");
+		const fn = vi
+			.fn()
+			.mockRejectedValue(new Error("SQLITE_BUSY: database is busy"));
+
+		await expect(
+			runRouteLoader(async () => {
+				await fn();
+				return { ok: true };
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			init: { status: 503 },
+			data: { code: "server_busy" },
+		});
+		expect(fn).toHaveBeenCalledTimes(3);
+	});
+
+	it("rethrows redirect responses unchanged", async () => {
+		const { runRouteLoader } = await import("~/lib/error-handler");
+		const redirect = new Response(null, { status: 302 });
+
+		await expect(
+			runRouteLoader(async () => {
+				throw redirect;
+			}),
+		).rejects.toBe(redirect);
+	});
+});
+
 describe("handleApiError", () => {
 	it("returns structured 403 details for CapacityExceededError", () => {
 		const result = handleApiError(

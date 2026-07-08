@@ -68,6 +68,10 @@ final class SnapshotStore {
         try? fileManager.removeItem(at: orgDirectory(for: organizationId))
     }
 
+    func clear(domain: String, organizationId: String) {
+        try? fileManager.removeItem(at: fileURL(domain: domain, organizationId: organizationId))
+    }
+
     private func loadMetadata(domain: String, organizationId: String) -> Metadata? {
         guard let data = try? Data(contentsOf: fileURL(domain: domain, organizationId: organizationId)),
               let envelope = try? decoder.decode(MetadataEnvelope.self, from: data)

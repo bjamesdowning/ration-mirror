@@ -1,6 +1,18 @@
 import { Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouteLoaderData } from "react-router";
 import { FilterSheet } from "~/components/shell/FilterSheet";
+import {
+	CopilotActivityIndicator,
+	type TurnPhase,
+} from "~/components/support/CopilotActivityIndicator";
+import {
+	clearCopilotSession,
+	loadCopilotSession,
+	resolveCopilotOrgHydration,
+	saveCopilotSession,
+	touchCopilotSession,
+} from "~/lib/copilot/session-storage.client";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 
 type CopilotStatus = {
@@ -52,6 +64,10 @@ type ApprovalRequest = {
 	toolName: string;
 };
 
+type RootLoaderSlice = {
+	activeOrganizationId?: string | null;
+};
+
 type AskPanelProps = {
 	isOpen: boolean;
 	onClose: () => void;
@@ -85,23 +101,34 @@ function webBlockedHref(blocked: NonNullable<CopilotEvent["blocked"]>): string {
 }
 
 export function AskPanel({ isOpen, onClose }: AskPanelProps) {
+	const root = useRouteLoaderData("root") as RootLoaderSlice | undefined;
+	const organizationId = root?.activeOrganizationId ?? null;
+
 	const [status, setStatus] = useState<CopilotStatus | null>(null);
 	const [messages, setMessages] = useState<CopilotMessage[]>([]);
 	const [draft, setDraft] = useState("");
 	const [error, setError] = useState<string | null>(null);
-	const [toolLabel, setToolLabel] = useState<string | null>(null);
 	const [blocked, setBlocked] = useState<CopilotEvent["blocked"] | null>(null);
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [needsConsent, setNeedsConsent] = useState(false);
 	const [approval, setApproval] = useState<ApprovalRequest | null>(null);
-	const [conversationId, setConversationId] = useState(() =>
+	const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
+	const [activeToolName, setActiveToolName] = useState<string | null>(null);
+	const [completedToolName, setCompletedToolName] = useState<string | null>(
+		null,
+	);
+	const [toolSucceeded, setToolSucceeded] = useState<boolean | null>(null);
+	const [conversationId, setConversationId] = useState<string>(() =>
 		crypto.randomUUID(),
 	);
 	const socketRef = useRef<WebSocket | null>(null);
 	const connectPromiseRef = useRef<Promise<WebSocket> | null>(null);
 	const messagesEndRef = useRef<HTMLDivElement | null>(null);
+	const toolLingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const hydratedOrgRef = useRef<string | null>(null);
 
-	const canSend = draft.trim().length > 0 && !isConnecting;
+	const canSend =
+		draft.trim().length > 0 && !isConnecting && turnPhase !== "connecting";
 	const socketUrl = useMemo(
 		() => copilotSocketUrl(conversationId),
 		[conversationId],
@@ -110,6 +137,42 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		status?.tier === "crew_member" &&
 		status.freeConversationsRemaining <= 0 &&
 		!status.autoDeductConsent;
+
+	const persistSession = useCallback(
+		(nextMessages: CopilotMessage[], nextConversationId = conversationId) => {
+			if (!organizationId) return;
+			touchCopilotSession(organizationId, {
+				conversationId: nextConversationId,
+				messages: nextMessages,
+			});
+		},
+		[conversationId, organizationId],
+	);
+
+	const clearToolLinger = useCallback(() => {
+		if (toolLingerRef.current) {
+			clearTimeout(toolLingerRef.current);
+			toolLingerRef.current = null;
+		}
+	}, []);
+
+	const scheduleToolDoneLinger = useCallback(
+		(toolName: string, succeeded: boolean) => {
+			clearToolLinger();
+			setActiveToolName(null);
+			setCompletedToolName(toolName);
+			setToolSucceeded(succeeded);
+			setTurnPhase("tool_done");
+			toolLingerRef.current = setTimeout(() => {
+				setCompletedToolName(null);
+				setToolSucceeded(null);
+				setTurnPhase((current) =>
+					current === "tool_done" ? "thinking" : current,
+				);
+			}, 800);
+		},
+		[clearToolLinger],
+	);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -131,21 +194,63 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		};
 	}, [isOpen]);
 
-	const appendAssistant = useCallback((text: string) => {
-		setMessages((current) => {
-			const last = current[current.length - 1];
-			if (last?.role === "assistant") {
-				return [
-					...current.slice(0, -1),
-					{ ...last, content: `${last.content}${text}` },
-				];
-			}
-			return [
-				...current,
-				{ id: crypto.randomUUID(), role: "assistant", content: text },
-			];
-		});
-	}, []);
+	useEffect(() => {
+		if (!isOpen) {
+			hydratedOrgRef.current = null;
+			return;
+		}
+		if (!organizationId || !status) return;
+		if (hydratedOrgRef.current === organizationId) return;
+
+		const snapshot = loadCopilotSession(organizationId, status.sessionIdleMs);
+		const hydration = resolveCopilotOrgHydration(snapshot);
+		if (hydration.kind === "restore") {
+			setConversationId(hydration.conversationId);
+			setMessages(hydration.messages);
+		} else {
+			socketRef.current?.close();
+			socketRef.current = null;
+			connectPromiseRef.current = null;
+			clearToolLinger();
+			setConversationId(crypto.randomUUID());
+			setMessages([]);
+			setBlocked(null);
+			setNeedsConsent(false);
+			setApproval(null);
+			setError(null);
+			setActiveToolName(null);
+			setCompletedToolName(null);
+			setToolSucceeded(null);
+			setTurnPhase("idle");
+		}
+		hydratedOrgRef.current = organizationId;
+	}, [isOpen, organizationId, status, clearToolLinger]);
+
+	const appendAssistant = useCallback(
+		(text: string) => {
+			setMessages((current) => {
+				const last = current[current.length - 1];
+				const next =
+					last?.role === "assistant"
+						? [
+								...current.slice(0, -1),
+								{ ...last, content: `${last.content}${text}` },
+							]
+						: [
+								...current,
+								{
+									id: crypto.randomUUID(),
+									role: "assistant" as const,
+									content: text,
+								},
+							];
+				persistSession(next);
+				return next;
+			});
+			setTurnPhase("streaming");
+		},
+		[persistSession],
+	);
 
 	const handleEvent = useCallback(
 		(event: CopilotEvent) => {
@@ -156,6 +261,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							? event.error.message
 							: (event.body ?? "Copilot hit an error."),
 					);
+					setTurnPhase("idle");
 					return;
 				}
 				if (!event.body || event.done) return;
@@ -173,15 +279,28 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						break;
 					case "tool-input-start":
 					case "tool-input-available":
-						setToolLabel(chunk.toolName ?? "Running tool");
+						clearToolLinger();
+						setCompletedToolName(null);
+						setToolSucceeded(null);
+						setActiveToolName(chunk.toolName ?? "tool");
+						setTurnPhase("tool_running");
 						break;
 					case "tool-output-available":
+						scheduleToolDoneLinger(chunk.toolName ?? "tool", true);
+						break;
 					case "tool-output-error":
 					case "tool-output-denied":
+						scheduleToolDoneLinger(chunk.toolName ?? "tool", false);
+						break;
 					case "finish":
-						setToolLabel(null);
+						clearToolLinger();
+						setActiveToolName(null);
+						setCompletedToolName(null);
+						setToolSucceeded(null);
+						setTurnPhase("idle");
 						break;
 					case "approval-requested":
+						setTurnPhase("idle");
 						if (chunk.toolCallId) {
 							setApproval({
 								toolCallId: chunk.toolCallId,
@@ -197,24 +316,46 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				case "message_start":
 					if (event.message) {
 						const message = event.message;
-						setMessages((current) => [...current, message]);
+						setMessages((current) => {
+							const next = [...current, message];
+							persistSession(next);
+							return next;
+						});
 					}
+					setTurnPhase("thinking");
 					break;
 				case "text_delta":
 					appendAssistant(event.text ?? "");
 					break;
+				case "message_end":
+					clearToolLinger();
+					setActiveToolName(null);
+					setCompletedToolName(null);
+					setToolSucceeded(null);
+					setTurnPhase("idle");
+					setMessages((current) => {
+						persistSession(current);
+						return current;
+					});
+					break;
 				case "tool_start":
-					setToolLabel(
-						event.status?.label ?? event.status?.toolName ?? "Running tool",
+					clearToolLinger();
+					setCompletedToolName(null);
+					setToolSucceeded(null);
+					setActiveToolName(
+						event.status?.toolName ?? event.status?.label ?? "tool",
 					);
+					setTurnPhase("tool_running");
 					break;
 				case "tool_end":
-					setToolLabel(null);
+					scheduleToolDoneLinger(event.status?.toolName ?? "tool", true);
 					break;
 				case "blocked_feature":
+					setTurnPhase("idle");
 					setBlocked(event.blocked ?? null);
 					break;
 				case "approval_request":
+					setTurnPhase("idle");
 					setApproval(
 						event.approvalId
 							? {
@@ -225,6 +366,22 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					);
 					break;
 				case "error":
+					setTurnPhase("idle");
+					if (
+						typeof event.error === "object" &&
+						event.error?.code === "session_limit_reached"
+					) {
+						socketRef.current?.close();
+						socketRef.current = null;
+						connectPromiseRef.current = null;
+						clearToolLinger();
+						const nextConversationId = crypto.randomUUID();
+						setConversationId(nextConversationId);
+						setMessages([]);
+						if (organizationId) clearCopilotSession(organizationId);
+						setError(event.error.message);
+						return;
+					}
 					setError(
 						typeof event.error === "object"
 							? event.error.message
@@ -233,7 +390,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					break;
 			}
 		},
-		[appendAssistant],
+		[
+			appendAssistant,
+			clearToolLinger,
+			organizationId,
+			persistSession,
+			scheduleToolDoneLinger,
+		],
 	);
 
 	const connectSocket = useCallback(async (): Promise<WebSocket> => {
@@ -242,6 +405,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		if (connectPromiseRef.current) return connectPromiseRef.current;
 
 		setIsConnecting(true);
+		setTurnPhase("connecting");
 		const promise = (async () => {
 			const response = await fetch("/api/copilot/token", { method: "POST" });
 			if (!response.ok) throw new Error("Unable to open copilot session.");
@@ -257,9 +421,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					handleEvent(parsed);
 				} catch {
 					setError("Copilot sent an unsupported message.");
+					setTurnPhase("idle");
 				}
 			};
-			socket.onerror = () => setError("Copilot connection failed.");
+			socket.onerror = () => {
+				setError("Copilot connection failed.");
+				setTurnPhase("idle");
+			};
 			socket.onclose = () => {
 				if (socketRef.current === socket) socketRef.current = null;
 			};
@@ -268,6 +436,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				socket.onopen = () => resolve();
 				socket.onerror = () => {
 					setError("Copilot connection failed.");
+					setTurnPhase("idle");
 					reject(new Error("Copilot connection failed."));
 				};
 				socket.onclose = () => {
@@ -279,6 +448,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		})().finally(() => {
 			connectPromiseRef.current = null;
 			setIsConnecting(false);
+			setTurnPhase((current) =>
+				current === "connecting" ? "thinking" : current,
+			);
 		});
 		connectPromiseRef.current = promise;
 		return promise;
@@ -293,11 +465,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	useEffect(() => {
 		return () => {
+			clearToolLinger();
 			socketRef.current?.close();
 			socketRef.current = null;
 			connectPromiseRef.current = null;
 		};
-	}, []);
+	}, [clearToolLinger]);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({
@@ -308,7 +481,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	async function send() {
 		const text = draft.trim();
-		if (!text || isConnecting) return;
+		if (!text || isConnecting || turnPhase === "connecting") return;
 		if (needsAutoDeductConsent) {
 			setNeedsConsent(true);
 			setError(null);
@@ -321,13 +494,14 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		};
 		const nextMessages = [...messages, message];
 		setMessages(nextMessages);
+		persistSession(nextMessages);
 		setDraft("");
+		setTurnPhase("thinking");
+		setActiveToolName(null);
+		setCompletedToolName(null);
+		setToolSucceeded(null);
 		try {
 			const socket = await connectSocket();
-			// Think is server-authoritative: submitting a turn uses the AI SDK
-			// "use chat request" envelope (a POST with the messages in the body),
-			// not a flat "cf_agent_chat_messages" transcript overwrite (which the
-			// server ignores).
 			socket.send(
 				JSON.stringify({
 					type: "cf_agent_use_chat_request",
@@ -342,6 +516,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				}),
 			);
 		} catch (e) {
+			setTurnPhase("idle");
 			setError(
 				e instanceof Error ? e.message : "Unable to open copilot session.",
 			);
@@ -354,13 +529,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		socketRef.current?.close();
 		socketRef.current = null;
 		connectPromiseRef.current = null;
-		setConversationId(crypto.randomUUID());
+		clearToolLinger();
+		const nextConversationId = crypto.randomUUID();
+		setConversationId(nextConversationId);
 		setMessages([]);
 		setBlocked(null);
 		setNeedsConsent(false);
 		setApproval(null);
 		setError(null);
-		setToolLabel(null);
+		setActiveToolName(null);
+		setCompletedToolName(null);
+		setToolSucceeded(null);
+		setTurnPhase("idle");
+		if (organizationId) clearCopilotSession(organizationId);
 	}
 
 	function approveTool(approved: boolean) {
@@ -374,6 +555,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			}),
 		);
 		setApproval(null);
+		setTurnPhase("thinking");
 	}
 
 	async function enableAutoDeduct() {
@@ -393,6 +575,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			);
 		}
 	}
+
+	const displayToolName = completedToolName ?? activeToolName;
+	const showThinking =
+		turnPhase === "thinking" &&
+		(messages.length === 0 ||
+			messages[messages.length - 1]?.role !== "assistant" ||
+			messages[messages.length - 1]?.content.length === 0);
 
 	return (
 		<FilterSheet isOpen={isOpen} onClose={onClose} title="Ask Ration">
@@ -425,7 +614,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						</div>
 					) : (
 						<div className="space-y-3">
-							{messages.map((message) => (
+							{messages.map((message, index) => (
 								<div
 									key={message.id}
 									className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -438,7 +627,16 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 										}`}
 									>
 										{message.role === "assistant" ? (
-											<AssistantMarkdown content={message.content} />
+											<span className="inline">
+												<AssistantMarkdown content={message.content} />
+												{turnPhase === "streaming" &&
+												index === messages.length - 1 ? (
+													<span
+														className="ml-1 inline-block size-2 animate-pulse rounded-full bg-hyper-green align-middle"
+														aria-hidden
+													/>
+												) : null}
+											</span>
 										) : (
 											message.content
 										)}
@@ -450,11 +648,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					)}
 				</div>
 
-				{toolLabel ? (
-					<div className="rounded-xl border border-hyper-green/25 bg-hyper-green/10 p-3 text-sm text-carbon">
-						{toolLabel}
-					</div>
-				) : null}
+				{showThinking ? (
+					<CopilotActivityIndicator
+						turnPhase="thinking"
+						toolName={null}
+						toolSucceeded={null}
+					/>
+				) : (
+					<CopilotActivityIndicator
+						turnPhase={turnPhase}
+						toolName={displayToolName}
+						toolSucceeded={toolSucceeded}
+					/>
+				)}
 				{blocked ? (
 					<div className="rounded-xl border border-platinum bg-white/80 p-3 text-sm">
 						<p className="font-semibold">Open native flow</p>

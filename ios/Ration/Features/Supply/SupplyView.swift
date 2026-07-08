@@ -357,6 +357,7 @@ struct CheckOffPresentationItem: Identifiable {
 
 struct SupplyView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     var onOpenSettings: () -> Void = {}
     @State private var model = SupplyViewModel()
     @State private var showingOptions = false
@@ -683,6 +684,8 @@ struct SupplyView: View {
                 await model.load(api: env.api, snapshots: env.snapshots, online: false, organizationId: organizationId)
             }
         }
+        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotScrollTracked()
     }
 
     private func loadSupplyShareStatus() async {

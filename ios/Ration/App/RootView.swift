@@ -54,16 +54,22 @@ struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showingSettings = false
     @State private var showingScan = false
-    @State private var showingAsk = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var manifestSuccessMessage: String?
+
+    private var organizationId: String {
+        env.session.activeOrganizationId ?? "unknown"
+    }
+
+    private var showCopilotBar: Bool {
+        !showingSettings && !showingScan && !env.ask.isSheetPresented
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView(
                 onScan: { showingScan = true },
-                onAsk: { showingAsk = true },
                 onOpenSettings: { showingSettings = true },
                 onOpenSupply: { selectedTab = 4 },
                 onOpenCargo: { selectedTab = 1 },
@@ -100,14 +106,26 @@ struct MainTabView: View {
                 .tabItem { Label("Supply", systemImage: "cart") }
                 .tag(4)
         }
+        .environment(env.ask)
+        .environment(env.copilotScroll)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
         .sheet(isPresented: $showingScan) {
             ScanView()
         }
-        .sheet(isPresented: $showingAsk) {
+        .sheet(isPresented: Binding(
+            get: { env.ask.isSheetPresented },
+            set: { presented in
+                if presented {
+                    env.ask.openSheet()
+                } else {
+                    env.ask.closeSheet()
+                }
+            }
+        )) {
             AskView()
+                .environment(env.ask)
         }
         .overlay(alignment: .top) {
             if !env.network.isOnline {
@@ -122,17 +140,61 @@ struct MainTabView: View {
                 .padding(.bottom, 88)
             }
         }
+        .overlay(alignment: .bottom) {
+            if showCopilotBar {
+                CopilotFloatingBar(
+                    onOpenSheet: { env.ask.openSheet() },
+                    onSend: { text in
+                        Task {
+                            await env.ask.sendFromBar(
+                                text,
+                                api: env.api,
+                                auth: env.auth,
+                                organizationId: organizationId,
+                                snapshots: env.snapshots
+                            )
+                            env.copilotScroll.collapse()
+                        }
+                    }
+                )
+                .frame(maxWidth: .infinity, alignment: env.copilotScroll.isExpanded ? .center : .leading)
+                .padding(.bottom, 56)
+            }
+        }
         .task {
             await env.session.load(api: env.api)
+            guard organizationId != "unknown" else { return }
+            await env.ask.load(
+                api: env.api,
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+            env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
         }
         .onChange(of: env.session.orgGeneration) { _, newValue in
             orgGeneration = newValue
+            env.copilotScroll.resetForTabChange()
+            Task {
+                guard let organizationId = env.session.activeOrganizationId else { return }
+                await env.ask.load(
+                    api: env.api,
+                    auth: env.auth,
+                    organizationId: organizationId,
+                    snapshots: env.snapshots
+                )
+                env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            env.copilotScroll.resetForTabChange()
+            env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
         }
         .onChange(of: env.deepLinkDestination) { _, destination in
             guard let destination else { return }
             switch destination {
             case .ask:
-                showingAsk = true
+                env.ask.openSheet()
             case .scan:
                 showingScan = true
             case .galleyGenerate, .galleyImport:

@@ -85,4 +85,56 @@ final class AskViewModelTests: XCTestCase {
 
         XCTAssertEqual(model.state, .blocked(blocked))
     }
+
+    func testToolEndLingersThenClears() async {
+        let model = AskViewModel()
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_start",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: CopilotToolStatus(toolCallId: "t1", toolName: "list_inventory", label: "Checking"),
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+
+        XCTAssertEqual(model.turnPhase, .toolRunning)
+        XCTAssertNotNil(model.activeTool)
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_end",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: "t1",
+                ok: true,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+
+        XCTAssertNil(model.activeTool)
+        XCTAssertNotNil(model.completedTool)
+        XCTAssertEqual(model.turnPhase, .toolDone)
+
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        XCTAssertNil(model.completedTool)
+    }
 }

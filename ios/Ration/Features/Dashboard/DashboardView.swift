@@ -3,8 +3,8 @@ import Observation
 
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     var onScan: () -> Void = {}
-    var onAsk: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenSupply: () -> Void = {}
     var onOpenCargo: () -> Void = {}
@@ -87,20 +87,12 @@ struct DashboardView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 if !model.isEditMode {
-                    HStack(spacing: 12) {
-                        IconFABButton(
-                            systemImage: "bubble.left.and.bubble.right",
-                            accessibilityLabel: "Ask Ration",
-                            isAI: true,
-                            action: onAsk
-                        )
-                        IconFABButton(
-                            systemImage: "camera.viewfinder",
-                            accessibilityLabel: "Scan receipt",
-                            isAI: true,
-                            action: onScan
-                        )
-                    }
+                    IconFABButton(
+                        systemImage: "camera.viewfinder",
+                        accessibilityLabel: "Scan receipt",
+                        isAI: true,
+                        action: onScan
+                    )
                 }
             }
             .sheet(item: $selectedCargoRoute) { route in
@@ -195,7 +187,9 @@ struct DashboardView: View {
                 }
             }
             .padding(16)
+            .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
         }
+        .copilotScrollTracked()
     }
 
     @ViewBuilder

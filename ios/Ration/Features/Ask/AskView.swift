@@ -4,10 +4,11 @@ import MarkdownUI
 
 struct AskView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
-    @State private var model = AskViewModel()
     @State private var draft = ""
 
+    private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
 
     var body: some View {
@@ -32,12 +33,25 @@ struct AskView: View {
                             }
 
                             ForEach(model.messages) { message in
-                                MessageBubble(message: message)
+                                MessageBubble(message: message, isStreaming: isStreamingBubble(message))
                                     .id(message.id)
                             }
 
                             if let tool = model.activeTool {
-                                ToolStatusCard(status: tool)
+                                ToolStatusCard(status: tool, phase: .running)
+                            } else if let completed = model.completedTool {
+                                ToolStatusCard(
+                                    status: CopilotToolStatus(
+                                        toolCallId: completed.toolName,
+                                        toolName: completed.toolName,
+                                        label: completed.label
+                                    ),
+                                    phase: completed.succeeded ? .done : .error
+                                )
+                            }
+
+                            if model.showsThinkingIndicator {
+                                ThinkingIndicator()
                             }
 
                             stateCard
@@ -45,6 +59,13 @@ struct AskView: View {
                         .padding(16)
                     }
                     .onChange(of: model.messages.count) { _, _ in
+                        if let last = model.messages.last {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: model.turnPhase) { _, _ in
                         if let last = model.messages.last {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(last.id, anchor: .bottom)
@@ -70,17 +91,25 @@ struct AskView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        ask.closeSheet()
+                        dismiss()
+                    }
                 }
             }
             .task(id: env.session.orgGeneration) {
                 guard let organizationId else { return }
-                await model.load(api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
+                await ask.load(api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
             }
             .onDisappear {
                 model.disconnect()
             }
         }
+    }
+
+    private func isStreamingBubble(_ message: CopilotMessage) -> Bool {
+        guard message.role == "assistant" else { return false }
+        return model.turnPhase == .streaming && message.id == model.messages.last?.id
     }
 
     @ViewBuilder
@@ -93,8 +122,6 @@ struct AskView: View {
                     Text("Linking to Ration Copilot…").rationCaption()
                 }
             }
-        case .streaming:
-            AIProcessingView(feature: .copilot, creditCost: model.status?.conversationFloorCost ?? 1)
         case let .awaitingApproval(id, title, description):
             ConfirmCard(title: title, description: description) {
                 Task { await model.approve(id, approved: true) }
@@ -109,7 +136,7 @@ struct AskView: View {
             }
         case let .error(message):
             ErrorBanner(message: message)
-        case .idle:
+        case .streaming, .idle:
             EmptyView()
         }
     }
@@ -128,7 +155,7 @@ struct AskView: View {
                 draft = ""
                 if let organizationId {
                     Task {
-                        await model.send(text, api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
+                        await ask.sendFromBar(text, api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
                     }
                     Haptics.light()
                 }
@@ -168,6 +195,7 @@ private struct AllowanceMeter: View {
 
 private struct MessageBubble: View {
     let message: CopilotMessage
+    let isStreaming: Bool
     private var isUser: Bool { message.role == "user" }
 
     var body: some View {
@@ -179,13 +207,59 @@ private struct MessageBubble: View {
                         .font(Typography.body())
                         .foregroundStyle(Theme.carbon)
                 } else {
-                    MarkdownText(markdown: message.content)
+                    HStack(alignment: .bottom, spacing: 4) {
+                        MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
+                        if isStreaming {
+                            CopilotStreamingCursor()
+                        }
+                    }
                 }
             }
             .padding(12)
             .background(isUser ? Theme.hyperGreen : Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             if !isUser { Spacer(minLength: 48) }
+        }
+    }
+}
+
+private struct CopilotStreamingCursor: View {
+    @State private var visible = true
+
+    var body: some View {
+        Circle()
+            .fill(Theme.hyperGreen)
+            .frame(width: 8, height: 8)
+            .opacity(visible ? 1 : 0.2)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: visible)
+            .onAppear { visible = false }
+    }
+}
+
+private struct ThinkingIndicator: View {
+  @State private var phase = 0
+
+    var body: some View {
+        GlassCard {
+            HStack(spacing: 10) {
+                ProgressView().tint(Theme.hyperGreen)
+                Text("Copilot is thinking")
+                    .rationHeadline()
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(Theme.hyperGreen)
+                            .frame(width: 5, height: 5)
+                            .opacity(phase == index ? 1 : 0.25)
+                    }
+                }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                phase = (phase + 1) % 3
+            }
         }
     }
 }
@@ -202,13 +276,29 @@ private struct MarkdownText: View {
     }
 }
 
+private enum ToolCardPhase {
+    case running
+    case done
+    case error
+}
+
 private struct ToolStatusCard: View {
     let status: CopilotToolStatus
+    let phase: ToolCardPhase
 
     var body: some View {
         GlassCard {
             HStack {
-                ProgressView().tint(Theme.hyperGreen)
+                Group {
+                    switch phase {
+                    case .running:
+                        ProgressView().tint(Theme.hyperGreen)
+                    case .done:
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.hyperGreen)
+                    case .error:
+                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.warning)
+                    }
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(status.label).rationHeadline()
                     Text(status.toolName).rationCaption()

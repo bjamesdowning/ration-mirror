@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GalleyView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     var onOpenSettings: () -> Void = {}
     @State private var model = GalleyViewModel()
     @State private var showingFilters = false
@@ -263,6 +264,8 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
+        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotScrollTracked()
     }
 
     private var matchList: some View {
@@ -319,6 +322,8 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
+        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotScrollTracked()
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {

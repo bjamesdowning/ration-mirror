@@ -348,6 +348,7 @@ final class ManifestViewModel {
 
 struct ManifestView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     var onOpenSettings: () -> Void = {}
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
@@ -630,6 +631,8 @@ struct ManifestView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotScrollTracked()
     }
 
     private func handleConsume(_ entry: ManifestEntry) async {

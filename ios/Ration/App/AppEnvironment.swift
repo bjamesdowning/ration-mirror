@@ -23,6 +23,8 @@ final class AppEnvironment {
     let nextActionDismiss: NextActionDismissStore
     let theme: ThemeStore
     let unitDisplayMode: UnitDisplayModeStore
+    let ask: AskCoordinator
+    let copilotScroll: CopilotScrollContext
     private(set) var deepLinkDestination: DeepLinkDestination?
     private(set) var cargoDataRevision = 0
 
@@ -42,6 +44,8 @@ final class AppEnvironment {
         self.theme = theme
         let unitDisplayMode = UnitDisplayModeStore()
         self.unitDisplayMode = unitDisplayMode
+        self.ask = AskCoordinator()
+        self.copilotScroll = CopilotScrollContext()
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
         auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode] in

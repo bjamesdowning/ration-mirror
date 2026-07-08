@@ -95,7 +95,7 @@ ai_search_sync:
   script:
     - |
       for file in $(find docs/fin content/blog -type f \( -name '*.md' -o -name '*.mdx' \)); do
-        bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file"
+        bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
       done
     - bunx wrangler ai-search jobs create ration-docs
     - bunx wrangler ai-search jobs create ration-blog

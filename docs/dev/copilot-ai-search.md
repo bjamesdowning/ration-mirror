@@ -14,9 +14,14 @@ wrangler ai-search create ration-docs --type r2 --source ration-copilot-docs
 wrangler ai-search create ration-blog --type web-crawler --source ration.mayutic.com/blog
 ```
 
-After docs/blog changes, run the manual GitLab `ai_search_sync` job. It uploads `docs/fin` and `content/blog` Markdown to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing:
+After docs/blog changes, run the manual GitLab `ai_search_sync` job. It uploads `docs/fin` and `content/blog` Markdown to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing.
+
+To upload from a local machine (must use `--remote` or objects land in Miniflare only):
 
 ```sh
+for file in $(find docs/fin content/blog -type f \( -name '*.md' -o -name '*.mdx' \)); do
+  wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
+done
 wrangler ai-search jobs create ration-docs
 wrangler ai-search jobs create ration-blog
 ```

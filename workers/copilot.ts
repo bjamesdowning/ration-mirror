@@ -114,11 +114,25 @@ function writeCopilotMetric(
 	conversationId: string,
 	extra?: { blobs?: string[]; doubles?: number[] },
 ) {
-	env.COPILOT_ANALYTICS?.writeDataPoint({
-		blobs: [event, identity.source, conversationId, ...(extra?.blobs ?? [])],
-		doubles: extra?.doubles,
-		indexes: [redactId(identity.organizationId), redactId(identity.userId)],
-	});
+	// Analytics Engine allows exactly ONE index per data point. Use the
+	// organization (billing/grouping entity) as the sampling key and keep the
+	// user id queryable via a blob. Telemetry is best-effort and must never
+	// break the request path, so failures are swallowed.
+	try {
+		env.COPILOT_ANALYTICS?.writeDataPoint({
+			blobs: [
+				event,
+				identity.source,
+				conversationId,
+				redactId(identity.userId),
+				...(extra?.blobs ?? []),
+			],
+			doubles: extra?.doubles,
+			indexes: [redactId(identity.organizationId)],
+		});
+	} catch (error) {
+		log.error("[Copilot] metric write failed", error);
+	}
 }
 
 function purgeSecret(env: Cloudflare.Env): string | undefined {

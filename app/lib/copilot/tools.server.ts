@@ -8,6 +8,7 @@ import {
 	ingestCargoItems,
 	updateItem,
 } from "../cargo.server";
+import { log } from "../logging.server";
 import { getMealPlan, getTodayISO, getWeekEntries } from "../manifest.server";
 import { addDays } from "../manifest-dates";
 import { matchMeals } from "../matching.server";
@@ -77,6 +78,14 @@ export const COPILOT_MCP_SCOPES = [
 	"mcp:preferences:write",
 ] as const;
 
+/**
+ * AI Search instances the copilot queries. All copilot knowledge — support
+ * docs (`docs/fin`) and blog posts (`content/blog`) — is uploaded to the single
+ * `ration-copilot-docs` R2 bucket backing the `ration-docs` instance, so one
+ * instance covers everything. Add more entries here to fan out.
+ */
+const COPILOT_AI_SEARCH_INSTANCES = ["ration-docs"] as const;
+
 async function searchAiSearchInstance(
 	env: Cloudflare.Env,
 	instanceName: string,
@@ -110,32 +119,47 @@ export function createCopilotToolDefs(
 				"Search official Ration support docs and blog content. Use before answering questions about how the app works.",
 			inputSchema: z.object({
 				query: z.string().min(1),
-				sources: z.array(z.enum(["docs", "blog"])).optional(),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_search",
 			audit: false,
 			handler: async (_ctx, args) => {
-				const sources = args.sources ?? ["docs", "blog"];
-				try {
-					const results = await Promise.all(
-						sources.map(async (source: "docs" | "blog") => ({
-							source,
-							result: await searchAiSearchInstance(
-								env,
-								source === "docs" ? "ration-docs" : "ration-blog",
-								args.query,
-							),
-						})),
-					);
-					return ok("search_docs", { query: args.query, results });
-				} catch {
+				// Query each instance independently so a single missing or failing
+				// instance never takes down the whole tool — return whatever
+				// succeeds and only error if every instance fails.
+				const settled = await Promise.allSettled(
+					COPILOT_AI_SEARCH_INSTANCES.map(
+						async (
+							instance,
+						): Promise<{ instance: string; result: unknown }> => ({
+							instance,
+							result: await searchAiSearchInstance(env, instance, args.query),
+						}),
+					),
+				);
+				const results = settled
+					.filter(
+						(
+							outcome,
+						): outcome is PromiseFulfilledResult<{
+							instance: string;
+							result: unknown;
+						}> => outcome.status === "fulfilled",
+					)
+					.map((outcome) => outcome.value);
+				for (const outcome of settled) {
+					if (outcome.status === "rejected") {
+						log.error("[Copilot] search_docs instance failed", outcome.reason);
+					}
+				}
+				if (results.length === 0) {
 					return err(
 						"search_docs",
 						"internal_error",
 						"Ration Copilot knowledge search is unavailable.",
 					);
 				}
+				return ok("search_docs", { query: args.query, results });
 			},
 		},
 		{

@@ -4,15 +4,21 @@ Ration Copilot uses Cloudflare AI Search as managed retrieval. The application d
 
 ## Instances
 
-- `ration-docs`: R2-backed instance for `docs/fin` and future support docs.
-- `ration-blog`: website crawler instance for the public blog domain.
+- `ration-docs`: R2-backed instance for **all** copilot knowledge. Both
+  `docs/fin` (support docs) and `content/blog` (blog posts) are uploaded to the
+  `ration-copilot-docs` bucket, so this single instance covers everything. The
+  copilot queries only this instance (see `COPILOT_AI_SEARCH_INSTANCES` in
+  `app/lib/copilot/tools.server.ts`).
 
-Create them once:
+Create it once:
 
 ```sh
 wrangler ai-search create ration-docs --type r2 --source ration-copilot-docs
-wrangler ai-search create ration-blog --type web-crawler --source ration.mayutic.com/blog
 ```
+
+`search_docs` uses `Promise.allSettled` across `COPILOT_AI_SEARCH_INSTANCES`, so
+adding a second instance (e.g. a web-crawler `ration-blog`) is a one-line change
+and a single failing instance never takes the tool down.
 
 After docs/blog changes, run the manual GitLab `ai_search_sync` job. It uploads `docs/fin` and `content/blog` Markdown to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing.
 
@@ -30,7 +36,6 @@ Verify indexing before enabling `ration-copilot`:
 
 ```sh
 wrangler ai-search stats ration-docs
-wrangler ai-search stats ration-blog
 wrangler ai-search search ration-docs --query "How do I connect an agent?"
 ```
 

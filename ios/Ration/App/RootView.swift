@@ -21,7 +21,7 @@ struct RootView: View {
                     // consent flag (H-8) and the onboarding check, instead of
                     // each fetching `/settings` on its own.
                     async let sessionLoad: Void = env.session.load(api: env.api)
-                    async let settingsLoad = loadSettings()
+                    async let settingsLoad: Void = loadSettings()
                     _ = await (sessionLoad, settingsLoad)
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {

@@ -195,7 +195,7 @@ final class AskViewModel {
         streamTask?.cancel()
         streamTask = Task { [weak self] in
             for await event in socket.events() {
-                await self?.apply(event)
+                self?.apply(event)
             }
         }
     }
@@ -250,13 +250,11 @@ final class AskViewModel {
             toolLingerTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    guard let self else { return }
-                    if self.turnPhase == .toolDone {
-                        self.completedTool = nil
-                        if self.state == .streaming {
-                            self.turnPhase = .thinking
-                        }
+                guard let self else { return }
+                if self.turnPhase == .toolDone {
+                    self.completedTool = nil
+                    if self.state == .streaming {
+                        self.turnPhase = .thinking
                     }
                 }
             }

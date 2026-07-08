@@ -70,7 +70,7 @@ final class GroupSettingsViewModel {
             newGroupName = ""
             newGroupSlug = ""
             slugManuallyEdited = false
-            _ = try await env.session.load(api: api)
+            _ = await env.session.load(api: api)
             if let org = env.session.session?.organizations.first(where: { $0.id == response.organizationId }) {
                 try await env.session.activateOrg(org, api: api, auth: env.auth, snapshots: env.snapshots)
             }
@@ -136,7 +136,7 @@ final class GroupSettingsViewModel {
         errorMessage = nil
         do {
             _ = try await api.transferGroupOwnership(newOwnerMemberId: memberId)
-            _ = try await env.session.load(api: api)
+            _ = await env.session.load(api: api)
             session = env.session.session
             members = try await api.groupMembers().members
             successMessage = "Ownership transferred"
@@ -153,7 +153,7 @@ final class GroupSettingsViewModel {
         errorMessage = nil
         do {
             _ = try await api.deleteGroup(organizationId: orgId)
-            _ = try await env.session.load(api: api)
+            _ = await env.session.load(api: api)
             Haptics.success()
             return true
         } catch {

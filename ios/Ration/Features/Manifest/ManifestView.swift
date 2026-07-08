@@ -450,21 +450,21 @@ struct ManifestView: View {
                     await reload()
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                IconFAB(
-                    systemImage: "plus.circle.fill",
-                    accessibilityLabel: "Manifest actions",
-                    disabled: !env.network.isOnline
-                ) {
-                    Button { showingAddEntry = true } label: {
-                        Label("Add entry", systemImage: "plus")
-                    }
-                    .disabled(!env.network.isOnline)
-                    Button { showingPlanWeek = true } label: {
-                        Label("Plan week", systemImage: "sparkles")
-                    }
-                    .disabled(!env.network.isOnline)
+        }
+        .tabDockAction(tag: 3) {
+            IconFABMenuCore(
+                systemImage: "plus.circle.fill",
+                accessibilityLabel: "Manifest actions",
+                disabled: !env.network.isOnline
+            ) {
+                Button { showingAddEntry = true } label: {
+                    Label("Add entry", systemImage: "plus")
                 }
+                .disabled(!env.network.isOnline)
+                Button { showingPlanWeek = true } label: {
+                    Label("Plan week", systemImage: "sparkles")
+                }
+                .disabled(!env.network.isOnline)
             }
         }
         .overlay(alignment: .bottom) {
@@ -477,7 +477,10 @@ struct ManifestView: View {
                         consumeUndoToken = nil
                     }
                 )
-                .padding(.bottom, 24)
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                )
             }
         }
         .task(id: organizationId) {
@@ -631,7 +634,7 @@ struct ManifestView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }
 

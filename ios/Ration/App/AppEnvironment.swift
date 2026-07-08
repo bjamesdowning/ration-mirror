@@ -25,6 +25,7 @@ final class AppEnvironment {
     let unitDisplayMode: UnitDisplayModeStore
     let ask: AskCoordinator
     let copilotScroll: CopilotScrollContext
+    let tabDock: TabDockContext
     private(set) var deepLinkDestination: DeepLinkDestination?
     private(set) var cargoDataRevision = 0
 
@@ -46,6 +47,7 @@ final class AppEnvironment {
         self.unitDisplayMode = unitDisplayMode
         self.ask = AskCoordinator()
         self.copilotScroll = CopilotScrollContext()
+        self.tabDock = TabDockContext()
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
         auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode] in

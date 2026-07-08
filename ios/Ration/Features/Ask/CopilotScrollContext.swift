@@ -196,7 +196,11 @@ extension View {
         modifier(CopilotScrollReporter())
     }
 
-    func copilotBarBottomPadding(isExpanded: Bool) -> some View {
-        padding(.bottom, CopilotDockLayout.bottomContentPadding(isExpanded: isExpanded))
+    func copilotDockScrollMargins(isExpanded: Bool, hasTabAction: Bool = true) -> some View {
+        contentMargins(
+            .bottom,
+            CopilotDockLayout.scrollContentMargin(isExpanded: isExpanded, hasTabAction: hasTabAction),
+            for: .scrollContent
+        )
     }
 }

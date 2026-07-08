@@ -175,12 +175,14 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Security hardening (v1.4.6–v1.4.11, iOS security audit fix plan):** `PrivacyInfo.xcprivacy` privacy manifest (v1.4.6); centralized/symmetric AI consent gate across all four AI entry points via `SessionStore.hasAIConsent` + `AIConsentCoordinator`, and server-side consent enforcement added to `/scan` (v1.4.8); forced-logout full wipe (`AuthManager.onSignedOut` → snapshots/billing/session/image caches) plus abandoned-PKCE-verifier Keychain cleanup on every sign-out (v1.4.9); mobile `/hub` and `/supply` rate limiting + pagination, and a `preLimit` fix for `/meals/match` (v1.4.10); post-review cleanup — explicit sign-out now routes through the same `onSignedOut` wipe hook instead of duplicating it, and `RootView`'s startup fetches (`session.load`, settings) run concurrently and are shared between the AI consent flag and the onboarding check instead of double-fetching `/settings` (v1.4.11). See [`plans/ios-security-audit-fix-plan.md`](../plans/ios-security-audit-fix-plan.md).
 
-**Copilot dual-dock (v1.5.20):** Global `CopilotFloatingBar` on all tab screens uses a **dual-dock** layout — Copilot input/collapse chip on the leading edge, tab action FABs (`IconFAB`) on the trailing edge with a reserved 72pt gutter (`CopilotDockLayout`). Scroll down to collapse the bar to a chat icon; scroll up to re-expand. List content scrolls underneath the floating glass controls via increased bottom insets (`copilotBarBottomPadding`). Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel` — terminal `done` frames and unknown chunks are ignored instead of surfacing decode errors.
+**Copilot stacked dock (v1.5.22):** `CopilotBottomDock` unifies Copilot input and tab action FABs in a single glass overlay above the tab bar. When expanded, the input bar spans full width and the tab FAB sits above it (trailing); scroll down to collapse the bar to a chat chip and the FAB lowers to the bottom-right row. Tab actions register via `.tabDockAction(tag:)` (`TabDockContext`) instead of per-tab `safeAreaInset` FABs — eliminating the blank dead zone from stacked insets. List content scrolls under the dock via `.copilotDockScrollMargins` (`contentMargins` + `CopilotDockLayout`). Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel`.
 
 **Copilot device QA checklist (before release):**
-- Galley/Cargo: scroll down collapses Copilot bar; scroll up re-expands; `+` FAB remains tappable while bar is expanded.
+- Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
+- Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
+- List rows scroll visibly behind the glass dock — no large blank band above the controls.
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
-- Hub: scan FAB and Copilot bar coexist without overlap.
+- Hub edit mode: scan FAB hidden; Supply empty list: replenish FAB hidden.
 - Tab switch resets bar to expanded when allowance allows auto-expand.
 
 ## Security notes

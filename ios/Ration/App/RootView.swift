@@ -108,6 +108,7 @@ struct MainTabView: View {
         }
         .environment(env.ask)
         .environment(env.copilotScroll)
+        .environment(env.tabDock)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
@@ -137,13 +138,21 @@ struct MainTabView: View {
                 TransientSuccessToast(message: message) {
                     manifestSuccessMessage = nil
                 }
-                .padding(.bottom, 88)
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: env.copilotScroll.isExpanded,
+                        hasTabAction: env.tabDock.hasAction(for: selectedTab)
+                    )
+                )
             }
         }
         .overlay(alignment: .bottom) {
             if showCopilotBar {
-                CopilotFloatingBar(
+                CopilotBottomDock(
                     scrollContext: env.copilotScroll,
+                    tabDock: env.tabDock,
+                    selectedTab: selectedTab,
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         Task {
@@ -158,8 +167,7 @@ struct MainTabView: View {
                         }
                     }
                 )
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 56)
+                .padding(.bottom, CopilotDockLayout.tabBarClearance)
             }
         }
         .task {

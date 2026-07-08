@@ -105,17 +105,17 @@ struct GalleyView: View {
                     await model.refreshAvailabilityMatches(api: env.api, online: env.network.isOnline)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
-                    Button { showingAddTypeChoice = true } label: {
-                        Label("Add", systemImage: "plus")
-                    }
-                    Button { showingGenerate = true } label: {
-                        Label("Generate meal", systemImage: "sparkles")
-                    }
-                    Button { showingImport = true } label: {
-                        Label("Import recipe", systemImage: "link")
-                    }
+        }
+        .tabDockAction(tag: 2) {
+            IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
+                Button { showingAddTypeChoice = true } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                Button { showingGenerate = true } label: {
+                    Label("Generate meal", systemImage: "sparkles")
+                }
+                Button { showingImport = true } label: {
+                    Label("Import recipe", systemImage: "link")
                 }
             }
         }
@@ -124,12 +124,18 @@ struct GalleyView: View {
                 TransientSuccessToast(message: message) {
                     generateSuccessMessage = nil
                 }
-                .padding(.bottom, 80)
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                )
             } else if let message = cookSuccessMessage {
                 TransientSuccessToast(message: message) {
                     cookSuccessMessage = nil
                 }
-                .padding(.bottom, 80)
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                )
             }
         }
         .task(id: organizationId) {
@@ -264,7 +270,7 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
-        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }
 
@@ -322,7 +328,7 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
-        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }
 
@@ -382,6 +388,7 @@ struct GalleyView: View {
 
 struct MealDetailView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     let mealId: String
     let initialMeal: Meal
     var isInitiallySelectedForSupply = false
@@ -448,7 +455,10 @@ struct MealDetailView: View {
                         cookUndoToken = nil
                     }
                 )
-                .padding(.bottom, 80)
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                )
             }
         }
         .safeAreaInset(edge: .bottom) {

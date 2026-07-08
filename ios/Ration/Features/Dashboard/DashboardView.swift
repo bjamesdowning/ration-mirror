@@ -85,16 +85,6 @@ struct DashboardView: View {
             .navigationDestination(isPresented: $showGroupSettings) {
                 GroupSettingsView()
             }
-            .safeAreaInset(edge: .bottom) {
-                if !model.isEditMode {
-                    IconFABButton(
-                        systemImage: "camera.viewfinder",
-                        accessibilityLabel: "Scan receipt",
-                        isAI: true,
-                        action: onScan
-                    )
-                }
-            }
             .sheet(item: $selectedCargoRoute) { route in
                 NavigationStack {
                     CargoDetailView(itemId: route.id)
@@ -111,6 +101,14 @@ struct DashboardView: View {
         }
         .refreshable {
             await reload()
+        }
+        .tabDockAction(tag: 0, isActive: !model.isEditMode) {
+            IconFABButtonCore(
+                systemImage: "camera.viewfinder",
+                accessibilityLabel: "Scan receipt",
+                isAI: true,
+                action: onScan
+            )
         }
     }
 
@@ -187,7 +185,10 @@ struct DashboardView: View {
                 }
             }
             .padding(16)
-            .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+            .copilotDockScrollMargins(
+                isExpanded: scrollContext.isExpanded,
+                hasTabAction: !model.isEditMode
+            )
         }
         .copilotScrollTracked()
     }

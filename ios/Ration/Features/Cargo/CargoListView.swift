@@ -88,14 +88,14 @@ struct CargoListView: View {
                     await model.toggleRestock(item, quantity: quantity, api: env.api)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                IconFAB(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
-                    Button(action: onScan) {
-                        Label("Scan receipt", systemImage: "camera.viewfinder")
-                    }
-                    Button { showingAdd = true } label: {
-                        Label("Add item", systemImage: "plus")
-                    }
+        }
+        .tabDockAction(tag: 1) {
+            IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
+                Button(action: onScan) {
+                    Label("Scan receipt", systemImage: "camera.viewfinder")
+                }
+                Button { showingAdd = true } label: {
+                    Label("Add item", systemImage: "plus")
                 }
             }
         }
@@ -203,7 +203,7 @@ struct CargoListView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
-        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }
 }

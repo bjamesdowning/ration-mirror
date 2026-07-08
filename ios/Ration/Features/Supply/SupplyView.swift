@@ -576,22 +576,23 @@ struct SupplyView: View {
                     TransientSuccessToast(message: message) {
                         model.dockMessage = nil
                     }
-                    .padding(.bottom, 80)
+                    .padding(
+                        .bottom,
+                        CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                    )
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                if model.totalCount > 0 {
-                    IconFAB(
-                        systemImage: "shippingbox.and.arrow.backward.fill",
-                        accessibilityLabel: "Replenish Cargo",
-                        disabled: model.isDocking || model.isScanning || !env.network.isOnline
-                    ) {
-                        Button {
-                            showingReplenishSheet = true
-                        } label: {
-                            Label("Replenish Cargo", systemImage: "shippingbox.and.arrow.backward")
-                        }
-                    }
+        }
+        .tabDockAction(tag: 4, isActive: model.totalCount > 0) {
+            IconFABMenuCore(
+                systemImage: "shippingbox.and.arrow.backward.fill",
+                accessibilityLabel: "Replenish Cargo",
+                disabled: model.isDocking || model.isScanning || !env.network.isOnline
+            ) {
+                Button {
+                    showingReplenishSheet = true
+                } label: {
+                    Label("Replenish Cargo", systemImage: "shippingbox.and.arrow.backward")
                 }
             }
         }
@@ -684,7 +685,10 @@ struct SupplyView: View {
                 await model.load(api: env.api, snapshots: env.snapshots, online: false, organizationId: organizationId)
             }
         }
-        .copilotBarBottomPadding(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins(
+            isExpanded: scrollContext.isExpanded,
+            hasTabAction: model.totalCount > 0
+        )
         .copilotScrollTracked()
     }
 

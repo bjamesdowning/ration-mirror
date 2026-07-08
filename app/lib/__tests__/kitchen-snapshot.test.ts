@@ -81,4 +81,38 @@ describe("buildKitchenAwareSuggestedActions", () => {
 		);
 		expect(actions.some((a) => a.action === "cargo_at_limit")).toBe(true);
 	});
+
+	it("does not suggest seed_inventory when crew tier has stocked cargo", () => {
+		const kitchen = emptyKitchen();
+		kitchen.tier = "crew_member";
+		kitchen.limits = {
+			maxInventoryItems: -1,
+			maxMeals: -1,
+			maxGroceryLists: -1,
+		};
+		kitchen.capacity.cargo = { current: 163, limit: -1, canAdd: -1 };
+		kitchen.credits = 10;
+
+		const actions = buildKitchenAwareSuggestedActions(
+			{
+				claimed: true,
+				status: "claimed",
+				claimUrlAvailable: false,
+				preClaim: false,
+			},
+			{
+				canRead: true,
+				canWriteInventory: true,
+				canWriteGalley: false,
+				canWriteManifest: false,
+				canWriteSupply: false,
+				canWritePreferences: false,
+			},
+			kitchen,
+		);
+
+		expect(actions.some((a) => a.action === "seed_inventory")).toBe(false);
+		expect(actions.some((a) => a.action === "search_ingredients")).toBe(true);
+		expect(actions.some((a) => a.action === "get_expiring_items")).toBe(true);
+	});
 });

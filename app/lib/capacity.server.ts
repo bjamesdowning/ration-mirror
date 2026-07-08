@@ -220,9 +220,10 @@ export async function checkCapacityWithTier(
 				: limits.maxGroceryLists;
 
 	if (limit === -1) {
+		const current = await getResourceCount(env, organizationId, resource);
 		return {
 			allowed: true,
-			current: 0,
+			current,
 			limit: -1,
 			tier,
 			isExpired,

@@ -15,6 +15,9 @@ struct AskView: View {
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: model.status)
     }
+    private var showsStopControl: Bool {
+        model.isTurnActive && !model.isAwaitingApproval
+    }
 
     var body: some View {
         NavigationStack {
@@ -133,9 +136,6 @@ struct AskView: View {
                 guard let organizationId else { return }
                 await ask.load(api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
             }
-            .onDisappear {
-                model.disconnect()
-            }
         }
     }
 
@@ -164,7 +164,11 @@ struct AskView: View {
                 }
             }
         case let .awaitingApproval(id, title, description):
-            ConfirmCard(title: title, description: description) {
+            ConfirmCard(
+                title: title,
+                description: description,
+                isLocked: model.isStopping || !model.isAwaitingApproval
+            ) {
                 Task { await model.approve(id, approved: true) }
             } onDeny: {
                 Task { await model.approve(id, approved: false) }
@@ -200,23 +204,45 @@ struct AskView: View {
                 }
 
             Button {
-                let text = draft
-                draft = ""
-                if let organizationId {
-                    followsLatest = true
+                if showsStopControl {
                     Task {
-                        await ask.sendFromBar(text, api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
+                        await model.stop()
                     }
-                    Haptics.light()
+                } else {
+                    let text = draft
+                    if let organizationId {
+                        followsLatest = true
+                        Task {
+                            let accepted = await ask.sendFromBar(
+                                text,
+                                api: env.api,
+                                auth: env.auth,
+                                organizationId: organizationId,
+                                snapshots: env.snapshots
+                            )
+                            if accepted, draft == text {
+                                draft = ""
+                            }
+                            if accepted {
+                                Haptics.light()
+                            }
+                        }
+                    }
                 }
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
+                Image(systemName: showsStopControl ? "stop.circle.fill" : "arrow.up.circle.fill")
                     .font(Typography.heroIcon(34))
-                    .foregroundStyle(Theme.hyperGreen)
+                    .foregroundStyle(showsStopControl ? Theme.warning : Theme.hyperGreen)
             }
-            .disabled(isCopilotExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(isCopilotExhausted ? 0.45 : 1)
-            .accessibilityLabel("Send message to Copilot")
+            .disabled(
+                showsStopControl
+                    ? model.isStopping
+                    : isCopilotExhausted
+                        || model.isAwaitingApproval
+                        || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            .opacity((isCopilotExhausted && !showsStopControl) || model.isStopping ? 0.45 : 1)
+            .accessibilityLabel(showsStopControl ? "Stop Copilot response" : "Send message to Copilot")
         }
     }
 }
@@ -369,6 +395,7 @@ private struct ToolStatusCard: View {
 private struct ConfirmCard: View {
     let title: String
     let description: String
+    let isLocked: Bool
     let onApprove: () -> Void
     let onDeny: () -> Void
 
@@ -380,8 +407,10 @@ private struct ConfirmCard: View {
                 HStack {
                     Button("Cancel", action: onDeny)
                         .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isLocked)
                     Button("Confirm", action: onApprove)
                         .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isLocked)
                 }
             }
         }

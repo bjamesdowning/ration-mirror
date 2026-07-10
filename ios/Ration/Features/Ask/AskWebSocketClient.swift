@@ -1,7 +1,20 @@
 import Foundation
 
 @MainActor
-final class AskWebSocketClient {
+protocol AskSocketClient: AnyObject {
+    var conversationId: String { get }
+
+    func events() -> AsyncStream<CopilotStreamEvent>
+    func connect() async throws
+    func send(_ messages: [CopilotMessage]) async throws
+    func approve(_ approvalId: String, approved: Bool) async throws
+    func cancelActiveRequest() async throws
+    func newConversation()
+    func disconnect()
+}
+
+@MainActor
+final class AskWebSocketClient: AskSocketClient {
     enum ClientError: LocalizedError {
         case notConnected
         case invalidMessage
@@ -20,6 +33,7 @@ final class AskWebSocketClient {
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private var continuation: AsyncStream<CopilotStreamEvent>.Continuation?
+    private var activeRequestId: String?
     private(set) var conversationId: String
 
     init(auth: AuthManager, conversationId: String = UUID().uuidString) {
@@ -72,10 +86,29 @@ final class AskWebSocketClient {
         guard let bodyString = String(data: bodyData, encoding: .utf8) else {
             throw ClientError.invalidMessage
         }
+        let requestId = UUID().uuidString
         let payload = AgentUseChatRequestPayload(
-            id: UUID().uuidString,
+            id: requestId,
             requestInit: AgentRequestInit(method: "POST", body: bodyString)
         )
+        let data = try JSON.encoder.encode(payload)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw ClientError.invalidMessage
+        }
+        activeRequestId = requestId
+        do {
+            try await task.send(.string(json))
+        } catch {
+            if activeRequestId == requestId {
+                activeRequestId = nil
+            }
+            throw error
+        }
+    }
+
+    func approve(_ approvalId: String, approved: Bool) async throws {
+        guard let task else { throw ClientError.notConnected }
+        let payload = ApprovalResponsePayload(approvalId: approvalId, approved: approved)
         let data = try JSON.encoder.encode(payload)
         guard let json = String(data: data, encoding: .utf8) else {
             throw ClientError.invalidMessage
@@ -83,9 +116,10 @@ final class AskWebSocketClient {
         try await task.send(.string(json))
     }
 
-    func approve(_ approvalId: String, approved: Bool) async throws {
+    func cancelActiveRequest() async throws {
         guard let task else { throw ClientError.notConnected }
-        let payload = ApprovalResponsePayload(approvalId: approvalId, approved: approved)
+        guard let activeRequestId else { return }
+        let payload = AgentChatRequestCancelPayload(id: activeRequestId)
         let data = try JSON.encoder.encode(payload)
         guard let json = String(data: data, encoding: .utf8) else {
             throw ClientError.invalidMessage
@@ -101,6 +135,7 @@ final class AskWebSocketClient {
     func disconnect() {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        activeRequestId = nil
     }
 
     private func receiveLoop() async {
@@ -110,10 +145,14 @@ final class AskWebSocketClient {
                 let message = try await task.receive()
                 let event = decode(message)
                 if event.type != "noop" {
+                    clearActiveRequestIfTerminal(event, message: message)
                     continuation?.yield(event)
                 }
             }
         } catch {
+            guard self.task === task else { return }
+            activeRequestId = nil
+            self.task = nil
             continuation?.yield(
                 CopilotStreamEvent(
                     type: "error",
@@ -133,6 +172,28 @@ final class AskWebSocketClient {
                 )
             )
         }
+    }
+
+    private func clearActiveRequestIfTerminal(
+        _ event: CopilotStreamEvent,
+        message: URLSessionWebSocketTask.Message
+    ) {
+        guard event.type == "message_end" || event.type == "error",
+              let activeRequestId else { return }
+
+        let data: Data
+        switch message {
+        case .data(let incoming):
+            data = incoming
+        case .string(let incoming):
+            data = Data(incoming.utf8)
+        @unknown default:
+            return
+        }
+
+        guard let envelope = try? JSON.decoder.decode(AgentResponseEnvelope.self, from: data),
+              envelope.id == activeRequestId else { return }
+        self.activeRequestId = nil
     }
 
     private func decode(_ message: URLSessionWebSocketTask.Message) -> CopilotStreamEvent {
@@ -187,6 +248,15 @@ private struct AgentUseChatRequestPayload: Encodable {
         case id
         case requestInit = "init"
     }
+}
+
+private struct AgentChatRequestCancelPayload: Encodable {
+    let type = "cf_agent_chat_request_cancel"
+    let id: String
+}
+
+private struct AgentResponseEnvelope: Decodable {
+    let id: String?
 }
 
 private struct AgentRequestInit: Encodable {

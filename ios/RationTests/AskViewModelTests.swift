@@ -184,4 +184,203 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.messages.count, 1)
         XCTAssertEqual(model.messages.first?.content, "Hello")
     }
+
+    func testActiveTurnCompletesOnMessageEnd() {
+        let model = AskViewModel()
+
+        model.apply(Self.event(type: "text_delta", messageId: "assistant-1", text: "Partial"))
+
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertEqual(model.turnPhase, .streaming)
+
+        model.apply(Self.event(type: "message_end"))
+
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isStopping)
+        XCTAssertFalse(model.isAwaitingApproval)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertEqual(model.turnPhase, .idle)
+        XCTAssertEqual(model.messages.last?.content, "Partial")
+    }
+
+    func testApprovalRequestLocksTurnAndDenialCompletes() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+
+        model.apply(
+            Self.event(
+                type: "approval_request",
+                approvalId: "approval-1",
+                title: "Remove item?",
+                description: "Remove milk."
+            )
+        )
+
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertTrue(model.isAwaitingApproval)
+
+        await model.approve("approval-1", approved: false)
+
+        XCTAssertEqual(socket.approvalResponses.count, 1)
+        XCTAssertEqual(socket.approvalResponses.first?.id, "approval-1")
+        XCTAssertEqual(socket.approvalResponses.first?.approved, false)
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isAwaitingApproval)
+        XCTAssertEqual(model.state, .idle)
+    }
+
+    func testApprovalResumesActiveTurn() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "approval_request", approvalId: "approval-1"))
+
+        await model.approve("approval-1", approved: true)
+
+        XCTAssertEqual(socket.approvalResponses.first?.approved, true)
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertFalse(model.isAwaitingApproval)
+        XCTAssertEqual(model.state, .streaming)
+        XCTAssertEqual(model.turnPhase, .thinking)
+    }
+
+    func testDisconnectRecoversActiveTurnToReady() {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Partial"))
+
+        model.disconnect()
+
+        XCTAssertTrue(socket.didDisconnect)
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isStopping)
+        XCTAssertEqual(model.state, .idle)
+    }
+
+    func testStopWaitsForTerminalEventAndKeepsPartialOutput() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Keep this"))
+
+        await model.stop()
+
+        XCTAssertEqual(socket.cancelCount, 1)
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertTrue(model.isStopping)
+
+        model.apply(Self.event(type: "message_end"))
+
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isStopping)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertEqual(model.messages.last?.content, "Keep this")
+    }
+
+    func testStopTimeoutDisconnectsAndCompletesTurn() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket, stopTimeoutNanoseconds: 1_000_000)
+        model.apply(Self.event(type: "text_delta", text: "Partial"))
+
+        await model.stop()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        XCTAssertTrue(socket.didDisconnect)
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isStopping)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertEqual(model.messages.last?.content, "Partial")
+    }
+
+    func testApprovalIgnoredWhileStopping() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Partial"))
+
+        await model.stop()
+
+        model.apply(
+            Self.event(
+                type: "approval_request",
+                approvalId: "approval-1",
+                title: "Remove item?"
+            )
+        )
+
+        XCTAssertFalse(model.isAwaitingApproval)
+        XCTAssertTrue(model.isStopping)
+        if case .awaitingApproval = model.state {
+            XCTFail("Approval UI should not appear while stopping")
+        }
+    }
+
+    func testNewChatClearsActiveTurnAndMessages() {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Partial"))
+
+        model.newChat(auth: AuthManager(), organizationId: "org-1", snapshots: SnapshotStore())
+
+        XCTAssertTrue(socket.didDisconnect)
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertFalse(model.isStopping)
+        XCTAssertEqual(model.messages.count, 0)
+        XCTAssertEqual(model.state, .idle)
+    }
+
+    private static func event(
+        type: String,
+        messageId: String? = nil,
+        text: String? = nil,
+        approvalId: String? = nil,
+        title: String? = nil,
+        description: String? = nil
+    ) -> CopilotStreamEvent {
+        CopilotStreamEvent(
+            type: type,
+            message: nil,
+            messageId: messageId,
+            text: text,
+            usageTokens: nil,
+            status: nil,
+            toolCallId: nil,
+            ok: nil,
+            error: nil,
+            approvalId: approvalId,
+            toolName: nil,
+            title: title,
+            description: description,
+            blocked: nil
+        )
+    }
+}
+
+@MainActor
+private final class TestAskSocketClient: AskSocketClient {
+    var conversationId = "test-conversation"
+    var approvalResponses: [(id: String, approved: Bool)] = []
+    var cancelCount = 0
+    var didDisconnect = false
+
+    func events() -> AsyncStream<CopilotStreamEvent> {
+        AsyncStream { _ in }
+    }
+
+    func connect() async throws {}
+    func send(_ messages: [CopilotMessage]) async throws {}
+
+    func approve(_ approvalId: String, approved: Bool) async throws {
+        approvalResponses.append((approvalId, approved))
+    }
+
+    func cancelActiveRequest() async throws {
+        cancelCount += 1
+    }
+
+    func newConversation() {
+        conversationId = "new-test-conversation"
+        disconnect()
+    }
+
+    func disconnect() {
+        didDisconnect = true
+    }
 }

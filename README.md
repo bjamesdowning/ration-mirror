@@ -192,7 +192,7 @@ npx wrangler r2 bucket lifecycle add ration-storage \
 
 Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
 
-**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status.
+**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket, support persistent multi-turn streaming with explicit Stop controls, and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status.
 
 **Copilot billing:** Billing is per conversation, not per message. Crew orgs receive 3 free copilot conversations per UTC day via KV allowance; after that, or for free-tier orgs from the first conversation, the existing ledger charges `AI_COSTS.COPILOT_TURN` as a 1-credit floor and reconciles upward by cumulative token brackets. The server enforces the `ration-copilot` Flagship flag and `copilot_connect`/`copilot` rate limits.
 

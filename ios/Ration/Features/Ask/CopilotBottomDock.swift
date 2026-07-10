@@ -7,8 +7,12 @@ struct CopilotBottomDock: View {
 
     let selectedTab: Int
     let isExhausted: Bool
+    let isTurnActive: Bool
+    let isStopping: Bool
+    let isAwaitingApproval: Bool
     let onOpenSheet: () -> Void
-    let onSend: (String) -> Void
+    let onSend: (String) async -> Bool
+    let onStop: () async -> Void
     let onExhaustedTap: () -> Void
 
     @State private var draft = ""
@@ -21,6 +25,9 @@ struct CopilotBottomDock: View {
         "What's expiring this week?",
         "Show meals I can cook tonight",
     ]
+    private var showsStopControl: Bool {
+        isTurnActive && !isAwaitingApproval
+    }
 
     var body: some View {
         // Align to the bottom without expanding hit testing across the full
@@ -47,7 +54,7 @@ struct CopilotBottomDock: View {
         .onDisappear {
             scrollContext.registerDismissKeyboardHandler(nil)
         }
-        .opacity(isExhausted ? 0.45 : 1)
+        .opacity(isExhausted && !isTurnActive ? 0.45 : 1)
         .task(id: hintIndex) {
             guard scrollContext.isExpanded, !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -102,16 +109,33 @@ struct CopilotBottomDock: View {
             .accessibilityLabel("Ask Ration")
             .onSubmit { submitDraft() }
 
-            Button(action: submitDraft) {
-                Image(systemName: "arrow.up.circle.fill")
+            Button {
+                if showsStopControl {
+                    Task { await onStop() }
+                } else {
+                    submitDraft()
+                }
+            } label: {
+                Image(systemName: showsStopControl ? "stop.circle.fill" : "arrow.up.circle.fill")
                     .font(Typography.heroIcon(30))
-                    .foregroundStyle(Theme.hyperGreen)
+                    .foregroundStyle(showsStopControl ? Theme.warning : Theme.hyperGreen)
             }
             .opacity(
-                isExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1
+                isStopping
+                    || (!showsStopControl
+                        && (isExhausted
+                            || isAwaitingApproval
+                            || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    ? 0.35 : 1
             )
-            .disabled(isExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Send to Copilot")
+            .disabled(
+                showsStopControl
+                    ? isStopping
+                    : isExhausted
+                        || isAwaitingApproval
+                        || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            .accessibilityLabel(showsStopControl ? "Stop Copilot response" : "Send to Copilot")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
@@ -165,14 +189,22 @@ struct CopilotBottomDock: View {
     }
 
     private func submitDraft() {
+        guard !isTurnActive, !isAwaitingApproval else { return }
         guard !isExhausted else {
             onExhaustedTap()
             return
         }
+        let originalDraft = draft
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        draft = ""
-        isInputFocused = false
-        onSend(text)
+        Task {
+            let accepted = await onSend(text)
+            if accepted, draft == originalDraft {
+                draft = ""
+            }
+            if accepted {
+                isInputFocused = false
+            }
+        }
     }
 }

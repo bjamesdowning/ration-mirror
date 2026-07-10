@@ -21,7 +21,6 @@ final class AskCoordinator {
 
     func closeSheet() {
         isSheetPresented = false
-        model.disconnect()
     }
 
     func sendFromBar(
@@ -30,8 +29,14 @@ final class AskCoordinator {
         auth: AuthManager,
         organizationId: String,
         snapshots: SnapshotStore
-    ) async {
+    ) async -> Bool {
         isSheetPresented = true
-        await model.send(text, api: api, auth: auth, organizationId: organizationId, snapshots: snapshots)
+        return await model.send(
+            text,
+            api: api,
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots
+        )
     }
 }

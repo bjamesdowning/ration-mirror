@@ -41,15 +41,28 @@ final class AskViewModel {
     private(set) var activeTool: CopilotToolStatus?
     private(set) var completedTool: CompletedTool?
     private(set) var lastSyncedLabel: String?
+    private(set) var isTurnActive = false
+    private(set) var isStopping = false
+    private(set) var isAwaitingApproval = false
 
-    private var socket: AskWebSocketClient?
+    private var socket: (any AskSocketClient)?
     private var streamTask: Task<Void, Never>?
     private var toolLingerTask: Task<Void, Never>?
     private var snapshotSaveTask: Task<Void, Never>?
+    private var stopTimeoutTask: Task<Void, Never>?
     private var isConnected = false
-    private var isSending = false
+    private var isSubmitting = false
     private var organizationId: String?
     private var snapshots: SnapshotStore?
+    private let stopTimeoutNanoseconds: UInt64
+
+    init(
+        socket: (any AskSocketClient)? = nil,
+        stopTimeoutNanoseconds: UInt64 = 2_000_000_000
+    ) {
+        self.socket = socket
+        self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
+    }
 
     var showsThinkingIndicator: Bool {
         if completedTool != nil { return false }
@@ -83,6 +96,16 @@ final class AskViewModel {
 
         self.organizationId = organizationId
         self.snapshots = snapshots
+        if !orgChanged, socket != nil {
+            do {
+                status = try await api.copilotStatus()
+            } catch {
+                if !isTurnActive {
+                    state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
+                }
+            }
+            return
+        }
 
         if let cached = await snapshots.load(Snapshot.self, domain: SnapshotDomain.ask, organizationId: organizationId) {
             messages = cached.payload.messages
@@ -128,9 +151,21 @@ final class AskViewModel {
         }
     }
 
-    func send(_ text: String, api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
+    @discardableResult
+    func send(
+        _ text: String,
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSending else { return }
+        guard !trimmed.isEmpty,
+              !isSubmitting,
+              !isTurnActive,
+              !isAwaitingApproval else { return false }
+        isSubmitting = true
+        defer { isSubmitting = false }
         self.organizationId = organizationId
         self.snapshots = snapshots
 
@@ -140,15 +175,14 @@ final class AskViewModel {
            !status.autoDeductConsent {
             state = .allowanceExhausted("Your Crew allowance is used. Confirm once to let Copilot use the shared credit balance for future chats.")
             turnPhase = .idle
-            return
+            return false
         }
         if socket == nil {
             socket = AskWebSocketClient(auth: auth)
         }
-        guard let socket else { return }
+        guard let socket else { return false }
 
         do {
-            isSending = true
             turnPhase = .connecting
             if !isConnected {
                 try await socket.connect()
@@ -156,17 +190,28 @@ final class AskViewModel {
                 observe(socket)
             }
             clearTransientError()
-            messages.append(CopilotMessage(role: "user", content: trimmed))
+            let userMessage = CopilotMessage(role: "user", content: trimmed)
+            messages.append(userMessage)
+            beginTurn()
             state = .streaming
             turnPhase = .thinking
             activeTool = nil
             completedTool = nil
-            try await socket.send(messages)
+            do {
+                try await socket.send(messages)
+            } catch {
+                if messages.last?.id == userMessage.id {
+                    messages.removeLast()
+                }
+                throw error
+            }
             await persistSnapshotNow()
+            return true
         } catch {
-            isSending = false
-            turnPhase = .idle
-            state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            completeTurn(
+                state: .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            )
+            return false
         }
     }
 
@@ -180,27 +225,77 @@ final class AskViewModel {
     }
 
     func approve(_ approvalId: String, approved: Bool) async {
+        guard case let .awaitingApproval(id, _, _) = state,
+              id == approvalId,
+              isAwaitingApproval,
+              let socket else { return }
+        isAwaitingApproval = false
         do {
-            try await socket?.approve(approvalId, approved: approved)
-            state = .streaming
-            turnPhase = .thinking
+            try await socket.approve(approvalId, approved: approved)
+            if approved {
+                guard !isStopping else { return }
+                isTurnActive = true
+                state = .streaming
+                turnPhase = .thinking
+            } else {
+                completeTurn(state: .idle)
+                scheduleImmediateSnapshotSave()
+            }
         } catch {
-            state = .error(error.localizedDescription)
+            completeTurn(state: .error(error.localizedDescription))
+        }
+    }
+
+    func stop() async {
+        guard isTurnActive, !isStopping else { return }
+        isStopping = true
+        isAwaitingApproval = false
+
+        guard let socket else {
+            completeTurn(state: .idle)
+            return
+        }
+
+        do {
+            try await socket.cancelActiveRequest()
+        } catch {
+            completeTurn(state: .error(error.localizedDescription))
+            return
+        }
+
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.stopTimeoutNanoseconds)
+            guard !Task.isCancelled, self.isStopping else { return }
+            self.socket?.disconnect()
+            self.isConnected = false
+            self.completeTurn(state: .idle)
+            self.scheduleImmediateSnapshotSave()
         }
     }
 
     func newChat(auth: AuthManager, organizationId: String, snapshots: SnapshotStore) {
         snapshotSaveTask?.cancel()
-        socket?.newConversation()
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = nil
+        streamTask?.cancel()
+        streamTask = nil
+        toolLingerTask?.cancel()
+        toolLingerTask = nil
+
+        let previousSocket = socket
+        if isTurnActive {
+            Task { try? await previousSocket?.cancelActiveRequest() }
+        }
+        previousSocket?.newConversation()
+
         socket = AskWebSocketClient(auth: auth)
         isConnected = false
-        isSending = false
         messages = []
         activeTool = nil
         completedTool = nil
-        toolLingerTask?.cancel()
-        state = .idle
-        turnPhase = .idle
+        completeTurn(state: .idle)
         Task {
             await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
         }
@@ -216,9 +311,10 @@ final class AskViewModel {
         snapshotSaveTask = nil
         socket?.disconnect()
         isConnected = false
+        completeTurn(state: .idle)
     }
 
-    private func observe(_ socket: AskWebSocketClient) {
+    private func observe(_ socket: any AskSocketClient) {
         streamTask?.cancel()
         streamTask = Task { [weak self] in
             for await event in socket.events() {
@@ -230,6 +326,7 @@ final class AskViewModel {
     func apply(_ event: CopilotStreamEvent) {
         switch event.type {
         case "message_start":
+            beginTurnIfNeeded()
             if let message = event.message {
                 if message.role == "assistant" {
                     if let index = messages.lastIndex(where: { $0.role == "assistant" && $0.id == message.id }) {
@@ -245,6 +342,7 @@ final class AskViewModel {
             }
             turnPhase = .thinking
         case "text_delta":
+            beginTurnIfNeeded()
             let text = event.text ?? ""
             if let index = messages.lastIndex(where: { $0.role == "assistant" }) {
                 messages[index].content += text
@@ -256,13 +354,11 @@ final class AskViewModel {
             turnPhase = .streaming
             persistSnapshotDebounced()
         case "message_end":
-            activeTool = nil
             clearTransientError()
-            state = .idle
-            turnPhase = .idle
-            isSending = false
+            completeTurn(state: .idle)
             scheduleImmediateSnapshotSave()
         case "tool_start":
+            beginTurnIfNeeded()
             if let status = event.status {
                 activeTool = CopilotToolStatus(
                     toolCallId: status.toolCallId,
@@ -295,24 +391,30 @@ final class AskViewModel {
             }
             scheduleImmediateSnapshotSave()
         case "approval_request":
-            isSending = false
+            guard !isStopping else { return }
+            beginTurnIfNeeded()
             turnPhase = .idle
+            guard let approvalId = event.approvalId else {
+                completeTurn(state: .error("Copilot sent an invalid approval request."))
+                return
+            }
+            isAwaitingApproval = true
             state = .awaitingApproval(
-                id: event.approvalId ?? UUID().uuidString,
+                id: approvalId,
                 title: event.title ?? "Confirm action",
                 description: event.description ?? "Ration Copilot needs your confirmation."
             )
         case "blocked_feature":
-            isSending = false
-            turnPhase = .idle
             if let blocked = event.blocked {
-                state = .blocked(blocked)
+                completeTurn(state: .blocked(blocked))
+            } else {
+                completeTurn(state: .error("Copilot sent an invalid blocked action."))
             }
         case "error":
             isConnected = false
-            isSending = false
-            turnPhase = .idle
-            state = .error(event.error?.message ?? event.text ?? "Copilot hit an error.")
+            completeTurn(
+                state: .error(event.error?.message ?? event.text ?? "Copilot hit an error.")
+            )
         default:
             break
         }
@@ -350,5 +452,33 @@ final class AskViewModel {
         if case .error = state {
             state = .idle
         }
+    }
+
+    private func beginTurn() {
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = nil
+        isTurnActive = true
+        isStopping = false
+        isAwaitingApproval = false
+    }
+
+    private func beginTurnIfNeeded() {
+        if !isTurnActive {
+            beginTurn()
+        }
+    }
+
+    private func completeTurn(state: State) {
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = nil
+        toolLingerTask?.cancel()
+        toolLingerTask = nil
+        activeTool = nil
+        completedTool = nil
+        isTurnActive = false
+        isStopping = false
+        isAwaitingApproval = false
+        turnPhase = .idle
+        self.state = state
     }
 }

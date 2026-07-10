@@ -171,20 +171,25 @@ struct MainTabView: View {
                     tabDock: env.tabDock,
                     selectedTab: selectedTab,
                     isExhausted: isCopilotExhausted,
+                    isTurnActive: env.ask.model.isTurnActive,
+                    isStopping: env.ask.model.isStopping,
+                    isAwaitingApproval: env.ask.model.isAwaitingApproval,
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
-                        Task {
-                            guard let organizationId = env.session.activeOrganizationId else { return }
-                            await env.ask.sendFromBar(
-                                text,
-                                api: env.api,
-                                auth: env.auth,
-                                organizationId: organizationId,
-                                snapshots: env.snapshots
-                            )
+                        guard let organizationId = env.session.activeOrganizationId else { return false }
+                        let accepted = await env.ask.sendFromBar(
+                            text,
+                            api: env.api,
+                            auth: env.auth,
+                            organizationId: organizationId,
+                            snapshots: env.snapshots
+                        )
+                        if accepted {
                             env.copilotScroll.collapse()
                         }
+                        return accepted
                     },
+                    onStop: { await env.ask.model.stop() },
                     onExhaustedTap: { showingCopilotPaywall = true }
                 )
                 .padding(

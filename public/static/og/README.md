@@ -44,6 +44,8 @@ folder when ready:
 - [ ] `meal-planning-loop.png` — for `/blog/meal-planning-loop`
 - [ ] `pantry-data-problem.png` — for `/blog/pantry-data-problem`
 - [ ] `mcp-kitchen-assistant.png` — for `/blog/mcp-kitchen-assistant`
+- [ ] `agentic-app-control-copilot.png` — for `/blog/agentic-app-control-copilot`
+- [ ] `building-ration-copilot-cloudflare-think.png` — for `/blog/building-ration-copilot-cloudflare-think`
 
 Until each per-post image exists, the post will fall through to the sitewide
 `OG_IMAGE` defined in `app/lib/seo.ts`.

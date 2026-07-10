@@ -23,7 +23,7 @@ be automated and must be done from a human-controlled console.
 - [ ] Confirm the `ration.mayutic.com` property is verified.
 - [ ] **Sitemaps** → submit/resubmit `https://ration.mayutic.com/sitemap.xml`.
       Wait for status to show "Success" and the URL count to match the
-      sitemap (currently 11 static + 8 blog posts = 19 URLs).
+      sitemap (currently 11 static + 10 blog posts = 21 URLs).
 - [ ] **URL Inspection** → for each URL below, paste it, click
       **Test Live URL**, then **Request Indexing**. Repeat after every
       meaningful content update.
@@ -38,6 +38,8 @@ be automated and must be done from a human-controlled console.
   - [ ] `https://ration.mayutic.com/blog/semantic-pantry-search`
   - [ ] `https://ration.mayutic.com/blog/cloudflare-vectorize-semantic-pantry-search`
   - [ ] `https://ration.mayutic.com/blog/food-waste-data-pipeline`
+  - [ ] `https://ration.mayutic.com/blog/agentic-app-control-copilot`
+  - [ ] `https://ration.mayutic.com/blog/building-ration-copilot-cloudflare-think`
   - [ ] `https://ration.mayutic.com/connect`
   - [ ] `https://ration.mayutic.com/docs/api`
   - [ ] `https://ration.mayutic.com/auth.md`

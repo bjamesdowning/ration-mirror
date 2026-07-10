@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { atomOneDark } from "react-syntax-highlighter/dist/cjs/styles/hljs";
 import remarkGfm from "remark-gfm";
+import { MermaidDiagram } from "./MermaidDiagram";
 
 // Custom dark theme aligned to Orbital Luxury palette
 const orbitalTheme = {
@@ -39,6 +40,10 @@ function CodeBlock({ children, className, node, ...rest }: CodeProps) {
 	const match = /language-(\w+)/.exec(className || "");
 	const language = match ? match[1] : undefined;
 	const isBlock = !!language;
+
+	if (isBlock && language === "mermaid") {
+		return <MermaidDiagram source={String(children).replace(/\n$/, "")} />;
+	}
 
 	if (isBlock) {
 		return (

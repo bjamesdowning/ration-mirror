@@ -1288,7 +1288,7 @@ Blog frontmatter should include `title`, `description`, `date`, `dateModified`, 
 
 Manual operator follow-ups (Search Console, Bing Webmaster, IndexNow, OG image generation) are tracked in [`docs/seo/checklist.md`](docs/seo/checklist.md).
 
-Published blog posts include MCP onboarding guides such as [Your Kitchen Has an API Now](/blog/mcp-kitchen-assistant) (OAuth-first) and [Agent-First MCP Onboarding](/blog/agent-first-mcp-onboarding) (autonomous self-registration + claim-when-ready).
+Published blog posts include MCP onboarding guides such as [Your Kitchen Has an API Now](/blog/mcp-kitchen-assistant) (OAuth-first) and [Agent-First MCP Onboarding](/blog/agent-first-mcp-onboarding) (autonomous self-registration + claim-when-ready), plus Copilot coverage in [Agentic App Control Is the Next Interface](/blog/agentic-app-control-copilot) and [Building Ration Copilot on Cloudflare Think](/blog/building-ration-copilot-cloudflare-think).
 
 ---
 

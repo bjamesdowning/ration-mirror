@@ -229,7 +229,7 @@ private struct CopilotDismissKeyboardOnTap: ViewModifier {
 }
 
 private struct CopilotKeyboardDismissOverlay: ViewModifier {
-    @Environment(CopilotScrollContext.self) private var scrollContext
+    let scrollContext: CopilotScrollContext
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
@@ -296,8 +296,8 @@ extension View {
         modifier(CopilotDismissKeyboardOnTap())
     }
 
-    func copilotKeyboardDismissOverlay() -> some View {
-        modifier(CopilotKeyboardDismissOverlay())
+    func copilotKeyboardDismissOverlay(_ scrollContext: CopilotScrollContext) -> some View {
+        modifier(CopilotKeyboardDismissOverlay(scrollContext: scrollContext))
     }
 
     func copilotKeyboardObserved(_ scrollContext: CopilotScrollContext) -> some View {

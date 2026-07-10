@@ -11,6 +11,9 @@ struct RationApp: App {
         WindowGroup {
             RootView()
                 .environment(env)
+                .environment(env.ask)
+                .environment(env.copilotScroll)
+                .environment(env.tabDock)
                 .preferredColorScheme(env.theme.colorScheme)
                 .tint(Theme.hyperGreen)
                 .background(Theme.ceramic)

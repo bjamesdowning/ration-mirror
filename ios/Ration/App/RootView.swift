@@ -184,7 +184,7 @@ struct MainTabView: View {
             }
         }
         .copilotKeyboardObserved(env.copilotScroll)
-        .copilotKeyboardDismissOverlay()
+        .copilotKeyboardDismissOverlay(env.copilotScroll)
         .task {
             await env.session.load(api: env.api)
             guard organizationId != "unknown" else { return }

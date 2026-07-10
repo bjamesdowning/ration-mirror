@@ -38,6 +38,8 @@ actor SnapshotDiskWorker {
         organizationId: String,
         expectedGeneration: Int
     ) throws -> Bool {
+        let signpost = PerformanceSignposts.begin("SnapshotSave")
+        defer { PerformanceSignposts.end("SnapshotSave", id: signpost) }
         guard expectedGeneration == writeGeneration else { return false }
         let envelope = Envelope(
             metadata: Metadata(syncedAt: Date(), organizationId: organizationId),
@@ -55,6 +57,8 @@ actor SnapshotDiskWorker {
         domain: String,
         organizationId: String
     ) throws -> (payload: T, metadata: Metadata)? {
+        let signpost = PerformanceSignposts.begin("SnapshotLoad")
+        defer { PerformanceSignposts.end("SnapshotLoad", id: signpost) }
         let url = fileURL(domain: domain, organizationId: organizationId)
         guard fileManager.fileExists(atPath: url.path) else { return nil }
         let data = try Data(contentsOf: url)

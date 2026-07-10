@@ -92,7 +92,7 @@ struct AIConsentGateView: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "doc.text.viewfinder")
-                .font(.system(size: 44))
+                .font(Typography.heroIcon(44))
                 .foregroundStyle(Theme.hyperGreen)
             Text("Receipt scanning uses AI").rationTitle()
             Text("Your receipt image and extracted items are sent to Ration cloud services and AI providers for processing. See Privacy & AI in Settings to manage consent.")

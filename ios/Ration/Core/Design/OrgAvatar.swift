@@ -72,7 +72,7 @@ struct OrgAvatar: View {
   private var initialsView: some View {
     let colors = OrgAvatarHelpers.colors(for: orgId)
     return Text(OrgAvatarHelpers.initials(for: name))
-      .font(.system(size: size * 0.38, weight: .bold, design: .monospaced))
+      .font(Typography.mono(size * 0.38, weight: .bold))
       .foregroundStyle(colors.fg)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(colors.bg)

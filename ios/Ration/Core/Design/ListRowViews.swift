@@ -119,6 +119,13 @@ struct CargoRowView: View {
         )
         var parts = [item.name.capitalized, quantity]
         if let expiresAt = item.expiresAt {
+            let band = CargoExpiryBand.band(
+                expiresAt: expiresAt,
+                isExpiredStatus: item.status == "expired"
+            )
+            if let urgency = band.accessibilityLabel {
+                parts.append(urgency)
+            }
             parts.append("expires \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
         }
         if !item.tags.isEmpty {

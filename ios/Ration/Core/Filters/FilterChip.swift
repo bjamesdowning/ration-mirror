@@ -15,12 +15,12 @@ struct FilterChip: View {
             HStack(spacing: 6) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(Typography.heroIcon(14, weight: .medium))
                 }
                 Text(label)
                     .font(Typography.caption())
             }
-            .foregroundStyle(isActive ? Color.black : Theme.carbon)
+            .foregroundStyle(isActive ? Theme.onHyperGreen : Theme.carbon)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(isActive ? Theme.hyperGreen : Theme.platinum)

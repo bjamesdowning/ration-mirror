@@ -55,7 +55,7 @@ struct GalleyAddTypeChoiceSheet: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 28))
+                    .font(Typography.heroIcon(28))
                     .foregroundStyle(Theme.hyperGreen)
                 Text(title).rationHeadline()
                 Text(detail)

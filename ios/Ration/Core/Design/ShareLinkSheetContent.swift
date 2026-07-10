@@ -27,8 +27,8 @@ struct ShareLinkSection: View {
             } else if hasActiveLink, let shareURL {
                 HStack {
                     Text("Active")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.black)
+                        .font(Typography.mono(11, weight: .bold))
+                        .foregroundStyle(Theme.onHyperGreen)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Theme.hyperGreen)
@@ -37,7 +37,7 @@ struct ShareLinkSection: View {
                 }
 
                 Text(shareURL)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(Typography.mono(12))
                     .textSelection(.enabled)
                     .lineLimit(3)
 

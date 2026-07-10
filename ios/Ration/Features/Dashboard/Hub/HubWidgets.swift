@@ -27,7 +27,7 @@ struct HubStatsWidget: View {
         } label: {
             VStack(alignment: .leading, spacing: compact ? 4 : 6) {
                 Image(systemName: icon)
-                    .font(.system(size: compact ? 14 : 16, weight: .semibold))
+                    .font(Typography.heroIcon(compact ? 14 : 16))
                     .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
                 Text("\(value)")
                     .font(compact ? Typography.headline() : Typography.display())
@@ -363,7 +363,7 @@ struct ManifestPreviewWidget: View {
         return VStack(alignment: .leading, spacing: 6) {
             Text(HubDateFormat.smartLabel(isoDate: date))
                 .font(Typography.caption())
-                .foregroundStyle(isToday ? Color.black : Theme.carbon)
+                .foregroundStyle(isToday ? Theme.onHyperGreen : Theme.carbon)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .frame(maxWidth: .infinity)

@@ -83,7 +83,7 @@ struct TagsSettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tag.name).foregroundStyle(Theme.carbon)
-                    Text(tag.slug).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.muted)
+                    Text(tag.slug).font(Typography.mono(12)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 Text("\(tag.cargoCount) cargo · \(tag.mealCount) meals")

@@ -7,11 +7,11 @@ struct IconFABIcon: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(isAI ? Color.black : Theme.carbon)
+            .font(Typography.heroIcon(22))
+            .foregroundStyle(isAI ? Theme.onHyperGreen : Theme.carbon)
             .frame(width: CopilotDockLayout.fabSize, height: CopilotDockLayout.fabSize)
             .background(isAI ? Theme.hyperGreen : Color.clear, in: Circle())
-            .background(.ultraThinMaterial, in: Circle())
+            .rationAdaptiveMaterial(in: Circle())
             .overlay(Circle().stroke(isAI ? Theme.hyperGreen : Theme.platinum, lineWidth: 1))
     }
 }

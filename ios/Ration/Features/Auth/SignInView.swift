@@ -50,7 +50,7 @@ private struct AuthModePicker: View {
                 } label: {
                     Text(option.pickerLabel)
                         .font(Typography.headline())
-                        .foregroundStyle(mode == option ? Color.black : Theme.muted)
+                        .foregroundStyle(mode == option ? Theme.onHyperGreen : Theme.muted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(mode == option ? Theme.hyperGreen : Color.clear)
@@ -115,7 +115,7 @@ struct SignInView: View {
     private var brandHeader: some View {
         VStack(spacing: 8) {
             Image(systemName: "circle.hexagongrid.fill")
-                .font(.system(size: 48))
+                .font(Typography.heroIcon(48))
                 .foregroundStyle(Theme.hyperGreen)
             Text("RATION").rationDisplay()
             Text("Orbital supply chain").rationCaption()
@@ -194,7 +194,7 @@ struct SignInView: View {
                             .tint(Theme.carbon)
                     } else {
                         Image(systemName: "g.circle.fill")
-                            .font(.system(size: 20))
+                            .font(Typography.heroIcon(20))
                     }
                     Text("Continue with Google")
                         .font(Typography.body().weight(.semibold))
@@ -220,7 +220,7 @@ struct SignInView: View {
                 tosAccepted.toggle()
             } label: {
                 Image(systemName: tosAccepted ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 20))
+                    .font(Typography.heroIcon(20))
                     .foregroundStyle(tosAccepted ? Theme.hyperGreen : Theme.muted)
             }
             .accessibilityLabel("Agree to Terms of Service and Privacy Policy")
@@ -272,7 +272,7 @@ struct SignInView: View {
         GlassCard {
             VStack(spacing: 12) {
                 Image(systemName: "envelope.badge")
-                    .font(.system(size: 32))
+                    .font(Typography.heroIcon(32))
                     .foregroundStyle(Theme.hyperGreen)
                 Text("Check your inbox").rationHeadline()
                 Text("Tap the link in the email we sent to \(email). It opens Ration and signs you in.")

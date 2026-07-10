@@ -26,11 +26,26 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `ListSwipeActions` | `ListSwipeActions.swift` | Shared inventory swipe modifiers (Cargo, Galley) |
 | `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + consume) |
 
+| `RationAdaptiveMaterial` | `RationAdaptiveMaterial.swift` | Frosted surfaces with Reduce Transparency fallback |
+
 ## Typography
 
 - **Space Mono** (Regular + Bold) bundled in `Resources/Fonts/`; registered via `UIAppFonts`.
-- Scale via `UIFontMetrics` in `Typography.swift` for Dynamic Type.
-- Use `.rationBody()`, `.rationCaption()`, etc. — avoid raw `.system` fonts in new views.
+- Scale via `Font.custom(…, relativeTo:)` in `Typography.swift` for Dynamic Type.
+- Use `.rationBody()` / `.rationCaption()` for scalable Space Mono text.
+- Use `Typography.heroIcon()` for fixed-size SF Symbols inside reserved control geometry; never apply scalable custom text fonts to symbols.
+- Hyper-Green label text uses `Theme.onHyperGreen`, not ad-hoc `Color.black`.
+
+## Motion & haptics
+
+- **Motion tokens** live in `MotionPolicy.swift` — restrained springs and short fades; infinite pulses respect Reduce Motion.
+- **Haptics** — `Haptics.light()` for toggles/FAB taps; `success`/`warning`/`error` for outcomes. Generators are prepared before firing.
+- **Materials** — prefer `RationAdaptiveMaterial` over raw `.ultraThinMaterial` so Reduce Transparency falls back to `Theme.surface`.
+
+## Empty states
+
+- Use `EmptyStateView` for list/sheet zero-data states — symbol hero icon, title, message, optional secondary CTA.
+- Empty icons use a subtle pulse when Reduce Motion is off; combined accessibility element for VoiceOver.
 
 ## Per-page patterns
 

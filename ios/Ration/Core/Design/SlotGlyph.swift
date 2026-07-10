@@ -18,7 +18,7 @@ struct SlotGlyphView: View {
 
     var body: some View {
         Image(systemName: SlotGlyph.systemImage(for: slotType))
-            .font(.system(size: 14, weight: .semibold))
+            .font(Typography.mono(14, weight: .semibold))
             .foregroundStyle(Theme.muted)
             .frame(width: 28, height: 28)
             .background(Theme.platinum)

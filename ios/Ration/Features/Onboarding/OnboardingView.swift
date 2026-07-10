@@ -118,6 +118,9 @@ struct OnboardingView: View {
                     .frame(width: 8, height: 8)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Onboarding progress")
+        .accessibilityValue("Step \(model.step + 1) of \(model.steps.count)")
     }
 
     private var stepCopy: String {

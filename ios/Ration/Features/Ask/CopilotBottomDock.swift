@@ -80,7 +80,7 @@ struct CopilotBottomDock: View {
         HStack(alignment: .center, spacing: 10) {
             Button(action: onOpenSheet) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(Typography.heroIcon(16))
                     .foregroundStyle(Theme.hyperGreen)
             }
             .accessibilityLabel("Open full Copilot chat")
@@ -104,7 +104,7 @@ struct CopilotBottomDock: View {
 
             Button(action: submitDraft) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 30))
+                    .font(Typography.heroIcon(30))
                     .foregroundStyle(Theme.hyperGreen)
             }
             .opacity(
@@ -116,7 +116,9 @@ struct CopilotBottomDock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background {
+            RationAdaptiveMaterial(shape: AnyShape(Capsule()))
+        }
         .overlay(Capsule().stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1))
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .toolbar {
@@ -138,8 +140,8 @@ struct CopilotBottomDock: View {
             }
         } label: {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color.black)
+                .font(Typography.heroIcon(20))
+                .foregroundStyle(Theme.onHyperGreen)
                 .frame(width: CopilotDockLayout.collapsedChatChipSize, height: CopilotDockLayout.collapsedChatChipSize)
                 .background(Theme.hyperGreen, in: Circle())
                 .overlay(Circle().stroke(Theme.hyperGreen, lineWidth: 1))

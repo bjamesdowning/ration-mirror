@@ -103,7 +103,7 @@ struct PaywallView: View {
     private var header: some View {
         VStack(spacing: 8) {
             Image(systemName: "bolt.shield.fill")
-                .font(.system(size: 44))
+                .font(Typography.heroIcon(44))
                 .foregroundStyle(Theme.hyperGreen)
             Text("Unlock Crew Member").rationTitle()
             Text("Higher inventory limits, AI scans, and smart logistics.")

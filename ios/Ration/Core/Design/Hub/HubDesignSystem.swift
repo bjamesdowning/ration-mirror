@@ -36,7 +36,7 @@ struct HubProgressBar: View {
             }
         }
         .frame(height: 4)
-        .animation(.easeInOut(duration: 0.25), value: progress)
+        .animation(MotionPolicy.shortFade, value: progress)
     }
 }
 
@@ -69,7 +69,7 @@ struct HubDateChip: View {
     var body: some View {
         Text(HubDateFormat.smartLabel(isoDate: isoDate))
             .font(Typography.caption())
-            .foregroundStyle(isSelected || isToday ? Color.black : Theme.carbon)
+            .foregroundStyle(isSelected || isToday ? Theme.onHyperGreen : Theme.carbon)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
@@ -92,7 +92,7 @@ struct HubSlotBadge: View {
 
     var body: some View {
         Text(abbreviation)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .font(Typography.mono(9, weight: .bold))
             .foregroundStyle(Theme.muted)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)

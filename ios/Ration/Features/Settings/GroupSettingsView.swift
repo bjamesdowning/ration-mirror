@@ -123,8 +123,11 @@ struct GroupSettingsView: View {
             if env.session.isSwitchingOrg {
                 ProgressView("Switching…")
                     .padding()
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .background {
+                        RationAdaptiveMaterial(
+                            shape: AnyShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        )
+                    }
             }
         }
     }
@@ -227,7 +230,7 @@ struct GroupSettingsView: View {
                         .font(Typography.caption())
                         .foregroundStyle(Theme.muted)
                     Text(link)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(Typography.mono(12))
                         .foregroundStyle(Theme.carbon)
                         .textSelection(.enabled)
                     Button("Copy link") {

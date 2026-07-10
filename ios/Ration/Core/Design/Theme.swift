@@ -6,6 +6,8 @@ import UIKit
 enum Theme {
     // Accent colors — identical in both themes.
     static let hyperGreen = Color(hex: 0x00E088)
+    /// Label color on Hyper-Green fills (CTAs, AI FABs, active chips).
+    static let onHyperGreen = Color(hex: 0x111111)
     static let success = Color(hex: 0x10B981)
     static let warning = Color(hex: 0xF59E0B)
     static let danger = Color(hex: 0xEF4444)

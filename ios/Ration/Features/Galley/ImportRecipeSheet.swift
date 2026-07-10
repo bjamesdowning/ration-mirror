@@ -272,7 +272,7 @@ struct ImportRecipeSheet: View {
             GlassCard {
                 VStack(spacing: 8) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 36))
+                        .font(Typography.heroIcon(36))
                         .foregroundStyle(Theme.hyperGreen)
                     Text("Added to Galley").rationHeadline()
                     Text(meal.name.capitalized).rationCaption()

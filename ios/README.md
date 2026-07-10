@@ -241,6 +241,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Performance and offline fluidity (iOS 1.1.3 build 7, web v1.5.43):** Snapshot JSON and file access run through the `SnapshotDiskWorker` actor instead of `MainActor`. Hub, Cargo, Galley, Manifest, and Supply restore org-scoped cache before network refresh (stale-while-revalidate), retain cached content on refresh failure with an explicit error, and reserve layout space for stale-data banners. Snapshot write generations prevent an in-flight task from recreating old account data after logout, account deletion, org switch, or Copilot new-chat clearing. Copilot coalesces streaming snapshot writes, lets readers pause auto-follow and jump back to the latest message, and includes keyboard height in dock-safe scroll margins. MetricKit payloads are retained locally under Application Support with bounded retention and no console or PII logging.
 
+**Beauty & modernity polish (iOS 1.1.4 build 8, web v1.5.44):** Typography tokens keep Space Mono text Dynamic Type-aware while `Typography.heroIcon()` provides fixed-size native SF Symbols for reserved control geometry. `Theme.onHyperGreen` replaces ad-hoc black on Hyper-Green surfaces. `RationAdaptiveMaterial` provides Reduce Transparency fallbacks for dock/FAB/composer chrome. Lists retain stable model IDs and native SwiftUI invalidation so every rendered field, environment change, and navigation input stays current. `EmptyStateView` adds optional CTAs and restrained symbol pulse. DEBUG `PerformanceSignposts` instrument snapshot load/save. Dead `FloatingActionBar` removed. Extended Sprint 3 QA checklist below.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -256,6 +258,14 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Fail a refresh while cache is visible: cached content remains and a refresh error is announced instead of appearing fresh.
 - Leave a cached tab open past the 30-minute threshold: the stale banner appears without covering the first row.
 - Force logout as a Copilot response completes, then sign in as another user: no prior conversation snapshot is restored.
+
+**Sprint 3 beauty & accessibility QA (before release):**
+- Settings → Accessibility → Display & Text Size → Larger Text (AX5): Copilot dock, week navigator, sign-in CTAs, list rows — no clipping.
+- Reduce Transparency ON: Icon FAB, Copilot dock, Ask composer use opaque `Theme.surface` (no illegible blur).
+- Reduce Motion ON: `EmptyStateView` pulse, AI processing ring, Copilot streaming cursor — no infinite animation.
+- VoiceOver: Cargo row announces expiry urgency band; filter button reports active-filter state; onboarding dots announce step X of Y.
+- Empty Cargo/Galley/Supply/Manifest lists: centered symbol hero, readable copy, no layout jump when data arrives.
+- Instruments (DEBUG): `SnapshotLoad` / `SnapshotSave` signposts visible under Performance category during tab open.
 
 ## Security notes
 

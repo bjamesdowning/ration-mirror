@@ -63,7 +63,7 @@ struct AIProcessingView: View {
                     .scaleEffect(reduceMotion ? 1 : (pulse ? 1.08 : 0.92))
                     .animation(MotionPolicy.repeatingPulse(duration: 1.2), value: pulse)
                 Image(systemName: feature.icon)
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(Typography.heroIcon(32))
                     .foregroundStyle(Theme.hyperGreen)
             }
             VStack(spacing: 8) {

@@ -13,7 +13,7 @@ struct AIFeatureInlineIntro: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 28))
+                    .font(Typography.heroIcon(28))
                     .foregroundStyle(Theme.hyperGreen)
                 Text(title).rationTitle()
             }

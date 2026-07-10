@@ -58,5 +58,6 @@ struct PageOptionsButton: View {
                 }
         }
         .accessibilityLabel("Filters and options")
+        .accessibilityValue(hasActiveFilters ? "Active filters applied" : "No active filters")
     }
 }

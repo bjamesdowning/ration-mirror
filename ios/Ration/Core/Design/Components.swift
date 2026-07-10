@@ -6,11 +6,11 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 8) {
-            if isLoading { ProgressView().tint(.black) }
+            if isLoading { ProgressView().tint(Theme.onHyperGreen) }
             configuration.label
         }
         .font(Typography.headline())
-        .foregroundStyle(Color.black)
+        .foregroundStyle(Theme.onHyperGreen)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .background(Theme.hyperGreen.opacity(configuration.isPressed ? 0.85 : 1))
@@ -80,24 +80,48 @@ struct LoadingView: View {
     }
 }
 
-/// Empty-state placeholder.
+/// Empty-state placeholder with symbol-first hero icon and optional CTA.
 struct EmptyStateView: View {
     let icon: String
     let title: String
     let message: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 40))
+                .font(Typography.heroIcon(40))
                 .foregroundStyle(Theme.muted)
-            Text(title).rationHeadline()
-            Text(message)
-                .rationCaption()
-                .multilineTextAlignment(.center)
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion && isVisible)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 8) {
+                Text(title).rationHeadline()
+                Text(message)
+                    .rationCaption()
+                    .multilineTextAlignment(.center)
+            }
+            .accessibilityElement(children: .combine)
+
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .frame(maxWidth: 240)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
         .padding(.horizontal, 24)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
+        .onAppear {
+            isVisible = true
+        }
+        .onDisappear {
+            isVisible = false
+        }
     }
 }

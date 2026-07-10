@@ -31,6 +31,12 @@ enum Typography {
         return custom(name, size: size, relativeTo: .footnote)
     }
 
+    /// Fixed-size SF Symbol styling for controls with reserved geometry.
+    /// Text remains Dynamic Type-aware through the semantic Space Mono tokens above.
+    static func heroIcon(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight)
+    }
+
     static func dataCaption() -> Font {
         custom(regularName, size: 12, relativeTo: .caption).monospacedDigit()
     }

@@ -33,6 +33,16 @@ enum CargoExpiryBand: Equatable {
         case .red, .expired: return Theme.danger
         }
     }
+
+    var accessibilityLabel: String? {
+        switch self {
+        case .hidden: nil
+        case .green: "fresh"
+        case .yellow: "expires soon"
+        case .red: "expires very soon"
+        case .expired: "expired"
+        }
+    }
 }
 
 struct CargoExpiryGauge: View {

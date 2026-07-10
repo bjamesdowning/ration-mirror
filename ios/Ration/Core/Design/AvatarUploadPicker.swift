@@ -108,7 +108,7 @@ struct AvatarUploadPicker: View {
             .overlay(Circle().stroke(Theme.platinum, lineWidth: 1))
 
             Image(systemName: "pencil.circle.fill")
-                .font(.system(size: size * 0.28))
+                .font(Typography.mono(size * 0.28))
                 .foregroundStyle(Theme.hyperGreen)
                 .background(Circle().fill(Theme.ceramic))
         }

@@ -29,14 +29,14 @@ struct OrgSwitcherBar: View {
                     }
                     HStack(spacing: 4) {
                         Image(systemName: "diamond.fill")
-                            .font(.system(size: 8))
+                            .font(Typography.mono(8))
                             .foregroundStyle(Theme.hyperGreen)
                         Text("\(env.session.credits) credits")
                             .font(Typography.caption())
                             .foregroundStyle(Theme.muted)
                     }
                     Text(tierLabel)
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(Typography.mono(9, weight: .bold))
                         .foregroundStyle(env.session.isCrewMember ? Theme.carbon : Theme.muted)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -50,7 +50,7 @@ struct OrgSwitcherBar: View {
                         .foregroundStyle(Theme.muted)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Typography.mono(10, weight: .semibold))
                     .foregroundStyle(Theme.muted)
             }
             .padding(.horizontal, 10)

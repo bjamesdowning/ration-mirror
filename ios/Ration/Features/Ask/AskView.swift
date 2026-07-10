@@ -79,8 +79,7 @@ struct AskView: View {
                                     .rationCaption()
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Capsule())
+                                    .rationAdaptiveMaterial(in: Capsule())
                             }
                             .foregroundStyle(Theme.carbon)
                             .padding(16)
@@ -106,7 +105,9 @@ struct AskView: View {
 
                 composer
                     .padding(16)
-                    .background(.ultraThinMaterial)
+                    .background {
+                        RationAdaptiveMaterial(shape: AnyShape(Rectangle()))
+                    }
             }
             .background(Theme.ceramic.ignoresSafeArea())
             .navigationTitle("Ask")
@@ -210,7 +211,7 @@ struct AskView: View {
                 }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 34))
+                    .font(Typography.heroIcon(34))
                     .foregroundStyle(Theme.hyperGreen)
             }
             .disabled(isCopilotExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

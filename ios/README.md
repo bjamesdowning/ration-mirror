@@ -239,6 +239,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Post-buildout stability (iOS 1.1.1 build 5, web v1.5.30):** Single-line Copilot input with rotating example placeholders (no stacked hint row). Keyboard dismisses on scroll, send, dock collapse, tap on list content, and Done toolbar. Scroll margins stay stable during dock collapse and grow when the keyboard is visible so the last row clears the keyboard. Supply sync uses the Manifest calendar window; post-dock reconcile passes the syncing user's settings.
 
+**Performance and offline fluidity (iOS 1.1.3 build 7, web v1.5.43):** Snapshot JSON and file access run through the `SnapshotDiskWorker` actor instead of `MainActor`. Hub, Cargo, Galley, Manifest, and Supply restore org-scoped cache before network refresh (stale-while-revalidate), retain cached content on refresh failure with an explicit error, and reserve layout space for stale-data banners. Snapshot write generations prevent an in-flight task from recreating old account data after logout, account deletion, org switch, or Copilot new-chat clearing. Copilot coalesces streaming snapshot writes, lets readers pause auto-follow and jump back to the latest message, and includes keyboard height in dock-safe scroll margins. MetricKit payloads are retained locally under Application Support with bounded retention and no console or PII logging.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -249,6 +251,11 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Copilot field: scroll list to dismiss keyboard; tap Done on keyboard accessory; send clears focus.
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
+- During a long Copilot response, scroll upward: reading position remains stable; “Jump to latest” resumes auto-follow.
+- Open each tab with a warm cache and delayed network: cached content appears without an empty flash; refresh spinner remains visible.
+- Fail a refresh while cache is visible: cached content remains and a refresh error is announced instead of appearing fresh.
+- Leave a cached tab open past the 30-minute threshold: the stale banner appears without covering the first row.
+- Force logout as a Copilot response completes, then sign in as another user: no prior conversation snapshot is restored.
 
 ## Security notes
 

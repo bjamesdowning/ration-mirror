@@ -60,26 +60,26 @@ final class DirectionsParserTests: XCTestCase {
 
 final class SnapshotStoreSyncStateTests: XCTestCase {
     @MainActor
-    func testFreshWhenRecentlySynced() {
+    func testFreshWhenRecentlySynced() async {
         let store = SnapshotStore()
-        let orgId = "test-org-sync-fresh"
-        store.save(["items": []] as [String: [String]], domain: "cargo", organizationId: orgId)
+        let orgId = "test-org-sync-fresh-legacy"
+        await store.save(["items": []] as [String: [String]], domain: "cargo", organizationId: orgId)
         let state = store.syncState(domain: "cargo", organizationId: orgId, online: true)
         XCTAssertEqual(state, .fresh)
-        store.clear(organizationId: orgId)
+        await store.clear(organizationId: orgId)
     }
 
     @MainActor
-    func testOfflineWhenNotOnline() {
+    func testOfflineWhenNotOnline() async {
         let store = SnapshotStore()
-        let orgId = "test-org-sync-offline"
-        store.save(["items": []] as [String: [String]], domain: "cargo", organizationId: orgId)
+        let orgId = "test-org-sync-offline-legacy"
+        await store.save(["items": []] as [String: [String]], domain: "cargo", organizationId: orgId)
         let state = store.syncState(domain: "cargo", organizationId: orgId, online: false)
         if case .offline = state {
             XCTAssertTrue(true)
         } else {
             XCTFail("Expected offline state")
         }
-        store.clear(organizationId: orgId)
+        await store.clear(organizationId: orgId)
     }
 }

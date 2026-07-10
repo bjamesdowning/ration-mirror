@@ -256,15 +256,19 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     @Environment(CopilotScrollContext.self) private var scrollContext
     let hasTabAction: Bool
 
-    func body(content: Content) -> some View {
-        content.contentMargins(
-            .bottom,
-            CopilotDockLayout.scrollContentMargin(
-                isExpanded: scrollContext.isExpanded,
-                hasTabAction: hasTabAction
-            ),
-            for: .scrollContent
+    private var margin: CGFloat {
+        CopilotDockLayout.scrollContentMargin(
+            isExpanded: scrollContext.isExpanded,
+            hasTabAction: hasTabAction,
+            keyboardInset: scrollContext.keyboardInset
         )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.bottom, margin, for: .scrollContent)
+            .animation(MotionPolicy.dockSpring, value: scrollContext.isExpanded)
+            .animation(MotionPolicy.dockSpring, value: scrollContext.keyboardInset)
     }
 }
 

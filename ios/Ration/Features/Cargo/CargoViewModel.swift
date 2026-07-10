@@ -13,6 +13,7 @@ final class CargoViewModel {
     private(set) var total = 0
     private(set) var activeCargoIds: Set<String> = []
     private(set) var isLoading = false
+    private(set) var isRefreshing = false
     private(set) var isLoadingMore = false
     private(set) var isClearingSelections = false
     var errorMessage: String?
@@ -66,11 +67,11 @@ final class CargoViewModel {
         organizationId: String,
         forceRemoteSearch: Bool = false
     ) async {
-        isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
 
         if isSearchActive, online, forceRemoteSearch {
+            isLoading = listContentIsEmpty
+            defer { isLoading = false }
             await search(api: api)
             return
         }
@@ -80,26 +81,38 @@ final class CargoViewModel {
             return
         }
 
-        if online {
-            do {
-                async let pageTask = api.cargo(cursor: nil, domain: filters.domain)
-                async let tagsTask = api.cargoTags()
-                let page = try await pageTask
-                availableTags = (try? await tagsTask.tags) ?? availableTags
-                rawItems = page.items
-                activeCargoIds = Set(page.activeCargoIds ?? [])
-                listContent = .inventory(displayedInventory)
-                total = page.total
-                inventoryTotal = page.total
-                nextCursor = page.nextCursor
-                inventoryNextCursor = page.nextCursor
-                snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots, organizationId: organizationId)
+        let hadCache = await restoreSnapshot(snapshots, organizationId: organizationId)
+        isLoading = !hadCache
+        defer { isLoading = false }
+
+        guard online else {
+            if !hadCache {
+                errorMessage = "You're offline and no cached cargo is available."
             }
-        } else {
-            restoreSnapshot(snapshots, organizationId: organizationId)
+            return
+        }
+
+        isRefreshing = hadCache
+        defer { isRefreshing = false }
+
+        do {
+            async let pageTask = api.cargo(cursor: nil, domain: filters.domain)
+            async let tagsTask = api.cargoTags()
+            let page = try await pageTask
+            availableTags = (try? await tagsTask.tags) ?? availableTags
+            rawItems = page.items
+            activeCargoIds = Set(page.activeCargoIds ?? [])
+            listContent = .inventory(displayedInventory)
+            total = page.total
+            inventoryTotal = page.total
+            nextCursor = page.nextCursor
+            inventoryNextCursor = page.nextCursor
+            await snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
+        } catch {
+            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = hadCache
+                ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Cargo", detail: detail)
+                : detail
         }
     }
 
@@ -128,15 +141,28 @@ final class CargoViewModel {
         nextCursor = nil
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
-        if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo, organizationId: organizationId) {
-            rawItems = cached.payload.items
-            activeCargoIds = Set(cached.payload.activeCargoIds ?? [])
+    @discardableResult
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) async -> Bool {
+        await SnapshotRefreshPolicy.restoreIfAvailable(
+            snapshots: snapshots,
+            type: CargoPage.self,
+            domain: SnapshotDomain.cargo,
+            organizationId: organizationId
+        ) { page in
+            rawItems = page.items
+            activeCargoIds = Set(page.activeCargoIds ?? [])
             listContent = .inventory(displayedInventory)
-            total = cached.payload.total
-            inventoryTotal = cached.payload.total
-            nextCursor = cached.payload.nextCursor
-            inventoryNextCursor = cached.payload.nextCursor
+            total = page.total
+            inventoryTotal = page.total
+            nextCursor = page.nextCursor
+            inventoryNextCursor = page.nextCursor
+        }
+    }
+
+    private var listContentIsEmpty: Bool {
+        switch listContent {
+        case let .inventory(items): items.isEmpty
+        case let .search(results): results.isEmpty
         }
     }
 

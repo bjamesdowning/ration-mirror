@@ -55,7 +55,7 @@ final class AppEnvironment {
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
         auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, deepLinkRouter] in
-            snapshots.clearAll()
+            await snapshots.clearAll()
             await billing.logOut()
             session.clear()
             theme.clear()

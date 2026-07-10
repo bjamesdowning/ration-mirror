@@ -13,16 +13,14 @@ final class AppEnvironmentForcedLogoutWipeTests: XCTestCase {
     func testForcedLogoutClearsSnapshotsForActiveOrg() async {
         let env = AppEnvironment()
         let orgId = "org_forced_logout_\(UUID().uuidString)"
-        env.snapshots.save("cached-pantry-payload", domain: SnapshotDomain.cargo, organizationId: orgId)
-        XCTAssertNotNil(
-            env.snapshots.load(String.self, domain: SnapshotDomain.cargo, organizationId: orgId)
-        )
+        await env.snapshots.save("cached-pantry-payload", domain: SnapshotDomain.cargo, organizationId: orgId)
+        let cachedBefore = await env.snapshots.load(String.self, domain: SnapshotDomain.cargo, organizationId: orgId)
+        XCTAssertNotNil(cachedBefore)
 
         await env.auth.signOutLocal()
 
-        XCTAssertNil(
-            env.snapshots.load(String.self, domain: SnapshotDomain.cargo, organizationId: orgId)
-        )
+        let cachedAfter = await env.snapshots.load(String.self, domain: SnapshotDomain.cargo, organizationId: orgId)
+        XCTAssertNil(cachedAfter)
     }
 
     @MainActor

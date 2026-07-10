@@ -72,6 +72,7 @@ struct DashboardView: View {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.hub,
                     organizationId: organizationId,
+                    isRefreshing: model.isRefreshing,
                     onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
@@ -87,6 +88,15 @@ struct DashboardView: View {
                 }
             }
             .background(Theme.ceramic)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let message = model.refreshErrorMessage {
+                    ErrorBanner(message: message)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Theme.ceramic)
+                }
+            }
+            .dataSyncBanner(domain: SnapshotDomain.hub, organizationId: organizationId)
             .navigationDestination(isPresented: $showGroupSettings) {
                 GroupSettingsView()
             }

@@ -18,6 +18,7 @@ struct RationApp: App {
                 .tint(Theme.hyperGreen)
                 .background(Theme.ceramic)
                 .task { await env.auth.bootstrap() }
+                .task { PerformanceTelemetry.shared.registerIfNeeded() }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {
                         handleAuthHandoff(url)

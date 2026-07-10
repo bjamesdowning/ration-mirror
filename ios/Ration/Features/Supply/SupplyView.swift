@@ -7,6 +7,7 @@ import Observation
 final class SupplyViewModel {
     private(set) var list: SupplyList?
     private(set) var isLoading = false
+    private(set) var isRefreshing = false
     private(set) var isSyncing = false
     private(set) var isDocking = false
     private(set) var isScanning = false
@@ -43,22 +44,32 @@ final class SupplyViewModel {
     }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        isLoading = true
         errorMessage = nil
+        let hadCache = await restoreSnapshot(snapshots, organizationId: organizationId)
+        isLoading = !hadCache
         defer { isLoading = false }
 
-        if online {
-            do {
-                list = try await api.supply().list
-                if let list {
-                    snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: organizationId)
-                }
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(snapshots, organizationId: organizationId)
+        guard online else {
+            if !hadCache {
+                errorMessage = "You're offline and no cached supply list is available."
             }
-        } else {
-            restoreSnapshot(snapshots, organizationId: organizationId)
+            await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: online)
+            return
+        }
+
+        isRefreshing = hadCache
+        defer { isRefreshing = false }
+
+        do {
+            list = try await api.supply().list
+            if let list {
+                await snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: organizationId)
+            }
+        } catch {
+            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = hadCache
+                ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Supply", detail: detail)
+                : detail
         }
         await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: online)
         if online {
@@ -72,7 +83,7 @@ final class SupplyViewModel {
         organizationId: String,
         online: Bool
     ) async {
-        if let cached = snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo, organizationId: organizationId) {
+        if let cached = await snapshots.load(CargoPage.self, domain: SnapshotDomain.cargo, organizationId: organizationId) {
             cargoLinkRows = cached.payload.items.map { CargoLinkResolver.Row(id: $0.id, name: $0.name) }
         }
         guard online else { return }
@@ -92,9 +103,15 @@ final class SupplyViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
-        if let cached = snapshots.load(SupplyResponse.self, domain: SnapshotDomain.supply, organizationId: organizationId) {
-            list = cached.payload.list
+    @discardableResult
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) async -> Bool {
+        await SnapshotRefreshPolicy.restoreIfAvailable(
+            snapshots: snapshots,
+            type: SupplyResponse.self,
+            domain: SnapshotDomain.supply,
+            organizationId: organizationId
+        ) { response in
+            list = response.list
         }
     }
 
@@ -171,7 +188,7 @@ final class SupplyViewModel {
         do {
             let response = try await api.syncSupply()
             list = response.list
-            snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
+            await snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
             await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: true)
             Haptics.success()
         } catch {
@@ -427,6 +444,7 @@ struct SupplyView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.supply,
                     organizationId: organizationId,
+                    isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
                     onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
@@ -436,6 +454,7 @@ struct SupplyView: View {
                 GroupSettingsView()
             }
             .background(Theme.ceramic)
+            .dataSyncBanner(domain: SnapshotDomain.supply, organizationId: organizationId)
             .sheet(isPresented: $showingOptions) {
                 SupplyOptionsSheet(
                     shareURL: supplyShareURL,

@@ -66,11 +66,13 @@ struct CargoListView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.cargo,
                     organizationId: organizationId,
+                    isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
                     onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
                 )
             }
+            .dataSyncBanner(domain: SnapshotDomain.cargo, organizationId: organizationId)
             .navigationDestination(isPresented: $showGroupSettings) {
                 GroupSettingsView()
             }

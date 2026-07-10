@@ -7,6 +7,7 @@ struct AskView: View {
     @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @State private var followsLatest = true
     @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
@@ -63,6 +64,32 @@ struct AskView: View {
                         .padding(16)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8).onChanged { _ in
+                            followsLatest = false
+                        }
+                    )
+                    .overlay(alignment: .bottomTrailing) {
+                        if !followsLatest, !model.messages.isEmpty {
+                            Button {
+                                followsLatest = true
+                                scrollToBottom(proxy: proxy, force: true)
+                            } label: {
+                                Label("Jump to latest", systemImage: "arrow.down")
+                                    .rationCaption()
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Capsule())
+                            }
+                            .foregroundStyle(Theme.carbon)
+                            .padding(16)
+                            .accessibilityLabel("Jump to latest Copilot message")
+                        }
+                    }
+                    .onChange(of: model.streamingContentLength) { _, _ in
+                        scrollToBottom(proxy: proxy)
+                    }
                     .onChange(of: model.messages.count) { _, _ in
                         scrollToBottom(proxy: proxy)
                     }
@@ -88,6 +115,7 @@ struct AskView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("New Chat") {
                         if let organizationId {
+                            followsLatest = true
                             model.newChat(auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
                             Haptics.light()
                         }
@@ -110,7 +138,8 @@ struct AskView: View {
         }
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
+    private func scrollToBottom(proxy: ScrollViewProxy, force: Bool = false) {
+        guard followsLatest || force else { return }
         if let last = model.messages.last {
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
@@ -173,6 +202,7 @@ struct AskView: View {
                 let text = draft
                 draft = ""
                 if let organizationId {
+                    followsLatest = true
                     Task {
                         await ask.sendFromBar(text, api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
                     }

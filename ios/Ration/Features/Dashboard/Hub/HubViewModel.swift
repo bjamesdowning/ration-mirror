@@ -11,34 +11,52 @@ final class HubViewModel {
     }
 
     private(set) var state: State = .loading
+    private(set) var isRefreshing = false
+    private(set) var refreshErrorMessage: String?
     var isEditMode = false
     var toggleErrorMessage: String?
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        if online {
-            do {
-                let data = try await api.hub()
-                state = .loaded(data)
-                snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
-            } catch {
-                if !restoreSnapshot(snapshots, organizationId: organizationId) {
-                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                }
+        refreshErrorMessage = nil
+        let hadCache = await SnapshotRefreshPolicy.restoreIfAvailable(
+            snapshots: snapshots,
+            type: HubResponse.self,
+            domain: SnapshotDomain.hub,
+            organizationId: organizationId
+        ) { data in
+            state = .loaded(data)
+        }
+
+        if !hadCache {
+            state = .loading
+        }
+
+        guard online else {
+            if !hadCache {
+                state = .failed("You're offline and no cached Hub data is available.")
             }
-        } else if restoreSnapshot(snapshots, organizationId: organizationId) {
-            // offline snapshot
-        } else {
-            state = .failed("You're offline and no cached Hub data is available.")
+            return
+        }
+
+        isRefreshing = hadCache
+        defer { isRefreshing = false }
+
+        do {
+            let data = try await api.hub()
+            state = .loaded(data)
+            await snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
+        } catch {
+            if !hadCache {
+                state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            } else {
+                refreshErrorMessage = Self.cachedRefreshError(error)
+            }
         }
     }
 
-    @discardableResult
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) -> Bool {
-        guard let cached = snapshots.load(HubResponse.self, domain: SnapshotDomain.hub, organizationId: organizationId) else {
-            return false
-        }
-        state = .loaded(cached.payload)
-        return true
+    private static func cachedRefreshError(_ error: Error) -> String {
+        let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        return SnapshotRefreshPolicy.refreshFailureMessage(feature: "Hub", detail: detail)
     }
 
     var resolvedLayout: [HubWidgetLayout] {
@@ -101,7 +119,7 @@ final class HubViewModel {
 
         do {
             _ = try await api.toggleSupplyItem(item.id, isPurchased: isPurchased)
-            snapshots.save(newData, domain: SnapshotDomain.hub, organizationId: organizationId)
+            await snapshots.save(newData, domain: SnapshotDomain.hub, organizationId: organizationId)
         } catch {
             toggleErrorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)

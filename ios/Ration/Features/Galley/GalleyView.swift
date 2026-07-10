@@ -65,6 +65,7 @@ struct GalleyView: View {
                     hasActiveFilters: model.filters.hasActiveFilters,
                     syncDomain: SnapshotDomain.galley,
                     organizationId: organizationId,
+                    isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
                     onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
@@ -74,6 +75,16 @@ struct GalleyView: View {
                 GroupSettingsView()
             }
             .background(Theme.ceramic)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let message = model.errorMessage,
+                   !model.meals.isEmpty || !model.matches.isEmpty {
+                    ErrorBanner(message: message)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Theme.ceramic)
+                }
+            }
+            .dataSyncBanner(domain: SnapshotDomain.galley, organizationId: organizationId)
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: availableTags)
             }

@@ -56,7 +56,7 @@ struct AccountDeletionView: View {
         defer { isDeleting = false }
         do {
             _ = try await env.api.deleteAccount()
-            env.snapshots.clearAll()
+            await env.snapshots.clearAll()
             await env.billing.logOut()
             await env.auth.signOut()
             dismiss()

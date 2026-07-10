@@ -23,7 +23,7 @@ final class AskViewModel {
         case streaming
     }
 
-    struct Snapshot: Codable {
+    struct Snapshot: Codable, Sendable {
         let conversationId: String
         let messages: [CopilotMessage]
     }
@@ -45,6 +45,7 @@ final class AskViewModel {
     private var socket: AskWebSocketClient?
     private var streamTask: Task<Void, Never>?
     private var toolLingerTask: Task<Void, Never>?
+    private var snapshotSaveTask: Task<Void, Never>?
     private var isConnected = false
     private var isSending = false
     private var organizationId: String?
@@ -63,6 +64,11 @@ final class AskViewModel {
         }
     }
 
+    /// Last assistant message content length — drives scroll-to-bottom during streaming.
+    var streamingContentLength: Int {
+        messages.last(where: { $0.role == "assistant" })?.content.count ?? 0
+    }
+
     func load(api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
         let orgChanged = self.organizationId != organizationId
         if orgChanged {
@@ -78,7 +84,7 @@ final class AskViewModel {
         self.organizationId = organizationId
         self.snapshots = snapshots
 
-        if let cached = snapshots.load(Snapshot.self, domain: SnapshotDomain.ask, organizationId: organizationId) {
+        if let cached = await snapshots.load(Snapshot.self, domain: SnapshotDomain.ask, organizationId: organizationId) {
             messages = cached.payload.messages
             socket = AskWebSocketClient(auth: auth, conversationId: cached.payload.conversationId)
             lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
@@ -91,7 +97,7 @@ final class AskViewModel {
             if let syncedAt = snapshots.syncedAt(domain: SnapshotDomain.ask, organizationId: organizationId),
                let status,
                Date().timeIntervalSince(syncedAt) * 1000 > Double(status.sessionIdleMs) {
-                snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
+                await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
                 messages = []
                 socket = AskWebSocketClient(auth: auth)
                 lastSyncedLabel = nil
@@ -156,7 +162,7 @@ final class AskViewModel {
             activeTool = nil
             completedTool = nil
             try await socket.send(messages)
-            persistSnapshot()
+            await persistSnapshotNow()
         } catch {
             isSending = false
             turnPhase = .idle
@@ -184,6 +190,7 @@ final class AskViewModel {
     }
 
     func newChat(auth: AuthManager, organizationId: String, snapshots: SnapshotStore) {
+        snapshotSaveTask?.cancel()
         socket?.newConversation()
         socket = AskWebSocketClient(auth: auth)
         isConnected = false
@@ -194,7 +201,9 @@ final class AskViewModel {
         toolLingerTask?.cancel()
         state = .idle
         turnPhase = .idle
-        snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
+        Task {
+            await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
+        }
         lastSyncedLabel = nil
     }
 
@@ -203,6 +212,8 @@ final class AskViewModel {
         streamTask = nil
         toolLingerTask?.cancel()
         toolLingerTask = nil
+        snapshotSaveTask?.cancel()
+        snapshotSaveTask = nil
         socket?.disconnect()
         isConnected = false
     }
@@ -243,14 +254,14 @@ final class AskViewModel {
             clearTransientError()
             state = .streaming
             turnPhase = .streaming
-            persistSnapshot()
+            persistSnapshotDebounced()
         case "message_end":
             activeTool = nil
             clearTransientError()
             state = .idle
             turnPhase = .idle
             isSending = false
-            persistSnapshot()
+            scheduleImmediateSnapshotSave()
         case "tool_start":
             if let status = event.status {
                 activeTool = CopilotToolStatus(
@@ -282,7 +293,7 @@ final class AskViewModel {
                     self.completedTool = nil
                 }
             }
-            persistSnapshot()
+            scheduleImmediateSnapshotSave()
         case "approval_request":
             isSending = false
             turnPhase = .idle
@@ -307,10 +318,27 @@ final class AskViewModel {
         }
     }
 
-    private func persistSnapshot() {
+    private func persistSnapshotDebounced() {
+        snapshotSaveTask?.cancel()
+        snapshotSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.persistSnapshotNow()
+        }
+    }
+
+    private func scheduleImmediateSnapshotSave() {
+        snapshotSaveTask?.cancel()
+        snapshotSaveTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            await self?.persistSnapshotNow()
+        }
+    }
+
+    private func persistSnapshotNow() async {
         guard let organizationId, let snapshots else { return }
         let conversationId = socket?.conversationId ?? UUID().uuidString
-        snapshots.save(
+        await snapshots.save(
             Snapshot(conversationId: conversationId, messages: messages),
             domain: SnapshotDomain.ask,
             organizationId: organizationId

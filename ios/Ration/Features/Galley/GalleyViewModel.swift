@@ -42,6 +42,7 @@ final class GalleyViewModel {
     private(set) var matchTotal = 0
     private(set) var activeMealIds: Set<String> = []
     private(set) var isLoading = false
+    private(set) var isRefreshing = false
     private(set) var isClearingSelections = false
     var errorMessage: String?
 
@@ -92,41 +93,66 @@ final class GalleyViewModel {
     }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        isLoading = true
         errorMessage = nil
+        let hadCache = await restoreSnapshot(snapshots, organizationId: organizationId)
+        let hasUsableContent = SnapshotRefreshPolicy.hasUsableContent(
+            hasSnapshot: hadCache,
+            modeSpecificItemCount: isMatchMode ? matches.count : nil
+        )
+        isLoading = !hasUsableContent
         defer { isLoading = false }
 
-        if online {
-            if isMatchMode {
-                do {
-                    async let matchTask = api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
-                    async let mealsTask = api.meals(tag: serverTagFilter, domain: filters.domain)
-                    let response = try await matchTask
-                    let mealsResponse = try await mealsTask
-                    matches = response.matches
-                    matchTotal = response.total ?? response.matches.count
-                    matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
-                    activeMealIds = Set(mealsResponse.activeMealIds ?? [])
-                } catch {
-                    errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                    restoreSnapshot(snapshots, organizationId: organizationId)
-                }
-            } else {
-                do {
-                    let mealsResponse = try await api.meals(tag: serverTagFilter, domain: filters.domain)
-                    meals = mealsResponse.meals
-                    mealTotal = mealsResponse.total ?? mealsResponse.meals.count
-                    activeMealIds = Set(mealsResponse.activeMealIds ?? [])
-                    snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
-                } catch {
-                    errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                    restoreSnapshot(snapshots, organizationId: organizationId)
-                }
-                await refreshAvailabilityMatches(api: api, online: true)
+        guard online else {
+            matchByMealId = [:]
+            if !hasUsableContent {
+                errorMessage = isMatchMode
+                    ? "You're offline and no cached meal matches are available."
+                    : "You're offline and no cached meals are available."
+            }
+            return
+        }
+
+        isRefreshing = hasUsableContent
+        defer { isRefreshing = false }
+
+        if isMatchMode {
+            do {
+                async let matchTask = api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
+                async let mealsTask = api.meals(tag: serverTagFilter, domain: filters.domain)
+                let response = try await matchTask
+                let mealsResponse = try await mealsTask
+                matches = response.matches
+                matchTotal = response.total ?? response.matches.count
+                matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
+                activeMealIds = Set(mealsResponse.activeMealIds ?? [])
+            } catch {
+                let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                errorMessage = hasUsableContent
+                    ? SnapshotRefreshPolicy.refreshFailureMessage(
+                        feature: "meal matches",
+                        cachedContent: "previous results",
+                        detail: detail
+                    )
+                    : detail
             }
         } else {
-            matchByMealId = [:]
-            restoreSnapshot(snapshots, organizationId: organizationId)
+            do {
+                let mealsResponse = try await api.meals(tag: serverTagFilter, domain: filters.domain)
+                meals = mealsResponse.meals
+                mealTotal = mealsResponse.total ?? mealsResponse.meals.count
+                activeMealIds = Set(mealsResponse.activeMealIds ?? [])
+                await snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
+            } catch {
+                let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                errorMessage = hadCache
+                    ? SnapshotRefreshPolicy.refreshFailureMessage(
+                        feature: "Galley",
+                        cachedContent: "cached meals",
+                        detail: detail
+                    )
+                    : detail
+            }
+            await refreshAvailabilityMatches(api: api, online: true)
         }
     }
 
@@ -147,11 +173,17 @@ final class GalleyViewModel {
         }
     }
 
-    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
-        if let cached = snapshots.load(MealsResponse.self, domain: SnapshotDomain.galley, organizationId: organizationId) {
-            meals = cached.payload.meals
-            mealTotal = cached.payload.total ?? cached.payload.meals.count
-            activeMealIds = Set(cached.payload.activeMealIds ?? [])
+    @discardableResult
+    private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) async -> Bool {
+        await SnapshotRefreshPolicy.restoreIfAvailable(
+            snapshots: snapshots,
+            type: MealsResponse.self,
+            domain: SnapshotDomain.galley,
+            organizationId: organizationId
+        ) { response in
+            meals = response.meals
+            mealTotal = response.total ?? response.meals.count
+            activeMealIds = Set(response.activeMealIds ?? [])
         }
     }
 

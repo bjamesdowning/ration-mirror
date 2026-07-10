@@ -6,6 +6,7 @@ import Observation
 final class ManifestViewModel {
     private(set) var manifest: ManifestResponse?
     private(set) var isLoading = false
+    private(set) var isRefreshing = false
     private(set) var isSavingEntry = false
     private(set) var isTogglingSupplyDay = false
     var errorMessage: String?
@@ -47,35 +48,40 @@ final class ManifestViewModel {
     }
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
-        isLoading = true
         errorMessage = nil
         offlineBannerMessage = nil
-        defer { isLoading = false }
 
         let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+        let hadCache = await restoreSnapshot(
+            snapshots,
+            organizationId: organizationId,
+            requestedStart: rangeStart,
+            preserveRangeStart: online
+        )
+        isLoading = !hadCache
+        defer { isLoading = false }
 
-        if online {
-            do {
-                let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
-                manifest = data
-                applySupplyDayInclusion(from: data)
-                snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
-            } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-                restoreSnapshot(
-                    snapshots,
-                    organizationId: organizationId,
-                    requestedStart: rangeStart,
-                    preserveRangeStart: true
-                )
+        guard online else {
+            if !hadCache {
+                errorMessage = "You're offline and no cached manifest is available."
             }
-        } else {
-            restoreSnapshot(
-                snapshots,
-                organizationId: organizationId,
-                requestedStart: rangeStart,
-                preserveRangeStart: false
-            )
+            return
+        }
+
+        isRefreshing = hadCache
+        defer { isRefreshing = false }
+
+        do {
+            let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
+            manifest = data
+            applySupplyDayInclusion(from: data)
+            offlineBannerMessage = nil
+            await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+        } catch {
+            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = hadCache
+                ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Manifest", detail: detail)
+                : detail
         }
     }
 
@@ -100,11 +106,11 @@ final class ManifestViewModel {
                 selectedDay = newSelectedDay
                 manifest = data
                 applySupplyDayInclusion(from: data)
-                snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
-        } else if let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
+        } else if let cached = await snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
             if cached.payload.startDate == normalizedStart {
                 rangeStart = normalizedStart
                 selectedDay = newSelectedDay
@@ -280,7 +286,7 @@ final class ManifestViewModel {
             let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
             manifest = data
             applySupplyDayInclusion(from: data)
-            snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+            await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
         } catch {
             // Consume succeeded — do not surface reload failures as errors.
         }
@@ -321,18 +327,21 @@ final class ManifestViewModel {
         }
     }
 
+    @discardableResult
     private func restoreSnapshot(
         _ snapshots: SnapshotStore,
         organizationId: String,
         requestedStart: String,
         preserveRangeStart: Bool = false
-    ) {
-        guard let cached = snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) else {
-            return
+    ) async -> Bool {
+        guard let cached = await snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) else {
+            return false
         }
         manifest = cached.payload
         applySupplyDayInclusion(from: cached.payload)
-        if !requestedStart.isEmpty, cached.payload.startDate != requestedStart {
+        if !preserveRangeStart,
+           !requestedStart.isEmpty,
+           cached.payload.startDate != requestedStart {
             let formatted = ManifestDateHelpers.formatRange(
                 start: cached.payload.startDate,
                 end: cached.payload.endDate
@@ -343,6 +352,7 @@ final class ManifestViewModel {
             rangeStart = cached.payload.startDate
             selectedDay = resolvedSelectedDay(forWeekStart: cached.payload.startDate, previousSelected: selectedDay)
         }
+        return true
     }
 }
 
@@ -465,6 +475,7 @@ struct ManifestView: View {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
+                    isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
                     onOpenGroupSettings: { showGroupSettings = true },
                     onOpenSettings: onOpenSettings
@@ -473,6 +484,7 @@ struct ManifestView: View {
             .navigationDestination(isPresented: $showGroupSettings) {
                 GroupSettingsView()
             }
+            .dataSyncBanner(domain: SnapshotDomain.manifest, organizationId: organizationId)
             .sheet(isPresented: $showingOptions) {
                 ManifestOptionsSheet(
                     weekStart: model.weekStartPref,

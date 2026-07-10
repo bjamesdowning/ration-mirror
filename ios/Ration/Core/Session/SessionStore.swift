@@ -85,7 +85,7 @@ final class SessionStore {
         if let oldLogo = activeOrg?.logo, let url = AvatarURLResolver.resolve(oldLogo) {
             AuthImageLoader.shared.invalidate(url: url)
         }
-        snapshots.clearAll()
+        await snapshots.clearAll()
         session = try await api.session()
         orgGeneration += 1
     }

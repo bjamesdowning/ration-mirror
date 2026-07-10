@@ -83,6 +83,7 @@ struct SyncIndicatorIcon: View {
 struct SyncIndicatorToolbar: ToolbarContent {
     let domain: String
     let organizationId: String
+    var isRefreshing: Bool = false
     @Environment(AppEnvironment.self) private var env
 
     var body: some ToolbarContent {
@@ -91,10 +92,81 @@ struct SyncIndicatorToolbar: ToolbarContent {
             organizationId: organizationId,
             online: env.network.isOnline
         )
-        if state.shouldShowIndicator {
-            ToolbarItem(placement: .topBarTrailing) {
-                SyncIndicatorIcon(state: state)
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 8) {
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Refreshing")
+                }
+                if state.shouldShowIndicator {
+                    SyncIndicatorIcon(state: state)
+                }
             }
         }
+    }
+}
+
+struct StaleDataBanner: View {
+    let syncedAt: Date
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.circlepath")
+            Text(message)
+                .rationCaption()
+        }
+        .foregroundStyle(Theme.carbon)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .background(Theme.warning.opacity(0.18))
+        .accessibilityLabel(message)
+    }
+
+    private var message: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        let relative = formatter.localizedString(for: syncedAt, relativeTo: Date())
+        return "Showing cached data from \(relative) — pull to refresh"
+    }
+}
+
+struct DataSyncBannerModifier: ViewModifier {
+    let domain: String
+    let organizationId: String?
+    let reservesOfflineBannerSpace: Bool
+    @Environment(AppEnvironment.self) private var env
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .top, spacing: 0) {
+            TimelineView(.periodic(from: Date(), by: 60)) { _ in
+                if let organizationId, env.network.isOnline {
+                    let state = env.snapshots.syncState(
+                        domain: domain,
+                        organizationId: organizationId,
+                        online: true
+                    )
+                    if case let .stale(date) = state {
+                        StaleDataBanner(syncedAt: date)
+                            .padding(.top, reservesOfflineBannerSpace ? 36 : 0)
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    func dataSyncBanner(
+        domain: String,
+        organizationId: String?,
+        reservesOfflineBannerSpace: Bool = false
+    ) -> some View {
+        modifier(DataSyncBannerModifier(
+            domain: domain,
+            organizationId: organizationId,
+            reservesOfflineBannerSpace: reservesOfflineBannerSpace
+        ))
     }
 }

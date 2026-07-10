@@ -6,9 +6,9 @@ final class CargoViewModelSearchTests: XCTestCase {
     func testEditingSubmittedSearchRestoresLocalInventoryProjection() async throws {
         let organizationId = "org-search-\(UUID().uuidString)"
         let snapshots = SnapshotStore()
-        defer { snapshots.clear(domain: SnapshotDomain.cargo, organizationId: organizationId) }
+        defer { Task { await snapshots.clear(domain: SnapshotDomain.cargo, organizationId: organizationId) } }
         let page = try decodePage()
-        snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
+        await snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
 
         let auth = AuthManager()
         let api = RationAPI(client: APIClient(auth: auth))

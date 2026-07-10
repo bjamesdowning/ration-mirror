@@ -5,6 +5,7 @@ struct GlobalPageToolbar: ToolbarContent {
     var hasActiveFilters: Bool = false
     var syncDomain: String?
     var organizationId: String?
+    var isRefreshing: Bool = false
     var onOptions: (() -> Void)?
     var onOpenGroupSettings: () -> Void
     var onOpenSettings: () -> Void
@@ -16,6 +17,11 @@ struct GlobalPageToolbar: ToolbarContent {
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Refreshing")
+                }
                 if let syncDomain, let organizationId {
                     let state = env.snapshots.syncState(
                         domain: syncDomain,

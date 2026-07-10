@@ -167,9 +167,15 @@ struct MainTabView: View {
                         }
                     }
                 )
-                .padding(.bottom, CopilotDockLayout.tabBarClearance)
+                .padding(
+                    .bottom,
+                    env.copilotScroll.keyboardInset > 0
+                        ? env.copilotScroll.keyboardInset
+                        : CopilotDockLayout.tabBarClearance
+                )
             }
         }
+        .copilotKeyboardObserved()
         .task {
             await env.session.load(api: env.api)
             guard organizationId != "unknown" else { return }

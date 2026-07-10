@@ -14,10 +14,12 @@ final class CopilotScrollContext {
     private(set) var isExpanded = true
     private(set) var scrollDirection: CopilotScrollDirection = .idle
     private(set) var trackingGeneration = 0
+    private(set) var keyboardInset: CGFloat = 0
 
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
     private var lastProcessedAt: CFAbsoluteTime = 0
+    private var dismissKeyboardHandler: (() -> Void)?
     private let collapseThreshold: CGFloat = 24
     private let scrollProcessInterval: CFAbsoluteTime = 0.05
 
@@ -39,6 +41,20 @@ final class CopilotScrollContext {
         isExpanded = canAutoExpand
     }
 
+    func setKeyboardInset(_ inset: CGFloat) {
+        let clamped = max(0, inset)
+        guard keyboardInset != clamped else { return }
+        keyboardInset = clamped
+    }
+
+    func registerDismissKeyboardHandler(_ handler: (() -> Void)?) {
+        dismissKeyboardHandler = handler
+    }
+
+    func dismissKeyboard() {
+        dismissKeyboardHandler?()
+    }
+
     func expandManually() {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isExpanded = true
@@ -46,6 +62,7 @@ final class CopilotScrollContext {
     }
 
     func collapse() {
+        dismissKeyboard()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isExpanded = false
         }
@@ -198,17 +215,69 @@ struct CopilotScrollReporter: ViewModifier {
     }
 }
 
+private struct CopilotDismissKeyboardOnTap: ViewModifier {
+    @Environment(CopilotScrollContext.self) private var scrollContext
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            TapGesture().onEnded {
+                scrollContext.dismissKeyboard()
+            }
+        )
+    }
+}
+
+private struct CopilotDockScrollMarginsModifier: ViewModifier {
+    @Environment(CopilotScrollContext.self) private var scrollContext
+    let hasTabAction: Bool
+
+    func body(content: Content) -> some View {
+        content.contentMargins(
+            .bottom,
+            CopilotDockLayout.scrollContentMargin(
+                isExpanded: true,
+                hasTabAction: hasTabAction,
+                keyboardInset: scrollContext.keyboardInset
+            ),
+            for: .scrollContent
+        )
+    }
+}
+
+private struct CopilotKeyboardInsetObserver: ViewModifier {
+    @Environment(CopilotScrollContext.self) private var scrollContext
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+                    return
+                }
+                let screenHeight = UIScreen.main.bounds.height
+                let overlap = max(0, screenHeight - frame.origin.y)
+                scrollContext.setKeyboardInset(overlap)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                scrollContext.setKeyboardInset(0)
+            }
+    }
+}
+
 extension View {
     func copilotScrollTracked() -> some View {
         modifier(CopilotScrollReporter())
     }
 
+    func copilotDismissKeyboardOnTap() -> some View {
+        modifier(CopilotDismissKeyboardOnTap())
+    }
+
+    func copilotKeyboardObserved() -> some View {
+        modifier(CopilotKeyboardInsetObserver())
+    }
+
     /// Uses the expanded dock margin so List layout does not relayout when the dock collapses during scroll.
     func copilotDockScrollMargins(isExpanded _: Bool = true, hasTabAction: Bool = true) -> some View {
-        contentMargins(
-            .bottom,
-            CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: hasTabAction),
-            for: .scrollContent
-        )
+        modifier(CopilotDockScrollMarginsModifier(hasTabAction: hasTabAction))
     }
 }

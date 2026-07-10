@@ -191,6 +191,7 @@ struct DashboardView: View {
             )
         }
         .scrollDismissesKeyboard(.interactively)
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 

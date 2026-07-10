@@ -23,8 +23,14 @@ enum CopilotDockLayout {
     }
 
     /// Scroll content margin so the last row can scroll into view under the glass dock.
-    static func scrollContentMargin(isExpanded: Bool, hasTabAction: Bool = true) -> CGFloat {
-        dockHeight(isExpanded: isExpanded, hasTabAction: hasTabAction) + tabBarClearance
+    static func scrollContentMargin(
+        isExpanded: Bool,
+        hasTabAction: Bool = true,
+        keyboardInset: CGFloat = 0
+    ) -> CGFloat {
+        dockHeight(isExpanded: isExpanded, hasTabAction: hasTabAction)
+            + tabBarClearance
+            + max(0, keyboardInset - tabBarClearance)
     }
 
     /// Toast / undo banner offset above the tab bar and dock.

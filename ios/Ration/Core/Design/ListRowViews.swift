@@ -130,12 +130,14 @@ struct CargoRowView: View {
 
 // MARK: - Meal row
 
-/// Telemetry Strip row for Galley meals; match mode uses the same layout with `HubMatchRing`.
+/// Galley list row — Telemetry Strip with detail navigation, inline Cook, and swipe parity with Cargo.
 struct MealRowView: View {
     let meal: Meal
     var match: MealMatch?
     var showMatchRing: Bool = true
     var isSelectedForSupply = false
+    var isInitiallySelectedForSupply = false
+    var onCook: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -144,47 +146,72 @@ struct MealRowView: View {
                     .accessibilityLabel("\(Int(match.matchPercentage)) percent ingredient match")
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(meal.name.capitalized)
-                        .rationBody()
-                        .lineLimit(1)
-                    if isSelectedForSupply {
-                        SupplySelectionBadge(compact: true)
-                    }
-                }
+            NavigationLink {
+                MealDetailView(
+                    mealId: meal.id,
+                    initialMeal: meal,
+                    isInitiallySelectedForSupply: isInitiallySelectedForSupply
+                )
+            } label: {
+                mealMetadata
+            }
+            .buttonStyle(.plain)
 
-                HStack(spacing: 6) {
-                    TelemetryTypeBadge(label: meal.type.capitalized)
-                    if !meal.ingredients.isEmpty {
-                        Label("\(meal.ingredients.count)", systemImage: "list.bullet")
-                            .rationCaption()
-                    }
-                    if let prep = meal.prepTime {
-                        Text("\(prep)m")
-                            .rationCaption()
-                    }
-                    if let servings = meal.servings {
-                        Text("\(servings) srv")
-                            .rationCaption()
-                    }
-                }
+            Spacer(minLength: 0)
 
-                if !meal.tags.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(meal.tags.prefix(2)) { tag in
-                            TelemetryTagChip(tag: tag.name)
-                        }
-                        if meal.tags.count > 2 {
-                            Text("+\(meal.tags.count - 2)")
-                                .rationCaption()
-                                .foregroundStyle(Theme.muted)
-                        }
+            Button(action: onCook) {
+                Image(systemName: "flame.circle.fill")
+                    .font(Typography.mono(28))
+                    .foregroundStyle(Theme.hyperGreen)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cook meal")
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var mealMetadata: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(meal.name.capitalized)
+                    .rationBody()
+                    .lineLimit(1)
+                if isSelectedForSupply {
+                    SupplySelectionBadge(compact: true)
+                }
+            }
+
+            HStack(spacing: 6) {
+                TelemetryTypeBadge(label: meal.type.capitalized)
+                if !meal.ingredients.isEmpty {
+                    Label("\(meal.ingredients.count)", systemImage: "list.bullet")
+                        .rationCaption()
+                }
+                if let prep = meal.prepTime {
+                    Text("\(prep)m")
+                        .rationCaption()
+                }
+                if let servings = meal.servings {
+                    Text("\(servings) srv")
+                        .rationCaption()
+                }
+            }
+
+            if !meal.tags.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(meal.tags.prefix(2)) { tag in
+                        TelemetryTagChip(tag: tag.name)
+                    }
+                    if meal.tags.count > 2 {
+                        Text("+\(meal.tags.count - 2)")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
                     }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(mealAccessibilityLabel)
     }

@@ -41,6 +41,22 @@ final class CargoViewModel {
         activeCargoIds.contains(cargoId)
     }
 
+    func cachedCargoItem(id: String) -> CargoItem? {
+        rawItems.first { $0.id == id }
+    }
+
+    func resolveCargoItem(for result: SearchResult, api: RationAPI) async -> CargoItem? {
+        if let cached = cachedCargoItem(id: result.id) {
+            return cached
+        }
+        do {
+            return try await api.cargoItem(id: result.id).item
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
+    }
+
     func reload(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         isLoading = true
         errorMessage = nil
@@ -162,20 +178,34 @@ final class CargoViewModel {
     }
 
     func delete(_ item: CargoItem, api: RationAPI) async {
-        guard case var .inventory(items) = listContent else { return }
-        let snapshot = items
-        rawItems.removeAll { $0.id == item.id }
-        activeCargoIds.remove(item.id)
-        items = displayedInventory
-        listContent = .inventory(items)
-        total = max(0, total - 1)
+        await delete(id: item.id, api: api)
+    }
+
+    func delete(id: String, api: RationAPI) async {
+        let previousContent = listContent
+        let previousRawItems = rawItems
+        let previousTotal = total
+
+        rawItems.removeAll { $0.id == id }
+        activeCargoIds.remove(id)
+
+        switch listContent {
+        case .inventory:
+            listContent = .inventory(displayedInventory)
+            total = max(0, total - 1)
+        case var .search(results):
+            results.removeAll { $0.id == id }
+            listContent = .search(results)
+            total = results.count
+        }
+
         do {
-            try await api.deleteCargo(item.id)
+            try await api.deleteCargo(id)
             Haptics.light()
         } catch {
-            rawItems = snapshot
-            listContent = .inventory(snapshot)
-            total = snapshot.count
+            rawItems = previousRawItems
+            listContent = previousContent
+            total = previousTotal
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }

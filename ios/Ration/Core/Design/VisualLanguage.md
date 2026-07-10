@@ -21,6 +21,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `ListCountHeader` | `ListCountHeader.swift` | Trailing inventory total on Cargo, Galley, Manifest |
 | `TelemetryTagChip` | `ListRowViews.swift` | Hyper-green tag chips (`Theme.tagChipForeground` / `Theme.tagChipBackground`) |
 | `CargoRowView` / `MealRowView` | `ListRowViews.swift` | Unified Telemetry Strip list rows |
+| `ListSwipeActions` | `ListSwipeActions.swift` | Shared inventory swipe modifiers (Cargo, Galley) |
 | `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + consume) |
 
 ## Typography
@@ -35,6 +36,27 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 - **Cargo / Galley / Manifest** — Single `plus.circle.fill` icon FAB with action menu.
 - **Hub** — Icon scan FAB; stats cells are icon + number first.
 - **Manifest rows** — Slot glyph circle + meal name (no inline slot text).
+
+## List swipe conventions
+
+Inventory-style lists share one dual-edge pattern via `inventoryLeadingSwipeActions` and `inventoryDestructiveTrailingSwipe`:
+
+| Gesture | Edge | Actions | Tint |
+|---------|------|---------|------|
+| Swipe right | Leading | Add/Remove Supply, Edit | Hyper-Green, Carbon |
+| Swipe left | Trailing | Delete | Destructive (system red) |
+
+**Where applied:** Cargo (inventory + search), Galley (meals + match mode).
+
+**Domain actions stay inline** (not swipes): Galley Cook (`flame.circle.fill` on row), Manifest Consume (`fork.knife.circle.fill`), Supply Check (leading swipe is the primary list action for shopping — see Supply below).
+
+**Other list deviations (documented, unchanged):**
+
+- **Supply** — Leading Check when unpurchased; trailing Snooze + Delete.
+- **Manifest / Plan week** — Trailing Delete only; consume is inline on the row.
+- **Hub edit** — Trailing reorder (Up/Down), not inventory CRUD.
+
+**Add flows** — Tab dock `IconFABMenuCore` menus; not swipe gestures.
 
 ## Hub layout
 

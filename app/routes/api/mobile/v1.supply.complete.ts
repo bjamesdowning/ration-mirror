@@ -46,7 +46,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context.cloudflare.env,
 			organizationId,
 			listId,
-			{ unitMode: unitDisplayMode },
+			{ unitMode: unitDisplayMode, userId },
 		);
 		return { success: true, docked: result.docked };
 	} catch (e) {

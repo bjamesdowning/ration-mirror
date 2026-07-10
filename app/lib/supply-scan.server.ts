@@ -10,6 +10,7 @@ import {
 	completeSupplyFromScan,
 	getSupplyListById,
 	type SupplyItemWithSource,
+	type SupplyListOperationOptions,
 	type SupplyScanCompleteInput,
 } from "./supply.server";
 import {
@@ -17,7 +18,6 @@ import {
 	SUPPLY_SCAN_FUZZY_THRESHOLD,
 	scoreScanToSupplyItem,
 } from "./supply-scan-match.server";
-import type { UnitDisplayMode } from "./unit-display-mode";
 import { getUnitMultiplier, toSupportedUnit } from "./units";
 
 const SCAN_COMPLETE_IDEMPOTENCY_TTL = 86_400;
@@ -207,7 +207,7 @@ export async function completeSupplyScan(
 	organizationId: string,
 	listId: string,
 	body: SupplyScanCompleteRequest,
-	options?: { unitMode?: UnitDisplayMode },
+	options: SupplyListOperationOptions = {},
 ) {
 	const idempotencyKey = scanCompleteIdempotencyKey(
 		organizationId,
@@ -241,7 +241,7 @@ export async function completeSupplyScan(
 			organizationId,
 			listId,
 			completeInputs,
-			{ unitMode: options?.unitMode ?? "metric" },
+			options,
 		);
 
 		const payload = { ...result, replayed: false as const };

@@ -39,6 +39,12 @@ struct CopilotBottomDock: View {
                 isInputFocused = false
             }
         }
+        .onAppear {
+            scrollContext.registerDismissKeyboardHandler { isInputFocused = false }
+        }
+        .onDisappear {
+            scrollContext.registerDismissKeyboardHandler(nil)
+        }
         .task(id: hintIndex) {
             guard scrollContext.isExpanded, !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)

@@ -55,7 +55,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			context.cloudflare.env,
 			groupId,
 			listId,
-			{ unitMode: unitDisplayMode },
+			{ unitMode: unitDisplayMode, userId: user.id },
 		);
 
 		return {

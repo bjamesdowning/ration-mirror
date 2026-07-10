@@ -113,6 +113,37 @@ struct CargoListView: View {
         )
     }
 
+    private func resolveSearchCargoItem(_ result: SearchResult) async -> CargoItem? {
+        if let cached = model.cachedCargoItem(id: result.id) {
+            return cached
+        }
+        return await model.resolveCargoItem(for: result, api: env.api)
+    }
+
+    private func handleSearchSupplyToggle(_ result: SearchResult) async {
+        guard let item = await resolveSearchCargoItem(result) else {
+            if model.errorMessage == nil {
+                model.errorMessage = "Couldn't load this item. Pull to refresh and try again."
+            }
+            return
+        }
+        if model.isCargoSelected(result.id) {
+            await model.toggleRestock(item, api: env.api)
+        } else {
+            restockItem = item
+        }
+    }
+
+    private func handleSearchEdit(_ result: SearchResult) async {
+        guard let item = await resolveSearchCargoItem(result) else {
+            if model.errorMessage == nil {
+                model.errorMessage = "Couldn't load this item. Pull to refresh and try again."
+            }
+            return
+        }
+        editingItem = item
+    }
+
     private var isEmpty: Bool {
         switch model.listContent {
         case let .inventory(items): items.isEmpty
@@ -156,35 +187,22 @@ struct CargoListView: View {
                         }
                         .listRowBackground(Theme.surface)
                         .task { await model.loadMoreIfNeeded(current: item, api: env.api) }
-                        .swipeActions(edge: .leading) {
-                            let selected = model.isCargoSelected(item.id)
-                            Button {
-                                if selected {
+                        .inventoryLeadingSwipeActions(
+                            isSelectedForSupply: model.isCargoSelected(item.id),
+                            onSupplyToggle: {
+                                if model.isCargoSelected(item.id) {
                                     Task { await model.toggleRestock(item, api: env.api) }
                                 } else {
                                     restockItem = item
                                 }
-                            } label: {
-                                Label(
-                                    selected ? "Remove" : "Add to Supply",
-                                    systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
-                                )
+                            },
+                            onEdit: { editingItem = item }
+                        )
+                        .inventoryDestructiveTrailingSwipe {
+                            Task {
+                                await model.delete(item, api: env.api)
+                                env.notifyCargoDataChanged()
                             }
-                            .tint(Theme.hyperGreen)
-                            Button {
-                                editingItem = item
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            .tint(Theme.carbon)
-                        }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                Task {
-                                    await model.delete(item, api: env.api)
-                                    env.notifyCargoDataChanged()
-                                }
-                            } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                 case let .search(results):
@@ -195,6 +213,21 @@ struct CargoListView: View {
                             SearchResultRow(result: result)
                         }
                         .listRowBackground(Theme.surface)
+                        .inventoryLeadingSwipeActions(
+                            isSelectedForSupply: model.isCargoSelected(result.id),
+                            onSupplyToggle: {
+                                Task { await handleSearchSupplyToggle(result) }
+                            },
+                            onEdit: {
+                                Task { await handleSearchEdit(result) }
+                            }
+                        )
+                        .inventoryDestructiveTrailingSwipe {
+                            Task {
+                                await model.delete(id: result.id, api: env.api)
+                                env.notifyCargoDataChanged()
+                            }
+                        }
                     }
                 }
             }
@@ -205,6 +238,7 @@ struct CargoListView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 }

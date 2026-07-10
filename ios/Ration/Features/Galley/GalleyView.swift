@@ -19,6 +19,7 @@ struct GalleyView: View {
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
     @State private var cookSuccessMessage: String?
+    @State private var editingMeal: Meal?
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
@@ -97,6 +98,9 @@ struct GalleyView: View {
             }
             .navigationDestination(item: $navigateToMealId) { mealId in
                 MealDetailView(mealId: mealId, initialMeal: placeholderMeal(id: mealId))
+            }
+            .sheet(item: $editingMeal) { meal in
+                MealFormView(mode: .edit(meal)) { await reload() }
             }
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
             .onChange(of: env.cargoDataRevision) { _, _ in
@@ -224,43 +228,31 @@ struct GalleyView: View {
             }
             Section {
                 ForEach(model.displayedMeals) { meal in
-                    NavigationLink {
-                        MealDetailView(
-                            mealId: meal.id,
-                            initialMeal: meal,
-                            isInitiallySelectedForSupply: model.isMealSelected(meal.id)
-                        )
-                    } label: {
-                        MealRowView(
-                            meal: meal,
-                            match: env.network.isOnline ? model.match(for: meal.id) : nil,
-                            showMatchRing: env.network.isOnline,
-                            isSelectedForSupply: model.isMealSelected(meal.id)
-                        )
-                    }
+                    MealRowView(
+                        meal: meal,
+                        match: env.network.isOnline ? model.match(for: meal.id) : nil,
+                        showMatchRing: env.network.isOnline,
+                        isSelectedForSupply: model.isMealSelected(meal.id),
+                        isInitiallySelectedForSupply: model.isMealSelected(meal.id),
+                        onCook: { Task { await handleCook(mealId: meal.id) } }
+                    )
                     .listRowBackground(Theme.surface)
-                    .swipeActions {
-                        let selected = model.isMealSelected(meal.id)
-                        Button {
+                    .inventoryLeadingSwipeActions(
+                        isSelectedForSupply: model.isMealSelected(meal.id),
+                        onSupplyToggle: {
                             Task { await model.toggleActive(meal.id, api: env.api) }
-                        } label: {
-                            Label(
-                                selected ? "Remove" : "Add to Supply",
-                                systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
+                        },
+                        onEdit: { editingMeal = meal }
+                    )
+                    .inventoryDestructiveTrailingSwipe {
+                        Task {
+                            await model.deleteMeal(
+                                meal.id,
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
                             )
-                        }
-                        .tint(Theme.hyperGreen)
-                        Button {
-                            Task { await handleCook(mealId: meal.id) }
-                        } label: {
-                            Label("Cook", systemImage: "flame")
-                        }
-                        Button(role: .destructive) {
-                            Task {
-                                await model.deleteMeal(meal.id, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                            }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
                         }
                     }
                 }
@@ -272,6 +264,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 
@@ -296,31 +289,31 @@ struct GalleyView: View {
             }
             Section {
                 ForEach(model.displayedMatches) { match in
-                    NavigationLink {
-                        MealDetailView(
-                            mealId: match.meal.id,
-                            initialMeal: match.meal,
-                            isInitiallySelectedForSupply: model.isMealSelected(match.meal.id)
-                        )
-                    } label: {
-                        MealRowView(
-                            meal: match.meal,
-                            match: match,
-                            isSelectedForSupply: model.isMealSelected(match.meal.id)
-                        )
-                    }
+                    MealRowView(
+                        meal: match.meal,
+                        match: match,
+                        isSelectedForSupply: model.isMealSelected(match.meal.id),
+                        isInitiallySelectedForSupply: model.isMealSelected(match.meal.id),
+                        onCook: { Task { await handleCook(mealId: match.meal.id) } }
+                    )
                     .listRowBackground(Theme.surface)
-                    .swipeActions {
-                        let selected = model.isMealSelected(match.meal.id)
-                        Button {
+                    .inventoryLeadingSwipeActions(
+                        isSelectedForSupply: model.isMealSelected(match.meal.id),
+                        onSupplyToggle: {
                             Task { await model.toggleActive(match.meal.id, api: env.api) }
-                        } label: {
-                            Label(
-                                selected ? "Remove" : "Add to Supply",
-                                systemImage: selected ? "cart.fill.badge.minus" : "cart.badge.plus"
+                        },
+                        onEdit: { editingMeal = match.meal }
+                    )
+                    .inventoryDestructiveTrailingSwipe {
+                        Task {
+                            await model.deleteMeal(
+                                match.meal.id,
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
                             )
                         }
-                        .tint(Theme.hyperGreen)
                     }
                 }
             }
@@ -331,6 +324,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 

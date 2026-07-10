@@ -636,6 +636,7 @@ struct ManifestView: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 

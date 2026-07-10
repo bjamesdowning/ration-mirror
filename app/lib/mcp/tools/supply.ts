@@ -272,7 +272,7 @@ export function registerSupplyTools(server: McpServer, env: McpToolsEnv): void {
 						env,
 						ctx.organizationId,
 						list.id,
-						{ unitMode: unitDisplayMode },
+						{ unitMode: unitDisplayMode, userId: ctx.userId },
 					);
 					return ok("complete_supply_list", result);
 				},

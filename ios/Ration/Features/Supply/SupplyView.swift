@@ -689,6 +689,7 @@ struct SupplyView: View {
             isExpanded: scrollContext.isExpanded,
             hasTabAction: model.totalCount > 0
         )
+        .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
 

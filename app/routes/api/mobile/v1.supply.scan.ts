@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -12,6 +13,7 @@ import {
 	SupplyScanError,
 	validateSupplyOnlyIds,
 } from "~/lib/supply-scan.server";
+import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 import type { Route } from "./+types/v1.supply.scan";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -106,11 +108,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 			parsed.data.supplyOnlyIds,
 		);
 
+		const userSettings = await getUserSettings(
+			context.cloudflare.env.DB,
+			userId,
+		);
+		const unitDisplayMode = resolveUnitDisplayMode(userSettings);
+
 		return await completeSupplyScan(
 			context.cloudflare.env,
 			organizationId,
 			listId,
 			parsed.data,
+			{ unitMode: unitDisplayMode, userId },
 		);
 	} catch (e) {
 		if (e instanceof SupplyScanError) {

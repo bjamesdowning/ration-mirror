@@ -6,6 +6,17 @@ final class CopilotDockLayoutTests: XCTestCase {
         XCTAssertEqual(CopilotDockLayout.expandedInputBarHeight, 64)
     }
 
+    func testScrollContentMarginAddsKeyboardInsetBeyondTabBar() {
+        let base = CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: true)
+        let withKeyboard = CopilotDockLayout.scrollContentMargin(
+            isExpanded: true,
+            hasTabAction: true,
+            keyboardInset: 336
+        )
+
+        XCTAssertGreaterThan(withKeyboard, base)
+    }
+
     func testExpandedDockHeightIncludesFabAndInput() {
         let height = CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true)
 

@@ -1038,7 +1038,7 @@ describe("MCP tools", () => {
 				undefined,
 				expect.objectContaining({ trigger: "mcp_sync_supply" }),
 				"metric",
-				"user-1",
+				"user-test-123",
 			);
 		});
 	});

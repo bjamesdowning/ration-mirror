@@ -2311,16 +2311,23 @@ function supplyRowToDockedReconcile(
 	};
 }
 
+/** Options for supply list mutations that may re-sync from manifest selections. */
+export type SupplyListOperationOptions = {
+	unitMode?: UnitDisplayMode;
+	userId?: string;
+};
+
 /** Re-sync supply and reconcile cargo restock toggles after docking to Cargo. */
 export async function reconcileSupplyAfterDock(
 	env: Env,
 	organizationId: string,
 	dockedItems: DockedSupplyItemForReconcile[],
-	unitMode: UnitDisplayMode = "metric",
+	options: SupplyListOperationOptions = {},
 ): Promise<{
 	cargoSelectionsCleared: number;
 	cargoSelectionsReduced: number;
 }> {
+	const unitMode = options.unitMode ?? "metric";
 	return retryOnD1Contention(async () => {
 		const cargoResult = await fulfillCargoSelectionsFromDockedSupplyItems(
 			env.DB,
@@ -2337,6 +2344,7 @@ export async function reconcileSupplyAfterDock(
 				organizationId,
 			},
 			unitMode,
+			options.userId,
 		);
 
 		return {
@@ -2353,7 +2361,7 @@ export async function completeSupplyList(
 	env: Env,
 	organizationId: string,
 	listId: string,
-	options?: { unitMode?: UnitDisplayMode },
+	options: SupplyListOperationOptions = {},
 ) {
 	const d1 = drizzle(env.DB);
 
@@ -2400,7 +2408,7 @@ export async function completeSupplyList(
 		env,
 		organizationId,
 		dockedForReconcile,
-		options?.unitMode ?? "metric",
+		options,
 	);
 
 	// 4. Remove purchased rows from the list
@@ -2445,7 +2453,7 @@ export async function completeSupplyFromScan(
 	organizationId: string,
 	listId: string,
 	pairs: SupplyScanCompleteInput[],
-	options?: { unitMode?: UnitDisplayMode },
+	options: SupplyListOperationOptions = {},
 ) {
 	if (pairs.length === 0) {
 		return { docked: 0, supplyUpdated: 0, supplyRemoved: 0 };
@@ -2525,7 +2533,7 @@ export async function completeSupplyFromScan(
 		env,
 		organizationId,
 		dockedForReconcile,
-		options?.unitMode ?? "metric",
+		options,
 	);
 
 	const ledgerOps = pairs.map((p) =>

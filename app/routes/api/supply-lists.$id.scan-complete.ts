@@ -67,7 +67,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			groupId,
 			listId,
 			parsed.data,
-			{ unitMode: unitDisplayMode },
+			{ unitMode: unitDisplayMode, userId: user.id },
 		);
 	} catch (e) {
 		if (e instanceof SupplyScanError) {

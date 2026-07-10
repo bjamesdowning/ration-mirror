@@ -6,8 +6,10 @@ struct CopilotBottomDock: View {
     @Bindable var tabDock: TabDockContext
 
     let selectedTab: Int
+    let isExhausted: Bool
     let onOpenSheet: () -> Void
     let onSend: (String) -> Void
+    let onExhaustedTap: () -> Void
 
     @State private var draft = ""
     @State private var hintIndex = 0
@@ -45,6 +47,7 @@ struct CopilotBottomDock: View {
         .onDisappear {
             scrollContext.registerDismissKeyboardHandler(nil)
         }
+        .opacity(isExhausted ? 0.45 : 1)
         .task(id: hintIndex) {
             guard scrollContext.isExpanded, !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -81,8 +84,8 @@ struct CopilotBottomDock: View {
                     .foregroundStyle(Theme.hyperGreen)
             }
             .accessibilityLabel("Open full Copilot chat")
+            .disabled(isExhausted)
 
-            // Single-line field avoids TextViewAdaptor layout recursion on iOS 26+.
             TextField(
                 "",
                 text: $draft,
@@ -95,6 +98,7 @@ struct CopilotBottomDock: View {
             .frame(height: 44)
             .submitLabel(.send)
             .focused($isInputFocused)
+            .disabled(isExhausted)
             .accessibilityLabel("Ask Ration")
             .onSubmit { submitDraft() }
 
@@ -103,8 +107,10 @@ struct CopilotBottomDock: View {
                     .font(.system(size: 30))
                     .foregroundStyle(Theme.hyperGreen)
             }
-            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1)
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(
+                isExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1
+            )
+            .disabled(isExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("Send to Copilot")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -125,7 +131,11 @@ struct CopilotBottomDock: View {
 
     private var collapsedButton: some View {
         Button {
-            scrollContext.expandManually()
+            if isExhausted {
+                onExhaustedTap()
+            } else {
+                onOpenSheet()
+            }
         } label: {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 20, weight: .semibold))
@@ -153,6 +163,10 @@ struct CopilotBottomDock: View {
     }
 
     private func submitDraft() {
+        guard !isExhausted else {
+            onExhaustedTap()
+            return
+        }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""

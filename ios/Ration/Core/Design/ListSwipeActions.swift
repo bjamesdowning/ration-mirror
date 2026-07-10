@@ -20,7 +20,7 @@ extension View {
                 Button(action: onEdit) {
                     Label("Edit", systemImage: "pencil")
                 }
-                .tint(Theme.carbon)
+                .tint(Theme.hyperGreen)
             }
         }
     }

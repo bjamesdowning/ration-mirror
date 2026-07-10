@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useNavigate } from "react-router";
 import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
@@ -71,6 +71,7 @@ export function CargoListRow({
 	tagSuggestions = [],
 	detailHref,
 }: CargoListRowProps) {
+	const navigate = useNavigate();
 	const fetcher = useFetcher<{
 		success?: boolean;
 		error?: string;
@@ -185,6 +186,8 @@ export function CargoListRow({
 
 	if (isDeleting) return null;
 
+	const detailPath = detailHref ?? `/hub/cargo/${item.id}`;
+
 	return (
 		<>
 			{successToast.isOpen && (
@@ -218,28 +221,37 @@ export function CargoListRow({
 				/>
 			)}
 
-			<div className="flex items-center gap-2 py-3 min-h-[48px] group overflow-hidden">
+			<div className="relative flex items-center gap-2 py-3 min-h-[48px] group overflow-hidden">
+				<button
+					type="button"
+					className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hyper-green"
+					onClick={(event) => {
+						if ((event.target as HTMLElement).closest("[data-row-action]"))
+							return;
+						navigate(detailPath);
+					}}
+					aria-label={`View ${item.name}`}
+				/>
+
 				{/* Status dot */}
 				<span
-					className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`}
+					className={`relative z-10 w-2 h-2 rounded-full shrink-0 ${statusColor}`}
 					aria-hidden="true"
 				/>
 
-				{/* Name — opens ingredient details */}
-				<Link
-					to={detailHref ?? `/hub/cargo/${item.id}`}
-					className="flex-1 text-left min-w-0"
+				{/* Name */}
+				<span
+					className="relative z-10 flex-1 text-left min-w-0 text-sm font-semibold text-carbon dark:text-white truncate group-hover:text-hyper-green transition-colors"
+					title={item.name}
 				>
-					<span
-						className="text-sm font-semibold text-carbon dark:text-white truncate block group-hover:text-hyper-green transition-colors"
-						title={item.name}
-					>
-						{item.name}
-					</span>
-				</Link>
+					{item.name}
+				</span>
 
 				{/* Tags (up to 2, hidden on very small screens) */}
-				<div className="hidden sm:flex items-center gap-1 shrink-0">
+				<div
+					className="relative z-20 hidden sm:flex items-center gap-1 shrink-0"
+					data-row-action
+				>
 					{visibleTags.map((tag) => (
 						<TagChip key={tag.id} tag={tag} onClick={onTagClick} size="sm" />
 					))}
@@ -250,7 +262,7 @@ export function CargoListRow({
 
 				{/* Expiry */}
 				<span
-					className={`hidden sm:inline text-xs font-medium shrink-0 w-12 text-right ${
+					className={`relative z-10 hidden sm:inline text-xs font-medium shrink-0 w-12 text-right ${
 						parsedExpiry &&
 						(
 							inferStatus(parsedExpiry) === "biohazard" ||
@@ -264,7 +276,7 @@ export function CargoListRow({
 				</span>
 
 				{/* Qty + Unit */}
-				<span className="text-sm font-bold text-carbon dark:text-white shrink-0 min-w-16 text-right">
+				<span className="relative z-10 text-sm font-bold text-carbon dark:text-white shrink-0 min-w-16 text-right">
 					<DisplayQuantity
 						quantity={item.quantity}
 						unit={item.unit}
@@ -276,18 +288,18 @@ export function CargoListRow({
 
 				{/* Promoted badge (desktop) */}
 				{isPromoted && (
-					<span className="hidden md:inline text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium shrink-0">
+					<span className="relative z-10 hidden md:inline text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium shrink-0">
 						In Galley
 					</span>
 				)}
 				{localActive && (
-					<span className="hidden md:inline text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium shrink-0">
+					<span className="relative z-10 hidden md:inline text-xs px-2 py-0.5 bg-hyper-green/15 text-hyper-green rounded-full font-medium shrink-0">
 						On Supply
 					</span>
 				)}
 
 				{/* Action menu — always visible */}
-				<div className="shrink-0">
+				<div className="relative z-20 shrink-0" data-row-action>
 					<ActionMenu
 						actions={[
 							{

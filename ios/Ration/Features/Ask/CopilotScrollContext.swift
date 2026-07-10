@@ -219,11 +219,36 @@ private struct CopilotDismissKeyboardOnTap: ViewModifier {
     @Environment(CopilotScrollContext.self) private var scrollContext
 
     func body(content: Content) -> some View {
-        content.simultaneousGesture(
-            TapGesture().onEnded {
-                scrollContext.dismissKeyboard()
+        content
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    scrollContext.dismissKeyboard()
+                }
+            )
+    }
+}
+
+private struct CopilotKeyboardDismissOverlay: ViewModifier {
+    @Environment(CopilotScrollContext.self) private var scrollContext
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            if scrollContext.keyboardInset > 0 {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        scrollContext.dismissKeyboard()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.bottom, dismissOverlayReservedBottom)
             }
-        )
+        }
+    }
+
+    /// Leave the dock + tab bar region tappable while the keyboard is open.
+    private var dismissOverlayReservedBottom: CGFloat {
+        max(CopilotDockLayout.tabBarClearance, scrollContext.keyboardInset)
+            + CopilotDockLayout.dockHeight(isExpanded: scrollContext.isExpanded, hasTabAction: true)
     }
 }
 
@@ -235,9 +260,8 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
         content.contentMargins(
             .bottom,
             CopilotDockLayout.scrollContentMargin(
-                isExpanded: true,
-                hasTabAction: hasTabAction,
-                keyboardInset: scrollContext.keyboardInset
+                isExpanded: scrollContext.isExpanded,
+                hasTabAction: hasTabAction
             ),
             for: .scrollContent
         )
@@ -245,7 +269,7 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
 }
 
 private struct CopilotKeyboardInsetObserver: ViewModifier {
-    @Environment(CopilotScrollContext.self) private var scrollContext
+    let scrollContext: CopilotScrollContext
 
     func body(content: Content) -> some View {
         content
@@ -272,11 +296,15 @@ extension View {
         modifier(CopilotDismissKeyboardOnTap())
     }
 
-    func copilotKeyboardObserved() -> some View {
-        modifier(CopilotKeyboardInsetObserver())
+    func copilotKeyboardDismissOverlay() -> some View {
+        modifier(CopilotKeyboardDismissOverlay())
     }
 
-    /// Uses the expanded dock margin so List layout does not relayout when the dock collapses during scroll.
+    func copilotKeyboardObserved(_ scrollContext: CopilotScrollContext) -> some View {
+        modifier(CopilotKeyboardInsetObserver(scrollContext: scrollContext))
+    }
+
+    /// Reserves bottom scroll margin for the dock; uses collapsed height when the bar is minimized.
     func copilotDockScrollMargins(isExpanded _: Bool = true, hasTabAction: Bool = true) -> some View {
         modifier(CopilotDockScrollMarginsModifier(hasTabAction: hasTabAction))
     }

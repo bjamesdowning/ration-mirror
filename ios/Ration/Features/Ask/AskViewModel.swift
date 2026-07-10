@@ -46,10 +46,12 @@ final class AskViewModel {
     private var streamTask: Task<Void, Never>?
     private var toolLingerTask: Task<Void, Never>?
     private var isConnected = false
+    private var isSending = false
     private var organizationId: String?
     private var snapshots: SnapshotStore?
 
     var showsThinkingIndicator: Bool {
+        if completedTool != nil { return false }
         switch turnPhase {
         case .connecting, .thinking, .toolRunning:
             return true
@@ -62,6 +64,17 @@ final class AskViewModel {
     }
 
     func load(api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
+        let orgChanged = self.organizationId != organizationId
+        if orgChanged {
+            disconnect()
+            messages = []
+            activeTool = nil
+            completedTool = nil
+            state = .idle
+            turnPhase = .idle
+            lastSyncedLabel = nil
+        }
+
         self.organizationId = organizationId
         self.snapshots = snapshots
 
@@ -111,7 +124,7 @@ final class AskViewModel {
 
     func send(_ text: String, api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !isSending else { return }
         self.organizationId = organizationId
         self.snapshots = snapshots
 
@@ -129,6 +142,7 @@ final class AskViewModel {
         guard let socket else { return }
 
         do {
+            isSending = true
             turnPhase = .connecting
             if !isConnected {
                 try await socket.connect()
@@ -144,6 +158,7 @@ final class AskViewModel {
             try await socket.send(messages)
             persistSnapshot()
         } catch {
+            isSending = false
             turnPhase = .idle
             state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
@@ -172,6 +187,7 @@ final class AskViewModel {
         socket?.newConversation()
         socket = AskWebSocketClient(auth: auth)
         isConnected = false
+        isSending = false
         messages = []
         activeTool = nil
         completedTool = nil
@@ -204,7 +220,17 @@ final class AskViewModel {
         switch event.type {
         case "message_start":
             if let message = event.message {
-                messages.append(message)
+                if message.role == "assistant" {
+                    if let index = messages.lastIndex(where: { $0.role == "assistant" && $0.id == message.id }) {
+                        if messages[index].content.isEmpty {
+                            messages[index] = message
+                        }
+                    } else if messages.last?.role != "assistant" {
+                        messages.append(message)
+                    }
+                } else if !messages.contains(where: { $0.id == message.id }) {
+                    messages.append(message)
+                }
             }
             turnPhase = .thinking
         case "text_delta":
@@ -223,6 +249,7 @@ final class AskViewModel {
             clearTransientError()
             state = .idle
             turnPhase = .idle
+            isSending = false
             persistSnapshot()
         case "tool_start":
             if let status = event.status {
@@ -245,21 +272,19 @@ final class AskViewModel {
                 label: CopilotToolLabels.label(for: toolName, phase: succeeded ? .done : .error),
                 succeeded: succeeded
             )
-            turnPhase = .toolDone
+            turnPhase = .thinking
             toolLingerTask?.cancel()
             toolLingerTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                if self.turnPhase == .toolDone {
+                if self.completedTool?.toolName == toolName {
                     self.completedTool = nil
-                    if self.state == .streaming {
-                        self.turnPhase = .thinking
-                    }
                 }
             }
             persistSnapshot()
         case "approval_request":
+            isSending = false
             turnPhase = .idle
             state = .awaitingApproval(
                 id: event.approvalId ?? UUID().uuidString,
@@ -267,12 +292,14 @@ final class AskViewModel {
                 description: event.description ?? "Ration Copilot needs your confirmation."
             )
         case "blocked_feature":
+            isSending = false
             turnPhase = .idle
             if let blocked = event.blocked {
                 state = .blocked(blocked)
             }
         case "error":
             isConnected = false
+            isSending = false
             turnPhase = .idle
             state = .error(event.error?.message ?? event.text ?? "Copilot hit an error.")
         default:

@@ -124,6 +124,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const connectPromiseRef = useRef<Promise<WebSocket> | null>(null);
 	const messagesEndRef = useRef<HTMLDivElement | null>(null);
 	const toolLingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const isSendingRef = useRef(false);
 	const hydratedOrgRef = useRef<string | null>(null);
 
 	const canSend =
@@ -316,6 +317,21 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					if (event.message) {
 						const message = event.message;
 						setMessages((current) => {
+							if (
+								message.role === "assistant" &&
+								current.some(
+									(entry) =>
+										entry.role === "assistant" && entry.id === message.id,
+								)
+							) {
+								return current;
+							}
+							if (
+								message.role === "assistant" &&
+								current[current.length - 1]?.role === "assistant"
+							) {
+								return current;
+							}
 							const next = [...current, message];
 							persistSession(next);
 							return next;
@@ -332,6 +348,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					setCompletedToolName(null);
 					setToolSucceeded(null);
 					setTurnPhase("idle");
+					isSendingRef.current = false;
 					setMessages((current) => {
 						persistSession(current);
 						return current;
@@ -482,7 +499,14 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	async function send() {
 		const text = draft.trim();
-		if (!text || isConnecting || turnPhase === "connecting") return;
+		if (
+			!text ||
+			isConnecting ||
+			turnPhase === "connecting" ||
+			isSendingRef.current
+		) {
+			return;
+		}
 		if (needsAutoDeductConsent) {
 			setNeedsConsent(true);
 			setError(null);
@@ -501,6 +525,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setActiveToolName(null);
 		setCompletedToolName(null);
 		setToolSucceeded(null);
+		isSendingRef.current = true;
 		try {
 			const socket = await connectSocket();
 			socket.send(
@@ -517,6 +542,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				}),
 			);
 		} catch (e) {
+			isSendingRef.current = false;
 			setTurnPhase("idle");
 			setError(
 				e instanceof Error ? e.message : "Unable to open copilot session.",

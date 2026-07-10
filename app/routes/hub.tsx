@@ -1,7 +1,13 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { NavLink, Outlet, redirect, useRouteLoaderData } from "react-router";
+import {
+	NavLink,
+	Outlet,
+	redirect,
+	useNavigate,
+	useRouteLoaderData,
+} from "react-router";
 import { SettingsIcon } from "~/components/icons/PageIcons";
 import { OnboardingTour } from "~/components/onboarding";
 import { BottomNav, RailSidebar } from "~/components/shell";
@@ -18,7 +24,13 @@ import {
 	getGroupTierLimits,
 } from "~/lib/capacity.server";
 import { ConfirmProvider } from "~/lib/confirm-context";
+import { isCopilotExhausted } from "~/lib/copilot/exhaustion";
+import { getCopilotStatus } from "~/lib/copilot/gate.server";
 import { runRouteLoader } from "~/lib/error-handler";
+import {
+	buildFlagContext,
+	isFeatureEnabled,
+} from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { registerServiceWorker } from "~/lib/pwa.client";
@@ -60,6 +72,7 @@ export function shouldRevalidate({
 		"/api/scan",
 		"/api/meals/generate",
 		"/api/meals/import",
+		"/api/copilot/consent",
 	];
 	if (alwaysRevalidate.some((p) => formAction?.startsWith(p))) return true;
 
@@ -109,6 +122,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		}
 
 		const tierInfo = await getGroupTierLimits(context.cloudflare.env, groupId);
+		const flagContext = buildFlagContext(
+			request,
+			context.cloudflare.env,
+			session,
+		);
+		const copilotEnabled = await isFeatureEnabled(
+			context.cloudflare.env,
+			"ration-copilot",
+			flagContext,
+		);
 		const db = drizzle(context.cloudflare.env.DB, { schema });
 		const [
 			orgRow,
@@ -117,6 +140,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			mealsCapacity,
 			listCapacity,
 			userSettings,
+			copilotStatus,
 		] = await Promise.all([
 			db
 				.select({ logo: schema.organization.logo })
@@ -147,6 +171,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				0,
 			),
 			getUserSettings(context.cloudflare.env.DB, session.user.id),
+			copilotEnabled
+				? getCopilotStatus(context.cloudflare.env, {
+						userId: session.user.id,
+						organizationId: groupId,
+						tier: tierInfo.tier,
+					})
+				: Promise.resolve(null),
 		]);
 
 		return {
@@ -177,19 +208,22 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			onboardingCompletedAt: userSettings.onboardingCompletedAt ?? null,
 			onboardingStep: userSettings.onboardingStep ?? 0,
 			unitDisplayMode: resolveUnitDisplayMode(userSettings),
+			copilotStatus,
 		};
 	});
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
-	const { onboardingCompletedAt, onboardingStep } = loaderData;
+	const { onboardingCompletedAt, onboardingStep, copilotStatus } = loaderData;
 	const [isAskOpen, setIsAskOpen] = useState(false);
 	const [hasAskMounted, setHasAskMounted] = useState(false);
+	const navigate = useNavigate();
 
 	const root = useRouteLoaderData("root") as RootLoaderHeaderSlice | undefined;
 	const showAskLauncher = Boolean(
 		root?.user?.id && root?.clientFlags?.rationCopilot,
 	);
+	const copilotExhausted = isCopilotExhausted(copilotStatus);
 
 	useEffect(() => {
 		registerServiceWorker();
@@ -226,7 +260,11 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							>
 								{showAskLauncher ? (
 									<>
-										<AskLauncherButton onClick={() => setIsAskOpen(true)} />
+										<AskLauncherButton
+											disabled={copilotExhausted}
+											onClick={() => setIsAskOpen(true)}
+											onDisabledClick={() => navigate("/hub/pricing")}
+										/>
 										<span
 											className="w-px h-7 shrink-0 self-center bg-platinum/90 dark:bg-white/15 mx-1"
 											aria-hidden

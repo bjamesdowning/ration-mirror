@@ -116,17 +116,29 @@ export function MealListRow({
 
 	return (
 		<>
-			<div className="flex items-center gap-3 py-3 px-1 min-h-[48px] group">
+			<div className="relative flex items-center gap-3 py-3 px-1 min-h-[48px] group">
+				<button
+					type="button"
+					className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hyper-green"
+					onClick={(event) => {
+						if ((event.target as HTMLElement).closest("[data-row-action]"))
+							return;
+						navigate(detailPath);
+					}}
+					aria-label={`View ${meal.name}`}
+				/>
+
 				{/* Supply list toggle — desktop only */}
 				<button
 					type="button"
+					data-row-action
 					onClick={handleToggleActive}
 					disabled={isToggling}
 					aria-pressed={localActive}
 					title={
 						localActive ? "Selected for Supply list" : "Add to Supply list"
 					}
-					className={`hidden md:flex items-center justify-center min-w-[44px] min-h-[44px] border rounded text-xs font-bold transition-all shrink-0 ${
+					className={`relative z-20 hidden md:flex items-center justify-center min-w-[44px] min-h-[44px] border rounded text-xs font-bold transition-all shrink-0 ${
 						localActive
 							? "bg-hyper-green text-carbon border-hyper-green"
 							: "bg-platinum/70 dark:bg-white/5 text-muted border-carbon/20 hover:bg-platinum"
@@ -139,12 +151,8 @@ export function MealListRow({
 					)}
 				</button>
 
-				{/* Name — tappable to open detail */}
-				<button
-					type="button"
-					onClick={() => navigate(detailPath)}
-					className="flex-1 text-left min-w-0"
-				>
+				{/* Name */}
+				<div className="relative z-10 flex-1 text-left min-w-0">
 					<span
 						className="text-sm font-semibold text-carbon dark:text-white truncate block group-hover:text-hyper-green transition-colors capitalize"
 						title={meal.name}
@@ -154,10 +162,13 @@ export function MealListRow({
 					{isProvision && quantityLabel && (
 						<span className="text-xs text-muted block">{quantityLabel}</span>
 					)}
-				</button>
+				</div>
 
 				{/* Tags (up to 2, hidden on very small screens) */}
-				<div className="hidden sm:flex items-center gap-1 shrink-0">
+				<div
+					className="relative z-20 hidden sm:flex items-center gap-1 shrink-0"
+					data-row-action
+				>
 					{visibleTags.map((tag) => (
 						<TagChip key={tag.id} tag={tag} onClick={onTagClick} size="sm" />
 					))}
@@ -169,10 +180,10 @@ export function MealListRow({
 				{/* Recipe-specific metadata */}
 				{!isProvision && (
 					<>
-						<span className="text-xs text-muted shrink-0 hidden md:block w-20 text-right">
+						<span className="relative z-10 text-xs text-muted shrink-0 hidden md:block w-20 text-right">
 							{meal.ingredients?.length ?? 0} ingredients
 						</span>
-						<span className="text-xs font-medium text-carbon dark:text-white shrink-0 w-12 text-right hidden md:block">
+						<span className="relative z-10 text-xs font-medium text-carbon dark:text-white shrink-0 w-12 text-right hidden md:block">
 							{meal.prepTime ? `${meal.prepTime}m` : "--"}
 						</span>
 					</>
@@ -180,16 +191,16 @@ export function MealListRow({
 
 				{/* Provision type label */}
 				{isProvision && (
-					<span className="text-xs text-muted shrink-0 hidden md:block">
+					<span className="relative z-10 text-xs text-muted shrink-0 hidden md:block">
 						Single item
 					</span>
 				)}
 
 				{/* Action menu */}
-				<div className="shrink-0 md:hidden">
+				<div className="relative z-20 shrink-0 md:hidden" data-row-action>
 					<ActionMenu actions={[supplyAction, editAction, deleteAction]} />
 				</div>
-				<div className="shrink-0 hidden md:block">
+				<div className="relative z-20 shrink-0 hidden md:block" data-row-action>
 					<ActionMenu actions={[editAction, deleteAction]} />
 				</div>
 			</div>

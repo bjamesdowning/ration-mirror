@@ -31,4 +31,68 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
 
         XCTAssertFalse(CopilotAutoExpandPolicy.canAutoExpand(status: status))
     }
+
+    func testIsCopilotExhaustedForFreeTierWithoutCredits() {
+        let status = CopilotStatusResponse(
+            tier: "free",
+            freeConversationsRemaining: 0,
+            allowanceResetAt: Date(),
+            creditBalance: 0,
+            autoDeductConsent: false,
+            conversationFloorCost: 1,
+            sessionIdleMs: 1_200_000,
+            brackets: []
+        )
+
+        XCTAssertTrue(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+    }
+
+    func testIsNotCopilotExhaustedWithFreeConversations() {
+        let status = CopilotStatusResponse(
+            tier: "crew_member",
+            freeConversationsRemaining: 1,
+            allowanceResetAt: Date(),
+            creditBalance: 0,
+            autoDeductConsent: false,
+            conversationFloorCost: 1,
+            sessionIdleMs: 1_200_000,
+            brackets: []
+        )
+
+        XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+    }
+
+    func testIsNotCopilotExhaustedWhenCrewNeedsConsent() {
+        let status = CopilotStatusResponse(
+            tier: "crew_member",
+            freeConversationsRemaining: 0,
+            allowanceResetAt: Date(),
+            creditBalance: 0,
+            autoDeductConsent: false,
+            conversationFloorCost: 1,
+            sessionIdleMs: 1_200_000,
+            brackets: []
+        )
+
+        XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+    }
+
+    func testIsCopilotExhaustedWhenCrewHasConsentButNoCredits() {
+        let status = CopilotStatusResponse(
+            tier: "crew_member",
+            freeConversationsRemaining: 0,
+            allowanceResetAt: Date(),
+            creditBalance: 0,
+            autoDeductConsent: true,
+            conversationFloorCost: 1,
+            sessionIdleMs: 1_200_000,
+            brackets: []
+        )
+
+        XCTAssertTrue(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+    }
+
+    func testIsNotCopilotExhaustedWhenStatusNil() {
+        XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: nil))
+    }
 }

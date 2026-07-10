@@ -34,7 +34,7 @@ import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { AddItemForm } from "~/components/supply/AddItemForm";
 import { ExportMenu } from "~/components/supply/ExportMenu";
 import { ReplenishModal } from "~/components/supply/ReplenishModal";
-import { ReplenishScanIntroModal } from "~/components/supply/ReplenishScanIntroModal";
+import { ReplenishReceiptModal } from "~/components/supply/ReplenishReceiptModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
 import { SupplyList } from "~/components/supply/SupplyList";
@@ -297,7 +297,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	const [showShareModal, setShowShareModal] = useState(false);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [showReplenishModal, setShowReplenishModal] = useState(false);
-	const [showReplenishScanIntro, setShowReplenishScanIntro] = useState(false);
+	const [showReplenishReceipt, setShowReplenishReceipt] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const revalidator = useRevalidator();
 	const dashboardData = useRouteLoaderData("routes/hub") as
@@ -706,18 +706,22 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				onDockPurchased={handleDockCargo}
 				onScanReceipt={() => {
 					setShowReplenishModal(false);
-					setShowReplenishScanIntro(true);
+					setShowReplenishReceipt(true);
 				}}
 				isDocking={isDocking}
 				scanCost={dashboardData?.aiCosts?.SCAN}
 			/>
 
-			<ReplenishScanIntroModal
-				open={showReplenishScanIntro}
-				onClose={() => setShowReplenishScanIntro(false)}
-				onConfirm={() => {
-					setShowReplenishScanIntro(false);
+			<ReplenishReceiptModal
+				open={showReplenishReceipt}
+				onClose={() => setShowReplenishReceipt(false)}
+				onPickCamera={() => {
+					setShowReplenishReceipt(false);
 					cameraRef.current?.openCamera();
+				}}
+				onPickFile={() => {
+					setShowReplenishReceipt(false);
+					cameraRef.current?.openPhotoLibrary();
 				}}
 				credits={dashboardData?.balance ?? 0}
 				costPerScan={dashboardData?.aiCosts?.SCAN ?? 2}

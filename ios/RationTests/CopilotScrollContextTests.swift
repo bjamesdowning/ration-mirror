@@ -54,4 +54,27 @@ final class CopilotScrollContextTests: XCTestCase {
 
         XCTAssertFalse(context.isExpanded)
     }
+
+    func testKeyboardInsetUpdates() {
+        let context = CopilotScrollContext()
+
+        context.setKeyboardInset(320)
+
+        XCTAssertEqual(context.keyboardInset, 320)
+
+        context.setKeyboardInset(0)
+
+        XCTAssertEqual(context.keyboardInset, 0)
+    }
+
+    func testCollapseDismissesKeyboardViaHandler() {
+        let context = CopilotScrollContext()
+        var dismissed = false
+        context.registerDismissKeyboardHandler { dismissed = true }
+        context.expandManually()
+
+        context.collapse()
+
+        XCTAssertTrue(dismissed)
+    }
 }

@@ -371,13 +371,11 @@ struct SupplyView: View {
     @State private var hasTriggeredAutoSync = false
     @State private var showGroupSettings = false
     @State private var showingReplenishSheet = false
-    @State private var showingReplenishScanIntro = false
-    @State private var showingScanSourceSheet = false
+    @State private var showingReplenishReceipt = false
     @State private var showingSupplyScanCamera = false
     @State private var showingSupplyScanPhotoLibrary = false
     @State private var supplyScanReviewContext: SupplyScanReviewContext?
     @State private var scanConsent = AIConsentCoordinator()
-    @State private var showingScanPaywall = false
 
     private var scanCreditCost: Int {
         env.session.session?.aiCosts?.scan ?? 1
@@ -491,7 +489,7 @@ struct SupplyView: View {
                     scanCost: scanCreditCost,
                     onScanReceipt: {
                         showingReplenishSheet = false
-                        showingReplenishScanIntro = true
+                        showingReplenishReceipt = true
                     },
                     onDockPurchased: {
                         showingReplenishSheet = false
@@ -507,22 +505,26 @@ struct SupplyView: View {
                     }
                 )
             }
-            .sheet(isPresented: $showingReplenishScanIntro) {
-                ReplenishScanIntroSheet(creditCost: scanCreditCost) {
-                    showingReplenishScanIntro = false
-                    if env.session.credits < scanCreditCost {
-                        showingScanPaywall = true
-                    } else {
-                        proceedToSupplyScan()
-                    }
-                }
-            }
-            .sheet(isPresented: $showingScanSourceSheet) {
-                ReplenishScanSourceSheet(
-                    onCamera: { showingSupplyScanCamera = true },
-                    onPhotoLibrary: { showingSupplyScanPhotoLibrary = true },
+            .sheet(isPresented: $showingReplenishReceipt) {
+                ReplenishReceiptSheet(
+                    creditCost: scanCreditCost,
+                    onCamera: {
+                        showingReplenishReceipt = false
+                        scanConsent.presentIfNeeded(session: env.session) {
+                            showingSupplyScanCamera = true
+                        }
+                    },
+                    onPhotoLibrary: {
+                        showingReplenishReceipt = false
+                        scanConsent.presentIfNeeded(session: env.session) {
+                            showingSupplyScanPhotoLibrary = true
+                        }
+                    },
                     onPDF: { data, filename in
-                        Task { await runSupplyScan(data: data, filename: filename, mimeType: "application/pdf") }
+                        showingReplenishReceipt = false
+                        scanConsent.presentIfNeeded(session: env.session) {
+                            Task { await runSupplyScan(data: data, filename: filename, mimeType: "application/pdf") }
+                        }
                     }
                 )
             }
@@ -548,7 +550,6 @@ struct SupplyView: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingScanPaywall) { PaywallView() }
             .fullScreenCover(isPresented: $showingSupplyScanCamera) {
                 CameraPicker(sourceType: .camera) { image in
                     showingSupplyScanCamera = false
@@ -723,12 +724,6 @@ struct SupplyView: View {
         Haptics.light()
     }
 
-    private func proceedToSupplyScan() {
-        scanConsent.presentIfNeeded(session: env.session) {
-            showingScanSourceSheet = true
-        }
-    }
-
     private func runSupplyScan(image: UIImage) async {
         if let context = await model.scanReceiptAndFetchMatch(image: image, api: env.api) {
             supplyScanReviewContext = context
@@ -765,7 +760,7 @@ struct ReplenishSheet: View {
                 Button(action: onScanReceipt) {
                     replenishOption(
                         icon: "camera.fill",
-                        title: "From receipt",
+                        title: "Dock from Receipt",
                         subtitle: scanSubtitle,
                         highlighted: true
                     )
@@ -775,7 +770,7 @@ struct ReplenishSheet: View {
                 Button(action: onDockPurchased) {
                     replenishOption(
                         icon: "checkmark.circle.fill",
-                        title: "From purchased list",
+                        title: "Dock from List",
                         subtitle: purchasedCount > 0
                             ? "Dock \(purchasedCount) checked-off item\(purchasedCount == 1 ? "" : "s")"
                             : "Check off items while shopping first",

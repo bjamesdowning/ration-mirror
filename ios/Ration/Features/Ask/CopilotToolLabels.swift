@@ -60,4 +60,14 @@ enum CopilotAutoExpandPolicy {
         if status.tier == "crew_member", !status.autoDeductConsent { return false }
         return true
     }
+
+    /// Copilot is fully exhausted — no free chats and insufficient credits for a new conversation.
+    /// Crew members without auto-deduct consent are not exhausted; they can open Ask to consent.
+    static func isCopilotExhausted(status: CopilotStatusResponse?) -> Bool {
+        guard let status else { return false }
+        if status.freeConversationsRemaining > 0 { return false }
+        if status.creditBalance >= status.conversationFloorCost { return false }
+        if status.tier == "crew_member", !status.autoDeductConsent { return false }
+        return true
+    }
 }

@@ -49,7 +49,7 @@ export function ReplenishModal({
 							<Camera className="w-5 h-5" />
 						</span>
 						<span>
-							<span className="block font-semibold">From receipt</span>
+							<span className="block font-semibold">Dock from Receipt</span>
 							<span className="text-xs text-muted">
 								Scan or upload — match to your supply list
 								{typeof scanCost === "number"
@@ -71,7 +71,7 @@ export function ReplenishModal({
 							<Check className="w-5 h-5" />
 						</span>
 						<span>
-							<span className="block font-semibold">From purchased list</span>
+							<span className="block font-semibold">Dock from List</span>
 							<span className="text-xs text-muted">
 								{purchasedCount > 0
 									? `Dock ${purchasedCount} checked-off item${purchasedCount === 1 ? "" : "s"}`

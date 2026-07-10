@@ -57,9 +57,14 @@ struct MainTabView: View {
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var manifestSuccessMessage: String?
+    @State private var showingCopilotPaywall = false
 
     private var organizationId: String {
         env.session.activeOrganizationId ?? "unknown"
+    }
+
+    private var isCopilotExhausted: Bool {
+        CopilotAutoExpandPolicy.isCopilotExhausted(status: env.ask.model.status)
     }
 
     private var showCopilotBar: Bool {
@@ -112,6 +117,9 @@ struct MainTabView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showingCopilotPaywall) {
+            PaywallView()
+        }
         .sheet(isPresented: $showingScan) {
             ScanView()
         }
@@ -153,6 +161,7 @@ struct MainTabView: View {
                     scrollContext: env.copilotScroll,
                     tabDock: env.tabDock,
                     selectedTab: selectedTab,
+                    isExhausted: isCopilotExhausted,
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         Task {
@@ -165,17 +174,17 @@ struct MainTabView: View {
                             )
                             env.copilotScroll.collapse()
                         }
-                    }
+                    },
+                    onExhaustedTap: { showingCopilotPaywall = true }
                 )
                 .padding(
                     .bottom,
-                    env.copilotScroll.keyboardInset > 0
-                        ? env.copilotScroll.keyboardInset
-                        : CopilotDockLayout.tabBarClearance
+                    max(CopilotDockLayout.tabBarClearance, env.copilotScroll.keyboardInset)
                 )
             }
         }
-        .copilotKeyboardObserved()
+        .copilotKeyboardObserved(env.copilotScroll)
+        .copilotKeyboardDismissOverlay()
         .task {
             await env.session.load(api: env.api)
             guard organizationId != "unknown" else { return }

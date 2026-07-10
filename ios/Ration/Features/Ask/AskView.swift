@@ -7,9 +7,13 @@ struct AskView: View {
     @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
+    private var isCopilotExhausted: Bool {
+        CopilotAutoExpandPolicy.isCopilotExhausted(status: model.status)
+    }
 
     var body: some View {
         NavigationStack {
@@ -60,18 +64,16 @@ struct AskView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: model.messages.count) { _, _ in
-                        if let last = model.messages.last {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
+                        scrollToBottom(proxy: proxy)
                     }
                     .onChange(of: model.turnPhase) { _, _ in
-                        if let last = model.messages.last {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
+                        scrollToBottom(proxy: proxy)
+                    }
+                    .onChange(of: model.activeTool?.toolCallId) { _, _ in
+                        scrollToBottom(proxy: proxy)
+                    }
+                    .onChange(of: model.completedTool) { _, _ in
+                        scrollToBottom(proxy: proxy)
                     }
                 }
 
@@ -104,6 +106,14 @@ struct AskView: View {
             }
             .onDisappear {
                 model.disconnect()
+            }
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let last = model.messages.last {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
     }
@@ -151,6 +161,13 @@ struct AskView: View {
                 .frame(minHeight: 44, maxHeight: 120, alignment: .topLeading)
                 .background(Theme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .focused($isComposerFocused)
+                .disabled(isCopilotExhausted)
+                .opacity(isCopilotExhausted ? 0.45 : 1)
+                .onTapGesture {
+                    isComposerFocused = true
+                }
 
             Button {
                 let text = draft
@@ -166,7 +183,8 @@ struct AskView: View {
                     .font(.system(size: 34))
                     .foregroundStyle(Theme.hyperGreen)
             }
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isCopilotExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(isCopilotExhausted ? 0.45 : 1)
         }
     }
 }

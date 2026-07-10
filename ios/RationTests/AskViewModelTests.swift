@@ -132,9 +132,56 @@ final class AskViewModelTests: XCTestCase {
 
         XCTAssertNil(model.activeTool)
         XCTAssertNotNil(model.completedTool)
-        XCTAssertEqual(model.turnPhase, .toolDone)
+        XCTAssertEqual(model.turnPhase, .thinking)
+        XCTAssertNotNil(model.completedTool)
 
         try? await Task.sleep(nanoseconds: 900_000_000)
         XCTAssertNil(model.completedTool)
+        XCTAssertEqual(model.turnPhase, .thinking)
+    }
+
+    func testMessageStartDoesNotDuplicateAssistantFromTextDelta() {
+        let model = AskViewModel()
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "text_delta",
+                message: nil,
+                messageId: "assistant-1",
+                text: "Hello",
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_start",
+                message: CopilotMessage(id: "assistant-1", role: "assistant", content: ""),
+                messageId: "assistant-1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+
+        XCTAssertEqual(model.messages.count, 1)
+        XCTAssertEqual(model.messages.first?.content, "Hello")
     }
 }

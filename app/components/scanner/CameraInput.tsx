@@ -17,6 +17,7 @@ import { SupplyScanReviewModal } from "./SupplyScanReviewModal";
 
 export interface CameraInputHandle {
 	openCamera: () => void;
+	openPhotoLibrary: () => void;
 }
 
 interface CameraInputProps {
@@ -54,7 +55,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 	) => {
 		const fetcher = useFetcher<ScanApiResponse>();
 		const revalidator = useRevalidator();
-		const inputRef = useRef<HTMLInputElement>(null);
+		const cameraInputRef = useRef<HTMLInputElement>(null);
+		const fileInputRef = useRef<HTMLInputElement>(null);
 		const [isAnalyzing, setIsAnalyzing] = useState(false);
 		const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 		const [existingInventory, setExistingInventory] = useState<
@@ -68,10 +70,13 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		>(null);
 		const [isLoadingSupplyMatch, setIsLoadingSupplyMatch] = useState(false);
 
-		// Expose openCamera method via ref
+		// Expose camera vs library/file pickers via ref (replenish flow uses both).
 		useImperativeHandle(ref, () => ({
 			openCamera: () => {
-				inputRef.current?.click();
+				cameraInputRef.current?.click();
+			},
+			openPhotoLibrary: () => {
+				fileInputRef.current?.click();
 			},
 		}));
 
@@ -82,7 +87,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 		const showError = useCallback((message: string) => {
 			setScanError(message);
 			setIsAnalyzing(false);
-			if (inputRef.current) inputRef.current.value = "";
+			if (cameraInputRef.current) cameraInputRef.current.value = "";
+			if (fileInputRef.current) fileInputRef.current.value = "";
 		}, []);
 
 		const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,7 +346,8 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			setExistingInventory(undefined);
 			setSupplyMatch(null);
 			setScanError(null);
-			if (inputRef.current) inputRef.current.value = "";
+			if (cameraInputRef.current) cameraInputRef.current.value = "";
+			if (fileInputRef.current) fileInputRef.current.value = "";
 		};
 
 		const handleModalSuccess = () => {
@@ -355,7 +362,16 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 			<>
 				<div className={`relative ${className || "inline-block"}`}>
 					<input
-						ref={inputRef}
+						ref={cameraInputRef}
+						type="file"
+						accept="image/*"
+						capture="environment"
+						className="hidden"
+						onChange={handleFileChange}
+						disabled={isAnalyzing}
+					/>
+					<input
+						ref={fileInputRef}
 						type="file"
 						accept="image/*,application/pdf"
 						className="hidden"
@@ -365,7 +381,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 
 					<button
 						type="button"
-						onClick={() => inputRef.current?.click()}
+						onClick={() => fileInputRef.current?.click()}
 						disabled={isAnalyzing}
 						className={`
                         flex items-center gap-2 px-4 py-3 

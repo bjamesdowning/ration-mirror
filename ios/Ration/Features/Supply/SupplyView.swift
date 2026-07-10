@@ -358,6 +358,7 @@ struct CheckOffPresentationItem: Identifiable {
 struct SupplyView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
     @State private var model = SupplyViewModel()
     @State private var showingOptions = false
@@ -381,8 +382,12 @@ struct SupplyView: View {
         env.session.session?.aiCosts?.scan ?? 1
     }
 
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
+    private var organizationId: String? {
+        env.session.activeOrganizationId
+    }
+
+    private var loadTaskKey: String {
+        "\(organizationId ?? "nil")-\(isTabActive)"
     }
 
     var body: some View {
@@ -390,8 +395,8 @@ struct SupplyView: View {
             Group {
                 if model.isLoading && model.list == nil {
                     LoadingView()
-                } else if let list = model.list, !list.items.isEmpty {
-                    listView(list)
+                } else if let list = model.list, !list.items.isEmpty, let organizationId {
+                    listView(list, organizationId: organizationId)
                 } else {
                     VStack(spacing: 16) {
                         EmptyStateView(
@@ -400,7 +405,15 @@ struct SupplyView: View {
                             message: "Select meals in Galley, mark Cargo for restock, or plan meals in Manifest. Your list refreshes when you open Supply."
                         )
                         Button("Refresh list") {
-                            Task { await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId) }
+                            Task {
+                                guard let organizationId else { return }
+                                await model.sync(
+                                    api: env.api,
+                                    snapshots: env.snapshots,
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
+                                )
+                            }
                         }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(model.isSyncing)
@@ -430,7 +443,13 @@ struct SupplyView: View {
                     isLoadingShare: isLoadingShare,
                     isSyncing: model.isSyncing,
                     onRefreshFromMeals: {
-                        await model.sync(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                        guard let organizationId else { return }
+                        await model.sync(
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            online: env.network.isOnline,
+                            organizationId: organizationId
+                        )
                     },
                     onShare: { await createSupplyShare() },
                     onRevokeShare: { await revokeSupplyShare() },
@@ -458,6 +477,7 @@ struct SupplyView: View {
             }
             .sheet(item: $checkOffItem) { presentation in
                 SupplyItemCheckOffSheet(item: presentation.item) { quantity, unit in
+                    guard let organizationId else { return }
                     await model.markPurchased(
                         presentation.item,
                         quantity: quantity,
@@ -471,6 +491,7 @@ struct SupplyView: View {
             }
             .sheet(item: $snoozeItem) { item in
                 SnoozeDurationSheet(itemName: item.name) { duration in
+                    guard let organizationId else { return }
                     await model.snooze(
                         item,
                         duration: duration,
@@ -494,6 +515,7 @@ struct SupplyView: View {
                     onDockPurchased: {
                         showingReplenishSheet = false
                         Task {
+                            guard let organizationId else { return }
                             await model.dock(
                                 api: env.api,
                                 snapshots: env.snapshots,
@@ -531,6 +553,7 @@ struct SupplyView: View {
             .sheet(item: $supplyScanReviewContext) { context in
                 SupplyScanReviewView(context: context) {
                     Task {
+                        guard let organizationId else { return }
                         await model.load(
                             api: env.api,
                             snapshots: env.snapshots,
@@ -597,9 +620,10 @@ struct SupplyView: View {
                 }
             }
         }
-        .task(id: organizationId) {
+        .task(id: loadTaskKey) {
+            guard isTabActive, let organizationId else { return }
             await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-            if let settings = try? await env.api.settings().settings {
+            if let settings = env.launch.userSettings {
                 let mode = UnitDisplayMode.resolve(from: settings)
                 env.unitDisplayMode.apply(mode)
                 model.filters.supplyUnitMode = mode.rawValue
@@ -613,7 +637,7 @@ struct SupplyView: View {
         }
     }
 
-    private func listView(_ list: SupplyList) -> some View {
+    private func listView(_ list: SupplyList, organizationId: String) -> some View {
         List {
             if model.totalCount > 0 {
                 Section {
@@ -855,7 +879,13 @@ private struct SupplyListItemRow: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(item.isPurchased ? "Mark not purchased" : "Check off item")
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityLabel(
+                item.isPurchased
+                    ? "Mark \(item.name) not purchased"
+                    : "Check off \(item.name)"
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 supplyItemName

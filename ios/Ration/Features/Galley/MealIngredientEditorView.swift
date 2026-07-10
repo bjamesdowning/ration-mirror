@@ -51,6 +51,7 @@ struct EditableMealIngredient: Identifiable, Equatable {
 struct MealIngredientEditorView: View {
     @Binding var ingredients: [EditableMealIngredient]
     let cargoItems: [CargoItem]
+    @FocusState private var focusedQuantityId: String?
 
     var body: some View {
         ForEach($ingredients) { $ingredient in
@@ -64,6 +65,7 @@ struct MealIngredientEditorView: View {
                 HStack {
                     TextField("Qty", value: $ingredient.quantity, format: .number)
                         .keyboardType(.decimalPad)
+                        .focused($focusedQuantityId, equals: ingredient.id)
                         .frame(maxWidth: 80)
                     UnitPicker(units: RationUnits.all, selection: $ingredient.unit)
                 }
@@ -74,6 +76,7 @@ struct MealIngredientEditorView: View {
         .onDelete { indices in
             ingredients.remove(atOffsets: indices)
         }
+        .rationFormKeyboardToolbar { focusedQuantityId = nil }
 
         Button {
             ingredients.append(EditableMealIngredient())

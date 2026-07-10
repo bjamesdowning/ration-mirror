@@ -185,6 +185,7 @@ struct AskView: View {
             }
             .disabled(isCopilotExhausted || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity(isCopilotExhausted ? 0.45 : 1)
+            .accessibilityLabel("Send message to Copilot")
         }
     }
 }
@@ -245,19 +246,21 @@ private struct MessageBubble: View {
 
 private struct CopilotStreamingCursor: View {
     @State private var visible = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Circle()
             .fill(Theme.hyperGreen)
             .frame(width: 8, height: 8)
-            .opacity(visible ? 1 : 0.2)
-            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: visible)
-            .onAppear { visible = false }
+            .opacity(reduceMotion ? 1 : (visible ? 1 : 0.2))
+            .animation(MotionPolicy.repeatingPulse(duration: 0.8), value: visible)
+            .onAppear { if !reduceMotion { visible = false } }
     }
 }
 
 private struct ThinkingIndicator: View {
-  @State private var phase = 0
+    @State private var phase = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GlassCard {
@@ -265,17 +268,20 @@ private struct ThinkingIndicator: View {
                 ProgressView().tint(Theme.hyperGreen)
                 Text("Copilot is thinking")
                     .rationHeadline()
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .fill(Theme.hyperGreen)
-                            .frame(width: 5, height: 5)
-                            .opacity(phase == index ? 1 : 0.25)
+                if !reduceMotion {
+                    HStack(spacing: 4) {
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .fill(Theme.hyperGreen)
+                                .frame(width: 5, height: 5)
+                                .opacity(phase == index ? 1 : 0.25)
+                        }
                     }
                 }
             }
         }
         .task {
+            guard !reduceMotion else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 phase = (phase + 1) % 3

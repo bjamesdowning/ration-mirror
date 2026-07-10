@@ -3,6 +3,7 @@ import SwiftUI
 struct GalleyView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
     @State private var model = GalleyViewModel()
     @State private var showingFilters = false
@@ -21,8 +22,12 @@ struct GalleyView: View {
     @State private var cookSuccessMessage: String?
     @State private var editingMeal: Meal?
 
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
+    private var organizationId: String? {
+        env.session.activeOrganizationId
+    }
+
+    private var loadTaskKey: String {
+        "\(organizationId ?? "nil")-\(isTabActive)"
     }
 
     private var galleyCount: Int {
@@ -142,10 +147,23 @@ struct GalleyView: View {
                 )
             }
         }
-        .task(id: organizationId) {
-            if model.meals.isEmpty { await reload() }
+        .task(id: loadTaskKey) {
+            guard isTabActive, let organizationId else { return }
+            if model.meals.isEmpty { await reload(organizationId: organizationId) }
             if let tags = try? await env.api.mealTags().tags {
                 availableTags = tags
+            }
+        }
+        .onChange(of: env.deepLinkRouter.galleyGeneratePending, initial: true) { _, pending in
+            if pending {
+                showingGenerate = true
+                env.deepLinkRouter.acknowledgeGalleyGenerate()
+            }
+        }
+        .onChange(of: env.deepLinkRouter.galleyImportPending, initial: true) { _, pending in
+            if pending {
+                showingImport = true
+                env.deepLinkRouter.acknowledgeGalleyImport()
             }
         }
         .alert("Insufficient cargo", isPresented: $showCookConfirmation) {
@@ -161,7 +179,8 @@ struct GalleyView: View {
         }
     }
 
-    private func reload() async {
+    private func reload(organizationId: String? = nil) async {
+        guard let organizationId = organizationId ?? self.organizationId else { return }
         await model.load(
             api: env.api,
             snapshots: env.snapshots,
@@ -246,6 +265,7 @@ struct GalleyView: View {
                     )
                     .inventoryDestructiveTrailingSwipe {
                         Task {
+                            guard let organizationId else { return }
                             await model.deleteMeal(
                                 meal.id,
                                 api: env.api,
@@ -306,6 +326,7 @@ struct GalleyView: View {
                     )
                     .inventoryDestructiveTrailingSwipe {
                         Task {
+                            guard let organizationId else { return }
                             await model.deleteMeal(
                                 match.meal.id,
                                 api: env.api,
@@ -529,10 +550,15 @@ struct MealDetailView: View {
                 Button { if desiredServings > 1 { desiredServings -= 1 } } label: {
                     Image(systemName: "minus.circle")
                 }
-                Text("\(desiredServings)").rationBody().frame(minWidth: 32)
+                .accessibilityLabel("Decrease servings")
+                Text("\(desiredServings)")
+                    .rationBody()
+                    .frame(minWidth: 32)
+                    .accessibilityLabel("\(desiredServings) servings")
                 Button { if desiredServings < 99 { desiredServings += 1 } } label: {
                     Image(systemName: "plus.circle")
                 }
+                .accessibilityLabel("Increase servings")
             }
         }
     }

@@ -104,16 +104,26 @@ For each new feature, **evaluate** whether an E2E test would benefit stability. 
 
 **Every change must increment the version.** Use `1.X.[1-49]` for patches; before reaching `1.X.50`, bump to `1.(X+1).0`. Each minor version represents 50 changes.
 
+**Web / Workers (source of truth):**
+- `package.json` `version` and `app/lib/version.ts` (`APP_VERSION`, `MCP_SERVER_VERSION`, `COPILOT_SERVER_VERSION`)
+
+**iOS (parallel track, same rules):**
+- `MARKETING_VERSION` in `ios/project.yml` (`CFBundleShortVersionString`) — user-facing app version
+- `CURRENT_PROJECT_VERSION` in `ios/project.yml` (`CFBundleVersion`) — monotonic build number; increment on every TestFlight / App Store upload
+- Bump `MARKETING_VERSION` whenever `ios/` changes ship (Swift, `project.yml`, entitlements, in-app assets). Follow the same patch/minor cadence as web: `1.X.1` … `1.X.49`, then `1.(X+1).0`
+- After `project.yml` edits, run `bun run ios:generate` before build or archive
+- iOS and web version numbers are **independent** (e.g. web `1.5.40` and iOS `1.1.1` can coexist); only the increment **rules** are shared
+
 **Rules:**
 - Patch range: `1.X.1` … `1.X.49` (e.g. `1.1.0` → `1.1.1`, `1.1.1` → `1.1.2`, … `1.1.49`)
 - Before `1.X.50`: bump to `1.(X+1).0` (e.g. after `1.1.49` → `1.2.0`)
 - Sync `app/lib/version.ts` with `package.json` (`APP_VERSION` and `MCP_SERVER_VERSION` — the MCP worker and `get_context` read this constant; never hardcode MCP versions elsewhere)
-- Add the version to the commit message, e.g. `[v1.1.1]`
+- Add the version to the commit message, e.g. `[v1.1.1]` for web and `[ios-v1.1.1]` when iOS ships
 
 Example:
 ```
 feat: add magic link auth
-[v1.1.1]
+[v1.1.1] [ios-v1.1.1]
 ```
 
 This keeps a clear audit trail and deploy/build identifiers monotonic.
@@ -123,7 +133,8 @@ This keeps a clear audit trail and deploy/build identifiers monotonic.
 A change is not complete until:
 - `bun run test:unit`, `bun run typecheck`, and `bun run lint` all pass without errors
 - The version has been incremented in `package.json` and `app/lib/version.ts` (patch 1-49, or minor bump at 50)
-- The commit message includes the new version (e.g. `[v1.1.1]`)
+- When `ios/` changes ship, `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION` for uploads) in `ios/project.yml` are bumped under the same patch/minor rules; run `bun run ios:generate`
+- The commit message includes the new version (e.g. `[v1.1.1]` and `[ios-v1.1.1]` when applicable)
 - Any affected documentation in `README.md` has been verified and updated
 
 ## File Organization

@@ -3,6 +3,7 @@ import SwiftUI
 struct CargoListView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    var isTabActive: Bool = false
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     @State private var model = CargoViewModel()
@@ -12,8 +13,12 @@ struct CargoListView: View {
     @State private var restockItem: CargoItem?
     @State private var showGroupSettings = false
 
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
+    private var organizationId: String? {
+        env.session.activeOrganizationId
+    }
+
+    private var loadTaskKey: String {
+        "\(organizationId ?? "nil")-\(isTabActive)"
     }
 
     var body: some View {
@@ -51,7 +56,8 @@ struct CargoListView: View {
             }
             .navigationTitle("Cargo")
             .searchable(text: $model.filters.search, prompt: "Search cargo")
-            .onSubmit(of: .search) { Task { await reload() } }
+            .onSubmit(of: .search) { Task { await reload(forceRemoteSearch: true) } }
+            .onChange(of: model.filters.search) { _, _ in model.applyClientFilters() }
             .onChange(of: model.filters.domain) { _, _ in model.applyClientFilters() }
             .onChange(of: model.filters.selectedTags) { _, _ in model.applyClientFilters() }
             .background(Theme.ceramic)
@@ -99,17 +105,20 @@ struct CargoListView: View {
                 }
             }
         }
-        .task(id: organizationId) {
-            if isEmpty { await reload() }
+        .task(id: loadTaskKey) {
+            guard isTabActive, let organizationId else { return }
+            if isEmpty { await reload(forceRemoteSearch: false, organizationId: organizationId) }
         }
     }
 
-    private func reload() async {
+    private func reload(forceRemoteSearch: Bool = false, organizationId: String? = nil) async {
+        guard let organizationId = organizationId ?? self.organizationId else { return }
         await model.reload(
             api: env.api,
             snapshots: env.snapshots,
             online: env.network.isOnline,
-            organizationId: organizationId
+            organizationId: organizationId,
+            forceRemoteSearch: forceRemoteSearch
         )
     }
 

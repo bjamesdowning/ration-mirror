@@ -18,8 +18,9 @@ final class PlanWeekViewModel {
     var rangeEnd: String?
     var dietaryNote = ""
     var variety = "medium"
-    private let maxPollAttempts = 80
-    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
+    var shouldShowPaywall = false
+    private var activeTask: Task<Void, Never>?
+    private var submissionGeneration = 0
 
     var startDate: String {
         rangeStart ?? ManifestDateHelpers.todayISO()
@@ -36,61 +37,80 @@ final class PlanWeekViewModel {
         PlanWeekRangeSelection.isValid(start: rangeStart, end: rangeEnd)
     }
 
-    func submit(api: RationAPI) async {
+    func cancelActiveWork() {
+        submissionGeneration += 1
+        activeTask?.cancel()
+        activeTask = nil
+    }
+
+    func submit(api: RationAPI, session: SessionStore) {
         guard canSubmitPlan else {
             state = .failed("Select a date range of 1–7 days.")
             return
         }
+        cancelActiveWork()
+        let generation = submissionGeneration
+        shouldShowPaywall = false
         state = .submitting
-        do {
-            let response = try await api.planWeek(PlanWeekRequest(
-                startDate: startDate,
-                days: days,
-                dietaryNote: dietaryNote.isEmpty ? nil : dietaryNote,
-                variety: variety
-            ))
-            guard let requestId = response.requestId else {
-                state = .failed("Planning started but no request id was returned.")
-                return
-            }
-            Haptics.light()
-            state = .processing(requestId: requestId)
-            await poll(requestId: requestId, api: api)
-        } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-        }
-    }
-
-    func poll(requestId: String, api: RationAPI) async {
-        for attempt in 0..<maxPollAttempts {
+        activeTask = Task {
             do {
-                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
-                let result = try await api.planWeekStatus(requestId: requestId)
-                switch result.status {
-                case "completed":
-                    scheduleEntries = result.schedule ?? []
-                    state = .completed
+                let response = try await api.planWeek(PlanWeekRequest(
+                    startDate: startDate,
+                    days: days,
+                    dietaryNote: dietaryNote.isEmpty ? nil : dietaryNote,
+                    variety: variety
+                ))
+                guard isCurrent(generation) else { return }
+                guard let requestId = response.requestId else {
+                    state = .failed("Planning started but no request id was returned.")
                     return
-                case "failed":
-                    state = .failed(result.error ?? "Planning failed.")
-                    return
-                default:
-                    state = .processing(requestId: requestId)
                 }
+                Haptics.light()
+                state = .processing(requestId: requestId)
+                Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
+                await poll(requestId: requestId, api: api, generation: generation)
             } catch is CancellationError {
                 return
             } catch {
-                if let apiError = error as? APIError,
-                   [429, 503].contains(apiError.statusCode ?? 0),
-                   attempt < maxPollAttempts - 1
-                {
-                    continue
+                guard isCurrent(generation) else { return }
+                if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    shouldShowPaywall = true
+                    state = .idle
+                } else {
+                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
                 }
-                state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                return
             }
         }
-        state = .failed("Planning is still processing. Refresh Manifest shortly.")
+    }
+
+    func poll(requestId: String, api: RationAPI, generation: Int) async {
+        let poller = AIJobPoller<PlanWeekStatusResponse>(
+            fetchStatus: { try await api.planWeekStatus(requestId: $0) },
+            interpretStatus: { result in
+                switch result.status {
+                case "completed": .completed
+                case "failed": .failed(result.error ?? "Planning failed.")
+                default: .running
+                }
+            }
+        )
+        do {
+            let result = try await poller.poll(requestId: requestId)
+            guard isCurrent(generation) else { return }
+            scheduleEntries = result.schedule ?? []
+            state = .completed
+        } catch is CancellationError {
+            return
+        } catch AIJobPollError.timedOut {
+            guard isCurrent(generation) else { return }
+            state = .failed("Planning is still processing. Refresh Manifest shortly.")
+        } catch let AIJobPollError.failed(message) {
+            guard isCurrent(generation) else { return }
+            state = .failed(message)
+        } catch {
+            guard isCurrent(generation) else { return }
+            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+        }
     }
 
     func removeScheduleEntry(_ entry: PlanWeekScheduleEntry) {
@@ -107,11 +127,17 @@ final class PlanWeekViewModel {
     }
 
     func reset() {
+        cancelActiveWork()
         state = .idle
         scheduleEntries = []
         rangeStart = nil
         rangeEnd = nil
+        shouldShowPaywall = false
     }
 
     func fail(_ message: String) { state = .failed(message) }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == submissionGeneration
+    }
 }

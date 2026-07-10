@@ -22,6 +22,12 @@ struct CargoFormView: View {
     @State private var tagSuggestions: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var quantityError: String?
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case name, quantity
+    }
 
     init(mode: Mode, onSaved: @escaping () async -> Void = {}) {
         self.mode = mode
@@ -59,10 +65,18 @@ struct CargoFormView: View {
             Form {
                 Section("Item") {
                     TextField("Name", text: $name)
+                        .focused($focusedField, equals: .name)
                     HStack {
                         TextField("Quantity", text: $quantity)
                             .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .quantity)
                         UnitPicker(units: RationUnits.cargoEdit, selection: $unit)
+                    }
+                    if let quantityError {
+                        Text(quantityError)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.warning)
+                            .accessibilityLabel(quantityError)
                     }
                     Picker("Domain", selection: $domain) {
                         ForEach(CargoDomain.allCases, id: \.self) { d in
@@ -99,14 +113,20 @@ struct CargoFormView: View {
                     tagSuggestions = response.tags
                 }
             }
+            .rationFormKeyboardToolbar { focusedField = nil }
         }
     }
 
     @MainActor
     private func save() async {
         errorMessage = nil
-        guard let qty = Double(quantity) else {
-            errorMessage = "Quantity must be a number."
+        quantityError = nil
+        let qty: Double
+        switch QuantityValidation.validate(quantity) {
+        case let .valid(value):
+            qty = value
+        case let .invalid(message):
+            quantityError = message
             return
         }
         isSaving = true

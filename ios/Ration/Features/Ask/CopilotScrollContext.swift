@@ -56,14 +56,14 @@ final class CopilotScrollContext {
     }
 
     func expandManually() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+        withAnimation(MotionPolicy.dockSpring) {
             isExpanded = true
         }
     }
 
     func collapse() {
         dismissKeyboard()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+        withAnimation(MotionPolicy.dockSpring) {
             isExpanded = false
         }
     }

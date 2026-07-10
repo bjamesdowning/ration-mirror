@@ -17,61 +17,82 @@ final class ScanViewModel {
 
     private(set) var state: State = .idle
     private(set) var selectedItems: Set<String> = []
-    private let maxPollAttempts = 80
-    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
+    var shouldShowPaywall = false
+    private var activeTask: Task<Void, Never>?
+    private var submissionGeneration = 0
 
-    func submit(image: UIImage, api: RationAPI) async {
-        state = .uploading
-        guard let data = image.resizedJPEG(maxDimension: 1024, quality: 0.7) else {
-            state = .failed("Could not process the image.")
-            return
-        }
-        do {
-            let response = try await api.submitScan(imageData: data)
-            guard let requestId = response.requestId else {
-                state = .failed("Scan was submitted but no request id was returned.")
-                return
-            }
-            Haptics.light()
-            state = .processing(requestId: requestId)
-            await poll(requestId: requestId, api: api)
-        } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-        }
+    func cancelActiveWork() {
+        submissionGeneration += 1
+        activeTask?.cancel()
+        activeTask = nil
     }
 
-    func poll(requestId: String, api: RationAPI) async {
-        for attempt in 0..<maxPollAttempts {
+    func submit(image: UIImage, api: RationAPI, session: SessionStore) {
+        cancelActiveWork()
+        let generation = submissionGeneration
+        shouldShowPaywall = false
+        state = .uploading
+        activeTask = Task {
             do {
-                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
-                let result = try await api.scanStatus(requestId: requestId)
-                switch result.status {
-                case "completed":
-                    let items = result.items ?? []
-                    selectedItems = Set(items.map(\.id))
-                    state = .completed(requestId: requestId, items: items)
+                guard let data = try await ScanImageProcessor.resizedJPEG(from: image) else {
+                    guard isCurrent(generation) else { return }
+                    state = .failed("Could not process the image.")
                     return
-                case "failed":
-                    state = .failed(result.error ?? "Scan failed. Please try again.")
-                    return
-                default:
-                    state = .processing(requestId: requestId)
                 }
+                guard isCurrent(generation) else { return }
+                let response = try await api.submitScan(imageData: data)
+                guard isCurrent(generation) else { return }
+                guard let requestId = response.requestId else {
+                    state = .failed("Scan was submitted but no request id was returned.")
+                    return
+                }
+                Haptics.light()
+                state = .processing(requestId: requestId)
+                Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
+                await poll(requestId: requestId, api: api, generation: generation)
             } catch is CancellationError {
                 return
             } catch {
-                if let apiError = error as? APIError,
-                   [429, 503].contains(apiError.statusCode ?? 0),
-                   attempt < maxPollAttempts - 1
-                {
-                    state = .processing(requestId: requestId)
-                    continue
+                guard isCurrent(generation) else { return }
+                if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    shouldShowPaywall = true
+                    state = .idle
+                } else {
+                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
                 }
-                state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                return
             }
         }
-        state = .failed("Scan is still processing. Pull Cargo to refresh shortly.")
+    }
+
+    func poll(requestId: String, api: RationAPI, generation: Int) async {
+        let poller = AIJobPoller<ScanStatusResponse>(
+            fetchStatus: { try await api.scanStatus(requestId: $0) },
+            interpretStatus: { result in
+                switch result.status {
+                case "completed": .completed
+                case "failed": .failed(result.error ?? "Scan failed. Please try again.")
+                default: .running
+                }
+            }
+        )
+        do {
+            let result = try await poller.poll(requestId: requestId)
+            guard isCurrent(generation) else { return }
+            let items = result.items ?? []
+            selectedItems = Set(items.map(\.id))
+            state = .completed(requestId: requestId, items: items)
+        } catch is CancellationError {
+            return
+        } catch AIJobPollError.timedOut {
+            guard isCurrent(generation) else { return }
+            state = .failed("Scan is still processing. Pull Cargo to refresh shortly.")
+        } catch let AIJobPollError.failed(message) {
+            guard isCurrent(generation) else { return }
+            state = .failed(message)
+        } catch {
+            guard isCurrent(generation) else { return }
+            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+        }
     }
 
     func toggleSelection(_ item: ScanResultItem) {
@@ -108,8 +129,14 @@ final class ScanViewModel {
     }
 
     func reset() {
+        cancelActiveWork()
         state = .idle
         selectedItems = []
+        shouldShowPaywall = false
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == submissionGeneration
     }
 }
 
@@ -170,10 +197,16 @@ struct ScanView: View {
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraPicker { image in
                     showingCamera = false
-                    if let image { Task { await model.submit(image: image, api: env.api) } }
+                    if let image {
+                        model.submit(image: image, api: env.api, session: env.session)
+                    }
                 }
                 .ignoresSafeArea()
             }
+            .onChange(of: model.shouldShowPaywall) { _, show in
+                if show { showingPaywall = true }
+            }
+            .onDisappear { model.cancelActiveWork() }
         }
     }
 
@@ -325,21 +358,5 @@ struct CameraPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             onResult(nil)
         }
-    }
-}
-
-extension UIImage {
-    func resizedJPEG(maxDimension: CGFloat, quality: CGFloat) -> Data? {
-        let longest = max(size.width, size.height)
-        let scale = longest > maxDimension ? maxDimension / longest : 1
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-        let resized = renderer.image { _ in
-            draw(in: CGRect(origin: .zero, size: newSize))
-        }
-        return resized.jpegData(compressionQuality: quality)
     }
 }

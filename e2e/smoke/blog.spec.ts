@@ -26,6 +26,15 @@ test.describe("blog", () => {
 		await expect(page.getByRole("article")).toBeVisible({ timeout: 5000 });
 	});
 
+	test("mermaid diagrams render on copilot blog posts", async ({ page }) => {
+		test.setTimeout(60_000);
+		await page.goto("/blog/agentic-app-control-copilot");
+		await expect(page.getByRole("article")).toBeVisible({ timeout: 5000 });
+		await expect(
+			page.locator('article [aria-label="Diagram"] svg').first(),
+		).toBeVisible({ timeout: 45_000 });
+	});
+
 	test("invalid slug returns 404 and error boundary", async ({ page }) => {
 		await page.goto("/blog/nonexistent-slug-xyz-404");
 		await expect(

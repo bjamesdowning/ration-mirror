@@ -349,6 +349,7 @@ final class ManifestViewModel {
 struct ManifestView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
@@ -366,8 +367,12 @@ struct ManifestView: View {
     @State private var consumeConfirmationMessage: String?
     @State private var showConsumeConfirmation = false
 
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
+    private var organizationId: String? {
+        env.session.activeOrganizationId
+    }
+
+    private var loadTaskKey: String {
+        "\(organizationId ?? "nil")-\(isTabActive)"
     }
 
     private var manifestEntryCount: Int {
@@ -377,12 +382,80 @@ struct ManifestView: View {
     }
 
     var body: some View {
+        manifestNavigationStack
+            .tabDockAction(tag: 3) {
+                IconFABMenuCore(
+                    systemImage: "plus.circle.fill",
+                    accessibilityLabel: "Manifest actions",
+                    disabled: !env.network.isOnline
+                ) {
+                    Button { showingAddEntry = true } label: {
+                        Label("Add entry", systemImage: "plus")
+                    }
+                    .disabled(!env.network.isOnline)
+                    Button { showingPlanWeek = true } label: {
+                        Label("Plan week", systemImage: "sparkles")
+                    }
+                    .disabled(!env.network.isOnline)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if showConsumeUndo, consumeUndoToken != nil {
+                    UndoToast(
+                        message: "Meal consumed",
+                        onUndo: { Task { await undoConsume() } },
+                        onDismiss: {
+                            showConsumeUndo = false
+                            consumeUndoToken = nil
+                        }
+                    )
+                    .padding(
+                        .bottom,
+                        CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                    )
+                }
+            }
+            .task(id: loadTaskKey) {
+                guard isTabActive, let organizationId else { return }
+                model.resetAnchorForOrganizationChange()
+                if let manifestSettings = env.launch.userSettings?.manifestSettings {
+                    model.configureFromSettings(
+                        calendarSpan: manifestSettings.calendarSpan ?? 7,
+                        weekStartPref: manifestSettings.weekStart ?? "sunday"
+                    )
+                } else {
+                    model.applyInitialAnchorIfNeeded()
+                }
+                await reload(organizationId: organizationId)
+                await loadManifestShareStatus()
+            }
+            .onChange(of: env.deepLinkRouter.manifestPlanWeekPending, initial: true) { _, pending in
+                if pending {
+                    showingPlanWeek = true
+                    env.deepLinkRouter.acknowledgeManifestPlanWeek()
+                }
+            }
+            .refreshable { await reload() }
+            .alert("Insufficient cargo", isPresented: $showConsumeConfirmation) {
+                Button("Consume anyway") {
+                    Task { await confirmConsumeDespiteShortfall() }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingConsumeEntry = nil
+                    consumeConfirmationMessage = nil
+                }
+            } message: {
+                Text(consumeConfirmationMessage ?? "Missing ingredients. Consume anyway?")
+            }
+    }
+
+    private var manifestNavigationStack: some View {
         NavigationStack {
             Group {
                 if model.isLoading && model.manifest == nil {
                     LoadingView()
-                } else if let manifest = model.manifest {
-                    content(manifest)
+                } else if let manifest = model.manifest, let organizationId {
+                    content(manifest, organizationId: organizationId)
                 } else {
                     emptyPrompt
                 }
@@ -432,6 +505,9 @@ struct ManifestView: View {
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(defaultDate: model.manifest?.startDate) { mealId, date, slot in
+                    guard let organizationId = env.session.activeOrganizationId else {
+                        return "Organization not ready."
+                    }
                     let ok = await model.addEntry(
                         mealId: mealId,
                         date: date,
@@ -451,66 +527,10 @@ struct ManifestView: View {
                 }
             }
         }
-        .tabDockAction(tag: 3) {
-            IconFABMenuCore(
-                systemImage: "plus.circle.fill",
-                accessibilityLabel: "Manifest actions",
-                disabled: !env.network.isOnline
-            ) {
-                Button { showingAddEntry = true } label: {
-                    Label("Add entry", systemImage: "plus")
-                }
-                .disabled(!env.network.isOnline)
-                Button { showingPlanWeek = true } label: {
-                    Label("Plan week", systemImage: "sparkles")
-                }
-                .disabled(!env.network.isOnline)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if showConsumeUndo, consumeUndoToken != nil {
-                UndoToast(
-                    message: "Meal consumed",
-                    onUndo: { Task { await undoConsume() } },
-                    onDismiss: {
-                        showConsumeUndo = false
-                        consumeUndoToken = nil
-                    }
-                )
-                .padding(
-                    .bottom,
-                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
-                )
-            }
-        }
-        .task(id: organizationId) {
-            model.resetAnchorForOrganizationChange()
-            if let settings = try? await env.api.settings().settings.manifestSettings {
-                model.configureFromSettings(
-                    calendarSpan: settings.calendarSpan ?? 7,
-                    weekStartPref: settings.weekStart ?? "sunday"
-                )
-            } else {
-                model.applyInitialAnchorIfNeeded()
-            }
-            await reload()
-            await loadManifestShareStatus()
-        }
-        .refreshable { await reload() }
-        .alert("Insufficient cargo", isPresented: $showConsumeConfirmation) {
-            Button("Consume anyway") {
-                Task { await confirmConsumeDespiteShortfall() }
-            }
-            Button("Cancel", role: .cancel) {
-                pendingConsumeEntry = nil
-                consumeConfirmationMessage = nil
-            }
-        } message: {
-            Text(consumeConfirmationMessage ?? "Missing ingredients. Consume anyway?")
-        }
     }
 
-    private func reload() async {
+    private func reload(organizationId: String? = nil) async {
+        guard let organizationId = organizationId ?? self.organizationId else { return }
         await model.load(
             api: env.api,
             snapshots: env.snapshots,
@@ -534,7 +554,7 @@ struct ManifestView: View {
     }
 
     @ViewBuilder
-    private func content(_ manifest: ManifestResponse) -> some View {
+    private func content(_ manifest: ManifestResponse, organizationId: String) -> some View {
         let entryDates = Set(manifest.entries.map(\.date))
         let dayEntries = manifest.entries.filter { $0.date == model.selectedDay }
 
@@ -641,6 +661,7 @@ struct ManifestView: View {
     }
 
     private func handleConsume(_ entry: ManifestEntry) async {
+        guard let organizationId else { return }
         switch await model.consume(
             entry,
             api: env.api,
@@ -661,7 +682,7 @@ struct ManifestView: View {
     }
 
     private func confirmConsumeDespiteShortfall() async {
-        guard let entry = pendingConsumeEntry else { return }
+        guard let entry = pendingConsumeEntry, let organizationId else { return }
         pendingConsumeEntry = nil
         consumeConfirmationMessage = nil
         showConsumeConfirmation = false
@@ -731,7 +752,7 @@ struct ManifestView: View {
     }
 
     private func undoConsume() async {
-        guard let token = consumeUndoToken, env.network.isOnline else {
+        guard let token = consumeUndoToken, env.network.isOnline, let organizationId else {
             showConsumeUndo = false
             consumeUndoToken = nil
             return

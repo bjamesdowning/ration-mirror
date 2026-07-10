@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.5.39",
+	"version": "1.5.42",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -57,6 +57,7 @@
 		"isbot": "^5.1.39",
 		"jose": "^6.1.3",
 		"lucide-react": "^0.576.0",
+		"mermaid": "^11.16.0",
 		"react": "^19.2.5",
 		"react-dom": "^19.2.5",
 		"react-markdown": "^10.1.0",

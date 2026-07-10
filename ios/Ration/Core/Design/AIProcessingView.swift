@@ -52,6 +52,7 @@ struct AIProcessingView: View {
     var creditCost: Int?
 
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 24) {
@@ -59,8 +60,8 @@ struct AIProcessingView: View {
                 Circle()
                     .stroke(Theme.hyperGreen.opacity(0.25), lineWidth: 3)
                     .frame(width: 88, height: 88)
-                    .scaleEffect(pulse ? 1.08 : 0.92)
-                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
+                    .scaleEffect(reduceMotion ? 1 : (pulse ? 1.08 : 0.92))
+                    .animation(MotionPolicy.repeatingPulse(duration: 1.2), value: pulse)
                 Image(systemName: feature.icon)
                     .font(.system(size: 32, weight: .semibold))
                     .foregroundStyle(Theme.hyperGreen)

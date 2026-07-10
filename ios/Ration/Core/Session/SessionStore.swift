@@ -36,13 +36,16 @@ final class SessionStore {
         AvatarURLResolver.resolve(session?.user.image)
     }
 
-    func load(api: RationAPI) async {
+    @discardableResult
+    func load(api: RationAPI) async -> Bool {
         isLoading = true
         defer { isLoading = false }
         do {
             session = try await api.session()
+            return true
         } catch {
             // Keep prior session on transient failure.
+            return false
         }
     }
 

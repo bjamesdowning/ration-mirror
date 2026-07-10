@@ -81,6 +81,7 @@ struct HubEditView: View {
                                 Toggle("", isOn: binding(for: widget.id))
                                     .labelsHidden()
                                     .tint(Theme.hyperGreen)
+                                    .accessibilityLabel(widget.visible ? "Hide \(def.title)" : "Show \(def.title)")
                             }
 
                             Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: def.defaultSize)) {

@@ -4,6 +4,7 @@ import Observation
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(CopilotScrollContext.self) private var scrollContext
+    var isTabActive: Bool = true
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenSupply: () -> Void = {}
@@ -18,8 +19,12 @@ struct DashboardView: View {
     @State private var draggingWidgetId: String?
     @State private var showGroupSettings = false
 
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
+    private var organizationId: String? {
+        env.session.activeOrganizationId
+    }
+
+    private var loadTaskKey: String {
+        "\(organizationId ?? "nil")-\(isTabActive)"
     }
 
     var body: some View {
@@ -96,8 +101,14 @@ struct DashboardView: View {
                 }
             }
         }
-        .task(id: organizationId) {
-            await reload()
+        .task(id: loadTaskKey) {
+            guard isTabActive, let organizationId else { return }
+            await model.load(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
         }
         .refreshable {
             await reload()
@@ -113,6 +124,7 @@ struct DashboardView: View {
     }
 
     private func reload() async {
+        guard let organizationId else { return }
         await model.load(
             api: env.api,
             snapshots: env.snapshots,
@@ -147,10 +159,11 @@ struct DashboardView: View {
                     ErrorBanner(message: toggleError).frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let action = model.nextAction(for: data),
+                if let organizationId,
+                   let action = model.nextAction(for: data),
                    !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
                 {
-                    nextActionCard(action)
+                    nextActionCard(action, organizationId: organizationId)
                 }
 
                 ForEach(model.resolvedLayout) { widget in
@@ -225,6 +238,7 @@ struct DashboardView: View {
                 cargoLinkRows: (data.cargoTagIndex ?? []).map { CargoLinkResolver.Row(id: $0.id, name: $0.name) },
                 size: size,
                 onToggleItem: { item, purchased in
+                    guard let organizationId = env.session.activeOrganizationId else { return }
                     await model.toggleSupplyItem(
                         item,
                         isPurchased: purchased,
@@ -252,7 +266,10 @@ struct DashboardView: View {
         }
     }
 
-    private func nextActionCard(_ action: (key: String, title: String, detail: String, icon: String)) -> some View {
+    private func nextActionCard(
+        _ action: (key: String, title: String, detail: String, icon: String),
+        organizationId: String
+    ) -> some View {
         GlassCard {
             HStack(spacing: 12) {
                 Image(systemName: action.icon)

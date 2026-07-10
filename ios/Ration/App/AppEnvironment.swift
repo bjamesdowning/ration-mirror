@@ -26,7 +26,8 @@ final class AppEnvironment {
     let ask: AskCoordinator
     let copilotScroll: CopilotScrollContext
     let tabDock: TabDockContext
-    private(set) var deepLinkDestination: DeepLinkDestination?
+    let launch: LaunchCoordinator
+    let deepLinkRouter: DeepLinkRouter
     private(set) var cargoDataRevision = 0
 
     init() {
@@ -48,14 +49,19 @@ final class AppEnvironment {
         self.ask = AskCoordinator()
         self.copilotScroll = CopilotScrollContext()
         self.tabDock = TabDockContext()
+        let launch = LaunchCoordinator()
+        self.launch = launch
+        self.deepLinkRouter = DeepLinkRouter()
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
-        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode] in
+        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, deepLinkRouter] in
             snapshots.clearAll()
             await billing.logOut()
             session.clear()
             theme.clear()
             unitDisplayMode.clear()
+            launch.reset()
+            deepLinkRouter.reset()
             AuthImageLoader.shared.clearAll()
         }
     }
@@ -65,10 +71,6 @@ final class AppEnvironment {
     }
 
     func openDeepLink(_ destination: DeepLinkDestination) {
-        deepLinkDestination = destination
-    }
-
-    func consumeDeepLink() {
-        deepLinkDestination = nil
+        deepLinkRouter.enqueue(destination)
     }
 }

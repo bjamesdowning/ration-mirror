@@ -34,8 +34,8 @@ struct CopilotBottomDock: View {
         }
         .frame(maxWidth: .infinity, alignment: .bottom)
         .fixedSize(horizontal: false, vertical: true)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: scrollContext.isExpanded)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: tabDock.revision)
+        .animation(MotionPolicy.dockSpring, value: scrollContext.isExpanded)
+        .animation(MotionPolicy.dockSpring, value: tabDock.revision)
         .onChange(of: scrollContext.isExpanded) { _, expanded in
             if !expanded {
                 isInputFocused = false

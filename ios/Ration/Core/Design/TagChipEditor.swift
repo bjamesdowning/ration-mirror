@@ -32,6 +32,9 @@ struct TagChipEditor: View {
                                     .foregroundStyle(Theme.muted)
                             }
                             .buttonStyle(.plain)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel("Remove tag \(Tag.displayName(from: tag))")
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

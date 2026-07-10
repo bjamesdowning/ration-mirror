@@ -4,7 +4,6 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showOnboarding = false
-    @State private var settingsLoaded = false
 
     var body: some View {
         switch env.auth.phase {
@@ -13,38 +12,39 @@ struct RootView: View {
         case .signedOut:
             SignInView()
         case .signedIn:
-            MainTabView()
-                .task {
-                    // `session.load` and the settings fetch hit independent
-                    // endpoints — run them concurrently rather than back to
-                    // back. The single settings response feeds both the AI
-                    // consent flag (H-8) and the onboarding check, instead of
-                    // each fetching `/settings` on its own.
-                    async let sessionLoad: Void = env.session.load(api: env.api)
-                    async let settingsLoad: Void = loadSettings()
-                    _ = await (sessionLoad, settingsLoad)
-                }
-                .fullScreenCover(isPresented: $showOnboarding) {
-                    OnboardingView {
-                        showOnboarding = false
+            Group {
+                switch env.launch.phase {
+                case .idle, .loading:
+                    LoadingView(label: "Calibrating…")
+                case let .failed(message):
+                    VStack(spacing: 16) {
+                        ErrorBanner(message: message)
+                        Button("Try again") {
+                            env.launch.retry()
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
                     }
+                    .padding(24)
+                    .background(Theme.ceramic)
+                case .ready:
+                    MainTabView()
                 }
-        }
-    }
-
-    @MainActor
-    private func loadSettings() async {
-        guard !settingsLoaded else { return }
-        settingsLoaded = true
-        do {
-            let settings = try await env.api.settings().settings
-            env.session.applyConsent(settings)
-            env.theme.syncFromServer(settings)
-            env.unitDisplayMode.syncFromServer(settings)
-            let completed = settings.onboardingCompletedAt?.isEmpty == false
-            showOnboarding = !completed
-        } catch {
-            showOnboarding = false
+            }
+            .task(id: env.launch.startupGeneration) {
+                await env.launch.performStartup(
+                    api: env.api,
+                    session: env.session,
+                    theme: env.theme,
+                    unitDisplayMode: env.unitDisplayMode
+                )
+                guard !Task.isCancelled, env.launch.isStartupComplete else { return }
+                showOnboarding = env.launch.needsOnboarding
+            }
+            .fullScreenCover(isPresented: $showOnboarding) {
+                OnboardingView {
+                    showOnboarding = false
+                }
+            }
         }
     }
 }
@@ -56,12 +56,9 @@ struct MainTabView: View {
     @State private var showingScan = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
+    @State private var activatedTabs: Set<Int> = [0]
     @State private var manifestSuccessMessage: String?
     @State private var showingCopilotPaywall = false
-
-    private var organizationId: String {
-        env.session.activeOrganizationId ?? "unknown"
-    }
 
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: env.ask.model.status)
@@ -74,6 +71,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView(
+                isTabActive: activatedTabs.contains(0),
                 onScan: { showingScan = true },
                 onOpenSettings: { showingSettings = true },
                 onOpenSupply: { selectedTab = 4 },
@@ -85,17 +83,25 @@ struct MainTabView: View {
                 .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
                 .tag(0)
 
-            CargoListView(onScan: { showingScan = true }, onOpenSettings: { showingSettings = true })
+            CargoListView(
+                isTabActive: activatedTabs.contains(1),
+                onScan: { showingScan = true },
+                onOpenSettings: { showingSettings = true }
+            )
                 .id(orgGeneration)
                 .tabItem { Label("Cargo", systemImage: "shippingbox") }
                 .tag(1)
 
-            GalleyView(onOpenSettings: { showingSettings = true })
+            GalleyView(
+                isTabActive: activatedTabs.contains(2),
+                onOpenSettings: { showingSettings = true }
+            )
                 .id(orgGeneration)
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
                 .tag(2)
 
             ManifestView(
+                isTabActive: activatedTabs.contains(3),
                 onOpenSettings: { showingSettings = true },
                 onPlanWeekComplete: { count in
                     selectedTab = 3
@@ -106,7 +112,10 @@ struct MainTabView: View {
                 .tabItem { Label("Manifest", systemImage: "calendar") }
                 .tag(3)
 
-            SupplyView(onOpenSettings: { showingSettings = true })
+            SupplyView(
+                isTabActive: activatedTabs.contains(4),
+                onOpenSettings: { showingSettings = true }
+            )
                 .id(orgGeneration)
                 .tabItem { Label("Supply", systemImage: "cart") }
                 .tag(4)
@@ -165,6 +174,7 @@ struct MainTabView: View {
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         Task {
+                            guard let organizationId = env.session.activeOrganizationId else { return }
                             await env.ask.sendFromBar(
                                 text,
                                 api: env.api,
@@ -185,9 +195,13 @@ struct MainTabView: View {
         }
         .copilotKeyboardObserved(env.copilotScroll)
         .copilotKeyboardDismissOverlay(env.copilotScroll)
-        .task {
-            await env.session.load(api: env.api)
-            guard organizationId != "unknown" else { return }
+        .onChange(of: selectedTab) { _, tab in
+            activatedTabs.insert(tab)
+            env.copilotScroll.resetForTabChange()
+            env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+        }
+        .task(id: shellReadyKey) {
+            guard let organizationId = env.session.activeOrganizationId else { return }
             await env.ask.load(
                 api: env.api,
                 auth: env.auth,
@@ -195,6 +209,23 @@ struct MainTabView: View {
                 snapshots: env.snapshots
             )
             env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            env.deepLinkRouter.replayPending(
+                selectedTab: &selectedTab,
+                openAskSheet: { env.ask.openSheet() },
+                openScan: { showingScan = true }
+            )
+            activatedTabs.insert(selectedTab)
+        }
+        .onChange(of: env.deepLinkRouter.pending) { _, destination in
+            guard destination != nil, env.launch.isStartupComplete,
+                  env.session.activeOrganizationId != nil
+            else { return }
+            env.deepLinkRouter.replayPending(
+                selectedTab: &selectedTab,
+                openAskSheet: { env.ask.openSheet() },
+                openScan: { showingScan = true }
+            )
+            activatedTabs.insert(selectedTab)
         }
         .onChange(of: env.session.orgGeneration) { _, newValue in
             orgGeneration = newValue
@@ -210,24 +241,10 @@ struct MainTabView: View {
                 env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
             }
         }
-        .onChange(of: selectedTab) { _, _ in
-            env.copilotScroll.resetForTabChange()
-            env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
-        }
-        .onChange(of: env.deepLinkDestination) { _, destination in
-            guard let destination else { return }
-            switch destination {
-            case .ask:
-                env.ask.openSheet()
-            case .scan:
-                showingScan = true
-            case .galleyGenerate, .galleyImport:
-                selectedTab = 2
-            case .manifestPlanWeek:
-                selectedTab = 3
-            }
-            env.consumeDeepLink()
-        }
+    }
+
+    private var shellReadyKey: String {
+        "\(env.launch.isStartupComplete)-\(env.launch.startupGeneration)-\(env.session.activeOrganizationId ?? "nil")-\(env.session.orgGeneration)"
     }
 }
 

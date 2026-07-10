@@ -31,6 +31,8 @@ final class CargoViewModel {
     }
 
     private var nextCursor: String?
+    private var inventoryNextCursor: String?
+    private var inventoryTotal = 0
     private var rawItems: [CargoItem] = []
 
     var displayedInventory: [CargoItem] {
@@ -57,13 +59,24 @@ final class CargoViewModel {
         }
     }
 
-    func reload(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+    func reload(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String,
+        forceRemoteSearch: Bool = false
+    ) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
-        if isSearchActive, online {
+        if isSearchActive, online, forceRemoteSearch {
             await search(api: api)
+            return
+        }
+
+        if isSearchActive, !forceRemoteSearch {
+            applyClientFilters()
             return
         }
 
@@ -77,7 +90,9 @@ final class CargoViewModel {
                 activeCargoIds = Set(page.activeCargoIds ?? [])
                 listContent = .inventory(displayedInventory)
                 total = page.total
+                inventoryTotal = page.total
                 nextCursor = page.nextCursor
+                inventoryNextCursor = page.nextCursor
                 snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
             } catch {
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -89,20 +104,28 @@ final class CargoViewModel {
     }
 
     func applyClientFilters() {
-        if case .inventory = listContent {
-            listContent = .inventory(displayedInventory)
-        }
+        let items = displayedInventory
+        listContent = .inventory(items)
+        total = hasLocalFilters ? items.count : inventoryTotal
+        nextCursor = inventoryNextCursor
     }
 
     private func search(api: RationAPI) async {
+        let query = filters.search
         do {
-            let response = try await api.search(query: filters.search)
-            listContent = .search(response.results)
-            total = response.results.count
-            nextCursor = nil
+            let response = try await api.search(query: query)
+            guard query == filters.search else { return }
+            applyRemoteSearchResults(response.results)
         } catch {
+            guard query == filters.search else { return }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    func applyRemoteSearchResults(_ results: [SearchResult]) {
+        listContent = .search(results)
+        total = results.count
+        nextCursor = nil
     }
 
     private func restoreSnapshot(_ snapshots: SnapshotStore, organizationId: String) {
@@ -111,7 +134,9 @@ final class CargoViewModel {
             activeCargoIds = Set(cached.payload.activeCargoIds ?? [])
             listContent = .inventory(displayedInventory)
             total = cached.payload.total
+            inventoryTotal = cached.payload.total
             nextCursor = cached.payload.nextCursor
+            inventoryNextCursor = cached.payload.nextCursor
         }
     }
 
@@ -132,6 +157,7 @@ final class CargoViewModel {
             }
             listContent = .inventory(displayedInventory)
             nextCursor = page.nextCursor
+            inventoryNextCursor = page.nextCursor
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -185,14 +211,18 @@ final class CargoViewModel {
         let previousContent = listContent
         let previousRawItems = rawItems
         let previousTotal = total
+        let previousInventoryTotal = inventoryTotal
+        let removedFromInventory = rawItems.contains { $0.id == id }
 
         rawItems.removeAll { $0.id == id }
+        if removedFromInventory {
+            inventoryTotal = max(0, inventoryTotal - 1)
+        }
         activeCargoIds.remove(id)
 
         switch listContent {
         case .inventory:
-            listContent = .inventory(displayedInventory)
-            total = max(0, total - 1)
+            applyClientFilters()
         case var .search(results):
             results.removeAll { $0.id == id }
             listContent = .search(results)
@@ -206,7 +236,12 @@ final class CargoViewModel {
             rawItems = previousRawItems
             listContent = previousContent
             total = previousTotal
+            inventoryTotal = previousInventoryTotal
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private var hasLocalFilters: Bool {
+        isSearchActive || !filters.selectedTags.isEmpty
     }
 }

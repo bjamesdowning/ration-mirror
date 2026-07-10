@@ -346,5 +346,8 @@ struct WeekNavigator: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(ManifestDateHelpers.smartLabel(isoDate: day))
+        .accessibilityValue(hasMeals ? "Has meals" : "No meals")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

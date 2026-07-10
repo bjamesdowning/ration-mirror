@@ -17,42 +17,69 @@ final class ImportRecipeViewModel {
 
     private(set) var state: State = .idle
     var url = ""
-    private let maxPollAttempts = 80
-    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
+    var shouldShowPaywall = false
+    private var activeTask: Task<Void, Never>?
+    private var submissionGeneration = 0
 
-    func submit(api: RationAPI) async {
+    func cancelActiveWork() {
+        submissionGeneration += 1
+        activeTask?.cancel()
+        activeTask = nil
+    }
+
+    func submit(api: RationAPI, session: SessionStore) {
+        cancelActiveWork()
+        let generation = submissionGeneration
+        shouldShowPaywall = false
         state = .submitting
-        do {
-            let response = try await api.importRecipe(ImportRecipeRequest(url: url))
-            guard let requestId = response.requestId else {
-                state = .failed("Import started but no request id was returned.")
+        activeTask = Task {
+            do {
+                let response = try await api.importRecipe(ImportRecipeRequest(url: url))
+                guard isCurrent(generation) else { return }
+                guard let requestId = response.requestId else {
+                    state = .failed("Import started but no request id was returned.")
+                    return
+                }
+                Haptics.light()
+                state = .processing(requestId: requestId)
+                Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
+                await poll(requestId: requestId, api: api, generation: generation)
+            } catch is CancellationError {
                 return
+            } catch let error as APIError where error.statusCode == 409 && error.code == "DUPLICATE_URL" {
+                guard isCurrent(generation) else { return }
+                if let existingId = error.existingMealId {
+                    state = .duplicate(
+                        existingMealId: existingId,
+                        existingMealName: error.existingMealName
+                    )
+                } else {
+                    state = .failed(error.errorDescription ?? "This recipe URL was already imported.")
+                }
+            } catch {
+                guard isCurrent(generation) else { return }
+                if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    shouldShowPaywall = true
+                    state = .idle
+                } else {
+                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+                }
             }
-            Haptics.light()
-            state = .processing(requestId: requestId)
-            await poll(requestId: requestId, api: api)
-        } catch let error as APIError where error.statusCode == 409 && error.code == "DUPLICATE_URL" {
-            if let existingId = error.existingMealId {
-                state = .duplicate(
-                    existingMealId: existingId,
-                    existingMealName: error.existingMealName
-                )
-            } else {
-                state = .failed(error.errorDescription ?? "This recipe URL was already imported.")
-            }
-        } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
     }
 
-    func poll(requestId: String, api: RationAPI) async {
-        for attempt in 0..<maxPollAttempts {
+    func poll(requestId: String, api: RationAPI, generation: Int) async {
+        let maxAttempts = 80
+        let delayNanoseconds: UInt64 = 1_500_000_000
+        for attempt in 0..<maxAttempts {
             do {
-                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
+                try Task.checkCancellation()
+                if attempt > 0 {
+                    try await Task.sleep(nanoseconds: delayNanoseconds)
+                }
                 let result = try await api.importRecipeStatus(requestId: requestId)
-                if result.code == "DUPLICATE_URL",
-                   let existingId = result.existingMealId
-                {
+                guard isCurrent(generation) else { return }
+                if result.code == "DUPLICATE_URL", let existingId = result.existingMealId {
                     state = .duplicate(
                         existingMealId: existingId,
                         existingMealName: result.existingMealName
@@ -78,9 +105,10 @@ final class ImportRecipeViewModel {
             } catch is CancellationError {
                 return
             } catch {
+                guard isCurrent(generation) else { return }
                 if let apiError = error as? APIError,
                    [429, 503].contains(apiError.statusCode ?? 0),
-                   attempt < maxPollAttempts - 1
+                   attempt < maxAttempts - 1
                 {
                     continue
                 }
@@ -88,6 +116,7 @@ final class ImportRecipeViewModel {
                 return
             }
         }
+        guard isCurrent(generation) else { return }
         state = .failed("Import is still processing. Check Galley shortly.")
     }
 
@@ -101,7 +130,15 @@ final class ImportRecipeViewModel {
         }
     }
 
-    func reset() { state = .idle }
+    func reset() {
+        cancelActiveWork()
+        state = .idle
+        shouldShowPaywall = false
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == submissionGeneration
+    }
 }
 
 struct ImportRecipeSheet: View {
@@ -109,6 +146,7 @@ struct ImportRecipeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = ImportRecipeViewModel()
     @State private var consent = AIConsentCoordinator()
+    @State private var showingPaywall = false
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
 
@@ -157,6 +195,11 @@ struct ImportRecipeSheet: View {
                 )
                 .presentationDetents([.large])
             }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .onChange(of: model.shouldShowPaywall) { _, show in
+                if show { showingPaywall = true }
+            }
+            .onDisappear { model.cancelActiveWork() }
         }
     }
 
@@ -180,7 +223,7 @@ struct ImportRecipeSheet: View {
                     isDisabled: model.url.trimmingCharacters(in: .whitespaces).isEmpty
                 ) {
                     consent.presentIfNeeded(session: env.session) {
-                        Task { await model.submit(api: env.api) }
+                        model.submit(api: env.api, session: env.session)
                     }
                 }
             }

@@ -14,7 +14,13 @@ struct ProvisionFormView: View {
     @State private var tagSuggestions: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var quantityError: String?
     @State private var showingPaywall = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case name, quantity
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,10 +31,18 @@ struct ProvisionFormView: View {
                 Section("Item") {
                     TextField("Item name", text: $name)
                         .textInputAutocapitalization(.never)
+                        .focused($focusedField, equals: .name)
                     HStack {
                         TextField("Quantity", text: $quantity)
                             .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .quantity)
                         UnitPicker(units: RationUnits.all, selection: $unit)
+                    }
+                    if let quantityError {
+                        Text(quantityError)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.warning)
+                            .accessibilityLabel(quantityError)
                     }
                     Picker("Domain", selection: $domain) {
                         Text("Food").tag("food")
@@ -50,6 +64,7 @@ struct ProvisionFormView: View {
                 }
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
+            .rationFormKeyboardToolbar { focusedField = nil }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
             .task {
                 if let response = try? await env.api.cargoTags() {
@@ -63,26 +78,31 @@ struct ProvisionFormView: View {
     private func save() async {
         isSaving = true
         errorMessage = nil
+        quantityError = nil
         defer { isSaving = false }
 
-        let qty = Double(quantity) ?? 1
-        let body = CreateProvisionRequest(
-            name: name.trimmingCharacters(in: .whitespaces).lowercased(),
-            domain: domain,
-            quantity: qty,
-            unit: unit.isEmpty ? "unit" : unit,
-            tags: tags
-        )
+        switch QuantityValidation.validate(quantity) {
+        case let .valid(qty):
+            let body = CreateProvisionRequest(
+                name: name.trimmingCharacters(in: .whitespaces).lowercased(),
+                domain: domain,
+                quantity: qty,
+                unit: unit.isEmpty ? "unit" : unit,
+                tags: tags
+            )
 
-        do {
-            _ = try await env.api.createProvision(body)
-            Haptics.success()
-            await onSaved()
-            dismiss()
-        } catch let error as APIError where isCapacityExceeded(error) {
-            showingPaywall = true
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            do {
+                _ = try await env.api.createProvision(body)
+                Haptics.success()
+                await onSaved()
+                dismiss()
+            } catch let error as APIError where isCapacityExceeded(error) {
+                showingPaywall = true
+            } catch {
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
+        case let .invalid(message):
+            quantityError = message
         }
     }
 

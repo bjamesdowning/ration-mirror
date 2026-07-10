@@ -23,6 +23,12 @@ open Ration.xcodeproj
 Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) before
 building to a device, then re-run `xcodegen generate`.
 
+**Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
+(currently **1.1.1**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
+(`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
+After editing `project.yml`, run `bun run ios:generate`.
+
 ### First-class repo commands
 
 Run these from the repository root:
@@ -231,7 +237,7 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot stacked dock (v1.5.22):** `CopilotBottomDock` unifies Copilot input and tab action FABs in a single glass overlay above the tab bar. When expanded, the input bar spans full width and the tab FAB sits above it (trailing); scroll down to collapse the bar to a chat chip and the FAB lowers to the bottom-right row. Tab actions register via `.tabDockAction(tag:)` (`TabDockContext`) instead of per-tab `safeAreaInset` FABs — eliminating the blank dead zone from stacked insets. List content scrolls under the dock via `.copilotDockScrollMargins` (`contentMargins` + `CopilotDockLayout`). Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel`.
 
-**Post-buildout stability (iOS 1.1.0 build 4, web v1.5.30):** Single-line Copilot input with rotating example placeholders (no stacked hint row). Keyboard dismisses on scroll, send, dock collapse, tap on list content, and Done toolbar. Scroll margins stay stable during dock collapse and grow when the keyboard is visible so the last row clears the keyboard. Supply sync uses the Manifest calendar window; post-dock reconcile passes the syncing user's settings.
+**Post-buildout stability (iOS 1.1.1 build 5, web v1.5.30):** Single-line Copilot input with rotating example placeholders (no stacked hint row). Keyboard dismisses on scroll, send, dock collapse, tap on list content, and Done toolbar. Scroll margins stay stable during dock collapse and grow when the keyboard is visible so the last row clears the keyboard. Supply sync uses the Manifest calendar window; post-dock reconcile passes the syncing user's settings.
 
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).

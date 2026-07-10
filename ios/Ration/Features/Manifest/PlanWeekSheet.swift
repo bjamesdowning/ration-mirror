@@ -5,6 +5,7 @@ struct PlanWeekSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = PlanWeekViewModel()
     @State private var consent = AIConsentCoordinator()
+    @State private var showingPaywall = false
     var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
@@ -45,6 +46,11 @@ struct PlanWeekSheet: View {
                 )
                 .presentationDetents([.large])
             }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .onChange(of: model.shouldShowPaywall) { _, show in
+                if show { showingPaywall = true }
+            }
+            .onDisappear { model.cancelActiveWork() }
         }
     }
 
@@ -69,7 +75,7 @@ struct PlanWeekSheet: View {
                     .foregroundStyle(Theme.muted)
                 AIFeaturePrimaryButton(label: "Plan week", creditCost: creditCost) {
                     consent.presentIfNeeded(session: env.session) {
-                        Task { await model.submit(api: env.api) }
+                        model.submit(api: env.api, session: env.session)
                     }
                 }
                 .disabled(!model.canSubmitPlan)

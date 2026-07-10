@@ -14,22 +14,46 @@ final class GenerateMealViewModel {
 
     private(set) var state: State = .idle
     var customization = ""
-    private let maxPollAttempts = 80
-    private let pollDelayNanoseconds: UInt64 = 1_500_000_000
+    var shouldShowPaywall = false
+    private var activeTask: Task<Void, Never>?
+    private var submissionGeneration = 0
 
-    func submit(api: RationAPI) async {
+    func cancelActiveWork() {
+        submissionGeneration += 1
+        activeTask?.cancel()
+        activeTask = nil
+    }
+
+    func submit(api: RationAPI, session: SessionStore) {
+        cancelActiveWork()
+        let generation = submissionGeneration
+        shouldShowPaywall = false
         state = .submitting
-        do {
-            let response = try await api.generateMeal(GenerateMealRequest(customization: customization.isEmpty ? nil : customization))
-            guard let requestId = response.requestId else {
-                state = .failed("Generation started but no request id was returned.")
+        activeTask = Task {
+            do {
+                let response = try await api.generateMeal(
+                    GenerateMealRequest(customization: customization.isEmpty ? nil : customization)
+                )
+                guard isCurrent(generation) else { return }
+                guard let requestId = response.requestId else {
+                    state = .failed("Generation started but no request id was returned.")
+                    return
+                }
+                Haptics.light()
+                state = .processing(requestId: requestId)
+                Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
+                await poll(requestId: requestId, api: api, generation: generation)
+            } catch is CancellationError {
                 return
+            } catch {
+                guard isCurrent(generation) else { return }
+                if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    shouldShowPaywall = true
+                    state = .idle
+                } else {
+                    state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+                }
             }
-            Haptics.light()
-            state = .processing(requestId: requestId)
-            await poll(requestId: requestId, api: api)
-        } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
     }
 
@@ -51,38 +75,44 @@ final class GenerateMealViewModel {
         }
     }
 
-    func poll(requestId: String, api: RationAPI) async {
-        for attempt in 0..<maxPollAttempts {
-            do {
-                try await Task.sleep(nanoseconds: pollDelayNanoseconds)
-                let result = try await api.generateMealStatus(requestId: requestId)
+    func poll(requestId: String, api: RationAPI, generation: Int) async {
+        let poller = AIJobPoller<GenerateMealStatusResponse>(
+            fetchStatus: { try await api.generateMealStatus(requestId: $0) },
+            interpretStatus: { result in
                 switch result.status {
-                case "completed":
-                    state = .completed(result.recipes ?? [])
-                    return
-                case "failed":
-                    state = .failed(result.error ?? "Generation failed.")
-                    return
-                default:
-                    state = .processing(requestId: requestId)
+                case "completed": .completed
+                case "failed": .failed(result.error ?? "Generation failed.")
+                default: .running
                 }
-            } catch is CancellationError {
-                return
-            } catch {
-                if let apiError = error as? APIError,
-                   [429, 503].contains(apiError.statusCode ?? 0),
-                   attempt < maxPollAttempts - 1
-                {
-                    continue
-                }
-                state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
-                return
             }
+        )
+        do {
+            let result = try await poller.poll(requestId: requestId)
+            guard isCurrent(generation) else { return }
+            state = .completed(result.recipes ?? [])
+        } catch is CancellationError {
+            return
+        } catch AIJobPollError.timedOut {
+            guard isCurrent(generation) else { return }
+            state = .failed("Generation is still processing. Check Galley shortly.")
+        } catch let AIJobPollError.failed(message) {
+            guard isCurrent(generation) else { return }
+            state = .failed(message)
+        } catch {
+            guard isCurrent(generation) else { return }
+            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
-        state = .failed("Generation is still processing. Check Galley shortly.")
     }
 
-    func reset() { state = .idle }
+    func reset() {
+        cancelActiveWork()
+        state = .idle
+        shouldShowPaywall = false
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == submissionGeneration
+    }
 }
 
 struct GenerateMealSheet: View {
@@ -93,6 +123,7 @@ struct GenerateMealSheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var consent = AIConsentCoordinator()
+    @State private var showingPaywall = false
     var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
@@ -136,6 +167,11 @@ struct GenerateMealSheet: View {
                 )
                 .presentationDetents([.large])
             }
+            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .onChange(of: model.shouldShowPaywall) { _, show in
+                if show { showingPaywall = true }
+            }
+            .onDisappear { model.cancelActiveWork() }
         }
     }
 
@@ -153,7 +189,7 @@ struct GenerateMealSheet: View {
                     .textFieldStyle(.roundedBorder)
                 AIFeaturePrimaryButton(label: "Generate ideas", creditCost: creditCost) {
                     consent.presentIfNeeded(session: env.session) {
-                        Task { await model.submit(api: env.api) }
+                        model.submit(api: env.api, session: env.session)
                     }
                 }
             }

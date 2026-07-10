@@ -118,7 +118,7 @@ final class APIClient {
         do {
             (data, response) = try await session.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw Self.normalizedTransportError(error)
         }
 
         guard let http = response as? HTTPURLResponse else {
@@ -177,6 +177,16 @@ final class APIClient {
         } catch {
             throw APIError.decoding("\(error)")
         }
+    }
+
+    nonisolated static func normalizedTransportError(_ error: Error) -> Error {
+        if error is CancellationError {
+            return CancellationError()
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return CancellationError()
+        }
+        return APIError.transport(error.localizedDescription)
     }
 }
 

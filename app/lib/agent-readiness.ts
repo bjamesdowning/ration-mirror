@@ -471,7 +471,12 @@ export const HOME_MARKDOWN = `# Ration
 
 ${SITE_DESCRIPTION}
 
-Ration lets you manage an entire kitchen through an AI agent. Paste the MCP URL into Claude, Cursor, or any compatible client — OAuth browser sign-in grants scoped access to search Cargo, match meals, plan a Manifest, generate Supply lists, and update inventory.
+Ration is an AI pantry management system that keeps inventory, recipes, meal plans, and shopping lists in one closed loop. Use the built-in Ration Copilot, or paste the MCP URL into Claude, ChatGPT, Cursor, or any compatible client for scoped access to the same live kitchen context.
+
+## Two AI Control Surfaces
+
+- Ration Copilot: the live in-app kitchen assistant for asking, planning, and acting from current household data.
+- MCP: external AI control through OAuth 2.1 or autonomous agent registration, with structured tools for the full kitchen loop.
 
 ## Connect Your Agent
 
@@ -486,6 +491,8 @@ The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/s
 3. Manifest: weekly meal planning with breakfast, lunch, dinner, and snack slots.
 4. Supply: shopping lists generated from missing ingredients.
 5. Dock: purchased items flow back into Cargo.
+
+Ration for iOS is coming soon. The responsive web app and installable PWA are available now.
 
 ## Agent-Ready Surfaces
 

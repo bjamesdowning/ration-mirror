@@ -14,8 +14,8 @@ type PublicHeaderProps = {
 const linkClass =
 	"py-3 px-3 rounded-lg text-muted hover:bg-carbon/5 hover:text-carbon transition-colors";
 const desktopLinkClass = "text-muted hover:text-hyper-green transition-colors";
-const signInClass =
-	"text-hyper-green font-medium hover:text-hyper-green/80 transition-colors";
+const primaryClass =
+	"bg-hyper-green text-[#111111] font-bold hover:opacity-90 transition-opacity rounded-lg px-3 py-2";
 
 export function PublicHeader({
 	breadcrumb,
@@ -84,12 +84,11 @@ export function PublicHeader({
 	}, [open]);
 
 	const headerOuter = isHome
-		? "relative z-50 border-b border-carbon/10 bg-ceramic"
+		? "sticky top-0 z-50 border-b border-carbon/10 bg-ceramic/90 backdrop-blur-xl"
 		: "relative z-50 border-b border-carbon/10 bg-ceramic/90 backdrop-blur sticky top-0";
 
 	// Same max-width and padding as sub-pages (blog, tools) for consistent header layout
-	const innerClass =
-		"max-w-5xl mx-auto px-6 h-16 flex items-center justify-between w-full min-w-0";
+	const innerClass = `${isHome ? "max-w-7xl" : "max-w-5xl"} mx-auto px-6 h-16 flex items-center justify-between w-full min-w-0`;
 
 	return (
 		<header className={headerOuter}>
@@ -123,23 +122,39 @@ export function PublicHeader({
 							Home
 						</Link>
 					)}
-					<Link to="/blog" className={desktopLinkClass}>
-						Blog
-					</Link>
-					<Link to="/tools" className={desktopLinkClass}>
-						Tools
-					</Link>
-					<Link to="/about" className={desktopLinkClass}>
-						About
-					</Link>
+					{isHome ? (
+						<>
+							<Link to="/#how-it-works" className={desktopLinkClass}>
+								How it works
+							</Link>
+							<Link to="/#control" className={desktopLinkClass}>
+								Copilot + MCP
+							</Link>
+							<Link to="/#ios" className={desktopLinkClass}>
+								iOS
+							</Link>
+						</>
+					) : (
+						<>
+							<Link to="/blog" className={desktopLinkClass}>
+								Blog
+							</Link>
+							<Link to="/tools" className={desktopLinkClass}>
+								Tools
+							</Link>
+							<Link to="/about" className={desktopLinkClass}>
+								About
+							</Link>
+						</>
+					)}
 					<Link to="/#pricing" className={desktopLinkClass}>
 						Pricing
 					</Link>
 					<Link
 						to="/#signup"
-						className={`${desktopLinkClass} ${signInClass} border border-hyper-green/40 rounded-lg px-3 py-1.5`}
+						className={isHome ? primaryClass : desktopLinkClass}
 					>
-						Sign In
+						{isHome ? "Start free" : "Sign in"}
 					</Link>
 					{isHome && showLiveVersion && (
 						<span
@@ -193,27 +208,55 @@ export function PublicHeader({
 												Home
 											</Link>
 										)}
-										<Link
-											to="/blog"
-											className={linkClass}
-											onClick={() => setOpen(false)}
-										>
-											Blog
-										</Link>
-										<Link
-											to="/tools"
-											className={linkClass}
-											onClick={() => setOpen(false)}
-										>
-											Tools
-										</Link>
-										<Link
-											to="/about"
-											className={linkClass}
-											onClick={() => setOpen(false)}
-										>
-											About
-										</Link>
+										{isHome ? (
+											<>
+												<Link
+													to="/#how-it-works"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													How it works
+												</Link>
+												<Link
+													to="/#control"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													Copilot + MCP
+												</Link>
+												<Link
+													to="/#ios"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													iOS
+												</Link>
+											</>
+										) : (
+											<>
+												<Link
+													to="/blog"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													Blog
+												</Link>
+												<Link
+													to="/tools"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													Tools
+												</Link>
+												<Link
+													to="/about"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													About
+												</Link>
+											</>
+										)}
 										<Link
 											to="/#pricing"
 											className={linkClass}
@@ -223,10 +266,10 @@ export function PublicHeader({
 										</Link>
 										<Link
 											to="/#signup"
-											className={`${linkClass} ${signInClass} mt-2 border border-hyper-green/40 rounded-lg`}
+											className={`${linkClass} mt-2 bg-hyper-green text-[#111111] font-bold`}
 											onClick={() => setOpen(false)}
 										>
-											Sign In
+											{isHome ? "Start free" : "Sign in"}
 										</Link>
 										{isHome && showLiveVersion && (
 											<div className="flex items-center gap-2 py-3 px-3 mt-2 pt-4 border-t border-carbon/10">

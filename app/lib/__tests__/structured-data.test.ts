@@ -99,6 +99,8 @@ describe("softwareAppSchema", () => {
 		}) as Record<string, unknown>;
 		expect(schema["@type"]).toBe("SoftwareApplication");
 		expect(schema.applicationCategory).toBe("LifestyleApplication");
+		expect(schema.operatingSystem).toBe("Web");
+		expect(schema.description).toContain("Ration Copilot");
 		const offers = schema.offers as Record<string, unknown>;
 		expect(offers["@type"]).toBe("Offer");
 		expect(offers.price).toBe("0");

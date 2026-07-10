@@ -83,10 +83,9 @@ setup("authenticate", async ({ page }) => {
 		name: "Onboarding tour",
 	});
 	if (await onboardingDialog.isVisible().catch(() => false)) {
-		await onboardingDialog
-			.getByRole("button", { name: /Skip tour/i })
-			.first()
-			.click();
+		// Escape matches OnboardingTour keyboard handler; avoids clicking the
+		// fullscreen backdrop "Skip tour" button hidden behind the welcome card.
+		await page.keyboard.press("Escape");
 		await expect(onboardingDialog).toBeHidden({ timeout: 10000 });
 	}
 

@@ -54,6 +54,11 @@ export function buildLlmsComparisonFacts(
 				"Agents can semantically search pantry inventory, match recipes to stock, create and update meals, plan a weekly Manifest, build Supply shopping lists from missing ingredients, import receipts via preview/apply tools, and read expiring items. Vision scan and AI meal generation remain in the human UI and consume credits — agents use their own LLM plus Ration's structured tools instead.",
 		},
 		{
+			question: "What is the difference between Ration Copilot and MCP?",
+			answer:
+				"Ration Copilot is the built-in AI kitchen assistant in the Ration experience. MCP connects external clients such as Claude, ChatGPT, Cursor, and Zed through OAuth 2.1 or agent self-registration. Both work from the same live Cargo, Galley, Manifest, and Supply context; MCP exposes structured tools while Copilot provides the native conversational interface.",
+		},
+		{
 			question: "Why choose Ration for an AI kitchen assistant?",
 			answer: `Ration is built agent-first: machine-readable auth.md discovery, OAuth MCP, ${mcpToolCount} structured tools, agent self-registration without human signup, and edge-hosted inventory with semantic search. Unlike generic note apps, Ration gives agents durable kitchen state, scoped write access, and a documented OpenAPI surface for programmatic import and export.`,
 		},

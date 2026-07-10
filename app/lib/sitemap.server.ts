@@ -10,7 +10,7 @@ export type SitemapEntry = {
  * content changes meaningfully so crawlers know to revisit.
  */
 const STATIC_PAGES: ReadonlyArray<SitemapEntry> = [
-	{ path: "/", lastmod: "2026-06-19" },
+	{ path: "/", lastmod: "2026-07-10" },
 	{ path: "/about", lastmod: "2026-04-25" },
 	{ path: "/connect", lastmod: "2026-06-19" },
 	{ path: "/docs/api", lastmod: "2026-06-19" },

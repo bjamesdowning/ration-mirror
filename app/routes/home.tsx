@@ -3,7 +3,8 @@ import "../../load-context";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
-import { CheckIcon, CodeIcon } from "~/components/icons/PageIcons";
+import { CheckIcon } from "~/components/icons/PageIcons";
+import { SplashExperience } from "~/components/marketing/SplashExperience";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
@@ -42,9 +43,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export function meta(_: Route.MetaArgs) {
-	const title = "Ration — AI-Native Kitchen Management";
+	const title = "Ration — AI Pantry Management, Copilot & MCP";
 	const description =
-		"Manage your entire kitchen through an AI agent. Agents can autonomously provision a kitchen via MCP — no human signup required to start. Ration connects Cargo, Galley, Manifest, Supply, credits, and agent control into one elegant meal-planning system.";
+		"AI pantry management in one closed loop. Track inventory, plan meals and build shopping lists with Ration Copilot or any MCP-compatible assistant.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -54,115 +55,6 @@ export function meta(_: Route.MetaArgs) {
 }
 
 type FeatureValue = boolean | string;
-
-const promptCards = [
-	{
-		prompt: "What can I cook tonight with what's already in Cargo?",
-		tool: "match_meals",
-		result: "6 cookable meals found. Two use ingredients expiring this week.",
-	},
-	{
-		prompt: "Plan dinners through Friday and add anything missing.",
-		tool: "get_meal_plan + sync_supply_from_selected_meals",
-		result: "Manifest drafted. Supply list updated with 11 missing items.",
-	},
-	{
-		prompt: "We cooked lentil soup for four.",
-		tool: "consume_meal",
-		result: "Ingredients deducted from Cargo using semantic matching.",
-	},
-];
-
-const lifecycle = [
-	{
-		title: "Cargo",
-		label: "Know the kitchen",
-		copy: "Inventory, quantities, expiry, tags, and semantic search give your agent a live model of what is in stock.",
-		image: "/static/ration-cargo-light.webp",
-	},
-	{
-		title: "Galley",
-		label: "Understand the options",
-		copy: "Recipes and provisions become structured choices. Match Mode shows what can be cooked now and what is missing.",
-		image: "/static/ration-galley-light.webp",
-	},
-	{
-		title: "Manifest",
-		label: "Plan the week",
-		copy: "Schedule breakfast, lunch, dinner, and snacks by intent. Your agent can read the plan and adjust it around real life.",
-		image: "/static/ration-manifest-dark.webp",
-	},
-	{
-		title: "Supply",
-		label: "Buy only the delta",
-		copy: "Supply lists are generated from planned meals and current Cargo, then docked back into inventory after shopping.",
-		image: "/static/ration-supply-shared-dark.webp",
-	},
-];
-
-const experienceChapters = [
-	{
-		kicker: "01 / Observe",
-		title: "Ration turns your kitchen into context.",
-		copy: "Scan a shelf, import a receipt, or add items manually. Cargo becomes structured, searchable memory for both the app and your AI client.",
-		image: "/static/ration-scan-result-dark.webp",
-	},
-	{
-		kicker: "02 / Ask",
-		title: "Your agent can reason over meals, stock, and preferences.",
-		copy: "Ask what to cook, what expires soon, what to buy, or whether a recipe is possible. MCP-connected agents — including those that self-registered — answer from live inventory and Galley data.",
-		image: "/static/mcp-server-chat.webp",
-	},
-	{
-		kicker: "03 / Act",
-		title: "Planning, shopping, and cooking close the loop.",
-		copy: "The Manifest feeds Supply. Consumed meals deduct ingredients. Docked groceries refill Cargo. The system keeps moving without spreadsheet upkeep.",
-		image: "/static/ration-manifest-dark.webp",
-	},
-];
-
-const capabilities = [
-	{
-		title: "OAuth MCP control",
-		copy: "Agents can self-register and receive a full-write kitchen instantly — or humans paste one URL into Cursor or Claude Desktop for OAuth-scoped access to inventory, meals, plans, and supply lists.",
-		chip: "16+ tools",
-		accent: true,
-	},
-	{
-		title: "Semantic kitchen memory",
-		copy: "Vector matching understands that canned tomatoes, tinned tomatoes, and cherry tomatoes are related without brittle keyword rules.",
-		chip: "768 dimensions",
-	},
-	{
-		title: "AI-assisted intake",
-		copy: "Photo scanning, receipt extraction, recipe import, meal generation, and weekly planning use credits on both tiers.",
-		chip: "Credits",
-	},
-	{
-		title: "Crew households",
-		copy: "Shared groups let families or housemates use the same Cargo, Galley, Manifest, Supply lists, and credit pool.",
-		chip: "Groups",
-	},
-	{
-		title: "Agent-ready discovery",
-		copy: "Ration publishes auth.md, anonymous agent registration, Link headers, API catalog, OAuth server card, MCP protected-resource metadata, and agent skills — so clients can provision and connect without manual setup.",
-		chip: "Well-known",
-		accent: true,
-	},
-	{
-		title: "REST and export paths",
-		copy: "Programmatic endpoints support inventory, Galley, and Supply import/export workflows with scoped API keys.",
-		chip: "API v1",
-	},
-];
-
-const aiFeatures = [
-	"Photo and receipt scanning",
-	"Meal import via URL",
-	"AI meal generation from Cargo",
-	"AI weekly Manifest planning",
-	"Semantic ingredient search",
-];
 
 function SectionHeader({
 	eyebrow,
@@ -213,219 +105,6 @@ function FeatureRow({
 			<td className="px-4 py-2.5 text-center">{renderCell(free)}</td>
 			<td className="px-4 py-2.5 text-center">{renderCell(crew)}</td>
 		</tr>
-	);
-}
-
-function AgentCommandDeck() {
-	return (
-		<div className="relative">
-			<div className="absolute -inset-6 rounded-[2rem] bg-hyper-green/10 blur-3xl" />
-			<div className="relative glass-panel rounded-[2rem] overflow-hidden border border-hyper-green/20 shadow-2xl">
-				<div className="flex items-center justify-between border-b border-carbon/10 px-5 py-3">
-					<div className="flex items-center gap-2">
-						<span className="h-2.5 w-2.5 rounded-full bg-hyper-green shadow-glow-sm" />
-						<span className="text-xs font-bold uppercase tracking-wider text-carbon">
-							Agent Kitchen Session
-						</span>
-					</div>
-					<span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-						MCP / Autonomous Provision
-					</span>
-				</div>
-				<div className="grid lg:grid-cols-5">
-					<div className="lg:col-span-3 bg-carbon text-ceramic p-5 md:p-7 space-y-4">
-						{promptCards.map((card) => (
-							<div key={card.prompt} className="space-y-2">
-								<p className="text-xs text-hyper-green">user</p>
-								<p className="text-sm leading-relaxed">{card.prompt}</p>
-								<div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-									<p className="text-[10px] uppercase tracking-wider text-hyper-green">
-										{card.tool}
-									</p>
-									<p className="mt-1 text-xs text-ceramic/75">{card.result}</p>
-								</div>
-							</div>
-						))}
-					</div>
-					<div className="lg:col-span-2 bg-ceramic p-5 md:p-7 flex flex-col justify-between gap-6">
-						<div className="space-y-3">
-							<p className="text-label text-hyper-green">Direct Control</p>
-							<h3 className="text-display text-2xl text-carbon">
-								Your pantry, inside your AI.
-							</h3>
-							<p className="text-sm text-muted leading-relaxed">
-								Ration gives agents OAuth-authorized read/write tools — or
-								autonomous self-registration that spins up a kitchen with full
-								MCP access before a human claims ownership. No manual API key
-								choreography for standard clients.
-							</p>
-						</div>
-						<div className="flex flex-wrap gap-2">
-							{[
-								"search_ingredients",
-								"match_meals",
-								"consume_meal",
-								"sync_supply",
-							].map((tool) => (
-								<span
-									key={tool}
-									className="rounded-full bg-carbon/5 px-3 py-1 text-[11px] text-carbon"
-								>
-									{tool}
-								</span>
-							))}
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-function LifecycleStory() {
-	return (
-		<section className="w-full space-y-8">
-			<SectionHeader
-				centered
-				eyebrow="Closed Loop"
-				title="One kitchen lifecycle, available to humans and agents."
-				subtitle="The web UI is a control room. MCP is the conversational interface — agents can also provision their own kitchen autonomously. Both move through the same Cargo, Galley, Manifest, Supply, and Dock loop."
-			/>
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-				{lifecycle.map((stage, index) => (
-					<div
-						key={stage.title}
-						className="glass-panel rounded-2xl overflow-hidden"
-					>
-						<div className="aspect-[4/3] bg-platinum/40 overflow-hidden">
-							<img
-								src={stage.image}
-								alt={`${stage.title} screenshot`}
-								className="h-full w-full object-cover object-top"
-								loading="lazy"
-							/>
-						</div>
-						<div className="p-5 space-y-3">
-							<div className="flex items-center justify-between">
-								<p className="text-[10px] font-bold uppercase tracking-wider text-hyper-green">
-									0{index + 1}
-								</p>
-								<p className="text-[10px] uppercase tracking-wider text-muted">
-									{stage.label}
-								</p>
-							</div>
-							<h3 className="text-display text-xl text-carbon">
-								{stage.title}
-							</h3>
-							<p className="text-sm text-muted leading-relaxed">{stage.copy}</p>
-						</div>
-					</div>
-				))}
-			</div>
-		</section>
-	);
-}
-
-function ExperienceChapters() {
-	return (
-		<section className="w-full space-y-10">
-			<SectionHeader
-				eyebrow="Experience"
-				title="From stocked shelves to dinner decisions."
-				subtitle="Ration tells a simpler story than a dashboard tour: observe the kitchen, ask the agent, then let the plan update inventory and shopping."
-			/>
-			<div className="space-y-6">
-				{experienceChapters.map((chapter, index) => (
-					<div
-						key={chapter.title}
-						className={`grid grid-cols-1 lg:grid-cols-2 gap-6 items-center ${
-							index % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""
-						}`}
-					>
-						<div className="glass-panel rounded-2xl p-6 md:p-8 space-y-4">
-							<p className="text-label text-hyper-green">{chapter.kicker}</p>
-							<h3 className="text-display text-2xl md:text-4xl text-carbon leading-tight">
-								{chapter.title}
-							</h3>
-							<p className="text-muted leading-relaxed">{chapter.copy}</p>
-						</div>
-						<div className="glass-panel rounded-2xl overflow-hidden">
-							<img
-								src={chapter.image}
-								alt=""
-								className="w-full aspect-video object-cover object-top"
-								loading="lazy"
-							/>
-						</div>
-					</div>
-				))}
-			</div>
-		</section>
-	);
-}
-
-function CapabilityMatrix() {
-	return (
-		<section className="w-full space-y-8">
-			<SectionHeader
-				centered
-				eyebrow="Platform"
-				title="Built for agents, still elegant for people."
-				subtitle="The core features remain visible, but they are grouped by what a user or agent is trying to accomplish."
-			/>
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-				{capabilities.map((capability) => (
-					<div
-						key={capability.title}
-						className={`glass-panel rounded-2xl p-6 space-y-4 ${
-							capability.accent ? "border-hyper-green/30" : ""
-						}`}
-					>
-						<div className="flex items-start justify-between gap-4">
-							<h3 className="text-display text-xl text-carbon">
-								{capability.title}
-							</h3>
-							<span className="rounded-full bg-hyper-green/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-hyper-green">
-								{capability.chip}
-							</span>
-						</div>
-						<p className="text-sm text-muted leading-relaxed">
-							{capability.copy}
-						</p>
-					</div>
-				))}
-			</div>
-			<div className="glass-panel rounded-2xl p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-				<div className="space-y-4">
-					<div className="w-10 h-10 rounded-xl bg-hyper-green/10 flex items-center justify-center">
-						<CodeIcon className="w-5 h-5 text-hyper-green" />
-					</div>
-					<h3 className="text-display text-2xl text-carbon">
-						Agent-ready by design.
-					</h3>
-					<p className="text-sm text-muted leading-relaxed">
-						Agents can discover Ration through Link headers, read auth.md for
-						anonymous self-registration, inspect OAuth authorization-server
-						metadata, fetch the MCP server card, and load skill instructions.
-					</p>
-				</div>
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-					{[
-						"/.well-known/api-catalog",
-						"/.well-known/mcp/server-card.json",
-						"/.well-known/agent-skills/index.json",
-						"Accept: text/markdown",
-					].map((item) => (
-						<div
-							key={item}
-							className="rounded-xl bg-carbon/5 p-3 font-mono text-carbon/70"
-						>
-							{item}
-						</div>
-					))}
-				</div>
-			</div>
-		</section>
 	);
 }
 
@@ -596,7 +275,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		softwareAppSchema({
 			name: "Ration",
 			description:
-				"AI-native pantry inventory, meal planning, supply lists, and MCP agent control. Agents can autonomously provision a kitchen or connect via OAuth. Manage your kitchen through Claude, ChatGPT, or any MCP-compatible assistant.",
+				"AI pantry management in one closed loop: inventory, recipes, meal plans, and shopping lists controlled by the built-in Ration Copilot or Claude, ChatGPT, Cursor, and other MCP-compatible assistants.",
 			offers: [
 				{
 					name: "Free",
@@ -634,111 +313,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	});
 
 	return (
-		<div className="min-h-screen bg-ceramic text-carbon flex flex-col relative overflow-hidden">
+		<div className="min-h-screen bg-ceramic text-carbon flex flex-col">
 			<JsonLd data={homeSchemas} />
-			<div className="absolute inset-0 pointer-events-none opacity-40">
-				<div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-hyper-green/10 blur-3xl" />
-				<div className="absolute right-[-12rem] top-[36rem] h-[30rem] w-[30rem] rounded-full bg-carbon/5 blur-3xl" />
-			</div>
 
 			<PublicHeader showLiveVersion />
 
-			<main className="relative z-20 flex-1">
-				<div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-24 md:space-y-32">
-					<section className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-12 items-center">
-						<div className="space-y-8">
-							<div className="inline-flex items-center gap-2 rounded-full border border-hyper-green/30 bg-hyper-green/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-hyper-green">
-								<span className="h-1.5 w-1.5 rounded-full bg-hyper-green shadow-glow-sm" />
-								MCP-first · agents self-register
-							</div>
-							<div className="space-y-5">
-								<h1 className="text-display text-5xl md:text-7xl text-carbon leading-[0.95] tracking-tight">
-									Manage your kitchen through your AI agent.
-								</h1>
-								<p className="text-lg md:text-xl text-muted leading-relaxed max-w-2xl">
-									Paste one MCP URL — or let your agent autonomously provision a
-									kitchen with full write access. OAuth sign-in for humans;
-									self-registration for agents. Then operate pantry inventory,
-									recipes, meal plans, shopping lists, and credits with scoped
-									consent.
-								</p>
-							</div>
-							<div className="flex flex-col sm:flex-row gap-3">
-								<a
-									href="#signup"
-									className="inline-flex justify-center rounded-xl bg-hyper-green px-5 py-3 text-sm font-bold text-carbon shadow-glow-sm hover:opacity-90"
-								>
-									Connect your kitchen
-								</a>
-								<a
-									href="#pricing"
-									className="inline-flex justify-center rounded-xl btn-secondary px-5 py-3 text-sm font-bold"
-								>
-									View pricing
-								</a>
-								<Link
-									to="/docs/api"
-									className="inline-flex justify-center rounded-xl border border-carbon/10 px-5 py-3 text-sm font-bold text-muted hover:text-carbon"
-								>
-									Agent docs
-								</Link>
-							</div>
-							<div className="grid grid-cols-3 gap-3 max-w-xl">
-								{[
-									["Agent MCP", "Self-register or OAuth"],
-									["Cargo", "Live pantry context"],
-									["Supply", "Shopping delta"],
-								].map(([label, value]) => (
-									<div key={label} className="glass-panel rounded-xl p-3">
-										<p className="text-label text-hyper-green">{label}</p>
-										<p className="mt-1 text-xs text-muted">{value}</p>
-									</div>
-								))}
-							</div>
-						</div>
-						<AgentCommandDeck />
-					</section>
-
-					<LifecycleStory />
-					<ExperienceChapters />
-					<CapabilityMatrix />
-
-					<section className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-						<div className="glass-panel rounded-2xl p-6 md:p-8 space-y-5">
-							<SectionHeader
-								eyebrow="AI Features"
-								title="Automation where the upkeep used to be."
-								subtitle="Credits power expensive AI operations while the day-to-day lifecycle stays available on both tiers."
-							/>
-							<div className="grid gap-3">
-								{aiFeatures.map((feature) => (
-									<div
-										key={feature}
-										className="flex items-center gap-3 rounded-xl bg-carbon/5 p-3 text-sm text-carbon"
-									>
-										<CheckIcon className="h-4 w-4 text-hyper-green" />
-										{feature}
-									</div>
-								))}
-							</div>
-						</div>
-						<div className="glass-panel rounded-2xl overflow-hidden">
-							<img
-								src="/static/ai-meal-generation.webp"
-								alt="AI meal generation illustration"
-								className="w-full aspect-[4/3] object-cover"
-								loading="lazy"
-							/>
-							<div className="p-6">
-								<p className="text-sm text-muted leading-relaxed">
-									Ask for a week of dinners, a rescue meal for expiring produce,
-									or a supply list for the meals already planned. Ration keeps
-									the agent grounded in your actual kitchen.
-								</p>
-							</div>
-						</div>
-					</section>
-
+			<main className="splash-page flex-1">
+				<SplashExperience />
+				<div className="max-w-7xl mx-auto px-6 py-16 md:py-24 space-y-24 md:space-y-32">
 					{loaderData.recentPosts.length > 0 && (
 						<section aria-label="Latest from the blog" className="space-y-6">
 							<div className="flex items-end justify-between flex-wrap gap-4">

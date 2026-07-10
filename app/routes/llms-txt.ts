@@ -41,15 +41,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 	const body = `# Ration
 
-> AI-native kitchen management. Pantry inventory, recipes, weekly meal plans, supply lists, and an OAuth MCP server — paste one URL into Claude, ChatGPT, or Cursor and authorize in your browser.
+> AI pantry management in one closed loop. Track inventory, match recipes, plan meals, and build shopping lists with the built-in Ration Copilot or an OAuth MCP connection for Claude, ChatGPT, Cursor, and other compatible assistants.
 
-Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. It ships an open MCP server, a public REST API, and a free tier suitable for getting started.
+Ration is built by Mayutic on Cloudflare Workers, D1, R2, and Vectorize. Copilot is the in-app AI kitchen assistant; MCP gives external agents scoped access to the same live household data. It also ships a public REST API and a free tier. A native iOS app is coming soon; the responsive web app and PWA are available now.
 
 ${comparisonFacts}
 
 ## Product
 
-- [Home](${origin}/): Overview, features, pricing, and signup.
+- [Home](${origin}/): Closed-loop AI pantry management, Copilot and MCP control, pricing, iOS status, and signup.
 - [About](${origin}/about): The team, mission, and principles behind Ration.
 - [Tools](${origin}/tools): Free public utilities — unit converter and more.
 - [Unit Converter](${origin}/tools/unit-converter): Convert cups to grams, tablespoons to milliliters, ounces to grams, with ingredient-specific density for 200+ baking ingredients.

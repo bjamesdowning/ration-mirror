@@ -30,7 +30,7 @@ export function buildHomeFaqEntries(opts: {
 		{
 			question: "How does Ration work with AI assistants?",
 			answer:
-				"Add https://mcp.ration.mayutic.com/mcp to any MCP-compatible client (Claude Desktop, Cursor, ChatGPT desktop, Zed) — or let your agent self-register via auth.md for immediate full-write access. OAuth clients open browser sign-in to pick a household and approve scopes. Either path gives inventory, meal matching, weekly planning, supply lists, and ingredient consumption. Revoke access anytime in Hub Settings → Connected Agents.",
+				"Use Ration Copilot inside the app, or add https://mcp.ration.mayutic.com/mcp to Claude, Cursor, ChatGPT, Zed, or another MCP-compatible client. Copilot and MCP operate the same live pantry, recipes, meal plan, and shopping list. MCP access uses browser OAuth with scoped, revocable permissions; autonomous agents can also self-register through auth.md.",
 		},
 		{
 			question: "How do I connect Claude or Cursor?",
@@ -44,7 +44,7 @@ export function buildHomeFaqEntries(opts: {
 		{
 			question: "What is Cargo, Galley, Manifest, and Supply?",
 			answer:
-				"Cargo is your live pantry inventory. Galley is your recipe library. Manifest is your weekly meal plan. Supply is your shopping list. Each surface is queryable by your AI agent through the MCP server.",
+				"Cargo is live pantry inventory. Galley is the recipe library. Manifest is the weekly meal plan. Supply is the shopping list, and Dock moves purchased items back into Cargo. Cooking deducts ingredients, so the full loop stays current for people, Copilot, and MCP-connected assistants.",
 		},
 		{
 			question: "Where is my data stored?",
@@ -55,6 +55,16 @@ export function buildHomeFaqEntries(opts: {
 			question: "Can I export my data?",
 			answer:
 				"Yes. Every Ration account can export full inventory, recipes, supply lists, and meal plans as JSON or CSV from the dashboard or via the v1 REST API.",
+		},
+		{
+			question: "What is Ration Copilot?",
+			answer:
+				"Ration Copilot is the built-in AI kitchen assistant for web and iOS. It answers questions from your live household context and can help inspect pantry stock, find meals, build plans, and keep shopping aligned. It is the in-app option; MCP provides the same structured kitchen context to external AI clients.",
+		},
+		{
+			question: "Is there a Ration iOS app?",
+			answer:
+				"Ration for iOS is coming soon. The native app will bring Cargo, Manifest, Supply, household sync, and Ration Copilot to iPhone. Until launch, Ration is available as a responsive web app and installable PWA.",
 		},
 	];
 }

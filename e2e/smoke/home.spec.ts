@@ -5,19 +5,31 @@ test.describe("home", () => {
 		await page.goto("/");
 		await expect(
 			page.getByRole("heading", {
-				name: /Manage your kitchen through your AI agent/i,
+				name: /Your kitchen, operable by AI/i,
 			}),
 		).toBeVisible({ timeout: 5000 });
 		await expect(
-			page.getByText(/MCP-first.*agents self-register/i).first(),
+			page.getByText(/AI pantry management.*MCP native/i).first(),
 		).toBeVisible();
 		await expect(
-			page.getByRole("link", { name: /View pricing/i }),
+			page.getByRole("link", { name: /Start free/i }).first(),
 		).toBeVisible();
-		await expect(page.getByRole("link", { name: /Agent docs/i })).toBeVisible();
 		await expect(
-			page.getByText("Agent-ready by design.").first(),
+			page.getByRole("link", { name: /Connect an AI agent/i }).first(),
 		).toBeVisible();
+		await expect(
+			page.getByRole("heading", {
+				name: /A pantry that keeps its own context/i,
+			}),
+		).toBeVisible();
+		await expect(page.getByText("Ration Copilot").first()).toBeVisible();
+		await expect(page.getByText("MCP control").first()).toBeVisible();
+		await expect(
+			page.getByRole("heading", {
+				name: /The full loop, wherever dinner happens/i,
+			}),
+		).toBeVisible();
+		await expect(page.getByLabel("iOS app coming soon")).toBeVisible();
 		// Key footer/header links
 		await expect(
 			page.getByRole("link", { name: "Blog" }).first(),

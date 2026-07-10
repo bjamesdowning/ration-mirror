@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feFlood flood-color="#00E088" flood-opacity=".2"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="#F8F9FA"/>
+  <g stroke="#E6E6E6" stroke-width="1" opacity=".48">
+    <path d="M0 105H1200M0 210H1200M0 315H1200M0 420H1200M0 525H1200"/>
+    <path d="M100 0V630M200 0V630M300 0V630M400 0V630M500 0V630M600 0V630M700 0V630M800 0V630M900 0V630M1000 0V630M1100 0V630"/>
+  </g>
+  <g font-family="monospace">
+    <circle cx="72" cy="72" r="8" fill="#00E088" filter="url(#glow)"/>
+    <text x="95" y="80" fill="#111111" font-size="28" font-weight="700" letter-spacing="2">RATION</text>
+    <text x="65" y="235" fill="#111111" font-size="63" font-weight="700" letter-spacing="-3">Your kitchen,</text>
+    <text x="65" y="310" fill="#111111" font-size="63" font-weight="700" letter-spacing="-3">operable by AI.</text>
+    <rect x="65" y="349" width="74" height="5" rx="2.5" fill="#00E088"/>
+    <text x="65" y="405" fill="#6B7280" font-size="20">Copilot / MCP / Closed-loop pantry</text>
+    <g transform="translate(735 105)">
+      <path d="M175 0L340 120 277 314H73L10 120Z" fill="none" stroke="#00E088" stroke-width="3" filter="url(#glow)"/>
+      <g fill="#F8F9FA" stroke="#00E088" stroke-width="2">
+        <circle cx="175" cy="0" r="49"/><circle cx="340" cy="120" r="49"/>
+        <circle cx="277" cy="314" r="49"/><circle cx="73" cy="314" r="49"/>
+        <circle cx="10" cy="120" r="49"/>
+      </g>
+      <g fill="#111111" font-size="16" text-anchor="middle">
+        <text x="175" y="6">Cargo</text><text x="340" y="126">Galley</text>
+        <text x="277" y="320">Manifest</text><text x="73" y="320">Supply</text>
+        <text x="10" y="126">Dock</text>
+      </g>
+      <circle cx="175" cy="157" r="66" fill="#111111"/>
+      <text x="175" y="151" fill="#F8F9FA" font-size="22" font-weight="700" text-anchor="middle">Ration</text>
+      <text x="175" y="178" fill="#00E088" font-size="12" text-anchor="middle">LIVE CONTEXT</text>
+    </g>
+    <text x="65" y="570" fill="#6B7280" font-size="14" letter-spacing="1">AI PANTRY MANAGEMENT / RATION.MAYUTIC.COM</text>
+  </g>
+</svg>

@@ -85,7 +85,7 @@ export function websiteSchema(opts?: { searchUrlTemplate?: string }) {
 		name: "Ration",
 		url: SITE_ORIGIN,
 		description:
-			"AI-native kitchen management: pantry inventory, meal planning, shopping lists, and MCP agent control.",
+			"AI pantry management with live inventory, meal planning, shopping lists, built-in Ration Copilot, and MCP agent control.",
 		publisher: { "@type": "Organization", name: "Ration" },
 	};
 	if (opts?.searchUrlTemplate) {
@@ -166,7 +166,7 @@ export function softwareAppSchema(opts: {
 		url: SITE_ORIGIN,
 		description:
 			opts.description ??
-			"AI-native kitchen management for pantry inventory, meal planning, supply lists, and MCP agent control.",
+			"AI pantry management for inventory, meal planning, shopping lists, Ration Copilot, and MCP agent control.",
 		offers: offersField,
 		publisher: { "@type": "Organization", name: "Ration" },
 	};

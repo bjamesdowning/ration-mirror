@@ -49,7 +49,11 @@ describe("agent readiness metadata", () => {
 	});
 
 	it("provides markdown for key public pages", () => {
-		expect(getPublicMarkdownForPath("/")).toContain("manage an entire kitchen");
+		expect(getPublicMarkdownForPath("/")).toContain(
+			"AI pantry management system",
+		);
+		expect(getPublicMarkdownForPath("/")).toContain("Ration Copilot");
+		expect(getPublicMarkdownForPath("/")).toContain("iOS is coming soon");
 		expect(getPublicMarkdownForPath("/docs/api")).toContain("Ration API");
 		expect(getPublicMarkdownForPath("/legal/privacy")).toBeNull();
 	});

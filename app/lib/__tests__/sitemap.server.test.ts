@@ -55,4 +55,10 @@ describe("getSitemapEntries", () => {
 			expect(entry.lastmod).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		}
 	});
+
+	it("marks the remodeled home page with its current revision date", () => {
+		expect(
+			getSitemapEntries().find((entry) => entry.path === "/")?.lastmod,
+		).toBe("2026-07-10");
+	});
 });

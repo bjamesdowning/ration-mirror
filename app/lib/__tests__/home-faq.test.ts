@@ -15,9 +15,9 @@ const subscriptionProducts = {
 };
 
 describe("buildHomeFaqEntries", () => {
-	it("returns seven FAQ entries with tier-aware pricing answer", () => {
+	it("returns nine FAQ entries with tier-aware pricing answer", () => {
 		const entries = buildHomeFaqEntries({ tierLimits, subscriptionProducts });
-		expect(entries).toHaveLength(7);
+		expect(entries).toHaveLength(9);
 		expect(entries[0]?.question).toBe("What is Ration?");
 		expect(entries[3]?.answer).toContain("50 pantry items");
 		expect(entries[3]?.answer).toContain("$2/mo");
@@ -35,5 +35,17 @@ describe("buildHomeFaqEntries", () => {
 			(entry) => entry.question === "Can I export my data?",
 		)?.answer;
 		expect(exportAnswer).toContain("v1 REST API");
+	});
+
+	it("explains Copilot, MCP, and iOS availability", () => {
+		const entries = buildHomeFaqEntries({ tierLimits, subscriptionProducts });
+		expect(
+			entries.find((entry) => entry.question === "What is Ration Copilot?")
+				?.answer,
+		).toContain("built-in AI kitchen assistant");
+		expect(
+			entries.find((entry) => entry.question === "Is there a Ration iOS app?")
+				?.answer,
+		).toContain("coming soon");
 	});
 });

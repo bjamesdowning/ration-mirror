@@ -47,6 +47,7 @@ import { getCargoTagIndex } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
+import { resolveManifestSupplyWindow } from "~/lib/manifest-dates";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { ListIdSchema } from "~/lib/schemas/supply";
 import {
@@ -105,6 +106,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	// Light loader: ensure list exists and load current state. Heavy sync (createSupplyListFromSelectedMeals)
 	// runs only via action (Update list button or background sync) to avoid Worker resource limits in production.
+	const userSettings = await getUserSettings(
+		context.cloudflare.env.DB,
+		session.user.id,
+	);
+	const manifestWindow = resolveManifestSupplyWindow(userSettings);
+
 	const [
 		list,
 		activeSelections,
@@ -112,15 +119,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableTags,
 		manifestWeekMeals,
 		snoozes,
-		userSettings,
 	] = await Promise.all([
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getCargoTagIndex(context.cloudflare.env.DB, groupId),
 		getOrganizationTags(context.cloudflare.env.DB, groupId),
-		getManifestWeekMealsForSupply(context.cloudflare.env.DB, groupId),
+		getManifestWeekMealsForSupply(
+			context.cloudflare.env.DB,
+			groupId,
+			manifestWindow,
+		),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
-		getUserSettings(context.cloudflare.env.DB, session.user.id),
 	]);
 
 	const mealIds = [
@@ -187,6 +196,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					undefined,
 					telemetryContext,
 					unitDisplayMode,
+					userId,
 				);
 				emitSupplySyncInfo("supply_sync.action.success", telemetryContext, {
 					intent: "update-list",

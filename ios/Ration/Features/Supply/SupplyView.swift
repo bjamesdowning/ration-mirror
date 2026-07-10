@@ -671,7 +671,6 @@ struct SupplyView: View {
                         }
                     }
                 )
-                .id("\(item.id)-\(item.isPurchased)-\(item.quantity)-\(item.unit)")
                 .listRowBackground(Theme.surface)
             }
         }
@@ -685,6 +684,7 @@ struct SupplyView: View {
                 await model.load(api: env.api, snapshots: env.snapshots, online: false, organizationId: organizationId)
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(
             isExpanded: scrollContext.isExpanded,
             hasTabAction: model.totalCount > 0

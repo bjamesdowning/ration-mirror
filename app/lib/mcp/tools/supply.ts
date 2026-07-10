@@ -215,6 +215,7 @@ export function registerSupplyTools(server: McpServer, env: McpToolsEnv): void {
 						undefined,
 						{ trigger: "mcp_sync_supply", organizationId: ctx.organizationId },
 						a.unitMode ?? "metric",
+						ctx.userId,
 					);
 					const list = result.list;
 					if (!list) {

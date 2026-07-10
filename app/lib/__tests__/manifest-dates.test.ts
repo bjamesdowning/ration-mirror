@@ -6,6 +6,7 @@ import {
 	getWeekDates,
 	getWeekEnd,
 	getWeekStart,
+	resolveManifestSupplyWindow,
 	toISODateString,
 } from "~/lib/manifest-dates";
 
@@ -153,5 +154,31 @@ describe("getCalendarDates", () => {
 			expect(dates[0]).toBe("2025-01-06"); // Mon
 			expect(dates[6]).toBe("2025-01-12"); // Sun
 		});
+	});
+});
+
+describe("resolveManifestSupplyWindow", () => {
+	it("uses user manifest settings for weekStart and calendarSpan", () => {
+		const window = resolveManifestSupplyWindow(
+			{ manifestSettings: { weekStart: "monday", calendarSpan: 5 } },
+			"2025-01-08",
+		);
+		expect(window.startDate).toBe("2025-01-08");
+		expect(window.endDate).toBe("2025-01-12");
+	});
+
+	it("defaults to sunday weekStart and 5-day span when settings missing", () => {
+		const window = resolveManifestSupplyWindow(undefined, "2025-01-08");
+		expect(window.startDate).toBe("2025-01-08");
+		expect(window.endDate).toBe("2025-01-12");
+	});
+
+	it("uses full week when calendarSpan is 7 with monday preference", () => {
+		const window = resolveManifestSupplyWindow(
+			{ manifestSettings: { weekStart: "monday", calendarSpan: 7 } },
+			"2025-01-08",
+		);
+		expect(window.startDate).toBe("2025-01-06");
+		expect(window.endDate).toBe("2025-01-12");
 	});
 });

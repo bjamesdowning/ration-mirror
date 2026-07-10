@@ -111,3 +111,34 @@ export function getCalendarDates(
 	}
 	return dates;
 }
+
+export type ManifestSupplyWindowDefaults = {
+	weekStart?: "sunday" | "monday";
+	calendarSpan?: 3 | 5 | 7;
+};
+
+/** Resolves the manifest date range used for supply sync — mirrors Manifest UI window logic. */
+export function resolveManifestSupplyWindow(
+	settings:
+		| {
+				manifestSettings?: {
+					weekStart?: "sunday" | "monday";
+					calendarSpan?: 3 | 5 | 7;
+				};
+		  }
+		| null
+		| undefined,
+	today = getTodayISO(),
+	defaults: ManifestSupplyWindowDefaults = {
+		weekStart: "sunday",
+		calendarSpan: 5,
+	},
+): { startDate: string; endDate: string } {
+	const weekStart =
+		settings?.manifestSettings?.weekStart ?? defaults.weekStart ?? "sunday";
+	const calendarSpan =
+		settings?.manifestSettings?.calendarSpan ?? defaults.calendarSpan ?? 5;
+	const anchor = calendarSpan === 7 ? getWeekStart(today, weekStart) : today;
+	const dates = getCalendarDates(calendarSpan, anchor, weekStart);
+	return { startDate: dates[0], endDate: dates[dates.length - 1] };
+}

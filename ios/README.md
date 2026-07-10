@@ -47,6 +47,60 @@ If Xcode reports `Cannot find 'SomeView' in scope` after adding a Swift file,
 the generated project is stale. Run `bun run ios:generate`, then build again
 with **⌘R** in Xcode.
 
+### Archive & TestFlight signing
+
+Simulator builds (`bun run ios:build`) skip code signing. **Archive** requires
+Apple Developer signing on a physical device or **Any iOS Device (arm64)**.
+
+**One-time setup (do these before Product → Archive):**
+
+1. **Register the App ID** at [developer.apple.com](https://developer.apple.com/account) →
+   Certificates, Identifiers & Profiles → Identifiers → `com.mayutic.ration` with
+   **Sign in with Apple** and **Associated Domains**.
+2. **Register a device (optional for TestFlight, but fixes automatic signing errors)** —
+   Xcode's automatic signing often fails with *"Your team has no devices…"* until at
+   least one device is on the account. **TestFlight itself does not require this** once
+   you have a valid App Store distribution profile, but registering one device unblocks
+   automatic signing.
+
+   **Without a working USB port**, register the UDID wirelessly:
+   - On the iPhone, open Safari → [Apple's register-device flow](https://developer.apple.com/account/resources/devices/list) or a trusted UDID checker (e.g. install a temporary config profile, then remove it after).
+   - Copy the 40-character UDID.
+   - [developer.apple.com](https://developer.apple.com/account) → **Devices** → **+** → enter name + UDID.
+
+   **Alternative (no device registration at all):** use **manual signing** with an App
+   Store distribution profile (step 3b below). Apple confirms distribution profiles do
+   not include a device list.
+3. **Create an Apple Distribution certificate** — Xcode → **Settings → Accounts**
+   → select your Apple ID → **Manage Certificates…** → **+** → **Apple
+   Distribution**. Archive uploads need this; an **Apple Development** cert alone
+   is not enough.
+
+   **3b. Manual App Store profile (recommended if USB is unavailable):**
+   - [developer.apple.com](https://developer.apple.com/account) → **Profiles** → **+**
+   - Type: **App Store Connect** (or **App Store**)
+   - App ID: `com.mayutic.ration` → select your **Apple Distribution** certificate → name it → **Download**
+   - Double-click the `.mobileprovision` file to install it
+   - In Xcode: **Ration** target → **Signing & Capabilities** → **uncheck** Automatically manage signing → under **Release**, set **Provisioning Profile** to the profile you downloaded
+
+4. **Enable automatic signing (skip if using manual signing above)** — select the **Ration** target → **Signing & Capabilities** → check **Automatically manage signing**, team `M2KJH5GDGH`. After `bun run ios:generate`, `project.yml` sets `CODE_SIGN_STYLE: Automatic`.
+5. **Create the App Store Connect app** (if not done) with bundle ID
+   `com.mayutic.ration`.
+
+**Archive steps:**
+
+1. Destination: **Any iOS Device (arm64)** — not a simulator.
+2. **Product → Archive**.
+3. **Distribute App → App Store Connect → Upload**.
+
+**Common errors:**
+
+| Error | Fix |
+| ----- | --- |
+| *Your team has no devices…* | Register device UDID wirelessly (Safari on iPhone → developer portal → Devices), **or** switch to manual App Store distribution profile (see step 3b). |
+| *No profiles for 'com.mayutic.ration'* | Confirm App ID exists; enable automatic signing; retry after Distribution cert exists. |
+| *Communication with Apple failed* | Sign out/in under Settings → Accounts; confirm paid Developer Program membership is active. |
+
 ### Pointing at a local backend
 
 The app defaults to `https://ration.mayutic.com/api/mobile/v1`. To test against a
@@ -177,6 +231,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot stacked dock (v1.5.22):** `CopilotBottomDock` unifies Copilot input and tab action FABs in a single glass overlay above the tab bar. When expanded, the input bar spans full width and the tab FAB sits above it (trailing); scroll down to collapse the bar to a chat chip and the FAB lowers to the bottom-right row. Tab actions register via `.tabDockAction(tag:)` (`TabDockContext`) instead of per-tab `safeAreaInset` FABs — eliminating the blank dead zone from stacked insets. List content scrolls under the dock via `.copilotDockScrollMargins` (`contentMargins` + `CopilotDockLayout`). Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel`.
 
+**Post-buildout stability (iOS 1.1.0 build 3, web v1.5.29):** Single-line Copilot input with rotating example placeholders (no stacked hint row). Keyboard dismisses on scroll, send, dock collapse, and Done toolbar. List scroll margins use a stable expanded dock height so fast scrolling no longer relayouts lists mid-gesture (watchdog crash fix). Supply sync on web and iOS now uses the same manifest calendar window as the Manifest UI (`weekStart` + `calendarSpan`).
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -184,6 +240,9 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
 - Hub edit mode: scan FAB hidden; Supply empty list: replenish FAB hidden.
 - Tab switch resets bar to expanded when allowance allows auto-expand.
+- Copilot field: scroll list to dismiss keyboard; tap Done on keyboard accessory; send clears focus.
+- Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
+- Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
 
 ## Security notes
 

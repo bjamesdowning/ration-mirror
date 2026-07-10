@@ -12,13 +12,14 @@ enum CopilotScrollDirection: Equatable {
 @Observable
 final class CopilotScrollContext {
     private(set) var isExpanded = true
-    private(set) var scrollOffset: CGFloat = 0
     private(set) var scrollDirection: CopilotScrollDirection = .idle
     private(set) var trackingGeneration = 0
 
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
+    private var lastProcessedAt: CFAbsoluteTime = 0
     private let collapseThreshold: CGFloat = 24
+    private let scrollProcessInterval: CFAbsoluteTime = 0.05
 
     func setCanAutoExpand(_ value: Bool) {
         canAutoExpand = value
@@ -33,7 +34,7 @@ final class CopilotScrollContext {
     func resetForTabChange() {
         trackingGeneration += 1
         lastOffset = 0
-        scrollOffset = 0
+        lastProcessedAt = 0
         scrollDirection = .idle
         isExpanded = canAutoExpand
     }
@@ -51,6 +52,7 @@ final class CopilotScrollContext {
     }
 
     func reportScroll(offset: CGFloat) {
+        let now = CFAbsoluteTimeGetCurrent()
         let delta = offset - lastOffset
         let direction: CopilotScrollDirection
         if delta > 1 {
@@ -58,21 +60,26 @@ final class CopilotScrollContext {
         } else if delta < -1 {
             direction = .up
         } else {
-            direction = .idle
+            return
         }
 
-        scrollOffset = offset
-        scrollDirection = direction
         lastOffset = offset
 
-        guard direction != .idle else { return }
+        let isCollapsing = direction == .down && offset > collapseThreshold && isExpanded
+        let isExpanding = direction == .up && !isExpanded && canAutoExpand
+        guard isCollapsing || isExpanding || now - lastProcessedAt >= scrollProcessInterval else {
+            return
+        }
 
-        if direction == .down, offset > collapseThreshold, isExpanded {
+        lastProcessedAt = now
+        scrollDirection = direction
+
+        if isCollapsing {
             collapse()
             return
         }
 
-        if direction == .up, !isExpanded, canAutoExpand {
+        if isExpanding {
             expandManually()
         }
     }
@@ -196,10 +203,11 @@ extension View {
         modifier(CopilotScrollReporter())
     }
 
-    func copilotDockScrollMargins(isExpanded: Bool, hasTabAction: Bool = true) -> some View {
+    /// Uses the expanded dock margin so List layout does not relayout when the dock collapses during scroll.
+    func copilotDockScrollMargins(isExpanded _: Bool = true, hasTabAction: Bool = true) -> some View {
         contentMargins(
             .bottom,
-            CopilotDockLayout.scrollContentMargin(isExpanded: isExpanded, hasTabAction: hasTabAction),
+            CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: hasTabAction),
             for: .scrollContent
         )
     }

@@ -12,6 +12,7 @@ import {
 	supplySnooze,
 	user,
 } from "../db/schema";
+import { getUserSettings } from "./auth.server";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { dockSupplyItems, ingestCargoItems } from "./cargo.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
@@ -25,6 +26,7 @@ import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
+import { resolveManifestSupplyWindow } from "./manifest-dates";
 import { normalizeForCargoDedup } from "./matching.server";
 import {
 	chunkArray,
@@ -2161,6 +2163,7 @@ export async function createSupplyListFromSelectedMeals(
 	_listName?: string,
 	telemetryContext?: SupplySyncTelemetryContext,
 	unitMode: UnitDisplayMode = "metric",
+	userId?: string,
 ): Promise<{
 	list: ReturnType<typeof getSupplyListById> extends Promise<infer T>
 		? T
@@ -2184,10 +2187,14 @@ export async function createSupplyListFromSelectedMeals(
 
 		const mealsQueryStartedAtMs = Date.now();
 
-		// Step 1a: Get Manifest current-week occurrences (one row per plan entry)
+		const userSettings = userId ? await getUserSettings(env.DB, userId) : null;
+		const manifestWindow = resolveManifestSupplyWindow(userSettings);
+
+		// Step 1a: Get Manifest occurrences in the user's visible calendar window
 		const manifestOccurrences = await getManifestWeekMealsForSupply(
 			env.DB,
 			organizationId,
+			manifestWindow,
 		);
 
 		// Step 1b: Get Galley selections

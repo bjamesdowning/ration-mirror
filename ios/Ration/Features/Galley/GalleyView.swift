@@ -270,6 +270,7 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
+        .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }
@@ -328,6 +329,7 @@ struct GalleyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
+        .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }

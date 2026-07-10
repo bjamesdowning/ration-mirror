@@ -760,7 +760,7 @@ export interface ManifestMealForSupply {
 export async function getManifestWeekMealsForSupply(
 	db: D1Database,
 	organizationId: string,
-	weekStart: "sunday" | "monday" = "sunday",
+	window?: { startDate: string; endDate: string },
 ): Promise<ManifestMealForSupply[]> {
 	const d1 = drizzle(db);
 
@@ -778,8 +778,8 @@ export async function getManifestWeekMealsForSupply(
 	if (!plan) return [];
 
 	const today = getTodayISO();
-	const startDate = getWeekStart(today, weekStart);
-	const endDate = getWeekEnd(startDate);
+	const startDate = window?.startDate ?? getWeekStart(today, "sunday");
+	const endDate = window?.endDate ?? getWeekEnd(startDate);
 
 	const excludedDates = await getExcludedManifestDates(
 		db,

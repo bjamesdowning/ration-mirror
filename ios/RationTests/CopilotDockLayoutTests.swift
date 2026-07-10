@@ -2,6 +2,10 @@ import XCTest
 @testable import Ration
 
 final class CopilotDockLayoutTests: XCTestCase {
+    func testExpandedInputBarHeightMatchesSingleRowLayout() {
+        XCTAssertEqual(CopilotDockLayout.expandedInputBarHeight, 64)
+    }
+
     func testExpandedDockHeightIncludesFabAndInput() {
         let height = CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true)
 

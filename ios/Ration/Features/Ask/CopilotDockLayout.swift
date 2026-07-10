@@ -7,7 +7,7 @@ enum CopilotDockLayout {
     static let dockHorizontalPadding: CGFloat = 16
     static let dockBottomPadding: CGFloat = 8
     static let dockRowSpacing: CGFloat = 8
-    static let expandedInputBarHeight: CGFloat = 52
+    static let expandedInputBarHeight: CGFloat = 64
     static let collapsedChatChipSize: CGFloat = 48
     static let tabBarClearance: CGFloat = 56
 

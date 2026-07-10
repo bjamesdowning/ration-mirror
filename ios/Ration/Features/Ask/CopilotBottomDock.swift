@@ -10,9 +10,10 @@ struct CopilotBottomDock: View {
     let onSend: (String) -> Void
 
     @State private var draft = ""
-    @State private var placeholderIndex = 0
+    @State private var hintIndex = 0
+    @FocusState private var isInputFocused: Bool
 
-    private let placeholders = [
+    private let hintExamples = [
         "Add butter to my cargo",
         "Ask Ration what's for dinner",
         "What's expiring this week?",
@@ -33,11 +34,16 @@ struct CopilotBottomDock: View {
         .fixedSize(horizontal: false, vertical: true)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: scrollContext.isExpanded)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: tabDock.revision)
-        .task(id: placeholderIndex) {
-            guard !UIAccessibility.isReduceMotionEnabled else { return }
+        .onChange(of: scrollContext.isExpanded) { _, expanded in
+            if !expanded {
+                isInputFocused = false
+            }
+        }
+        .task(id: hintIndex) {
+            guard scrollContext.isExpanded, !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !Task.isCancelled else { return }
-            placeholderIndex = (placeholderIndex + 1) % placeholders.count
+            hintIndex = (hintIndex + 1) % hintExamples.count
         }
     }
 
@@ -62,31 +68,38 @@ struct CopilotBottomDock: View {
     }
 
     private var expandedBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Button(action: onOpenSheet) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.hyperGreen)
-                    .padding(.bottom, 14)
             }
             .accessibilityLabel("Open full Copilot chat")
 
-            TextField(placeholders[placeholderIndex], text: $draft, axis: .vertical)
-                .lineLimit(1...3)
-                .textFieldStyle(.plain)
-                .font(Typography.body())
-                .foregroundStyle(Theme.carbon)
-                .submitLabel(.send)
-                .onSubmit { submitDraft() }
+            // Single-line field avoids TextViewAdaptor layout recursion on iOS 26+.
+            TextField(
+                "",
+                text: $draft,
+                prompt: Text(hintExamples[hintIndex]).foregroundStyle(Theme.muted)
+            )
+            .lineLimit(1)
+            .textFieldStyle(.plain)
+            .font(Typography.body())
+            .foregroundStyle(Theme.carbon)
+            .frame(height: 44)
+            .submitLabel(.send)
+            .focused($isInputFocused)
+            .accessibilityLabel("Ask Ration")
+            .onSubmit { submitDraft() }
 
-            if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button(action: submitDraft) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Theme.hyperGreen)
-                }
-                .accessibilityLabel("Send to Copilot")
+            Button(action: submitDraft) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(Theme.hyperGreen)
             }
+            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1)
+            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityLabel("Send to Copilot")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
@@ -94,6 +107,14 @@ struct CopilotBottomDock: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    isInputFocused = false
+                }
+            }
+        }
     }
 
     private var collapsedButton: some View {
@@ -129,6 +150,7 @@ struct CopilotBottomDock: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
+        isInputFocused = false
         onSend(text)
     }
 }

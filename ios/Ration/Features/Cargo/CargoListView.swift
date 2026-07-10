@@ -203,6 +203,7 @@ struct CargoListView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable { await reload() }
+        .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
         .copilotScrollTracked()
     }

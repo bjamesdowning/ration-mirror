@@ -58,6 +58,7 @@ struct AskView: View {
                         }
                         .padding(16)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: model.messages.count) { _, _ in
                         if let last = model.messages.last {
                             withAnimation(.easeOut(duration: 0.2)) {
@@ -147,6 +148,7 @@ struct AskView: View {
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .padding(12)
+                .frame(minHeight: 44, maxHeight: 120, alignment: .topLeading)
                 .background(Theme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 

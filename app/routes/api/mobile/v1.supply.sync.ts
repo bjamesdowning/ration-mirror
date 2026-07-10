@@ -43,6 +43,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				organizationId,
 			},
 			unitDisplayMode,
+			userId,
 		);
 
 		return { list: result.list, summary: result.summary };

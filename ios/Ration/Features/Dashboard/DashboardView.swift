@@ -190,6 +190,7 @@ struct DashboardView: View {
                 hasTabAction: !model.isEditMode
             )
         }
+        .scrollDismissesKeyboard(.interactively)
         .copilotScrollTracked()
     }
 

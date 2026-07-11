@@ -27,6 +27,7 @@ final class AppEnvironment {
     let copilotScroll: CopilotScrollContext
     let tabDock: TabDockContext
     let launch: LaunchCoordinator
+    let onboarding: OnboardingCoordinator
     let deepLinkRouter: DeepLinkRouter
     private(set) var cargoDataRevision = 0
 
@@ -51,16 +52,19 @@ final class AppEnvironment {
         self.tabDock = TabDockContext()
         let launch = LaunchCoordinator()
         self.launch = launch
+        let onboarding = OnboardingCoordinator()
+        self.onboarding = onboarding
         self.deepLinkRouter = DeepLinkRouter()
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
-        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, deepLinkRouter] in
+        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter] in
             await snapshots.clearAll()
             await billing.logOut()
             session.clear()
             theme.clear()
             unitDisplayMode.clear()
             launch.reset()
+            onboarding.reset()
             deepLinkRouter.reset()
             AuthImageLoader.shared.clearAll()
         }

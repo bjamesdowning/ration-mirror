@@ -1,6 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { expect, type Page, test as setup } from "@playwright/test";
+import {
+	dismissOnboardingTourIfVisible,
+	waitForHubStyles,
+} from "./helpers/hub";
 
 const authFile = "e2e/.auth/user.json";
 
@@ -68,7 +72,8 @@ setup("authenticate", async ({ page }) => {
 		await ensureActiveGroup(page);
 	}
 
-	await page.goto("/hub");
+	await page.goto("/hub", { waitUntil: "networkidle" });
+	await waitForHubStyles(page);
 	const selectGroupSwitcher = page.getByRole("button", {
 		name: /Select Group/i,
 	});
@@ -79,15 +84,21 @@ setup("authenticate", async ({ page }) => {
 
 	// Persist a clean auth state with onboarding dismissed to prevent overlays
 	// from intercepting interactions in journey tests.
+	await dismissOnboardingTourIfVisible(page);
+	if (
+		await page
+			.getByRole("dialog", { name: "Onboarding tour" })
+			.isVisible()
+			.catch(() => false)
+	) {
+		await page.reload({ waitUntil: "networkidle" });
+		await waitForHubStyles(page);
+		await dismissOnboardingTourIfVisible(page);
+	}
 	const onboardingDialog = page.getByRole("dialog", {
 		name: "Onboarding tour",
 	});
-	if (await onboardingDialog.isVisible().catch(() => false)) {
-		// Escape matches OnboardingTour keyboard handler; avoids clicking the
-		// fullscreen backdrop "Skip tour" button hidden behind the welcome card.
-		await page.keyboard.press("Escape");
-		await expect(onboardingDialog).toBeHidden({ timeout: 10000 });
-	}
+	await expect(onboardingDialog).toBeHidden({ timeout: 10_000 });
 
 	await page.context().storageState({ path: authFile });
 });

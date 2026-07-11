@@ -89,6 +89,8 @@ export const MobileSettingsPatchSchema = z
 					.optional(),
 			})
 			.optional(),
+		/** Clears onboarding completion and resets step to 0 (Restart Tutorial). */
+		restartOnboarding: z.literal(true).optional(),
 	})
 	.refine((v) => Object.keys(v).length > 0, {
 		message: "At least one setting is required",

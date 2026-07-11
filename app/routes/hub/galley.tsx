@@ -495,6 +495,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 							</div>
 						}
 						quickAddPlaceholder="Add"
+						quickAddTestId="panel-quick-add-toggle"
 						showQuickAdd={addStep !== null}
 						onToggleQuickAdd={() => {
 							if (addStep !== null) {

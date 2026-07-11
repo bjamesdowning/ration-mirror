@@ -722,6 +722,7 @@ struct SettingsPatch: Encodable, Sendable {
     var aiConsentAt: String?
     var onboardingCompletedAt: String?
     var onboardingStep: Int?
+    var restartOnboarding: Bool?
     var expirationAlertDays: Int?
     var hubProfile: HubProfile?
     var hubLayout: HubLayoutPayload?

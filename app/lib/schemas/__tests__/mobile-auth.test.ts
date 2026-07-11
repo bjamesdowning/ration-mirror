@@ -94,4 +94,11 @@ describe("MobileSettingsPatchSchema", () => {
 		expect(parsed.manifestSettings?.weekStart).toBe("monday");
 		expect(parsed.manifestSettings?.calendarSpan).toBe(7);
 	});
+
+	it("accepts restartOnboarding flag", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			restartOnboarding: true,
+		});
+		expect(parsed.restartOnboarding).toBe(true);
+	});
 });

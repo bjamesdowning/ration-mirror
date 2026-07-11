@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * E2E runs against local dev server on port 5173.
  * - Default: Playwright starts `bun run dev:local` (local D1/KV/R2, fast startup).
- * - With existing server: `bun run dev` in one terminal, then `bun run test:e2e` — Playwright reuses it.
+ * - With existing server: `PLAYWRIGHT_REUSE_SERVER=1 bun run test:e2e` — Playwright reuses it.
  * - With custom URL: `PLAYWRIGHT_BASE_URL=http://localhost:5173 bun run test:e2e` — Playwright reuses it.
  * - With deployed URL: `PLAYWRIGHT_BASE_URL=https://... bun run test:e2e` — set webServer to undefined.
  */
@@ -60,7 +60,10 @@ export default defineConfig({
 		: {
 				command: "bun run dev:local",
 				url: baseURL,
-				reuseExistingServer: process.env.CI !== "true",
+				// Default to a fresh dev:local server so E2E never reuses a stale/wrong process on 5173.
+				reuseExistingServer:
+					!process.env.CI && process.env.PLAYWRIGHT_REUSE_SERVER === "1",
 				timeout: 120000,
+				stdout: "Local:",
 			},
 });

@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test } from "../fixtures/auth";
+import { gotoHubPage } from "../helpers/hub";
 
 // Supply mobile UI (shopping bar, stacked rows) is md:hidden — use phone viewport.
 test.use({ viewport: { width: 390, height: 844 } });
@@ -53,7 +54,7 @@ test.describe("supply", () => {
 	test.describe.configure({ mode: "serial" });
 
 	test.beforeEach(async ({ authenticatedPage: page }) => {
-		await page.goto("/hub/supply");
+		await gotoHubPage(page, "/hub/supply");
 		await expect(page.getByRole("heading", { name: "Supply" })).toBeVisible({
 			timeout: 15000,
 		});

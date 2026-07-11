@@ -1,4 +1,6 @@
 import { Link } from "react-router";
+import { getOnboardingTierCopy } from "~/lib/onboarding-tier-copy";
+import { CREW_MEMBER_PRODUCT, WELCOME_VOUCHER } from "~/lib/tiers";
 import { fireConfetti } from "../confetti";
 
 interface Step6Props {
@@ -7,27 +9,8 @@ interface Step6Props {
 	onBack: () => void;
 }
 
-const tiers = [
-	{
-		name: "Free",
-		features: [
-			"35 cargo",
-			"15 meals",
-			"1 Supply list",
-			"+ AI Features (credits)",
-		],
-	},
-	{
-		name: "Crew Member",
-		features: [
-			"Unlimited Cargo",
-			"Unlimited Meals",
-			"Unlimited lists",
-			"65 credits for AI scans (Annual)",
-		],
-		highlight: true,
-	},
-];
+const tiers = getOnboardingTierCopy();
+const welcomeCredits = CREW_MEMBER_PRODUCT.creditsOnSignup;
 
 /**
  * Step 6 — Full-screen launch card.
@@ -86,7 +69,7 @@ export function Step6_Launch({ onComplete, onSkip, onBack }: Step6Props) {
 				<div className="bg-hyper-green/10 border border-hyper-green/30 rounded-xl px-4 py-3 mb-5 flex items-center justify-between gap-3">
 					<div>
 						<p className="text-xs font-semibold text-carbon dark:text-white mb-0.5">
-							Free Supply Run — 65 credits
+							Free Supply Run — {welcomeCredits} credits
 						</p>
 						<p className="text-[11px] text-muted">
 							Use with Supply Run only at checkout to claim your first pack
@@ -94,7 +77,7 @@ export function Step6_Launch({ onComplete, onSkip, onBack }: Step6Props) {
 						</p>
 					</div>
 					<span className="shrink-0 font-bold text-hyper-green text-sm tracking-widest font-mono">
-						WELCOME65
+						{WELCOME_VOUCHER.promoCode}
 					</span>
 				</div>
 
@@ -135,9 +118,9 @@ export function Step6_Launch({ onComplete, onSkip, onBack }: Step6Props) {
 
 				{/* Tech insight */}
 				<p className="text-[11px] text-muted italic border-l-2 border-hyper-green/40 pl-2.5 mb-6">
-					Your first Supply Run (65 credits) is on us — use code{" "}
+					Your first Supply Run ({welcomeCredits} credits) is on us — use code{" "}
 					<span className="text-hyper-green font-mono font-bold">
-						WELCOME65
+						{WELCOME_VOUCHER.promoCode}
 					</span>{" "}
 					with Supply Run only at checkout.
 				</p>

@@ -18,6 +18,10 @@ final class LaunchCoordinator {
     private(set) var startupGeneration = 0
     private var loadedForGeneration: Int?
 
+    func updateUserSettings(_ settings: UserSettings) {
+        userSettings = settings
+    }
+
     var isStartupComplete: Bool {
         phase == .ready
     }
@@ -25,6 +29,10 @@ final class LaunchCoordinator {
     var needsOnboarding: Bool {
         guard phase == .ready, let userSettings else { return false }
         return userSettings.onboardingCompletedAt?.isEmpty != false
+    }
+
+    var initialOnboardingStep: Int {
+        OnboardingCoordinator.clampedStep(userSettings?.onboardingStep ?? 0)
     }
 
     func reset() {

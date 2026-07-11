@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
+import { gotoHubPage } from "../helpers/hub";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCAN_FIXTURE = path.join(__dirname, "../fixtures/sample-scan.png");
@@ -55,7 +56,7 @@ test.describe("scan", () => {
 			});
 		});
 
-		await page.goto("/hub/cargo");
+		await gotoHubPage(page, "/hub/cargo");
 
 		// Open scan: FAB or toolbar "Scan" button
 		await page.getByRole("button", { name: /Scan/ }).first().click();

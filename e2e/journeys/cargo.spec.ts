@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
+import { gotoHubPage, openPanelQuickAdd } from "../helpers/hub";
 
 const E2E_CARGO_NAME = "e2e-cargo-test";
 
@@ -7,10 +8,9 @@ test.describe("cargo", () => {
 	test("add and delete cargo item with cleanup", async ({
 		authenticatedPage: page,
 	}) => {
-		await page.goto("/hub/cargo");
+		await gotoHubPage(page, "/hub/cargo");
 
-		// Open Add form (hidden by default; toggle to show)
-		await page.getByRole("button", { name: "Add Item" }).first().click();
+		await openPanelQuickAdd(page);
 
 		// Add item
 		await page.getByLabel("Item Name").fill(E2E_CARGO_NAME);

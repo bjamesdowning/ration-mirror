@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.1.12**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.1.14**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -278,6 +278,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 **Copilot immersive chat (iOS 1.1.7 build 8):** Dock and full-screen chat now share a floating composer that starts as one line, grows to five lines, submits from Return or the send arrow, and dismisses interactively with a downward swipe. The full chat uses a compact single-row header, full-width assistant responses, right-aligned user bubbles, stable distance-based auto-follow, and a morphing dock-to-chip transition. Multi-turn streaming now appends each response after its prompt; session-limit recovery and late-frame filtering match web behavior.
 
 **Copilot reliability pass (iOS 1.1.12 build 8):** Restores Copilot send/stream lifecycle parity with web — non-response agent frames are ignored, event observation is ready before connect, and the composer clears after Return while the keyboard stays open. Sticky activity shows during connect/thinking until assistant tokens arrive. Scroll tracking refreshes when tabs activate so dock collapse works on Cargo/Galley/Manifest/Supply. Composer height remeasures after UIKit layout instead of at width ≈ 1pt.
+
+**Onboarding tour (iOS 1.1.14 build 10):** Seven-step first-run tour aligned with web: welcome glossary + unit picker, contextual bottom-sheet guides for Groups/Cargo/Galley/Manifest/Supply, launch screen for credits/WELCOME65/tiers/Copilot. Progress persists cross-platform; Settings → Tutorial restarts via `restartOnboarding` PATCH.
 
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).

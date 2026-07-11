@@ -15,7 +15,8 @@ interface PanelToolbarProps {
 	onToggleQuickAdd?: () => void;
 	/** Quick-add input placeholder text */
 	quickAddPlaceholder?: string;
-	/** Quick-add form content (rendered when showQuickAdd is true) */
+	/** Optional test id for the quick-add toggle (E2E). */
+	quickAddTestId?: string;
 	quickAddForm?: ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function PanelToolbar({
 	showQuickAdd,
 	onToggleQuickAdd,
 	quickAddPlaceholder = "Quick add...",
+	quickAddTestId,
 	quickAddForm,
 }: PanelToolbarProps) {
 	return (
@@ -41,6 +43,7 @@ export function PanelToolbar({
 				{onToggleQuickAdd && (
 					<button
 						type="button"
+						data-testid={quickAddTestId}
 						onClick={onToggleQuickAdd}
 						className={`
 							flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all

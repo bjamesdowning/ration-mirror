@@ -3,7 +3,6 @@ import SwiftUI
 /// Auth gate — routes between launch splash, sign-in, onboarding, and the main tab shell.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
-    @State private var showOnboarding = false
 
     var body: some View {
         switch env.auth.phase {
@@ -38,11 +37,14 @@ struct RootView: View {
                     unitDisplayMode: env.unitDisplayMode
                 )
                 guard !Task.isCancelled, env.launch.isStartupComplete else { return }
-                showOnboarding = env.launch.needsOnboarding
-            }
-            .fullScreenCover(isPresented: $showOnboarding) {
-                OnboardingView {
-                    showOnboarding = false
+                if env.launch.needsOnboarding {
+                    env.onboarding.startIfNeeded(
+                        completedAt: env.launch.userSettings?.onboardingCompletedAt,
+                        initialStep: env.launch.initialOnboardingStep,
+                        settings: env.launch.userSettings
+                    )
+                } else {
+                    env.onboarding.reset()
                 }
             }
         }
@@ -55,6 +57,7 @@ struct MainTabView: View {
     @State private var showingSettings = false
     @State private var showingGroupSettings = false
     @State private var showingScan = false
+    @State private var showingOnboardingPaywall = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var activatedTabs: Set<Int> = [0]
@@ -66,7 +69,11 @@ struct MainTabView: View {
     }
 
     private var showCopilotBar: Bool {
-        !showingSettings && !showingGroupSettings && !showingScan && !env.ask.isSheetPresented
+        !env.onboarding.isActive
+            && !showingSettings
+            && !showingGroupSettings
+            && !showingScan
+            && !env.ask.isSheetPresented
     }
 
     var body: some View {
@@ -147,6 +154,20 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showingScan) {
             ScanView()
+        }
+        .overlay {
+            if env.onboarding.isActive {
+                OnboardingContainerView(
+                    coordinator: env.onboarding,
+                    selectedTab: $selectedTab,
+                    showingGroupSettings: $showingGroupSettings,
+                    showingPaywall: $showingOnboardingPaywall,
+                    onFinished: {}
+                )
+            }
+        }
+        .sheet(isPresented: $showingOnboardingPaywall) {
+            PaywallView()
         }
         .sheet(isPresented: Binding(
             get: { env.ask.isSheetPresented },

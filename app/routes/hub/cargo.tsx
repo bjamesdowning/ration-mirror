@@ -660,6 +660,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 							</div>
 						}
 						quickAddPlaceholder="Add Item"
+						quickAddTestId="panel-quick-add-toggle"
 						showQuickAdd={showQuickAdd}
 						onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
 						quickAddForm={

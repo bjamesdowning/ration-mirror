@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
 import { cleanupE2eMeals, deleteMealById } from "../helpers/cleanup";
+import { gotoHubPage, openPanelQuickAdd } from "../helpers/hub";
 
 const E2E_MANIFEST_MEAL = `e2e-manifest-meal-${Date.now()}`;
 
@@ -8,7 +9,7 @@ test.describe("manifest", () => {
 	test("manifest page loads and shows week view", async ({
 		authenticatedPage: page,
 	}) => {
-		await page.goto("/hub/manifest");
+		await gotoHubPage(page, "/hub/manifest");
 
 		// Week navigator or calendar should be visible
 		await expect(
@@ -20,8 +21,8 @@ test.describe("manifest", () => {
 		await cleanupE2eMeals(page);
 
 		// 1. Create a meal in Galley
-		await page.goto("/hub/galley");
-		await page.getByRole("button", { name: "Add" }).first().click();
+		await gotoHubPage(page, "/hub/galley");
+		await openPanelQuickAdd(page);
 		await page.getByRole("button", { name: "Recipe" }).click();
 		await page.getByLabel("Meal Name").fill(E2E_MANIFEST_MEAL);
 		await page.getByRole("button", { name: "Create Meal" }).click();
@@ -29,7 +30,7 @@ test.describe("manifest", () => {
 		const mealId = page.url().split("/").pop() ?? "";
 
 		// 2. Go to Manifest and add meal to a slot
-		await page.goto("/hub/manifest");
+		await gotoHubPage(page, "/hub/manifest");
 		await page
 			.getByRole("button", {
 				name: /^Plus( (Breakfast|Lunch|Dinner|Snack))?$/,

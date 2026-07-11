@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
 import { test } from "../fixtures/auth";
+import { gotoHubPage } from "../helpers/hub";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_FIXTURE = path.join(__dirname, "../fixtures/avatar.png");
@@ -62,7 +63,7 @@ test.describe("settings", () => {
 			!hasActiveGroup,
 			"No active group available for settings avatar flow in this environment.",
 		);
-		await page.goto("/hub/settings");
+		await gotoHubPage(page, "/hub/settings");
 
 		// Ensure Account section is active before asserting profile controls.
 		await page.getByRole("button", { name: "Account" }).click();

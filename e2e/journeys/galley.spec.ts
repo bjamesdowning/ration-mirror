@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
 import { cleanupE2eMeals } from "../helpers/cleanup";
+import { gotoHubPage, openPanelQuickAdd } from "../helpers/hub";
 
 test.describe("galley", () => {
 	test.beforeEach(async ({ authenticatedPage: page }) => {
@@ -11,10 +12,9 @@ test.describe("galley", () => {
 		authenticatedPage: page,
 	}) => {
 		const mealName = `e2e-galley-meal-${Date.now()}`;
-		await page.goto("/hub/galley");
+		await gotoHubPage(page, "/hub/galley");
 
-		// Open Add flow: click Add, then Recipe
-		await page.getByRole("button", { name: "Add" }).first().click();
+		await openPanelQuickAdd(page);
 		await page.getByRole("button", { name: "Recipe" }).click();
 
 		// Fill meal name and create
@@ -42,10 +42,9 @@ test.describe("galley", () => {
 	test("edit meal name", async ({ authenticatedPage: page }) => {
 		const mealName = `e2e-galley-edit-${Date.now()}`;
 		const editedName = `${mealName}-edited`;
-		await page.goto("/hub/galley");
+		await gotoHubPage(page, "/hub/galley");
 
-		// Create meal
-		await page.getByRole("button", { name: "Add" }).first().click();
+		await openPanelQuickAdd(page);
 		await page.getByRole("button", { name: "Recipe" }).click();
 		await page.getByLabel("Meal Name").fill(mealName);
 		await page.getByRole("button", { name: "Create Meal" }).click();

@@ -130,6 +130,7 @@ struct SettingsView: View {
             }
 
             SettingsHelpSection()
+            SettingsTutorialSection()
 
             Section {
                 Button("Sign out", role: .destructive) {

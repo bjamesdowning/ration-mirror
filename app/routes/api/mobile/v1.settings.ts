@@ -1,5 +1,9 @@
 import { data } from "react-router";
-import { getUserSettings, patchUserSettings } from "~/lib/auth.server";
+import {
+	getUserSettings,
+	patchUserSettings,
+	writeUserSettings,
+} from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -41,6 +45,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const body = await request.json();
 		const patch = MobileSettingsPatchSchema.parse(body);
+
+		if (patch.restartOnboarding) {
+			const db = context.cloudflare.env.DB;
+			const current = await getUserSettings(db, userId);
+			await writeUserSettings(db, userId, {
+				...current,
+				onboardingCompletedAt: undefined,
+				onboardingStep: 0,
+			});
+			const settings = await getUserSettings(db, userId);
+			return { settings };
+		}
 
 		const settingsPatch = {
 			...normalizeMobileSettingsPatch(patch),

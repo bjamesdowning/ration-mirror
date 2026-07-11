@@ -723,7 +723,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 
 **FAB padding:** Cargo, Galley, Supply, and Manifest routes use `pb-36 md:pb-0` on the main content area to reserve space for the floating action bar on mobile.
 
-**Onboarding:** New users trigger a 6-step guided tour (`OnboardingTour`) that spotlights each major feature area in sequence. Progress is persisted to `user.settings.onboarding`. The tour respects keyboard navigation (Esc = skip, arrow keys = next/back) and fires a confetti animation on completion.
+**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) that introduces nomenclature, groups, and each hub module in sequence. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. The tour respects keyboard navigation (Esc = skip, arrow keys = next/back) and fires a confetti animation on completion. Settings includes **Restart Tutorial**. The native iOS app runs the same 7-step content with a hybrid flow: full-screen welcome/launch bookends plus tab-switching bottom-sheet cards (`ios/Ration/Features/Onboarding/`); restart via Settings → Tutorial.
 
 ---
 

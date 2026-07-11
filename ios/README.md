@@ -113,7 +113,9 @@ Pushes to `main` on GitLab trigger **Xcode Cloud** (Apple CI), not `.gitlab-ci.y
 The GitLab repo is connected under **App Store Connect → Ration by Mayutic → Xcode Cloud → Settings → Repositories** (`mayutic/ration/application`).
 
 `Ration.xcodeproj` is **not** committed — it is generated from `project.yml` via XcodeGen.
-Xcode Cloud runs [`ci_scripts/ci_post_clone.sh`](ci_scripts/ci_post_clone.sh) after clone to install XcodeGen and generate the project before archive.
+Xcode Cloud runs [`ci_scripts/ci_post_clone.sh`](ci_scripts/ci_post_clone.sh) after clone to install XcodeGen, generate the project, and copy the pinned [`swiftpm/Package.resolved`](swiftpm/Package.resolved) into the generated workspace (Xcode Cloud does not auto-resolve SPM).
+
+When SPM dependencies in `project.yml` change, resolve locally (`xcodebuild -resolvePackageDependencies -project ios/Ration.xcodeproj -scheme Ration`) and commit the updated `ios/swiftpm/Package.resolved`.
 
 **Workflow (configure in App Store Connect → Xcode Cloud → Manage Workflows):**
 

@@ -44,6 +44,11 @@ require_full_xcode() {
 generate_ios_project() {
 	require_command xcodegen
 	(cd ios && xcodegen generate)
+	if [ -f ios/swiftpm/Package.resolved ]; then
+		mkdir -p ios/Ration.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+		cp ios/swiftpm/Package.resolved \
+			ios/Ration.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+	fi
 }
 
 # XCTest cannot run on the abstract "generic/platform=iOS Simulator" destination

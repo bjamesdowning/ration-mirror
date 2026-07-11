@@ -44,7 +44,7 @@ enum CopilotWebSocketDecoder {
             return messageEnd(frameId: frame.id)
         }
 
-        if frame.error == true {
+        if frame.error?.isError == true {
             return CopilotStreamEvent(
                 type: "error",
                 message: nil,
@@ -54,7 +54,10 @@ enum CopilotWebSocketDecoder {
                 status: nil,
                 toolCallId: nil,
                 ok: nil,
-                error: CopilotToolError(code: "agent_error", message: frame.body ?? "Copilot hit an error."),
+                error: CopilotToolError(
+                    code: "agent_error",
+                    message: frame.error?.message ?? frame.body ?? "Copilot hit an error."
+                ),
                 approvalId: nil,
                 toolName: nil,
                 title: nil,
@@ -235,5 +238,40 @@ private struct AgentResponseFrame: Decodable {
     let id: String?
     let body: String?
     let done: Bool?
-    let error: Bool?
+    let error: AgentFrameError?
+}
+
+private enum AgentFrameError: Decodable {
+    case flag(Bool)
+    case detail(String?)
+
+    var isError: Bool {
+        switch self {
+        case .flag(let value):
+            return value
+        case .detail:
+            return true
+        }
+    }
+
+    var message: String? {
+        if case .detail(let message) = self {
+            return message
+        }
+        return nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let flag = try? container.decode(Bool.self) {
+            self = .flag(flag)
+            return
+        }
+        let detail = try container.decode(ErrorDetail.self)
+        self = .detail(detail.message)
+    }
+}
+
+private struct ErrorDetail: Decodable {
+    let message: String?
 }

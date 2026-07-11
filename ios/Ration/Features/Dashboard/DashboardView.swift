@@ -3,7 +3,6 @@ import Observation
 
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(CopilotScrollContext.self) private var scrollContext
     var isTabActive: Bool = true
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
@@ -206,7 +205,6 @@ struct DashboardView: View {
             }
             .padding(16)
             .copilotDockScrollMargins(
-                isExpanded: scrollContext.isExpanded,
                 hasTabAction: !model.isEditMode
             )
         }

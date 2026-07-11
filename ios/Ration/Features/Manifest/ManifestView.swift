@@ -421,7 +421,10 @@ struct ManifestView: View {
                     )
                     .padding(
                         .bottom,
-                        CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                        CopilotDockLayout.toastBottomOffset(
+                            isExpanded: scrollContext.isExpanded,
+                            keyboardInset: scrollContext.keyboardInset
+                        )
                     )
                 }
             }
@@ -664,7 +667,7 @@ struct ManifestView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins()
         .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }

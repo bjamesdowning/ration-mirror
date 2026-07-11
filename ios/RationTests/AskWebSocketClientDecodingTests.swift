@@ -109,4 +109,15 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertEqual(event.error?.code, "agent_error")
         XCTAssertEqual(event.error?.message, "Model unavailable")
     }
+
+    func testStructuredAgentErrorFrameReturnsErrorMessage() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"resp-9","error":{"message":"Session expired"}}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "error")
+        XCTAssertEqual(event.error?.code, "agent_error")
+        XCTAssertEqual(event.error?.message, "Session expired")
+    }
 }

@@ -175,7 +175,8 @@ struct MainTabView: View {
                     .bottom,
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: env.copilotScroll.isExpanded,
-                        hasTabAction: env.tabDock.hasAction(for: selectedTab)
+                        hasTabAction: env.tabDock.hasAction(for: selectedTab),
+                        keyboardInset: env.copilotScroll.keyboardInset
                     )
                 )
             }
@@ -186,6 +187,10 @@ struct MainTabView: View {
                     scrollContext: env.copilotScroll,
                     tabDock: env.tabDock,
                     selectedTab: selectedTab,
+                    draft: Binding(
+                        get: { env.ask.draft },
+                        set: { env.ask.draft = $0 }
+                    ),
                     isExhausted: isCopilotExhausted,
                     isTurnActive: env.ask.model.isTurnActive,
                     isStopping: env.ask.model.isStopping,
@@ -193,6 +198,7 @@ struct MainTabView: View {
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         guard let organizationId = env.session.activeOrganizationId else { return false }
+                        env.copilotScroll.dismissKeyboard()
                         let accepted = await env.ask.sendFromBar(
                             text,
                             api: env.api,
@@ -212,10 +218,17 @@ struct MainTabView: View {
                     .bottom,
                     max(CopilotDockLayout.tabBarClearance, env.copilotScroll.keyboardInset)
                 )
+                .animation(
+                    env.copilotScroll.keyboardAnimation,
+                    value: env.copilotScroll.keyboardInset
+                )
             }
         }
         .copilotKeyboardObserved(env.copilotScroll)
-        .copilotKeyboardDismissOverlay(env.copilotScroll)
+        .copilotKeyboardDismissOverlay(
+            env.copilotScroll,
+            hasTabAction: env.tabDock.hasAction(for: selectedTab)
+        )
         .onChange(of: selectedTab) { _, tab in
             activatedTabs.insert(tab)
             env.copilotScroll.resetForTabChange()

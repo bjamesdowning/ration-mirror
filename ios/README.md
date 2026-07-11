@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.1.1**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.1.7**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -243,6 +243,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Beauty & modernity polish (iOS 1.1.4 build 8, web v1.5.44):** Typography tokens keep Space Mono text Dynamic Type-aware while `Typography.heroIcon()` provides fixed-size native SF Symbols for reserved control geometry. `Theme.onHyperGreen` replaces ad-hoc black on Hyper-Green surfaces. `RationAdaptiveMaterial` provides Reduce Transparency fallbacks for dock/FAB/composer chrome. Lists retain stable model IDs and native SwiftUI invalidation so every rendered field, environment change, and navigation input stays current. `EmptyStateView` adds optional CTAs and restrained symbol pulse. DEBUG `PerformanceSignposts` instrument snapshot load/save. Dead `FloatingActionBar` removed. Extended Sprint 3 QA checklist below.
 
+**Copilot immersive chat (iOS 1.1.7 build 8):** Dock and full-screen chat now share a floating composer that starts as one line, grows to five lines, submits from Return or the send arrow, and dismisses interactively with a downward swipe. The full chat uses a compact single-row header, full-width assistant responses, right-aligned user bubbles, stable distance-based auto-follow, and a morphing dock-to-chip transition. Multi-turn streaming now appends each response after its prompt; session-limit recovery and late-frame filtering match web behavior.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -254,6 +256,14 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
 - During a long Copilot response, scroll upward: reading position remains stable; “Jump to latest” resumes auto-follow.
+- Send at least three consecutive Copilot turns: every assistant response appears below the matching user prompt.
+- On both the dock and Ask sheet, tap Return and the send arrow separately: each submits exactly once.
+- Type a long prompt: the composer remains one line until text wraps, grows through five lines, then scrolls internally.
+- With the keyboard open, swipe down over the composer and transcript: the keyboard follows the gesture and dismisses without moving the transcript to the top.
+- Ask sheet: header stays on one compact row; assistant responses use the full content width; user messages remain right-aligned.
+- Open Ask from a typed dock draft: the draft is preserved; sending opens the sheet without a dock/layout flash.
+- Return to a previously scrolled tab: the first restored offset does not spuriously collapse the Copilot dock.
+- Trigger an expired/session-limit conversation: the stale transcript clears and the next turn starts a new conversation.
 - Open each tab with a warm cache and delayed network: cached content appears without an empty flash; refresh spinner remains visible.
 - Fail a refresh while cache is visible: cached content remains and a refresh error is announced instead of appearing fresh.
 - Leave a cached tab open past the 30-minute threshold: the stale banner appears without covering the first row.

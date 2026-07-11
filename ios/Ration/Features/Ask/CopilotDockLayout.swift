@@ -34,7 +34,15 @@ enum CopilotDockLayout {
     }
 
     /// Toast / undo banner offset above the tab bar and dock.
-    static func toastBottomOffset(isExpanded: Bool, hasTabAction: Bool = true) -> CGFloat {
-        scrollContentMargin(isExpanded: isExpanded, hasTabAction: hasTabAction) + 12
+    static func toastBottomOffset(
+        isExpanded: Bool,
+        hasTabAction: Bool = true,
+        keyboardInset: CGFloat = 0
+    ) -> CGFloat {
+        scrollContentMargin(
+            isExpanded: isExpanded,
+            hasTabAction: hasTabAction,
+            keyboardInset: keyboardInset
+        ) + 12
     }
 }

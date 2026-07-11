@@ -2,7 +2,6 @@ import SwiftUI
 
 struct CargoListView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(CopilotScrollContext.self) private var scrollContext
     var isTabActive: Bool = false
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
@@ -245,7 +244,7 @@ struct CargoListView: View {
         .background(Theme.ceramic)
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
-        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins()
         .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }

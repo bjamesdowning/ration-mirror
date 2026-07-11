@@ -618,7 +618,10 @@ struct SupplyView: View {
                     }
                     .padding(
                         .bottom,
-                        CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                        CopilotDockLayout.toastBottomOffset(
+                            isExpanded: scrollContext.isExpanded,
+                            keyboardInset: scrollContext.keyboardInset
+                        )
                     )
                 }
             }
@@ -727,7 +730,6 @@ struct SupplyView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(
-            isExpanded: scrollContext.isExpanded,
             hasTabAction: model.totalCount > 0
         )
         .copilotDismissKeyboardOnTap()

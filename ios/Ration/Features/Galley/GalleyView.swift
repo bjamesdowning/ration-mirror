@@ -143,7 +143,10 @@ struct GalleyView: View {
                 }
                 .padding(
                     .bottom,
-                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: scrollContext.isExpanded,
+                        keyboardInset: scrollContext.keyboardInset
+                    )
                 )
             } else if let message = cookSuccessMessage {
                 TransientSuccessToast(message: message) {
@@ -151,7 +154,10 @@ struct GalleyView: View {
                 }
                 .padding(
                     .bottom,
-                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: scrollContext.isExpanded,
+                        keyboardInset: scrollContext.keyboardInset
+                    )
                 )
             }
         }
@@ -291,7 +297,7 @@ struct GalleyView: View {
         .background(Theme.ceramic)
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
-        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins()
         .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
@@ -352,7 +358,7 @@ struct GalleyView: View {
         .background(Theme.ceramic)
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
-        .copilotDockScrollMargins(isExpanded: scrollContext.isExpanded)
+        .copilotDockScrollMargins()
         .copilotDismissKeyboardOnTap()
         .copilotScrollTracked()
     }
@@ -482,7 +488,10 @@ struct MealDetailView: View {
                 )
                 .padding(
                     .bottom,
-                    CopilotDockLayout.toastBottomOffset(isExpanded: scrollContext.isExpanded)
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: scrollContext.isExpanded,
+                        keyboardInset: scrollContext.keyboardInset
+                    )
                 )
             }
         }

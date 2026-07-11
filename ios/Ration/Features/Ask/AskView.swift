@@ -6,7 +6,6 @@ struct AskView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = ""
     @State private var followsLatest = true
     @FocusState private var isComposerFocused: Bool
 
@@ -15,136 +14,153 @@ struct AskView: View {
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: model.status)
     }
-    private var showsStopControl: Bool {
-        model.isTurnActive && !model.isAwaitingApproval
+    var body: some View {
+        VStack(spacing: 0) {
+            CopilotCompactHeader(
+                status: model.status,
+                onClose: closeSheet,
+                onNewChat: startNewChat
+            )
+            transcript
+        }
+        .background(Theme.ceramic.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            composer
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 16).onEnded { value in
+                        let translation = value.translation
+                        if translation.height > 20,
+                           abs(translation.height) > abs(translation.width) {
+                            isComposerFocused = false
+                        }
+                    }
+                )
+        }
+        .task(id: env.session.orgGeneration) {
+            guard let organizationId else { return }
+            await ask.load(
+                api: env.api,
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+        }
     }
 
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if let status = model.status {
-                    AllowanceMeter(status: status)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                }
-
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            if model.messages.isEmpty {
-                                EmptyStateView(
-                                    icon: "sparkles",
-                                    title: "Ask Ration",
-                                    message: "Ask about the app, update Cargo, or inspect what is expiring. Scans, recipe generation, imports, and week planning stay in their native flows."
-                                )
-                                .padding(.top, 32)
-                            }
-
-                            ForEach(model.messages) { message in
-                                MessageBubble(message: message, isStreaming: isStreamingBubble(message))
-                                    .id(message.id)
-                            }
-
-                            if let tool = model.activeTool {
-                                ToolStatusCard(status: tool, phase: .running)
-                            } else if let completed = model.completedTool {
-                                ToolStatusCard(
-                                    status: CopilotToolStatus(
-                                        toolCallId: completed.toolName,
-                                        toolName: completed.toolName,
-                                        label: completed.label
-                                    ),
-                                    phase: completed.succeeded ? .done : .error
-                                )
-                            }
-
-                            if model.showsThinkingIndicator {
-                                ThinkingIndicator()
-                            }
-
-                            stateCard
+    private var transcript: some View {
+        GeometryReader { _ in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if model.messages.isEmpty {
+                            EmptyStateView(
+                                icon: "sparkles",
+                                title: "Ask Ration",
+                                message: "Ask about the app, update Cargo, or inspect what is expiring. Scans, recipe generation, imports, and week planning stay in their native flows."
+                            )
+                            .padding(.top, 32)
                         }
-                        .padding(16)
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 8).onChanged { _ in
-                            followsLatest = false
-                        }
-                    )
-                    .overlay(alignment: .bottomTrailing) {
-                        if !followsLatest, !model.messages.isEmpty {
-                            Button {
-                                followsLatest = true
-                                scrollToBottom(proxy: proxy, force: true)
-                            } label: {
-                                Label("Jump to latest", systemImage: "arrow.down")
-                                    .rationCaption()
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .rationAdaptiveMaterial(in: Capsule())
-                            }
-                            .foregroundStyle(Theme.carbon)
-                            .padding(16)
-                            .accessibilityLabel("Jump to latest Copilot message")
-                        }
-                    }
-                    .onChange(of: model.streamingContentLength) { _, _ in
-                        scrollToBottom(proxy: proxy)
-                    }
-                    .onChange(of: model.messages.count) { _, _ in
-                        scrollToBottom(proxy: proxy)
-                    }
-                    .onChange(of: model.turnPhase) { _, _ in
-                        scrollToBottom(proxy: proxy)
-                    }
-                    .onChange(of: model.activeTool?.toolCallId) { _, _ in
-                        scrollToBottom(proxy: proxy)
-                    }
-                    .onChange(of: model.completedTool) { _, _ in
-                        scrollToBottom(proxy: proxy)
-                    }
-                }
 
-                composer
+                        ForEach(model.messages) { message in
+                            MessageBubble(
+                                message: message,
+                                isStreaming: isStreamingBubble(message)
+                            )
+                            .id(message.id)
+                        }
+
+                        if let tool = model.activeTool {
+                            ToolStatusCard(status: tool, phase: .running)
+                        } else if let completed = model.completedTool {
+                            ToolStatusCard(
+                                status: CopilotToolStatus(
+                                    toolCallId: completed.toolName,
+                                    toolName: completed.toolName,
+                                    label: completed.label
+                                ),
+                                phase: completed.succeeded ? .done : .error
+                            )
+                        }
+
+                        if model.showsThinkingIndicator {
+                            ThinkingIndicator()
+                        }
+
+                        stateCard
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("copilot-transcript-bottom")
+                    }
                     .padding(16)
                     .background {
-                        RationAdaptiveMaterial(shape: AnyShape(Rectangle()))
-                    }
-            }
-            .background(Theme.ceramic.ignoresSafeArea())
-            .navigationTitle("Ask")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("New Chat") {
-                        if let organizationId {
-                            followsLatest = true
-                            model.newChat(auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
-                            Haptics.light()
+                        CopilotTranscriptScrollObserver { distance in
+                            followsLatest = distance < 48
                         }
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        ask.closeSheet()
-                        dismiss()
+                .scrollDismissesKeyboard(.interactively)
+                .overlay(alignment: .bottomTrailing) {
+                    if !followsLatest, !model.messages.isEmpty {
+                        Button {
+                            followsLatest = true
+                            scrollToBottom(proxy: proxy, force: true)
+                        } label: {
+                            Label("Jump to latest", systemImage: "arrow.down")
+                                .rationCaption()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .rationAdaptiveMaterial(in: Capsule())
+                        }
+                        .foregroundStyle(Theme.carbon)
+                        .padding(16)
+                        .accessibilityLabel("Jump to latest Copilot message")
                     }
                 }
-            }
-            .task(id: env.session.orgGeneration) {
-                guard let organizationId else { return }
-                await ask.load(api: env.api, auth: env.auth, organizationId: organizationId, snapshots: env.snapshots)
+                .onChange(of: model.streamingContentLength) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: model.messages.count) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: model.turnPhase) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: model.activeTool?.toolCallId) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: model.completedTool) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
             }
         }
     }
 
+    private func closeSheet() {
+        isComposerFocused = false
+        ask.closeSheet()
+        dismiss()
+    }
+
+    private func startNewChat() {
+        guard let organizationId else { return }
+        followsLatest = true
+        ask.draft = ""
+        model.newChat(
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
+        Haptics.light()
+    }
+
     private func scrollToBottom(proxy: ScrollViewProxy, force: Bool = false) {
         guard followsLatest || force else { return }
-        if let last = model.messages.last {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo(last.id, anchor: .bottom)
-            }
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo("copilot-transcript-bottom", anchor: .bottom)
         }
     }
 
@@ -187,87 +203,36 @@ struct AskView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("Ask Ration…", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .textFieldStyle(.plain)
-                .padding(12)
-                .frame(minHeight: 44, maxHeight: 120, alignment: .topLeading)
-                .background(Theme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .focused($isComposerFocused)
-                .disabled(isCopilotExhausted)
-                .opacity(isCopilotExhausted ? 0.45 : 1)
-                .onTapGesture {
-                    isComposerFocused = true
+        CopilotComposerBar(
+            draft: Binding(
+                get: { ask.draft },
+                set: { ask.draft = $0 }
+            ),
+            mode: .sheet,
+            isExhausted: isCopilotExhausted,
+            isTurnActive: model.isTurnActive,
+            isStopping: model.isStopping,
+            isAwaitingApproval: model.isAwaitingApproval,
+            focus: $isComposerFocused,
+            onOpenSheet: {},
+            onSend: { text in
+                guard let organizationId else { return false }
+                followsLatest = true
+                let accepted = await ask.sendFromSheet(
+                    text,
+                    api: env.api,
+                    auth: env.auth,
+                    organizationId: organizationId,
+                    snapshots: env.snapshots
+                )
+                if accepted {
+                    Haptics.light()
                 }
-
-            Button {
-                if showsStopControl {
-                    Task {
-                        await model.stop()
-                    }
-                } else {
-                    let text = draft
-                    if let organizationId {
-                        followsLatest = true
-                        Task {
-                            let accepted = await ask.sendFromBar(
-                                text,
-                                api: env.api,
-                                auth: env.auth,
-                                organizationId: organizationId,
-                                snapshots: env.snapshots
-                            )
-                            if accepted, draft == text {
-                                draft = ""
-                            }
-                            if accepted {
-                                Haptics.light()
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: showsStopControl ? "stop.circle.fill" : "arrow.up.circle.fill")
-                    .font(Typography.heroIcon(34))
-                    .foregroundStyle(showsStopControl ? Theme.warning : Theme.hyperGreen)
-            }
-            .disabled(
-                showsStopControl
-                    ? model.isStopping
-                    : isCopilotExhausted
-                        || model.isAwaitingApproval
-                        || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-            .opacity((isCopilotExhausted && !showsStopControl) || model.isStopping ? 0.45 : 1)
-            .accessibilityLabel(showsStopControl ? "Stop Copilot response" : "Send message to Copilot")
-        }
-    }
-}
-
-private struct AllowanceMeter: View {
-    let status: CopilotStatusResponse
-
-    var body: some View {
-        GlassCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Copilot allowance").rationCaption()
-                    Text(status.freeConversationsRemaining > 0 ? "\(status.freeConversationsRemaining) free chats today" : "\(status.conversationFloorCost) credit floor per new chat")
-                        .rationHeadline()
-                }
-                Spacer()
-                Text("\(status.creditBalance) cr")
-                    .font(Typography.caption())
-                    .foregroundStyle(Theme.hyperGreen)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Theme.hyperGreen.opacity(0.12))
-                    .clipShape(Capsule())
-            }
-        }
+                return accepted
+            },
+            onStop: { await model.stop() },
+            onExhaustedTap: {}
+        )
     }
 }
 
@@ -277,27 +242,29 @@ private struct MessageBubble: View {
     private var isUser: Bool { message.role == "user" }
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 48) }
-            Group {
-                if isUser {
+        Group {
+            if isUser {
+                HStack {
+                    Spacer(minLength: 48)
                     Text(message.content)
                         .font(Typography.body())
                         .foregroundStyle(Theme.carbon)
-                } else {
-                    HStack(alignment: .bottom, spacing: 4) {
-                        MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
-                        if isStreaming {
-                            CopilotStreamingCursor()
-                        }
+                        .padding(12)
+                        .background(Theme.hyperGreen)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            } else {
+                HStack(alignment: .bottom, spacing: 4) {
+                    MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
+                    if isStreaming {
+                        CopilotStreamingCursor()
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
             }
-            .padding(12)
-            .background(isUser ? Theme.hyperGreen : Theme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            if !isUser { Spacer(minLength: 48) }
         }
+        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 }
 

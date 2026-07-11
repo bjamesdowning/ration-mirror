@@ -32,6 +32,15 @@ final class CopilotScrollContextTests: XCTestCase {
         XCTAssertEqual(context.scrollDirection, .down)
     }
 
+    func testInitialScrollReportSeedsOffsetWithoutCollapsingBar() {
+        let context = CopilotScrollContext()
+
+        context.reportScroll(offset: 240, isInitial: true)
+
+        XCTAssertTrue(context.isExpanded)
+        XCTAssertEqual(context.scrollDirection, .idle)
+    }
+
     func testScrollUpReExpandsWhenAutoExpandAllowed() {
         let context = CopilotScrollContext()
         context.reportScroll(offset: 40)
@@ -64,6 +73,46 @@ final class CopilotScrollContextTests: XCTestCase {
 
         context.setKeyboardInset(0)
 
+        XCTAssertEqual(context.keyboardInset, 0)
+    }
+
+    func testComposerHeightTracksMultilineGrowthWithoutShrinkingBelowSingleLine() {
+        let context = CopilotScrollContext()
+
+        context.setComposerHeight(112)
+        XCTAssertEqual(context.composerHeight, 112)
+
+        context.setComposerHeight(20)
+        XCTAssertEqual(context.composerHeight, CopilotDockLayout.expandedInputBarHeight)
+    }
+
+    func testKeyboardGeometryUsesBottomAttachedIntersection() {
+        let inset = CopilotKeyboardGeometry.bottomInset(
+            keyboardFrame: CGRect(x: 0, y: 500, width: 390, height: 344),
+            windowBounds: CGRect(x: 0, y: 0, width: 390, height: 844)
+        )
+
+        XCTAssertEqual(inset, 344)
+    }
+
+    func testKeyboardGeometryIgnoresFloatingKeyboard() {
+        let inset = CopilotKeyboardGeometry.bottomInset(
+            keyboardFrame: CGRect(x: 80, y: 300, width: 300, height: 220),
+            windowBounds: CGRect(x: 0, y: 0, width: 1024, height: 768)
+        )
+
+        XCTAssertEqual(inset, 0)
+    }
+
+    func testTabResetDismissesKeyboardAndClearsInset() {
+        let context = CopilotScrollContext()
+        var dismissed = false
+        context.registerDismissKeyboardHandler { dismissed = true }
+        context.setKeyboardInset(320)
+
+        context.resetForTabChange()
+
+        XCTAssertTrue(dismissed)
         XCTAssertEqual(context.keyboardInset, 0)
     }
 

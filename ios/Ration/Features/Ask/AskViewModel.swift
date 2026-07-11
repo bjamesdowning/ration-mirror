@@ -79,7 +79,8 @@ final class AskViewModel {
 
     /// Last assistant message content length — drives scroll-to-bottom during streaming.
     var streamingContentLength: Int {
-        messages.last(where: { $0.role == "assistant" })?.content.count ?? 0
+        guard messages.last?.role == "assistant" else { return 0 }
+        return messages.last?.content.count ?? 0
     }
 
     func load(api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
@@ -128,26 +129,6 @@ final class AskViewModel {
         } catch {
             isConnected = false
             state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
-        }
-    }
-
-    func connectIfNeeded(auth: AuthManager) async {
-        if socket == nil {
-            socket = AskWebSocketClient(auth: auth)
-        }
-        guard let socket else { return }
-        turnPhase = .connecting
-        state = .connecting
-        do {
-            try await socket.connect()
-            isConnected = true
-            state = .idle
-            turnPhase = .idle
-            observe(socket)
-        } catch {
-            isConnected = false
-            turnPhase = .idle
-            state = .error(error.localizedDescription)
         }
     }
 
@@ -318,9 +299,14 @@ final class AskViewModel {
         streamTask?.cancel()
         streamTask = Task { [weak self] in
             for await event in socket.events() {
-                self?.apply(event)
+                guard let self, self.shouldAcceptObservedEvent(event) else { continue }
+                self.apply(event)
             }
         }
+    }
+
+    func shouldAcceptObservedEvent(_ event: CopilotStreamEvent) -> Bool {
+        isTurnActive || event.type == "message_end" || event.type == "error"
     }
 
     func apply(_ event: CopilotStreamEvent) {
@@ -343,12 +329,7 @@ final class AskViewModel {
             turnPhase = .thinking
         case "text_delta":
             beginTurnIfNeeded()
-            let text = event.text ?? ""
-            if let index = messages.lastIndex(where: { $0.role == "assistant" }) {
-                messages[index].content += text
-            } else {
-                messages.append(CopilotMessage(id: event.messageId ?? UUID().uuidString, role: "assistant", content: text))
-            }
+            appendAssistantDelta(event.text ?? "", messageId: event.messageId)
             clearTransientError()
             state = .streaming
             turnPhase = .streaming
@@ -372,7 +353,7 @@ final class AskViewModel {
             turnPhase = .toolRunning
         case "tool_end":
             let toolName = activeTool?.toolName ?? "tool"
-            let succeeded = event.ok ?? true
+            let succeeded = event.ok == true
             activeTool = nil
             completedTool = CompletedTool(
                 toolName: toolName,
@@ -411,12 +392,41 @@ final class AskViewModel {
                 completeTurn(state: .error("Copilot sent an invalid blocked action."))
             }
         case "error":
+            let wasTurnActive = isTurnActive
             isConnected = false
+            if event.error?.code == "session_limit_reached" {
+                messages = []
+                activeTool = nil
+                completedTool = nil
+                socket?.newConversation()
+                if let organizationId, let snapshots {
+                    Task {
+                        await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
+                    }
+                }
+                lastSyncedLabel = nil
+            } else if !wasTurnActive {
+                return
+            }
             completeTurn(
                 state: .error(event.error?.message ?? event.text ?? "Copilot hit an error.")
             )
         default:
             break
+        }
+    }
+
+    private func appendAssistantDelta(_ text: String, messageId: String?) {
+        if messages.last?.role == "assistant", let index = messages.indices.last {
+            messages[index].content += text
+        } else {
+            messages.append(
+                CopilotMessage(
+                    id: messageId ?? UUID().uuidString,
+                    role: "assistant",
+                    content: text
+                )
+            )
         }
     }
 

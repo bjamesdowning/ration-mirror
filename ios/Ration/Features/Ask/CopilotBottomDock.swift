@@ -6,6 +6,7 @@ struct CopilotBottomDock: View {
     @Bindable var tabDock: TabDockContext
 
     let selectedTab: Int
+    @Binding var draft: String
     let isExhausted: Bool
     let isTurnActive: Bool
     let isStopping: Bool
@@ -15,19 +16,8 @@ struct CopilotBottomDock: View {
     let onStop: () async -> Void
     let onExhaustedTap: () -> Void
 
-    @State private var draft = ""
-    @State private var hintIndex = 0
     @FocusState private var isInputFocused: Bool
-
-    private let hintExamples = [
-        "Add butter to my cargo",
-        "Ask Ration what's for dinner",
-        "What's expiring this week?",
-        "Show meals I can cook tonight",
-    ]
-    private var showsStopControl: Bool {
-        isTurnActive && !isAwaitingApproval
-    }
+    @Namespace private var dockMorph
 
     var body: some View {
         // Align to the bottom without expanding hit testing across the full
@@ -41,7 +31,6 @@ struct CopilotBottomDock: View {
         }
         .frame(maxWidth: .infinity, alignment: .bottom)
         .fixedSize(horizontal: false, vertical: true)
-        .animation(MotionPolicy.dockSpring, value: scrollContext.isExpanded)
         .animation(MotionPolicy.dockSpring, value: tabDock.revision)
         .onChange(of: scrollContext.isExpanded) { _, expanded in
             if !expanded {
@@ -53,13 +42,6 @@ struct CopilotBottomDock: View {
         }
         .onDisappear {
             scrollContext.registerDismissKeyboardHandler(nil)
-        }
-        .opacity(isExhausted && !isTurnActive ? 0.45 : 1)
-        .task(id: hintIndex) {
-            guard scrollContext.isExpanded, !UIAccessibility.isReduceMotionEnabled else { return }
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled else { return }
-            hintIndex = (hintIndex + 1) % hintExamples.count
         }
     }
 
@@ -84,74 +66,31 @@ struct CopilotBottomDock: View {
     }
 
     private var expandedBar: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Button(action: onOpenSheet) {
-                Image(systemName: "sparkles")
-                    .font(Typography.heroIcon(16))
-                    .foregroundStyle(Theme.hyperGreen)
-            }
-            .accessibilityLabel("Open full Copilot chat")
-            .disabled(isExhausted)
-
-            TextField(
-                "",
-                text: $draft,
-                prompt: Text(hintExamples[hintIndex]).foregroundStyle(Theme.muted)
-            )
-            .lineLimit(1)
-            .textFieldStyle(.plain)
-            .font(Typography.body())
-            .foregroundStyle(Theme.carbon)
-            .frame(height: 44)
-            .submitLabel(.send)
-            .focused($isInputFocused)
-            .disabled(isExhausted)
-            .accessibilityLabel("Ask Ration")
-            .onSubmit { submitDraft() }
-
-            Button {
-                if showsStopControl {
-                    Task { await onStop() }
-                } else {
-                    submitDraft()
-                }
-            } label: {
-                Image(systemName: showsStopControl ? "stop.circle.fill" : "arrow.up.circle.fill")
-                    .font(Typography.heroIcon(30))
-                    .foregroundStyle(showsStopControl ? Theme.warning : Theme.hyperGreen)
-            }
-            .opacity(
-                isStopping
-                    || (!showsStopControl
-                        && (isExhausted
-                            || isAwaitingApproval
-                            || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                    ? 0.35 : 1
-            )
-            .disabled(
-                showsStopControl
-                    ? isStopping
-                    : isExhausted
-                        || isAwaitingApproval
-                        || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-            .accessibilityLabel(showsStopControl ? "Stop Copilot response" : "Send to Copilot")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        CopilotComposerBar(
+            draft: $draft,
+            mode: .dock,
+            isExhausted: isExhausted,
+            isTurnActive: isTurnActive,
+            isStopping: isStopping,
+            isAwaitingApproval: isAwaitingApproval,
+            focus: $isInputFocused,
+            onOpenSheet: onOpenSheet,
+            onSend: onSend,
+            onStop: onStop,
+            onExhaustedTap: onExhaustedTap
+        )
+        .matchedGeometryEffect(id: "copilotComposer", in: dockMorph)
+        .transition(.opacity)
         .background {
-            RationAdaptiveMaterial(shape: AnyShape(Capsule()))
-        }
-        .overlay(Capsule().stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    isInputFocused = false
-                }
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: CopilotComposerHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
             }
+        }
+        .onPreferenceChange(CopilotComposerHeightPreferenceKey.self) { height in
+            scrollContext.setComposerHeight(height)
         }
     }
 
@@ -171,7 +110,8 @@ struct CopilotBottomDock: View {
                 .overlay(Circle().stroke(Theme.hyperGreen, lineWidth: 1))
         }
         .accessibilityLabel("Ask Ration")
-        .transition(.scale.combined(with: .opacity))
+        .matchedGeometryEffect(id: "copilotComposer", in: dockMorph)
+        .transition(.opacity)
     }
 
     private var bottomFade: some View {
@@ -188,23 +128,12 @@ struct CopilotBottomDock: View {
         .allowsHitTesting(false)
     }
 
-    private func submitDraft() {
-        guard !isTurnActive, !isAwaitingApproval else { return }
-        guard !isExhausted else {
-            onExhaustedTap()
-            return
-        }
-        let originalDraft = draft
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        Task {
-            let accepted = await onSend(text)
-            if accepted, draft == originalDraft {
-                draft = ""
-            }
-            if accepted {
-                isInputFocused = false
-            }
-        }
+}
+
+private struct CopilotComposerHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = CopilotDockLayout.expandedInputBarHeight
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

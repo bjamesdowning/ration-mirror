@@ -6,9 +6,22 @@ import Observation
 final class AskCoordinator {
     let model = AskViewModel()
     private(set) var isSheetPresented = false
+    var draft = ""
+    private var draftOrganizationId: String?
 
     func load(api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
+        scopeDraft(to: organizationId)
         await model.load(api: api, auth: auth, organizationId: organizationId, snapshots: snapshots)
+    }
+
+    @discardableResult
+    func scopeDraft(to organizationId: String) -> Bool {
+        let didChangeOrganization = draftOrganizationId.map { $0 != organizationId } ?? false
+        if didChangeOrganization {
+            draft = ""
+        }
+        draftOrganizationId = organizationId
+        return didChangeOrganization
     }
 
     func updateAutoExpandPolicy(scrollContext: CopilotScrollContext) {
@@ -30,7 +43,46 @@ final class AskCoordinator {
         organizationId: String,
         snapshots: SnapshotStore
     ) async -> Bool {
-        isSheetPresented = true
+        await send(
+            text,
+            api: api,
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots,
+            presentsSheet: true
+        )
+    }
+
+    func sendFromSheet(
+        _ text: String,
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> Bool {
+        await send(
+            text,
+            api: api,
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots,
+            presentsSheet: false
+        )
+    }
+
+    private func send(
+        _ text: String,
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore,
+        presentsSheet: Bool
+    ) async -> Bool {
+        guard !scopeDraft(to: organizationId) else { return false }
+        if presentsSheet {
+            isSheetPresented = true
+            await Task.yield()
+        }
         return await model.send(
             text,
             api: api,

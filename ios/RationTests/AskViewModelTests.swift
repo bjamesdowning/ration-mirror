@@ -140,6 +140,24 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.turnPhase, .thinking)
     }
 
+    func testToolEndWithoutExplicitSuccessIsNotReportedAsSuccessful() {
+        let model = AskViewModel()
+        model.apply(
+            Self.event(
+                type: "tool_start",
+                status: CopilotToolStatus(
+                    toolCallId: "tool-1",
+                    toolName: "list_inventory",
+                    label: "Checking"
+                )
+            )
+        )
+
+        model.apply(Self.event(type: "tool_end", toolCallId: "tool-1"))
+
+        XCTAssertEqual(model.completedTool?.succeeded, false)
+    }
+
     func testMessageStartDoesNotDuplicateAssistantFromTextDelta() {
         let model = AskViewModel()
 
@@ -183,6 +201,20 @@ final class AskViewModelTests: XCTestCase {
 
         XCTAssertEqual(model.messages.count, 1)
         XCTAssertEqual(model.messages.first?.content, "Hello")
+    }
+
+    func testSecondTurnDeltaCreatesAssistantAfterLatestUserMessage() {
+        let model = AskViewModel()
+
+        model.apply(Self.event(type: "message_start", message: CopilotMessage(role: "user", content: "First")))
+        model.apply(Self.event(type: "text_delta", messageId: "assistant-1", text: "First reply"))
+        model.apply(Self.event(type: "message_start", message: CopilotMessage(role: "user", content: "Second")))
+        model.apply(Self.event(type: "text_delta", messageId: "assistant-2", text: "Second reply"))
+
+        XCTAssertEqual(model.messages.map(\.role), ["user", "assistant", "user", "assistant"])
+        XCTAssertEqual(model.messages.map(\.content), ["First", "First reply", "Second", "Second reply"])
+        XCTAssertEqual(model.messages.last?.id, "assistant-2")
+        XCTAssertEqual(model.streamingContentLength, "Second reply".count)
     }
 
     func testActiveTurnCompletesOnMessageEnd() {
@@ -275,7 +307,7 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.messages.last?.content, "Keep this")
     }
 
-    func testStopTimeoutDisconnectsAndCompletesTurn() async {
+    func testStopTimeoutDisconnectsBeforeCompletingTurn() async {
         let socket = TestAskSocketClient()
         let model = AskViewModel(socket: socket, stopTimeoutNanoseconds: 1_000_000)
         model.apply(Self.event(type: "text_delta", text: "Partial"))
@@ -288,6 +320,60 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertFalse(model.isStopping)
         XCTAssertEqual(model.state, .idle)
         XCTAssertEqual(model.messages.last?.content, "Partial")
+    }
+
+    func testObservedEventsAreIgnoredWhileIdleExceptTerminalEvent() {
+        let model = AskViewModel()
+
+        XCTAssertFalse(model.shouldAcceptObservedEvent(Self.event(type: "text_delta", text: "Late")))
+        XCTAssertTrue(model.shouldAcceptObservedEvent(Self.event(type: "message_end")))
+        XCTAssertTrue(
+            model.shouldAcceptObservedEvent(
+                Self.event(
+                    type: "error",
+                    error: CopilotToolError(code: "socket_closed", message: "Closed")
+                )
+            )
+        )
+
+        model.apply(Self.event(type: "text_delta", text: "Active"))
+
+        XCTAssertTrue(model.shouldAcceptObservedEvent(Self.event(type: "text_delta", text: "More")))
+    }
+
+    func testIdleSocketErrorDoesNotShowTurnError() {
+        let model = AskViewModel()
+
+        model.apply(
+            Self.event(
+                type: "error",
+                error: CopilotToolError(code: "socket_closed", message: "Closed")
+            )
+        )
+
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertFalse(model.isTurnActive)
+    }
+
+    func testSessionLimitClearsConversationAndRotatesSocket() {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Existing"))
+
+        model.apply(
+            Self.event(
+                type: "error",
+                error: CopilotToolError(
+                    code: "session_limit_reached",
+                    message: "Start a new conversation."
+                )
+            )
+        )
+
+        XCTAssertEqual(model.messages, [])
+        XCTAssertEqual(socket.conversationId, "new-test-conversation")
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.state, .error("Start a new conversation."))
     }
 
     func testApprovalIgnoredWhileStopping() async {
@@ -328,22 +414,27 @@ final class AskViewModelTests: XCTestCase {
 
     private static func event(
         type: String,
+        message: CopilotMessage? = nil,
         messageId: String? = nil,
         text: String? = nil,
+        status: CopilotToolStatus? = nil,
+        toolCallId: String? = nil,
+        ok: Bool? = nil,
+        error: CopilotToolError? = nil,
         approvalId: String? = nil,
         title: String? = nil,
         description: String? = nil
     ) -> CopilotStreamEvent {
         CopilotStreamEvent(
             type: type,
-            message: nil,
+            message: message,
             messageId: messageId,
             text: text,
             usageTokens: nil,
-            status: nil,
-            toolCallId: nil,
-            ok: nil,
-            error: nil,
+            status: status,
+            toolCallId: toolCallId,
+            ok: ok,
+            error: error,
             approvalId: approvalId,
             toolName: nil,
             title: title,

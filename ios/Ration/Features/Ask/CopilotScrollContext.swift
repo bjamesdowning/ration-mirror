@@ -15,6 +15,9 @@ final class CopilotScrollContext {
     private(set) var scrollDirection: CopilotScrollDirection = .idle
     private(set) var trackingGeneration = 0
     private(set) var keyboardInset: CGFloat = 0
+    private(set) var composerHeight = CopilotDockLayout.expandedInputBarHeight
+    private(set) var keyboardAnimationDuration: Double = 0.25
+    private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
 
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
@@ -34,17 +37,48 @@ final class CopilotScrollContext {
     }
 
     func resetForTabChange() {
+        dismissKeyboard()
         trackingGeneration += 1
         lastOffset = 0
         lastProcessedAt = 0
         scrollDirection = .idle
+        keyboardInset = 0
         isExpanded = canAutoExpand
     }
 
-    func setKeyboardInset(_ inset: CGFloat) {
+    func setKeyboardInset(
+        _ inset: CGFloat,
+        duration: Double? = nil,
+        curve: UIView.AnimationCurve? = nil
+    ) {
         let clamped = max(0, inset)
+        if let duration {
+            keyboardAnimationDuration = duration
+        }
+        if let curve {
+            keyboardAnimationCurve = curve
+        }
         guard keyboardInset != clamped else { return }
         keyboardInset = clamped
+    }
+
+    func setComposerHeight(_ height: CGFloat) {
+        composerHeight = max(CopilotDockLayout.expandedInputBarHeight, height)
+    }
+
+    var keyboardAnimation: Animation {
+        switch keyboardAnimationCurve {
+        case .easeIn:
+            return .easeIn(duration: keyboardAnimationDuration)
+        case .easeOut:
+            return .easeOut(duration: keyboardAnimationDuration)
+        case .linear:
+            return .linear(duration: keyboardAnimationDuration)
+        case .easeInOut:
+            return .easeInOut(duration: keyboardAnimationDuration)
+        @unknown default:
+            return .easeInOut(duration: keyboardAnimationDuration)
+        }
     }
 
     func registerDismissKeyboardHandler(_ handler: (() -> Void)?) {
@@ -56,19 +90,24 @@ final class CopilotScrollContext {
     }
 
     func expandManually() {
-        withAnimation(MotionPolicy.dockSpring) {
+        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
             isExpanded = true
         }
     }
 
     func collapse() {
         dismissKeyboard()
-        withAnimation(MotionPolicy.dockSpring) {
+        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
             isExpanded = false
         }
     }
 
-    func reportScroll(offset: CGFloat) {
+    func reportScroll(offset: CGFloat, isInitial: Bool = false) {
+        if isInitial {
+            lastOffset = offset
+            lastProcessedAt = CFAbsoluteTimeGetCurrent()
+            return
+        }
         let now = CFAbsoluteTimeGetCurrent()
         let delta = offset - lastOffset
         let direction: CopilotScrollDirection
@@ -104,7 +143,7 @@ final class CopilotScrollContext {
 
 private struct CopilotScrollTracker: UIViewRepresentable {
     let trackingGeneration: Int
-    let onOffsetChange: (CGFloat) -> Void
+    let onOffsetChange: (CGFloat, Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onOffsetChange: onOffsetChange)
@@ -126,9 +165,9 @@ private struct CopilotScrollTracker: UIViewRepresentable {
         weak var scrollView: UIScrollView?
         private var observation: NSKeyValueObservation?
         private var attachedGeneration = -1
-        let onOffsetChange: (CGFloat) -> Void
+        let onOffsetChange: (CGFloat, Bool) -> Void
 
-        init(onOffsetChange: @escaping (CGFloat) -> Void) {
+        init(onOffsetChange: @escaping (CGFloat, Bool) -> Void) {
             self.onOffsetChange = onOffsetChange
         }
 
@@ -186,9 +225,9 @@ private struct CopilotScrollTracker: UIViewRepresentable {
                 \.contentOffset,
                 options: [.new]
             ) { [weak self] scrollView, _ in
-                self?.onOffsetChange(scrollView.contentOffset.y)
+                self?.onOffsetChange(scrollView.contentOffset.y, false)
             }
-            onOffsetChange(scrollView.contentOffset.y)
+            onOffsetChange(scrollView.contentOffset.y, true)
         }
 
         func detach() {
@@ -208,8 +247,8 @@ struct CopilotScrollReporter: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background(
-            CopilotScrollTracker(trackingGeneration: scrollContext.trackingGeneration) { offset in
-                scrollContext.reportScroll(offset: offset)
+            CopilotScrollTracker(trackingGeneration: scrollContext.trackingGeneration) { offset, isInitial in
+                scrollContext.reportScroll(offset: offset, isInitial: isInitial)
             }
         )
     }
@@ -230,6 +269,7 @@ private struct CopilotDismissKeyboardOnTap: ViewModifier {
 
 private struct CopilotKeyboardDismissOverlay: ViewModifier {
     let scrollContext: CopilotScrollContext
+    let hasTabAction: Bool
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
@@ -247,8 +287,20 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
 
     /// Leave the dock + tab bar region tappable while the keyboard is open.
     private var dismissOverlayReservedBottom: CGFloat {
-        max(CopilotDockLayout.tabBarClearance, scrollContext.keyboardInset)
-            + CopilotDockLayout.dockHeight(isExpanded: scrollContext.isExpanded, hasTabAction: true)
+        let base = max(CopilotDockLayout.tabBarClearance, scrollContext.keyboardInset)
+            + CopilotDockLayout.dockHeight(
+                isExpanded: scrollContext.isExpanded,
+                hasTabAction: hasTabAction
+            )
+        return base + expandedComposerHeightAdjustment
+    }
+
+    private var expandedComposerHeightAdjustment: CGFloat {
+        guard scrollContext.isExpanded else { return 0 }
+        return max(
+            0,
+            scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
+        )
     }
 }
 
@@ -257,10 +309,15 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        CopilotDockLayout.scrollContentMargin(
+        let base = CopilotDockLayout.scrollContentMargin(
             isExpanded: scrollContext.isExpanded,
             hasTabAction: hasTabAction,
             keyboardInset: scrollContext.keyboardInset
+        )
+        guard scrollContext.isExpanded else { return base }
+        return base + max(
+            0,
+            scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
         )
     }
 
@@ -268,7 +325,18 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
         content
             .contentMargins(.bottom, margin, for: .scrollContent)
             .animation(MotionPolicy.dockSpring, value: scrollContext.isExpanded)
-            .animation(MotionPolicy.dockSpring, value: scrollContext.keyboardInset)
+    }
+}
+
+enum CopilotKeyboardGeometry {
+    static func bottomInset(keyboardFrame: CGRect, windowBounds: CGRect) -> CGFloat {
+        guard keyboardFrame.minY < windowBounds.maxY,
+              keyboardFrame.maxY >= windowBounds.maxY - 1 else {
+            return 0
+        }
+        let intersection = windowBounds.intersection(keyboardFrame)
+        guard !intersection.isNull else { return 0 }
+        return max(0, intersection.height)
     }
 }
 
@@ -281,13 +349,31 @@ private struct CopilotKeyboardInsetObserver: ViewModifier {
                 guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
                     return
                 }
-                let screenHeight = UIScreen.main.bounds.height
-                let overlap = max(0, screenHeight - frame.origin.y)
-                scrollContext.setKeyboardInset(overlap)
+                let overlap: CGFloat
+                if let window = activeWindow {
+                    let frameInWindow = window.convert(frame, from: window.screen.coordinateSpace)
+                    overlap = CopilotKeyboardGeometry.bottomInset(
+                        keyboardFrame: frameInWindow,
+                        windowBounds: window.bounds
+                    )
+                } else {
+                    overlap = 0
+                }
+                let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
+                let curveRaw = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
+                let curve = curveRaw.flatMap(UIView.AnimationCurve.init(rawValue:))
+                scrollContext.setKeyboardInset(overlap, duration: duration, curve: curve)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 scrollContext.setKeyboardInset(0)
             }
+    }
+
+    private var activeWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
     }
 }
 
@@ -300,8 +386,16 @@ extension View {
         modifier(CopilotDismissKeyboardOnTap())
     }
 
-    func copilotKeyboardDismissOverlay(_ scrollContext: CopilotScrollContext) -> some View {
-        modifier(CopilotKeyboardDismissOverlay(scrollContext: scrollContext))
+    func copilotKeyboardDismissOverlay(
+        _ scrollContext: CopilotScrollContext,
+        hasTabAction: Bool = true
+    ) -> some View {
+        modifier(
+            CopilotKeyboardDismissOverlay(
+                scrollContext: scrollContext,
+                hasTabAction: hasTabAction
+            )
+        )
     }
 
     func copilotKeyboardObserved(_ scrollContext: CopilotScrollContext) -> some View {
@@ -309,7 +403,7 @@ extension View {
     }
 
     /// Reserves bottom scroll margin for the dock; uses collapsed height when the bar is minimized.
-    func copilotDockScrollMargins(isExpanded _: Bool = true, hasTabAction: Bool = true) -> some View {
+    func copilotDockScrollMargins(hasTabAction: Bool = true) -> some View {
         modifier(CopilotDockScrollMarginsModifier(hasTabAction: hasTabAction))
     }
 }

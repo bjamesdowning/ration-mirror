@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.1.7**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.1.12**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -106,6 +106,38 @@ Apple Developer signing on a physical device or **Any iOS Device (arm64)**.
 | *Your team has no devices…* | Register device UDID wirelessly (Safari on iPhone → developer portal → Devices), **or** switch to manual App Store distribution profile (see step 3b). |
 | *No profiles for 'com.mayutic.ration'* | Confirm App ID exists; enable automatic signing; retry after Distribution cert exists. |
 | *Communication with Apple failed* | Sign out/in under Settings → Accounts; confirm paid Developer Program membership is active. |
+
+### Xcode Cloud (GitLab → TestFlight)
+
+Pushes to `main` on GitLab trigger **Xcode Cloud** (Apple CI), not `.gitlab-ci.yml`.
+The GitLab repo is connected under **App Store Connect → Ration by Mayutic → Xcode Cloud → Settings → Repositories** (`mayutic/ration/application`).
+
+`Ration.xcodeproj` is **not** committed — it is generated from `project.yml` via XcodeGen.
+Xcode Cloud runs [`ci_scripts/ci_post_clone.sh`](ci_scripts/ci_post_clone.sh) after clone to install XcodeGen and generate the project before archive.
+
+**Workflow (configure in App Store Connect → Xcode Cloud → Manage Workflows):**
+
+| Setting | Value |
+| ------- | ----- |
+| Start condition | Branch Changes → `main` |
+| Project | `ios/Ration.xcodeproj` |
+| Scheme | `Ration` |
+| Action | Archive - iOS |
+| Post-action | **TestFlight Internal Testing** |
+
+Every TestFlight / App Store upload needs a new `CURRENT_PROJECT_VERSION` in `project.yml`.
+Archive alone uploads to App Store Connect; the TestFlight post-action distributes to internal testers.
+
+**Local sanity check** (simulates the Xcode Cloud post-clone step):
+
+```bash
+rm -rf ios/Ration.xcodeproj
+(cd ios/ci_scripts && ./ci_post_clone.sh)
+test -d ios/Ration.xcodeproj
+```
+
+**Production:** TestFlight auto-uploads from `main` do not publish to the public App Store.
+When live, submit a tested build manually under **Distribution → + Version → Submit for Review**.
 
 ### Pointing at a local backend
 

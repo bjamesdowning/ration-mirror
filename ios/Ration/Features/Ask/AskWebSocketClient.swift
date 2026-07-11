@@ -31,23 +31,27 @@ final class AskWebSocketClient: AskSocketClient {
 
     private let auth: AuthManager
     private let session: URLSession
+    private let eventsStream: AsyncStream<CopilotStreamEvent>
+    private let eventsContinuation: AsyncStream<CopilotStreamEvent>.Continuation
     private var task: URLSessionWebSocketTask?
-    private var continuation: AsyncStream<CopilotStreamEvent>.Continuation?
     private var activeRequestId: String?
     private(set) var conversationId: String
 
     init(auth: AuthManager, conversationId: String = UUID().uuidString) {
         self.auth = auth
         self.conversationId = conversationId
+        var continuation: AsyncStream<CopilotStreamEvent>.Continuation!
+        eventsStream = AsyncStream { cont in
+            continuation = cont
+        }
+        eventsContinuation = continuation
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30
         self.session = URLSession(configuration: config)
     }
 
     func events() -> AsyncStream<CopilotStreamEvent> {
-        AsyncStream { continuation in
-            self.continuation = continuation
-        }
+        eventsStream
     }
 
     func connect() async throws {
@@ -146,14 +150,14 @@ final class AskWebSocketClient: AskSocketClient {
                 let event = decode(message)
                 if event.type != "noop" {
                     clearActiveRequestIfTerminal(event, message: message)
-                    continuation?.yield(event)
+                    eventsContinuation.yield(event)
                 }
             }
         } catch {
             guard self.task === task else { return }
             activeRequestId = nil
             self.task = nil
-            continuation?.yield(
+            eventsContinuation.yield(
                 CopilotStreamEvent(
                     type: "error",
                     message: nil,

@@ -48,6 +48,7 @@ struct DashboardView: View {
                             hubLayout: data.hubLayout,
                             availableMealTags: data.availableMealTags,
                             availableCargoTags: data.availableCargoTags ?? [],
+                            isTabActive: isTabActive,
                             onSave: { widgets in
                                 try await model.saveLayout(widgets, api: env.api)
                                 await reload()
@@ -209,8 +210,7 @@ struct DashboardView: View {
             )
         }
         .scrollDismissesKeyboard(.interactively)
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 0, isActive: isTabActive)
     }
 
     @ViewBuilder

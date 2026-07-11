@@ -41,7 +41,7 @@ enum CopilotWebSocketDecoder {
         }
 
         if frame.type != "cf_agent_use_chat_response" {
-            return messageEnd(frameId: frame.id)
+            return noop(frameId: frame.id)
         }
 
         if frame.error?.isError == true {

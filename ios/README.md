@@ -245,14 +245,17 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot immersive chat (iOS 1.1.7 build 8):** Dock and full-screen chat now share a floating composer that starts as one line, grows to five lines, submits from Return or the send arrow, and dismisses interactively with a downward swipe. The full chat uses a compact single-row header, full-width assistant responses, right-aligned user bubbles, stable distance-based auto-follow, and a morphing dock-to-chip transition. Multi-turn streaming now appends each response after its prompt; session-limit recovery and late-frame filtering match web behavior.
 
+**Copilot reliability pass (iOS 1.1.12 build 8):** Restores Copilot send/stream lifecycle parity with web — non-response agent frames are ignored, event observation is ready before connect, and the composer clears after Return while the keyboard stays open. Sticky activity shows during connect/thinking until assistant tokens arrive. Scroll tracking refreshes when tabs activate so dock collapse works on Cargo/Galley/Manifest/Supply. Composer height remeasures after UIKit layout instead of at width ≈ 1pt.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
 - List rows scroll visibly behind the glass dock — no large blank band above the controls.
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
 - Hub edit mode: scan FAB hidden; Supply empty list: replenish FAB hidden.
-- Tab switch resets bar to expanded when allowance allows auto-expand.
-- Copilot field: scroll list to dismiss keyboard; tap Done on keyboard accessory; send clears focus.
+- Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
+- Collapsed chat chip: tap expands the bar and opens the keyboard; scroll-up expand alone must not open the keyboard.
+- Copilot field: swipe down on the composer capsule to dismiss keyboard; send from dock opens Ask sheet.
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
 - During a long Copilot response, scroll upward: reading position remains stable; “Jump to latest” resumes auto-follow.
@@ -261,7 +264,10 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Type a long prompt: the composer remains one line until text wraps, grows through five lines, then scrolls internally.
 - With the keyboard open, swipe down over the composer and transcript: the keyboard follows the gesture and dismisses without moving the transcript to the top.
 - Ask sheet: header stays on one compact row; assistant responses use the full content width; user messages remain right-aligned.
-- Open Ask from a typed dock draft: the draft is preserved; sending opens the sheet without a dock/layout flash.
+- Ask sheet: after send, sticky activity bar shows “Copilot is thinking” (or tool label) until assistant text streams in.
+- Repeat dock collapse/expand on Hub, Cargo, Galley, Manifest, and Supply: behavior must match (no stuck chip, no stuck expanded bar).
+- Empty Cargo/Galley/Manifest/Supply lists and Hub edit mode: scroll down still collapses the dock to the chat chip.
+- Ask sheet: with composer unfocused, swipe the transcript to dismiss keyboard; with composer focused, swipe-down on the capsule still dismisses.
 - Return to a previously scrolled tab: the first restored offset does not spuriously collapse the Copilot dock.
 - Trigger an expired/session-limit conversation: the stale transcript clears and the next turn starts a new conversation.
 - Open each tab with a warm cache and delayed network: cached content appears without an empty flash; refresh spinner remains visible.

@@ -18,7 +18,10 @@ struct CopilotComposerBar: View {
     let isTurnActive: Bool
     let isStopping: Bool
     let isAwaitingApproval: Bool
-    let focus: FocusState<Bool>.Binding
+    let focusToken: Int
+    let dismissToken: Int
+    let onFocusChange: (Bool) -> Void
+    let onDismissKeyboard: () -> Void
     let onOpenSheet: () -> Void
     let onSend: (String) async -> Bool
     let onStop: () async -> Void
@@ -26,6 +29,7 @@ struct CopilotComposerBar: View {
 
     @State private var hintIndex = 0
     @State private var submissionInFlight = false
+    @State private var contentHeight = CopilotComposerHeightPolicy.singleLineHeight
 
     private let hintExamples = [
         "Add butter to my cargo",
@@ -36,6 +40,10 @@ struct CopilotComposerBar: View {
 
     private var showsStopControl: Bool {
         isTurnActive && !isAwaitingApproval
+    }
+
+    private var placeholder: String {
+        hintExamples[hintIndex]
     }
 
     var body: some View {
@@ -51,25 +59,19 @@ struct CopilotComposerBar: View {
                 .disabled(isExhausted)
             }
 
-            ZStack(alignment: .leading) {
-                if draft.isEmpty {
-                    Text(hintExamples[hintIndex])
-                        .font(Typography.body())
-                        .foregroundStyle(Theme.muted)
-                        .padding(.vertical, 11)
-                        .allowsHitTesting(false)
-                }
-                CopilotGrowingTextView(
-                    text: $draft,
-                    isFocused: Binding(
-                        get: { focus.wrappedValue },
-                        set: { focus.wrappedValue = $0 }
-                    ),
-                    isEnabled: !isExhausted,
-                    onSubmit: submitDraft
-                )
-            }
-            .frame(minHeight: 44, maxHeight: 120, alignment: .leading)
+            CopilotGrowingTextView(
+                text: $draft,
+                placeholder: placeholder,
+                isEnabled: !isExhausted,
+                focusToken: focusToken,
+                dismissToken: dismissToken,
+                onFocusChange: onFocusChange,
+                onHeightChange: { height in
+                    contentHeight = height
+                },
+                onSubmit: submitDraft
+            )
+            .frame(height: contentHeight)
             .accessibilityLabel("Ask Ration")
 
             Button {
@@ -101,10 +103,11 @@ struct CopilotComposerBar: View {
                 .stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1)
         }
         .simultaneousGesture(
-            DragGesture(minimumDistance: 16).onEnded { value in
+            DragGesture(minimumDistance: 20).onEnded { value in
                 let translation = value.translation
-                if translation.height > 20, abs(translation.height) > abs(translation.width) {
-                    focus.wrappedValue = false
+                if translation.height > 24,
+                   abs(translation.height) > abs(translation.width) {
+                    onDismissKeyboard()
                 }
             }
         )
@@ -142,9 +145,7 @@ struct CopilotComposerBar: View {
             let accepted = await onSend(text)
             if accepted, draft == originalDraft {
                 draft = ""
-            }
-            if accepted, mode == .dock {
-                focus.wrappedValue = false
+                contentHeight = CopilotComposerHeightPolicy.singleLineHeight
             }
             submissionInFlight = false
         }

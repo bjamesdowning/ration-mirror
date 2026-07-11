@@ -2,29 +2,32 @@ import SwiftUI
 import Observation
 import UIKit
 
-enum CopilotScrollDirection: Equatable {
-    case up
-    case down
-    case idle
-}
-
 @MainActor
 @Observable
 final class CopilotScrollContext {
     private(set) var isExpanded = true
     private(set) var scrollDirection: CopilotScrollDirection = .idle
     private(set) var trackingGeneration = 0
+    private(set) var activeTab = 0
     private(set) var keyboardInset: CGFloat = 0
     private(set) var composerHeight = CopilotDockLayout.expandedInputBarHeight
     private(set) var keyboardAnimationDuration: Double = 0.25
     private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
+    private(set) var isComposerFocused = false
 
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
     private var lastProcessedAt: CFAbsoluteTime = 0
     private var dismissKeyboardHandler: (() -> Void)?
-    private let collapseThreshold: CGFloat = 24
     private let scrollProcessInterval: CFAbsoluteTime = 0.05
+
+    func setActiveTab(_ tab: Int) {
+        activeTab = tab
+    }
+
+    func shouldAcceptScrollReports(from tab: Int, isTabActive: Bool) -> Bool {
+        isTabActive && tab == activeTab
+    }
 
     func setCanAutoExpand(_ value: Bool) {
         canAutoExpand = value
@@ -85,8 +88,13 @@ final class CopilotScrollContext {
         dismissKeyboardHandler = handler
     }
 
+    func setComposerFocused(_ focused: Bool) {
+        isComposerFocused = focused
+    }
+
     func dismissKeyboard() {
         dismissKeyboardHandler?()
+        isComposerFocused = false
     }
 
     func expandManually() {
@@ -110,19 +118,24 @@ final class CopilotScrollContext {
         }
         let now = CFAbsoluteTimeGetCurrent()
         let delta = offset - lastOffset
-        let direction: CopilotScrollDirection
-        if delta > 1 {
-            direction = .down
-        } else if delta < -1 {
-            direction = .up
-        } else {
+        guard let direction = CopilotScrollCollapsePolicy.direction(delta: delta) else {
             return
         }
 
         lastOffset = offset
 
-        let isCollapsing = direction == .down && offset > collapseThreshold && isExpanded
-        let isExpanding = direction == .up && !isExpanded && canAutoExpand
+        let isCollapsing = CopilotScrollCollapsePolicy.shouldCollapse(
+            normalizedOffset: offset,
+            direction: direction,
+            isExpanded: isExpanded,
+            isComposerFocused: isComposerFocused
+        )
+        let isExpanding = CopilotScrollCollapsePolicy.shouldExpand(
+            direction: direction,
+            isExpanded: isExpanded,
+            canAutoExpand: canAutoExpand,
+            isComposerFocused: isComposerFocused
+        )
         guard isCollapsing || isExpanding || now - lastProcessedAt >= scrollProcessInterval else {
             return
         }
@@ -142,38 +155,52 @@ final class CopilotScrollContext {
 }
 
 private struct CopilotScrollTracker: UIViewRepresentable {
+    let tab: Int
+    let isTabActive: Bool
+    let scrollContext: CopilotScrollContext
     let trackingGeneration: Int
-    let onOffsetChange: (CGFloat, Bool) -> Void
+    let isEnabled: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onOffsetChange: onOffsetChange)
+        Coordinator()
     }
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
         view.isUserInteractionEnabled = false
         view.backgroundColor = .clear
-        context.coordinator.scheduleAttach(from: view, generation: trackingGeneration)
+        context.coordinator.tab = tab
+        context.coordinator.isTabActive = isTabActive
+        context.coordinator.scrollContext = scrollContext
+        context.coordinator.updateEnabled(isEnabled, from: view, generation: trackingGeneration)
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.scheduleAttach(from: uiView, generation: trackingGeneration)
+        context.coordinator.tab = tab
+        context.coordinator.isTabActive = isTabActive
+        context.coordinator.scrollContext = scrollContext
+        context.coordinator.updateEnabled(isEnabled, from: uiView, generation: trackingGeneration)
     }
 
     final class Coordinator: NSObject {
         weak var scrollView: UIScrollView?
         private var observation: NSKeyValueObservation?
         private var attachedGeneration = -1
-        let onOffsetChange: (CGFloat, Bool) -> Void
+        private var isEnabled = false
+        var tab = 0
+        var isTabActive = false
+        weak var scrollContext: CopilotScrollContext?
 
-        init(onOffsetChange: @escaping (CGFloat, Bool) -> Void) {
-            self.onOffsetChange = onOffsetChange
-        }
-
-        func scheduleAttach(from view: UIView, generation: Int) {
+        func updateEnabled(_ enabled: Bool, from view: UIView, generation: Int) {
+            isEnabled = enabled
             DispatchQueue.main.async { [weak self, weak view] in
                 guard let self, let view else { return }
+                if !self.isEnabled {
+                    self.detach()
+                    self.attachedGeneration = -1
+                    return
+                }
                 if self.attachedGeneration != generation {
                     self.detach()
                     self.attachedGeneration = generation
@@ -225,9 +252,32 @@ private struct CopilotScrollTracker: UIViewRepresentable {
                 \.contentOffset,
                 options: [.new]
             ) { [weak self] scrollView, _ in
-                self?.onOffsetChange(scrollView.contentOffset.y, false)
+                guard scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else {
+                    return
+                }
+                let normalized = CopilotScrollCollapsePolicy.normalizedOffset(
+                    contentOffsetY: scrollView.contentOffset.y,
+                    adjustedTopInset: scrollView.adjustedContentInset.top
+                )
+                self?.reportOffset(normalized, isInitial: false)
             }
-            onOffsetChange(scrollView.contentOffset.y, true)
+            let normalized = CopilotScrollCollapsePolicy.normalizedOffset(
+                contentOffsetY: scrollView.contentOffset.y,
+                adjustedTopInset: scrollView.adjustedContentInset.top
+            )
+            reportOffset(normalized, isInitial: true)
+        }
+
+        private func reportOffset(_ offset: CGFloat, isInitial: Bool) {
+            let tab = self.tab
+            let isTabActive = self.isTabActive
+            guard let scrollContext = self.scrollContext else { return }
+            Task { @MainActor in
+                guard scrollContext.shouldAcceptScrollReports(from: tab, isTabActive: isTabActive) else {
+                    return
+                }
+                scrollContext.reportScroll(offset: offset, isInitial: isInitial)
+            }
         }
 
         func detach() {
@@ -243,27 +293,24 @@ private struct CopilotScrollTracker: UIViewRepresentable {
 }
 
 struct CopilotScrollReporter: ViewModifier {
+    let tab: Int
+    let isActive: Bool
     @Environment(CopilotScrollContext.self) private var scrollContext
+
+    private var isTrackingEnabled: Bool {
+        scrollContext.shouldAcceptScrollReports(from: tab, isTabActive: isActive)
+    }
 
     func body(content: Content) -> some View {
         content.background(
-            CopilotScrollTracker(trackingGeneration: scrollContext.trackingGeneration) { offset, isInitial in
-                scrollContext.reportScroll(offset: offset, isInitial: isInitial)
-            }
-        )
-    }
-}
-
-private struct CopilotDismissKeyboardOnTap: ViewModifier {
-    @Environment(CopilotScrollContext.self) private var scrollContext
-
-    func body(content: Content) -> some View {
-        content
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    scrollContext.dismissKeyboard()
-                }
+            CopilotScrollTracker(
+                tab: tab,
+                isTabActive: isActive,
+                scrollContext: scrollContext,
+                trackingGeneration: scrollContext.trackingGeneration,
+                isEnabled: isTrackingEnabled
             )
+        )
     }
 }
 
@@ -324,7 +371,6 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contentMargins(.bottom, margin, for: .scrollContent)
-            .animation(MotionPolicy.dockSpring, value: scrollContext.isExpanded)
     }
 }
 
@@ -378,12 +424,8 @@ private struct CopilotKeyboardInsetObserver: ViewModifier {
 }
 
 extension View {
-    func copilotScrollTracked() -> some View {
-        modifier(CopilotScrollReporter())
-    }
-
-    func copilotDismissKeyboardOnTap() -> some View {
-        modifier(CopilotDismissKeyboardOnTap())
+    func copilotScrollTracked(tab: Int, isActive: Bool) -> some View {
+        modifier(CopilotScrollReporter(tab: tab, isActive: isActive))
     }
 
     func copilotKeyboardDismissOverlay(

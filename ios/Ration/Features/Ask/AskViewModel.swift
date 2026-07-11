@@ -64,17 +64,14 @@ final class AskViewModel {
         self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
     }
 
-    var showsThinkingIndicator: Bool {
-        if completedTool != nil { return false }
-        switch turnPhase {
-        case .connecting, .thinking, .toolRunning:
-            return true
-        case .streaming:
-            guard let last = messages.last, last.role == "assistant" else { return true }
-            return last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .toolDone, .idle:
-            return false
-        }
+    var activityDisplay: CopilotActivityDisplay {
+        CopilotActivityDisplayResolver.resolve(
+            turnPhase: turnPhase,
+            isTurnActive: isTurnActive,
+            activeToolName: activeTool?.toolName,
+            completedTool: completedTool,
+            messages: messages
+        )
     }
 
     /// Last assistant message content length — drives scroll-to-bottom during streaming.
@@ -165,16 +162,16 @@ final class AskViewModel {
 
         do {
             turnPhase = .connecting
+            beginTurn()
+            state = .streaming
             if !isConnected {
+                observe(socket)
                 try await socket.connect()
                 isConnected = true
-                observe(socket)
             }
             clearTransientError()
             let userMessage = CopilotMessage(role: "user", content: trimmed)
             messages.append(userMessage)
-            beginTurn()
-            state = .streaming
             turnPhase = .thinking
             activeTool = nil
             completedTool = nil
@@ -360,7 +357,7 @@ final class AskViewModel {
                 label: CopilotToolLabels.label(for: toolName, phase: succeeded ? .done : .error),
                 succeeded: succeeded
             )
-            turnPhase = .thinking
+            turnPhase = .toolDone
             toolLingerTask?.cancel()
             toolLingerTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 800_000_000)
@@ -368,6 +365,9 @@ final class AskViewModel {
                 guard let self else { return }
                 if self.completedTool?.toolName == toolName {
                     self.completedTool = nil
+                    if self.isTurnActive, self.turnPhase == .toolDone {
+                        self.turnPhase = .thinking
+                    }
                 }
             }
             scheduleImmediateSnapshotSave()

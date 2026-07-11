@@ -204,20 +204,22 @@ struct GalleyView: View {
     }
 
     private func galleyEmptyState(isSearch: Bool) -> some View {
-        VStack(spacing: 16) {
-            EmptyStateView(
-                icon: isSearch ? "magnifyingglass" : "fork.knife",
-                title: isSearch ? "No matches" : "No galley plans yet",
-                message: isSearch
-                    ? "Try a different search term."
-                    : "Add a go-to meal or generate ideas from your Cargo."
-            )
-            if !isSearch {
-                Button("Add") { showingAddTypeChoice = true }
-                    .buttonStyle(SecondaryButtonStyle())
+        CopilotTrackableScrollSurface(tab: 2, isActive: isTabActive) {
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    icon: isSearch ? "magnifyingglass" : "fork.knife",
+                    title: isSearch ? "No matches" : "No galley plans yet",
+                    message: isSearch
+                        ? "Try a different search term."
+                        : "Add a go-to meal or generate ideas from your Cargo."
+                )
+                if !isSearch {
+                    Button("Add") { showingAddTypeChoice = true }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
             }
+            .padding(24)
         }
-        .padding(24)
     }
 
     private func placeholderMeal(id: String) -> Meal {
@@ -298,8 +300,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 2, isActive: isTabActive)
     }
 
     private var matchList: some View {
@@ -359,8 +360,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 2, isActive: isTabActive)
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {

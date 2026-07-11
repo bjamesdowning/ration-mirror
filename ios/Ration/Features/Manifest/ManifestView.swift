@@ -552,17 +552,19 @@ struct ManifestView: View {
     }
 
     private var emptyPrompt: some View {
-        VStack(spacing: 16) {
-            EmptyStateView(
-                icon: "calendar",
-                title: "Plan your next meal",
-                message: "Schedule meals from Galley to close your weekly loop."
-            )
-            Button("Add to plan") { showingAddEntry = true }
-                .buttonStyle(SecondaryButtonStyle())
-                .disabled(!env.network.isOnline)
+        CopilotTrackableScrollSurface(tab: 3, isActive: isTabActive, hasTabAction: true) {
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    icon: "calendar",
+                    title: "Plan your next meal",
+                    message: "Schedule meals from Galley to close your weekly loop."
+                )
+                Button("Add to plan") { showingAddEntry = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(!env.network.isOnline)
+            }
+            .padding(24)
         }
-        .padding(24)
     }
 
     @ViewBuilder
@@ -668,8 +670,7 @@ struct ManifestView: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 3, isActive: isTabActive)
     }
 
     private func handleConsume(_ entry: ManifestEntry) async {

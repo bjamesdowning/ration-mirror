@@ -198,7 +198,6 @@ struct MainTabView: View {
                     onOpenSheet: { env.ask.openSheet() },
                     onSend: { text in
                         guard let organizationId = env.session.activeOrganizationId else { return false }
-                        env.copilotScroll.dismissKeyboard()
                         let accepted = await env.ask.sendFromBar(
                             text,
                             api: env.api,
@@ -206,9 +205,6 @@ struct MainTabView: View {
                             organizationId: organizationId,
                             snapshots: env.snapshots
                         )
-                        if accepted {
-                            env.copilotScroll.collapse()
-                        }
                         return accepted
                     },
                     onStop: { await env.ask.model.stop() },
@@ -231,6 +227,7 @@ struct MainTabView: View {
         )
         .onChange(of: selectedTab) { _, tab in
             activatedTabs.insert(tab)
+            env.copilotScroll.setActiveTab(tab)
             env.copilotScroll.resetForTabChange()
             env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
         }
@@ -243,6 +240,7 @@ struct MainTabView: View {
                 snapshots: env.snapshots
             )
             env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            env.copilotScroll.setActiveTab(selectedTab)
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
                 openAskSheet: { env.ask.openSheet() },

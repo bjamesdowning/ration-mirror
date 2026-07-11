@@ -16,12 +16,11 @@ struct CopilotBottomDock: View {
     let onStop: () async -> Void
     let onExhaustedTap: () -> Void
 
-    @FocusState private var isInputFocused: Bool
+    @State private var focusToken = 0
+    @State private var dismissToken = 0
     @Namespace private var dockMorph
 
     var body: some View {
-        // Align to the bottom without expanding hit testing across the full
-        // TabView overlay (which would swallow tab-bar and content taps).
         VStack(spacing: 0) {
             dockContent
                 .padding(.horizontal, CopilotDockLayout.dockHorizontalPadding)
@@ -34,14 +33,18 @@ struct CopilotBottomDock: View {
         .animation(MotionPolicy.dockSpring, value: tabDock.revision)
         .onChange(of: scrollContext.isExpanded) { _, expanded in
             if !expanded {
-                isInputFocused = false
+                scrollContext.setComposerFocused(false)
             }
         }
         .onAppear {
-            scrollContext.registerDismissKeyboardHandler { isInputFocused = false }
+            scrollContext.registerDismissKeyboardHandler {
+                dismissToken += 1
+                focusToken = 0
+            }
         }
         .onDisappear {
             scrollContext.registerDismissKeyboardHandler(nil)
+            scrollContext.setComposerFocused(false)
         }
     }
 
@@ -73,7 +76,13 @@ struct CopilotBottomDock: View {
             isTurnActive: isTurnActive,
             isStopping: isStopping,
             isAwaitingApproval: isAwaitingApproval,
-            focus: $isInputFocused,
+            focusToken: focusToken,
+            dismissToken: dismissToken,
+            onFocusChange: { scrollContext.setComposerFocused($0) },
+            onDismissKeyboard: {
+                dismissToken += 1
+                focusToken = 0
+            },
             onOpenSheet: onOpenSheet,
             onSend: onSend,
             onStop: onStop,
@@ -99,7 +108,8 @@ struct CopilotBottomDock: View {
             if isExhausted {
                 onExhaustedTap()
             } else {
-                onOpenSheet()
+                scrollContext.expandManually()
+                requestFocus()
             }
         } label: {
             Image(systemName: "bubble.left.and.bubble.right")
@@ -128,6 +138,9 @@ struct CopilotBottomDock: View {
         .allowsHitTesting(false)
     }
 
+    private func requestFocus() {
+        focusToken += 1
+    }
 }
 
 private struct CopilotComposerHeightPreferenceKey: PreferenceKey {

@@ -7,12 +7,17 @@ struct AskView: View {
     @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
     @State private var followsLatest = true
-    @FocusState private var isComposerFocused: Bool
+    @State private var focusToken = 0
+    @State private var dismissToken = 0
+    @State private var isComposerFocused = false
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: model.status)
+    }
+    private var activityDisplay: CopilotActivityDisplay {
+        model.activityDisplay
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -25,19 +30,15 @@ struct AskView: View {
         }
         .background(Theme.ceramic.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            composer
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 16).onEnded { value in
-                        let translation = value.translation
-                        if translation.height > 20,
-                           abs(translation.height) > abs(translation.width) {
-                            isComposerFocused = false
-                        }
-                    }
-                )
+            VStack(spacing: 8) {
+                if activityDisplay != .hidden {
+                    CopilotActivityIndicator(display: activityDisplay)
+                        .padding(.horizontal, 16)
+                }
+                composer
+                    .padding(.horizontal, 16)
+            }
+            .padding(.vertical, 8)
         }
         .task(id: env.session.orgGeneration) {
             guard let organizationId else { return }
@@ -72,23 +73,6 @@ struct AskView: View {
                             .id(message.id)
                         }
 
-                        if let tool = model.activeTool {
-                            ToolStatusCard(status: tool, phase: .running)
-                        } else if let completed = model.completedTool {
-                            ToolStatusCard(
-                                status: CopilotToolStatus(
-                                    toolCallId: completed.toolName,
-                                    toolName: completed.toolName,
-                                    label: completed.label
-                                ),
-                                phase: completed.succeeded ? .done : .error
-                            )
-                        }
-
-                        if model.showsThinkingIndicator {
-                            ThinkingIndicator()
-                        }
-
                         stateCard
 
                         Color.clear
@@ -102,7 +86,7 @@ struct AskView: View {
                         }
                     }
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .scrollDismissesKeyboard(isComposerFocused ? .never : .interactively)
                 .overlay(alignment: .bottomTrailing) {
                     if !followsLatest, !model.messages.isEmpty {
                         Button {
@@ -140,7 +124,8 @@ struct AskView: View {
     }
 
     private func closeSheet() {
-        isComposerFocused = false
+        dismissToken += 1
+        focusToken = 0
         ask.closeSheet()
         dismiss()
     }
@@ -213,7 +198,13 @@ struct AskView: View {
             isTurnActive: model.isTurnActive,
             isStopping: model.isStopping,
             isAwaitingApproval: model.isAwaitingApproval,
-            focus: $isComposerFocused,
+            focusToken: focusToken,
+            dismissToken: dismissToken,
+            onFocusChange: { isComposerFocused = $0 },
+            onDismissKeyboard: {
+                dismissToken += 1
+                focusToken = 0
+            },
             onOpenSheet: {},
             onSend: { text in
                 guard let organizationId else { return false }
@@ -282,38 +273,6 @@ private struct CopilotStreamingCursor: View {
     }
 }
 
-private struct ThinkingIndicator: View {
-    @State private var phase = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        GlassCard {
-            HStack(spacing: 10) {
-                ProgressView().tint(Theme.hyperGreen)
-                Text("Copilot is thinking")
-                    .rationHeadline()
-                if !reduceMotion {
-                    HStack(spacing: 4) {
-                        ForEach(0..<3, id: \.self) { index in
-                            Circle()
-                                .fill(Theme.hyperGreen)
-                                .frame(width: 5, height: 5)
-                                .opacity(phase == index ? 1 : 0.25)
-                        }
-                    }
-                }
-            }
-        }
-        .task {
-            guard !reduceMotion else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                phase = (phase + 1) % 3
-            }
-        }
-    }
-}
-
 private struct MarkdownText: View {
     let markdown: String
 
@@ -323,39 +282,6 @@ private struct MarkdownText: View {
                 FontFamily(.system())
                 ForegroundColor(Theme.carbon)
             }
-    }
-}
-
-private enum ToolCardPhase {
-    case running
-    case done
-    case error
-}
-
-private struct ToolStatusCard: View {
-    let status: CopilotToolStatus
-    let phase: ToolCardPhase
-
-    var body: some View {
-        GlassCard {
-            HStack {
-                Group {
-                    switch phase {
-                    case .running:
-                        ProgressView().tint(Theme.hyperGreen)
-                    case .done:
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.hyperGreen)
-                    case .error:
-                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.warning)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(status.label).rationHeadline()
-                    Text(status.toolName).rationCaption()
-                }
-                Spacer()
-            }
-        }
     }
 }
 

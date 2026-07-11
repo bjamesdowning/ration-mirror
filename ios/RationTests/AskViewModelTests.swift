@@ -132,7 +132,7 @@ final class AskViewModelTests: XCTestCase {
 
         XCTAssertNil(model.activeTool)
         XCTAssertNotNil(model.completedTool)
-        XCTAssertEqual(model.turnPhase, .thinking)
+        XCTAssertEqual(model.turnPhase, .toolDone)
         XCTAssertNotNil(model.completedTool)
 
         try? await Task.sleep(nanoseconds: 900_000_000)
@@ -412,6 +412,59 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.state, .idle)
     }
 
+    func testSendActivatesTurnAndShowsThinkingActivity() async {
+        let socket = StreamingTestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        let auth = AuthManager()
+        let api = RationAPI(client: APIClient(auth: auth))
+        let snapshots = SnapshotStore()
+
+        let accepted = await model.send(
+            "Hello",
+            api: api,
+            auth: auth,
+            organizationId: "org-1",
+            snapshots: snapshots
+        )
+
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(model.messages.count, 1)
+        XCTAssertEqual(model.messages.first?.role, "user")
+        XCTAssertEqual(model.messages.first?.content, "Hello")
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertEqual(model.turnPhase, .thinking)
+        XCTAssertEqual(model.activityDisplay, .thinking)
+        XCTAssertEqual(socket.connectCount, 1)
+        XCTAssertEqual(socket.sentMessages.count, 1)
+    }
+
+    func testSendObservesStreamingEventsUntilMessageEnd() async {
+        let socket = StreamingTestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        let auth = AuthManager()
+        let api = RationAPI(client: APIClient(auth: auth))
+        let snapshots = SnapshotStore()
+
+        let accepted = await model.send(
+            "Hello",
+            api: api,
+            auth: auth,
+            organizationId: "org-1",
+            snapshots: snapshots
+        )
+        XCTAssertTrue(accepted)
+
+        socket.emit(Self.event(type: "text_delta", text: "Hi there"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        socket.emit(Self.event(type: "message_end"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(model.messages.map(\.role), ["user", "assistant"])
+        XCTAssertEqual(model.messages.last?.content, "Hi there")
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.state, .idle)
+    }
+
     private static func event(
         type: String,
         message: CopilotMessage? = nil,
@@ -441,6 +494,49 @@ final class AskViewModelTests: XCTestCase {
             description: description,
             blocked: nil
         )
+    }
+}
+
+@MainActor
+private final class StreamingTestAskSocketClient: AskSocketClient {
+    var conversationId = "test-conversation"
+    var connectCount = 0
+    var sentMessages: [[CopilotMessage]] = []
+    private let eventStream: AsyncStream<CopilotStreamEvent>
+    private let eventContinuation: AsyncStream<CopilotStreamEvent>.Continuation
+
+    init() {
+        var continuation: AsyncStream<CopilotStreamEvent>.Continuation!
+        eventStream = AsyncStream { cont in
+            continuation = cont
+        }
+        eventContinuation = continuation
+    }
+
+    func events() -> AsyncStream<CopilotStreamEvent> {
+        eventStream
+    }
+
+    func connect() async throws {
+        connectCount += 1
+    }
+
+    func send(_ messages: [CopilotMessage]) async throws {
+        sentMessages.append(messages)
+    }
+
+    func approve(_ approvalId: String, approved: Bool) async throws {}
+
+    func cancelActiveRequest() async throws {}
+
+    func newConversation() {
+        conversationId = "new-test-conversation"
+    }
+
+    func disconnect() {}
+
+    func emit(_ event: CopilotStreamEvent) {
+        eventContinuation.yield(event)
     }
 }
 

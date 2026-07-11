@@ -415,27 +415,33 @@ struct SupplyView: View {
                 } else if let list = model.list, !list.items.isEmpty, let organizationId {
                     listView(list, organizationId: organizationId)
                 } else {
-                    VStack(spacing: 16) {
-                        EmptyStateView(
-                            icon: "cart",
-                            title: "No supply delta yet",
-                            message: "Select meals in Galley, mark Cargo for restock, or plan meals in Manifest. Your list refreshes when you open Supply."
-                        )
-                        Button("Refresh list") {
-                            Task {
-                                guard let organizationId else { return }
-                                await model.sync(
-                                    api: env.api,
-                                    snapshots: env.snapshots,
-                                    online: env.network.isOnline,
-                                    organizationId: organizationId
-                                )
+                    CopilotTrackableScrollSurface(
+                        tab: 4,
+                        isActive: isTabActive,
+                        hasTabAction: false
+                    ) {
+                        VStack(spacing: 16) {
+                            EmptyStateView(
+                                icon: "cart",
+                                title: "No supply delta yet",
+                                message: "Select meals in Galley, mark Cargo for restock, or plan meals in Manifest. Your list refreshes when you open Supply."
+                            )
+                            Button("Refresh list") {
+                                Task {
+                                    guard let organizationId else { return }
+                                    await model.sync(
+                                        api: env.api,
+                                        snapshots: env.snapshots,
+                                        online: env.network.isOnline,
+                                        organizationId: organizationId
+                                    )
+                                }
                             }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(model.isSyncing)
                         }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(model.isSyncing)
+                        .padding(24)
                     }
-                    .padding(24)
                 }
             }
             .navigationTitle("Supply")
@@ -732,8 +738,7 @@ struct SupplyView: View {
         .copilotDockScrollMargins(
             hasTabAction: model.totalCount > 0
         )
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 4, isActive: isTabActive)
     }
 
     private func loadSupplyShareStatus() async {

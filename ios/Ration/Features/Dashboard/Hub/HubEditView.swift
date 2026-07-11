@@ -6,6 +6,7 @@ struct HubEditView: View {
     let hubLayout: HubLayoutPayload?
     let availableMealTags: [String]
     let availableCargoTags: [String]
+    var isTabActive: Bool = true
     let onSave: ([HubWidgetLayout]) async throws -> Void
     let onSaveProfile: (HubProfile) async throws -> Void
     let onExit: () -> Void
@@ -23,6 +24,7 @@ struct HubEditView: View {
         hubLayout: HubLayoutPayload?,
         availableMealTags: [String],
         availableCargoTags: [String],
+        isTabActive: Bool = true,
         onSave: @escaping ([HubWidgetLayout]) async throws -> Void,
         onSaveProfile: @escaping (HubProfile) async throws -> Void,
         onExit: @escaping () -> Void
@@ -31,6 +33,7 @@ struct HubEditView: View {
         self.hubLayout = hubLayout
         self.availableMealTags = availableMealTags
         self.availableCargoTags = availableCargoTags
+        self.isTabActive = isTabActive
         self.onSave = onSave
         self.onSaveProfile = onSaveProfile
         self.onExit = onExit
@@ -108,6 +111,9 @@ struct HubEditView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Theme.ceramic)
+            .scrollDismissesKeyboard(.interactively)
+            .copilotDockScrollMargins(hasTabAction: false)
+            .copilotScrollTracked(tab: 0, isActive: isTabActive)
             .navigationTitle("Edit Hub")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

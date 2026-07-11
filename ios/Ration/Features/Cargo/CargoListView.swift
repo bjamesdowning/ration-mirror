@@ -26,29 +26,33 @@ struct CargoListView: View {
                 if model.isLoading && isEmpty {
                     LoadingView()
                 } else if let errorMessage = model.errorMessage, isEmpty {
-                    VStack(spacing: 16) {
-                        ErrorBanner(message: errorMessage)
-                        Button("Retry") { Task { await reload() } }
-                            .buttonStyle(SecondaryButtonStyle())
-                    }
-                    .padding(24)
-                } else if isEmpty {
-                    VStack(spacing: 16) {
-                        EmptyStateView(
-                            icon: "shippingbox",
-                            title: model.isSearchActive ? "No matches" : "No cargo yet",
-                            message: model.isSearchActive
-                                ? "Try a different search term."
-                                : "Scan a receipt or add staples manually to fill your pantry."
-                        )
-                        if !model.isSearchActive {
-                            Button("Scan receipt") { onScan() }
-                                .buttonStyle(AIButtonStyle())
-                            Button("Add manually") { showingAdd = true }
+                    CopilotTrackableScrollSurface(tab: 1, isActive: isTabActive) {
+                        VStack(spacing: 16) {
+                            ErrorBanner(message: errorMessage)
+                            Button("Retry") { Task { await reload() } }
                                 .buttonStyle(SecondaryButtonStyle())
                         }
+                        .padding(24)
                     }
-                    .padding(24)
+                } else if isEmpty {
+                    CopilotTrackableScrollSurface(tab: 1, isActive: isTabActive) {
+                        VStack(spacing: 16) {
+                            EmptyStateView(
+                                icon: "shippingbox",
+                                title: model.isSearchActive ? "No matches" : "No cargo yet",
+                                message: model.isSearchActive
+                                    ? "Try a different search term."
+                                    : "Scan a receipt or add staples manually to fill your pantry."
+                            )
+                            if !model.isSearchActive {
+                                Button("Scan receipt") { onScan() }
+                                    .buttonStyle(AIButtonStyle())
+                                Button("Add manually") { showingAdd = true }
+                                    .buttonStyle(SecondaryButtonStyle())
+                            }
+                        }
+                        .padding(24)
+                    }
                 } else {
                     list
                 }
@@ -245,8 +249,7 @@ struct CargoListView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotDismissKeyboardOnTap()
-        .copilotScrollTracked()
+        .copilotScrollTracked(tab: 1, isActive: isTabActive)
     }
 }
 

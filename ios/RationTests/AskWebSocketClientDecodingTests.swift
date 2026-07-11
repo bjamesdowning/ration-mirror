@@ -120,4 +120,35 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertEqual(event.error?.code, "agent_error")
         XCTAssertEqual(event.error?.message, "Session expired")
     }
+
+    func testNonResponseAgentFrameReturnsNoopNotMessageEnd() {
+        let json = """
+        {"type":"cf_agent_chat_messages","id":"state-1"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "noop")
+        XCTAssertNil(event.error)
+    }
+
+    func testStateFrameThenDeltaThenFinishPreservesActiveTurn() {
+        let stateFrame = """
+        {"type":"cf_agent_chat_messages","id":"state-1"}
+        """
+        let textDelta = """
+        {"type":"cf_agent_use_chat_response","id":"resp-10","body":"{\\"type\\":\\"text-delta\\",\\"delta\\":\\"Hello\\"}"}
+        """
+        let finish = """
+        {"type":"cf_agent_use_chat_response","id":"resp-11","body":"{\\"type\\":\\"finish\\"}"}
+        """
+
+        let stateEvent = CopilotWebSocketDecoder.decode(data: Data(stateFrame.utf8))
+        let deltaEvent = CopilotWebSocketDecoder.decode(data: Data(textDelta.utf8))
+        let finishEvent = CopilotWebSocketDecoder.decode(data: Data(finish.utf8))
+
+        XCTAssertEqual(stateEvent.type, "noop")
+        XCTAssertEqual(deltaEvent.type, "text_delta")
+        XCTAssertEqual(deltaEvent.text, "Hello")
+        XCTAssertEqual(finishEvent.type, "message_end")
+    }
 }

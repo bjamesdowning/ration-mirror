@@ -141,6 +141,15 @@ test -d ios/Ration.xcodeproj
 **Production:** TestFlight auto-uploads from `main` do not publish to the public App Store.
 When live, submit a tested build manually under **Distribution → + Version → Submit for Review**.
 
+**Export archive exit code 70** (archive succeeds, export/signing fails):
+
+This is an Apple **managed signing** issue in Xcode Cloud, not a compile error. In the detailed export log, look for `No signing certificate "iOS Distribution" found` or similar.
+
+1. [developer.apple.com → Certificates](https://developer.apple.com/account/resources/certificates/list) — revoke **Distribution Managed (Xcode Cloud)** and **Development Managed (Xcode Cloud)** (revoked certs are recreated on the next build).
+2. Confirm App ID `com.mayutic.ration` has **Sign in with Apple** and **Associated Domains** enabled (matches `Ration.entitlements`).
+3. Confirm App Store Connect **agreements** are active and the workflow Archive action targets **App Store Connect** (not Development only).
+4. Rebuild in Xcode Cloud after revoking certs.
+
 ### Pointing at a local backend
 
 The app defaults to `https://ration.mayutic.com/api/mobile/v1`. To test against a

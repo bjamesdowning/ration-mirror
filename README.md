@@ -507,6 +507,8 @@ sequenceDiagram
 
 **Supply snooze:** If a user has previously snoozed an ingredient (e.g. "soy sauce" — already have it somewhere), a `supply_snooze` row suppresses it from appearing in newly synced supply lists until the snooze expires.
 
+**Manifest planning horizon:** Which scheduled Manifest meals contribute to Supply is controlled separately from the Manifest page view. Org-scoped `organization.metadata.supplySettings.manifestHorizonDays` (1–30, default 7) defines a forward-looking window (`today` → `today + N - 1`). Owner/admin edit via Supply options or Group Settings (`PATCH /api/organization/supply-settings`); members see the active window read-only. Galley selections and Cargo restock toggles are not date-filtered.
+
 ---
 
 ### 3.6 Meal Plan Consume Flow (D1 + Vectorize)
@@ -679,7 +681,7 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 - **Day supply inclusion** — Each manifest day can be included or excluded from Supply sync via toggles on day headers (`POST /api/meal-plans/supply-days/:date`). Default: all days included. Excluded days persist in `manifest_supply_day` and filter manifest entries by `meal_plan_entry.date` during sync.
 - **Readiness signal** — Each Manifest meal card shows a subtle availability dot (green = all required ingredients available, amber = missing ingredients) based on current cargo inventory. **Expired cargo** (past `expiresAt`) is excluded from availability; items expiring soon still count as available.
 - **Share** — Crew Member only. Generates a `shareToken` (URL-safe, unique). Public read-only at `/shared/manifest/:token`.
-- **Week navigation** — The `?week=` query param shifts the 7-day window. The UI computes ISO week offsets on the client; the loader fetches entries for `startDate`–`endDate`.
+- **Week navigation** — The `?week=` query param shifts the visible window. **Calendar span** (`user.settings.manifestSettings.calendarSpan`: 3, 5, or 7 days) controls how many days appear on the Manifest page only (editable on Manifest, not Hub Settings). The Hub **manifest-preview** widget has its own per-user `daySpan` filter (Today / 3 / 7 / 14 days) via Customize Hub.
 
 ---
 
@@ -688,7 +690,8 @@ The Manifest is a calendar-style meal plan. Each organization has a single activ
 The supply list bridges the Galley and Cargo — it holds ingredients needed to cook the selected meals that aren't already in the pantry.
 
 **Key workflows:**
-- **Sync** — Opening Supply auto-syncs on each visit; use **Refresh list** to recompute manually. `POST /hub/supply` (intent `update-list`) materializes contributions from manifest week meals, Galley `active_meal_selection`, and Cargo `active_cargo_selection` (restock toggles with optional `quantity_override`). Meal rows use pantry gap math; cargo restock uses explicit buy quantity. Contributions merge by `normalizeForCargoDedup` name + domain into one row with multiple `sourceOrigins` badges. Vectorize resolves fuzzy name matches for meal gaps. Snoozed items are excluded.
+- **Sync** — Opening Supply auto-syncs on each visit; use **Refresh list** to recompute manually. `POST /hub/supply` (intent `update-list`) materializes contributions from Manifest meals within the org **planning horizon** (see §3.5), Galley `active_meal_selection`, and Cargo `active_cargo_selection` (restock toggles with optional `quantity_override`). Meal rows use pantry gap math; cargo restock uses explicit buy quantity. Contributions merge by `normalizeForCargoDedup` name + domain into one row with multiple `sourceOrigins` badges. Vectorize resolves fuzzy name matches for meal gaps. Snoozed items are excluded.
+- **Planning horizon** — Owner/admin set how many days of Manifest meals feed the list (7/14/21/30 presets or 1–30 custom on web) in Supply options or Group Settings. Stored in `organization.metadata.supplySettings.manifestHorizonDays`.
 - **Selection toggles** — Galley meals and Cargo items can be marked for Supply sync via toggle on cards/rows (web) or swipe actions (iOS). Adding cargo to Supply prompts for restock quantity (default 1 + cargo unit). Selection bars show counts + Clear all.
 - **Unit normalization** — Global **unit display mode** (`user.settings.unitDisplayMode`: `original`, `metric`, `imperial`, or `cooking`) controls how quantities appear across Cargo, Galley, and Supply via `presentQuantity()`. Set it in **Hub → System → Preferences**. Legacy `supplyUnitMode` is kept in sync in both directions for older clients. Cargo, meal ingredients, and supply items store **authored** `quantity`/`unit` plus canonical `base_quantity`/`base_unit` for matching, sync gap math, and mode-aware display. Liquids stay volume-based (`ml`) while volume-measured solids with density data canonicalize to weight. Run `bun run db:migrate:dev`, export row JSON, then generate reviewed SQL with `scripts/backfill-base-quantity.ts` after deploy. iOS density data is generated from the TypeScript table with `bun run ios:density`.
 - **From meal** — `POST /api/supply-lists/:id/from-meal` adds missing ingredients for a single specific meal.

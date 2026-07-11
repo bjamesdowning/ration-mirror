@@ -40,6 +40,7 @@ struct OrgMembership: Codable, Sendable, Identifiable {
     let isActive: Bool
 
     var canManageLogo: Bool { role == "owner" || role == "admin" }
+    var canManageSupplySettings: Bool { role == "owner" || role == "admin" }
 }
 
 /// Credit costs for AI features — mirrors `AI_COSTS` from ledger.server.
@@ -688,6 +689,25 @@ struct HubResponse: Codable, Sendable {
 }
 
 // MARK: - Settings
+
+struct OrganizationSupplySettings: Codable, Sendable {
+    var manifestHorizonDays: Int?
+}
+
+struct SupplyPlanningWindow: Codable, Sendable {
+    let startDate: String
+    let endDate: String
+    let horizonDays: Int
+}
+
+struct OrganizationSupplySettingsResponse: Codable, Sendable {
+    let supplySettings: OrganizationSupplySettings
+    let window: SupplyPlanningWindow
+}
+
+struct OrganizationSupplySettingsPatch: Encodable, Sendable {
+    let manifestHorizonDays: Int
+}
 
 struct ManifestSettings: Codable, Sendable {
     var weekStart: String?

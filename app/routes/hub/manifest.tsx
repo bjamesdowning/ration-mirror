@@ -34,7 +34,11 @@ import { Toast } from "~/components/shell/Toast";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { useToast } from "~/hooks/useToast";
 import { parseAllergens } from "~/lib/allergens";
-import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
+import {
+	getUserSettings,
+	requireActiveGroup,
+	writeUserSettings,
+} from "~/lib/auth.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import type {
@@ -51,6 +55,7 @@ import {
 import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { type TagRecord, toTagSlugs } from "~/lib/tags";
 import type { Route } from "./+types/manifest";
@@ -174,6 +179,51 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		readyMealIds,
 		supplyDayInclusion,
 	};
+}
+
+export async function action({ request, context }: Route.ActionArgs) {
+	const {
+		session: { user },
+	} = await requireActiveGroup(context, request);
+	const formData = await request.formData();
+	const intent = formData.get("intent");
+
+	if (intent === "update-manifest-calendar-span") {
+		const env = context.cloudflare.env;
+		const rateLimitResult = await checkRateLimit(
+			env.RATION_KV,
+			"settings_mutation",
+			user.id,
+		);
+		if (!rateLimitResult.allowed) {
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many requests. Please try again later.",
+			);
+		}
+
+		const spanRaw = formData.get("span") as string;
+		const span =
+			spanRaw === "3" || spanRaw === "5" || spanRaw === "7"
+				? (+spanRaw as 3 | 5 | 7)
+				: null;
+		if (span !== null) {
+			const currentSettings = await getUserSettings(
+				context.cloudflare.env.DB,
+				user.id,
+			);
+			await writeUserSettings(context.cloudflare.env.DB, user.id, {
+				...currentSettings,
+				manifestSettings: {
+					...currentSettings.manifestSettings,
+					calendarSpan: span,
+				},
+			});
+		}
+		return { success: true };
+	}
+
+	return null;
 }
 
 const DAY_NAMES = [

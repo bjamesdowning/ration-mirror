@@ -6,7 +6,9 @@ import {
 	getWeekDates,
 	getWeekEnd,
 	getWeekStart,
+	resolveManifestHorizonDays,
 	resolveManifestSupplyWindow,
+	resolveSupplyManifestWindow,
 	toISODateString,
 } from "~/lib/manifest-dates";
 
@@ -180,5 +182,65 @@ describe("resolveManifestSupplyWindow", () => {
 		);
 		expect(window.startDate).toBe("2025-01-06");
 		expect(window.endDate).toBe("2025-01-12");
+	});
+});
+
+describe("resolveManifestHorizonDays", () => {
+	it("defaults to 7 when org metadata is missing", () => {
+		expect(resolveManifestHorizonDays(null)).toBe(7);
+		expect(resolveManifestHorizonDays(undefined)).toBe(7);
+	});
+
+	it("reads manifestHorizonDays from org metadata", () => {
+		expect(
+			resolveManifestHorizonDays({
+				supplySettings: { manifestHorizonDays: 14 },
+			}),
+		).toBe(14);
+	});
+
+	it("falls back to default for out-of-range values", () => {
+		expect(
+			resolveManifestHorizonDays({
+				supplySettings: { manifestHorizonDays: 45 },
+			}),
+		).toBe(7);
+	});
+});
+
+describe("resolveSupplyManifestWindow", () => {
+	it("returns forward-looking window from today", () => {
+		const window = resolveSupplyManifestWindow(
+			{ supplySettings: { manifestHorizonDays: 7 } },
+			"2025-01-08",
+		);
+		expect(window.startDate).toBe("2025-01-08");
+		expect(window.endDate).toBe("2025-01-14");
+		expect(window.horizonDays).toBe(7);
+	});
+
+	it("supports 1-day horizon (today only)", () => {
+		const window = resolveSupplyManifestWindow(
+			{ supplySettings: { manifestHorizonDays: 1 } },
+			"2025-01-08",
+		);
+		expect(window.startDate).toBe("2025-01-08");
+		expect(window.endDate).toBe("2025-01-08");
+		expect(window.horizonDays).toBe(1);
+	});
+
+	it("supports 30-day horizon", () => {
+		const window = resolveSupplyManifestWindow(
+			{ supplySettings: { manifestHorizonDays: 30 } },
+			"2025-01-08",
+		);
+		expect(window.endDate).toBe("2025-02-06");
+		expect(window.horizonDays).toBe(30);
+	});
+
+	it("defaults to 7 days when unset", () => {
+		const window = resolveSupplyManifestWindow(null, "2025-01-08");
+		expect(window.endDate).toBe("2025-01-14");
+		expect(window.horizonDays).toBe(7);
 	});
 });

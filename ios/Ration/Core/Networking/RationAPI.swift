@@ -46,6 +46,19 @@ final class RationAPI {
         try await client.patch("settings", body: patch)
     }
 
+    func organizationSupplySettings() async throws -> OrganizationSupplySettingsResponse {
+        try await client.get("organization/supply-settings")
+    }
+
+    func patchOrganizationSupplySettings(
+        manifestHorizonDays: Int
+    ) async throws -> OrganizationSupplySettingsResponse {
+        try await client.patch(
+            "organization/supply-settings",
+            body: OrganizationSupplySettingsPatch(manifestHorizonDays: manifestHorizonDays)
+        )
+    }
+
     // Hub
     func hub() async throws -> HubResponse {
         try await client.get("hub")

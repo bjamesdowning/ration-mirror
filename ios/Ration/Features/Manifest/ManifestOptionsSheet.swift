@@ -51,6 +51,9 @@ struct ManifestOptionsSheet: View {
                             .foregroundStyle(Theme.danger)
                             .font(Typography.caption())
                     }
+                    Text("Controls how many days you see on the Manifest page only. Does not affect Supply.")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
                     Picker("Week starts", selection: $selectedWeekStart) {
                         Text("Sunday").tag("sunday")
                         Text("Monday").tag("monday")

@@ -37,6 +37,7 @@ import { ReplenishModal } from "~/components/supply/ReplenishModal";
 import { ReplenishReceiptModal } from "~/components/supply/ReplenishReceiptModal";
 import { ShareModal } from "~/components/supply/ShareModal";
 import { SnoozedItemsPanel } from "~/components/supply/SnoozedItemsPanel";
+import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
 import { SupplyList } from "~/components/supply/SupplyList";
 import { SupplyShoppingBar } from "~/components/supply/SupplyShoppingBar";
 import { usePageFilters } from "~/hooks/usePageFilters";
@@ -47,8 +48,13 @@ import { getCargoTagIndex } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
-import { resolveManifestSupplyWindow } from "~/lib/manifest-dates";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
+import {
+	canManageGroupSupplySettings,
+	getMemberRole,
+	getOrganizationMetadata,
+	resolveSupplyContext,
+} from "~/lib/org-supply-settings.server";
 import { ListIdSchema } from "~/lib/schemas/supply";
 import {
 	completeSupplyList,
@@ -110,7 +116,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		context.cloudflare.env.DB,
 		session.user.id,
 	);
-	const manifestWindow = resolveManifestSupplyWindow(userSettings);
+	const orgMetadata = await getOrganizationMetadata(
+		context.cloudflare.env.DB,
+		groupId,
+	);
+	const supplyContext = resolveSupplyContext(orgMetadata);
+	const memberRole = await getMemberRole(
+		context.cloudflare.env.DB,
+		groupId,
+		session.user.id,
+	);
 
 	const [
 		list,
@@ -127,7 +142,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getManifestWeekMealsForSupply(
 			context.cloudflare.env.DB,
 			groupId,
-			manifestWindow,
+			supplyContext.window,
 		),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
 	]);
@@ -158,6 +173,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		snoozes,
 		unitDisplayMode: resolveUnitDisplayMode(userSettings),
 		mealTagSlugsByMealId,
+		supplyWindow: supplyContext.window,
+		canManageSupplySettings: canManageGroupSupplySettings(
+			memberRole ?? "member",
+		),
 	};
 }
 
@@ -273,6 +292,8 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 		cargo,
 		snoozes = [],
 		mealTagSlugsByMealId = {},
+		supplyWindow,
+		canManageSupplySettings,
 	} = loaderData;
 	const location = useLocation();
 	type SyncResult = {
@@ -364,6 +385,19 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 	// Filter content for mobile sheet
 	const filterContent = (
 		<div className="space-y-6">
+			<div className="space-y-2">
+				<p className="text-xs font-semibold text-muted uppercase tracking-widest">
+					Manifest planning
+				</p>
+				<SupplyHorizonPicker
+					horizonDays={supplyWindow.horizonDays}
+					windowEndDate={supplyWindow.endDate}
+					canEdit={canManageSupplySettings}
+					fullWidth
+					onHorizonChange={() => handleRefreshList()}
+				/>
+			</div>
+
 			<DomainFilterChips
 				activeDomain={activeDomain}
 				onDomainChange={handleDomainChange}
@@ -549,6 +583,18 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 						purchasedCount={progressPurchasedCount}
 						totalCount={progressTotalCount}
 					/>
+					<div className="hidden md:block glass-panel rounded-xl p-4">
+						<p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">
+							Manifest planning
+						</p>
+						<SupplyHorizonPicker
+							horizonDays={supplyWindow.horizonDays}
+							windowEndDate={supplyWindow.endDate}
+							canEdit={canManageSupplySettings}
+							showStepper
+							onHorizonChange={() => handleRefreshList()}
+						/>
+					</div>
 					<div className="hidden md:block">
 						<PanelToolbar
 							primaryAction={

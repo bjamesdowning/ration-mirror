@@ -3,7 +3,7 @@ set -euo pipefail
 
 IOS_PROJECT="ios/Ration.xcodeproj"
 IOS_SCHEME="Ration"
-IOS_TEST_SCHEME="RationTests"
+IOS_TEST_SCHEME="Ration"
 IOS_DESTINATION="${IOS_DESTINATION:-generic/platform=iOS Simulator}"
 # Project-local DerivedData so the gate is isolated from (and never wipes) the
 # user's Xcode GUI cache. Resetting this path before a test run is how we avoid

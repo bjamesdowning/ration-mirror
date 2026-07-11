@@ -38,6 +38,18 @@ final class ManifestDateHelpersTests: XCTestCase {
         XCTAssertEqual(anchor, today)
     }
 
+    func testSupplyManifestWindowForwardLooking() {
+        let window = ManifestDateHelpers.supplyManifestWindow(horizonDays: 14, today: "2026-07-11")
+        XCTAssertEqual(window.startDate, "2026-07-11")
+        XCTAssertEqual(window.endDate, "2026-07-24")
+        XCTAssertEqual(window.horizonDays, 14)
+    }
+
+    func testSupplyManifestWindowClampsToBounds() {
+        let window = ManifestDateHelpers.supplyManifestWindow(horizonDays: 99, today: "2026-07-11")
+        XCTAssertEqual(window.horizonDays, 30)
+    }
+
     func testAddDaysAcrossMonthBoundary() {
         let result = ManifestDateHelpers.addDays("2026-01-30", days: 5)
         XCTAssertEqual(result, "2026-02-04")

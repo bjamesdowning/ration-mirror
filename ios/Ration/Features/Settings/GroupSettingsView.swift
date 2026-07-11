@@ -12,6 +12,10 @@ struct GroupSettingsView: View {
     @State private var transferConfirmText = ""
     @State private var selectedTransferMemberId = ""
 
+    @State private var supplyWindow: SupplyPlanningWindow?
+    @State private var isLoadingSupplySettings = false
+    @State private var supplySettingsError: String?
+
     private var tierLabel: String { env.session.isCrewMember ? "CREW" : "FREE" }
 
     var body: some View {
@@ -26,6 +30,7 @@ struct GroupSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ceramic)
         .task { await model.load(api: env.api) }
+        .task { await loadSupplySettings() }
         .refreshable { await model.load(api: env.api) }
         .sheet(isPresented: $showingPaywall) { PaywallView() }
         .alert("Delete this group permanently?", isPresented: $showingDeleteConfirm) {
@@ -79,6 +84,8 @@ struct GroupSettingsView: View {
 
             activeOrgSection
 
+            supplyPlanningSection
+
             if let session = model.session, session.organizations.count > 1 {
                 orgSwitcherSection(session)
             }
@@ -129,6 +136,67 @@ struct GroupSettingsView: View {
                         )
                     }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var supplyPlanningSection: some View {
+        Section("Supply planning") {
+            if let supplySettingsError {
+                Text(supplySettingsError)
+                    .foregroundStyle(Theme.danger)
+                    .font(Typography.caption())
+            }
+            if let supplyWindow {
+                Text("Including Manifest meals through \(HubDateFormat.smartLabel(isoDate: supplyWindow.endDate)) (\(supplyWindow.horizonDays) days)")
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+            }
+            if env.session.activeOrg?.canManageSupplySettings == true {
+                Picker("Planning horizon", selection: horizonBinding) {
+                    ForEach([7, 14, 21, 30], id: \.self) { days in
+                        Text("\(days) days").tag(days)
+                    }
+                }
+                .disabled(isLoadingSupplySettings)
+            } else {
+                Text("Only group owners and admins can change the planning horizon.")
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private var horizonBinding: Binding<Int> {
+        Binding(
+            get: { supplyWindow?.horizonDays ?? 7 },
+            set: { newValue in
+                guard newValue != supplyWindow?.horizonDays else { return }
+                Task { await patchHorizon(newValue) }
+            }
+        )
+    }
+
+    private func loadSupplySettings() async {
+        guard env.network.isOnline else { return }
+        do {
+            let response = try await env.api.organizationSupplySettings()
+            supplyWindow = response.window
+        } catch {
+            supplySettingsError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func patchHorizon(_ days: Int) async {
+        isLoadingSupplySettings = true
+        supplySettingsError = nil
+        defer { isLoadingSupplySettings = false }
+        do {
+            let response = try await env.api.patchOrganizationSupplySettings(manifestHorizonDays: days)
+            supplyWindow = response.window
+            Haptics.success()
+        } catch {
+            supplySettingsError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

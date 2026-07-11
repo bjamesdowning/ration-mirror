@@ -126,6 +126,16 @@ enum ManifestDateHelpers {
         return days + 1
     }
 
+    /// Forward-looking Manifest window for Supply sync (mirrors web `resolveSupplyManifestWindow`).
+    static func supplyManifestWindow(
+        horizonDays: Int,
+        today: String? = nil
+    ) -> (startDate: String, endDate: String, horizonDays: Int) {
+        let clamped = min(30, max(1, horizonDays))
+        let anchor = today ?? todayISO()
+        return (anchor, addDays(anchor, days: clamped - 1), clamped)
+    }
+
     static func monthGridDates(containing isoDate: String) -> [String] {
         guard let anchor = localDate(from: isoDate) else { return [] }
         let month = calendar.component(.month, from: anchor)

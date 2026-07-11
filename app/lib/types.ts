@@ -36,7 +36,7 @@ export interface UserSettings {
 		weekStart?: "sunday" | "monday";
 		defaultSlots?: string[]; // e.g. ["breakfast", "lunch", "dinner"]
 		showSnackSlot?: boolean;
-		/** Number of days shown in Manifest on desktop: 3, 5, or 7. Default 5. */
+		/** Number of days shown on the Manifest page: 3, 5, or 7. Default 5. View only — does not affect Supply. */
 		calendarSpan?: 3 | 5 | 7;
 	};
 	/** ISO timestamp when the user completed onboarding. Null/absent = not yet completed. */
@@ -156,9 +156,15 @@ export interface HubWidgetProps {
 	size: "sm" | "md" | "lg";
 }
 
+export interface OrganizationSupplySettings {
+	/** Manifest meal entries through today + (N-1) days contribute to Supply. Default 7. */
+	manifestHorizonDays?: number;
+}
+
 // Extended organization type with credits and metadata
 export interface OrganizationMetadata {
 	isPersonal?: boolean;
+	supplySettings?: OrganizationSupplySettings;
 	[key: string]: unknown;
 }
 

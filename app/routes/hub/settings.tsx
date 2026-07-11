@@ -14,7 +14,6 @@ import {
 	useRouteLoaderData,
 } from "react-router";
 import { CheckIcon, SettingsIcon } from "~/components/icons/PageIcons";
-import { CalendarSpanPicker } from "~/components/manifest/CalendarSpanPicker";
 import { AllergenSelector } from "~/components/settings/AllergenSelector";
 import { DeveloperSection } from "~/components/settings/developer/DeveloperSection";
 import { TagsSettingsSection } from "~/components/settings/TagsSettingsSection";
@@ -24,6 +23,7 @@ import { Toast } from "~/components/shell/Toast";
 import { UnitDisplayToggle } from "~/components/shell/UnitDisplayToggle";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { UserAvatar } from "~/components/shell/UserAvatar";
+import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
 import { type AllergenSlug, parseAllergens } from "~/lib/allergens";
@@ -40,6 +40,11 @@ import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
 import { log } from "~/lib/logging.server";
 import { listConnectedAgentGrants } from "~/lib/oauth.server";
+import {
+	canManageGroupSupplySettings,
+	getOrganizationMetadata,
+	resolveSupplyContext,
+} from "~/lib/org-supply-settings.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
@@ -284,10 +289,13 @@ export async function loader(args: Route.LoaderArgs) {
 			},
 		});
 
-		const [organizationTags, unusedTags] = await Promise.all([
+		const [organizationTags, unusedTags, orgMetadata] = await Promise.all([
 			getOrganizationTags(env.DB, groupId),
 			getUnusedTags(env.DB, groupId),
+			getOrganizationMetadata(env.DB, groupId),
 		]);
+
+		const supplyContext = resolveSupplyContext(orgMetadata);
 
 		// Groups the user owns with no other members (will be deleted on account purge)
 		const ownedMemberships = userMemberships.filter((m) => m.role === "owner");
@@ -327,6 +335,8 @@ export async function loader(args: Route.LoaderArgs) {
 			ownedGroupsWithNoOtherMembers,
 			organizationTags,
 			unusedTags,
+			supplyWindow: supplyContext.window,
+			canManageSupplySettings: canManageGroupSupplySettings(currentUserRole),
 		};
 	} catch (error) {
 		log.error("[Settings] Loader failed", error);
@@ -526,25 +536,6 @@ export async function action(args: Route.ActionArgs) {
 		return { success: true, mode };
 	}
 
-	if (intent === "update-manifest-calendar-span") {
-		const spanRaw = formData.get("span") as string;
-		const span =
-			spanRaw === "3" || spanRaw === "5" || spanRaw === "7"
-				? (+spanRaw as 3 | 5 | 7)
-				: null;
-		if (span !== null) {
-			const currentSettings = await getUserSettings(env.DB, userId);
-			await writeUserSettings(env.DB, userId, {
-				...currentSettings,
-				manifestSettings: {
-					...currentSettings.manifestSettings,
-					calendarSpan: span,
-				},
-			});
-		}
-		return { success: true };
-	}
-
 	return null;
 }
 
@@ -706,6 +697,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							organizationLogo={loaderData.organizationLogo ?? null}
 							organizationTags={loaderData.organizationTags ?? []}
 							unusedTags={loaderData.unusedTags ?? []}
+							supplyWindow={loaderData.supplyWindow}
+							canManageSupplySettings={loaderData.canManageSupplySettings}
 						/>
 					)}
 					{activeSection === "preferences" && (
@@ -1097,6 +1090,8 @@ function GroupSection({
 	organizationLogo,
 	organizationTags,
 	unusedTags,
+	supplyWindow,
+	canManageSupplySettings,
 }: {
 	// biome-ignore lint/suspicious/noExplicitAny: members type is complex from Drizzle query
 	members: any[];
@@ -1115,6 +1110,12 @@ function GroupSection({
 	organizationLogo: string | null;
 	organizationTags: TagWithCounts[];
 	unusedTags: TagWithCounts[];
+	supplyWindow: {
+		startDate: string;
+		endDate: string;
+		horizonDays: number;
+	};
+	canManageSupplySettings: boolean;
 }) {
 	const revalidator = useRevalidator();
 	const successToast = useToast({ duration: 3000 });
@@ -1249,6 +1250,19 @@ function GroupSection({
 				currentUserRole={currentUserRole}
 				groupCanInviteMembers={groupCanInviteMembers}
 			/>
+			<div className="glass-panel rounded-xl p-6">
+				<h3 className="text-xs text-label text-muted mb-1">Supply planning</h3>
+				<p className="text-sm text-muted mb-4">
+					How far ahead Manifest meals contribute to your shared Supply list.
+					Galley selections and Cargo restock are always included.
+				</p>
+				<SupplyHorizonPicker
+					horizonDays={supplyWindow.horizonDays}
+					windowEndDate={supplyWindow.endDate}
+					canEdit={canManageSupplySettings}
+					showStepper
+				/>
+			</div>
 			<TagsSettingsSection
 				tags={organizationTags}
 				unusedTags={unusedTags}
@@ -1418,9 +1432,6 @@ function PreferencesSection({ settings }: { settings: UserSettings }) {
 			{/* Default View */}
 			<ViewModeSection settings={settings} />
 
-			{/* Manifest Calendar */}
-			<ManifestCalendarSection settings={settings} />
-
 			{/* Hub Layout */}
 			<div className="glass-panel rounded-xl p-6">
 				<h3 className="text-xs text-label text-muted mb-1">Hub Layout</h3>
@@ -1562,44 +1573,6 @@ function ViewModeSection({ settings }: { settings: UserSettings }) {
 						</fieldset>
 					</div>
 				))}
-				{fetcher.state !== "idle" && (
-					<span className="text-hyper-green animate-pulse text-sm">
-						Saving...
-					</span>
-				)}
-			</div>
-		</div>
-	);
-}
-
-// ─── Manifest Calendar Section ─────────────────────────────────────────────────
-
-function ManifestCalendarSection({ settings }: { settings: UserSettings }) {
-	const fetcher = useFetcher();
-
-	const calendarSpan =
-		(settings.manifestSettings as { calendarSpan?: 3 | 5 | 7 } | undefined)
-			?.calendarSpan ?? 5;
-
-	const handleChange = (span: 3 | 5 | 7) => {
-		fetcher.submit(
-			{ intent: "update-manifest-calendar-span", span: String(span) },
-			{ method: "post" },
-		);
-	};
-
-	return (
-		<div className="glass-panel rounded-xl p-6">
-			<h3 className="text-xs text-label text-muted mb-1">Manifest Calendar</h3>
-			<p className="text-sm text-muted mb-4">
-				Number of days shown in the Manifest. On mobile, swipe between days
-				using the day tabs.
-			</p>
-			<div className="flex items-center gap-2">
-				<CalendarSpanPicker
-					currentSpan={calendarSpan}
-					onChange={handleChange}
-				/>
 				{fetcher.state !== "idle" && (
 					<span className="text-hyper-green animate-pulse text-sm">
 						Saving...

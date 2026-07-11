@@ -25,7 +25,7 @@ export function CalendarSpanSelector({
 		pendingSpanRef.current = span;
 		fetcher.submit(
 			{ intent: "update-manifest-calendar-span", span: String(span) },
-			{ method: "post", action: "/hub/settings" },
+			{ method: "post", action: "/hub/manifest" },
 		);
 	};
 

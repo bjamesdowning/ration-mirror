@@ -112,12 +112,56 @@ export function getCalendarDates(
 	return dates;
 }
 
+import {
+	SUPPLY_MANIFEST_HORIZON_DEFAULT,
+	SUPPLY_MANIFEST_HORIZON_MAX,
+	SUPPLY_MANIFEST_HORIZON_MIN,
+} from "./schemas/org-supply-settings";
+import type { OrganizationMetadata } from "./types";
+
+export const SUPPLY_MANIFEST_HORIZON = {
+	min: SUPPLY_MANIFEST_HORIZON_MIN,
+	max: SUPPLY_MANIFEST_HORIZON_MAX,
+	default: SUPPLY_MANIFEST_HORIZON_DEFAULT,
+} as const;
+
+/** Resolves how many forward days of Manifest entries feed Supply sync. */
+export function resolveManifestHorizonDays(
+	orgMetadata: OrganizationMetadata | null | undefined,
+): number {
+	const raw = orgMetadata?.supplySettings?.manifestHorizonDays;
+	if (
+		typeof raw === "number" &&
+		Number.isInteger(raw) &&
+		raw >= SUPPLY_MANIFEST_HORIZON.min &&
+		raw <= SUPPLY_MANIFEST_HORIZON.max
+	) {
+		return raw;
+	}
+	return SUPPLY_MANIFEST_HORIZON.default;
+}
+
+/** Resolves the manifest date range used for Supply sync (org-scoped, forward-looking). */
+export function resolveSupplyManifestWindow(
+	orgMetadata: OrganizationMetadata | null | undefined,
+	today = getTodayISO(),
+): { startDate: string; endDate: string; horizonDays: number } {
+	const horizonDays = resolveManifestHorizonDays(orgMetadata);
+	return {
+		startDate: today,
+		endDate: addDays(today, horizonDays - 1),
+		horizonDays,
+	};
+}
+
 export type ManifestSupplyWindowDefaults = {
 	weekStart?: "sunday" | "monday";
 	calendarSpan?: 3 | 5 | 7;
 };
 
-/** Resolves the manifest date range used for supply sync — mirrors Manifest UI window logic. */
+/**
+ * @deprecated Use resolveSupplyManifestWindow with organization.metadata instead.
+ */
 export function resolveManifestSupplyWindow(
 	settings:
 		| {

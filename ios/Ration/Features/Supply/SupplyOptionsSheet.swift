@@ -55,15 +55,40 @@ struct SupplyOptionsSheet: View {
     var shareExpiresAt: String?
     var isLoadingShare: Bool = false
     var isSyncing: Bool
+    var canManageSupplySettings: Bool
+    var supplyWindow: SupplyPlanningWindow?
     var onRefreshFromMeals: () async -> Void
     var onShare: () async -> Void
     var onRevokeShare: () async -> Void
     var onUpgradeRequired: () -> Void
     var onOpenFilters: () -> Void
+    var onPatchHorizon: (_ days: Int) async -> Void = { _ in }
+
+    private let horizonPresets = [7, 14, 21, 30]
 
     var body: some View {
         NavigationStack {
             List {
+                Section("Manifest planning") {
+                    if let supplyWindow {
+                        Text(supplyWindowSummary(supplyWindow))
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                    }
+                    if canManageSupplySettings {
+                        Picker("Planning horizon", selection: horizonBinding) {
+                            ForEach(horizonPresets, id: \.self) { days in
+                                Text("\(days) days").tag(days)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    } else {
+                        Text("Ask a group owner or admin to change the planning horizon.")
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+
                 Section("List") {
                     Button {
                         Task { await onRefreshFromMeals() }
@@ -97,6 +122,24 @@ struct SupplyOptionsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private var horizonBinding: Binding<Int> {
+        Binding(
+            get: { supplyWindow?.horizonDays ?? 7 },
+            set: { newValue in
+                guard newValue != supplyWindow?.horizonDays else { return }
+                Task {
+                    await onPatchHorizon(newValue)
+                    await onRefreshFromMeals()
+                }
+            }
+        )
+    }
+
+    private func supplyWindowSummary(_ window: SupplyPlanningWindow) -> String {
+        let endLabel = HubDateFormat.smartLabel(isoDate: window.endDate)
+        return "Including Manifest meals through \(endLabel) (\(window.horizonDays) days)"
     }
 }
 

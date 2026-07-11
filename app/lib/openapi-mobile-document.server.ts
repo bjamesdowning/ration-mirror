@@ -358,6 +358,21 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					responses: { "200": { description: "Batch ingest summary" } },
 				},
 			},
+			"/api/mobile/v1/organization/supply-settings": {
+				get: {
+					summary: "Org supply planning horizon (read)",
+					security: [{ bearerAuth: [] }],
+					responses: { "200": { description: "Supply settings and window" } },
+				},
+				patch: {
+					summary: "Update org supply planning horizon (owner/admin)",
+					security: [{ bearerAuth: [] }],
+					responses: {
+						"200": { description: "Updated supply settings" },
+						"403": { description: "Forbidden for members" },
+					},
+				},
+			},
 			"/api/mobile/v1/supply/sync": {
 				post: {
 					summary: "Rebuild supply list from selected meals",

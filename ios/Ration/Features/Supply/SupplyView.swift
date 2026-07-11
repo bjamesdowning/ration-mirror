@@ -385,6 +385,7 @@ struct SupplyView: View {
     @State private var supplyShareURL: String?
     @State private var supplyShareExpiresAt: String?
     @State private var isLoadingShare = false
+    @State private var supplyWindow: SupplyPlanningWindow?
     @State private var snoozeItem: SupplyItem?
     @State private var showingPaywall = false
     @State private var hasTriggeredAutoSync = false
@@ -464,6 +465,8 @@ struct SupplyView: View {
                     shareExpiresAt: supplyShareExpiresAt,
                     isLoadingShare: isLoadingShare,
                     isSyncing: model.isSyncing,
+                    canManageSupplySettings: env.session.activeOrg?.canManageSupplySettings == true,
+                    supplyWindow: supplyWindow,
                     onRefreshFromMeals: {
                         guard let organizationId else { return }
                         await model.sync(
@@ -479,9 +482,25 @@ struct SupplyView: View {
                     onOpenFilters: {
                         showingOptions = false
                         showingFilters = true
+                    },
+                    onPatchHorizon: { days in
+                        guard env.network.isOnline else { return }
+                        do {
+                            let response = try await env.api.patchOrganizationSupplySettings(
+                                manifestHorizonDays: days
+                            )
+                            supplyWindow = response.window
+                            Haptics.success()
+                        } catch {
+                            model.errorMessage = (error as? APIError)?.errorDescription
+                                ?? error.localizedDescription
+                        }
                     }
                 )
-                .task { await loadSupplyShareStatus() }
+                .task {
+                    await loadSupplyShareStatus()
+                    await loadSupplySettings()
+                }
             }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(
@@ -739,6 +758,16 @@ struct SupplyView: View {
             hasTabAction: model.totalCount > 0
         )
         .copilotScrollTracked(tab: 4, isActive: isTabActive)
+    }
+
+    private func loadSupplySettings() async {
+        guard env.network.isOnline else { return }
+        do {
+            let response = try await env.api.organizationSupplySettings()
+            supplyWindow = response.window
+        } catch {
+            // Non-fatal — options sheet falls back to defaults.
+        }
     }
 
     private func loadSupplyShareStatus() async {

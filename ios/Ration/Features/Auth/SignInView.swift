@@ -114,9 +114,11 @@ struct SignInView: View {
 
     private var brandHeader: some View {
         VStack(spacing: 8) {
-            Image(systemName: "circle.hexagongrid.fill")
-                .font(Typography.heroIcon(48))
-                .foregroundStyle(Theme.hyperGreen)
+            Image("RationMark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 48, height: 48)
+                .accessibilityLabel("Ration")
             Text("RATION").rationDisplay()
             Text("Orbital supply chain").rationCaption()
         }

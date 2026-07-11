@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MCP_TOOL_GROUPS } from "../agent-readiness";
 import { COPILOT_TOOL_LABELS, copilotToolLabel } from "../copilot/tool-labels";
 
 describe("copilot tool labels", () => {
@@ -13,8 +14,12 @@ describe("copilot tool labels", () => {
 		expect(copilotToolLabel("unknown_tool", "running")).toBe("Working on it…");
 	});
 
-	it("includes core copilot inventory tools", () => {
-		expect(COPILOT_TOOL_LABELS.add_cargo_item).toBeDefined();
-		expect(COPILOT_TOOL_LABELS.match_meals).toBeDefined();
+	it("includes every Copilot tool", () => {
+		const expected = [
+			"search_docs",
+			...MCP_TOOL_GROUPS.flatMap((group) => [...group.tools]),
+		].sort();
+
+		expect(Object.keys(COPILOT_TOOL_LABELS).sort()).toEqual(expected);
 	});
 });

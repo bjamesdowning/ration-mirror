@@ -120,7 +120,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 				},
 				toolGroups: MCP_TOOL_GROUPS,
 				notes: [
-					"AI features that use credits stay in the Ration UI.",
+					"Image scanning and recipe URL extraction stay in the Ration UI. Copilot can create recipes and meal plans with deterministic MCP tools after presenting the native AI option.",
 					"All MCP tools are credit-free; vector embeddings are backfilled async.",
 					"Use cursor pagination for list_inventory and list_meals.",
 					"Bulk receipt imports go through preview_inventory_import → apply_inventory_import.",

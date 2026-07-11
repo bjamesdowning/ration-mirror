@@ -5,23 +5,23 @@ describe("detectBlockedCopilotIntent", () => {
 	it.each([
 		["scan this receipt", "scan", "ration://scan"],
 		[
-			"generate a meal with chicken",
-			"generate_meal",
-			"ration://galley/generate",
-		],
-		[
 			"import this recipe url https://example.com",
 			"import_url",
 			"ration://galley/import",
 		],
-		["plan my week", "plan_week", "ration://manifest/plan-week"],
 	])("blocks %s", (input, feature, deepLink) => {
 		const blocked = detectBlockedCopilotIntent(input);
 		expect(blocked?.feature).toBe(feature);
 		expect(blocked?.deepLink).toBe(deepLink);
 	});
 
-	it("allows deterministic pantry edits", () => {
-		expect(detectBlockedCopilotIntent("add milk to cargo")).toBeNull();
+	it.each([
+		"add milk to cargo",
+		"generate a meal with chicken",
+		"create a recipe for pasta",
+		"plan my week",
+		"what's on my meal plan",
+	])("allows tool-backed request: %s", (input) => {
+		expect(detectBlockedCopilotIntent(input)).toBeNull();
 	});
 });

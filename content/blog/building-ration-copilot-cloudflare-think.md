@@ -2,7 +2,7 @@
 title: "Building Ration Copilot on Cloudflare Think: Workers, AI Search, and Durable Objects"
 description: "A technical walkthrough of Ration's first-party AI assistant: Project Think on Durable Objects, managed AI Search for docs, Vectorize for pantry semantics, and shared MCP tool runtime on Cloudflare Workers."
 date: 2026-07-10
-dateModified: 2026-07-10
+dateModified: 2026-07-11
 authorName: "Ration"
 image: "/static/og/building-ration-copilot-cloudflare-think.png"
 tags:
@@ -108,23 +108,20 @@ Copilot impersonates an internal MCP context:
 - `keyName: "Ration Copilot"`
 - Full write scopes: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`
 
-The current Copilot tool surface is an 11-tool subset of the full MCP catalog:
+Copilot exposes the complete 35-tool MCP catalog plus its own `search_docs` tool. That includes Cargo CRUD and imports, Galley recipe management and consumption, Manifest planning, Supply list operations, context, and preferences. The domain modules export one transport-neutral catalog consumed by both MCP registration and the AI SDK adapter, preventing tool schemas or handlers from drifting between surfaces.
 
-| Tool | Backend primitive |
-| ---- | ----------------- |
-| `search_docs` | Cloudflare AI Search (`ration-docs` instance) |
-| `search_ingredients` | Workers AI embeddings + Vectorize, D1 hydration |
-| `list_inventory` | D1 |
-| `get_cargo_item` | D1 |
-| `get_expiring_items` | D1 |
-| `get_supply_list` | D1 |
-| `get_meal_plan` | D1 |
-| `list_meals` | D1 |
-| `match_meals` | D1 + matching service |
-| `add_cargo_item` | D1 write |
-| `update_cargo_item` | D1 write |
+The resulting surface is:
 
-External MCP clients can call a wider set of tools (supply writes, meal CRUD, preferences, and more). Copilot starts with the highest-frequency pantry workflows. Expanding the subset is a configuration change, not a new integration.
+| Area | Copilot tools |
+| ---- | ------------- |
+| Product knowledge | `search_docs` |
+| Cargo | `search_ingredients`, `list_inventory`, `get_cargo_item`, `get_expiring_items`, `add_cargo_item`, `update_cargo_item`, `remove_cargo_item`, `inventory_import_schema`, `preview_inventory_import`, `apply_inventory_import`, `import_inventory_csv` |
+| Galley | `list_meals`, `match_meals`, `create_meal`, `update_meal`, `delete_meal`, `toggle_meal_active`, `clear_active_meals`, `consume_meal` |
+| Manifest | `get_meal_plan`, `add_meal_plan_entry`, `bulk_add_meal_plan_entries`, `update_meal_plan_entry`, `consume_manifest_entries`, `remove_meal_plan_entry` |
+| Supply | `get_supply_list`, `add_supply_item`, `update_supply_item`, `remove_supply_item`, `mark_supply_purchased`, `sync_supply_from_selected_meals`, `complete_supply_list` |
+| Account | `get_context`, `get_user_preferences`, `update_user_preferences` |
+
+This removes the earlier Copilot-only allowlist. Adding a tool to the shared MCP domain catalog now makes it available to both transports, while the parity test fails if Copilot and `MCP_TOOL_GROUPS` drift.
 
 For the external MCP architecture, see [Designing a Consumer App for AI Agents](/blog/mcp-consumer-app-architecture). For the trend-level view of why a first-party copilot exists alongside MCP, see [Agentic App Control Is the Next Interface](/blog/agentic-app-control-copilot).
 
@@ -217,7 +214,13 @@ Identity always includes a verified `organizationId`. Client-supplied org IDs ar
 
 **Kill switch:** Flagship flag `ration-copilot` gates the feature server-side. UI-only hiding is not sufficient.
 
-**Blocked intents:** Regex intent guard in `app/lib/copilot/intent-guard.server.ts` detects requests for receipt scan, AI recipe generation, URL import, and AI week planning. Copilot responds with guidance and a deep link to the native flow instead of attempting the action in chat.
+**Reduced intent restrictions:** The regex guard in `app/lib/copilot/intent-guard.server.ts` now blocks only receipt/image scanning and recipe URL import because chat cannot receive files or perform browser extraction. The previous hard blocks on recipe generation and week planning are gone.
+
+When a request resembles those native AI features, the Worker's `beforeTurn` hook disables tools for that turn. Copilot explains the purpose-built Galley Generate or Manifest Plan Week experience, provides the deep link, and asks whether the user wants to continue there or in chat. If the user chooses chat, Copilot can create a structured recipe with `create_meal`, or orchestrate `get_expiring_items` → `match_meals` → `bulk_add_meal_plan_entries` and optionally synchronize Supply.
+
+Destructive and high-impact definitions declare `needsApproval`, which the AI SDK turns into a signed approval request before execution. This covers permanent deletes, bulk imports and planning, clearing selections, completing Supply, and insufficient-Cargo overrides. The boolean `confirm` fields remain domain-level defense in depth; they are not treated as proof that the user approved the action.
+
+The system prompt also keeps Copilot focused on Ration and kitchen logistics. It declines unrelated general-assistant work such as writing code, homework, or unrelated creative tasks without calling tools.
 
 ---
 
@@ -231,6 +234,7 @@ Session caps prevent runaway cost:
 | ----- | ----- |
 | Max messages | 40 |
 | Max tokens | 60,000 |
+| Max tool-loop steps per turn | 10 |
 | Idle TTL | 20 minutes (KV conversation keys) |
 
 Rate limiting uses the same `checkRateLimit()` helper as other AI endpoints.
@@ -284,7 +288,7 @@ AI Search retrieves documentation and blog content from a managed R2-backed inde
 
 **Does Copilot use the same code as the MCP server?**
 
-Yes, for tool execution. `runTool()` is shared. MCP adds OAuth, API keys, and the full tool catalog surface. Copilot adds session auth and a curated tool subset.
+Yes. The full tool catalog, schemas, handlers, and `runTool()` middleware are shared. MCP adds OAuth and API-key transport; Copilot adds session auth, `search_docs`, conversational safety guidance, and native-feature due diligence.
 
 **What model does Copilot use?**
 

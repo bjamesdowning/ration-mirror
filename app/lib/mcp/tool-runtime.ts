@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { z } from "zod";
 import { buildClaimRecoveryPaths } from "../agent/claim.constants";
 import { checkRateLimit } from "../rate-limiter.server";
 import { auditMcpWrite } from "./audit";
@@ -50,6 +51,61 @@ export type MakeToolOptions<TArgs extends Record<string, unknown>, TData> = {
 	audit: boolean;
 	handler: (ctx: McpToolContext, args: TArgs) => Promise<ToolEnvelope<TData>>;
 };
+
+type SharedToolApproval<TArgs> =
+	| boolean
+	| ((args: TArgs) => boolean | PromiseLike<boolean>);
+
+/**
+ * A transport-neutral tool definition shared by MCP and Copilot adapters.
+ *
+ * The object schema is kept intact for consumers such as the AI SDK, while
+ * MCP registration uses its raw shape to preserve the existing wire contract.
+ */
+export type SharedToolDefinition = {
+	name: string;
+	description: string;
+	inputSchema: z.ZodObject;
+	scopes: Parameters<typeof requireScope>[1];
+	rateLimitCategory: McpRateLimitCategory;
+	audit: boolean;
+	needsApproval?: SharedToolApproval<Record<string, unknown>>;
+	handler: (
+		ctx: McpToolContext,
+		args: Record<string, unknown>,
+	) => Promise<ToolEnvelope<unknown>>;
+};
+
+/** Preserve schema-derived handler inference when declaring a tool. */
+export function defineSharedTool<TInputSchema extends z.ZodObject, TData>(
+	definition: Omit<
+		SharedToolDefinition,
+		"inputSchema" | "handler" | "needsApproval"
+	> & {
+		inputSchema: TInputSchema;
+		needsApproval?: SharedToolApproval<z.output<TInputSchema>>;
+		handler: (
+			ctx: McpToolContext,
+			args: z.output<TInputSchema>,
+		) => Promise<ToolEnvelope<TData>>;
+	},
+): SharedToolDefinition {
+	const approval = definition.needsApproval;
+	const needsApproval =
+		typeof approval === "function"
+			? (args: Record<string, unknown>) =>
+					approval(definition.inputSchema.parse(args))
+			: approval;
+
+	return {
+		...definition,
+		needsApproval,
+		// MCP and AI SDK adapters validate against inputSchema before execution.
+		// The generic declaration above keeps the handler coupled to that schema.
+		handler: (ctx, args) =>
+			definition.handler(ctx, args as z.output<TInputSchema>),
+	};
+}
 
 /**
  * Run a tool handler through the shared MCP/copilot middleware.
@@ -186,15 +242,23 @@ export function makeTool<TArgs extends Record<string, unknown>, TData>(
 	};
 }
 
-/** Register an MCP tool schema with the shared envelope handler. */
-export function registerMcpTool(
+/** Register one shared definition with the MCP transport adapter. */
+export function registerSharedMcpTool(
 	server: McpServer,
-	name: string,
-	description: string,
-	// biome-ignore lint/suspicious/noExplicitAny: MCP SDK tool schema is a string-keyed Zod map
-	schema: Record<string, any>,
-	// biome-ignore lint/suspicious/noExplicitAny: handler arity matches SDK
-	handler: any,
+	env: McpToolsEnv,
+	definition: SharedToolDefinition,
 ): void {
-	server.tool(name, description, schema, handler);
+	const handler = makeTool({
+		name: definition.name,
+		scopes: definition.scopes,
+		rateLimitCategory: definition.rateLimitCategory,
+		audit: definition.audit,
+		handler: definition.handler,
+	});
+	server.tool(
+		definition.name,
+		definition.description,
+		definition.inputSchema.shape,
+		async (args) => handler(env, args),
+	);
 }

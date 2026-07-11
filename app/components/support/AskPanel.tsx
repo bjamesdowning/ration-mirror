@@ -16,6 +16,7 @@ import {
 	resolveCopilotOrgHydration,
 	touchCopilotSession,
 } from "~/lib/copilot/session-storage.client";
+import { resolveCopilotToolEnd } from "~/lib/copilot/tool-event.client";
 import {
 	type CopilotTurnEvent,
 	type CopilotTurnState,
@@ -59,6 +60,8 @@ type CopilotEvent = {
 	messageId?: string;
 	text?: string;
 	status?: { toolCallId: string; toolName: string; label: string };
+	toolCallId?: string;
+	ok?: boolean;
 	blocked?: { feature: string; message: string; deepLink: string };
 	error?: { code: string; message: string } | boolean;
 	approvalId?: string;
@@ -121,11 +124,8 @@ function webBlockedHref(blocked: NonNullable<CopilotEvent["blocked"]>): string {
 	switch (blocked.feature) {
 		case "scan":
 			return "/hub/cargo";
-		case "generate_meal":
 		case "import_url":
 			return "/hub/galley";
-		case "plan_week":
-			return "/hub/manifest";
 	}
 	return "/hub";
 }
@@ -169,6 +169,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		[],
 	);
 	const handleEventRef = useRef<(event: CopilotEvent) => void>(() => undefined);
+	const toolNameByCallIdRef = useRef(new Map<string, string>());
 	const hydratedOrgRef = useRef<string | null>(null);
 
 	const isTurnActive = isCopilotTurnActive(turnState);
@@ -229,6 +230,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setActiveToolName(null);
 			setCompletedToolName(null);
 			setToolSucceeded(null);
+			toolNameByCallIdRef.current.clear();
 			setTurnPhase("idle");
 			setApproval(null);
 			transitionTurn({ type: "ended" });
@@ -446,14 +448,25 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					clearToolLinger();
 					setCompletedToolName(null);
 					setToolSucceeded(null);
+					if (event.status) {
+						toolNameByCallIdRef.current.set(
+							event.status.toolCallId,
+							event.status.toolName,
+						);
+					}
 					setActiveToolName(
 						event.status?.toolName ?? event.status?.label ?? "tool",
 					);
 					setTurnPhase("tool_running");
 					break;
-				case "tool_end":
-					scheduleToolDoneLinger(event.status?.toolName ?? "tool", true);
+				case "tool_end": {
+					const result = resolveCopilotToolEnd(
+						event,
+						toolNameByCallIdRef.current,
+					);
+					scheduleToolDoneLinger(result.toolName, result.succeeded);
 					break;
+				}
 				case "blocked_feature":
 					setBlocked(event.blocked ?? null);
 					endTurn();

@@ -2,6 +2,7 @@ import {
 	type StepContext,
 	Think,
 	type ToolCallContext,
+	type ToolCallDecision,
 	type ToolCallResultContext,
 	type TurnContext,
 } from "@cloudflare/think";
@@ -18,6 +19,8 @@ import {
 	reconcileAndPersistCopilotConversationUsage,
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
+import { detectNativeFeatureSuggestion } from "../app/lib/copilot/native-feature-hints.server";
+import { getCopilotSystemPrompt } from "../app/lib/copilot/system-prompt.server";
 import {
 	COPILOT_MCP_SCOPES,
 	toAiSdkTools,
@@ -178,19 +181,14 @@ function lastUserText(ctx: TurnContext): string {
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
+	private billingBlocked = false;
 
 	getModel() {
 		return "@cf/moonshotai/kimi-k2.6";
 	}
 
 	getSystemPrompt() {
-		return [
-			"You are Ration Copilot, a first-party assistant for Ration's orbital supply-chain pantry app.",
-			"Use tools for factual app state and kitchen mutations. Never ask the user for organization ids or trust client-supplied org ids.",
-			"Do not mimic paid AI features: scan receipts/images, generate recipes, import recipe URLs, or build AI weekly plans. When asked, explain the native flow and provide the matching deep link.",
-			"Before destructive or high-impact changes, explain the action and wait for explicit user confirmation if a tool requires confirmation.",
-			"Keep responses concise, precise, and optimistic. Use Markdown for lists and steps.",
-		].join("\n");
+		return getCopilotSystemPrompt();
 	}
 
 	getTools(): ToolSet {
@@ -205,6 +203,13 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		if (this.billingBlocked) {
+			return {
+				system: `${ctx.system}\n\nThis conversation exhausted its credit allowance. Do not call tools. Tell the user to add credits and start a new chat, or start a new chat after the allowance resets.`,
+				activeTools: [],
+				maxSteps: 1,
+			};
+		}
 		const rl = await checkRateLimit(
 			this.env.RATION_KV,
 			"copilot",
@@ -259,34 +264,51 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				maxSteps: 1,
 			};
 		}
-		const blocked = detectBlockedCopilotIntent(lastUserText(ctx));
-		if (!blocked) {
+		const userText = lastUserText(ctx);
+		const blocked = detectBlockedCopilotIntent(userText);
+		if (blocked) {
+			writeCopilotMetric(
+				this.env,
+				"blocked_feature",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+				{ blobs: [blocked.feature] },
+			);
+			this.broadcast(
+				JSON.stringify({
+					type: "blocked_feature",
+					blocked,
+				}),
+			);
 			return {
-				activeTools: Object.keys(ctx.tools),
-				maxSteps: 6,
+				system: `${ctx.system}\n\nThe current user request is blocked from the copilot tool loop. Respond with this exact guidance in natural language: ${blocked.message} Deep link: ${blocked.deepLink}`,
+				activeTools: [],
+				maxSteps: 1,
 			};
 		}
-		writeCopilotMetric(
-			this.env,
-			"blocked_feature",
-			{ ...identity, source: "agent" },
-			identity.conversationId,
-			{ blobs: [blocked.feature] },
-		);
-		this.broadcast(
-			JSON.stringify({
-				type: "blocked_feature",
-				blocked,
-			}),
-		);
+		const nativeSuggestion = detectNativeFeatureSuggestion(userText);
+		if (nativeSuggestion) {
+			return {
+				system: `${ctx.system}\n\nBefore taking action, briefly explain that ${nativeSuggestion.name} may be a better fit because ${nativeSuggestion.message.toLowerCase()} Offer this deep link: ${nativeSuggestion.deepLink}. Ask whether the user wants to use the native flow or continue in chat. Do not call tools this turn.`,
+				activeTools: [],
+				maxSteps: 1,
+			};
+		}
 		return {
-			system: `${ctx.system}\n\nThe current user request is blocked from the copilot tool loop. Respond with this exact guidance in natural language: ${blocked.message} Deep link: ${blocked.deepLink}`,
-			activeTools: [],
-			maxSteps: 1,
+			activeTools: Object.keys(ctx.tools),
+			maxSteps: 10,
+			stopWhen: () => this.billingBlocked,
 		};
 	}
 
-	beforeToolCall(ctx: ToolCallContext) {
+	beforeToolCall(ctx: ToolCallContext): ToolCallDecision | undefined {
+		if (this.billingBlocked) {
+			return {
+				action: "block",
+				reason:
+					"Copilot cannot run more tools because this conversation exhausted its credit allowance.",
+			};
+		}
 		const identity = decodeAgentName(this.name);
 		writeCopilotMetric(
 			this.env,
@@ -329,13 +351,14 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			);
 		} catch (error) {
 			if (error instanceof InsufficientCreditsError) {
+				this.billingBlocked = true;
 				this.broadcast(
 					JSON.stringify({
 						type: "error",
 						error: {
 							code: "insufficient_credits",
 							message:
-								"Copilot needs more credits to continue this chat. Add credits or start again after your allowance resets.",
+								"Copilot needs more credits. Add credits and start a new chat, or start a new chat after your allowance resets.",
 						},
 					}),
 				);

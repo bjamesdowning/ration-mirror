@@ -9,9 +9,19 @@ import {
 } from "~/lib/query-utils.server";
 import type { BulkEntryCreateSchema } from "~/lib/schemas/manifest";
 
-type BulkEntryInput = z.infer<typeof BulkEntryCreateSchema>;
+export type BulkEntryInput = z.infer<typeof BulkEntryCreateSchema>;
 
-export async function submitManifestBulkEntries(
+export class ManifestBulkSubmissionError extends Error {
+	constructor(
+		message: string,
+		readonly status: 403 | 404,
+	) {
+		super(message);
+		this.name = "ManifestBulkSubmissionError";
+	}
+}
+
+export async function insertManifestBulkEntries(
 	db: D1Database,
 	organizationId: string,
 	planId: string,
@@ -33,7 +43,7 @@ export async function submitManifestBulkEntries(
 		.limit(1);
 
 	if (!planRows[0]) {
-		throw data({ error: "Meal plan not found" }, { status: 404 });
+		throw new ManifestBulkSubmissionError("Meal plan not found", 404);
 	}
 
 	const mealIds = [...new Set(inputEntries.map((e) => e.mealId))];
@@ -53,13 +63,14 @@ export async function submitManifestBulkEntries(
 		(e) => !validMealIds.has(e.mealId),
 	);
 	if (unauthorizedMeal) {
-		throw data(
-			{ error: "One or more meals not found or unauthorized" },
-			{ status: 403 },
+		throw new ManifestBulkSubmissionError(
+			"One or more meals not found or unauthorized",
+			403,
 		);
 	}
 
 	const rows = inputEntries.map((e) => ({
+		id: crypto.randomUUID(),
 		planId: planRows[0].id,
 		mealId: e.mealId,
 		date: e.date,
@@ -77,5 +88,35 @@ export async function submitManifestBulkEntries(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await drizzleDb.batch(insertStatements as [any, ...any[]]);
 
-	return { inserted: rows.length };
+	return {
+		inserted: rows.length,
+		entries: rows.map((row) => ({
+			entryId: row.id,
+			mealId: row.mealId,
+			date: row.date,
+			slotType: row.slotType,
+		})),
+	};
+}
+
+export async function submitManifestBulkEntries(
+	db: D1Database,
+	organizationId: string,
+	planId: string,
+	input: BulkEntryInput,
+) {
+	try {
+		const result = await insertManifestBulkEntries(
+			db,
+			organizationId,
+			planId,
+			input,
+		);
+		return { inserted: result.inserted };
+	} catch (error) {
+		if (error instanceof ManifestBulkSubmissionError) {
+			throw data({ error: error.message }, { status: error.status });
+		}
+		throw error;
+	}
 }

@@ -1121,6 +1121,11 @@ describe("MCP tools", () => {
 			expect(data).toHaveLength(1);
 			expect(data[0]?.mealName).toBe("Bacon Skillet");
 			expect(data[0]?.canMake).toBe(true);
+			expect(matchMeals).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				expect.objectContaining({ limit: 10, preLimit: 200 }),
+			);
 		});
 
 		it("returns empty array when no strict matches", async () => {

@@ -71,6 +71,26 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Removed from Cargo",
 		error: "Could not remove from Cargo",
 	},
+	inventory_import_schema: {
+		running: "Loading Cargo import format…",
+		done: "Loaded Cargo import format",
+		error: "Could not load import format",
+	},
+	preview_inventory_import: {
+		running: "Previewing Cargo import…",
+		done: "Previewed Cargo import",
+		error: "Could not preview Cargo import",
+	},
+	apply_inventory_import: {
+		running: "Importing into Cargo…",
+		done: "Imported into Cargo",
+		error: "Could not import into Cargo",
+	},
+	import_inventory_csv: {
+		running: "Importing Cargo CSV…",
+		done: "Imported Cargo CSV",
+		error: "Could not import Cargo CSV",
+	},
 	add_supply_item: {
 		running: "Adding to Supply…",
 		done: "Added to Supply",
@@ -91,9 +111,39 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Updated Supply",
 		error: "Could not update Supply",
 	},
+	sync_supply_from_selected_meals: {
+		running: "Syncing Supply from meals…",
+		done: "Synced Supply from meals",
+		error: "Could not sync Supply",
+	},
+	complete_supply_list: {
+		running: "Docking purchased supplies…",
+		done: "Docked purchased supplies",
+		error: "Could not complete Supply list",
+	},
 	add_meal_plan_entry: {
 		running: "Adding to Manifest…",
 		done: "Added to Manifest",
+		error: "Could not update Manifest",
+	},
+	bulk_add_meal_plan_entries: {
+		running: "Building your Manifest…",
+		done: "Built your Manifest",
+		error: "Could not build Manifest",
+	},
+	update_meal_plan_entry: {
+		running: "Updating Manifest…",
+		done: "Updated Manifest",
+		error: "Could not update Manifest",
+	},
+	consume_manifest_entries: {
+		running: "Logging Manifest meals…",
+		done: "Logged Manifest meals",
+		error: "Could not log Manifest meals",
+	},
+	remove_meal_plan_entry: {
+		running: "Removing from Manifest…",
+		done: "Removed from Manifest",
 		error: "Could not update Manifest",
 	},
 	create_meal: {
@@ -106,10 +156,40 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Updated meal",
 		error: "Could not update meal",
 	},
+	delete_meal: {
+		running: "Deleting meal…",
+		done: "Deleted meal",
+		error: "Could not delete meal",
+	},
+	toggle_meal_active: {
+		running: "Updating Galley selection…",
+		done: "Updated Galley selection",
+		error: "Could not update Galley selection",
+	},
+	clear_active_meals: {
+		running: "Clearing Galley selections…",
+		done: "Cleared Galley selections",
+		error: "Could not clear Galley selections",
+	},
+	consume_meal: {
+		running: "Logging meal and updating Cargo…",
+		done: "Logged meal and updated Cargo",
+		error: "Could not log meal",
+	},
 	get_context: {
 		running: "Loading Ration context…",
 		done: "Loaded context",
 		error: "Context lookup failed",
+	},
+	get_user_preferences: {
+		running: "Loading preferences…",
+		done: "Loaded preferences",
+		error: "Could not load preferences",
+	},
+	update_user_preferences: {
+		running: "Updating preferences…",
+		done: "Updated preferences",
+		error: "Could not update preferences",
 	},
 };
 

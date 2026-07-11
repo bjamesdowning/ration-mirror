@@ -1,4 +1,5 @@
 import type { CopilotBlockedFeature } from "../schemas/copilot";
+import { NATIVE_FEATURE_HINTS } from "./native-feature-hints.server";
 
 export type CopilotBlockedIntent = CopilotBlockedFeature;
 
@@ -10,9 +11,8 @@ const BLOCKED_FEATURES: Array<{
 }> = [
 	{
 		feature: "scan",
-		deepLink: "ration://scan",
-		message:
-			"Receipt and visual scanning stay in the native Scan flow so credit use, camera permissions, and image handling remain explicit.",
+		deepLink: NATIVE_FEATURE_HINTS.scan.deepLink,
+		message: NATIVE_FEATURE_HINTS.scan.message,
 		patterns: [
 			/\bscan\b.*\b(receipt|image|photo|picture|barcode)\b/i,
 			/\b(read|parse|process)\b.*\b(receipt|image|photo|picture)\b/i,
@@ -20,34 +20,12 @@ const BLOCKED_FEATURES: Array<{
 		],
 	},
 	{
-		feature: "generate_meal",
-		deepLink: "ration://galley/generate",
-		message:
-			"AI meal generation stays in Galley so recipe generation uses the existing credit gate and review flow.",
-		patterns: [
-			/\b(generate|create|make)\b.*\b(recipe|meal|dish)\b/i,
-			/\bai\b.*\b(recipe|meal)\b/i,
-		],
-	},
-	{
 		feature: "import_url",
-		deepLink: "ration://galley/import",
-		message:
-			"Recipe URL import stays in Galley so browser extraction and credit billing remain explicit.",
+		deepLink: NATIVE_FEATURE_HINTS.import_url.deepLink,
+		message: NATIVE_FEATURE_HINTS.import_url.message,
 		patterns: [
 			/\b(import|pull|parse|extract)\b.*\b(url|link|website|recipe site)\b/i,
 			/\b(import|pull|parse|extract)\b.*https?:\/\/\S+/i,
-		],
-	},
-	{
-		feature: "plan_week",
-		deepLink: "ration://manifest/plan-week",
-		message:
-			"AI week planning stays in Manifest so the existing planning credit gate and confirmation flow remain in control.",
-		patterns: [
-			/\b(plan|build|generate)\b.*\b(week|weekly)\b/i,
-			/\bmeal plan\b/i,
-			/\bmanifest\b.*\b(ai|plan)\b/i,
 		],
 	},
 ];

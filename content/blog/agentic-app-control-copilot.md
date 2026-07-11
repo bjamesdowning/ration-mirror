@@ -2,7 +2,7 @@
 title: "Agentic App Control Is the Next Interface: How Ration Copilot Changes Pantry Management"
 description: "Why in-app AI copilots that take action, not just answer questions, are the next interface for pantry management, meal planning, and grocery logistics. Ration Copilot as a case study."
 date: 2026-07-10
-dateModified: 2026-07-10
+dateModified: 2026-07-11
 authorName: "Ration"
 image: "/static/og/agentic-app-control-copilot.png"
 tags:
@@ -143,16 +143,16 @@ That architecture matters for product trust. You are not maintaining two version
 
 Agentic control without boundaries gets expensive and risky fast.
 
-Ration keeps certain AI-heavy flows in native UI on purpose:
+Ration keeps flows that require capabilities chat does not have in native UI:
 
 - Receipt and image **scan** (vision OCR)
-- AI **recipe generation**
 - URL **import** for recipes
-- AI **week planning**
 
-If you ask Copilot to scan a receipt, it does not pretend to do vision work in chat. It points you to the scan flow with a deep link. Same for recipe generation and week planning. The intent guard keeps credit-consuming features where latency, preview, and billing are predictable.
+If you ask Copilot to scan a receipt or import a recipe URL, it does not pretend to handle a file or browser extraction. It points you to the required native flow with a deep link.
 
-For write actions, Copilot can request confirmation before destructive changes. External MCP clients use OAuth scopes. Copilot uses verified session identity. Both paths enforce organization scoping on every database query.
+Recipe generation and week planning have two valid paths. Copilot first explains the purpose-built native AI option and its review controls. If you prefer to continue in chat, it can create structured recipes or assemble a Manifest with the same deterministic tools exposed through MCP. Copilot remains focused on Ration and kitchen logistics; it declines unrelated requests such as writing software.
+
+For destructive and high-impact writes, Copilot requires an explicit approval response before execution; a model-generated `confirm: true` is not sufficient. External MCP clients use OAuth scopes. Copilot uses verified session identity. Both paths enforce organization scoping on every database query.
 
 ---
 

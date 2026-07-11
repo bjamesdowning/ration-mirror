@@ -3,7 +3,6 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { log, redactId } from "~/lib/logging.server";
-import { revokeMobileRefreshFamilies } from "~/lib/mobile/token.server";
 import { deleteOrganization } from "~/lib/organizations.server";
 import { deleteR2Prefix } from "~/lib/r2-cleanup.server";
 
@@ -66,7 +65,6 @@ export async function purgeUserAccount(
 		}
 	}
 
-	await revokeMobileRefreshFamilies(env, userId);
 	await purgeCopilotConversationsForUser(env, userId);
 
 	await db.batch([

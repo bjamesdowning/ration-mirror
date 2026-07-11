@@ -1,13 +1,12 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { redirect, useLoaderData } from "react-router";
-import { MobileAuthHandoffCard } from "~/components/auth/MobileAuthHandoffCard";
+import { redirect } from "react-router";
 import { ensureActiveOrganization, getAuth } from "~/lib/auth.server";
 import { mobileAuthHandoffLinks } from "~/lib/mobile/auth-handoff";
 import { readMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
 import { PKCE_CHALLENGE_REGEX } from "~/lib/mobile/pkce";
 import { storeMobileAuthCode } from "~/lib/mobile/token.server";
 
-/** Landing page after magic-link verification for iOS clients. */
+/** Post-verify handoff for iOS magic-link clients — redirects into the app. */
 export async function loader({ request, context }: LoaderFunctionArgs) {
 	const url = new URL(request.url);
 	const error = url.searchParams.get("error");
@@ -53,7 +52,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 			codeChallenge,
 		);
 		const baseUrl = context.cloudflare.env.BETTER_AUTH_URL.replace(/\/$/, "");
-		return mobileAuthHandoffLinks(baseUrl, code);
+		const links = mobileAuthHandoffLinks(baseUrl, code);
+		// Chain directly to the Universal Link after verify — the user's Continue
+		// tap satisfies the gesture requirement for app handoff.
+		throw redirect(links.universalLink);
 	}
 
 	throw redirect("/hub");
@@ -66,22 +68,7 @@ export function meta() {
 	];
 }
 
+/** Loader always redirects; component is a fallback only. */
 export default function MobileAuthCallback() {
-	const links = useLoaderData<typeof loader>();
-
-	return (
-		<MobileAuthHandoffCard
-			title="Open Ration to finish signing in"
-			body="Your email link was verified. Tap below to return to the app and complete sign-in. The app handoff expires in about five minutes."
-			primaryHref={links.universalLink}
-			secondaryHref={links.customSchemeLink}
-			footnote={
-				<>
-					Using the Simulator? Open the magic link in{" "}
-					<strong className="text-carbon">Safari inside the Simulator</strong>,
-					not your Mac&apos;s browser — then tap Open Ration above.
-				</>
-			}
-		/>
-	);
+	return null;
 }

@@ -154,6 +154,19 @@ final class GroupSettingsViewModel {
         do {
             _ = try await api.deleteGroup(organizationId: orgId)
             _ = await env.session.load(api: api)
+            session = env.session.session
+
+            if let session {
+                if session.organizations.isEmpty {
+                    await env.auth.signOut()
+                } else if !session.organizations.contains(where: \.isActive),
+                          let next = session.organizations.first {
+                    await activateOrg(next, env: env)
+                }
+            } else {
+                await env.auth.signOut()
+            }
+
             Haptics.success()
             return true
         } catch {

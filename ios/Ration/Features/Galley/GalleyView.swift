@@ -5,6 +5,7 @@ struct GalleyView: View {
     @Environment(CopilotScrollContext.self) private var scrollContext
     var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     @State private var model = GalleyViewModel()
     @State private var showingFilters = false
     @State private var showingAddTypeChoice = false
@@ -15,7 +16,6 @@ struct GalleyView: View {
     @State private var navigateToMealId: String?
     @State private var availableTags: [String] = []
     @State private var generateSuccessMessage: String?
-    @State private var showGroupSettings = false
     @State private var pendingCookMealId: String?
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
@@ -67,12 +67,9 @@ struct GalleyView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
-                    onOpenGroupSettings: { showGroupSettings = true },
+                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-            }
-            .navigationDestination(isPresented: $showGroupSettings) {
-                GroupSettingsView()
             }
             .background(Theme.ceramic)
             .safeAreaInset(edge: .top, spacing: 0) {

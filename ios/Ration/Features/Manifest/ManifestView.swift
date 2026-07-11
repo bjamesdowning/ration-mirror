@@ -361,6 +361,7 @@ struct ManifestView: View {
     @Environment(CopilotScrollContext.self) private var scrollContext
     var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     var onPlanWeekComplete: (Int) -> Void = { _ in }
     @State private var model = ManifestViewModel()
     @State private var showingAddEntry = false
@@ -372,7 +373,6 @@ struct ManifestView: View {
     @State private var showingPaywall = false
     @State private var consumeUndoToken: String?
     @State private var showConsumeUndo = false
-    @State private var showGroupSettings = false
     @State private var pendingConsumeEntry: ManifestEntry?
     @State private var consumeConfirmationMessage: String?
     @State private var showConsumeConfirmation = false
@@ -477,12 +477,9 @@ struct ManifestView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
-                    onOpenGroupSettings: { showGroupSettings = true },
+                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-            }
-            .navigationDestination(isPresented: $showGroupSettings) {
-                GroupSettingsView()
             }
             .dataSyncBanner(domain: SnapshotDomain.manifest, organizationId: organizationId)
             .sheet(isPresented: $showingOptions) {

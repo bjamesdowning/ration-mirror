@@ -6,12 +6,12 @@ struct CargoListView: View {
     var isTabActive: Bool = false
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     @State private var model = CargoViewModel()
     @State private var showingAdd = false
     @State private var showingFilters = false
     @State private var editingItem: CargoItem?
     @State private var restockItem: CargoItem?
-    @State private var showGroupSettings = false
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -68,14 +68,11 @@ struct CargoListView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingFilters = true },
-                    onOpenGroupSettings: { showGroupSettings = true },
+                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
             }
             .dataSyncBanner(domain: SnapshotDomain.cargo, organizationId: organizationId)
-            .navigationDestination(isPresented: $showGroupSettings) {
-                GroupSettingsView()
-            }
             .sheet(isPresented: $showingAdd) {
                 CargoFormView(mode: .create) {
                     await reload()

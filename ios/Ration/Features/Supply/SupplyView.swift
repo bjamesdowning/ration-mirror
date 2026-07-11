@@ -377,6 +377,7 @@ struct SupplyView: View {
     @Environment(CopilotScrollContext.self) private var scrollContext
     var isTabActive: Bool = false
     var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     @State private var model = SupplyViewModel()
     @State private var showingOptions = false
     @State private var showingFilters = false
@@ -387,7 +388,6 @@ struct SupplyView: View {
     @State private var snoozeItem: SupplyItem?
     @State private var showingPaywall = false
     @State private var hasTriggeredAutoSync = false
-    @State private var showGroupSettings = false
     @State private var showingReplenishSheet = false
     @State private var showingReplenishReceipt = false
     @State private var showingSupplyScanCamera = false
@@ -446,12 +446,9 @@ struct SupplyView: View {
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
                     onOptions: { showingOptions = true },
-                    onOpenGroupSettings: { showGroupSettings = true },
+                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-            }
-            .navigationDestination(isPresented: $showGroupSettings) {
-                GroupSettingsView()
             }
             .background(Theme.ceramic)
             .dataSyncBanner(domain: SnapshotDomain.supply, organizationId: organizationId)

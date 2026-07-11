@@ -20,6 +20,24 @@ function parseBearerToken(request: Request): string | null {
 	return token.length > 0 ? token : null;
 }
 
+/** Verifies the bearer JWT and returns the user id only (no org membership gate). */
+export async function requireMobileUserAuth(
+	context: AppLoadContext,
+	request: Request,
+): Promise<{ userId: string }> {
+	const token = parseBearerToken(request);
+	if (!token) {
+		throwMobileJsonError("Unauthorized", 401, "unauthorized");
+	}
+
+	try {
+		const claims = await verifyMobileAccessToken(context.cloudflare.env, token);
+		return { userId: claims.userId };
+	} catch {
+		throwMobileJsonError("Unauthorized", 401, "unauthorized");
+	}
+}
+
 export async function requireMobileAuth(
 	context: AppLoadContext,
 	request: Request,
@@ -40,7 +58,10 @@ export async function requireMobileAuth(
 			userId: claims.userId,
 			organizationId: claims.organizationId,
 		};
-	} catch {
+	} catch (error) {
+		if (error instanceof Error && error.message === "forbidden_org") {
+			throwMobileJsonError("Organization access denied", 403, "forbidden_org");
+		}
 		throwMobileJsonError("Unauthorized", 401, "unauthorized");
 	}
 }

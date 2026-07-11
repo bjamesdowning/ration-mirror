@@ -7,6 +7,7 @@ struct DashboardView: View {
     var isTabActive: Bool = true
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    var onOpenGroupSettings: () -> Void = {}
     var onOpenSupply: () -> Void = {}
     var onOpenCargo: () -> Void = {}
     var onOpenGalley: () -> Void = {}
@@ -17,7 +18,6 @@ struct DashboardView: View {
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
     @State private var draggingWidgetId: String?
-    @State private var showGroupSettings = false
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -73,7 +73,7 @@ struct DashboardView: View {
                     syncDomain: SnapshotDomain.hub,
                     organizationId: organizationId,
                     isRefreshing: model.isRefreshing,
-                    onOpenGroupSettings: { showGroupSettings = true },
+                    onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
                 if case .loaded = model.state, !model.isEditMode {
@@ -97,9 +97,6 @@ struct DashboardView: View {
                 }
             }
             .dataSyncBanner(domain: SnapshotDomain.hub, organizationId: organizationId)
-            .navigationDestination(isPresented: $showGroupSettings) {
-                GroupSettingsView()
-            }
             .sheet(item: $selectedCargoRoute) { route in
                 NavigationStack {
                     CargoDetailView(itemId: route.id)

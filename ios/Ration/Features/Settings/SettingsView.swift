@@ -17,6 +17,7 @@ final class SessionViewModel {
             async let settingsTask = api.settings()
             session = try await sessionTask
             settings = try await settingsTask.settings
+            errorMessage = nil
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -39,7 +40,7 @@ struct SettingsView: View {
                 } else if model.isLoading {
                     LoadingView()
                 } else {
-                    Theme.ceramic
+                    sessionErrorState
                 }
             }
             .navigationTitle("Settings")
@@ -54,6 +55,35 @@ struct SettingsView: View {
             .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
         }
         .task { await model.load(api: env.api) }
+    }
+
+    private var sessionErrorState: some View {
+        VStack(spacing: 16) {
+            if let errorMessage = model.errorMessage {
+                ErrorBanner(message: errorMessage)
+            } else {
+                Text("Unable to load settings.")
+                    .font(Typography.body())
+                    .foregroundStyle(Theme.muted)
+            }
+            Button("Retry") {
+                Task { await model.load(api: env.api) }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            NavigationLink("Delete account") {
+                AccountDeletionView(onAccountDeleted: { dismiss() })
+            }
+            .foregroundStyle(Theme.danger)
+            Button("Sign out", role: .destructive) {
+                Task {
+                    await env.auth.signOut()
+                    dismiss()
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.ceramic)
     }
 
     private func content(_ session: SessionResponse) -> some View {
@@ -72,10 +102,6 @@ struct SettingsView: View {
             Section("Account") {
                 LabeledContent("Name", value: session.user.name ?? "—")
                 LabeledContent("Email", value: session.user.email)
-                NavigationLink("Delete account") {
-                    AccountDeletionView()
-                }
-                .foregroundStyle(Theme.danger)
             }
 
             Section("Membership") {
@@ -100,6 +126,7 @@ struct SettingsView: View {
                 AppearanceSettingsSection(settings: settings, api: env.api)
                     .id(settings.theme ?? "dark")
                 MeasurementsSettingsSection(settings: settings)
+                PreferencesSettingsSection(settings: settings, api: env.api)
             }
 
             SettingsHelpSection()
@@ -107,15 +134,21 @@ struct SettingsView: View {
             Section {
                 Button("Sign out", role: .destructive) {
                     Task {
-                        // `auth.signOut()` runs the full wipe (snapshots,
-                        // billing, session, image cache) via `AuthManager
-                        // .onSignedOut` — see `AppEnvironment.init()` (H-2).
-                        // Explicit sign-out and forced 401 logout share this
-                        // one path so there's a single source of truth.
                         await env.auth.signOut()
                         dismiss()
                     }
                 }
+            }
+
+            Section {
+                NavigationLink("Delete account") {
+                    AccountDeletionView(onAccountDeleted: { dismiss() })
+                }
+                .foregroundStyle(Theme.danger)
+            } header: {
+                Text("Danger zone")
+            } footer: {
+                Text("Permanently delete your account and personal data. This cannot be undone.")
             }
         }
         .listStyle(.insetGrouped)

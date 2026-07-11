@@ -4,7 +4,11 @@ import { TagChip } from "~/components/shared/TagChip";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
-import { formatTagName, type TagWithCounts } from "~/lib/tags";
+import {
+	formatTagName,
+	normalizeTagSlug,
+	type TagWithCounts,
+} from "~/lib/tags";
 
 const TAG_COLORS = [
 	"#00E088",
@@ -41,6 +45,11 @@ export function TagsSettingsSection({
 	const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
 	const [mergeTargetId, setMergeTargetId] = useState("");
 	const [isCleaningUnused, setIsCleaningUnused] = useState(false);
+	const [newTagName, setNewTagName] = useState("");
+	const [newTagSlug, setNewTagSlug] = useState("");
+	const [newTagCategory, setNewTagCategory] = useState("");
+	const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+	const [isCreating, setIsCreating] = useState(false);
 
 	const sortedTags = useMemo(
 		() => [...tags].sort((a, b) => a.name.localeCompare(b.name)),
@@ -123,6 +132,42 @@ export function TagsSettingsSection({
 		}
 	};
 
+	const createTag = async () => {
+		const slug = normalizeTagSlug(newTagSlug);
+		if (!slug) return;
+
+		setIsCreating(true);
+		setErrorMessage("");
+		try {
+			const trimmedName = newTagName.trim();
+			const trimmedCategory = newTagCategory.trim();
+			const response = await fetch("/api/tags", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					slug,
+					name: trimmedName || formatTagName(slug),
+					category: trimmedCategory || null,
+				}),
+			});
+			const payload = (await response.json()) as { error?: string };
+			if (!response.ok) {
+				throw new Error(payload.error ?? "Failed to create tag");
+			}
+			successToast.show();
+			setNewTagName("");
+			setNewTagSlug("");
+			setNewTagCategory("");
+			setSlugManuallyEdited(false);
+			revalidator.revalidate();
+		} catch (e) {
+			setErrorMessage(e instanceof Error ? e.message : "Failed to create tag");
+			errorToast.show();
+		} finally {
+			setIsCreating(false);
+		}
+	};
+
 	const mergeTag = async () => {
 		if (!mergeSourceId || !mergeTargetId) return;
 		const source = tags.find((t) => t.id === mergeSourceId);
@@ -200,8 +245,8 @@ export function TagsSettingsSection({
 				<div>
 					<h3 className="text-xs text-label text-muted mb-1">Tags</h3>
 					<p className="text-sm text-muted max-w-lg">
-						Organization-wide labels for Cargo and Galley. Up to 10 tags per
-						item. Manage names, colors, and categories here.
+						Group-wide labels for Cargo and Galley. Up to 10 tags per item.
+						Manage names, colors, and categories here.
 					</p>
 				</div>
 				{canManage && unusedTags.length > 0 && (
@@ -218,9 +263,56 @@ export function TagsSettingsSection({
 				)}
 			</div>
 
+			{canManage ? (
+				<div className="mb-6 p-4 bg-platinum/30 rounded-lg space-y-3">
+					<h4 className="text-xs text-label text-muted">Create tag</h4>
+					<div className="grid gap-3 sm:grid-cols-2">
+						<input
+							type="text"
+							value={newTagName}
+							onChange={(e) => {
+								const value = e.target.value;
+								setNewTagName(value);
+								if (!slugManuallyEdited) {
+									setNewTagSlug(normalizeTagSlug(value));
+								}
+							}}
+							placeholder="Display name"
+							className="px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm"
+						/>
+						<input
+							type="text"
+							value={newTagSlug}
+							onChange={(e) => {
+								setSlugManuallyEdited(true);
+								setNewTagSlug(e.target.value);
+							}}
+							placeholder="slug"
+							className="px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm font-mono"
+						/>
+					</div>
+					<input
+						type="text"
+						value={newTagCategory}
+						onChange={(e) => setNewTagCategory(e.target.value)}
+						placeholder="Category (optional)"
+						className="w-full px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm"
+					/>
+					<button
+						type="button"
+						onClick={createTag}
+						disabled={isCreating || !normalizeTagSlug(newTagSlug)}
+						className="text-sm px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green font-medium hover:bg-hyper-green/20 disabled:opacity-50"
+					>
+						{isCreating ? "Creating…" : "Create tag"}
+					</button>
+				</div>
+			) : null}
+
 			{sortedTags.length === 0 ? (
 				<p className="text-sm text-muted">
-					No tags yet. Tags are created when you label cargo or meals.
+					No tags yet. Create one above or add tags when you label cargo or
+					meals.
 				</p>
 			) : (
 				<ul className="space-y-3">

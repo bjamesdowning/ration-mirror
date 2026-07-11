@@ -4,17 +4,32 @@ struct AccountDeletionView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
 
+    var onAccountDeleted: (() -> Void)?
+
     @State private var confirmation = ""
     @State private var isDeleting = false
     @State private var errorMessage: String?
+    @State private var ownedSoloGroups: [String] = []
 
-    private let requiredPhrase = "DELETE"
+    private var isConfirmed: Bool {
+        confirmation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "delete"
+    }
 
     var body: some View {
         Form {
             Section {
                 Text("Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, and sessions. Financial ledger records may be anonymized where required by law.")
                     .font(Typography.body())
+            }
+
+            if !ownedSoloGroups.isEmpty {
+                Section {
+                    Text("Groups with no other members will be permanently deleted: \(ownedSoloGroups.joined(separator: ", ")).")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.warning)
+                } header: {
+                    Text("Groups you own")
+                }
             }
 
             Section {
@@ -26,8 +41,8 @@ struct AccountDeletionView: View {
             }
 
             Section {
-                TextField("Type DELETE to confirm", text: $confirmation)
-                    .textInputAutocapitalization(.characters)
+                TextField("Type delete to confirm", text: $confirmation)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
 
@@ -41,24 +56,34 @@ struct AccountDeletionView: View {
                 Button("Delete my account", role: .destructive) {
                     Task { await deleteAccount() }
                 }
-                .disabled(confirmation != requiredPhrase || isDeleting)
+                .disabled(!isConfirmed || isDeleting)
             }
         }
         .navigationTitle("Delete Account")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadPreview() }
+    }
+
+    @MainActor
+    private func loadPreview() async {
+        do {
+            let preview = try await env.api.accountDeletionPreview()
+            ownedSoloGroups = preview.ownedGroupsWithNoOtherMembers
+        } catch {
+            // Non-blocking — deletion still works without preview data.
+        }
     }
 
     @MainActor
     private func deleteAccount() async {
-        guard confirmation == requiredPhrase else { return }
+        guard isConfirmed else { return }
         isDeleting = true
         errorMessage = nil
         defer { isDeleting = false }
         do {
             _ = try await env.api.deleteAccount()
-            await env.snapshots.clearAll()
-            await env.billing.logOut()
-            await env.auth.signOut()
+            await env.auth.signOutLocal()
+            onAccountDeleted?()
             dismiss()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription

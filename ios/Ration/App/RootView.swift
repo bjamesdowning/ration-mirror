@@ -53,6 +53,7 @@ struct RootView: View {
 struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showingSettings = false
+    @State private var showingGroupSettings = false
     @State private var showingScan = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
@@ -65,7 +66,7 @@ struct MainTabView: View {
     }
 
     private var showCopilotBar: Bool {
-        !showingSettings && !showingScan && !env.ask.isSheetPresented
+        !showingSettings && !showingGroupSettings && !showingScan && !env.ask.isSheetPresented
     }
 
     var body: some View {
@@ -74,6 +75,7 @@ struct MainTabView: View {
                 isTabActive: activatedTabs.contains(0),
                 onScan: { showingScan = true },
                 onOpenSettings: { showingSettings = true },
+                onOpenGroupSettings: { showingGroupSettings = true },
                 onOpenSupply: { selectedTab = 4 },
                 onOpenCargo: { selectedTab = 1 },
                 onOpenGalley: { selectedTab = 2 },
@@ -86,7 +88,8 @@ struct MainTabView: View {
             CargoListView(
                 isTabActive: activatedTabs.contains(1),
                 onScan: { showingScan = true },
-                onOpenSettings: { showingSettings = true }
+                onOpenSettings: { showingSettings = true },
+                onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
                 .tabItem { Label("Cargo", systemImage: "shippingbox") }
@@ -94,7 +97,8 @@ struct MainTabView: View {
 
             GalleyView(
                 isTabActive: activatedTabs.contains(2),
-                onOpenSettings: { showingSettings = true }
+                onOpenSettings: { showingSettings = true },
+                onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
                 .tabItem { Label("Galley", systemImage: "fork.knife") }
@@ -103,6 +107,7 @@ struct MainTabView: View {
             ManifestView(
                 isTabActive: activatedTabs.contains(3),
                 onOpenSettings: { showingSettings = true },
+                onOpenGroupSettings: { showingGroupSettings = true },
                 onPlanWeekComplete: { count in
                     selectedTab = 3
                     manifestSuccessMessage = "Added \(count) meals to Manifest"
@@ -114,7 +119,8 @@ struct MainTabView: View {
 
             SupplyView(
                 isTabActive: activatedTabs.contains(4),
-                onOpenSettings: { showingSettings = true }
+                onOpenSettings: { showingSettings = true },
+                onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
                 .tabItem { Label("Supply", systemImage: "cart") }
@@ -125,6 +131,16 @@ struct MainTabView: View {
         .environment(env.tabDock)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showingGroupSettings) {
+            NavigationStack {
+                GroupSettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingGroupSettings = false }
+                        }
+                    }
+            }
         }
         .sheet(isPresented: $showingCopilotPaywall) {
             PaywallView()

@@ -1373,6 +1373,10 @@ struct AccountDeleteResponse: Codable, Sendable {
     let deleted: Bool
 }
 
+struct AccountDeletionPreviewResponse: Codable, Sendable {
+    let ownedGroupsWithNoOtherMembers: [String]
+}
+
 // MARK: - Billing
 
 struct EntitlementInfo: Codable, Sendable {

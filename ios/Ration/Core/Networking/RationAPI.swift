@@ -22,6 +22,10 @@ final class RationAPI {
         try await client.delete("account")
     }
 
+    func accountDeletionPreview() async throws -> AccountDeletionPreviewResponse {
+        try await client.get("account")
+    }
+
     func copilotStatus() async throws -> CopilotStatusResponse {
         try await client.get("copilot/status")
     }

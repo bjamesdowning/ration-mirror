@@ -119,9 +119,9 @@ export function buildMagicLinkEmail(
                 Your sign-in link
               </h1>
               <p style="margin:0 0 28px;font-size:14px;color:#666666;line-height:1.6;">
-                Click the button below to sign in to your Ration account. This link expires in 5 minutes and can only be used once.
+                Tap the button below to continue sign-in (one more step on the next page). This link expires in 5 minutes and can only be used once.
               </p>
-              ${emailButton(url, "Sign in to Ration →")}
+              ${emailButton(url, "Continue sign-in →")}
               <p style="margin:28px 0 0;font-size:12px;color:#999999;line-height:1.5;">
                 Or copy and paste this link into your browser:<br />
                 <a href="${url}" style="color:#00E088;word-break:break-all;">${url}</a>
@@ -135,7 +135,7 @@ export function buildMagicLinkEmail(
 
 	const text = `Sign in to Ration
 
-Click the link below to sign in. This link expires in 5 minutes and can only be used once.
+Tap the link below to continue sign-in. This link expires in 5 minutes and can only be used once.
 
 ${url}
 

@@ -53,6 +53,8 @@ const ERROR_MESSAGES: Record<string, string> = {
 	TOKEN_NOT_FOUND:
 		"This sign-in link could not be found. Please request a new one.",
 	ATTEMPTS_EXCEEDED: "Too many attempts. Please request a new sign-in link.",
+	invalid_request:
+		"This mobile sign-in handoff expired or was opened on the wrong device. Request a new link from the app on the same device, then tap Continue.",
 };
 
 export default function AuthVerify() {

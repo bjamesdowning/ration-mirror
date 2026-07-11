@@ -88,7 +88,7 @@ struct GroupSettingsView: View {
             membersSection
 
             if env.session.activeOrg?.canManageLogo == true {
-                Section("Organization") {
+                Section("Tags") {
                     NavigationLink("Manage tags") {
                         TagsSettingsView()
                     }
@@ -165,7 +165,7 @@ struct GroupSettingsView: View {
 
     @ViewBuilder
     private func orgSwitcherSection(_ session: SessionResponse) -> some View {
-        Section("Switch organization") {
+        Section("Switch group") {
             ForEach(session.organizations) { org in
                 Button {
                     Task { await model.activateOrg(org, env: env) }

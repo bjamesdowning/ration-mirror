@@ -1122,7 +1122,7 @@ erDiagram
 
 ### 7.1 Authentication Flow
 
-Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, and are authenticated on click. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. **Sign in with Apple on web** is available when Apple web secrets are configured and the `apple-web-login` Flagship flag is enabled (default off — see [Feature flags](docs/dev/feature-flags.md)). Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
+Authentication is handled by Better Auth with the `organization` and `magicLink` plugins. Primary sign-in is via **magic link** (passwordless): users enter their email, receive a one-time link, land on an inert `/auth/magic-link/continue` page, then submit **Continue sign-in** (POST) to consume the token — email scanners cannot burn the link by prefetching a GET verify URL. **Google OAuth** is available when `GOOGLE_CLIENT_ID` is configured. **Sign in with Apple on web** is available when Apple web secrets are configured and the `apple-web-login` Flagship flag is enabled (default off — see [Feature flags](docs/dev/feature-flags.md)). Unauthenticated users are redirected to `/` (root) by `requireAuth()`.
 
 **Cross-platform identity:** One Ration account per person. Google and magic link unify by verified email. Apple (including Hide My Email on iOS) unifies by Apple `sub` when the user signs in with the **same Apple ID** on web via Sign in with Apple.
 
@@ -1699,7 +1699,7 @@ Ration exposes a programmatic REST API for external integrations, authenticated 
 
 Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web hub routes (`/api/*` with cookies) are unchanged.
 
-**Authentication:** `Authorization: Bearer <access_jwt>`. Obtain tokens via a **PKCE-protected** magic link: the app generates a `code_verifier`, sends its S256 `codeChallenge` (`POST /api/mobile/v1/auth/magic-link { email, codeChallenge }`) → email → `/auth/mobile-callback?client=ios&code_challenge=...` (challenge bound to the one-time code) → `ration://auth/callback?code=...` → `POST /api/mobile/v1/auth/token` with `grantType: authorization_code` **and `codeVerifier`** (server verifies `S256(verifier)`, rejecting a mismatch with `invalid_grant`). Refresh with `grantType: refresh_token`. PKCE binds the one-time code to the originating app so a hijacked `ration://` redirect cannot be redeemed.
+**Authentication:** `Authorization: Bearer <access_jwt>`. Obtain tokens via a **PKCE-protected** magic link: the app generates a `code_verifier`, sends its S256 `codeChallenge` (`POST /api/mobile/v1/auth/magic-link { email, codeChallenge }`) → email → continue page (POST verify) → `/auth/mobile-callback?client=ios&pending=...` → Universal Link handoff → `POST /api/mobile/v1/auth/token` with `grantType: authorization_code` **and `codeVerifier`** (server verifies `S256(verifier)`, rejecting a mismatch with `invalid_grant`). Refresh with `grantType: refresh_token`. PKCE binds the one-time code to the originating app so a hijacked `ration://` redirect cannot be redeemed. **`DELETE /api/mobile/v1/account`** uses user-only JWT auth (no active-org membership required) so account deletion works even when the access token references a stale group.
 
 **OpenAPI:** [`GET /api/openapi/mobile-v1.json`](/api/openapi/mobile-v1.json)
 

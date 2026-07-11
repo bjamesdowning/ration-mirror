@@ -14,6 +14,11 @@ struct TagsSettingsView: View {
     @State private var mergeSourceId: String?
     @State private var mergeTargetId = ""
     @State private var busyId: String?
+    @State private var newTagName = ""
+    @State private var newTagSlug = ""
+    @State private var newTagCategory = ""
+    @State private var slugManuallyEdited = false
+    @State private var isCreating = false
 
     private var unusedTags: [TagWithCounts] {
         tags.filter { $0.cargoCount == 0 && $0.mealCount == 0 }
@@ -41,9 +46,13 @@ struct TagsSettingsView: View {
                         }
                     }
 
+                    if canManage {
+                        createTagSection
+                    }
+
                     Section {
                         if tags.isEmpty {
-                            Text("No tags yet. Tags are created when you label cargo or meals.")
+                            Text("No tags yet. Create one below or add tags when labeling cargo or meals.")
                                 .rationCaption()
                                 .foregroundStyle(Theme.muted)
                         } else {
@@ -52,7 +61,7 @@ struct TagsSettingsView: View {
                             }
                         }
                     } header: {
-                        Text("Organization tags")
+                        Text("Group tags")
                     } footer: {
                         Text("Up to 10 tags per cargo or meal item. Manage names and categories here.")
                     }
@@ -75,6 +84,38 @@ struct TagsSettingsView: View {
         .background(Theme.ceramic)
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    @ViewBuilder
+    private var createTagSection: some View {
+        Section("Create tag") {
+            TextField("Display name", text: $newTagName)
+                .onChange(of: newTagName) { _, value in
+                    if !slugManuallyEdited {
+                        newTagSlug = normalizeTagSlug(value)
+                    }
+                }
+            TextField("Slug", text: $newTagSlug)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: newTagSlug) { _, _ in slugManuallyEdited = true }
+            TextField("Category (optional)", text: $newTagCategory)
+            Button(isCreating ? "Creating…" : "Create tag") {
+                Task { await createTag() }
+            }
+            .foregroundStyle(Theme.hyperGreen)
+            .disabled(isCreating || normalizeTagSlug(newTagSlug).isEmpty)
+        }
+    }
+
+    private func normalizeTagSlug(_ input: String) -> String {
+        input
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
+            .prefix(50)
+            .description
     }
 
     @ViewBuilder
@@ -135,6 +176,33 @@ struct TagsSettingsView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @MainActor
+    private func createTag() async {
+        let slug = normalizeTagSlug(newTagSlug)
+        guard !slug.isEmpty else { return }
+        isCreating = true
+        defer { isCreating = false }
+        let trimmedName = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCategory = newTagCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            _ = try await env.api.createOrganizationTag(
+                CreateTagRequest(
+                    slug: slug,
+                    name: trimmedName.isEmpty ? nil : trimmedName,
+                    category: trimmedCategory.isEmpty ? nil : trimmedCategory
+                )
+            )
+            newTagName = ""
+            newTagSlug = ""
+            newTagCategory = ""
+            slugManuallyEdited = false
+            successMessage = "Tag created"
+            await load()
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     @MainActor

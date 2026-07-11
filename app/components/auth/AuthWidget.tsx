@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useRouteLoaderData } from "react-router";
 import { authClient } from "~/lib/auth-client";
 import { log } from "~/lib/logging.client";
@@ -46,6 +46,27 @@ export function AuthWidget({
 		flowState === "sending" || socialLoading !== null || devLoginLoading;
 	const consentBlocked = mode === "signUp" && !tosConsent;
 
+	const resolvedCallbackURL = useMemo(() => {
+		if (
+			callbackURL.startsWith("http://") ||
+			callbackURL.startsWith("https://")
+		) {
+			return callbackURL;
+		}
+		if (typeof window !== "undefined") {
+			return new URL(callbackURL, window.location.origin).href;
+		}
+		return callbackURL;
+	}, [callbackURL]);
+
+	const resolvedErrorCallbackURL = useMemo(() => {
+		const path = "/auth/verify";
+		if (typeof window !== "undefined") {
+			return new URL(path, window.location.origin).href;
+		}
+		return path;
+	}, []);
+
 	/** RFC 5322–style regex for basic email validation (relaxed for real-world use) */
 	const isValidEmail = (value: string): boolean =>
 		/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
@@ -67,9 +88,9 @@ export function AuthWidget({
 		try {
 			const { error } = await authClient.signIn.magicLink({
 				email: trimmed,
-				callbackURL,
-				newUserCallbackURL: callbackURL,
-				errorCallbackURL: "/auth/verify",
+				callbackURL: resolvedCallbackURL,
+				newUserCallbackURL: resolvedCallbackURL,
+				errorCallbackURL: resolvedErrorCallbackURL,
 			});
 
 			if (error) {
@@ -95,7 +116,7 @@ export function AuthWidget({
 		try {
 			await authClient.signIn.social({
 				provider: "google",
-				callbackURL,
+				callbackURL: resolvedCallbackURL,
 			});
 		} catch {
 			setErrorMsg("Google sign-in failed. Please try again.");
@@ -110,7 +131,7 @@ export function AuthWidget({
 		try {
 			await authClient.signIn.social({
 				provider: "apple",
-				callbackURL,
+				callbackURL: resolvedCallbackURL,
 				...(mode === "signUp"
 					? {
 							requestSignUp: true,
@@ -132,7 +153,7 @@ export function AuthWidget({
 			const { error } = await authClient.signIn.email({
 				email: "dev@ration.app",
 				password: "ration-dev",
-				callbackURL,
+				callbackURL: resolvedCallbackURL,
 			});
 			if (error) {
 				// Dev user may not exist yet — try signup
@@ -140,7 +161,7 @@ export function AuthWidget({
 					name: "Dev User",
 					email: "dev@ration.app",
 					password: "ration-dev",
-					callbackURL,
+					callbackURL: resolvedCallbackURL,
 				});
 				if (signUpResult.error) {
 					setErrorMsg(

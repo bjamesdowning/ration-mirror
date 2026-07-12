@@ -26,7 +26,12 @@ struct RootView: View {
                     .padding(24)
                     .background(Theme.ceramic)
                 case .ready:
-                    MainTabView()
+                    if env.launch.needsOnboarding, !env.session.needsOrgSelection {
+                        OnboardingBriefingView()
+                            .environment(env.ask)
+                    } else {
+                        MainTabView()
+                    }
                 }
             }
             .fullScreenCover(isPresented: Binding(
@@ -46,7 +51,6 @@ struct RootView: View {
                 if env.launch.needsOnboarding {
                     env.onboarding.startIfNeeded(
                         completedAt: env.launch.userSettings?.onboardingCompletedAt,
-                        initialStep: env.launch.initialOnboardingStep,
                         settings: env.launch.userSettings
                     )
                 } else {
@@ -64,7 +68,6 @@ struct MainTabView: View {
     @State private var showingSettings = false
     @State private var showingGroupSettings = false
     @State private var showingScan = false
-    @State private var showingOnboardingPaywall = false
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var activatedTabs: Set<Int> = [0]
@@ -76,8 +79,7 @@ struct MainTabView: View {
     }
 
     private var showCopilotBar: Bool {
-        !env.onboarding.isActive
-            && !showingSettings
+        !showingSettings
             && !showingGroupSettings
             && !showingScan
             && !env.ask.isSheetPresented
@@ -161,20 +163,6 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showingScan) {
             ScanView()
-        }
-        .overlay {
-            if env.onboarding.isActive {
-                OnboardingContainerView(
-                    coordinator: env.onboarding,
-                    selectedTab: $selectedTab,
-                    showingGroupSettings: $showingGroupSettings,
-                    showingPaywall: $showingOnboardingPaywall,
-                    onFinished: {}
-                )
-            }
-        }
-        .sheet(isPresented: $showingOnboardingPaywall) {
-            PaywallView()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showCopilotBar {

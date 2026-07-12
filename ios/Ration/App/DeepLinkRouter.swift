@@ -39,6 +39,8 @@ final class DeepLinkRouter {
             openAskSheet()
         case .scan:
             openScan()
+        case .cargo:
+            selectedTab = 1
         case .galleyGenerate:
             selectedTab = 2
             galleyGeneratePending = true

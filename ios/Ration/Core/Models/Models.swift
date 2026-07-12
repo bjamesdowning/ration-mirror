@@ -86,6 +86,12 @@ struct CopilotStatusResponse: Codable, Sendable {
     let conversationFloorCost: Int
     let sessionIdleMs: Int
     let brackets: [CopilotCostBracket]
+    let onboardingBriefingEligible: Bool? = nil
+    let onboardingBriefingConsumed: Bool? = nil
+
+    var canUseOnboardingBriefing: Bool {
+        onboardingBriefingEligible == true && onboardingBriefingConsumed != true
+    }
 }
 
 struct CopilotConsentRequest: Encodable {

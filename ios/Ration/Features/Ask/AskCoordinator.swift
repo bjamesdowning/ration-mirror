@@ -6,6 +6,7 @@ import Observation
 final class AskCoordinator {
     let model = AskViewModel()
     private(set) var isSheetPresented = false
+    var isOnboardingBriefing = false
     var draft = ""
     private var draftOrganizationId: String?
 
@@ -62,6 +63,23 @@ final class AskCoordinator {
     ) async -> Bool {
         await send(
             text,
+            api: api,
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots,
+            presentsSheet: false
+        )
+    }
+
+    func sendOnboardingBootstrap(
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> Bool {
+        model.tracksBriefingSession = true
+        return await send(
+            OnboardingBriefingCopy.bootstrapPrompt,
             api: api,
             auth: auth,
             organizationId: organizationId,

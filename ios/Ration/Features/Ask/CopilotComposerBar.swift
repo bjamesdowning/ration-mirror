@@ -26,6 +26,7 @@ struct CopilotComposerBar: View {
     let onSend: (String) async -> Bool
     let onStop: () async -> Void
     let onExhaustedTap: () -> Void
+    var placeholderOverride: String? = nil
 
     @State private var hintIndex = 0
     @State private var submissionInFlight = false
@@ -44,7 +45,7 @@ struct CopilotComposerBar: View {
     }
 
     private var placeholder: String {
-        hintExamples[hintIndex]
+        placeholderOverride ?? hintExamples[hintIndex]
     }
 
     var body: some View {

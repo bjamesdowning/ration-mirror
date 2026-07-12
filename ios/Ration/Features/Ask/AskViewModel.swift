@@ -44,6 +44,8 @@ final class AskViewModel {
     private(set) var isTurnActive = false
     private(set) var isStopping = false
     private(set) var isAwaitingApproval = false
+    private(set) var briefingComplete = false
+    var tracksBriefingSession = false
 
     private var socket: (any AskSocketClient)?
     private var streamTask: Task<Void, Never>?
@@ -129,6 +131,21 @@ final class AskViewModel {
         }
     }
 
+    func resetBriefingSession() {
+        tracksBriefingSession = false
+        briefingComplete = false
+    }
+
+    func showStaticBriefing(_ markdown: String) {
+        messages = [
+            CopilotMessage(role: "user", content: OnboardingBriefingCopy.bootstrapPrompt),
+            CopilotMessage(role: "assistant", content: markdown),
+        ]
+        briefingComplete = true
+        state = .idle
+        turnPhase = .idle
+    }
+
     @discardableResult
     func send(
         _ text: String,
@@ -141,7 +158,8 @@ final class AskViewModel {
         guard !trimmed.isEmpty,
               !isSubmitting,
               !isTurnActive,
-              !isAwaitingApproval else { return false }
+              !isAwaitingApproval,
+              !briefingComplete else { return false }
         isSubmitting = true
         defer { isSubmitting = false }
         self.organizationId = organizationId
@@ -333,6 +351,9 @@ final class AskViewModel {
             persistSnapshotDebounced()
         case "message_end":
             clearTransientError()
+            if tracksBriefingSession {
+                briefingComplete = true
+            }
             completeTurn(state: .idle)
             scheduleImmediateSnapshotSave()
         case "tool_start":
@@ -393,6 +414,11 @@ final class AskViewModel {
             }
         case "error":
             let wasTurnActive = isTurnActive
+            if event.error?.code == "onboarding_briefing_exhausted" {
+                briefingComplete = true
+                completeTurn(state: .idle)
+                return
+            }
             isConnected = false
             if event.error?.code == "session_limit_reached" {
                 messages = []

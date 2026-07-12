@@ -12,11 +12,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		);
 		const env = context.cloudflare.env;
 		const tierInfo = await getGroupTierLimits(env, organizationId);
-		return getCopilotStatus(env, {
-			userId,
-			organizationId,
-			tier: tierInfo.tier,
-		});
+		return getCopilotStatus(
+			env,
+			{
+				userId,
+				organizationId,
+				tier: tierInfo.tier,
+			},
+			{ request },
+		);
 	} catch (e) {
 		return handleApiError(e);
 	}

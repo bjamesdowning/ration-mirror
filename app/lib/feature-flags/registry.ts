@@ -21,6 +21,10 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "rationCopilot",
 	},
+	"copilot-onboarding-free": {
+		defaultEnabled: false,
+		description: "One-time iOS Ask Ration welcome briefing for new users",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

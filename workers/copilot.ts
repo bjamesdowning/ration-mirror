@@ -16,10 +16,17 @@ import {
 import {
 	CopilotNeedsConsentError,
 	ensureCopilotConversationOpen,
+	getConversationCharge,
+	persistConversationCharge,
 	reconcileAndPersistCopilotConversationUsage,
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
 import { detectNativeFeatureSuggestion } from "../app/lib/copilot/native-feature-hints.server";
+import {
+	finalizeOnboardingBriefing,
+	getOnboardingBriefingSystemPromptAppend,
+	isOnboardingBriefingPrompt,
+} from "../app/lib/copilot/onboarding-briefing.server";
 import { getCopilotSystemPrompt } from "../app/lib/copilot/system-prompt.server";
 import {
 	COPILOT_MCP_SCOPES,
@@ -178,6 +185,10 @@ function lastUserText(ctx: TurnContext): string {
 	return "";
 }
 
+function countUserMessages(ctx: TurnContext): number {
+	return ctx.messages.filter((message) => message.role === "user").length;
+}
+
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
@@ -203,6 +214,63 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		const charge = await getConversationCharge(
+			this.env,
+			identity.organizationId,
+			identity.conversationId,
+		);
+		if (charge?.mode === "onboarding_briefing") {
+			if (
+				charge.onboardingConsumed ||
+				(charge.onboardingTurnsUsed ?? 0) >= 1 ||
+				countUserMessages(ctx) > 1
+			) {
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_blocked_attempt",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+				);
+				this.broadcast(
+					JSON.stringify({
+						type: "error",
+						error: {
+							code: "onboarding_briefing_exhausted",
+							message:
+								"Your welcome briefing is complete. Unlock Ask Ration with credits or Crew Member.",
+						},
+					}),
+				);
+				return {
+					system: `${ctx.system}\n\nThe welcome briefing is complete. Do not answer further questions.`,
+					activeTools: [],
+					maxSteps: 1,
+				};
+			}
+			const userText = lastUserText(ctx);
+			if (!(await isOnboardingBriefingPrompt(userText))) {
+				this.broadcast(
+					JSON.stringify({
+						type: "error",
+						error: {
+							code: "onboarding_briefing_exhausted",
+							message:
+								"Your welcome briefing is complete. Unlock Ask Ration with credits or Crew Member.",
+						},
+					}),
+				);
+				return {
+					system: `${ctx.system}\n\nThe welcome briefing only accepts the canonical onboarding prompt.`,
+					activeTools: [],
+					maxSteps: 1,
+				};
+			}
+			return {
+				system: `${ctx.system}${getOnboardingBriefingSystemPromptAppend()}`,
+				activeTools: [],
+				maxSteps: 1,
+			};
+		}
 		if (this.billingBlocked) {
 			return {
 				system: `${ctx.system}\n\nThis conversation exhausted its credit allowance. Do not call tools. Tell the user to add credits and start a new chat, or start a new chat after the allowance resets.`,
@@ -383,6 +451,26 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				doubles: [this.totalUsageTokens, charge.bracketCreditsCharged],
 			},
 		);
+		if (charge.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
+			const nextCharge = {
+				...charge,
+				onboardingTurnsUsed: 1,
+				onboardingConsumed: true,
+			};
+			await persistConversationCharge(
+				this.env,
+				identity.organizationId,
+				identity.conversationId,
+				nextCharge,
+			);
+			await finalizeOnboardingBriefing(this.env, identity.userId);
+			writeCopilotMetric(
+				this.env,
+				"onboarding_briefing_completed",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+			);
+		}
 	}
 
 	override async fetch(request: Request): Promise<Response> {
@@ -455,7 +543,23 @@ export default {
 			}
 
 			const conversationId = parseConversationId(url);
-			await ensureCopilotConversationOpen(env, identity, conversationId);
+			const charge = await ensureCopilotConversationOpen(
+				env,
+				identity,
+				conversationId,
+				{
+					request,
+					source: identity.source,
+				},
+			);
+			if (charge.mode === "onboarding_briefing") {
+				writeCopilotMetric(
+					env,
+					"onboarding_briefing_started",
+					identity,
+					conversationId,
+				);
+			}
 			const agentName = encodeAgentName({ ...identity, conversationId });
 			ctx.waitUntil(
 				Promise.all(

@@ -728,7 +728,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 
 **FAB padding:** Cargo, Galley, Supply, and Manifest routes use `pb-36 md:pb-0` on the main content area to reserve space for the floating action bar on mobile.
 
-**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) that introduces nomenclature, groups, and each hub module in sequence. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. The tour respects keyboard navigation (Esc = skip, arrow keys = next/back) and fires a confetti animation on completion. Settings includes **Restart Tutorial**. The native iOS app runs the same 7-step content with a hybrid flow: full-screen welcome/launch bookends plus tab-switching bottom-sheet cards (`ios/Ration/Features/Onboarding/`); restart via Settings → Tutorial.
+**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) on **web**. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. Settings includes **Restart Tutorial**. **iOS** replaces the tour with a one-time **Ask Ration welcome briefing**: new users land in full-screen Copilot with an auto-sent bootstrap prompt, receive exactly one assistant response (server-enforced, tools disabled, `copilot-onboarding-free` flag), then **Enter Ration** with navigation chips (Cargo, pricing). Settings → Tutorial replays static briefing copy only (no extra LLM grant). See `app/lib/copilot/onboarding-briefing.server.ts` and `ios/Ration/Features/Onboarding/`.
 
 ---
 

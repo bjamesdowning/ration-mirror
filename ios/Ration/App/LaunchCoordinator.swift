@@ -31,10 +31,6 @@ final class LaunchCoordinator {
         return userSettings.onboardingCompletedAt?.isEmpty != false
     }
 
-    var initialOnboardingStep: Int {
-        OnboardingCoordinator.clampedStep(userSettings?.onboardingStep ?? 0)
-    }
-
     func reset() {
         startupGeneration += 1
         userSettings = nil

@@ -3,123 +3,49 @@ import XCTest
 
 @MainActor
 final class OnboardingCoordinatorTests: XCTestCase {
-    func testClampedStepBounds() {
-        XCTAssertEqual(OnboardingCoordinator.clampedStep(-3), 0)
-        XCTAssertEqual(OnboardingCoordinator.clampedStep(0), 0)
-        XCTAssertEqual(OnboardingCoordinator.clampedStep(6), 6)
-        XCTAssertEqual(OnboardingCoordinator.clampedStep(99), 6)
-    }
-
-    func testStartIfNeededResumesStepAndUnits() throws {
+    func testStartIfNeededActivatesBriefing() throws {
         let coordinator = OnboardingCoordinator()
-        let settings = try decodeSettings(#"{"unitDisplayMode":"imperial","onboardingStep":3}"#)
+        let settings = try decodeSettings(#"{"unitDisplayMode":"imperial"}"#)
 
-        coordinator.startIfNeeded(completedAt: nil, initialStep: settings.onboardingStep, settings: settings)
+        coordinator.startIfNeeded(completedAt: nil, settings: settings)
 
         XCTAssertTrue(coordinator.isActive)
-        XCTAssertEqual(coordinator.step, 3)
-        XCTAssertEqual(coordinator.phase, .contextual)
+        XCTAssertEqual(coordinator.phase, .askBriefing)
         XCTAssertEqual(coordinator.unitDisplayMode, "imperial")
-        XCTAssertEqual(coordinator.highlightedTab, 2)
+        XCTAssertFalse(coordinator.isStaticReplay)
     }
 
     func testStartIfNeededSkipsWhenCompleted() {
         let coordinator = OnboardingCoordinator()
-        coordinator.startIfNeeded(completedAt: "2026-01-01T00:00:00Z", initialStep: 0)
+        coordinator.startIfNeeded(completedAt: "2026-01-01T00:00:00Z")
         XCTAssertFalse(coordinator.isActive)
     }
 
-    func testPhaseMapping() {
+    func testRestartUsesStaticReplay() {
         let coordinator = OnboardingCoordinator()
-        coordinator.restart(fromServerStep: 0)
-        XCTAssertEqual(coordinator.phase, .welcome)
-
-        coordinator.restart(fromServerStep: 2)
-        XCTAssertEqual(coordinator.phase, .contextual)
-
-        coordinator.restart(fromServerStep: 6)
-        XCTAssertEqual(coordinator.phase, .launch)
-    }
-
-    func testGoBackPersistsPreviousStep() async throws {
-        let coordinator = OnboardingCoordinator()
-        coordinator.restart(fromServerStep: 4)
-        var patchedStep: Int?
-        coordinator.settingsPatchHandler = { patch in
-            patchedStep = patch.onboardingStep
-            return try self.decodeSettings("{}")
-        }
-
-        let settings = await coordinator.goBack(api: RationAPI(client: APIClient(auth: AuthManager())))
-
-        XCTAssertNotNil(settings)
-        XCTAssertEqual(patchedStep, 3)
-        XCTAssertEqual(coordinator.step, 3)
-    }
-
-    func testSkipStaysActiveWhenPatchFails() async {
-        let coordinator = OnboardingCoordinator()
-        coordinator.restart(fromServerStep: 2)
-        coordinator.settingsPatchHandler = { _ in
-            throw APIError.server(status: 503, message: "busy", code: nil)
-        }
-
-        let result = await coordinator.skip(api: RationAPI(client: APIClient(auth: AuthManager())))
-
-        XCTAssertNil(result)
+        coordinator.reset()
+        coordinator.restart(staticReplay: true)
         XCTAssertTrue(coordinator.isActive)
-        XCTAssertEqual(coordinator.step, 2)
-        XCTAssertNotNil(coordinator.errorMessage)
+        XCTAssertTrue(coordinator.isStaticReplay)
+        XCTAssertEqual(coordinator.phase, .askBriefing)
     }
 
-    func testCompleteStaysActiveWhenPatchFails() async {
+    func testCompleteFinishesLocally() async throws {
         let coordinator = OnboardingCoordinator()
-        coordinator.restart(fromServerStep: 6)
-        coordinator.settingsPatchHandler = { _ in
-            throw APIError.server(status: 503, message: "busy", code: nil)
-        }
-
-        let result = await coordinator.complete(api: RationAPI(client: APIClient(auth: AuthManager())))
-
-        XCTAssertNil(result)
-        XCTAssertTrue(coordinator.isActive)
-        XCTAssertEqual(coordinator.phase, .launch)
-    }
-
-    func testSkipFinishesWhenPatchSucceeds() async throws {
-        let coordinator = OnboardingCoordinator()
-        coordinator.restart(fromServerStep: 2)
+        coordinator.startIfNeeded(completedAt: nil, settings: nil)
         coordinator.settingsPatchHandler = { patch in
             XCTAssertNotNil(patch.onboardingCompletedAt)
             return try self.decodeSettings(#"{"onboardingCompletedAt":"2026-01-01T00:00:00Z"}"#)
         }
 
-        let result = await coordinator.skip(api: RationAPI(client: APIClient(auth: AuthManager())))
+        let result = await coordinator.complete(api: RationAPI(client: APIClient(auth: AuthManager())))
 
         XCTAssertNotNil(result)
         XCTAssertFalse(coordinator.isActive)
     }
 
-    func testRestartActivatesTourAtStepZero() {
-        let coordinator = OnboardingCoordinator()
-        coordinator.reset()
-        coordinator.restart(fromServerStep: 0)
-        XCTAssertTrue(coordinator.isActive)
-        XCTAssertEqual(coordinator.step, 0)
-        XCTAssertEqual(coordinator.phase, .welcome)
-    }
-
-    func testContextualCopyCoverage() {
-        for step in 1...5 {
-            XCTAssertNotNil(OnboardingCopy.contextualStep(for: step))
-        }
-        XCTAssertNil(OnboardingCopy.contextualStep(for: 0))
-        XCTAssertNil(OnboardingCopy.contextualStep(for: 6))
-    }
-
-    func testFreeTierListsMatchServerLimits() {
-        let free = OnboardingCopy.tiers.first { $0.id == "free" }
-        XCTAssertEqual(free?.features.contains("3 Supply lists"), true)
+    func testDefaultUnitDisplayModeUsesLocale() {
+        _ = OnboardingCoordinator.defaultUnitDisplayMode()
     }
 
     private func decodeSettings(_ json: String) throws -> UserSettings {
@@ -129,11 +55,11 @@ final class OnboardingCoordinatorTests: XCTestCase {
 
 @MainActor
 final class LaunchCoordinatorOnboardingTests: XCTestCase {
-    func testInitialOnboardingStepClampsServerValue() async throws {
+    func testNeedsOnboardingWhenCompletionMissing() async throws {
         let launch = LaunchCoordinator()
         let settings = try JSONDecoder().decode(
             UserSettings.self,
-            from: Data(#"{"onboardingStep":99}"#.utf8)
+            from: Data(#"{"onboardingStep":0}"#.utf8)
         )
 
         await launch.performStartup(
@@ -142,6 +68,6 @@ final class LaunchCoordinatorOnboardingTests: XCTestCase {
             applySettings: { _ in }
         )
 
-        XCTAssertEqual(launch.initialOnboardingStep, 6)
+        XCTAssertTrue(launch.needsOnboarding)
     }
 }

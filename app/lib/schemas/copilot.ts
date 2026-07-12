@@ -62,6 +62,8 @@ export const CopilotAllowanceStatusSchema = z.object({
 			credits: z.number().int().positive(),
 		}),
 	),
+	onboardingBriefingEligible: z.boolean().optional(),
+	onboardingBriefingConsumed: z.boolean().optional(),
 });
 export type CopilotAllowanceStatus = z.infer<
 	typeof CopilotAllowanceStatusSchema

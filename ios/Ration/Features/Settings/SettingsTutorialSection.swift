@@ -8,7 +8,7 @@ struct SettingsTutorialSection: View {
 
     var body: some View {
         Section {
-            Text("Replay the onboarding tour to revisit the Ration workflow and feature overview.")
+            Text("Replay the welcome briefing to revisit how Ration works.")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)
@@ -47,10 +47,7 @@ struct SettingsTutorialSection: View {
                 SettingsPatch(restartOnboarding: true)
             )
             env.launch.updateUserSettings(response.settings)
-            env.onboarding.restart(fromServerStep: response.settings.onboardingStep ?? 0)
-            if let mode = response.settings.unitDisplayMode, !mode.isEmpty {
-                env.onboarding.unitDisplayMode = mode
-            }
+            env.onboarding.restart(staticReplay: true)
             dismiss()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription

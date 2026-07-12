@@ -9,6 +9,7 @@ final class AppEnvironment {
     enum DeepLinkDestination: Equatable {
         case ask
         case scan
+        case cargo
         case galleyGenerate
         case galleyImport
         case manifestPlanWeek

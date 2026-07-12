@@ -4,6 +4,7 @@ import {
 	deductCredits,
 	withCreditGate,
 } from "../ledger.server";
+import type { CopilotAuthSource } from "./auth.server";
 import {
 	COPILOT_CONVERSATION_FLOOR_COST,
 	COPILOT_COST_BRACKETS,
@@ -12,6 +13,11 @@ import {
 	creditsForCopilotTokens,
 	FREE_TIER_DAILY_CONVERSATIONS,
 } from "./constants";
+import {
+	claimOnboardingBriefing,
+	getOnboardingBriefingStatus,
+	isEligibleForOnboardingBriefing,
+} from "./onboarding-briefing.server";
 
 const ALLOWANCE_KEY_PREFIX = "copilot:allowance";
 const AUTO_DEDUCT_KEY_PREFIX = "copilot:auto-deduct";
@@ -28,7 +34,7 @@ export class CopilotNeedsConsentError extends Error {
 	}
 }
 
-export type CopilotChargeMode = "allowance" | "credits";
+export type CopilotChargeMode = "allowance" | "credits" | "onboarding_briefing";
 
 export interface CopilotGateIdentity {
 	organizationId: string;
@@ -40,6 +46,14 @@ export interface CopilotConversationCharge {
 	mode: CopilotChargeMode;
 	preauthorizedCredits: number;
 	bracketCreditsCharged: number;
+	onboardingTurnsUsed?: number;
+	onboardingConsumed?: boolean;
+}
+
+export interface OpenCopilotConversationOptions {
+	autoDeductConsent?: boolean;
+	request?: Request;
+	source?: CopilotAuthSource;
 }
 
 function isCrewTier(tier: string | null | undefined): boolean {
@@ -123,6 +137,7 @@ export async function setCopilotAutoDeductConsent(
 export async function getCopilotStatus(
 	env: Env,
 	identity: CopilotGateIdentity,
+	options?: { request?: Request },
 ) {
 	const resetAt = nextUtcMidnight();
 	const allowanceLimit = isCrewTier(identity.tier)
@@ -130,10 +145,17 @@ export async function getCopilotStatus(
 		: FREE_TIER_DAILY_CONVERSATIONS;
 	const used = await getAllowanceUsed(env.RATION_KV, identity.organizationId);
 	const freeConversationsRemaining = Math.max(0, allowanceLimit - used);
-	const [creditBalance, autoDeductConsent] = await Promise.all([
-		checkBalance(env, identity.organizationId),
-		getCopilotAutoDeductConsent(env, identity),
-	]);
+	const [creditBalance, autoDeductConsent, onboardingBriefing] =
+		await Promise.all([
+			checkBalance(env, identity.organizationId),
+			getCopilotAutoDeductConsent(env, identity),
+			getOnboardingBriefingStatus(env, {
+				env,
+				userId: identity.userId,
+				tier: identity.tier,
+				request: options?.request,
+			}),
+		]);
 
 	return {
 		tier: identity.tier,
@@ -144,14 +166,37 @@ export async function getCopilotStatus(
 		conversationFloorCost: COPILOT_CONVERSATION_FLOOR_COST,
 		sessionIdleMs: COPILOT_SESSION_IDLE_MS,
 		brackets: COPILOT_COST_BRACKETS,
+		onboardingBriefingEligible: onboardingBriefing.eligible,
+		onboardingBriefingConsumed: onboardingBriefing.consumed,
 	};
 }
 
 export async function openCopilotConversation(
 	env: Env,
 	identity: CopilotGateIdentity,
-	options?: { autoDeductConsent?: boolean },
+	options?: OpenCopilotConversationOptions,
 ): Promise<CopilotConversationCharge> {
+	if (
+		options?.source === "mobile" &&
+		(await isEligibleForOnboardingBriefing({
+			env,
+			userId: identity.userId,
+			tier: identity.tier,
+			request: options.request,
+		}))
+	) {
+		const claimed = await claimOnboardingBriefing(env, identity.userId);
+		if (claimed) {
+			return {
+				mode: "onboarding_briefing",
+				preauthorizedCredits: 0,
+				bracketCreditsCharged: 0,
+				onboardingTurnsUsed: 0,
+				onboardingConsumed: false,
+			};
+		}
+	}
+
 	const resetAt = nextUtcMidnight();
 	if (isCrewTier(identity.tier)) {
 		const used = await getAllowanceUsed(env.RATION_KV, identity.organizationId);
@@ -192,11 +237,42 @@ export async function openCopilotConversation(
 	);
 }
 
+export async function getConversationCharge(
+	env: Env,
+	organizationId: string,
+	conversationId: string,
+): Promise<CopilotConversationCharge | null> {
+	const key = conversationKey(organizationId, conversationId);
+	const existing = await env.RATION_KV.get(key, "json");
+	if (
+		existing &&
+		typeof existing === "object" &&
+		"mode" in existing &&
+		"bracketCreditsCharged" in existing
+	) {
+		return existing as CopilotConversationCharge;
+	}
+	return null;
+}
+
+export async function persistConversationCharge(
+	env: Env,
+	organizationId: string,
+	conversationId: string,
+	charge: CopilotConversationCharge,
+): Promise<void> {
+	await env.RATION_KV.put(
+		conversationKey(organizationId, conversationId),
+		JSON.stringify(charge),
+		{ expirationTtl: Math.ceil(COPILOT_SESSION_IDLE_MS / 1000) },
+	);
+}
+
 export async function ensureCopilotConversationOpen(
 	env: Env,
 	identity: CopilotGateIdentity,
 	conversationId: string,
-	options?: { autoDeductConsent?: boolean },
+	options?: OpenCopilotConversationOptions,
 ): Promise<CopilotConversationCharge> {
 	const key = conversationKey(identity.organizationId, conversationId);
 	const existing = await env.RATION_KV.get(key, "json");
@@ -213,9 +289,12 @@ export async function ensureCopilotConversationOpen(
 	}
 
 	const charge = await openCopilotConversation(env, identity, options);
-	await env.RATION_KV.put(key, JSON.stringify(charge), {
-		expirationTtl: Math.ceil(COPILOT_SESSION_IDLE_MS / 1000),
-	});
+	await persistConversationCharge(
+		env,
+		identity.organizationId,
+		conversationId,
+		charge,
+	);
 	return charge;
 }
 
@@ -226,7 +305,9 @@ export async function reconcileCopilotConversationUsage(
 	totalTokens: number,
 	conversationId?: string,
 ): Promise<CopilotConversationCharge> {
-	if (charge.mode === "allowance") return charge;
+	if (charge.mode === "allowance" || charge.mode === "onboarding_briefing") {
+		return charge;
+	}
 
 	const targetCredits = creditsForCopilotTokens(totalTokens);
 	const delta = targetCredits - charge.bracketCreditsCharged;

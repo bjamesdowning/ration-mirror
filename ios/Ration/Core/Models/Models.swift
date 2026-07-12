@@ -41,6 +41,7 @@ struct OrgMembership: Codable, Sendable, Identifiable {
 
     var canManageLogo: Bool { role == "owner" || role == "admin" }
     var canManageSupplySettings: Bool { role == "owner" || role == "admin" }
+    var canManageGroupProfile: Bool { role == "owner" || role == "admin" }
 }
 
 /// Credit costs for AI features — mirrors `AI_COSTS` from ledger.server.
@@ -175,7 +176,6 @@ struct GroupMembersResponse: Codable, Sendable {
 
 struct CreateGroupRequest: Encodable, Sendable {
     let name: String
-    let slug: String
 }
 
 struct CreateGroupResponse: Codable, Sendable {
@@ -275,8 +275,7 @@ struct OrganizationTagsResponse: Codable, Sendable {
 }
 
 struct CreateTagRequest: Encodable, Sendable {
-    let slug: String
-    var name: String?
+    let name: String
     var color: String?
     var category: String?
 }
@@ -707,6 +706,18 @@ struct OrganizationSupplySettingsResponse: Codable, Sendable {
 
 struct OrganizationSupplySettingsPatch: Encodable, Sendable {
     let manifestHorizonDays: Int
+}
+
+struct OrganizationProfilePatchRequest: Encodable, Sendable {
+    let name: String
+}
+
+struct OrganizationProfilePatchResponse: Codable, Sendable {
+    let id: String
+    let name: String
+    let slug: String?
+    let logo: String?
+    let credits: Int
 }
 
 struct ManifestSettings: Codable, Sendable {

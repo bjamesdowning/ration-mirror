@@ -4,11 +4,7 @@ import { TagChip } from "~/components/shared/TagChip";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
-import {
-	formatTagName,
-	normalizeTagSlug,
-	type TagWithCounts,
-} from "~/lib/tags";
+import { formatTagName, type TagWithCounts } from "~/lib/tags";
 
 const TAG_COLORS = [
 	"#00E088",
@@ -46,9 +42,7 @@ export function TagsSettingsSection({
 	const [mergeTargetId, setMergeTargetId] = useState("");
 	const [isCleaningUnused, setIsCleaningUnused] = useState(false);
 	const [newTagName, setNewTagName] = useState("");
-	const [newTagSlug, setNewTagSlug] = useState("");
 	const [newTagCategory, setNewTagCategory] = useState("");
-	const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 
 	const sortedTags = useMemo(
@@ -133,20 +127,18 @@ export function TagsSettingsSection({
 	};
 
 	const createTag = async () => {
-		const slug = normalizeTagSlug(newTagSlug);
-		if (!slug) return;
+		const trimmedName = newTagName.trim();
+		if (!trimmedName) return;
 
 		setIsCreating(true);
 		setErrorMessage("");
 		try {
-			const trimmedName = newTagName.trim();
 			const trimmedCategory = newTagCategory.trim();
 			const response = await fetch("/api/tags", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					slug,
-					name: trimmedName || formatTagName(slug),
+					name: trimmedName,
 					category: trimmedCategory || null,
 				}),
 			});
@@ -156,9 +148,7 @@ export function TagsSettingsSection({
 			}
 			successToast.show();
 			setNewTagName("");
-			setNewTagSlug("");
 			setNewTagCategory("");
-			setSlugManuallyEdited(false);
 			revalidator.revalidate();
 		} catch (e) {
 			setErrorMessage(e instanceof Error ? e.message : "Failed to create tag");
@@ -266,31 +256,13 @@ export function TagsSettingsSection({
 			{canManage ? (
 				<div className="mb-6 p-4 bg-platinum/30 rounded-lg space-y-3">
 					<h4 className="text-xs text-label text-muted">Create tag</h4>
-					<div className="grid gap-3 sm:grid-cols-2">
-						<input
-							type="text"
-							value={newTagName}
-							onChange={(e) => {
-								const value = e.target.value;
-								setNewTagName(value);
-								if (!slugManuallyEdited) {
-									setNewTagSlug(normalizeTagSlug(value));
-								}
-							}}
-							placeholder="Display name"
-							className="px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm"
-						/>
-						<input
-							type="text"
-							value={newTagSlug}
-							onChange={(e) => {
-								setSlugManuallyEdited(true);
-								setNewTagSlug(e.target.value);
-							}}
-							placeholder="slug"
-							className="px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm font-mono"
-						/>
-					</div>
+					<input
+						type="text"
+						value={newTagName}
+						onChange={(e) => setNewTagName(e.target.value)}
+						placeholder="Display name"
+						className="w-full px-3 py-2 rounded-lg border border-platinum bg-ceramic text-sm"
+					/>
 					<input
 						type="text"
 						value={newTagCategory}
@@ -301,7 +273,7 @@ export function TagsSettingsSection({
 					<button
 						type="button"
 						onClick={createTag}
-						disabled={isCreating || !normalizeTagSlug(newTagSlug)}
+						disabled={isCreating || !newTagName.trim()}
 						className="text-sm px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green font-medium hover:bg-hyper-green/20 disabled:opacity-50"
 					>
 						{isCreating ? "Creating…" : "Create tag"}

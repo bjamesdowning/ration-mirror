@@ -4,8 +4,13 @@ import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
+import {
+	isOrganizationSlugTaken,
+	resolveOrganizationCreateSlug,
+} from "~/lib/group-create.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { MobileCreateGroupSchema } from "~/lib/schemas/mobile/groups";
 import type { Route } from "./+types/groups.create";
 
 /** GET is not supported; this route is action-only (POST). */
@@ -19,7 +24,6 @@ export async function loader() {
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user, session } = await requireAuth(context, request);
 
-	// Rate limiting to prevent group spam
 	const rateLimitResult = await checkRateLimit(
 		context.cloudflare.env.RATION_KV,
 		"group_create",
@@ -35,24 +39,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const formData = await request.formData();
-	const name = formData.get("name")?.toString();
-	const slug = formData.get("slug")?.toString();
+	const nameRaw = formData.get("name")?.toString();
+	const slugRaw = formData.get("slug")?.toString();
 
-	if (!name || !slug) {
-		return data({ error: "Name and Slug are required" }, { status: 400 });
+	const parsed = MobileCreateGroupSchema.safeParse({
+		name: nameRaw,
+		slug: slugRaw?.trim() ? slugRaw : undefined,
+	});
+	if (!parsed.success) {
+		const firstIssue = parsed.error.issues[0]?.message ?? "Invalid request";
+		return data({ error: firstIssue }, { status: 400 });
 	}
 
-	// Validate slug format (alphanumeric, hyphens)
-	if (!/^[a-z0-9-]+$/.test(slug)) {
-		return data(
-			{
-				error:
-					"Unique ID must contain only lowercase letters, numbers, and hyphens",
-			},
-			{ status: 400 },
-		);
-	}
-
+	const { name, slug: explicitSlug } = parsed.data;
 	const db = drizzle(context.cloudflare.env.DB, { schema });
 
 	const groupCapacity = await checkOwnedGroupCapacity(
@@ -74,12 +73,26 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
-	// Check slug uniqueness
-	const existing = await db.query.organization.findFirst({
-		where: (org, { eq }) => eq(org.slug, slug),
-	});
+	let slug: string;
+	try {
+		slug = await resolveOrganizationCreateSlug(
+			context.cloudflare.env.DB,
+			name,
+			explicitSlug,
+		);
+	} catch {
+		return data(
+			{ error: "Failed to create group. Please try again." },
+			{
+				status: 500,
+			},
+		);
+	}
 
-	if (existing) {
+	if (
+		explicitSlug &&
+		(await isOrganizationSlugTaken(context.cloudflare.env.DB, slug))
+	) {
 		return data(
 			{ error: "Unique ID is already taken. Please choose another." },
 			{ status: 400 },
@@ -88,9 +101,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const orgId = crypto.randomUUID();
 
-	// Context switch requires the primary session ID, not the join table ID
 	try {
-		// Create organization, add member, and switch context in one transaction
 		await db.batch([
 			db.insert(schema.organization).values({
 				id: orgId,

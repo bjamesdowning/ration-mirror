@@ -18,9 +18,7 @@ struct TagsSettingsView: View {
     @State private var showCleanupConfirm = false
     @State private var busyId: String?
     @State private var newTagName = ""
-    @State private var newTagSlug = ""
     @State private var newTagCategory = ""
-    @State private var slugManuallyEdited = false
     @State private var isCreating = false
     @State private var isCleaningUnused = false
 
@@ -195,33 +193,14 @@ struct TagsSettingsView: View {
     private var createTagSection: some View {
         Section("Create tag") {
             TextField("Display name", text: $newTagName)
-                .onChange(of: newTagName) { _, value in
-                    if !slugManuallyEdited {
-                        newTagSlug = normalizeTagSlug(value)
-                    }
-                }
-            TextField("Slug", text: $newTagSlug)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .onChange(of: newTagSlug) { _, _ in slugManuallyEdited = true }
             TextField("Category (optional)", text: $newTagCategory)
             Button(isCreating ? "Creating…" : "Create tag") {
                 Task { await createTag() }
             }
             .buttonStyle(.borderless)
             .foregroundStyle(Theme.hyperGreen)
-            .disabled(isCreating || normalizeTagSlug(newTagSlug).isEmpty)
+            .disabled(isCreating || newTagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-    }
-
-    private func normalizeTagSlug(_ input: String) -> String {
-        input
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
-            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
-            .prefix(50)
-            .description
     }
 
     @ViewBuilder
@@ -329,25 +308,21 @@ struct TagsSettingsView: View {
 
     @MainActor
     private func createTag() async {
-        let slug = normalizeTagSlug(newTagSlug)
-        guard !slug.isEmpty else { return }
+        let trimmedName = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
         clearFeedback()
         isCreating = true
         defer { isCreating = false }
-        let trimmedName = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCategory = newTagCategory.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             _ = try await env.api.createOrganizationTag(
                 CreateTagRequest(
-                    slug: slug,
-                    name: trimmedName.isEmpty ? nil : trimmedName,
+                    name: trimmedName,
                     category: trimmedCategory.isEmpty ? nil : trimmedCategory
                 )
             )
             newTagName = ""
-            newTagSlug = ""
             newTagCategory = ""
-            slugManuallyEdited = false
             successMessage = "Tag created"
             await load()
         } catch {

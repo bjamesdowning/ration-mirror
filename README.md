@@ -509,6 +509,8 @@ sequenceDiagram
 
 **Manifest planning horizon:** Which scheduled Manifest meals contribute to Supply is controlled separately from the Manifest page view. Org-scoped `organization.metadata.supplySettings.manifestHorizonDays` (1–30, default 7) defines a forward-looking window (`today` → `today + N - 1`). Owner/admin edit via Supply options or Group Settings (`PATCH /api/organization/supply-settings`); members see the active window read-only. Galley selections and Cargo restock toggles are not date-filtered.
 
+**Group display name:** Owner/admin rename the active group in Settings → Group (`PATCH /api/organization/profile` with `{ name }`). Slug and org id are unchanged — membership, cargo, and supply data are unaffected. Group and tag **create** flows accept a display name only; slugs are derived server-side.
+
 ---
 
 ### 3.6 Meal Plan Consume Flow (D1 + Vectorize)
@@ -645,7 +647,7 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 
 #### Tagging
 
-Tags are **organization-wide** labels stored in the `tag` registry (`drizzle/0036_tag_registry.sql`) and linked to cargo and meals via `cargo_tag` / `meal_tag` join tables. Each cargo item or meal supports up to **10 tags**. Slugs are normalized (`gluten-free`) with optional display name, color, and category.
+Tags are **organization-wide** labels stored in the `tag` registry (`drizzle/0036_tag_registry.sql`) and linked to cargo and meals via `cargo_tag` / `meal_tag` join tables. Each cargo item or meal supports up to **10 tags**. Create flows accept a display name only; slugs are normalized automatically (`gluten-free`) with optional color and category.
 
 - **Create on use** — Assigning a tag on any cargo or meal form auto-creates the registry entry (`resolveTagIds` in `app/lib/tags.server.ts`).
 - **Filter** — Cargo and Galley support multi-tag filters (OR by default; AND mode available for hub widgets via `tagFilterMode`).
@@ -1734,7 +1736,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/manifest/bulk` | Bulk add plan entries |
 | `DELETE` | `/api/mobile/v1/manifest/entries/:entryId` | Remove manifest entry |
 | `GET` | `/api/mobile/v1/groups/members` | List active group members |
-| `POST` | `/api/mobile/v1/groups` | Create group (`{ name, slug }`) |
+| `POST` | `/api/mobile/v1/groups` | Create group (`{ name }`; slug auto-generated) |
+| `PATCH` | `/api/mobile/v1/organization/profile` | Rename active group display name (`{ name }`, owner/admin) |
 | `POST` | `/api/mobile/v1/groups/delete` | Delete group (owner; `{ organizationId }`) |
 | `POST` | `/api/mobile/v1/groups/invitations/create` | Create invite link (owner/admin, Crew tier) |
 | `PATCH` | `/api/mobile/v1/groups/members/:memberId/role` | Change member role (`{ role: "admin" \| "member" }`) |

@@ -207,7 +207,23 @@ struct GroupSettingsView: View {
                 HStack(spacing: 12) {
                     OrgAvatar(name: org.name, orgId: org.id, imageURL: org.logo, size: 44)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(org.name).rationHeadline()
+                        if org.canManageGroupProfile {
+                            TextField("Group name", text: $model.editedGroupName)
+                                .rationHeadline()
+                            Button(model.isSavingGroupName ? "Saving…" : "Save name") {
+                                Task { _ = await model.saveGroupName(api: env.api, env: env) }
+                            }
+                            .buttonStyle(.borderless)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.hyperGreen)
+                            .disabled(
+                                model.isSavingGroupName
+                                    || model.editedGroupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || model.editedGroupName.trimmingCharacters(in: .whitespacesAndNewlines) == org.name
+                            )
+                        } else {
+                            Text(org.name).rationHeadline()
+                        }
                         Text("\(env.session.credits) credits · \(tierLabel)")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
@@ -256,11 +272,6 @@ struct GroupSettingsView: View {
     private var createGroupSection: some View {
         Section("Create group") {
             TextField("Group name", text: $model.newGroupName)
-                .onChange(of: model.newGroupName) { _, _ in model.syncSlugFromName() }
-            TextField("Unique ID (slug)", text: $model.newGroupSlug)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .onChange(of: model.newGroupSlug) { _, _ in model.slugManuallyEdited = true }
             Button(model.isCreatingGroup ? "Creating…" : "Create group") {
                 Task {
                     switch await model.createGroup(api: env.api, env: env) {

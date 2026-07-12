@@ -1,5 +1,7 @@
 /** Client-safe tag utilities and shared types. */
 
+import { slugifyDisplayName } from "~/lib/slugify";
+
 export const MAX_TAGS_PER_ENTITY = 10;
 export const MAX_TAG_SLUG_LENGTH = 50;
 export const TAG_SLUG_PATTERN = /^[a-z0-9-]+$/;
@@ -21,12 +23,7 @@ export type TagWithCounts = TagRecord & {
 
 /** Normalize user input to a canonical tag slug. */
 export function normalizeTagSlug(input: string): string {
-	return input
-		.trim()
-		.toLowerCase()
-		.replace(/\s+/g, "-")
-		.replace(/[^a-z0-9-]/g, "")
-		.slice(0, MAX_TAG_SLUG_LENGTH);
+	return slugifyDisplayName(input, MAX_TAG_SLUG_LENGTH);
 }
 
 /** Default display name from slug (title-case words). */

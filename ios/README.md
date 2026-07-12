@@ -188,7 +188,7 @@ Ration/
 
 ### Global shell (all tabs)
 
-- **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap pushes **Group Settings** (members, invite, create group, transfer credits, danger zone).
+- **Leading:** `OrgSwitcherBar` — org avatar, credits, CREW pill; tap pushes **Group Settings** (rename group, members, invite, create group, transfer credits, danger zone).
 - **Trailing:** `PageOptionsButton` (filters/options sheet) + `ProfileAvatarButton` (tap opens **Account Settings** sheet).
 - **Org switch:** invalidates org-scoped snapshots and reloads all tabs via `orgGeneration`.
 
@@ -264,7 +264,8 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/manifest/bulk` | POST | Bulk add plan entries |
 | `/manifest/entries/:entryId` | DELETE | Remove manifest entry |
 | `/groups/members` | GET | List group members |
-| `/groups` | POST | Create group |
+| `/groups` | POST | Create group (`{ name }`; slug auto-generated) |
+| `/organization/profile` | PATCH | Rename active group display name (`{ name }`, owner/admin) |
 | `/groups/delete` | POST | Delete group (owner) |
 | `/groups/invitations/create` | POST | Create invite link |
 | `/groups/members/:memberId/role` | PATCH | Change member role |

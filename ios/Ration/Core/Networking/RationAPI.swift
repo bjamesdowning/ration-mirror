@@ -59,6 +59,13 @@ final class RationAPI {
         )
     }
 
+    func patchOrganizationProfile(name: String) async throws -> OrganizationProfilePatchResponse {
+        try await client.patch(
+            "organization/profile",
+            body: OrganizationProfilePatchRequest(name: name)
+        )
+    }
+
     // Hub
     func hub() async throws -> HubResponse {
         try await client.get("hub")
@@ -314,8 +321,8 @@ final class RationAPI {
         try await client.get("groups/members")
     }
 
-    func createGroup(name: String, slug: String) async throws -> CreateGroupResponse {
-        try await client.post("groups", body: CreateGroupRequest(name: name, slug: slug))
+    func createGroup(name: String) async throws -> CreateGroupResponse {
+        try await client.post("groups", body: CreateGroupRequest(name: name))
     }
 
     func createGroupInvitation() async throws -> CreateGroupInvitationResponse {

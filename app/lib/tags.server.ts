@@ -7,9 +7,11 @@ import {
 	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
+import { resolveTagSlugFromName } from "./slugify";
 import {
 	dedupeTagSlugs,
 	formatTagName,
+	MAX_TAG_SLUG_LENGTH,
 	sanitizeTagColor,
 	type TagRecord,
 	type TagWithCounts,
@@ -120,7 +122,7 @@ export async function createTag(
 	db: D1Database,
 	organizationId: string,
 	input: {
-		slug: string;
+		slug?: string;
 		name?: string;
 		color?: string | null;
 		category?: string | null;
@@ -128,7 +130,21 @@ export async function createTag(
 	userId?: string | null,
 ): Promise<TagRecord> {
 	const d1 = drizzle(db);
-	const slug = input.slug;
+
+	let slug = input.slug;
+	if (!slug) {
+		const displayName = input.name?.trim();
+		if (!displayName) {
+			throw new Error("tag_name_required");
+		}
+		slug = await resolveTagSlugFromName(
+			displayName,
+			MAX_TAG_SLUG_LENGTH,
+			async (candidate) =>
+				Boolean(await getTagBySlug(db, organizationId, candidate)),
+		);
+	}
+
 	const existing = await getTagBySlug(db, organizationId, slug);
 	if (existing) return existing;
 

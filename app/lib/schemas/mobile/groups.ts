@@ -7,14 +7,15 @@ import {
 export { RoleUpdateSchema, TransferOwnershipSchema };
 
 export const MobileCreateGroupSchema = z.object({
-	name: z.string().min(1, "Name is required"),
+	name: z.string().trim().min(1, "Name is required").max(100),
 	slug: z
 		.string()
-		.min(1, "Slug is required")
+		.min(1)
 		.regex(
 			/^[a-z0-9-]+$/,
 			"Unique ID must contain only lowercase letters, numbers, and hyphens",
-		),
+		)
+		.optional(),
 });
 
 export type MobileCreateGroupInput = z.infer<typeof MobileCreateGroupSchema>;

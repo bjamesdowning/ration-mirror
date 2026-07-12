@@ -101,30 +101,6 @@ export default function CreateGroupPage() {
 						</div>
 					</div>
 
-					<div>
-						<label
-							htmlFor="slug"
-							className="block text-sm font-medium text-muted mb-2"
-						>
-							Unique ID (Slug)
-						</label>
-						<div className="relative">
-							<input
-								type="text"
-								inputMode="text"
-								name="slug"
-								id="slug"
-								required
-								placeholder="e.g. home-kitchen-1"
-								className="w-full bg-platinum/50 border border-carbon/10 rounded-lg px-4 py-3 text-carbon font-medium focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
-							/>
-							<p className="text-xs text-muted mt-2">
-								A unique identifier for your group URL (letters, numbers,
-								hyphens only)
-							</p>
-						</div>
-					</div>
-
 					<div className="pt-4 flex justify-end gap-3">
 						<a
 							href="/hub"

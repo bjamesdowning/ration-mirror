@@ -21,8 +21,9 @@ final class GroupSettingsViewModel {
     var successMessage: String?
     var inviteLink: String?
     var newGroupName = ""
-    var newGroupSlug = ""
-    var slugManuallyEdited = false
+    var editedGroupName = ""
+    private var syncedGroupName = ""
+    private(set) var isSavingGroupName = false
 
     var currentUserRole: String {
         session?.organizations.first(where: \.isActive)?.role ?? "member"
@@ -43,21 +44,21 @@ final class GroupSettingsViewModel {
             async let membersTask = api.groupMembers()
             session = try await sessionTask
             members = try await membersTask.members
+            if let activeName = session?.organizations.first(where: \.isActive)?.name {
+                if editedGroupName.isEmpty || editedGroupName == syncedGroupName {
+                    editedGroupName = activeName
+                }
+                syncedGroupName = activeName
+            }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
-    func syncSlugFromName() {
-        guard !slugManuallyEdited else { return }
-        newGroupSlug = GroupSettingsSupport.slugSuggestion(from: newGroupName)
-    }
-
     func createGroup(api: RationAPI, env: AppEnvironment) async -> CreateGroupResult {
         let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let slug = newGroupSlug.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, GroupSettingsSupport.isValidSlug(slug) else {
-            let message = "Enter a group name and valid slug (lowercase letters, numbers, hyphens)."
+        guard !name.isEmpty else {
+            let message = "Enter a group name."
             errorMessage = message
             return .failure(message)
         }
@@ -66,10 +67,8 @@ final class GroupSettingsViewModel {
         successMessage = nil
         defer { isCreatingGroup = false }
         do {
-            let response = try await api.createGroup(name: name, slug: slug)
+            let response = try await api.createGroup(name: name)
             newGroupName = ""
-            newGroupSlug = ""
-            slugManuallyEdited = false
             _ = await env.session.load(api: api)
             if let org = env.session.session?.organizations.first(where: { $0.id == response.organizationId }) {
                 try await env.session.activateOrg(org, api: api, auth: env.auth, snapshots: env.snapshots)
@@ -167,6 +166,37 @@ final class GroupSettingsViewModel {
                 await env.auth.signOut()
             }
 
+            Haptics.success()
+            return true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+    }
+
+    func saveGroupName(api: RationAPI, env: AppEnvironment) async -> Bool {
+        let trimmed = editedGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Enter a group name."
+            return false
+        }
+        guard let activeName = session?.organizations.first(where: \.isActive)?.name,
+              trimmed != activeName else {
+            return false
+        }
+
+        isSavingGroupName = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isSavingGroupName = false }
+
+        do {
+            _ = try await api.patchOrganizationProfile(name: trimmed)
+            _ = await env.session.load(api: api)
+            session = env.session.session
+            syncedGroupName = trimmed
+            editedGroupName = env.session.activeOrg?.name ?? trimmed
+            successMessage = "Group name updated"
             Haptics.success()
             return true
         } catch {

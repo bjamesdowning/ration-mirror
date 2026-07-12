@@ -1126,6 +1126,10 @@ function GroupSection({
 	// Optimistic override until loader revalidation returns new logo
 	const [pendingUploadUrl, setPendingUploadUrl] = useState<string | null>(null);
 	const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
+	const [editedGroupName, setEditedGroupName] = useState(organizationName);
+	const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+	const [groupNameError, setGroupNameError] = useState("");
+	const organizationsQuery = authClient.useListOrganizations();
 
 	// Clear optimistic override when server data catches up (revalidation)
 	// biome-ignore lint/correctness/useExhaustiveDependencies: organizationLogo is the trigger; we clear when it changes
@@ -1133,11 +1137,46 @@ function GroupSection({
 		setPendingUploadUrl(null);
 	}, [organizationLogo]);
 
+	useEffect(() => {
+		setEditedGroupName(organizationName);
+	}, [organizationName]);
+
 	const canEditGroupImage =
 		currentUserRole === "owner" || currentUserRole === "admin";
 	const canManageTags = canEditGroupImage;
+	const canEditGroupName = canEditGroupImage;
+	const trimmedGroupName = editedGroupName.trim();
+	const groupNameUnchanged = trimmedGroupName === organizationName.trim();
 
 	const displayImage = pendingUploadUrl ?? organizationLogo;
+
+	const handleSaveGroupName = async () => {
+		if (!trimmedGroupName || groupNameUnchanged) return;
+
+		setIsSavingGroupName(true);
+		setGroupNameError("");
+		try {
+			const response = await fetch("/api/organization/profile", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: trimmedGroupName }),
+			});
+			const payload = (await response.json()) as { error?: string };
+			if (!response.ok) {
+				throw new Error(payload.error ?? "Failed to update group name");
+			}
+			successToast.show();
+			revalidator.revalidate();
+			await organizationsQuery.refetch();
+		} catch (e) {
+			setGroupNameError(
+				e instanceof Error ? e.message : "Failed to update group name",
+			);
+			errorToast.show();
+		} finally {
+			setIsSavingGroupName(false);
+		}
+	};
 
 	const handleGroupImageUpload = async (
 		event: React.ChangeEvent<HTMLInputElement>,
@@ -1191,6 +1230,43 @@ function GroupSection({
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Group</SectionHeading>
+
+			<div className="glass-panel rounded-xl p-6">
+				<h3 className="text-xs text-label text-muted mb-4">Group Name</h3>
+				{canEditGroupName ? (
+					<div className="space-y-3">
+						<input
+							type="text"
+							value={editedGroupName}
+							onChange={(e) => setEditedGroupName(e.target.value)}
+							placeholder="Group name"
+							className="w-full bg-platinum/50 border border-carbon/10 rounded-lg px-4 py-3 text-carbon font-medium focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
+						/>
+						<div className="flex items-center gap-3">
+							<button
+								type="button"
+								onClick={handleSaveGroupName}
+								disabled={
+									isSavingGroupName || !trimmedGroupName || groupNameUnchanged
+								}
+								className="text-sm px-4 py-2 rounded-lg bg-hyper-green/10 text-hyper-green font-medium hover:bg-hyper-green/20 disabled:opacity-50"
+							>
+								{isSavingGroupName ? "Saving…" : "Save name"}
+							</button>
+							{groupNameError ? (
+								<p className="text-sm text-danger">{groupNameError}</p>
+							) : null}
+						</div>
+					</div>
+				) : (
+					<div>
+						<p className="text-carbon font-medium">{organizationName}</p>
+						<p className="text-sm text-muted mt-2">
+							Only owners and admins can rename the group.
+						</p>
+					</div>
+				)}
+			</div>
 
 			{canEditGroupImage && (
 				<div className="glass-panel rounded-xl p-6">

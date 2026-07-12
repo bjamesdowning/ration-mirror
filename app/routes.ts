@@ -243,6 +243,7 @@ export default [
 		"api/organization/supply-settings",
 		"routes/api/organization.supply-settings.ts",
 	),
+	route("api/organization/profile", "routes/api/organization.profile.ts"),
 	route(
 		"api/organization/avatar/:orgId",
 		"routes/api/organization/avatar.$orgId.tsx",
@@ -334,6 +335,10 @@ export default [
 	route(
 		"api/mobile/v1/organization/supply-settings",
 		"routes/api/mobile/v1.organization.supply-settings.ts",
+	),
+	route(
+		"api/mobile/v1/organization/profile",
+		"routes/api/mobile/v1.organization.profile.ts",
 	),
 	route("api/mobile/v1/cargo", "routes/api/mobile/v1.cargo.ts"),
 	route("api/mobile/v1/cargo/batch", "routes/api/mobile/v1.cargo.batch.ts"),

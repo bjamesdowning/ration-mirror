@@ -49,12 +49,17 @@ const TagCategorySchema = z
 		return trimmed.length > 0 ? trimmed : null;
 	});
 
-export const CreateTagSchema = z.object({
-	slug: TagSlugSchema,
-	name: z.string().min(1).max(100).optional(),
-	color: TagColorSchema,
-	category: TagCategorySchema,
-});
+export const CreateTagSchema = z
+	.object({
+		name: z.string().trim().min(1).max(100).optional(),
+		slug: TagSlugSchema.optional(),
+		color: TagColorSchema,
+		category: TagCategorySchema,
+	})
+	.refine((data) => Boolean(data.name || data.slug), {
+		message: "Name is required",
+		path: ["name"],
+	});
 
 export const UpdateTagSchema = z.object({
 	name: z.string().min(1).max(100).optional(),

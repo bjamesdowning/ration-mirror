@@ -3,6 +3,10 @@ import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import {
+	isOrganizationSlugTaken,
+	resolveOrganizationCreateSlug,
+} from "~/lib/group-create.server";
 import { log } from "~/lib/logging.server";
 import { requireMobileAuth } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -45,7 +49,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return handleApiError(parsed.error);
 		}
 
-		const { name, slug } = parsed.data;
+		const { name, slug: explicitSlug } = parsed.data;
 		const db = drizzle(env.DB, { schema });
 
 		const groupCapacity = await checkOwnedGroupCapacity(env, userId);
@@ -64,10 +68,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const existing = await db.query.organization.findFirst({
-			where: (org, { eq }) => eq(org.slug, slug),
-		});
-		if (existing) {
+		const slug = await resolveOrganizationCreateSlug(
+			env.DB,
+			name,
+			explicitSlug,
+		);
+		if (explicitSlug && (await isOrganizationSlugTaken(env.DB, slug))) {
 			throw data(
 				{ error: "Unique ID is already taken. Please choose another." },
 				{ status: 400 },

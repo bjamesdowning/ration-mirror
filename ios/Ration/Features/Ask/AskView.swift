@@ -199,12 +199,7 @@ struct AskView: View {
             isAwaitingApproval: model.isAwaitingApproval,
             focusToken: focusToken,
             dismissToken: dismissToken,
-            keyboardHeight: max(
-                env.copilotScroll.keyboardInset,
-                CopilotKeyboardDismissPolicy.minimumDismissDistance * 4
-            ),
             onFocusChange: { _ in },
-            onDismissDragProgress: { _ in },
             onDismissKeyboard: {
                 dismissToken += 1
                 focusToken = 0

@@ -687,10 +687,9 @@ struct SupplyView: View {
                         .bottom,
                         CopilotDockLayout.toastBottomOffset(
                             isExpanded: scrollContext.isExpanded,
-                            keyboardInset: scrollContext.effectiveKeyboardInset
+                            keyboardInset: 0
                         )
                     )
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
             }
         }

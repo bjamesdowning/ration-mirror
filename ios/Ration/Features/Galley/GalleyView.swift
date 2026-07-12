@@ -149,10 +149,9 @@ struct GalleyView: View {
                     .bottom,
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: scrollContext.isExpanded,
-                        keyboardInset: scrollContext.effectiveKeyboardInset
+                        keyboardInset: 0
                     )
                 )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             } else if let message = cookSuccessMessage {
                 TransientSuccessToast(message: message) {
                     cookSuccessMessage = nil
@@ -161,10 +160,9 @@ struct GalleyView: View {
                     .bottom,
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: scrollContext.isExpanded,
-                        keyboardInset: scrollContext.effectiveKeyboardInset
+                        keyboardInset: 0
                     )
                 )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .task(id: loadTaskKey) {
@@ -501,10 +499,9 @@ struct MealDetailView: View {
                     .bottom,
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: scrollContext.isExpanded,
-                        keyboardInset: scrollContext.effectiveKeyboardInset
+                        keyboardInset: 0
                     )
                 )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .tabDockAction(tag: scrollContext.activeTab) {

@@ -104,6 +104,15 @@ final class CopilotScrollContextTests: XCTestCase {
         XCTAssertEqual(inset, 0)
     }
 
+    func testKeyboardGeometryCapsExcessiveInset() {
+        let inset = CopilotKeyboardGeometry.bottomInset(
+            keyboardFrame: CGRect(x: 0, y: 100, width: 390, height: 744),
+            windowBounds: CGRect(x: 0, y: 0, width: 390, height: 844)
+        )
+
+        XCTAssertEqual(inset, 844 * CopilotKeyboardGeometry.maximumInsetFraction, accuracy: 0.001)
+    }
+
     func testTabResetDismissesKeyboardAndClearsInset() {
         let context = CopilotScrollContext()
         var dismissed = false

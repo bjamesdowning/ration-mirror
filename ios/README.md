@@ -308,6 +308,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Red delete standard (iOS 1.1.23):** Swipe-to-delete and button-driven delete actions use explicit `Theme.danger` tint via shared helpers in `ListSwipeActions` (`destructiveTrailingSwipe`, `destructiveDeleteTint`, `destructiveDeleteForeground`) so delete controls stay red under the app-wide Hyper-Green accent. Covers Cargo, Galley, Manifest, Supply, Plan Week draft rows, detail FAB menus, settings delete flows, and edit-mode list deletes.
 
+**Copilot keyboard native UX (iOS 1.1.27 build 14):** Copilot dock uses `TabView.safeAreaInset` so SwiftUI lifts the composer above the keyboard (no manual overlay padding). UITextView locks ancestor `UIScrollView` scrolling while editing to prevent TabView fly-to-top. Keyboard dismiss uses standard iOS affordances: chevron-down on the composer, keyboard toolbar Done, and `inputAccessoryView` Done bar. Ask Ration opens via `fullScreenCover` (not `.sheet`) so swipe-down dismisses the keyboard without closing chat. Scroll margins no longer double-count keyboard height when the dock is inset-managed.
+
 **Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
 
 **Copilot device QA checklist (before release):**
@@ -323,7 +325,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
 - Collapsed chat chip: tap expands the bar and opens the keyboard; scroll-up expand alone must not open the keyboard.
 - With keyboard open on any tab: composer stays directly above keyboard (not at top of screen).
-- Copilot field: swipe down on the composer capsule to dismiss keyboard interactively; dock follows finger during drag.
+- Copilot field: tap chevron-down or keyboard Done to dismiss; scroll list/transcript to dismiss interactively.
+- Ask full screen: swipe down on composer dismisses keyboard only (chat stays open); X button closes chat.
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
 - During a long Copilot response, scroll upward: reading position remains stable; “Jump to latest” resumes auto-follow.

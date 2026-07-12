@@ -176,41 +176,7 @@ struct MainTabView: View {
         .sheet(isPresented: $showingOnboardingPaywall) {
             PaywallView()
         }
-        .sheet(isPresented: Binding(
-            get: { env.ask.isSheetPresented },
-            set: { presented in
-                if presented {
-                    env.ask.openSheet()
-                } else {
-                    env.ask.closeSheet()
-                }
-            }
-        )) {
-            AskView()
-                .environment(env.ask)
-        }
-        .overlay(alignment: .top) {
-            if !env.network.isOnline {
-                OfflineBanner(label: "Offline — showing cached data where available")
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if let message = manifestSuccessMessage {
-                TransientSuccessToast(message: message) {
-                    manifestSuccessMessage = nil
-                }
-                .padding(
-                    .bottom,
-                    CopilotDockLayout.toastBottomOffset(
-                        isExpanded: env.copilotScroll.isExpanded,
-                        hasTabAction: env.tabDock.hasAction(for: selectedTab),
-                        keyboardInset: env.copilotScroll.effectiveKeyboardInset
-                    )
-                )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
-        }
-        .overlay(alignment: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if showCopilotBar {
                 CopilotBottomDock(
                     scrollContext: env.copilotScroll,
@@ -239,17 +205,39 @@ struct MainTabView: View {
                     onStop: { await env.ask.model.stop() },
                     onExhaustedTap: { showingCopilotPaywall = true }
                 )
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { env.ask.isSheetPresented },
+            set: { presented in
+                if presented {
+                    env.ask.openSheet()
+                } else {
+                    env.ask.closeSheet()
+                }
+            }
+        )) {
+            AskView()
+                .environment(env.ask)
+        }
+        .overlay(alignment: .top) {
+            if !env.network.isOnline {
+                OfflineBanner(label: "Offline — showing cached data where available")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = manifestSuccessMessage {
+                TransientSuccessToast(message: message) {
+                    manifestSuccessMessage = nil
+                }
                 .padding(
                     .bottom,
-                    max(CopilotDockLayout.tabBarClearance, env.copilotScroll.effectiveKeyboardInset)
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: env.copilotScroll.isExpanded,
+                        hasTabAction: env.tabDock.hasAction(for: selectedTab),
+                        keyboardInset: 0
+                    )
                 )
-                .animation(
-                    env.copilotScroll.keyboardDismissDragProgress == 0
-                        ? env.copilotScroll.keyboardAnimation
-                        : nil,
-                    value: env.copilotScroll.effectiveKeyboardInset
-                )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .copilotKeyboardObserved(env.copilotScroll)

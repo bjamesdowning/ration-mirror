@@ -20,9 +20,7 @@ struct CopilotComposerBar: View {
     let isAwaitingApproval: Bool
     let focusToken: Int
     let dismissToken: Int
-    let keyboardHeight: CGFloat
     let onFocusChange: (Bool) -> Void
-    let onDismissDragProgress: (CGFloat) -> Void
     let onDismissKeyboard: () -> Void
     let onOpenSheet: () -> Void
     let onSend: (String) async -> Bool
@@ -33,7 +31,6 @@ struct CopilotComposerBar: View {
     @State private var submissionInFlight = false
     @State private var contentHeight = CopilotComposerHeightPolicy.singleLineHeight
     @State private var isComposerFocused = false
-    @State private var dismissDragOffset: CGFloat = 0
 
     private let hintExamples = [
         "Add butter to my cargo",
@@ -52,6 +49,16 @@ struct CopilotComposerBar: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
+            if isComposerFocused {
+                Button(action: onDismissKeyboard) {
+                    Image(systemName: "chevron.down")
+                        .font(Typography.heroIcon(16))
+                        .foregroundStyle(Theme.muted)
+                        .frame(minWidth: 32, minHeight: 44)
+                }
+                .accessibilityLabel("Dismiss keyboard")
+            }
+
             if mode == .dock {
                 Button(action: onOpenSheet) {
                     Image(systemName: "sparkles")
@@ -69,6 +76,7 @@ struct CopilotComposerBar: View {
                 isEnabled: !isExhausted,
                 focusToken: focusToken,
                 dismissToken: dismissToken,
+                showsKeyboardDismissAccessory: true,
                 onFocusChange: { focused in
                     isComposerFocused = focused
                     onFocusChange(focused)
@@ -76,7 +84,8 @@ struct CopilotComposerBar: View {
                 onHeightChange: { height in
                     contentHeight = height
                 },
-                onSubmit: submitDraft
+                onSubmit: submitDraft,
+                onDismissKeyboard: onDismissKeyboard
             )
             .frame(height: contentHeight)
             .accessibilityLabel("Ask Ration")
@@ -105,34 +114,17 @@ struct CopilotComposerBar: View {
                 shape: AnyShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             )
         }
-        .background {
-            CopilotComposerDismissGestureBridge(
-                isEnabled: isComposerFocused,
-                keyboardHeight: keyboardHeight,
-                onDismissDragProgress: { progress in
-                    let height = max(keyboardHeight, CopilotKeyboardDismissPolicy.minimumDismissDistance * 4)
-                    dismissDragOffset = progress * height * 0.35
-                    onDismissDragProgress(progress)
-                },
-                onDismissKeyboard: {
-                    dismissDragOffset = 0
-                    onDismissDragProgress(0)
-                    onDismissKeyboard()
-                },
-                onDismissDragReset: {
-                    dismissDragOffset = 0
-                    onDismissDragProgress(0)
-                }
-            )
-        }
         .overlay {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1)
         }
-        .offset(y: dismissDragOffset)
         .opacity(isExhausted && !isTurnActive ? 0.45 : 1)
-        .onChange(of: dismissToken) { _, _ in
-            dismissDragOffset = 0
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done", action: onDismissKeyboard)
+                    .foregroundStyle(Theme.hyperGreen)
+            }
         }
         .task(id: hintIndex) {
             guard !UIAccessibility.isReduceMotionEnabled else { return }

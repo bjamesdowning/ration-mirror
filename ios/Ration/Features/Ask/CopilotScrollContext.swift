@@ -350,12 +350,11 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
 
     /// Leave the dock + tab bar region tappable while the keyboard is open.
     private var dismissOverlayReservedBottom: CGFloat {
-        let base = max(CopilotDockLayout.tabBarClearance, scrollContext.effectiveKeyboardInset)
-            + CopilotDockLayout.dockHeight(
-                isExpanded: scrollContext.isExpanded,
-                hasTabAction: hasTabAction
-            )
-        return base + expandedComposerHeightAdjustment
+        CopilotDockLayout.dockHeight(
+            isExpanded: scrollContext.isExpanded,
+            hasTabAction: hasTabAction
+        )
+        + expandedComposerHeightAdjustment
     }
 
     private var expandedComposerHeightAdjustment: CGFloat {
@@ -375,7 +374,7 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
         let base = CopilotDockLayout.scrollContentMargin(
             isExpanded: scrollContext.isExpanded,
             hasTabAction: hasTabAction,
-            keyboardInset: scrollContext.effectiveKeyboardInset
+            keyboardInset: 0
         )
         guard scrollContext.isExpanded else { return base }
         return base + max(
@@ -391,14 +390,33 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
 }
 
 enum CopilotKeyboardGeometry {
+    static let maximumInsetFraction: CGFloat = 0.55
+
     static func bottomInset(keyboardFrame: CGRect, windowBounds: CGRect) -> CGFloat {
         guard keyboardFrame.minY < windowBounds.maxY,
               keyboardFrame.maxY >= windowBounds.maxY - 1 else {
             return 0
         }
+        let distanceFromBottom = max(0, windowBounds.maxY - keyboardFrame.minY)
         let intersection = windowBounds.intersection(keyboardFrame)
-        guard !intersection.isNull else { return 0 }
-        return max(0, intersection.height)
+        let rawInset = max(distanceFromBottom, intersection.isNull ? 0 : intersection.height)
+        let cap = windowBounds.height * maximumInsetFraction
+        return min(rawInset, cap)
+    }
+
+    static func frameInWindow(_ screenFrame: CGRect, window: UIWindow) -> CGRect {
+        let converted = window.convert(screenFrame, from: window.screen.coordinateSpace)
+        if isFramePlausible(converted, in: window.bounds) {
+            return converted
+        }
+        if isFramePlausible(screenFrame, in: window.bounds) {
+            return screenFrame
+        }
+        return converted
+    }
+
+    private static func isFramePlausible(_ frame: CGRect, in bounds: CGRect) -> Bool {
+        frame.minY >= -1 && frame.maxY <= bounds.maxY + 1
     }
 }
 
@@ -413,7 +431,10 @@ private struct CopilotKeyboardInsetObserver: ViewModifier {
                 }
                 let overlap: CGFloat
                 if let window = activeWindow {
-                    let frameInWindow = window.convert(frame, from: window.screen.coordinateSpace)
+                    let frameInWindow = CopilotKeyboardGeometry.frameInWindow(
+                        frame,
+                        window: window
+                    )
                     overlap = CopilotKeyboardGeometry.bottomInset(
                         keyboardFrame: frameInWindow,
                         windowBounds: window.bounds

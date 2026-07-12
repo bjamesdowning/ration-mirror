@@ -191,10 +191,10 @@ struct DashboardView: View {
                 reorderSession.widgetFrames = frames
             }
             .padding(16)
+            .copilotDockContentPadding()
         }
         .scrollDisabled(reorderSession.isDragging)
         .scrollDismissesKeyboard(.interactively)
-        .copilotDockScrollMargins()
         .copilotScrollTracked(tab: 0, isActive: isTabActive)
         .onAppear {
             reorderSession.syncDisplayOrder(from: model.resolvedLayout)

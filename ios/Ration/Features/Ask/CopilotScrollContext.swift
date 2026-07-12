@@ -366,26 +366,58 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
     }
 }
 
+private enum CopilotDockInsetCalculator {
+    static func bottomMargin(
+        isExpanded: Bool,
+        hasTabAction: Bool,
+        composerHeight: CGFloat
+    ) -> CGFloat {
+        let base = CopilotDockLayout.scrollContentMargin(
+            isExpanded: isExpanded,
+            hasTabAction: hasTabAction,
+            keyboardInset: 0
+        )
+        guard isExpanded else { return base }
+        return base + max(
+            0,
+            composerHeight - CopilotDockLayout.expandedInputBarHeight
+        )
+    }
+}
+
 private struct CopilotDockScrollMarginsModifier: ViewModifier {
     @Environment(CopilotScrollContext.self) private var scrollContext
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        let base = CopilotDockLayout.scrollContentMargin(
+        CopilotDockInsetCalculator.bottomMargin(
             isExpanded: scrollContext.isExpanded,
             hasTabAction: hasTabAction,
-            keyboardInset: 0
-        )
-        guard scrollContext.isExpanded else { return base }
-        return base + max(
-            0,
-            scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
+            composerHeight: scrollContext.composerHeight
         )
     }
 
     func body(content: Content) -> some View {
         content
             .contentMargins(.bottom, margin, for: .scrollContent)
+    }
+}
+
+/// Bottom padding for scroll *content* inside a plain `ScrollView` (not `List`).
+private struct CopilotDockContentPaddingModifier: ViewModifier {
+    @Environment(CopilotScrollContext.self) private var scrollContext
+    let hasTabAction: Bool
+
+    private var margin: CGFloat {
+        CopilotDockInsetCalculator.bottomMargin(
+            isExpanded: scrollContext.isExpanded,
+            hasTabAction: hasTabAction,
+            composerHeight: scrollContext.composerHeight
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content.padding(.bottom, margin)
     }
 }
 
@@ -481,8 +513,13 @@ extension View {
         modifier(CopilotKeyboardInsetObserver(scrollContext: scrollContext))
     }
 
-    /// Reserves bottom scroll margin for the dock; uses collapsed height when the bar is minimized.
+    /// Reserves bottom scroll margin for the dock on `List` and trackable `ScrollView` shells.
     func copilotDockScrollMargins(hasTabAction: Bool = true) -> some View {
         modifier(CopilotDockScrollMarginsModifier(hasTabAction: hasTabAction))
+    }
+
+    /// Extends scroll content height under a plain `ScrollView` so rows clear the dock.
+    func copilotDockContentPadding(hasTabAction: Bool = true) -> some View {
+        modifier(CopilotDockContentPaddingModifier(hasTabAction: hasTabAction))
     }
 }

@@ -12,11 +12,9 @@ struct DashboardView: View {
     var onOpenGalley: () -> Void = {}
     var onOpenManifest: () -> Void = {}
     @State private var model = HubViewModel()
-    @State private var showingEdit = false
-    @State private var editableWidgets: [HubWidgetLayout] = []
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
-    @State private var draggingWidgetId: String?
+    @State private var reorderSession = HubWidgetReorderSession()
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -150,22 +148,17 @@ struct DashboardView: View {
         }
     }
 
-    private func reorderWidgets(
-        sourceId: String,
-        to destinationId: String,
-        data: HubResponse
-    ) async {
-        var widgets = HubLayoutEngine.initEditableWidgets(
-            profile: data.hubProfile,
-            layout: data.hubLayout
-        )
-        widgets = HubLayoutEngine.reorderVisible(widgets, moving: sourceId, to: destinationId)
-        do {
-            try await model.saveLayout(widgets, api: env.api)
-            Haptics.light()
-            await reload()
-        } catch {
-            await reload()
+    private func persistWidgetOrder() {
+        guard let organizationId else { return }
+        let order = reorderSession.displayOrder
+        Task {
+            await model.applyVisibleOrder(
+                order,
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
         }
     }
 
@@ -183,44 +176,34 @@ struct DashboardView: View {
                     nextActionCard(action, organizationId: organizationId)
                 }
 
-                ForEach(model.resolvedLayout) { widget in
+                ForEach(reorderSession.displayOrder) { widget in
                     widgetView(widget, data: data)
-                        .opacity(draggingWidgetId == widget.id ? 0.55 : 1)
-                        .scaleEffect(draggingWidgetId == widget.id ? 1.02 : 1)
-                        .shadow(
-                            color: draggingWidgetId == widget.id ? Theme.carbon.opacity(0.1) : .clear,
-                            radius: 10,
-                            y: 4
-                        )
-                        .onDrag {
-                            draggingWidgetId = widget.id
-                            return NSItemProvider(object: widget.id as NSString)
-                        }
-                        .onDrop(
-                            of: [.text],
-                            delegate: HubWidgetDropDelegate(
-                                widgetId: widget.id,
-                                draggingId: $draggingWidgetId,
-                                onDrop: { sourceId, destinationId in
-                                    Task {
-                                        await reorderWidgets(
-                                            sourceId: sourceId,
-                                            to: destinationId,
-                                            data: data
-                                        )
-                                    }
-                                }
-                            )
+                        .hubWidgetReorderRow(
+                            id: widget.id,
+                            session: reorderSession,
+                            onOrderChanged: persistWidgetOrder
                         )
                 }
+            }
+            .coordinateSpace(name: HubWidgetReorder.coordinateSpaceName)
+            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.86), value: reorderSession.displayOrder.map(\.id))
+            .onPreferenceChange(HubWidgetFramePreferenceKey.self) { frames in
+                reorderSession.widgetFrames = frames
             }
             .padding(16)
             .copilotDockScrollMargins(
                 hasTabAction: !model.isEditMode
             )
         }
+        .scrollDisabled(reorderSession.isDragging)
         .scrollDismissesKeyboard(.interactively)
         .copilotScrollTracked(tab: 0, isActive: isTabActive)
+        .onAppear {
+            reorderSession.syncDisplayOrder(from: model.resolvedLayout)
+        }
+        .onChange(of: model.resolvedLayout.map(\.id)) { _, _ in
+            reorderSession.syncDisplayOrder(from: model.resolvedLayout)
+        }
     }
 
     @ViewBuilder
@@ -306,27 +289,6 @@ struct DashboardView: View {
                 .accessibilityLabel("Dismiss")
             }
         }
-    }
-}
-
-private struct HubWidgetDropDelegate: DropDelegate {
-    let widgetId: String
-    @Binding var draggingId: String?
-    let onDrop: (String, String) -> Void
-
-    func performDrop(info: DropInfo) -> Bool {
-        guard let sourceId = draggingId, sourceId != widgetId else {
-            draggingId = nil
-            return false
-        }
-        onDrop(sourceId, widgetId)
-        draggingId = nil
-        Haptics.light()
-        return true
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
     }
 }
 

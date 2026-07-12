@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.1.14**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.1.17**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -270,7 +270,7 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/groups/ownership/transfer` | POST | Transfer group ownership |
 | `/groups/credits/transfer` | POST | Transfer credits between owned groups |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. On the Hub screen, long-press a widget to drag-reorder with live position preview; layout saves optimistically in the background. Edit mode (toolbar slider) still supports swipe Up/Down, visibility toggles, and S/M/L sizing. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
 
 **Post-buildout UX overhaul (v1.4.18):** Trailing `ListCountHeader` (`"{n} items"`) on Cargo, Galley, and Manifest; toolbar count pill removed. Space Mono typography shipped with Dynamic Type scaling. Unified Telemetry Strip rows (`CargoRowView` / `MealRowView`) with hyper-green tag chips. Rich connected-meals section on Cargo detail (connection badges, all ingredients, sort). Manifest incremental polish (consumed strikethrough, week navigator density). See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
 

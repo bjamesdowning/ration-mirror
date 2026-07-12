@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Resolves visible Hub widgets from profile + custom layout — mirrors web `resolveLayout`.
@@ -56,6 +57,61 @@ enum HubLayoutEngine {
 
     enum MoveDirection {
         case up, down
+    }
+
+    /// Returns the widget id whose slot `y` falls into (by midpoint), excluding the dragged widget.
+    static func destinationId(
+        forY y: CGFloat,
+        frames: [String: CGRect],
+        order: [HubWidgetLayout],
+        excluding sourceId: String
+    ) -> String? {
+        for widget in order where widget.id != sourceId {
+            guard let frame = frames[widget.id] else { continue }
+            if y < frame.midY {
+                return widget.id
+            }
+        }
+        return order.last(where: { $0.id != sourceId })?.id
+    }
+
+    /// Moves `sourceId` to the index of `destinationId` within a visible-only display list.
+    static func reorderDisplayOrder(
+        _ order: [HubWidgetLayout],
+        moving sourceId: String,
+        to destinationId: String
+    ) -> [HubWidgetLayout] {
+        guard let fromIndex = order.firstIndex(where: { $0.id == sourceId }),
+              let toIndex = order.firstIndex(where: { $0.id == destinationId }),
+              fromIndex != toIndex
+        else { return order }
+
+        var next = order
+        let item = next.remove(at: fromIndex)
+        next.insert(item, at: toIndex)
+        return next
+    }
+
+    /// Merges a visible-only order into the full editable widget list.
+    static func applyVisibleOrder(
+        _ visibleOrder: [HubWidgetLayout],
+        to widgets: [HubWidgetLayout]
+    ) -> [HubWidgetLayout] {
+        let sorted = widgets.sorted { $0.order < $1.order }
+        let visibleIds = Set(visibleOrder.map(\.id))
+        let existingVisibleIds = Set(sorted.filter(\.visible).map(\.id))
+        guard visibleIds == existingVisibleIds else { return sorted }
+
+        var visibleIterator = visibleOrder.makeIterator()
+        return sorted.enumerated().map { index, widget in
+            var copy = widget
+            if widget.visible, let replacement = visibleIterator.next() {
+                copy = replacement
+                copy.visible = true
+            }
+            copy.order = index
+            return copy
+        }
     }
 
     /// Reorders visible widgets by moving `sourceId` to the position of `destinationId`.

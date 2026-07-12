@@ -16,6 +16,7 @@ final class HubViewModel {
     var isEditMode = false
     var toggleErrorMessage: String?
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
+    private var layoutSaveGeneration = 0
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         refreshErrorMessage = nil
@@ -106,6 +107,52 @@ final class HubViewModel {
         _ = try await api.patchSettings(SettingsPatch(hubProfile: profile))
     }
 
+    func applyVisibleOrder(
+        _ visibleOrder: [HubWidgetLayout],
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        guard case let .loaded(data) = state else { return }
+        let previousData = data
+
+        var widgets = HubLayoutEngine.initEditableWidgets(
+            profile: data.hubProfile,
+            layout: data.hubLayout
+        )
+        widgets = HubLayoutEngine.applyVisibleOrder(visibleOrder, to: widgets)
+
+        let optimistic = previousData.withHubLayout(
+            HubLayoutPayload(widgets: widgets),
+            profile: "custom"
+        )
+        state = .loaded(optimistic)
+        refreshErrorMessage = nil
+
+        layoutSaveGeneration += 1
+        let saveGeneration = layoutSaveGeneration
+
+        guard online else {
+            await snapshots.save(optimistic, domain: SnapshotDomain.hub, organizationId: organizationId)
+            refreshErrorMessage = "Layout changed offline — will sync when you're back online."
+            return
+        }
+
+        do {
+            try await saveLayout(widgets, api: api)
+            guard saveGeneration == layoutSaveGeneration else { return }
+            await snapshots.save(optimistic, domain: SnapshotDomain.hub, organizationId: organizationId)
+        } catch {
+            guard saveGeneration == layoutSaveGeneration else { return }
+            state = .loaded(previousData)
+            refreshErrorMessage = SnapshotRefreshPolicy.refreshFailureMessage(
+                feature: "Hub layout",
+                error: error
+            )
+        }
+    }
+
     func toggleSupplyItem(
         _ item: SupplyItem,
         isPurchased: Bool,
@@ -149,6 +196,24 @@ private extension HubResponse {
             expirationAlertDays: expirationAlertDays,
             hubProfile: hubProfile,
             hubLayout: hubLayout,
+            availableMealTags: availableMealTags,
+            availableCargoTags: availableCargoTags,
+            cargoTagIndex: cargoTagIndex,
+            mealMatches: mealMatches,
+            partialMealMatches: partialMealMatches,
+            snackMatches: snackMatches
+        )
+    }
+
+    func withHubLayout(_ layout: HubLayoutPayload, profile: HubProfile) -> HubResponse {
+        HubResponse(
+            expiringItems: expiringItems,
+            cargoStats: cargoStats,
+            latestSupplyList: latestSupplyList,
+            manifestPreview: manifestPreview,
+            expirationAlertDays: expirationAlertDays,
+            hubProfile: profile,
+            hubLayout: layout,
             availableMealTags: availableMealTags,
             availableCargoTags: availableCargoTags,
             cargoTagIndex: cargoTagIndex,

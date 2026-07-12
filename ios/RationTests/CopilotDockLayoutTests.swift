@@ -33,12 +33,13 @@ final class CopilotDockLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(withoutAction, CopilotDockLayout.collapsedChatChipSize)
     }
 
-    func testInsetDockMarginUsesDockHeightOnly() {
+    func testInsetDockMarginIncludesTabBarClearance() {
         let margin = CopilotDockLayout.scrollContentMarginForInsetDock(isExpanded: true, hasTabAction: true)
 
         XCTAssertEqual(
             margin,
             CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true)
+                + CopilotDockLayout.tabBarClearance
         )
     }
 

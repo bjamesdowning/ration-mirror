@@ -20,15 +20,12 @@ struct CopilotBottomDock: View {
     @Namespace private var dockMorph
 
     var body: some View {
-        VStack(spacing: 0) {
-            dockContent
-                .padding(.horizontal, CopilotDockLayout.dockHorizontalPadding)
-                .padding(.bottom, CopilotDockLayout.dockBottomPadding)
-
-            bottomFade
-        }
-        .frame(maxWidth: .infinity, alignment: .bottom)
-        .fixedSize(horizontal: false, vertical: true)
+        dockContent
+            .padding(.horizontal, CopilotDockLayout.dockHorizontalPadding)
+            .padding(.bottom, CopilotDockLayout.dockBottomPadding)
+            .padding(.bottom, CopilotDockLayout.tabBarClearance)
+            .frame(maxWidth: .infinity, alignment: .bottom)
+            .fixedSize(horizontal: false, vertical: true)
         .animation(MotionPolicy.dockSpring, value: tabDock.revision)
         .onChange(of: scrollContext.isExpanded) { _, expanded in
             if !expanded {
@@ -125,20 +122,6 @@ struct CopilotBottomDock: View {
         .accessibilityLabel("Ask Ration")
         .matchedGeometryEffect(id: "copilotComposer", in: dockMorph)
         .transition(.opacity)
-    }
-
-    private var bottomFade: some View {
-        LinearGradient(
-            colors: [
-                Theme.ceramic.opacity(0),
-                Theme.ceramic.opacity(0.55),
-                Theme.ceramic.opacity(0.92),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 28)
-        .allowsHitTesting(false)
     }
 
     private func sendFromDock(_ text: String) async -> Bool {

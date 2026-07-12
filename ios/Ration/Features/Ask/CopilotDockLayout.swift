@@ -22,13 +22,14 @@ enum CopilotDockLayout {
         return dockBottomPadding + rowHeight
     }
 
-    /// Scroll margin when dock lives in `TabView.safeAreaInset` (content area already excludes tab bar).
+    /// Scroll margin when dock lives in `TabView.safeAreaInset` (includes tab bar clearance).
     static func scrollContentMarginForInsetDock(
         isExpanded: Bool,
         hasTabAction: Bool = true,
         keyboardInset: CGFloat = 0
     ) -> CGFloat {
         dockHeight(isExpanded: isExpanded, hasTabAction: hasTabAction)
+            + tabBarClearance
             + max(0, keyboardInset)
     }
 

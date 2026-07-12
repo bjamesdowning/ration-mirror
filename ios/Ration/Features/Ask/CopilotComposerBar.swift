@@ -73,6 +73,7 @@ struct CopilotComposerBar: View {
                 isFocused: $isFocused,
                 placeholder: placeholder,
                 isEnabled: !isExhausted,
+                layout: mode == .dock ? .compact : .growing,
                 onSubmit: submitDraft,
                 onFocusChange: onFocusChange
             )
@@ -96,7 +97,7 @@ struct CopilotComposerBar: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, mode == .dock ? 8 : 10)
         .background {
             RationAdaptiveMaterial(
                 shape: AnyShape(RoundedRectangle(cornerRadius: 28, style: .continuous))

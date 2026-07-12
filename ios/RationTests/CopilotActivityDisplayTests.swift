@@ -98,7 +98,7 @@ final class CopilotActivityDisplayTests: XCTestCase {
 
 final class CopilotComposerHeightPolicyTests: XCTestCase {
     func testSingleLineDefaultHeight() {
-        XCTAssertEqual(CopilotComposerHeightPolicy.clampedHeight(for: 20), 44)
+        XCTAssertEqual(CopilotComposerHeightPolicy.clampedHeight(for: 20), 36)
     }
 
     func testClampsToMaxHeight() {
@@ -107,5 +107,18 @@ final class CopilotComposerHeightPolicyTests: XCTestCase {
 
     func testMaxLineCountIsFive() {
         XCTAssertEqual(CopilotComposerHeightPolicy.maxLineCount, 5)
+    }
+
+    func testSingleLineMeasurementIgnoresExtraPadding() {
+        let height = CopilotComposerHeightPolicy.measuredHeight(text: "", width: 240)
+        XCTAssertEqual(height, CopilotComposerHeightPolicy.singleLineHeight)
+    }
+
+    func testMultilineMeasurementUsesBoundingRect() {
+        let height = CopilotComposerHeightPolicy.measuredHeight(
+            text: "Line one\nLine two",
+            width: 240
+        )
+        XCTAssertGreaterThan(height, CopilotComposerHeightPolicy.singleLineHeight)
     }
 }

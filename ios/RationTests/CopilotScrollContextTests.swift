@@ -27,6 +27,7 @@ final class CopilotScrollContextTests: XCTestCase {
 
         context.reportScroll(offset: 0)
         context.reportScroll(offset: 30)
+        context.markScrollEnded()
 
         XCTAssertFalse(context.isExpanded)
         XCTAssertEqual(context.scrollDirection, .down)
@@ -44,9 +45,11 @@ final class CopilotScrollContextTests: XCTestCase {
     func testScrollUpReExpandsWhenAutoExpandAllowed() {
         let context = CopilotScrollContext()
         context.reportScroll(offset: 40)
+        context.markScrollEnded()
         XCTAssertFalse(context.isExpanded)
 
-        context.reportScroll(offset: 20)
+        context.reportScroll(offset: 0)
+        context.markScrollEnded()
 
         XCTAssertTrue(context.isExpanded)
         XCTAssertEqual(context.scrollDirection, .up)
@@ -57,9 +60,11 @@ final class CopilotScrollContextTests: XCTestCase {
         context.setCanAutoExpand(false)
         context.reportScroll(offset: 0)
         context.reportScroll(offset: 40)
+        context.markScrollEnded()
         XCTAssertFalse(context.isExpanded)
 
         context.reportScroll(offset: 20)
+        context.markScrollEnded()
 
         XCTAssertFalse(context.isExpanded)
     }
@@ -125,36 +130,26 @@ final class CopilotScrollContextTests: XCTestCase {
         XCTAssertEqual(context.keyboardInset, 0)
     }
 
-    func testEffectiveKeyboardInsetInterpolatesDuringDismissDrag() {
-        let context = CopilotScrollContext()
-
-        context.setKeyboardInset(320)
-        context.setKeyboardDismissDragProgress(0.5)
-
-        XCTAssertEqual(context.effectiveKeyboardInset, 160, accuracy: 0.001)
-
-        context.setKeyboardDismissDragProgress(1)
-        XCTAssertEqual(context.effectiveKeyboardInset, 0, accuracy: 0.001)
-    }
-
-    func testSetKeyboardInsetClearsDragProgressWhenKeyboardHides() {
-        let context = CopilotScrollContext()
-
-        context.setKeyboardInset(320)
-        context.setKeyboardDismissDragProgress(0.6)
-        context.setKeyboardInset(0)
-
-        XCTAssertEqual(context.keyboardInset, 0)
-        XCTAssertEqual(context.keyboardDismissDragProgress, 0)
-    }
-
-    func testDismissKeyboardClearsDragProgress() {
+    func testDismissKeyboardClearsKeyboardInset() {
         let context = CopilotScrollContext()
         context.setKeyboardInset(320)
-        context.setKeyboardDismissDragProgress(0.4)
 
         context.dismissKeyboard()
 
-        XCTAssertEqual(context.keyboardDismissDragProgress, 0)
+        XCTAssertEqual(context.keyboardInset, 0)
+    }
+
+    func testDeferredCollapseAppliesAfterScrollEnds() {
+        let context = CopilotScrollContext()
+
+        context.markScrollActive()
+        context.reportScroll(offset: 0)
+        context.reportScroll(offset: 40)
+
+        XCTAssertTrue(context.isExpanded)
+
+        context.markScrollEnded()
+
+        XCTAssertFalse(context.isExpanded)
     }
 }

@@ -14,7 +14,6 @@ struct DashboardView: View {
     @State private var model = HubViewModel()
     @State private var selectedCargoRoute: HubCargoRoute?
     @State private var selectedMealRoute: HubMealRoute?
-    @State private var reorderSession = HubWidgetReorderSession()
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -122,9 +121,6 @@ struct DashboardView: View {
                 )
             }
         }
-        .refreshable {
-            await reload()
-        }
         .tabDockAction(tag: 0, isActive: !model.isEditMode) {
             IconFABButtonCore(
                 systemImage: "camera.viewfinder",
@@ -148,59 +144,34 @@ struct DashboardView: View {
         }
     }
 
-    private func persistWidgetOrder() {
-        guard let organizationId else { return }
-        let order = reorderSession.displayOrder
-        Task {
-            await model.applyVisibleOrder(
-                order,
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId
-            )
-        }
-    }
-
     private func hubContent(_ data: HubResponse) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if let toggleError = model.toggleErrorMessage {
-                    ErrorBanner(message: toggleError).frame(maxWidth: .infinity, alignment: .leading)
-                }
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 16) {
+                    if let toggleError = model.toggleErrorMessage {
+                        ErrorBanner(message: toggleError).frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                if let organizationId,
-                   let action = model.nextAction(for: data),
-                   !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
-                {
-                    nextActionCard(action, organizationId: organizationId)
-                }
+                    if let organizationId,
+                       let action = model.nextAction(for: data),
+                       !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
+                    {
+                        nextActionCard(action, organizationId: organizationId)
+                    }
 
-                ForEach(reorderSession.displayOrder) { widget in
-                    widgetView(widget, data: data)
-                        .hubWidgetReorderRow(
-                            id: widget.id,
-                            session: reorderSession,
-                            onOrderChanged: persistWidgetOrder
-                        )
+                    ForEach(model.resolvedLayout) { widget in
+                        widgetView(widget, data: data)
+                    }
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height + 1)
+                .copilotDockContentPadding()
             }
-            .coordinateSpace(name: HubWidgetReorder.coordinateSpaceName)
-            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.86), value: reorderSession.displayOrder.map(\.id))
-            .onPreferenceChange(HubWidgetFramePreferenceKey.self) { frames in
-                reorderSession.widgetFrames = frames
+            .refreshable {
+                await reload()
             }
-            .padding(16)
-            .copilotDockContentPadding()
-        }
-        .scrollDisabled(reorderSession.isDragging)
-        .scrollDismissesKeyboard(.interactively)
-        .copilotScrollTracked(tab: 0, isActive: isTabActive)
-        .onAppear {
-            reorderSession.syncDisplayOrder(from: model.resolvedLayout)
-        }
-        .onChange(of: model.resolvedLayout.map(\.id)) { _, _ in
-            reorderSession.syncDisplayOrder(from: model.resolvedLayout)
+            .scrollDismissesKeyboard(.interactively)
+            .copilotScrollTracked(tab: 0, isActive: isTabActive)
         }
     }
 

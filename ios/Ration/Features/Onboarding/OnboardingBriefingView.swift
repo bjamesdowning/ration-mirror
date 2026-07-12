@@ -8,6 +8,7 @@ struct OnboardingBriefingView: View {
     @State private var followsLatest = true
     @State private var showingPaywall = false
     @State private var didBootstrap = false
+    @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
 
@@ -159,15 +160,14 @@ struct OnboardingBriefingView: View {
     private var composer: some View {
         CopilotComposerBar(
             draft: .constant(""),
+            isFocused: $isComposerFocused,
             mode: .sheet,
             isExhausted: true,
             isTurnActive: model.isTurnActive,
             isStopping: model.isStopping,
             isAwaitingApproval: false,
-            focusToken: 0,
-            dismissToken: 0,
             onFocusChange: { _ in },
-            onDismissKeyboard: {},
+            onDismissKeyboard: { isComposerFocused = false },
             onOpenSheet: {},
             onSend: { _ in false },
             onStop: {},

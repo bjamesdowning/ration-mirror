@@ -105,8 +105,7 @@ final class CopilotComposerHeightPolicyTests: XCTestCase {
         XCTAssertEqual(CopilotComposerHeightPolicy.clampedHeight(for: 200), 120)
     }
 
-    func testShouldDeferMeasurementUntilContainerHasWidth() {
-        XCTAssertTrue(CopilotComposerHeightPolicy.shouldDeferMeasurement(width: 1))
-        XCTAssertFalse(CopilotComposerHeightPolicy.shouldDeferMeasurement(width: 200))
+    func testMaxLineCountIsFive() {
+        XCTAssertEqual(CopilotComposerHeightPolicy.maxLineCount, 5)
     }
 }

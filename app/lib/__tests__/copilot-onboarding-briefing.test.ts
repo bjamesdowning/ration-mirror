@@ -136,10 +136,20 @@ describe("onboarding briefing", () => {
 		const kv = new MemoryKV();
 		const e = { RATION_KV: kv } as unknown as Env;
 		expect(await claimOnboardingBriefing(e, "user_1")).toBe(true);
-		expect(await getOnboardingBriefingKvState(kv as unknown as KVNamespace, "user_1")).toBe("pending");
+		expect(
+			await getOnboardingBriefingKvState(
+				kv as unknown as KVNamespace,
+				"user_1",
+			),
+		).toBe("pending");
 		expect(await claimOnboardingBriefing(e, "user_1")).toBe(true);
 		await finalizeOnboardingBriefing(e, "user_1");
-		expect(await getOnboardingBriefingKvState(kv as unknown as KVNamespace, "user_1")).toBe("consumed");
+		expect(
+			await getOnboardingBriefingKvState(
+				kv as unknown as KVNamespace,
+				"user_1",
+			),
+		).toBe("consumed");
 		expect(await claimOnboardingBriefing(e, "user_1")).toBe(false);
 	});
 });

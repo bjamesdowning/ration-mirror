@@ -16,8 +16,7 @@ struct CopilotBottomDock: View {
     let onStop: () async -> Void
     let onExhaustedTap: () -> Void
 
-    @State private var focusToken = 0
-    @State private var dismissToken = 0
+    @FocusState private var isComposerFocused: Bool
     @Namespace private var dockMorph
 
     var body: some View {
@@ -33,17 +32,21 @@ struct CopilotBottomDock: View {
         .animation(MotionPolicy.dockSpring, value: tabDock.revision)
         .onChange(of: scrollContext.isExpanded) { _, expanded in
             if !expanded {
+                isComposerFocused = false
                 scrollContext.setComposerFocused(false)
             }
         }
+        .onChange(of: isComposerFocused) { _, focused in
+            scrollContext.setComposerFocused(focused)
+        }
         .onAppear {
             scrollContext.registerDismissKeyboardHandler {
-                dismissToken += 1
-                focusToken = 0
+                isComposerFocused = false
             }
         }
         .onDisappear {
             scrollContext.registerDismissKeyboardHandler(nil)
+            isComposerFocused = false
             scrollContext.setComposerFocused(false)
         }
     }
@@ -72,20 +75,19 @@ struct CopilotBottomDock: View {
     private var expandedBar: some View {
         CopilotComposerBar(
             draft: $draft,
+            isFocused: $isComposerFocused,
             mode: .dock,
             isExhausted: isExhausted,
             isTurnActive: isTurnActive,
             isStopping: isStopping,
             isAwaitingApproval: isAwaitingApproval,
-            focusToken: focusToken,
-            dismissToken: dismissToken,
             onFocusChange: { scrollContext.setComposerFocused($0) },
             onDismissKeyboard: {
-                dismissToken += 1
-                focusToken = 0
+                isComposerFocused = false
+                scrollContext.dismissKeyboard()
             },
             onOpenSheet: onOpenSheet,
-            onSend: onSend,
+            onSend: sendFromDock,
             onStop: onStop,
             onExhaustedTap: onExhaustedTap
         )
@@ -110,7 +112,7 @@ struct CopilotBottomDock: View {
                 onExhaustedTap()
             } else {
                 scrollContext.expandManually()
-                requestFocus()
+                isComposerFocused = true
             }
         } label: {
             Image(systemName: "bubble.left.and.bubble.right")
@@ -139,8 +141,10 @@ struct CopilotBottomDock: View {
         .allowsHitTesting(false)
     }
 
-    private func requestFocus() {
-        focusToken += 1
+    private func sendFromDock(_ text: String) async -> Bool {
+        isComposerFocused = false
+        scrollContext.dismissKeyboard()
+        return await onSend(text)
     }
 }
 

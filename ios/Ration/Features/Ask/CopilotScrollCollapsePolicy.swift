@@ -8,7 +8,9 @@ enum CopilotScrollDirection: Equatable {
 
 enum CopilotScrollCollapsePolicy {
     static let collapseThreshold: CGFloat = 24
+    static let expandThreshold: CGFloat = 24
     static let directionEpsilon: CGFloat = 1
+    static let dockToggleCooldown: CFAbsoluteTime = 0.3
 
     static func normalizedOffset(contentOffsetY: CGFloat, adjustedTopInset: CGFloat) -> CGFloat {
         contentOffsetY + adjustedTopInset
@@ -31,12 +33,13 @@ enum CopilotScrollCollapsePolicy {
     }
 
     static func shouldExpand(
+        normalizedOffset: CGFloat,
         direction: CopilotScrollDirection,
         isExpanded: Bool,
         canAutoExpand: Bool,
         isComposerFocused: Bool
     ) -> Bool {
         guard !isExpanded, canAutoExpand, !isComposerFocused, direction == .up else { return false }
-        return true
+        return normalizedOffset < expandThreshold
     }
 }

@@ -10,7 +10,6 @@ final class CopilotScrollContext {
     private(set) var trackingGeneration = 0
     private(set) var activeTab = 0
     private(set) var keyboardInset: CGFloat = 0
-    private(set) var keyboardDismissDragProgress: CGFloat = 0
     private(set) var composerHeight = CopilotDockLayout.expandedInputBarHeight
     private(set) var keyboardAnimationDuration: Double = 0.25
     private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
@@ -19,18 +18,12 @@ final class CopilotScrollContext {
     private var canAutoExpand = true
     private var lastOffset: CGFloat = 0
     private var lastProcessedAt: CFAbsoluteTime = 0
+    private var lastDockToggleAt: CFAbsoluteTime = 0
     private var dismissKeyboardHandler: (() -> Void)?
+    private var pendingCollapse = false
+    private var pendingExpand = false
+    private var isUserScrolling = false
     private let scrollProcessInterval: CFAbsoluteTime = 0.05
-
-    var effectiveKeyboardInset: CGFloat {
-        keyboardInset * (1 - keyboardDismissDragProgress)
-    }
-
-    func setKeyboardDismissDragProgress(_ progress: CGFloat) {
-        let clamped = min(1, max(0, progress))
-        guard keyboardDismissDragProgress != clamped else { return }
-        keyboardDismissDragProgress = clamped
-    }
 
     func setActiveTab(_ tab: Int) {
         activeTab = tab
@@ -57,7 +50,9 @@ final class CopilotScrollContext {
         lastProcessedAt = 0
         scrollDirection = .idle
         keyboardInset = 0
-        keyboardDismissDragProgress = 0
+        pendingCollapse = false
+        pendingExpand = false
+        isUserScrolling = false
         isExpanded = canAutoExpand
     }
 
@@ -75,9 +70,6 @@ final class CopilotScrollContext {
         }
         guard keyboardInset != clamped else { return }
         keyboardInset = clamped
-        if clamped == 0 {
-            keyboardDismissDragProgress = 0
-        }
     }
 
     func setComposerHeight(_ height: CGFloat) {
@@ -110,19 +102,46 @@ final class CopilotScrollContext {
     func dismissKeyboard() {
         dismissKeyboardHandler?()
         isComposerFocused = false
-        keyboardDismissDragProgress = 0
+        setKeyboardInset(0)
     }
 
     func expandManually() {
-        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
-            isExpanded = true
+        pendingExpand = false
+        pendingCollapse = false
+        applyExpand()
+    }
+
+    func expandFromScroll() {
+        guard canToggleDockNow else {
+            pendingExpand = true
+            pendingCollapse = false
+            return
         }
+        applyExpand()
     }
 
     func collapse() {
         dismissKeyboard()
-        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
-            isExpanded = false
+        guard canToggleDockNow else {
+            pendingCollapse = true
+            pendingExpand = false
+            return
+        }
+        applyCollapse()
+    }
+
+    func markScrollActive() {
+        isUserScrolling = true
+    }
+
+    func markScrollEnded() {
+        isUserScrolling = false
+        if pendingCollapse {
+            pendingCollapse = false
+            applyCollapse()
+        } else if pendingExpand {
+            pendingExpand = false
+            applyExpand()
         }
     }
 
@@ -132,6 +151,8 @@ final class CopilotScrollContext {
             lastProcessedAt = CFAbsoluteTimeGetCurrent()
             return
         }
+
+        isUserScrolling = true
         let now = CFAbsoluteTimeGetCurrent()
         let delta = offset - lastOffset
         guard let direction = CopilotScrollCollapsePolicy.direction(delta: delta) else {
@@ -147,6 +168,7 @@ final class CopilotScrollContext {
             isComposerFocused: isComposerFocused
         )
         let isExpanding = CopilotScrollCollapsePolicy.shouldExpand(
+            normalizedOffset: offset,
             direction: direction,
             isExpanded: isExpanded,
             canAutoExpand: canAutoExpand,
@@ -165,7 +187,28 @@ final class CopilotScrollContext {
         }
 
         if isExpanding {
-            expandManually()
+            expandFromScroll()
+        }
+    }
+
+    private var canToggleDockNow: Bool {
+        !isUserScrolling
+            && CFAbsoluteTimeGetCurrent() - lastDockToggleAt >= CopilotScrollCollapsePolicy.dockToggleCooldown
+    }
+
+    private func applyCollapse() {
+        guard isExpanded else { return }
+        lastDockToggleAt = CFAbsoluteTimeGetCurrent()
+        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
+            isExpanded = false
+        }
+    }
+
+    private func applyExpand() {
+        guard !isExpanded, canAutoExpand else { return }
+        lastDockToggleAt = CFAbsoluteTimeGetCurrent()
+        withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
+            isExpanded = true
         }
     }
 }
@@ -204,6 +247,7 @@ private struct CopilotScrollTracker: UIViewRepresentable {
         private var observation: NSKeyValueObservation?
         private var attachedGeneration = -1
         private var isEnabled = false
+        private var scrollEndWorkItem: DispatchWorkItem?
         var tab = 0
         var isTabActive = false
         weak var scrollContext: CopilotScrollContext?
@@ -288,15 +332,31 @@ private struct CopilotScrollTracker: UIViewRepresentable {
             let tab = self.tab
             let isTabActive = self.isTabActive
             guard let scrollContext = self.scrollContext else { return }
+
             Task { @MainActor in
                 guard scrollContext.shouldAcceptScrollReports(from: tab, isTabActive: isTabActive) else {
                     return
                 }
+                scrollContext.markScrollActive()
                 scrollContext.reportScroll(offset: offset, isInitial: isInitial)
+                self.scheduleScrollEnded()
             }
         }
 
+        private func scheduleScrollEnded() {
+            scrollEndWorkItem?.cancel()
+            let item = DispatchWorkItem { [weak self] in
+                Task { @MainActor in
+                    self?.scrollContext?.markScrollEnded()
+                }
+            }
+            scrollEndWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: item)
+        }
+
         func detach() {
+            scrollEndWorkItem?.cancel()
+            scrollEndWorkItem = nil
             observation?.invalidate()
             observation = nil
             scrollView = nil
@@ -348,7 +408,6 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
         }
     }
 
-    /// Leave the dock + tab bar region tappable while the keyboard is open.
     private var dismissOverlayReservedBottom: CGFloat {
         CopilotDockLayout.dockHeight(
             isExpanded: scrollContext.isExpanded,
@@ -366,35 +425,16 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
     }
 }
 
-private enum CopilotDockInsetCalculator {
-    static func bottomMargin(
-        isExpanded: Bool,
-        hasTabAction: Bool,
-        composerHeight: CGFloat
-    ) -> CGFloat {
-        let base = CopilotDockLayout.scrollContentMargin(
-            isExpanded: isExpanded,
-            hasTabAction: hasTabAction,
-            keyboardInset: 0
-        )
-        guard isExpanded else { return base }
-        return base + max(
-            0,
-            composerHeight - CopilotDockLayout.expandedInputBarHeight
-        )
-    }
-}
-
 private struct CopilotDockScrollMarginsModifier: ViewModifier {
     @Environment(CopilotScrollContext.self) private var scrollContext
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        CopilotDockInsetCalculator.bottomMargin(
-            isExpanded: scrollContext.isExpanded,
-            hasTabAction: hasTabAction,
-            composerHeight: scrollContext.composerHeight
-        )
+        CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
+            + max(
+                0,
+                scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
+            )
     }
 
     func body(content: Content) -> some View {
@@ -403,17 +443,16 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
     }
 }
 
-/// Bottom padding for scroll *content* inside a plain `ScrollView` (not `List`).
 private struct CopilotDockContentPaddingModifier: ViewModifier {
     @Environment(CopilotScrollContext.self) private var scrollContext
     let hasTabAction: Bool
 
     private var margin: CGFloat {
-        CopilotDockInsetCalculator.bottomMargin(
-            isExpanded: scrollContext.isExpanded,
-            hasTabAction: hasTabAction,
-            composerHeight: scrollContext.composerHeight
-        )
+        CopilotDockLayout.fixedScrollContentMargin(hasTabAction: hasTabAction)
+            + max(
+                0,
+                scrollContext.composerHeight - CopilotDockLayout.expandedInputBarHeight
+            )
     }
 
     func body(content: Content) -> some View {
@@ -513,12 +552,10 @@ extension View {
         modifier(CopilotKeyboardInsetObserver(scrollContext: scrollContext))
     }
 
-    /// Reserves bottom scroll margin for the dock on `List` and trackable `ScrollView` shells.
     func copilotDockScrollMargins(hasTabAction: Bool = true) -> some View {
         modifier(CopilotDockScrollMarginsModifier(hasTabAction: hasTabAction))
     }
 
-    /// Extends scroll content height under a plain `ScrollView` so rows clear the dock.
     func copilotDockContentPadding(hasTabAction: Bool = true) -> some View {
         modifier(CopilotDockContentPaddingModifier(hasTabAction: hasTabAction))
     }

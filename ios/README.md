@@ -280,7 +280,7 @@ handler also opens the picker when access is lost remotely.
 | `/groups/ownership/transfer` | POST | Transfer group ownership |
 | `/groups/credits/transfer` | POST | Transfer credits between owned groups |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. On the Hub screen, long-press a widget to drag-reorder with live position preview; layout saves optimistically in the background. Edit mode (toolbar slider) still supports swipe Up/Down, visibility toggles, and S/M/L sizing. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. Reorder widgets in Hub edit mode (toolbar slider) via swipe Up/Down; layout saves optimistically in the background. Edit mode also supports visibility toggles and S/M/L sizing. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
 
 **Post-buildout UX overhaul (v1.4.18):** Trailing `ListCountHeader` (`"{n} items"`) on Cargo, Galley, and Manifest; toolbar count pill removed. Space Mono typography shipped with Dynamic Type scaling. Unified Telemetry Strip rows (`CargoRowView` / `MealRowView`) with hyper-green tag chips. Rich connected-meals section on Cargo detail (connection badges, all ingredients, sort). Manifest incremental polish (consumed strikethrough, week navigator density). See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
 
@@ -308,6 +308,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Red delete standard (iOS 1.1.23):** Swipe-to-delete and button-driven delete actions use explicit `Theme.danger` tint via shared helpers in `ListSwipeActions` (`destructiveTrailingSwipe`, `destructiveDeleteTint`, `destructiveDeleteForeground`) so delete controls stay red under the app-wide Hyper-Green accent. Covers Cargo, Galley, Manifest, Supply, Plan Week draft rows, detail FAB menus, settings delete flows, and edit-mode list deletes.
 
+**Copilot keyboard native UX (iOS 1.1.30 build 16):** Shared SwiftUI `TextField(axis: .vertical)` composer with `@FocusState` in tab dock and Ask sheet — keyboard and composer move as one unit without UITextView bridge hacks. Submit from tab dock dismisses keyboard, opens full Ask, and shows the user prompt plus Copilot thinking/tool activity in the transcript. Chevron-only keyboard dismiss (no Done toolbar). Fixed scroll margins with visual-only dock collapse; scroll-phase tracking defers dock toggle until flings settle. Hub widget reorder moves to edit mode only so home scroll stays fluid.
+
 **Copilot keyboard native UX (iOS 1.1.27 build 14):** Copilot dock uses `TabView.safeAreaInset` so SwiftUI lifts the composer above the keyboard (no manual overlay padding). UITextView locks ancestor `UIScrollView` scrolling while editing to prevent TabView fly-to-top. Keyboard dismiss uses standard iOS affordances: chevron-down on the composer, keyboard toolbar Done, and `inputAccessoryView` Done bar. Ask Ration opens via `fullScreenCover` (not `.sheet`) so swipe-down dismisses the keyboard without closing chat. Scroll margins no longer double-count keyboard height when the dock is inset-managed.
 
 **Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
@@ -325,7 +327,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
 - Collapsed chat chip: tap expands the bar and opens the keyboard; scroll-up expand alone must not open the keyboard.
 - With keyboard open on any tab: composer stays directly above keyboard (not at top of screen).
-- Copilot field: tap chevron-down or keyboard Done to dismiss; scroll list/transcript to dismiss interactively.
+- Copilot field: tap chevron-down to dismiss keyboard; scroll list/transcript to dismiss interactively.
+- Tab dock send: prompt appears in Ask transcript with thinking/tool activity; keyboard dismisses on tab before Ask opens.
 - Ask full screen: swipe down on composer dismisses keyboard only (chat stays open); X button closes chat.
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.

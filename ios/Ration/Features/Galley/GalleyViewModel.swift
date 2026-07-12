@@ -56,22 +56,10 @@ final class GalleyViewModel {
         supportsMatching: true
     ))
 
+    private(set) var displayedMeals: [Meal] = []
+    private(set) var displayedMatches: [MealMatch] = []
+
     var selectedMealCount: Int { activeMealIds.count }
-
-    var displayedMeals: [Meal] {
-        PageFilterEngine.filterMeals(meals, domain: filters.domain, tags: filters.selectedTags, search: filters.search)
-    }
-
-    var displayedMatches: [MealMatch] {
-        let filtered = PageFilterEngine.filterMeals(
-            matches.map(\.meal),
-            domain: filters.domain,
-            tags: filters.selectedTags,
-            search: filters.search
-        )
-        let ids = Set(filtered.map(\.id))
-        return matches.filter { ids.contains($0.meal.id) }
-    }
 
     var isSearchActive: Bool {
         !filters.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -93,6 +81,23 @@ final class GalleyViewModel {
         filters.selectedTags.count == 1 ? filters.selectedTags.first : nil
     }
 
+    func refreshDisplayedContent() {
+        displayedMeals = PageFilterEngine.filterMeals(
+            meals,
+            domain: filters.domain,
+            tags: filters.selectedTags,
+            search: filters.search
+        )
+        let filteredMeals = PageFilterEngine.filterMeals(
+            matches.map(\.meal),
+            domain: filters.domain,
+            tags: filters.selectedTags,
+            search: filters.search
+        )
+        let ids = Set(filteredMeals.map(\.id))
+        displayedMatches = matches.filter { ids.contains($0.meal.id) }
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         errorMessage = nil
         let hadCache = await restoreSnapshot(snapshots, organizationId: organizationId)
@@ -110,6 +115,7 @@ final class GalleyViewModel {
                     ? "You're offline and no cached meal matches are available."
                     : "You're offline and no cached meals are available."
             }
+            refreshDisplayedContent()
             return
         }
 
@@ -187,11 +193,13 @@ final class GalleyViewModel {
             }
             await refreshAvailabilityMatches(api: api, online: true)
         }
+        refreshDisplayedContent()
     }
 
     func refreshAvailabilityMatches(api: RationAPI, online: Bool) async {
         guard online else {
             matchByMealId = [:]
+            refreshDisplayedContent()
             return
         }
         do {
@@ -204,6 +212,7 @@ final class GalleyViewModel {
         } catch {
             // Non-fatal — keep existing gauges until next full reload.
         }
+        refreshDisplayedContent()
     }
 
     @discardableResult
@@ -217,6 +226,7 @@ final class GalleyViewModel {
             meals = response.meals
             mealTotal = response.total ?? response.meals.count
             activeMealIds = Set(response.activeMealIds ?? [])
+            refreshDisplayedContent()
         }
     }
 

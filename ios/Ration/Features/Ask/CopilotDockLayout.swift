@@ -22,24 +22,41 @@ enum CopilotDockLayout {
         return dockBottomPadding + rowHeight
     }
 
-    /// Scroll content margin so the last row can scroll into view under the glass dock.
-    static func scrollContentMargin(
+    /// Scroll margin when dock lives in `TabView.safeAreaInset` (content area already excludes tab bar).
+    static func scrollContentMarginForInsetDock(
         isExpanded: Bool,
         hasTabAction: Bool = true,
         keyboardInset: CGFloat = 0
     ) -> CGFloat {
         dockHeight(isExpanded: isExpanded, hasTabAction: hasTabAction)
-            + tabBarClearance
-            + max(0, keyboardInset - tabBarClearance)
+            + max(0, keyboardInset)
     }
 
-    /// Toast / undo banner offset above the tab bar and dock.
+    /// Fixed scroll clearance — always reserve expanded dock space; collapse is visual-only.
+    static func fixedScrollContentMargin(hasTabAction: Bool = true) -> CGFloat {
+        scrollContentMarginForInsetDock(isExpanded: true, hasTabAction: hasTabAction)
+    }
+
+    /// Legacy overlay-dock margin (dock + tab bar clearance).
+    static func scrollContentMargin(
+        isExpanded: Bool,
+        hasTabAction: Bool = true,
+        keyboardInset: CGFloat = 0
+    ) -> CGFloat {
+        scrollContentMarginForInsetDock(
+            isExpanded: isExpanded,
+            hasTabAction: hasTabAction,
+            keyboardInset: keyboardInset
+        )
+    }
+
+    /// Toast / undo banner offset above the dock inset region.
     static func toastBottomOffset(
         isExpanded: Bool,
         hasTabAction: Bool = true,
         keyboardInset: CGFloat = 0
     ) -> CGFloat {
-        scrollContentMargin(
+        scrollContentMarginForInsetDock(
             isExpanded: isExpanded,
             hasTabAction: hasTabAction,
             keyboardInset: keyboardInset

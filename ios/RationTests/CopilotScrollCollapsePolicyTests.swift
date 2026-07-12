@@ -40,6 +40,7 @@ final class CopilotScrollCollapsePolicyTests: XCTestCase {
     func testExpandRequiresUpwardDirectionWhileCollapsed() {
         XCTAssertTrue(
             CopilotScrollCollapsePolicy.shouldExpand(
+                normalizedOffset: 0,
                 direction: .up,
                 isExpanded: false,
                 canAutoExpand: true,
@@ -48,6 +49,16 @@ final class CopilotScrollCollapsePolicyTests: XCTestCase {
         )
         XCTAssertFalse(
             CopilotScrollCollapsePolicy.shouldExpand(
+                normalizedOffset: 40,
+                direction: .up,
+                isExpanded: false,
+                canAutoExpand: true,
+                isComposerFocused: false
+            )
+        )
+        XCTAssertFalse(
+            CopilotScrollCollapsePolicy.shouldExpand(
+                normalizedOffset: 0,
                 direction: .up,
                 isExpanded: true,
                 canAutoExpand: true,

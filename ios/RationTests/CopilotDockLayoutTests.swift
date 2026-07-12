@@ -6,9 +6,9 @@ final class CopilotDockLayoutTests: XCTestCase {
         XCTAssertEqual(CopilotDockLayout.expandedInputBarHeight, 64)
     }
 
-    func testScrollContentMarginAddsKeyboardInsetBeyondTabBar() {
-        let base = CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: true)
-        let withKeyboard = CopilotDockLayout.scrollContentMargin(
+    func testScrollContentMarginAddsKeyboardInset() {
+        let base = CopilotDockLayout.scrollContentMarginForInsetDock(isExpanded: true, hasTabAction: true)
+        let withKeyboard = CopilotDockLayout.scrollContentMarginForInsetDock(
             isExpanded: true,
             hasTabAction: true,
             keyboardInset: 336
@@ -33,24 +33,24 @@ final class CopilotDockLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(withoutAction, CopilotDockLayout.collapsedChatChipSize)
     }
 
-    func testScrollContentMarginAddsTabBarClearance() {
-        let margin = CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: true)
+    func testInsetDockMarginUsesDockHeightOnly() {
+        let margin = CopilotDockLayout.scrollContentMarginForInsetDock(isExpanded: true, hasTabAction: true)
 
         XCTAssertEqual(
             margin,
-            CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true) + CopilotDockLayout.tabBarClearance
+            CopilotDockLayout.dockHeight(isExpanded: true, hasTabAction: true)
         )
     }
 
-    func testExpandedMarginGreaterThanCollapsed() {
-        let expanded = CopilotDockLayout.scrollContentMargin(isExpanded: true, hasTabAction: true)
-        let collapsed = CopilotDockLayout.scrollContentMargin(isExpanded: false, hasTabAction: true)
+    func testFixedScrollMarginMatchesExpandedDock() {
+        let fixed = CopilotDockLayout.fixedScrollContentMargin(hasTabAction: true)
+        let expanded = CopilotDockLayout.scrollContentMarginForInsetDock(isExpanded: true, hasTabAction: true)
 
-        XCTAssertGreaterThan(expanded, collapsed)
+        XCTAssertEqual(fixed, expanded)
     }
 
     func testToastOffsetSitsAboveScrollMargin() {
-        let margin = CopilotDockLayout.scrollContentMargin(isExpanded: false, hasTabAction: true)
+        let margin = CopilotDockLayout.scrollContentMarginForInsetDock(isExpanded: false, hasTabAction: true)
         let toast = CopilotDockLayout.toastBottomOffset(isExpanded: false, hasTabAction: true)
 
         XCTAssertGreaterThan(toast, margin)

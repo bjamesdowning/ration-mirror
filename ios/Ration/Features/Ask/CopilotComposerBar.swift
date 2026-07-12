@@ -13,13 +13,12 @@ struct CopilotComposerBar: View {
     }
 
     @Binding var draft: String
+    @FocusState.Binding var isFocused: Bool
     let mode: Mode
     let isExhausted: Bool
     let isTurnActive: Bool
     let isStopping: Bool
     let isAwaitingApproval: Bool
-    let focusToken: Int
-    let dismissToken: Int
     let onFocusChange: (Bool) -> Void
     let onDismissKeyboard: () -> Void
     let onOpenSheet: () -> Void
@@ -30,8 +29,6 @@ struct CopilotComposerBar: View {
 
     @State private var hintIndex = 0
     @State private var submissionInFlight = false
-    @State private var contentHeight = CopilotComposerHeightPolicy.singleLineHeight
-    @State private var isComposerFocused = false
 
     private let hintExamples = [
         "Add butter to my cargo",
@@ -50,8 +47,8 @@ struct CopilotComposerBar: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            if isComposerFocused {
-                Button(action: onDismissKeyboard) {
+            if isFocused {
+                Button(action: dismissKeyboard) {
                     Image(systemName: "chevron.down")
                         .font(Typography.heroIcon(16))
                         .foregroundStyle(Theme.muted)
@@ -71,24 +68,14 @@ struct CopilotComposerBar: View {
                 .disabled(isExhausted)
             }
 
-            CopilotGrowingTextView(
+            CopilotNativeComposer(
                 text: $draft,
+                isFocused: $isFocused,
                 placeholder: placeholder,
                 isEnabled: !isExhausted,
-                focusToken: focusToken,
-                dismissToken: dismissToken,
-                showsKeyboardDismissAccessory: true,
-                onFocusChange: { focused in
-                    isComposerFocused = focused
-                    onFocusChange(focused)
-                },
-                onHeightChange: { height in
-                    contentHeight = height
-                },
                 onSubmit: submitDraft,
-                onDismissKeyboard: onDismissKeyboard
+                onFocusChange: onFocusChange
             )
-            .frame(height: contentHeight)
             .accessibilityLabel("Ask Ration")
 
             Button {
@@ -120,13 +107,6 @@ struct CopilotComposerBar: View {
                 .stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1)
         }
         .opacity(isExhausted && !isTurnActive ? 0.45 : 1)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done", action: onDismissKeyboard)
-                    .foregroundStyle(Theme.hyperGreen)
-            }
-        }
         .task(id: hintIndex) {
             guard !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -145,6 +125,11 @@ struct CopilotComposerBar: View {
             || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private func dismissKeyboard() {
+        isFocused = false
+        onDismissKeyboard()
+    }
+
     private func submitDraft() {
         guard !submissionInFlight, !isTurnActive, !isAwaitingApproval else { return }
         guard !isExhausted else {
@@ -155,12 +140,16 @@ struct CopilotComposerBar: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        if mode == .dock {
+            isFocused = false
+            onDismissKeyboard()
+        }
+
         submissionInFlight = true
         Task {
             let accepted = await onSend(text)
             if accepted, draft == originalDraft {
                 draft = ""
-                contentHeight = CopilotComposerHeightPolicy.singleLineHeight
             }
             submissionInFlight = false
         }

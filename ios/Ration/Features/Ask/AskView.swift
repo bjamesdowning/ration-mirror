@@ -7,8 +7,7 @@ struct AskView: View {
     @Environment(AskCoordinator.self) private var ask
     @Environment(\.dismiss) private var dismiss
     @State private var followsLatest = true
-    @State private var focusToken = 0
-    @State private var dismissToken = 0
+    @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
@@ -123,8 +122,7 @@ struct AskView: View {
     }
 
     private func closeSheet() {
-        dismissToken += 1
-        focusToken = 0
+        isComposerFocused = false
         ask.closeSheet()
         dismiss()
     }
@@ -192,17 +190,15 @@ struct AskView: View {
                 get: { ask.draft },
                 set: { ask.draft = $0 }
             ),
+            isFocused: $isComposerFocused,
             mode: .sheet,
             isExhausted: isCopilotExhausted,
             isTurnActive: model.isTurnActive,
             isStopping: model.isStopping,
             isAwaitingApproval: model.isAwaitingApproval,
-            focusToken: focusToken,
-            dismissToken: dismissToken,
             onFocusChange: { _ in },
             onDismissKeyboard: {
-                dismissToken += 1
-                focusToken = 0
+                isComposerFocused = false
             },
             onOpenSheet: {},
             onSend: { text in

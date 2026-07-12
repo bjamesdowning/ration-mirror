@@ -11,7 +11,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertTrue(CopilotAutoExpandPolicy.canAutoExpand(status: status))
@@ -26,7 +28,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertFalse(CopilotAutoExpandPolicy.canAutoExpand(status: status))
@@ -41,7 +45,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertTrue(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
@@ -56,7 +62,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
@@ -71,7 +79,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
@@ -86,7 +96,9 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: true,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: []
+            brackets: [],
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
         )
 
         XCTAssertTrue(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))

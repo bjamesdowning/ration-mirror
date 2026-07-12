@@ -295,6 +295,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Quiet revalidate (iOS 1.1.16 build 12):** Cold open and foreground resume no longer flash warning banners while background refresh runs. Cached content appears instantly; stale disclosure is muted ("Last updated …") and suppressed during refresh and a 15s foreground grace window. `SnapshotLoadCoordinator` coalesces overlapping `.task` and pull-to-refresh loads; `AuthManager` token rotation uses a detached task so SwiftUI cancellation cannot abort shared refresh. `CancellationError` is never surfaced to users. Network reachability debounces brief offline flaps; returning online triggers a debounced active-tab refresh.
 
+**Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -303,7 +305,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Hub edit mode: scan FAB hidden; Supply empty list: replenish FAB hidden.
 - Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
 - Collapsed chat chip: tap expands the bar and opens the keyboard; scroll-up expand alone must not open the keyboard.
-- Copilot field: swipe down on the composer capsule to dismiss keyboard; send from dock opens Ask sheet.
+- With keyboard open on any tab: composer stays directly above keyboard (not at top of screen).
+- Copilot field: swipe down on the composer capsule to dismiss keyboard interactively; dock follows finger during drag.
 - Single-line copilot bar: rotating example placeholder only (no static "Ask Ration…" row above field).
 - Fast scroll on Cargo/Galley/Supply long lists (30s fling): no crash, dock collapse still works.
 - During a long Copilot response, scroll upward: reading position remains stable; “Jump to latest” resumes auto-follow.

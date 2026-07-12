@@ -20,7 +20,9 @@ struct CopilotComposerBar: View {
     let isAwaitingApproval: Bool
     let focusToken: Int
     let dismissToken: Int
+    let keyboardHeight: CGFloat
     let onFocusChange: (Bool) -> Void
+    let onDismissDragProgress: (CGFloat) -> Void
     let onDismissKeyboard: () -> Void
     let onOpenSheet: () -> Void
     let onSend: (String) async -> Bool
@@ -30,6 +32,8 @@ struct CopilotComposerBar: View {
     @State private var hintIndex = 0
     @State private var submissionInFlight = false
     @State private var contentHeight = CopilotComposerHeightPolicy.singleLineHeight
+    @State private var isComposerFocused = false
+    @State private var dismissDragOffset: CGFloat = 0
 
     private let hintExamples = [
         "Add butter to my cargo",
@@ -65,7 +69,10 @@ struct CopilotComposerBar: View {
                 isEnabled: !isExhausted,
                 focusToken: focusToken,
                 dismissToken: dismissToken,
-                onFocusChange: onFocusChange,
+                onFocusChange: { focused in
+                    isComposerFocused = focused
+                    onFocusChange(focused)
+                },
                 onHeightChange: { height in
                     contentHeight = height
                 },
@@ -98,20 +105,35 @@ struct CopilotComposerBar: View {
                 shape: AnyShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             )
         }
+        .background {
+            CopilotComposerDismissGestureBridge(
+                isEnabled: isComposerFocused,
+                keyboardHeight: keyboardHeight,
+                onDismissDragProgress: { progress in
+                    let height = max(keyboardHeight, CopilotKeyboardDismissPolicy.minimumDismissDistance * 4)
+                    dismissDragOffset = progress * height * 0.35
+                    onDismissDragProgress(progress)
+                },
+                onDismissKeyboard: {
+                    dismissDragOffset = 0
+                    onDismissDragProgress(0)
+                    onDismissKeyboard()
+                },
+                onDismissDragReset: {
+                    dismissDragOffset = 0
+                    onDismissDragProgress(0)
+                }
+            )
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(Theme.hyperGreen.opacity(0.35), lineWidth: 1)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 20).onEnded { value in
-                let translation = value.translation
-                if translation.height > 24,
-                   abs(translation.height) > abs(translation.width) {
-                    onDismissKeyboard()
-                }
-            }
-        )
+        .offset(y: dismissDragOffset)
         .opacity(isExhausted && !isTurnActive ? 0.45 : 1)
+        .onChange(of: dismissToken) { _, _ in
+            dismissDragOffset = 0
+        }
         .task(id: hintIndex) {
             guard !UIAccessibility.isReduceMotionEnabled else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)

@@ -78,7 +78,9 @@ struct CopilotBottomDock: View {
             isAwaitingApproval: isAwaitingApproval,
             focusToken: focusToken,
             dismissToken: dismissToken,
+            keyboardHeight: scrollContext.keyboardInset,
             onFocusChange: { scrollContext.setComposerFocused($0) },
+            onDismissDragProgress: { scrollContext.setKeyboardDismissDragProgress($0) },
             onDismissKeyboard: {
                 dismissToken += 1
                 focusToken = 0

@@ -10,6 +10,7 @@ final class CopilotScrollContext {
     private(set) var trackingGeneration = 0
     private(set) var activeTab = 0
     private(set) var keyboardInset: CGFloat = 0
+    private(set) var keyboardDismissDragProgress: CGFloat = 0
     private(set) var composerHeight = CopilotDockLayout.expandedInputBarHeight
     private(set) var keyboardAnimationDuration: Double = 0.25
     private(set) var keyboardAnimationCurve: UIView.AnimationCurve = .easeInOut
@@ -20,6 +21,16 @@ final class CopilotScrollContext {
     private var lastProcessedAt: CFAbsoluteTime = 0
     private var dismissKeyboardHandler: (() -> Void)?
     private let scrollProcessInterval: CFAbsoluteTime = 0.05
+
+    var effectiveKeyboardInset: CGFloat {
+        keyboardInset * (1 - keyboardDismissDragProgress)
+    }
+
+    func setKeyboardDismissDragProgress(_ progress: CGFloat) {
+        let clamped = min(1, max(0, progress))
+        guard keyboardDismissDragProgress != clamped else { return }
+        keyboardDismissDragProgress = clamped
+    }
 
     func setActiveTab(_ tab: Int) {
         activeTab = tab
@@ -46,6 +57,7 @@ final class CopilotScrollContext {
         lastProcessedAt = 0
         scrollDirection = .idle
         keyboardInset = 0
+        keyboardDismissDragProgress = 0
         isExpanded = canAutoExpand
     }
 
@@ -63,6 +75,9 @@ final class CopilotScrollContext {
         }
         guard keyboardInset != clamped else { return }
         keyboardInset = clamped
+        if clamped == 0 {
+            keyboardDismissDragProgress = 0
+        }
     }
 
     func setComposerHeight(_ height: CGFloat) {
@@ -95,6 +110,7 @@ final class CopilotScrollContext {
     func dismissKeyboard() {
         dismissKeyboardHandler?()
         isComposerFocused = false
+        keyboardDismissDragProgress = 0
     }
 
     func expandManually() {
@@ -334,7 +350,7 @@ private struct CopilotKeyboardDismissOverlay: ViewModifier {
 
     /// Leave the dock + tab bar region tappable while the keyboard is open.
     private var dismissOverlayReservedBottom: CGFloat {
-        let base = max(CopilotDockLayout.tabBarClearance, scrollContext.keyboardInset)
+        let base = max(CopilotDockLayout.tabBarClearance, scrollContext.effectiveKeyboardInset)
             + CopilotDockLayout.dockHeight(
                 isExpanded: scrollContext.isExpanded,
                 hasTabAction: hasTabAction
@@ -359,7 +375,7 @@ private struct CopilotDockScrollMarginsModifier: ViewModifier {
         let base = CopilotDockLayout.scrollContentMargin(
             isExpanded: scrollContext.isExpanded,
             hasTabAction: hasTabAction,
-            keyboardInset: scrollContext.keyboardInset
+            keyboardInset: scrollContext.effectiveKeyboardInset
         )
         guard scrollContext.isExpanded else { return base }
         return base + max(

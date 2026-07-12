@@ -198,9 +198,10 @@ struct MainTabView: View {
                     CopilotDockLayout.toastBottomOffset(
                         isExpanded: env.copilotScroll.isExpanded,
                         hasTabAction: env.tabDock.hasAction(for: selectedTab),
-                        keyboardInset: env.copilotScroll.keyboardInset
+                        keyboardInset: env.copilotScroll.effectiveKeyboardInset
                     )
                 )
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .overlay(alignment: .bottom) {
@@ -234,12 +235,15 @@ struct MainTabView: View {
                 )
                 .padding(
                     .bottom,
-                    max(CopilotDockLayout.tabBarClearance, env.copilotScroll.keyboardInset)
+                    max(CopilotDockLayout.tabBarClearance, env.copilotScroll.effectiveKeyboardInset)
                 )
                 .animation(
-                    env.copilotScroll.keyboardAnimation,
-                    value: env.copilotScroll.keyboardInset
+                    env.copilotScroll.keyboardDismissDragProgress == 0
+                        ? env.copilotScroll.keyboardAnimation
+                        : nil,
+                    value: env.copilotScroll.effectiveKeyboardInset
                 )
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .copilotKeyboardObserved(env.copilotScroll)

@@ -9,7 +9,6 @@ struct AskView: View {
     @State private var followsLatest = true
     @State private var focusToken = 0
     @State private var dismissToken = 0
-    @State private var isComposerFocused = false
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
@@ -86,7 +85,7 @@ struct AskView: View {
                         }
                     }
                 }
-                .scrollDismissesKeyboard(isComposerFocused ? .never : .interactively)
+                .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .bottomTrailing) {
                     if !followsLatest, !model.messages.isEmpty {
                         Button {
@@ -200,7 +199,12 @@ struct AskView: View {
             isAwaitingApproval: model.isAwaitingApproval,
             focusToken: focusToken,
             dismissToken: dismissToken,
-            onFocusChange: { isComposerFocused = $0 },
+            keyboardHeight: max(
+                env.copilotScroll.keyboardInset,
+                CopilotKeyboardDismissPolicy.minimumDismissDistance * 4
+            ),
+            onFocusChange: { _ in },
+            onDismissDragProgress: { _ in },
             onDismissKeyboard: {
                 dismissToken += 1
                 focusToken = 0

@@ -33,6 +33,85 @@ private final class CopilotTextView: UITextView {
     }
 }
 
+struct CopilotComposerDismissGestureBridge: UIViewRepresentable {
+    let isEnabled: Bool
+    let keyboardHeight: CGFloat
+    let onDismissDragProgress: (CGFloat) -> Void
+    let onDismissKeyboard: () -> Void
+    let onDismissDragReset: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+
+        let recognizer = UIPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePan(_:))
+        )
+        recognizer.cancelsTouchesInView = false
+        recognizer.delegate = context.coordinator
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.isEnabled = isEnabled
+        context.coordinator.keyboardHeight = max(keyboardHeight, 1)
+        context.coordinator.onDismissDragProgress = onDismissDragProgress
+        context.coordinator.onDismissKeyboard = onDismissKeyboard
+        context.coordinator.onDismissDragReset = onDismissDragReset
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var isEnabled = false
+        var keyboardHeight: CGFloat = 320
+        var onDismissDragProgress: ((CGFloat) -> Void)?
+        var onDismissKeyboard: (() -> Void)?
+        var onDismissDragReset: (() -> Void)?
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            guard isEnabled else { return }
+            let translation = gesture.translation(in: gesture.view)
+
+            switch gesture.state {
+            case .began, .changed:
+                guard CopilotKeyboardDismissPolicy.isVerticalDownDrag(
+                    translation: CGSize(width: translation.x, height: translation.y)
+                ) else {
+                    return
+                }
+                let progress = CopilotKeyboardDismissPolicy.dismissProgress(
+                    translation: translation.y,
+                    keyboardHeight: keyboardHeight
+                )
+                onDismissDragProgress?(progress)
+            case .ended, .cancelled:
+                if CopilotKeyboardDismissPolicy.shouldDismissKeyboard(
+                    translation: CGSize(width: translation.x, height: translation.y)
+                ) {
+                    onDismissKeyboard?()
+                } else {
+                    onDismissDragReset?()
+                }
+            default:
+                break
+            }
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+    }
+}
+
 private final class CopilotComposerContainerView: UIView {
     let textView = CopilotTextView()
     let placeholderLabel = UILabel()

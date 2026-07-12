@@ -1044,6 +1044,7 @@ private struct SupplyListItemRow: View {
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
             }
+            .destructiveDeleteTint()
         }
     }
 

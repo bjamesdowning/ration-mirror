@@ -1,6 +1,16 @@
 import SwiftUI
 
 extension View {
+    /// Overrides the app Hyper-Green accent for destructive delete controls.
+    func destructiveDeleteTint() -> some View {
+        tint(Theme.danger)
+    }
+
+    /// Borderless caption delete buttons (settings rows, inline list actions).
+    func destructiveDeleteForeground() -> some View {
+        foregroundStyle(Theme.danger)
+    }
+
     /// Leading swipe (swipe right): Supply toggle + Edit — inventory lists (Cargo, Galley).
     func inventoryLeadingSwipeActions(
         isSelectedForSupply: Bool,
@@ -25,12 +35,21 @@ extension View {
         }
     }
 
-    /// Trailing swipe (swipe left): Delete only.
-    func inventoryDestructiveTrailingSwipe(onDelete: @escaping () -> Void) -> some View {
+    /// Trailing swipe (swipe left): destructive delete with explicit danger tint.
+    func destructiveTrailingSwipe(
+        label: String = "Delete",
+        onDelete: @escaping () -> Void
+    ) -> some View {
         swipeActions {
             Button(role: .destructive, action: onDelete) {
-                Label("Delete", systemImage: "trash")
+                Label(label, systemImage: "trash")
             }
+            .tint(Theme.danger)
         }
+    }
+
+    /// Trailing swipe (swipe left): Delete only — inventory lists (Cargo, Galley).
+    func inventoryDestructiveTrailingSwipe(onDelete: @escaping () -> Void) -> some View {
+        destructiveTrailingSwipe(onDelete: onDelete)
     }
 }

@@ -56,6 +56,7 @@ struct AccountDeletionView: View {
                 Button("Delete my account", role: .destructive) {
                     Task { await deleteAccount() }
                 }
+                .destructiveDeleteTint()
                 .disabled(!isConfirmed || isDeleting)
             }
         }

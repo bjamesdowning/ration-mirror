@@ -247,6 +247,7 @@ struct TagsSettingsView: View {
                     }
                     .buttonStyle(.borderless)
                     .font(Typography.caption())
+                    .destructiveDeleteForeground()
                     .disabled(isBusy)
                 }
             }

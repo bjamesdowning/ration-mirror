@@ -71,6 +71,7 @@ struct DirectionsEditorView: View {
         }
         .onDelete(perform: deleteSteps)
         .onMove(perform: moveSteps)
+        .destructiveDeleteTint()
 
         Button {
             addStep()

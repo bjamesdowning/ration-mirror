@@ -525,6 +525,7 @@ struct MealDetailView: View {
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .destructiveDeleteTint()
             }
         }
         .task {

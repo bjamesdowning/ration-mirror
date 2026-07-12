@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.1.17**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.1.23**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -297,6 +297,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 **Quiet revalidate (iOS 1.1.16 build 12):** Cold open and foreground resume no longer flash warning banners while background refresh runs. Cached content appears instantly; stale disclosure is muted ("Last updated …") and suppressed during refresh and a 15s foreground grace window. `SnapshotLoadCoordinator` coalesces overlapping `.task` and pull-to-refresh loads; `AuthManager` token rotation uses a detached task so SwiftUI cancellation cannot abort shared refresh. `CancellationError` is never surfaced to users. Network reachability debounces brief offline flaps; returning online triggers a debounced active-tab refresh.
 
 **Detail dock FAB (iOS 1.1.22):** Cargo item and Galley meal detail screens register their `⋯` action menus in `CopilotBottomDock` via `.tabDockAction` (same chrome/animations as list `+` FABs). `TabDockContext` uses a per-tab push/pop stack so detail temporarily replaces the active tab's list FAB and restores it on pop. Detail scroll surfaces use `.copilotDockScrollMargins` instead of legacy `safeAreaInset` FABs.
+
+**Red delete standard (iOS 1.1.23):** Swipe-to-delete and button-driven delete actions use explicit `Theme.danger` tint via shared helpers in `ListSwipeActions` (`destructiveTrailingSwipe`, `destructiveDeleteTint`, `destructiveDeleteForeground`) so delete controls stay red under the app-wide Hyper-Green accent. Covers Cargo, Galley, Manifest, Supply, Plan Week draft rows, detail FAB menus, settings delete flows, and edit-mode list deletes.
 
 **Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
 

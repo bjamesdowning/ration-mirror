@@ -95,12 +95,8 @@ struct PlanWeekSheet: View {
                     }
                 }
                 .listRowBackground(Theme.surface)
-                .swipeActions {
-                    Button(role: .destructive) {
-                        model.removeScheduleEntry(entry)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+                .destructiveTrailingSwipe {
+                    model.removeScheduleEntry(entry)
                 }
             }
             Section {

@@ -85,6 +85,7 @@ struct CargoDetailView: View {
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .destructiveDeleteTint()
             }
         }
         .task { await model.load(id: itemId, api: env.api) }

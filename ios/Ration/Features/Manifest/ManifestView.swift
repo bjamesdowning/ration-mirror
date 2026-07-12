@@ -672,19 +672,15 @@ struct ManifestView: View {
                             }
                         )
                         .listRowBackground(Theme.surface)
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                Task {
-                                    await model.deleteEntry(
-                                        entry,
-                                        api: env.api,
-                                        snapshots: env.snapshots,
-                                        online: env.network.isOnline,
-                                        organizationId: organizationId
-                                    )
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                        .destructiveTrailingSwipe {
+                            Task {
+                                await model.deleteEntry(
+                                    entry,
+                                    api: env.api,
+                                    snapshots: env.snapshots,
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
+                                )
                             }
                         }
                     }

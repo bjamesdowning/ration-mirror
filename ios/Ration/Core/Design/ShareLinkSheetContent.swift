@@ -71,6 +71,7 @@ struct ShareLinkSection: View {
                 } label: {
                     Label("Revoke share link", systemImage: "xmark.circle")
                 }
+                .destructiveDeleteTint()
                 .disabled(isWorking)
             } else {
                 Text("Generate a link to share with others. Links expire after 7 days.")

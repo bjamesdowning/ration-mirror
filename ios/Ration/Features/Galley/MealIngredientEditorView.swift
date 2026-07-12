@@ -76,6 +76,7 @@ struct MealIngredientEditorView: View {
         .onDelete { indices in
             ingredients.remove(atOffsets: indices)
         }
+        .destructiveDeleteTint()
         .rationFormKeyboardToolbar { focusedQuantityId = nil }
 
         Button {

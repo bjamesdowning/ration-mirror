@@ -415,6 +415,7 @@ struct GroupSettingsView: View {
                 deleteConfirmText = ""
                 showingDeleteConfirm = true
             }
+            .destructiveDeleteTint()
         } header: {
             Text("Danger zone")
         } footer: {

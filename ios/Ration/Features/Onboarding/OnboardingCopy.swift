@@ -44,9 +44,9 @@ enum OnboardingCopy {
             moduleLabel: "Cargo",
             systemImage: "shippingbox",
             title: "Your pantry, always accurate.",
-            body: "Track everything by type (Dry / Frozen), quantity, and expiry date. Add in bulk by scanning a receipt or snapping a photo of your fridge or pantry — the AI extracts items, quantities, and units.",
+            body: "Track everything by type (Dry / Frozen), quantity, and expiry date. Add in bulk by scanning receipts, product labels, or photos of your fridge, pantry, or shelves — the AI extracts items, quantities, and units.",
             techInsights: [
-                "OCR + LLM extracts item names, quantities, and units from a receipt or fridge/pantry photo in seconds.",
+                "OCR + LLM extracts item names, quantities, and units from receipts, labels, or pantry photos in seconds.",
                 "Import CSV for bulk spreadsheet upload.",
             ]
         ),

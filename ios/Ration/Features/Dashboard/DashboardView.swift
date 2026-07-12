@@ -128,7 +128,7 @@ struct DashboardView: View {
         .tabDockAction(tag: 0, isActive: !model.isEditMode) {
             IconFABButtonCore(
                 systemImage: "camera.viewfinder",
-                accessibilityLabel: "Scan receipt",
+                accessibilityLabel: "Scan items",
                 isAI: true,
                 action: onScan
             )

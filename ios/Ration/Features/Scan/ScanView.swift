@@ -9,17 +9,26 @@ final class ScanViewModel {
         case idle
         case uploading
         case processing(requestId: String)
-        case completed(requestId: String, items: [ScanResultItem])
+        case completed(requestId: String)
         case confirming
         case confirmed(added: Int, updated: Int)
         case failed(String)
     }
 
     private(set) var state: State = .idle
-    private(set) var selectedItems: Set<String> = []
+    var reviewItems: [EditableScanResultItem] = []
+    var editingItemId: String?
     var shouldShowPaywall = false
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
+
+    var selectedCount: Int {
+        reviewItems.filter(\.selected).count
+    }
+
+    var isEditing: Bool {
+        editingItemId != nil
+    }
 
     func cancelActiveWork() {
         submissionGeneration += 1
@@ -79,8 +88,9 @@ final class ScanViewModel {
             let result = try await poller.poll(requestId: requestId)
             guard isCurrent(generation) else { return }
             let items = result.items ?? []
-            selectedItems = Set(items.map(\.id))
-            state = .completed(requestId: requestId, items: items)
+            reviewItems = items.map { EditableScanResultItem(from: $0) }
+            editingItemId = nil
+            state = .completed(requestId: requestId)
         } catch is CancellationError {
             return
         } catch AIJobPollError.timedOut {
@@ -95,30 +105,44 @@ final class ScanViewModel {
         }
     }
 
-    func toggleSelection(_ item: ScanResultItem) {
-        if selectedItems.contains(item.id) {
-            selectedItems.remove(item.id)
-        } else {
-            selectedItems.insert(item.id)
+    func toggleSelection(_ id: String) {
+        guard let index = reviewItems.firstIndex(where: { $0.id == id }) else { return }
+        reviewItems[index].selected.toggle()
+    }
+
+    func startEditing(_ id: String) {
+        editingItemId = id
+    }
+
+    func cancelEditing() {
+        editingItemId = nil
+    }
+
+    func saveEdit(id: String, name: String, quantityText: String, unit: String) -> String? {
+        guard let index = reviewItems.firstIndex(where: { $0.id == id }) else { return nil }
+        switch reviewItems[index].applyingEdit(name: name, quantityText: quantityText, unit: unit) {
+        case let .saved(updated):
+            reviewItems[index] = updated
+            editingItemId = nil
+            Haptics.light()
+            return nil
+        case let .invalidName(message), let .invalidQuantity(message):
+            return message
         }
     }
 
-    func confirmToCargo(api: RationAPI, items: [ScanResultItem]) async {
-        let chosen = items.filter { selectedItems.contains($0.id) }
+    func confirmToCargo(api: RationAPI) async {
+        guard editingItemId == nil else {
+            state = .failed("Finish editing before adding to Cargo.")
+            return
+        }
+        let chosen = reviewItems.filter(\.selected)
         guard !chosen.isEmpty else {
             state = .failed("Select at least one item to add to Cargo.")
             return
         }
         state = .confirming
-        let batchItems = chosen.map { item in
-            BatchCargoItem(
-                name: item.name,
-                quantity: item.quantity,
-                unit: item.unit,
-                domain: item.domain ?? "food",
-                tags: item.tags ?? []
-            )
-        }
+        let batchItems = chosen.map { $0.toBatchCargoItem() }
         do {
             let result = try await api.batchAddCargo(BatchCargoRequest(items: batchItems))
             Haptics.success()
@@ -131,7 +155,8 @@ final class ScanViewModel {
     func reset() {
         cancelActiveWork()
         state = .idle
-        selectedItems = []
+        reviewItems = []
+        editingItemId = nil
         shouldShowPaywall = false
     }
 
@@ -159,13 +184,13 @@ struct ScanView: View {
                 case .idle:
                     idleContent
                 case .uploading:
-                    AIProcessingView(feature: .scanReceipt, creditCost: env.session.session?.aiCosts?.scan ?? 1)
+                    AIProcessingView(feature: .scanCargo, creditCost: env.session.session?.aiCosts?.scan ?? 1)
                 case let .processing(requestId):
                     processingContent(requestId)
-                case let .completed(requestId, items):
-                    completedContent(requestId: requestId, items: items)
+                case let .completed(requestId):
+                    completedContent(requestId: requestId)
                 case .confirming:
-                    AIProcessingView(feature: .scanReceipt, creditCost: nil)
+                    AIProcessingView(feature: .scanCargo, creditCost: nil)
                 case let .confirmed(added, updated):
                     confirmedContent(added: added, updated: updated)
                 case let .failed(message):
@@ -215,10 +240,10 @@ struct ScanView: View {
             VStack(spacing: 20) {
                 AIFeatureInlineIntro(
                     title: "Scan to add items",
-                    detail: "AI reads your receipt or pantry photo and suggests items to add to Cargo.",
+                    detail: "AI reads grocery receipts, product labels, or photos of your fridge, pantry, or shelves—and suggests items to add to Cargo.",
                     creditCost: scanCreditCost,
                     costLabel: "per scan",
-                    nextSteps: "Review detected items before confirming them to Cargo."
+                    nextSteps: "Review detected items and edit names, quantities, or units before confirming to Cargo."
                 )
                 AIFeaturePrimaryButton(label: "Open camera", creditCost: scanCreditCost) {
                     proceedAfterIntro()
@@ -247,49 +272,46 @@ struct ScanView: View {
         .padding(24)
     }
 
-    private func completedContent(requestId: String, items: [ScanResultItem]) -> some View {
+    private func completedContent(requestId: String) -> some View {
         ScrollView {
             VStack(spacing: 16) {
                 GlassCard {
                     VStack(spacing: 8) {
                         Text("Ready to review").rationHeadline()
-                        Text("\(items.count) item\(items.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
+                        Text("\(model.reviewItems.count) item\(model.reviewItems.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
                             .rationCaption()
+                        Text("Tap edit to fix names, quantities, or units")
+                            .rationCaption()
+                            .foregroundStyle(Theme.muted)
                     }
                 }
-                if items.isEmpty {
-                    EmptyStateView(icon: "doc.text.magnifyingglass", title: "No items found", message: "Try a clearer receipt photo or add cargo manually.")
+                if model.reviewItems.isEmpty {
+                    EmptyStateView(
+                        icon: "doc.text.magnifyingglass",
+                        title: "No items found",
+                        message: "Try a clearer photo or add cargo manually."
+                    )
                 } else {
-                    ForEach(items) { item in
-                        Button { model.toggleSelection(item) } label: {
-                            GlassCard {
-                                HStack {
-                                    Image(systemName: model.selectedItems.contains(item.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(model.selectedItems.contains(item.id) ? Theme.hyperGreen : Theme.muted)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(item.name.capitalized).rationBody()
-                                        if let domain = item.domain {
-                                            Text(domain.capitalized).rationCaption()
-                                        }
-                                    }
-                                    Spacer()
-                                    DisplayQuantityLabel(
-                                        quantity: item.quantity,
-                                        unit: item.unit,
-                                        ingredientName: item.name
-                                    )
-                                    .rationCaption()
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(model.reviewItems) { item in
+                        ScanReviewItemRow(
+                            item: item,
+                            isEditing: model.editingItemId == item.id,
+                            onToggleSelection: { model.toggleSelection(item.id) },
+                            onStartEdit: { model.startEditing(item.id) },
+                            onSave: { name, quantity, unit in
+                                model.saveEdit(id: item.id, name: name, quantityText: quantity, unit: unit)
+                            },
+                            onCancelEdit: { model.cancelEditing() }
+                        )
                     }
                     Button("Add selected to Cargo") {
-                        Task { await model.confirmToCargo(api: env.api, items: items) }
+                        Task { await model.confirmToCargo(api: env.api) }
                     }
                     .buttonStyle(PrimaryButtonStyle())
+                    .disabled(model.selectedCount == 0 || model.isEditing)
                     Button("Scan another") { model.reset() }
                         .buttonStyle(SecondaryButtonStyle())
+                        .disabled(model.isEditing)
                 }
             }
             .padding(16)

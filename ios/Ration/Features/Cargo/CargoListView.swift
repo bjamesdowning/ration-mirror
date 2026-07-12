@@ -42,10 +42,10 @@ struct CargoListView: View {
                                 title: model.isSearchActive ? "No matches" : "No cargo yet",
                                 message: model.isSearchActive
                                     ? "Try a different search term."
-                                    : "Scan a receipt or add staples manually to fill your pantry."
+                                    : "Scan receipts, labels, or pantry photos—or add staples manually to fill your pantry."
                             )
                             if !model.isSearchActive {
-                                Button("Scan receipt") { onScan() }
+                                Button("Scan items") { onScan() }
                                     .buttonStyle(AIButtonStyle())
                                 Button("Add manually") { showingAdd = true }
                                     .buttonStyle(SecondaryButtonStyle())
@@ -104,7 +104,7 @@ struct CargoListView: View {
         .tabDockAction(tag: 1) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
                 Button(action: onScan) {
-                    Label("Scan receipt", systemImage: "camera.viewfinder")
+                    Label("Scan items", systemImage: "camera.viewfinder")
                 }
                 Button { showingAdd = true } label: {
                     Label("Add item", systemImage: "plus")

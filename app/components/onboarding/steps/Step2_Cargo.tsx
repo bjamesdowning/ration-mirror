@@ -38,13 +38,13 @@ export function Step2_Cargo({ step, onNext, onBack, onSkip }: StepProps) {
 			</h3>
 			<p className="text-sm text-carbon/80 dark:text-white/80">
 				Track everything by type (Dry / Frozen), quantity, and expiry date. Add
-				in bulk by scanning a receipt or snapping a photo of your fridge or
-				pantry — the AI extracts items, quantities, and units.
+				in bulk by scanning receipts, product labels, or photos of your fridge,
+				pantry, or shelves — the AI extracts items, quantities, and units.
 			</p>
 
 			<TechInsight>
-				OCR + LLM extracts item names, quantities, and units from a receipt or
-				fridge/pantry photo in seconds.
+				OCR + LLM extracts item names, quantities, and units from receipts,
+				labels, or pantry photos in seconds.
 			</TechInsight>
 			<TechInsight>Import CSV for bulk spreadsheet upload.</TechInsight>
 			<TechInsight>

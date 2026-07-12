@@ -210,6 +210,9 @@ export function ScanResultsModal({
 						<p className="text-sm text-muted mt-1">
 							{items.length} items detected • {selectedItems.length} selected
 						</p>
+						<p className="text-xs text-muted mt-0.5">
+							Tap edit to fix names, quantities, or units
+						</p>
 					</div>
 					<button
 						type="button"

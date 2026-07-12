@@ -691,7 +691,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 					<EmptyPanel
 						icon={<PackageIcon className="w-12 h-12 text-muted" />}
 						title="Cargo Hold Empty"
-						description="Scan a receipt or add items to start tracking your ingredients."
+						description="Scan receipts, labels, or pantry photos—or add items manually to start tracking your ingredients."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
 								<button
@@ -699,7 +699,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 									onClick={() => setShowScanIntroModal(true)}
 									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 								>
-									Scan Receipt
+									Scan items
 								</button>
 								<button
 									type="button"

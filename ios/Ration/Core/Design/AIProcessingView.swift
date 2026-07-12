@@ -4,7 +4,7 @@ enum AIFeature: String {
     case generateMeals
     case planWeek
     case importRecipe
-    case scanReceipt
+    case scanCargo
     case supplyReplenish
     case copilot
 
@@ -13,7 +13,7 @@ enum AIFeature: String {
         case .generateMeals, .copilot: "sparkles"
         case .planWeek: "calendar"
         case .importRecipe: "link"
-        case .scanReceipt, .supplyReplenish: "camera.viewfinder"
+        case .scanCargo, .supplyReplenish: "camera.viewfinder"
         }
     }
 
@@ -22,7 +22,7 @@ enum AIFeature: String {
         case .generateMeals: "Generating meals…"
         case .planWeek: "Planning week…"
         case .importRecipe: "Importing recipe…"
-        case .scanReceipt: "Scanning receipt…"
+        case .scanCargo: "Analyzing photo…"
         case .supplyReplenish: "Matching receipt…"
         case .copilot: "Copilot is thinking…"
         }
@@ -36,8 +36,8 @@ enum AIFeature: String {
             "Building a balanced week from your Galley — matching what's already in Cargo."
         case .importRecipe:
             "Reading the recipe page and mapping ingredients to your inventory units."
-        case .scanReceipt:
-            "Extracting items from your receipt and matching them to Cargo entries."
+        case .scanCargo:
+            "Identifying items from your photo and matching them to Cargo entries."
         case .supplyReplenish:
             "Extracting items from your receipt and matching them to your Supply list."
         case .copilot:

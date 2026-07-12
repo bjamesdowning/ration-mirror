@@ -92,7 +92,7 @@ final class HubViewModel {
         if readyMeals == 0, data.mealMatches.isEmpty {
             return ("galley", "Stock Galley", "Add your first meal", "fork.knife")
         }
-        return ("scan", "Scan receipt", "Add cargo from a receipt", "camera.viewfinder")
+        return ("scan", "Scan items", "Add cargo from a photo", "camera.viewfinder")
     }
 
     func saveLayout(_ widgets: [HubWidgetLayout], api: RationAPI) async throws {

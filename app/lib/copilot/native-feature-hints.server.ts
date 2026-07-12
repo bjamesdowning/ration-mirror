@@ -3,7 +3,7 @@ export const NATIVE_FEATURE_HINTS = {
 		name: "Scan",
 		deepLink: "ration://scan",
 		message:
-			"Receipt and visual scanning require Ration's native Scan flow for camera permissions, image handling, and explicit credit use.",
+			"Receipt, label, and pantry photo scanning require Ration's native Scan flow for camera permissions, image handling, and explicit credit use.",
 	},
 	import_url: {
 		name: "Galley Import",

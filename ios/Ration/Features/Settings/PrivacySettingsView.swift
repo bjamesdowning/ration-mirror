@@ -13,7 +13,7 @@ struct PrivacySettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Ration processes receipt images, pantry items, recipe text, and allergy preferences through Cloudflare Workers and AI providers to power scans, meal matching, and planning.")
+                    Text("Ration processes photos, receipt images, pantry items, recipe text, and allergy preferences through Cloudflare Workers and AI providers to power scans, meal matching, and planning.")
                         .font(Typography.body())
                 } header: {
                     Text("AI Processing & Receipt Privacy")
@@ -83,9 +83,11 @@ struct PrivacySettingsView: View {
     }
 }
 
-/// Gate shown before the first scan when AI consent has not been recorded.
+/// Gate shown before the first AI feature use when consent has not been recorded.
 struct AIConsentGateView: View {
     @Environment(\.openURL) private var openURL
+    var title: String = "AI features use cloud processing"
+    var message: String = "Your photos, text, and preferences may be sent to Ration cloud services and AI providers for processing. See Privacy & AI in Settings to manage consent."
     let onAccept: () -> Void
     let onDecline: () -> Void
 
@@ -94,8 +96,8 @@ struct AIConsentGateView: View {
             Image(systemName: "doc.text.viewfinder")
                 .font(Typography.heroIcon(44))
                 .foregroundStyle(Theme.hyperGreen)
-            Text("Receipt scanning uses AI").rationTitle()
-            Text("Your receipt image and extracted items are sent to Ration cloud services and AI providers for processing. See Privacy & AI in Settings to manage consent.")
+            Text(title).rationTitle()
+            Text(message)
                 .rationCaption()
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {

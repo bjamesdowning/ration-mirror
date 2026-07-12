@@ -39,8 +39,11 @@ struct GroupSettingsView: View {
             Button("Delete Group", role: .destructive) {
                 Task {
                     guard deleteConfirmText == "delete" else { return }
-                    if await model.deleteGroup(api: env.api, env: env) {
+                    switch await model.deleteGroup(api: env.api, env: env) {
+                    case .needsOrgSelection:
                         dismiss()
+                    case .failure:
+                        break
                     }
                 }
             }

@@ -10,6 +10,11 @@ final class SessionStore {
     private(set) var isSwitchingOrg = false
     /// Incremented on org switch so tabs can reload org-scoped data.
     private(set) var orgGeneration = 0
+    /// Non-nil while the user must pick a group after deleting their active org or losing access.
+    private(set) var orgSelectionOrganizations: [OrgMembership]?
+
+    var needsOrgSelection: Bool { orgSelectionOrganizations != nil }
+
     /// Shared AI-consent flag (see H-8) — populated at app start by `RootView`
     /// via `loadSettings()` + `applyConsent(_:)` and read by
     /// `AIConsentCoordinator.presentIfNeeded` across all four AI entry points
@@ -69,6 +74,23 @@ final class SessionStore {
     func clear() {
         session = nil
         hasAIConsent = false
+        orgSelectionOrganizations = nil
+    }
+
+    /// Enter org-selection mode after deleting the active group or losing org access.
+    func beginOrgSelection(organizations: [OrgMembership]) {
+        if orgSelectionOrganizations != nil {
+            if !organizations.isEmpty {
+                orgSelectionOrganizations = organizations
+            }
+            return
+        }
+        session = nil
+        orgSelectionOrganizations = organizations
+    }
+
+    func completeOrgSelection() {
+        orgSelectionOrganizations = nil
     }
 
     func activateOrg(

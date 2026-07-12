@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const requireMobileAuth = vi.fn();
+const requireMobileUserAuth = vi.fn();
 const checkRateLimit = vi.fn();
 const checkOwnedGroupCapacity = vi.fn();
 const dbBatch = vi.fn();
 const organizationFindFirst = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
-	requireMobileAuth: (...args: unknown[]) => requireMobileAuth(...args),
+	requireMobileUserAuth: (...args: unknown[]) => requireMobileUserAuth(...args),
 }));
 
 vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
@@ -51,7 +51,7 @@ function postRequest(body: Record<string, unknown>) {
 describe("POST /api/mobile/v1/groups", () => {
 	beforeEach(() => {
 		for (const m of [
-			requireMobileAuth,
+			requireMobileUserAuth,
 			checkRateLimit,
 			checkOwnedGroupCapacity,
 			dbBatch,
@@ -59,7 +59,7 @@ describe("POST /api/mobile/v1/groups", () => {
 		]) {
 			m.mockReset();
 		}
-		requireMobileAuth.mockResolvedValue({ userId: "user_1" });
+		requireMobileUserAuth.mockResolvedValue({ userId: "user_1" });
 		checkRateLimit.mockResolvedValue({ allowed: true });
 		checkOwnedGroupCapacity.mockResolvedValue({
 			allowed: true,
@@ -84,7 +84,7 @@ describe("POST /api/mobile/v1/groups", () => {
 		expect(result.organizationId).toMatch(
 			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
 		);
-		expect(requireMobileAuth).toHaveBeenCalled();
+		expect(requireMobileUserAuth).toHaveBeenCalled();
 		expect(checkRateLimit).toHaveBeenCalledWith({}, "group_create", "user_1");
 		expect(checkOwnedGroupCapacity).toHaveBeenCalledWith(
 			expect.objectContaining({ DB: {}, RATION_KV: {} }),

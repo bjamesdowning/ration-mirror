@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
-import { requireMobileAuth } from "~/lib/mobile/auth.server";
+import { requireMobileUserAuth } from "~/lib/mobile/auth.server";
 import {
 	assertMobileOrgMembership,
 	issueMobileTokenPair,
@@ -20,7 +20,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
-		const { userId } = await requireMobileAuth(context, request);
+		const { userId } = await requireMobileUserAuth(context, request);
 		MobileActivateOrgSchema.parse({ organizationId: orgId });
 		await assertMobileOrgMembership(context.cloudflare.env, userId, orgId);
 		await revokeMobileRefreshFamilies(context.cloudflare.env, userId);

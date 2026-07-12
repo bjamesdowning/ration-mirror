@@ -214,6 +214,11 @@ struct DeleteGroupRequest: Encodable, Sendable {
 
 struct DeleteGroupResponse: Codable, Sendable {
     let success: Bool
+    let organizations: [OrgMembership]
+}
+
+struct OrganizationsResponse: Codable, Sendable {
+    let organizations: [OrgMembership]
 }
 
 // MARK: - Hub

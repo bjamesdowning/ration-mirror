@@ -3,7 +3,10 @@ import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
+import {
+	listMobileOrganizations,
+	requireMobileActiveGroup,
+} from "~/lib/mobile/auth.server";
 import { deleteOrganization } from "~/lib/organizations.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileDeleteGroupSchema } from "~/lib/schemas/mobile/groups";
@@ -71,11 +74,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		await deleteOrganization(env, organizationId);
 
+		const organizations = await listMobileOrganizations(env, userId, null);
+
 		log.info("[MobileDeleteGroup] Successfully deleted org", {
 			orgId: redactId(organizationId),
 		});
 
-		return { success: true };
+		return { success: true, organizations };
 	} catch (error) {
 		return handleApiError(error);
 	}

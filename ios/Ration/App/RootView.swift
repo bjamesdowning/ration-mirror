@@ -29,6 +29,12 @@ struct RootView: View {
                     MainTabView()
                 }
             }
+            .fullScreenCover(isPresented: Binding(
+                get: { env.session.needsOrgSelection },
+                set: { _ in }
+            )) {
+                SelectGroupView()
+            }
             .task(id: env.launch.startupGeneration) {
                 await env.launch.performStartup(
                     api: env.api,

@@ -8,6 +8,11 @@ enum CreateGroupResult: Equatable {
     case failure(String)
 }
 
+enum DeleteGroupOutcome: Equatable {
+    case needsOrgSelection
+    case failure(String)
+}
+
 @MainActor
 @Observable
 final class GroupSettingsViewModel {
@@ -147,30 +152,22 @@ final class GroupSettingsViewModel {
         }
     }
 
-    func deleteGroup(api: RationAPI, env: AppEnvironment) async -> Bool {
-        guard let orgId = session?.organizations.first(where: \.isActive)?.id else { return false }
+    func deleteGroup(api: RationAPI, env: AppEnvironment) async -> DeleteGroupOutcome {
+        guard let orgId = session?.organizations.first(where: \.isActive)?.id else {
+            return .failure("No active group to delete.")
+        }
         errorMessage = nil
         do {
-            _ = try await api.deleteGroup(organizationId: orgId)
-            _ = await env.session.load(api: api)
-            session = env.session.session
-
-            if let session {
-                if session.organizations.isEmpty {
-                    await env.auth.signOut()
-                } else if !session.organizations.contains(where: \.isActive),
-                          let next = session.organizations.first {
-                    await activateOrg(next, env: env)
-                }
-            } else {
-                await env.auth.signOut()
-            }
-
+            let response = try await api.deleteGroup(organizationId: orgId)
+            await env.snapshots.clearAll()
+            env.refreshOutcomes.clearAll()
+            env.session.beginOrgSelection(organizations: response.organizations)
             Haptics.success()
-            return true
+            return .needsOrgSelection
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return false
+            let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = message
+            return .failure(message)
         }
     }
 

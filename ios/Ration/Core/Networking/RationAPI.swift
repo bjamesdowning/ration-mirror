@@ -18,6 +18,10 @@ final class RationAPI {
         try await client.post("orgs/\(id)/activate", body: EmptyBody())
     }
 
+    func organizations() async throws -> OrganizationsResponse {
+        try await client.get("orgs")
+    }
+
     func deleteAccount() async throws -> AccountDeleteResponse {
         try await client.delete("account")
     }

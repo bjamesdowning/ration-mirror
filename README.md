@@ -1738,7 +1738,9 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `GET` | `/api/mobile/v1/groups/members` | List active group members |
 | `POST` | `/api/mobile/v1/groups` | Create group (`{ name }`; slug auto-generated) |
 | `PATCH` | `/api/mobile/v1/organization/profile` | Rename active group display name (`{ name }`, owner/admin) |
-| `POST` | `/api/mobile/v1/groups/delete` | Delete group (owner; `{ organizationId }`) |
+| `GET` | `/api/mobile/v1/orgs` | List user groups (user-only auth; org recovery) |
+| `POST` | `/api/mobile/v1/orgs/:id/activate` | Switch active group (user-only auth; org recovery) |
+| `POST` | `/api/mobile/v1/groups/delete` | Delete group (owner; `{ organizationId }`); returns remaining `organizations` |
 | `POST` | `/api/mobile/v1/groups/invitations/create` | Create invite link (owner/admin, Crew tier) |
 | `PATCH` | `/api/mobile/v1/groups/members/:memberId/role` | Change member role (`{ role: "admin" \| "member" }`) |
 | `POST` | `/api/mobile/v1/groups/ownership/transfer` | Transfer group ownership (`{ newOwnerMemberId }`) |

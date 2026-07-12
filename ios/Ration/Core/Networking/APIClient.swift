@@ -7,6 +7,8 @@ import Foundation
 final class APIClient {
     private let auth: AuthManager
     private let session: URLSession
+    /// Called when the server returns `forbidden_org` — JWT org is no longer valid.
+    var orgAccessLostHandler: (@MainActor () async -> Void)?
 
     init(auth: AuthManager) {
         self.auth = auth
@@ -158,6 +160,15 @@ final class APIClient {
             if http.statusCode == 401 {
                 await auth.signOutLocal()
                 throw APIError.unauthorized
+            }
+            if http.statusCode == 403,
+               errBody?.code == "forbidden_org",
+               path != "orgs",
+               !path.hasPrefix("orgs/")
+            {
+                if let orgAccessLostHandler {
+                    await orgAccessLostHandler()
+                }
             }
             throw APIError.server(
                 status: http.statusCode,

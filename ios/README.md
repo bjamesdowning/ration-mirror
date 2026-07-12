@@ -230,6 +230,13 @@ verifier.
 token pair (prior refresh families are revoked server-side); the app adopts it via
 `SessionStore.activateOrg` then reloads all tabs.
 
+**Post-delete group selection (iOS 1.1.24, web v1.5.57):** Deleting the active group
+returns `{ success, organizations }` from `POST /groups/delete`. The app clears org-scoped
+snapshots and presents **Select Mission Control** (`SelectGroupView`) — matching web
+`/select-group`. Recovery endpoints (`GET /orgs`, `POST /orgs/:id/activate`, `POST /groups`)
+accept user-only auth so a stale JWT org does not block switching. A global `forbidden_org`
+handler also opens the picker when access is lost remotely.
+
 ## Mobile API routes (v1.3.48+)
 
 ### Existing (MVP)
@@ -247,6 +254,7 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/manifest`, `/manifest/consume` | GET/POST | Meal plan |
 | `/scan`, `/scan/:requestId` | POST/GET | Visual scan AI |
 | `/settings` | GET/PATCH | User preferences |
+| `/orgs` | GET | List groups for org picker / recovery |
 | `/orgs/:id/activate` | POST | Org switch |
 
 ### New (post-MVP polish)
@@ -266,7 +274,7 @@ token pair (prior refresh families are revoked server-side); the app adopts it v
 | `/groups/members` | GET | List group members |
 | `/groups` | POST | Create group (`{ name }`; slug auto-generated) |
 | `/organization/profile` | PATCH | Rename active group display name (`{ name }`, owner/admin) |
-| `/groups/delete` | POST | Delete group (owner) |
+| `/groups/delete` | POST | Delete group (owner); returns remaining `organizations` |
 | `/groups/invitations/create` | POST | Create invite link |
 | `/groups/members/:memberId/role` | PATCH | Change member role |
 | `/groups/ownership/transfer` | POST | Transfer group ownership |

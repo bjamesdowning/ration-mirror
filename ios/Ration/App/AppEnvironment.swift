@@ -37,7 +37,9 @@ final class AppEnvironment {
     init() {
         let auth = AuthManager()
         self.auth = auth
-        self.api = RationAPI(client: APIClient(auth: auth))
+        let client = APIClient(auth: auth)
+        let api = RationAPI(client: client)
+        self.api = api
         let billing = BillingManager()
         self.billing = billing
         let snapshots = SnapshotStore()
@@ -62,6 +64,19 @@ final class AppEnvironment {
         self.lifecycle = AppLifecycleCoordinator()
         let refreshOutcomes = SnapshotRefreshOutcomeStore()
         self.refreshOutcomes = refreshOutcomes
+
+        client.orgAccessLostHandler = { [snapshots, refreshOutcomes, session] in
+            guard !session.needsOrgSelection else { return }
+            await snapshots.clearAll()
+            refreshOutcomes.clearAll()
+            session.beginOrgSelection(organizations: [])
+            do {
+                let response = try await api.organizations()
+                session.beginOrgSelection(organizations: response.organizations)
+            } catch {
+                // Empty placeholder from beginOrgSelection above — user can create a group.
+            }
+        }
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
         auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes] in

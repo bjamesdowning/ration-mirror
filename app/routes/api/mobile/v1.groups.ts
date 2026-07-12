@@ -8,7 +8,7 @@ import {
 	resolveOrganizationCreateSlug,
 } from "~/lib/group-create.server";
 import { log } from "~/lib/logging.server";
-import { requireMobileAuth } from "~/lib/mobile/auth.server";
+import { requireMobileUserAuth } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileCreateGroupSchema } from "~/lib/schemas/mobile/groups";
 import type { Route } from "./+types/v1.groups";
@@ -27,7 +27,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		const { userId } = await requireMobileAuth(context, request);
+		const { userId } = await requireMobileUserAuth(context, request);
 		const env = context.cloudflare.env;
 
 		const rateLimitResult = await checkRateLimit(

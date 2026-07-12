@@ -9,7 +9,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 3. **List totals** — Trailing `"{n} items"` caption at list top (`ListCountHeader`); toolbar stays symbol-only (no count pill).
 4. **Orbital aesthetic** — Ceramic backgrounds, GlassCard for grouped content, Hyper-Green for primary/AI only.
 5. **Accessibility** — `.accessibilityLabel` on every icon-only control.
-6. **Cached state** — Keep usable content visible during refresh; reserve space with `safeAreaInset` for stale/error banners instead of covering rows.
+6. **Cached state** — Keep usable content visible during refresh; show muted "Last updated …" captions only after a real refresh failure (not during the 15s foreground grace window or while `isRefreshing`). Reserve `safeAreaInset` space for error banners instead of covering rows.
 
 ## Components
 
@@ -19,7 +19,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `IconFAB` / `IconFABButton` | `IconFAB.swift` | Cargo, Galley, Manifest, Hub scan |
 | `SlotGlyphView` | `SlotGlyph.swift` | Manifest meal-plan rows |
 | `SyncIndicatorIcon` | `SyncIndicator.swift` | Offline/stale toolbar affordance |
-| `StaleDataBanner` | `SyncIndicator.swift` | Timed stale-cache disclosure above snapshot-backed content |
+| `StaleDataBanner` | `SyncIndicator.swift` | Muted last-updated caption after a failed background refresh (suppressed during grace/refresh) |
 | `ListCountHeader` | `ListCountHeader.swift` | Trailing inventory total on Cargo, Galley, Manifest |
 | `TelemetryTagChip` | `ListRowViews.swift` | Hyper-green tag chips (`Theme.tagChipForeground` / `Theme.tagChipBackground`) |
 | `CargoRowView` / `MealRowView` | `ListRowViews.swift` | Unified Telemetry Strip list rows |

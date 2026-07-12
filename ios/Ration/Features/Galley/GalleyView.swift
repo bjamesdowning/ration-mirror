@@ -27,7 +27,7 @@ struct GalleyView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 2))"
     }
 
     private var galleyCount: Int {
@@ -81,7 +81,11 @@ struct GalleyView: View {
                         .background(Theme.ceramic)
                 }
             }
-            .dataSyncBanner(domain: SnapshotDomain.galley, organizationId: organizationId)
+            .dataSyncBanner(
+                domain: SnapshotDomain.galley,
+                organizationId: organizationId,
+                isRefreshing: model.isRefreshing
+            )
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: availableTags)
             }
@@ -195,12 +199,15 @@ struct GalleyView: View {
 
     private func reload(organizationId: String? = nil) async {
         guard let organizationId = organizationId ?? self.organizationId else { return }
-        await model.load(
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId
-        )
+        model.refreshOutcomes = env.refreshOutcomes
+        await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.galley) {
+            await model.load(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+        }
     }
 
     private func galleyEmptyState(isSearch: Bool) -> some View {

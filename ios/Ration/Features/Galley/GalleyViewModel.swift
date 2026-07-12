@@ -45,6 +45,7 @@ final class GalleyViewModel {
     private(set) var isRefreshing = false
     private(set) var isClearingSelections = false
     var errorMessage: String?
+    var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
     var isMatchMode: Bool { filters.matchingEnabled }
 
@@ -125,8 +126,24 @@ final class GalleyViewModel {
                 matchTotal = response.total ?? response.matches.count
                 matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
                 activeMealIds = Set(mealsResponse.activeMealIds ?? [])
+                if let refreshOutcomes {
+                    SnapshotRefreshPolicy.recordRefreshSuccess(
+                        outcomes: refreshOutcomes,
+                        organizationId: organizationId,
+                        domain: SnapshotDomain.galley
+                    )
+                }
             } catch {
-                let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+                if let refreshOutcomes {
+                    SnapshotRefreshPolicy.recordRefreshFailure(
+                        outcomes: refreshOutcomes,
+                        organizationId: organizationId,
+                        domain: SnapshotDomain.galley,
+                        error: error
+                    )
+                }
+                let detail = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
                 errorMessage = hasUsableContent
                     ? SnapshotRefreshPolicy.refreshFailureMessage(
                         feature: "meal matches",
@@ -142,8 +159,24 @@ final class GalleyViewModel {
                 mealTotal = mealsResponse.total ?? mealsResponse.meals.count
                 activeMealIds = Set(mealsResponse.activeMealIds ?? [])
                 await snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
+                if let refreshOutcomes {
+                    SnapshotRefreshPolicy.recordRefreshSuccess(
+                        outcomes: refreshOutcomes,
+                        organizationId: organizationId,
+                        domain: SnapshotDomain.galley
+                    )
+                }
             } catch {
-                let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+                if let refreshOutcomes {
+                    SnapshotRefreshPolicy.recordRefreshFailure(
+                        outcomes: refreshOutcomes,
+                        organizationId: organizationId,
+                        domain: SnapshotDomain.galley,
+                        error: error
+                    )
+                }
+                let detail = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
                 errorMessage = hadCache
                     ? SnapshotRefreshPolicy.refreshFailureMessage(
                         feature: "Galley",

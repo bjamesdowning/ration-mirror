@@ -292,6 +292,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Onboarding tour (iOS 1.1.14 build 10):** Seven-step first-run tour aligned with web: welcome glossary + unit picker, contextual bottom-sheet guides for Groups/Cargo/Galley/Manifest/Supply, launch screen for credits/WELCOME65/tiers/Copilot. Progress persists cross-platform; Settings → Tutorial restarts via `restartOnboarding` PATCH.
 
+**Quiet revalidate (iOS 1.1.16 build 12):** Cold open and foreground resume no longer flash warning banners while background refresh runs. Cached content appears instantly; stale disclosure is muted ("Last updated …") and suppressed during refresh and a 15s foreground grace window. `SnapshotLoadCoordinator` coalesces overlapping `.task` and pull-to-refresh loads; `AuthManager` token rotation uses a detached task so SwiftUI cancellation cannot abort shared refresh. `CancellationError` is never surfaced to users. Network reachability debounces brief offline flaps; returning online triggers a debounced active-tab refresh.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -315,9 +317,12 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Ask sheet: with composer unfocused, swipe the transcript to dismiss keyboard; with composer focused, swipe-down on the capsule still dismisses.
 - Return to a previously scrolled tab: the first restored offset does not spuriously collapse the Copilot dock.
 - Trigger an expired/session-limit conversation: the stale transcript clears and the next turn starts a new conversation.
-- Open each tab with a warm cache and delayed network: cached content appears without an empty flash; refresh spinner remains visible.
+- Open each tab with a warm cache and delayed network: cached content appears without an empty flash or warning banner; refresh spinner remains visible.
 - Fail a refresh while cache is visible: cached content remains and a refresh error is announced instead of appearing fresh.
-- Leave a cached tab open past the 30-minute threshold: the stale banner appears without covering the first row.
+- Cold open after 1h away: no warning banner during the first 15s; muted "Last updated …" caption only if refresh fails and data remains stale after grace.
+- Pull-to-refresh during startup: no `CancellationError` banner; overlapping loads coalesce silently.
+- Restore network after airplane mode: active tab refreshes without user action.
+- Leave a cached tab open past the 30-minute threshold (after grace): the muted stale caption appears without covering the first row.
 - Force logout as a Copilot response completes, then sign in as another user: no prior conversation snapshot is restored.
 
 **Sprint 3 beauty & accessibility QA (before release):**

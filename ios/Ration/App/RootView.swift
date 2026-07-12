@@ -54,6 +54,7 @@ struct RootView: View {
 /// Bottom tab navigation — Hub, Cargo, Galley, Manifest, Supply.
 struct MainTabView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
     @State private var showingGroupSettings = false
     @State private var showingScan = false
@@ -252,8 +253,21 @@ struct MainTabView: View {
             env.copilotScroll.resetForTabChange()
             env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            env.lifecycle.recordBecameActive()
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard scenePhase == .active else { return }
+                env.lifecycle.bumpRefresh(forTab: selectedTab)
+            }
+        }
+        .onChange(of: env.network.onlineGeneration) { _, _ in
+            env.lifecycle.bumpRefresh(forTab: selectedTab)
+        }
         .task(id: shellReadyKey) {
             guard let organizationId = env.session.activeOrganizationId else { return }
+            await env.warmSnapshotMetadata(organizationId: organizationId)
             await env.ask.load(
                 api: env.api,
                 auth: env.auth,

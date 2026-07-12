@@ -17,7 +17,7 @@ struct CargoListView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 1))"
     }
 
     var body: some View {
@@ -75,7 +75,11 @@ struct CargoListView: View {
                     onOpenSettings: onOpenSettings
                 )
             }
-            .dataSyncBanner(domain: SnapshotDomain.cargo, organizationId: organizationId)
+            .dataSyncBanner(
+                domain: SnapshotDomain.cargo,
+                organizationId: organizationId,
+                isRefreshing: model.isRefreshing
+            )
             .sheet(isPresented: $showingAdd) {
                 CargoFormView(mode: .create) {
                     await reload()
@@ -115,13 +119,16 @@ struct CargoListView: View {
 
     private func reload(forceRemoteSearch: Bool = false, organizationId: String? = nil) async {
         guard let organizationId = organizationId ?? self.organizationId else { return }
-        await model.reload(
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId,
-            forceRemoteSearch: forceRemoteSearch
-        )
+        model.refreshOutcomes = env.refreshOutcomes
+        await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.cargo) {
+            await model.reload(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId,
+                forceRemoteSearch: forceRemoteSearch
+            )
+        }
     }
 
     private func resolveSearchCargoItem(_ result: SearchResult) async -> CargoItem? {

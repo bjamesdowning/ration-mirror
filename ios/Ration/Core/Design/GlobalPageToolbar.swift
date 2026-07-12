@@ -28,7 +28,16 @@ struct GlobalPageToolbar: ToolbarContent {
                         organizationId: organizationId,
                         online: env.network.isOnline
                     )
-                    if state.shouldShowIndicator {
+                    let showStale = SyncIndicatorPolicy.shouldShowStaleDisclosure(
+                        state: state,
+                        isRefreshing: isRefreshing,
+                        isInForegroundGrace: env.lifecycle.isInForegroundGrace,
+                        lastRefreshFailed: env.refreshOutcomes.lastRefreshFailed(
+                            organizationId: organizationId,
+                            domain: syncDomain
+                        )
+                    )
+                    if showStale || (state.shouldShowIndicator && !isStaleState(state)) {
                         SyncIndicatorIcon(state: state)
                     }
                 }
@@ -60,4 +69,9 @@ struct PageOptionsButton: View {
         .accessibilityLabel("Filters and options")
         .accessibilityValue(hasActiveFilters ? "Active filters applied" : "No active filters")
     }
+}
+
+private func isStaleState(_ state: DataSyncState) -> Bool {
+    if case .stale = state { return true }
+    return false
 }

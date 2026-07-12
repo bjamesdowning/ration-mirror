@@ -42,9 +42,13 @@ final class AuthManager {
 
     private static let refreshKey = "refresh_token"
     private static let pkceVerifierKey = "pkce_verifier"
-    private let session = URLSession(configuration: .ephemeral)
+    private let session: URLSession
 
     var isSignedIn: Bool { phase == .signedIn }
+
+    init(urlSession: URLSession = URLSession(configuration: .ephemeral)) {
+        self.session = urlSession
+    }
 
     // MARK: Bootstrap
 
@@ -170,22 +174,36 @@ final class AuthManager {
     }
 
     /// Single-flight refresh — concurrent callers await the same rotation.
+    /// Uses a detached task so SwiftUI `.task` cancellation cannot abort token rotation.
     @discardableResult
     func refreshAccessToken() async throws -> String {
         if let task = refreshTask { return try await task.value }
         guard let refreshToken else { throw APIError.notAuthenticated }
 
-        let task = Task<String, Error> {
-            defer { refreshTask = nil }
-            let pair = try await postToken(body: [
-                "grantType": "refresh_token",
-                "refreshToken": refreshToken,
-            ])
-            apply(pair)
+        let token = refreshToken
+        let baseURL = AppConfig.apiBaseURL
+        let session = self.session
+
+        let task = Task.detached(priority: .userInitiated) { () async throws -> String in
+            let pair = try await Self.postTokenDetached(
+                refreshToken: token,
+                baseURL: baseURL,
+                session: session
+            )
+            await MainActor.run { [weak self] in
+                self?.apply(pair)
+            }
             return pair.accessToken
         }
         refreshTask = task
-        return try await task.value
+        do {
+            let accessToken = try await task.value
+            refreshTask = nil
+            return accessToken
+        } catch {
+            refreshTask = nil
+            throw error
+        }
     }
 
     // MARK: Sign out
@@ -223,13 +241,43 @@ final class AuthManager {
         try await postTokenDictionary(body: body, endpoint: "auth/token")
     }
 
+    private static func postTokenDetached(
+        refreshToken: String,
+        baseURL: URL,
+        session: URLSession
+    ) async throws -> TokenPair {
+        try await postTokenDictionaryDetached(
+            body: [
+                "grantType": "refresh_token",
+                "refreshToken": refreshToken,
+            ],
+            endpoint: "auth/token",
+            baseURL: baseURL,
+            session: session
+        )
+    }
+
     private func postTokenDictionary(body: [String: Any], endpoint: String) async throws -> TokenPair {
-        var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: endpoint))
+        try await Self.postTokenDictionaryDetached(
+            body: body,
+            endpoint: endpoint,
+            baseURL: AppConfig.apiBaseURL,
+            session: session
+        )
+    }
+
+    private static func postTokenDictionaryDetached(
+        body: [String: Any],
+        endpoint: String,
+        baseURL: URL,
+        session: URLSession
+    ) async throws -> TokenPair {
+        var req = URLRequest(url: baseURL.appending(path: endpoint))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: req)
-        try Self.ensureOK(data: data, response: response)
+        try ensureOK(data: data, response: response)
         do {
             return try JSON.decoder.decode(TokenPair.self, from: data)
         } catch {

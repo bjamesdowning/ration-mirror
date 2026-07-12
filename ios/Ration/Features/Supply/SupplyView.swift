@@ -16,6 +16,7 @@ final class SupplyViewModel {
     private(set) var cargoLinkRows: [CargoLinkResolver.Row] = []
     var errorMessage: String?
     var dockMessage: String?
+    var refreshOutcomes: SnapshotRefreshOutcomeStore?
     private var lastHapticMilestone = 0
     private let maxPollAttempts = 80
     private let pollDelayNanoseconds: UInt64 = 1_500_000_000
@@ -65,8 +66,24 @@ final class SupplyViewModel {
             if let list {
                 await snapshots.save(SupplyResponse(list: list), domain: SnapshotDomain.supply, organizationId: organizationId)
             }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshSuccess(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.supply
+                )
+            }
         } catch {
-            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshFailure(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.supply,
+                    error: error
+                )
+            }
+            let detail = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
             errorMessage = hadCache
                 ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Supply", detail: detail)
                 : detail
@@ -191,8 +208,24 @@ final class SupplyViewModel {
             await snapshots.save(SupplyResponse(list: response.list), domain: SnapshotDomain.supply, organizationId: organizationId)
             await loadCargoLinks(api: api, snapshots: snapshots, organizationId: organizationId, online: true)
             Haptics.success()
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshSuccess(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.supply
+                )
+            }
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshFailure(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.supply,
+                    error: error
+                )
+            }
+            errorMessage = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
         }
     }
 
@@ -405,7 +438,7 @@ struct SupplyView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 4))"
     }
 
     var body: some View {
@@ -430,6 +463,7 @@ struct SupplyView: View {
                             Button("Refresh list") {
                                 Task {
                                     guard let organizationId else { return }
+                                    model.refreshOutcomes = env.refreshOutcomes
                                     await model.sync(
                                         api: env.api,
                                         snapshots: env.snapshots,
@@ -458,7 +492,11 @@ struct SupplyView: View {
                 )
             }
             .background(Theme.ceramic)
-            .dataSyncBanner(domain: SnapshotDomain.supply, organizationId: organizationId)
+            .dataSyncBanner(
+                domain: SnapshotDomain.supply,
+                organizationId: organizationId,
+                isRefreshing: model.isRefreshing || model.isSyncing
+            )
             .sheet(isPresented: $showingOptions) {
                 SupplyOptionsSheet(
                     shareURL: supplyShareURL,
@@ -469,6 +507,7 @@ struct SupplyView: View {
                     supplyWindow: supplyWindow,
                     onRefreshFromMeals: {
                         guard let organizationId else { return }
+                        model.refreshOutcomes = env.refreshOutcomes
                         await model.sync(
                             api: env.api,
                             snapshots: env.snapshots,
@@ -595,12 +634,15 @@ struct SupplyView: View {
                 SupplyScanReviewView(context: context) {
                     Task {
                         guard let organizationId else { return }
-                        await model.load(
-                            api: env.api,
-                            snapshots: env.snapshots,
-                            online: env.network.isOnline,
-                            organizationId: organizationId
-                        )
+                        model.refreshOutcomes = env.refreshOutcomes
+                        await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.supply) {
+                            await model.load(
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
+                            )
+                        }
                     }
                 }
             }
@@ -666,7 +708,15 @@ struct SupplyView: View {
         }
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
-            await model.load(api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+            model.refreshOutcomes = env.refreshOutcomes
+            await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.supply) {
+                await model.load(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
+            }
             if let settings = env.launch.userSettings {
                 let mode = UnitDisplayMode.resolve(from: settings)
                 env.unitDisplayMode.apply(mode)
@@ -676,7 +726,12 @@ struct SupplyView: View {
             supplyShareExpiresAt = try? await env.api.supplyShareStatus().shareExpiresAt
             if env.network.isOnline, !hasTriggeredAutoSync {
                 hasTriggeredAutoSync = true
-                await model.sync(api: env.api, snapshots: env.snapshots, online: true, organizationId: organizationId)
+                await model.sync(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: true,
+                    organizationId: organizationId
+                )
             }
         }
     }
@@ -747,10 +802,23 @@ struct SupplyView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ceramic)
         .refreshable {
+            model.refreshOutcomes = env.refreshOutcomes
             if env.network.isOnline {
-                await model.sync(api: env.api, snapshots: env.snapshots, online: true, organizationId: organizationId)
+                await model.sync(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: true,
+                    organizationId: organizationId
+                )
             } else {
-                await model.load(api: env.api, snapshots: env.snapshots, online: false, organizationId: organizationId)
+                await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.supply) {
+                    await model.load(
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: false,
+                        organizationId: organizationId
+                    )
+                }
             }
         }
         .scrollDismissesKeyboard(.interactively)

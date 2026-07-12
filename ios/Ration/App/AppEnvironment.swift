@@ -29,6 +29,9 @@ final class AppEnvironment {
     let launch: LaunchCoordinator
     let onboarding: OnboardingCoordinator
     let deepLinkRouter: DeepLinkRouter
+    let snapshotLoads: SnapshotLoadCoordinator
+    let lifecycle: AppLifecycleCoordinator
+    let refreshOutcomes: SnapshotRefreshOutcomeStore
     private(set) var cargoDataRevision = 0
 
     init() {
@@ -55,10 +58,15 @@ final class AppEnvironment {
         let onboarding = OnboardingCoordinator()
         self.onboarding = onboarding
         self.deepLinkRouter = DeepLinkRouter()
+        self.snapshotLoads = SnapshotLoadCoordinator()
+        self.lifecycle = AppLifecycleCoordinator()
+        let refreshOutcomes = SnapshotRefreshOutcomeStore()
+        self.refreshOutcomes = refreshOutcomes
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
-        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter] in
+        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes] in
             await snapshots.clearAll()
+            refreshOutcomes.clearAll()
             await billing.logOut()
             session.clear()
             theme.clear()
@@ -76,5 +84,26 @@ final class AppEnvironment {
 
     func openDeepLink(_ destination: DeepLinkDestination) {
         deepLinkRouter.enqueue(destination)
+    }
+
+    func loadSnapshot(
+        organizationId: String,
+        domain: String,
+        operation: @escaping @Sendable () async -> Void
+    ) async {
+        let key = SnapshotLoadCoordinator.key(organizationId: organizationId, domain: domain)
+        await snapshotLoads.run(key: key, operation: operation)
+    }
+
+    func warmSnapshotMetadata(organizationId: String) async {
+        for domain in [
+            SnapshotDomain.hub,
+            SnapshotDomain.cargo,
+            SnapshotDomain.galley,
+            SnapshotDomain.manifest,
+            SnapshotDomain.supply,
+        ] {
+            await snapshots.warmSyncMetadata(domain: domain, organizationId: organizationId)
+        }
     }
 }

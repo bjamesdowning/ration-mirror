@@ -17,6 +17,7 @@ final class ManifestViewModel {
     var weekStartPref = "sunday"
     private(set) var hasInitializedAnchor = false
     var supplyDayInclusion: [String: Bool] = [:]
+    var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
     enum ConsumeOutcome: Sendable {
         case success(undoToken: String?)
@@ -77,8 +78,24 @@ final class ManifestViewModel {
             applySupplyDayInclusion(from: data)
             offlineBannerMessage = nil
             await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshSuccess(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.manifest
+                )
+            }
         } catch {
-            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshFailure(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.manifest,
+                    error: error
+                )
+            }
+            let detail = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
             errorMessage = hadCache
                 ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Manifest", detail: detail)
                 : detail
@@ -382,7 +399,7 @@ struct ManifestView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 3))"
     }
 
     private var manifestEntryCount: Int {
@@ -484,7 +501,11 @@ struct ManifestView: View {
                     onOpenSettings: onOpenSettings
                 )
             }
-            .dataSyncBanner(domain: SnapshotDomain.manifest, organizationId: organizationId)
+            .dataSyncBanner(
+                domain: SnapshotDomain.manifest,
+                organizationId: organizationId,
+                isRefreshing: model.isRefreshing
+            )
             .sheet(isPresented: $showingOptions) {
                 ManifestOptionsSheet(
                     weekStart: model.weekStartPref,
@@ -543,12 +564,15 @@ struct ManifestView: View {
 
     private func reload(organizationId: String? = nil) async {
         guard let organizationId = organizationId ?? self.organizationId else { return }
-        await model.load(
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId
-        )
+        model.refreshOutcomes = env.refreshOutcomes
+        await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.manifest) {
+            await model.load(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+        }
     }
 
     private var emptyPrompt: some View {
@@ -775,14 +799,18 @@ struct ManifestView: View {
         do {
             _ = try await env.api.undoAction(token: token)
             Haptics.light()
-            await model.load(
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId
-            )
+            model.refreshOutcomes = env.refreshOutcomes
+            await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.manifest) {
+                await model.load(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
+            }
         } catch {
-            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            model.errorMessage = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
         }
     }
 }

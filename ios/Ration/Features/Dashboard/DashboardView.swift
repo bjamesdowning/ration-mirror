@@ -23,7 +23,7 @@ struct DashboardView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 0))"
     }
 
     var body: some View {
@@ -96,7 +96,11 @@ struct DashboardView: View {
                         .background(Theme.ceramic)
                 }
             }
-            .dataSyncBanner(domain: SnapshotDomain.hub, organizationId: organizationId)
+            .dataSyncBanner(
+                domain: SnapshotDomain.hub,
+                organizationId: organizationId,
+                isRefreshing: model.isRefreshing
+            )
             .sheet(item: $selectedCargoRoute) { route in
                 NavigationStack {
                     CargoDetailView(itemId: route.id)
@@ -110,12 +114,15 @@ struct DashboardView: View {
         }
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
-            await model.load(
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId
-            )
+            model.refreshOutcomes = env.refreshOutcomes
+            await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.hub) {
+                await model.load(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
+            }
         }
         .refreshable {
             await reload()
@@ -132,12 +139,15 @@ struct DashboardView: View {
 
     private func reload() async {
         guard let organizationId else { return }
-        await model.load(
-            api: env.api,
-            snapshots: env.snapshots,
-            online: env.network.isOnline,
-            organizationId: organizationId
-        )
+        model.refreshOutcomes = env.refreshOutcomes
+        await env.loadSnapshot(organizationId: organizationId, domain: SnapshotDomain.hub) {
+            await model.load(
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+        }
     }
 
     private func reorderWidgets(

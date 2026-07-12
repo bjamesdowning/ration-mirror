@@ -18,6 +18,7 @@ final class CargoViewModel {
     private(set) var isClearingSelections = false
     var errorMessage: String?
     var availableTags: [String] = []
+    var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
         supportsDomain: true,
@@ -108,8 +109,24 @@ final class CargoViewModel {
             nextCursor = page.nextCursor
             inventoryNextCursor = page.nextCursor
             await snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshSuccess(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.cargo
+                )
+            }
         } catch {
-            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshFailure(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.cargo,
+                    error: error
+                )
+            }
+            let detail = SnapshotRefreshPolicy.userFacingRefreshDetail(error)
             errorMessage = hadCache
                 ? SnapshotRefreshPolicy.refreshFailureMessage(feature: "Cargo", detail: detail)
                 : detail

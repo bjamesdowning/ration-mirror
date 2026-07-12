@@ -15,6 +15,7 @@ final class HubViewModel {
     private(set) var refreshErrorMessage: String?
     var isEditMode = false
     var toggleErrorMessage: String?
+    var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         refreshErrorMessage = nil
@@ -45,18 +46,29 @@ final class HubViewModel {
             let data = try await api.hub()
             state = .loaded(data)
             await snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshSuccess(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.hub
+                )
+            }
         } catch {
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if let refreshOutcomes {
+                SnapshotRefreshPolicy.recordRefreshFailure(
+                    outcomes: refreshOutcomes,
+                    organizationId: organizationId,
+                    domain: SnapshotDomain.hub,
+                    error: error
+                )
+            }
             if !hadCache {
-                state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+                state = .failed(SnapshotRefreshPolicy.userFacingRefreshDetail(error))
             } else {
-                refreshErrorMessage = Self.cachedRefreshError(error)
+                refreshErrorMessage = SnapshotRefreshPolicy.refreshFailureMessage(feature: "Hub", error: error)
             }
         }
-    }
-
-    private static func cachedRefreshError(_ error: Error) -> String {
-        let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        return SnapshotRefreshPolicy.refreshFailureMessage(feature: "Hub", detail: detail)
     }
 
     var resolvedLayout: [HubWidgetLayout] {

@@ -59,6 +59,34 @@ final class SnapshotRefreshPolicyTests: XCTestCase {
             "Couldn't refresh Cargo. Showing cached data. Server unavailable"
         )
     }
+
+    func testIgnorableRefreshErrorIncludesCancellationError() {
+        XCTAssertTrue(SnapshotRefreshPolicy.isIgnorableRefreshError(CancellationError()))
+    }
+
+    func testIgnorableRefreshErrorIncludesURLCancelled() {
+        XCTAssertTrue(
+            SnapshotRefreshPolicy.isIgnorableRefreshError(URLError(.cancelled))
+        )
+    }
+
+    func testRefreshFailureMessageReturnsNilForCancellation() {
+        XCTAssertNil(
+            SnapshotRefreshPolicy.refreshFailureMessage(
+                feature: "Hub",
+                error: CancellationError()
+            )
+        )
+    }
+
+    func testUserFacingRefreshDetailForTransportError() {
+        XCTAssertEqual(
+            SnapshotRefreshPolicy.userFacingRefreshDetail(
+                APIError.transport("timeout")
+            ),
+            "Network error. timeout"
+        )
+    }
 }
 
 final class SnapshotStoreAsyncTests: XCTestCase {

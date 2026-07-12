@@ -45,6 +45,16 @@ enum DataSyncState: Equatable {
 
 enum SyncIndicatorPolicy {
     static let staleThreshold: TimeInterval = 30 * 60
+
+    static func shouldShowStaleDisclosure(
+        state: DataSyncState,
+        isRefreshing: Bool,
+        isInForegroundGrace: Bool,
+        lastRefreshFailed: Bool
+    ) -> Bool {
+        guard case .stale = state else { return false }
+        return lastRefreshFailed && !isRefreshing && !isInForegroundGrace
+    }
 }
 
 extension SnapshotStore {
@@ -112,15 +122,14 @@ struct StaleDataBanner: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "clock.arrow.circlepath")
+            Image(systemName: "clock")
             Text(message)
                 .rationCaption()
         }
-        .foregroundStyle(Theme.carbon)
+        .foregroundStyle(Theme.muted)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .padding(.horizontal, 12)
-        .background(Theme.warning.opacity(0.18))
         .accessibilityLabel(message)
     }
 
@@ -128,13 +137,14 @@ struct StaleDataBanner: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         let relative = formatter.localizedString(for: syncedAt, relativeTo: Date())
-        return "Showing cached data from \(relative) — pull to refresh"
+        return "Last updated \(relative)"
     }
 }
 
 struct DataSyncBannerModifier: ViewModifier {
     let domain: String
     let organizationId: String?
+    let isRefreshing: Bool
     let reservesOfflineBannerSpace: Bool
     @Environment(AppEnvironment.self) private var env
 
@@ -147,7 +157,16 @@ struct DataSyncBannerModifier: ViewModifier {
                         organizationId: organizationId,
                         online: true
                     )
-                    if case let .stale(date) = state {
+                    if case let .stale(date) = state,
+                       SyncIndicatorPolicy.shouldShowStaleDisclosure(
+                           state: state,
+                           isRefreshing: isRefreshing,
+                           isInForegroundGrace: env.lifecycle.isInForegroundGrace,
+                           lastRefreshFailed: env.refreshOutcomes.lastRefreshFailed(
+                               organizationId: organizationId,
+                               domain: domain
+                           )
+                       ) {
                         StaleDataBanner(syncedAt: date)
                             .padding(.top, reservesOfflineBannerSpace ? 36 : 0)
                     }
@@ -161,11 +180,13 @@ extension View {
     func dataSyncBanner(
         domain: String,
         organizationId: String?,
+        isRefreshing: Bool = false,
         reservesOfflineBannerSpace: Bool = false
     ) -> some View {
         modifier(DataSyncBannerModifier(
             domain: domain,
             organizationId: organizationId,
+            isRefreshing: isRefreshing,
             reservesOfflineBannerSpace: reservesOfflineBannerSpace
         ))
     }

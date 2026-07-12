@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { requireAuth } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
 import type { Route } from "./+types/select-group";
@@ -9,6 +10,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function SelectGroupPage() {
 	const { data: organizations, isPending } = authClient.useListOrganizations();
+	const [createError, setCreateError] = useState<string | null>(null);
+	const [isCreating, setIsCreating] = useState(false);
 
 	// Auto-select if only one organization
 	if (organizations && organizations.length > 0) {
@@ -81,18 +84,39 @@ export default function SelectGroupPage() {
 				) : (
 					<div className="text-center py-6">
 						<p className="text-muted mb-4">You don't have any groups yet.</p>
+						{createError && (
+							<p className="text-danger text-sm mb-4">{createError}</p>
+						)}
 						<button
 							type="button"
+							disabled={isCreating}
 							onClick={async () => {
-								await authClient.organization.create({
-									name: "My Personal Group",
-									slug: `personal-${Date.now()}`,
-								});
-								window.location.reload();
+								setCreateError(null);
+								setIsCreating(true);
+								try {
+									const { error } = await authClient.organization.create({
+										name: "My Personal Group",
+										slug: `personal-${Date.now()}`,
+									});
+									if (error) {
+										setCreateError(
+											error.message ??
+												"Could not create group. You may have reached your group limit.",
+										);
+										return;
+									}
+									window.location.reload();
+								} catch {
+									setCreateError(
+										"Could not create group. Please try again or visit Settings.",
+									);
+								} finally {
+									setIsCreating(false);
+								}
 							}}
-							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
-							Create Personal Group
+							{isCreating ? "Creating..." : "Create Personal Group"}
 						</button>
 					</div>
 				)}

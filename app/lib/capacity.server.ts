@@ -288,3 +288,31 @@ export async function checkOwnedGroupCapacity(env: Env, userId: string) {
 		canCreate: Math.max(0, limit - current),
 	};
 }
+
+export type OwnedGroupCapacity = Awaited<
+	ReturnType<typeof checkOwnedGroupCapacity>
+>;
+
+/**
+ * Payload for 403 when a user cannot own another group (create or transfer recipient).
+ */
+export function buildRecipientCapacityExceededPayload(
+	capacity: OwnedGroupCapacity,
+) {
+	return {
+		error: "recipient_capacity_exceeded" as const,
+		message: `This member already owns the maximum number of groups (${capacity.limit}) and cannot take ownership of another.`,
+		resource: "owned_groups" as const,
+		current: capacity.current,
+		limit: capacity.limit,
+		tier: capacity.tier,
+	};
+}
+
+/**
+ * Returns capacity for a user who would gain ownership of another group.
+ * Caller should reject when `allowed` is false.
+ */
+export async function assertCanOwnAnotherGroup(env: Env, userId: string) {
+	return checkOwnedGroupCapacity(env, userId);
+}

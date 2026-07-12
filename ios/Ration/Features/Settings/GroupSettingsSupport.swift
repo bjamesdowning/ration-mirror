@@ -39,6 +39,25 @@ enum GroupSettingsSupport {
         return ownerWithCredits && organizations.count >= 2
     }
 
+    static func ownedGroupCount(in organizations: [OrgMembership]) -> Int {
+        organizations.filter { $0.role == "owner" }.count
+    }
+
+    static func maxOwnedGroups(isCrewMember: Bool) -> Int {
+        isCrewMember ? 5 : 1
+    }
+
+    static func canCreateGroup(organizations: [OrgMembership], isCrewMember: Bool) -> Bool {
+        ownedGroupCount(in: organizations) < maxOwnedGroups(isCrewMember: isCrewMember)
+    }
+
+    static func ownedGroupLimitMessage(limit: Int, isCrewMember: Bool) -> String {
+        if isCrewMember {
+            return "You've reached your \(limit)-group limit. Delete a group you own to create another."
+        }
+        return "Your free plan includes 1 group. Upgrade to Crew to create more."
+    }
+
     static func invitationAcceptURL(invitationId: String, webOrigin: URL = AppConfig.webOrigin) -> URL {
         var components = URLComponents(url: webOrigin.appending(path: "invitations/accept"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "id", value: invitationId)]
@@ -72,10 +91,30 @@ enum GroupSettingsSupport {
 
     /// Maps create-group API errors to UI outcomes (paywall vs Crew limit message).
     static func createGroupOutcome(from error: APIError, isCrewMember: Bool) -> CreateGroupResult? {
-        guard case .server(403, let message, _, _, _) = error else { return nil }
-        if message == "feature_gated" { return .showPaywall }
-        if message == "capacity_exceeded" {
-            return isCrewMember ? .crewGroupLimitReached(limit: 5) : .showPaywall
+        guard case .server(403, _, _, _, let limit, _, _) = error else { return nil }
+        let code = error.serverErrorCode
+        if code == "feature_gated" { return .showPaywall }
+        if code == "capacity_exceeded" {
+            let resolvedLimit = limit ?? maxOwnedGroups(isCrewMember: isCrewMember)
+            return isCrewMember ? .crewGroupLimitReached(limit: resolvedLimit) : .showPaywall
+        }
+        return nil
+    }
+
+    static func transferOwnershipErrorMessage(from error: APIError) -> String? {
+        guard case .server = error else { return nil }
+        if error.serverErrorCode == "recipient_capacity_exceeded" {
+            if let limit = error.serverLimit {
+                return "This member already owns the maximum number of groups (\(limit)) and cannot take ownership of another."
+            }
+            return error.errorDescription
+        }
+        return error.errorDescription
+    }
+
+    static func createGroupErrorMessage(from outcome: CreateGroupResult) -> String? {
+        if case .crewGroupLimitReached(let limit) = outcome {
+            return ownedGroupLimitMessage(limit: limit, isCrewMember: true)
         }
         return nil
     }

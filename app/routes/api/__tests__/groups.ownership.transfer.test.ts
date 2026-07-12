@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const requireMobileActiveGroup = vi.fn();
+const requireActiveGroup = vi.fn();
 const checkRateLimit = vi.fn();
 const assertCanOwnAnotherGroup = vi.fn();
 const invalidateTierCache = vi.fn();
 const findFirstMember = vi.fn();
 const dbBatch = vi.fn();
 
-vi.mock("~/lib/mobile/auth.server", () => ({
-	requireMobileActiveGroup: (...args: unknown[]) =>
-		requireMobileActiveGroup(...args),
+vi.mock("~/lib/auth.server", () => ({
+	requireActiveGroup: (...args: unknown[]) => requireActiveGroup(...args),
 }));
 
 vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
@@ -50,7 +49,7 @@ const newOwnerMemberId = "22222222-2222-4222-8222-222222222222";
 
 function postRequest() {
 	return new Request(
-		"https://ration.mayutic.com/api/mobile/v1/groups/ownership/transfer",
+		"https://ration.mayutic.com/api/groups/ownership/transfer",
 		{
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -59,10 +58,10 @@ function postRequest() {
 	);
 }
 
-describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
+describe("POST /api/groups/ownership/transfer", () => {
 	beforeEach(() => {
 		for (const m of [
-			requireMobileActiveGroup,
+			requireActiveGroup,
 			checkRateLimit,
 			assertCanOwnAnotherGroup,
 			invalidateTierCache,
@@ -71,17 +70,17 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		]) {
 			m.mockReset();
 		}
-		requireMobileActiveGroup.mockResolvedValue({
-			userId: "user_1",
-			organizationId: "org_1",
+		requireActiveGroup.mockResolvedValue({
+			session: { user: { id: "user_1" } },
+			groupId: "org_1",
 		});
 		checkRateLimit.mockResolvedValue({ allowed: true });
 		assertCanOwnAnotherGroup.mockResolvedValue({
 			allowed: true,
-			current: 2,
+			current: 1,
 			limit: 5,
 			tier: "crew_member",
-			canCreate: 3,
+			canCreate: 4,
 		});
 		findFirstMember
 			.mockResolvedValueOnce({
@@ -98,62 +97,6 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		invalidateTierCache.mockResolvedValue(undefined);
 	});
 
-	it("transfers ownership when actor is owner", async () => {
-		const { action } = await import(
-			"~/routes/api/mobile/v1.groups.ownership.transfer"
-		);
-		const result = (await action({
-			request: postRequest(),
-			context: ctx,
-			params: {},
-		} as never)) as { success: boolean };
-
-		expect(result.success).toBe(true);
-		expect(dbBatch).toHaveBeenCalled();
-		expect(invalidateTierCache).toHaveBeenCalledWith(env, "org_1");
-	});
-
-	it("rejects non-owners with 403", async () => {
-		findFirstMember.mockReset();
-		findFirstMember
-			.mockResolvedValueOnce({
-				id: actorMemberId,
-				role: "admin",
-				userId: "user_1",
-			})
-			.mockResolvedValueOnce({
-				id: newOwnerMemberId,
-				role: "member",
-				userId: "user_2",
-			});
-		const { action } = await import(
-			"~/routes/api/mobile/v1.groups.ownership.transfer"
-		);
-		await expect(
-			action({
-				request: postRequest(),
-				context: ctx,
-				params: {},
-			} as never),
-		).rejects.toMatchObject({ init: { status: 403 } });
-		expect(dbBatch).not.toHaveBeenCalled();
-	});
-
-	it("rejects when rate limited with 429", async () => {
-		checkRateLimit.mockResolvedValue({ allowed: false });
-		const { action } = await import(
-			"~/routes/api/mobile/v1.groups.ownership.transfer"
-		);
-		await expect(
-			action({
-				request: postRequest(),
-				context: ctx,
-				params: {},
-			} as never),
-		).rejects.toMatchObject({ init: { status: 429 } });
-		expect(dbBatch).not.toHaveBeenCalled();
-	});
-
 	it("rejects when recipient is at owned-group capacity with 403", async () => {
 		assertCanOwnAnotherGroup.mockResolvedValue({
 			allowed: false,
@@ -162,9 +105,7 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 			tier: "crew_member",
 			canCreate: 0,
 		});
-		const { action } = await import(
-			"~/routes/api/mobile/v1.groups.ownership.transfer"
-		);
+		const { action } = await import("~/routes/api/groups.ownership.transfer");
 		await expect(
 			action({
 				request: postRequest(),

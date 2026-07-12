@@ -14,7 +14,10 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
-import { checkCapacityWithTier } from "~/lib/capacity.server";
+import {
+	buildRecipientCapacityExceededPayload,
+	checkCapacityWithTier,
+} from "~/lib/capacity.server";
 
 const env = createMockEnv();
 const organizationId = "org-crew-1";
@@ -126,5 +129,22 @@ describe("checkCapacityWithTier", () => {
 		expect(result.allowed).toBe(false);
 		expect(result.current).toBe(35);
 		expect(result.canAdd).toBe(0);
+	});
+});
+
+describe("buildRecipientCapacityExceededPayload", () => {
+	it("returns recipient_capacity_exceeded with limit in message", () => {
+		const payload = buildRecipientCapacityExceededPayload({
+			allowed: false,
+			current: 5,
+			limit: 5,
+			tier: "crew_member",
+			canCreate: 0,
+		});
+
+		expect(payload.error).toBe("recipient_capacity_exceeded");
+		expect(payload.limit).toBe(5);
+		expect(payload.current).toBe(5);
+		expect(payload.message).toContain("5");
 	});
 });

@@ -172,8 +172,10 @@ final class APIClient {
             }
             throw APIError.server(
                 status: http.statusCode,
-                message: errBody?.error,
+                message: errBody?.message ?? errBody?.error,
                 code: errBody?.code,
+                errorCode: errBody?.error,
+                limit: errBody?.limit,
                 existingMealId: errBody?.existingMealId,
                 existingMealName: errBody?.existingMealName
             )

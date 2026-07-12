@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useLoaderData } from "react-router";
 import { HubHeader } from "~/components/hub/HubHeader";
 import { UpgradePrompt } from "~/components/shell/UpgradePrompt";
 import { requireAuth } from "~/lib/auth.server";
+import { checkOwnedGroupCapacity } from "~/lib/capacity.server";
 import type { Route } from "./+types/groups.new";
 
 type CreateGroupResponse = {
@@ -16,11 +17,16 @@ type CreateGroupResponse = {
 };
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	await requireAuth(context, request);
-	return {};
+	const session = await requireAuth(context, request);
+	const groupCapacity = await checkOwnedGroupCapacity(
+		context.cloudflare.env,
+		session.user.id,
+	);
+	return { groupCapacity };
 }
 
 export default function CreateGroupPage() {
+	const { groupCapacity } = useLoaderData<typeof loader>();
 	const fetcher = useFetcher<CreateGroupResponse>({ key: "create-group" });
 	const [dismissedUpgrade, setDismissedUpgrade] = useState(false);
 	const isSubmitting = fetcher.state === "submitting";
@@ -30,6 +36,11 @@ export default function CreateGroupPage() {
 		isCapacityExceeded && fetcher.data?.tier === "crew_member";
 	const showUpgradePrompt =
 		!dismissedUpgrade && isCapacityExceeded && !isCrewAtLimit;
+	const isAtCapacity = !groupCapacity.allowed;
+	const proactiveCrewAtLimit =
+		isAtCapacity && groupCapacity.tier === "crew_member";
+	const proactiveFreeAtLimit =
+		isAtCapacity && groupCapacity.tier !== "crew_member";
 
 	// Navigate via full reload on success so Better Auth's useListOrganizations
 	// cache is re-fetched from the server before the hub renders.
@@ -66,7 +77,9 @@ export default function CreateGroupPage() {
 
 					{isCrewAtLimit && (
 						<div className="p-4 bg-carbon/5 border border-carbon/10 rounded-lg text-sm">
-							<p className="font-medium text-carbon">5-group limit reached</p>
+							<p className="font-medium text-carbon">
+								{fetcher.data?.limit ?? 5}-group limit reached
+							</p>
 							<p className="text-muted mt-1">
 								Your Crew plan supports up to {fetcher.data?.limit ?? 5} groups.
 								Visit{" "}
@@ -80,6 +93,30 @@ export default function CreateGroupPage() {
 							</p>
 						</div>
 					)}
+
+					{proactiveCrewAtLimit && !isCapacityExceeded && (
+						<div className="p-4 bg-carbon/5 border border-carbon/10 rounded-lg text-sm">
+							<p className="font-medium text-carbon">
+								{groupCapacity.limit}-group limit reached
+							</p>
+							<p className="text-muted mt-1">
+								You've reached your {groupCapacity.limit}-group limit. Delete a
+								group you own to create another.
+							</p>
+						</div>
+					)}
+
+					{proactiveFreeAtLimit &&
+						!showUpgradePrompt &&
+						!isCapacityExceeded && (
+							<div className="p-4 bg-carbon/5 border border-carbon/10 rounded-lg text-sm">
+								<p className="font-medium text-carbon">Group limit reached</p>
+								<p className="text-muted mt-1">
+									Your free plan includes {groupCapacity.limit} group. Upgrade
+									to Crew to create more.
+								</p>
+							</div>
+						)}
 
 					<div>
 						<label
@@ -110,7 +147,7 @@ export default function CreateGroupPage() {
 						</a>
 						<button
 							type="submit"
-							disabled={isSubmitting}
+							disabled={isSubmitting || isAtCapacity}
 							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
 							{isSubmitting ? "Creating..." : "Create Group"}
@@ -120,7 +157,7 @@ export default function CreateGroupPage() {
 			</div>
 
 			<UpgradePrompt
-				open={showUpgradePrompt}
+				open={showUpgradePrompt || (proactiveFreeAtLimit && !dismissedUpgrade)}
 				onClose={() => setDismissedUpgrade(true)}
 				title="Crew Member required"
 				description="Creating additional groups requires a Crew Member subscription. Upgrade to unlock multiple groups and invite members."

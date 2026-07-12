@@ -117,4 +117,31 @@ describe("POST /api/mobile/v1/groups", () => {
 		).rejects.toMatchObject({ init: { status: 429 } });
 		expect(dbBatch).not.toHaveBeenCalled();
 	});
+
+	it("rejects when owned-group capacity is exceeded with 403", async () => {
+		checkOwnedGroupCapacity.mockResolvedValue({
+			allowed: false,
+			current: 5,
+			limit: 5,
+			tier: "crew_member",
+			canCreate: 0,
+		});
+		const { action } = await import("~/routes/api/mobile/v1.groups");
+		await expect(
+			action({
+				request: postRequest({ name: "Station Alpha", slug: "station-alpha" }),
+				context: ctx,
+				params: {},
+			} as never),
+		).rejects.toMatchObject({
+			init: { status: 403 },
+			data: {
+				error: "capacity_exceeded",
+				resource: "owned_groups",
+				limit: 5,
+				current: 5,
+			},
+		});
+		expect(dbBatch).not.toHaveBeenCalled();
+	});
 });

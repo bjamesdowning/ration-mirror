@@ -23,6 +23,8 @@ final class GroupSettingsViewModel {
     private(set) var isInviting = false
     private(set) var updatingMemberId: String?
     var errorMessage: String?
+    var createGroupError: String?
+    var transferError: String?
     var successMessage: String?
     var inviteLink: String?
     var newGroupName = ""
@@ -64,11 +66,12 @@ final class GroupSettingsViewModel {
         let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             let message = "Enter a group name."
-            errorMessage = message
+            createGroupError = message
             return .failure(message)
         }
         isCreatingGroup = true
         errorMessage = nil
+        createGroupError = nil
         successMessage = nil
         defer { isCreatingGroup = false }
         do {
@@ -88,16 +91,16 @@ final class GroupSettingsViewModel {
                 from: error,
                 isCrewMember: session?.isCrewMember ?? env.session.isCrewMember
             ) {
-                if case .crewGroupLimitReached(let limit) = outcome {
-                    errorMessage = "Your Crew plan supports up to \(limit) groups."
-                }
+                createGroupError = GroupSettingsSupport.createGroupErrorMessage(from: outcome)
                 return outcome
             }
-            errorMessage = error.errorDescription
-            return .failure(error.errorDescription ?? "Something went wrong.")
+            let message = error.errorDescription ?? "Something went wrong."
+            createGroupError = message
+            return .failure(message)
         } catch {
-            errorMessage = error.localizedDescription
-            return .failure(error.localizedDescription)
+            let message = error.localizedDescription
+            createGroupError = message
+            return .failure(message)
         }
     }
 
@@ -111,7 +114,7 @@ final class GroupSettingsViewModel {
             Haptics.success()
             return true
         } catch let error as APIError {
-            if case .server(403, let message, _, _, _) = error, message == "feature_gated" {
+            if error.statusCode == 403, error.serverErrorCode == "feature_gated" {
                 return false
             }
             errorMessage = error.errorDescription
@@ -138,6 +141,7 @@ final class GroupSettingsViewModel {
 
     func transferOwnership(to memberId: String, api: RationAPI, env: AppEnvironment) async -> Bool {
         errorMessage = nil
+        transferError = nil
         do {
             _ = try await api.transferGroupOwnership(newOwnerMemberId: memberId)
             _ = await env.session.load(api: api)
@@ -146,8 +150,12 @@ final class GroupSettingsViewModel {
             successMessage = "Ownership transferred"
             Haptics.success()
             return true
+        } catch let error as APIError {
+            transferError = GroupSettingsSupport.transferOwnershipErrorMessage(from: error)
+                ?? error.errorDescription
+            return false
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            transferError = error.localizedDescription
             return false
         }
     }

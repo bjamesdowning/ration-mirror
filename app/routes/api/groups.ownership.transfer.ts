@@ -3,7 +3,11 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { invalidateTierCache } from "~/lib/capacity.server";
+import {
+	assertCanOwnAnotherGroup,
+	buildRecipientCapacityExceededPayload,
+	invalidateTierCache,
+} from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { TransferOwnershipSchema } from "~/lib/schemas/groups";
@@ -77,6 +81,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 				{ error: "You cannot transfer ownership to yourself" },
 				{ status: 400 },
 			);
+		}
+
+		const recipientCapacity = await assertCanOwnAnotherGroup(
+			context.cloudflare.env,
+			targetMembership.userId,
+		);
+		if (!recipientCapacity.allowed) {
+			throw data(buildRecipientCapacityExceededPayload(recipientCapacity), {
+				status: 403,
+			});
 		}
 
 		// Atomic: promote new owner and demote current owner

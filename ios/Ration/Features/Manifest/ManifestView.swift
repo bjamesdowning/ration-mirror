@@ -772,7 +772,7 @@ struct ManifestView: View {
             manifestShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
-            if case .server(let status, _, _, _, _) = error, status == 403 {
+            if error.statusCode == 403 {
                 showingPaywall = true
             }
         } catch {}

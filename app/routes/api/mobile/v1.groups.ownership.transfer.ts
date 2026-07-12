@@ -2,7 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { invalidateTierCache } from "~/lib/capacity.server";
+import {
+	assertCanOwnAnotherGroup,
+	buildRecipientCapacityExceededPayload,
+	invalidateTierCache,
+} from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -69,6 +73,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 				{ error: "You cannot transfer ownership to yourself" },
 				{ status: 400 },
 			);
+		}
+
+		const recipientCapacity = await assertCanOwnAnotherGroup(
+			context.cloudflare.env,
+			targetMembership.userId,
+		);
+		if (!recipientCapacity.allowed) {
+			throw data(buildRecipientCapacityExceededPayload(recipientCapacity), {
+				status: 403,
+			});
 		}
 
 		await db.batch([

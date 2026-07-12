@@ -1982,6 +1982,7 @@ function DangerSection({
 	const transferOwnershipFetcher = useFetcher<{
 		success?: boolean;
 		error?: string;
+		message?: string;
 	}>();
 	const revalidator = useRevalidator();
 	const successToast = useToast({ duration: 3000 });
@@ -2125,7 +2126,8 @@ function DangerSection({
 						)}
 						{transferOwnershipFetcher.data?.error && (
 							<p className="text-sm text-danger mt-1">
-								{transferOwnershipFetcher.data.error}
+								{transferOwnershipFetcher.data.message ??
+									transferOwnershipFetcher.data.error}
 							</p>
 						)}
 					</div>

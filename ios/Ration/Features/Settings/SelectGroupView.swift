@@ -134,8 +134,21 @@ struct SelectGroupView: View {
             )
             env.session.completeOrgSelection()
             Haptics.success()
+        } catch let error as APIError {
+            if let outcome = GroupSettingsSupport.createGroupOutcome(
+                from: error,
+                isCrewMember: env.session.isCrewMember
+            ) {
+                if let message = GroupSettingsSupport.createGroupErrorMessage(from: outcome) {
+                    errorMessage = message
+                } else {
+                    errorMessage = "Upgrade to Crew to create more groups."
+                }
+                return
+            }
+            errorMessage = error.errorDescription
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = error.localizedDescription
         }
     }
 }

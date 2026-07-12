@@ -87,10 +87,76 @@ final class GroupSettingsViewModelTests: XCTestCase {
     }
 
     func testCreateGroupOutcomeMapsCrewCapacityToLimitMessage() {
-        let error = APIError.server(status: 403, message: "capacity_exceeded", code: nil)
+        let error = APIError.server(
+            status: 403,
+            message: "capacity_exceeded",
+            code: nil,
+            errorCode: "capacity_exceeded",
+            limit: 5
+        )
         XCTAssertEqual(
             GroupSettingsSupport.createGroupOutcome(from: error, isCrewMember: true),
             .crewGroupLimitReached(limit: 5)
+        )
+    }
+
+    func testOwnedGroupCountCountsOwnerRoleOnly() {
+        let orgs = [
+            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 0, role: "owner", isActive: true),
+            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false),
+            OrgMembership(id: "c", name: "C", slug: "c", logo: nil, credits: 0, role: "owner", isActive: false),
+        ]
+        XCTAssertEqual(GroupSettingsSupport.ownedGroupCount(in: orgs), 2)
+    }
+
+    func testCanCreateGroupAllowsBelowLimit() {
+        let orgs = (0..<4).map { i in
+            OrgMembership(
+                id: "org-\(i)",
+                name: "G\(i)",
+                slug: "g\(i)",
+                logo: nil,
+                credits: 0,
+                role: "owner",
+                isActive: i == 0
+            )
+        }
+        XCTAssertTrue(GroupSettingsSupport.canCreateGroup(organizations: orgs, isCrewMember: true))
+    }
+
+    func testCanCreateGroupBlocksAtCrewLimit() {
+        let orgs = (0..<5).map { i in
+            OrgMembership(
+                id: "org-\(i)",
+                name: "G\(i)",
+                slug: "g\(i)",
+                logo: nil,
+                credits: 0,
+                role: "owner",
+                isActive: i == 0
+            )
+        }
+        XCTAssertFalse(GroupSettingsSupport.canCreateGroup(organizations: orgs, isCrewMember: true))
+    }
+
+    func testTransferOwnershipErrorMessageForRecipientCapacity() {
+        let error = APIError.server(
+            status: 403,
+            message: "This member already owns the maximum number of groups (5) and cannot take ownership of another.",
+            code: nil,
+            errorCode: "recipient_capacity_exceeded",
+            limit: 5
+        )
+        XCTAssertEqual(
+            GroupSettingsSupport.transferOwnershipErrorMessage(from: error),
+            "This member already owns the maximum number of groups (5) and cannot take ownership of another."
+        )
+    }
+
+    func testCreateGroupErrorMessageForCrewLimit() {
+        XCTAssertEqual(
+            GroupSettingsSupport.createGroupErrorMessage(from: .crewGroupLimitReached(limit: 5)),
+            "You've reached your 5-group limit. Delete a group you own to create another."
         )
     }
 

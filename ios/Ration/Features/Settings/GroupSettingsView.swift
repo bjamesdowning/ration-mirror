@@ -18,6 +18,34 @@ struct GroupSettingsView: View {
 
     private var tierLabel: String { env.session.isCrewMember ? "CREW" : "FREE" }
 
+    private var isCrewMember: Bool {
+        model.session?.isCrewMember ?? env.session.isCrewMember
+    }
+
+    private var canCreateGroup: Bool {
+        guard let session = model.session else { return true }
+        return GroupSettingsSupport.canCreateGroup(
+            organizations: session.organizations,
+            isCrewMember: isCrewMember
+        )
+    }
+
+    private var ownedGroupLimit: Int {
+        GroupSettingsSupport.maxOwnedGroups(isCrewMember: isCrewMember)
+    }
+
+    private var createGroupFooter: String? {
+        guard let session = model.session else { return nil }
+        guard !GroupSettingsSupport.canCreateGroup(
+            organizations: session.organizations,
+            isCrewMember: isCrewMember
+        ) else { return nil }
+        return GroupSettingsSupport.ownedGroupLimitMessage(
+            limit: ownedGroupLimit,
+            isCrewMember: isCrewMember
+        )
+    }
+
     var body: some View {
         Group {
             if model.isLoading, model.session == nil {
@@ -57,9 +85,15 @@ struct GroupSettingsView: View {
             Button("Transfer Ownership") {
                 Task {
                     guard transferConfirmText == "transfer", !selectedTransferMemberId.isEmpty else { return }
-                    _ = await model.transferOwnership(to: selectedTransferMemberId, api: env.api, env: env)
-                    transferConfirmText = ""
-                    selectedTransferMemberId = ""
+                    let succeeded = await model.transferOwnership(
+                        to: selectedTransferMemberId,
+                        api: env.api,
+                        env: env
+                    )
+                    if succeeded {
+                        transferConfirmText = ""
+                        selectedTransferMemberId = ""
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {
@@ -273,7 +307,10 @@ struct GroupSettingsView: View {
 
     @ViewBuilder
     private var createGroupSection: some View {
-        Section("Create group") {
+        Section {
+            if let error = model.createGroupError {
+                ErrorBanner(message: error)
+            }
             TextField("Group name", text: $model.newGroupName)
             Button(model.isCreatingGroup ? "Creating…" : "Create group") {
                 Task {
@@ -285,8 +322,14 @@ struct GroupSettingsView: View {
                     }
                 }
             }
-            .disabled(model.isCreatingGroup)
-            .foregroundStyle(Theme.hyperGreen)
+            .disabled(model.isCreatingGroup || !canCreateGroup)
+            .foregroundStyle(canCreateGroup ? Theme.hyperGreen : Theme.muted)
+        } header: {
+            Text("Create group")
+        } footer: {
+            if let footer = createGroupFooter {
+                Text(footer)
+            }
         }
     }
 
@@ -393,6 +436,9 @@ struct GroupSettingsView: View {
     @ViewBuilder
     private var transferOwnershipSection: some View {
         Section {
+            if let error = model.transferError {
+                ErrorBanner(message: error)
+            }
             Picker("New owner", selection: $selectedTransferMemberId) {
                 Text("Select member").tag("")
                 ForEach(model.nonOwnerMembers) { member in

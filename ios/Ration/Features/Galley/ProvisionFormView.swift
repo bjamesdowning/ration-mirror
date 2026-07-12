@@ -107,7 +107,8 @@ struct ProvisionFormView: View {
     }
 
     private func isCapacityExceeded(_ error: APIError) -> Bool {
-        guard case .server(let status, let message, let code, _, _) = error else { return false }
-        return status == 403 && (code == "capacity_exceeded" || message == "capacity_exceeded")
+        guard let status = error.statusCode, status == 403 else { return false }
+        let code = error.serverErrorCode ?? error.code
+        return code == "capacity_exceeded"
     }
 }

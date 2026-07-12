@@ -182,6 +182,7 @@ Ration/
     ├── Manifest/   # Week navigation, plan-week AI, consume
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
     │               # GroupSettingsView — org switch, members, invite, credits transfer
+    │               # TagsSettingsView — edit name/category/color, merge, delete (with confirm)
     └── Billing/    # Paywall (RevenueCat SDK)
 ```
 

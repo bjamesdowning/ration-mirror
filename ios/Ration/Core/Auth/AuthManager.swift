@@ -39,6 +39,7 @@ final class AuthManager {
     }
     private var accessExpiry: Date?
     private var refreshTask: Task<String, Error>?
+    private var exchangeTask: Task<Void, Error>?
 
     private static let refreshKey = "refresh_token"
     private static let pkceVerifierKey = "pkce_verifier"
@@ -125,7 +126,12 @@ final class AuthManager {
 
     /// Exchange the `ration://auth/callback?code=...` code for tokens, proving
     /// possession of the PKCE verifier saved when the magic link was requested.
+    ///
+    /// Uses a detached task so SwiftUI lifecycle cancellation cannot abort the exchange
+    /// while the user switches between Mail and the app.
     func exchangeCode(_ code: String) async throws {
+        if let task = exchangeTask { return try await task.value }
+
         clearAuthError()
         guard let verifier = Keychain.get(Self.pkceVerifierKey) else {
             throw APIError.server(
@@ -134,20 +140,50 @@ final class AuthManager {
                 code: "missing_pkce_verifier"
             )
         }
-        let pair = try await postToken(body: [
-            "grantType": "authorization_code",
-            "code": code,
-            "codeVerifier": verifier,
-        ])
-        Keychain.delete(Self.pkceVerifierKey)
-        apply(pair)
-        phase = .signedIn
+
+        let baseURL = AppConfig.apiBaseURL
+        let session = self.session
+
+        let task = Task.detached(priority: .userInitiated) { () async throws -> Void in
+            do {
+                let pair = try await Self.postTokenDictionaryDetached(
+                    body: [
+                        "grantType": "authorization_code",
+                        "code": code,
+                        "codeVerifier": verifier,
+                    ],
+                    endpoint: "auth/token",
+                    baseURL: baseURL,
+                    session: session
+                )
+                await MainActor.run { [weak self] in
+                    Keychain.delete(Self.pkceVerifierKey)
+                    self?.apply(pair)
+                    self?.phase = .signedIn
+                    self?.exchangeTask = nil
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.exchangeTask = nil
+                }
+                throw error
+            }
+        }
+        exchangeTask = task
+        do {
+            try await task.value
+        } catch {
+            if error is CancellationError { throw error }
+            throw error
+        }
     }
 
     /// Surface callback/token exchange failures in the signed-out UI instead of
     /// silently ignoring deep links with expired or already-consumed codes.
     func recordAuthError(_ error: Error) {
-        authErrorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        guard phase != .signedIn else { return }
+        guard !AuthHandoffPolicy.isIgnorableHandoffError(error) else { return }
+        authErrorMessage = AuthHandoffPolicy.userFacingMessage(for: error)
         phase = .signedOut
     }
 

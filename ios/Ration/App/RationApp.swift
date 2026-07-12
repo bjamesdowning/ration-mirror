@@ -75,6 +75,7 @@ struct RationApp: App {
                 try await env.auth.exchangeCode(code)
             } catch {
                 handledAuthCode = nil
+                if AuthHandoffPolicy.isIgnorableHandoffError(error) { return }
                 env.auth.recordAuthError(error)
             }
         }

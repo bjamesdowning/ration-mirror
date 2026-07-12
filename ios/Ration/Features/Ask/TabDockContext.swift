@@ -1,32 +1,64 @@
 import SwiftUI
 import Observation
 
+/// Holds the latest dock action builder so pushed factories always render current menu state.
+@MainActor
+final class TabDockActionHandle {
+    private var builder: () -> AnyView = { AnyView(EmptyView()) }
+
+    func update(_ builder: @escaping () -> AnyView) {
+        self.builder = builder
+    }
+
+    func makeView() -> AnyView {
+        builder()
+    }
+}
+
 /// Per-tab action slot for the unified Copilot bottom dock (Hub scan, Galley +, etc.).
 @MainActor
 @Observable
 final class TabDockContext {
     private(set) var revision = 0
-    private var actionFactories: [Int: () -> AnyView] = [:]
+    private(set) var contentEpoch = 0
+    private var actionStacks: [Int: [() -> AnyView]] = [:]
+
+    func pushAction<Content: View>(for tag: Int, @ViewBuilder content: @escaping () -> Content) {
+        actionStacks[tag, default: []].append { AnyView(content()) }
+        revision += 1
+    }
+
+    func popAction(for tag: Int) {
+        guard var stack = actionStacks[tag], !stack.isEmpty else { return }
+        stack.removeLast()
+        if stack.isEmpty {
+            actionStacks.removeValue(forKey: tag)
+        } else {
+            actionStacks[tag] = stack
+        }
+        revision += 1
+    }
 
     func setAction<Content: View>(for tag: Int, @ViewBuilder content: @escaping () -> Content) {
-        // Idempotent — re-registering the same tab on every SwiftUI body pass
-        // would otherwise ping @Observable and re-render the tab shell in a loop.
-        guard actionFactories[tag] == nil else { return }
-        actionFactories[tag] = { AnyView(content()) }
-        revision += 1
+        guard actionStacks[tag]?.isEmpty ?? true else { return }
+        pushAction(for: tag, content: content)
     }
 
     func clearAction(for tag: Int) {
-        guard actionFactories.removeValue(forKey: tag) != nil else { return }
+        guard actionStacks.removeValue(forKey: tag) != nil else { return }
         revision += 1
     }
 
+    func bumpContentEpoch() {
+        contentEpoch += 1
+    }
+
     func action(for tag: Int) -> AnyView? {
-        actionFactories[tag]?()
+        actionStacks[tag]?.last?()
     }
 
     func hasAction(for tag: Int) -> Bool {
-        actionFactories[tag] != nil
+        !(actionStacks[tag]?.isEmpty ?? true)
     }
 }
 
@@ -35,19 +67,30 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
     let tag: Int
     let isActive: Bool
     @ViewBuilder let action: () -> Action
+    @State private var actionHandle = TabDockActionHandle()
+    @State private var isRegistered = false
 
     func body(content: Content) -> some View {
-        content
+        actionHandle.update { AnyView(action()) }
+
+        return content
             .onAppear { sync() }
             .onChange(of: isActive) { _, _ in sync() }
-            .onDisappear { tabDock.clearAction(for: tag) }
+            .onDisappear {
+                if isRegistered {
+                    tabDock.popAction(for: tag)
+                    isRegistered = false
+                }
+            }
     }
 
     private func sync() {
-        if isActive {
-            tabDock.setAction(for: tag, content: action)
-        } else {
-            tabDock.clearAction(for: tag)
+        if isActive && !isRegistered {
+            tabDock.pushAction(for: tag) { actionHandle.makeView() }
+            isRegistered = true
+        } else if !isActive && isRegistered {
+            tabDock.popAction(for: tag)
+            isRegistered = false
         }
     }
 }

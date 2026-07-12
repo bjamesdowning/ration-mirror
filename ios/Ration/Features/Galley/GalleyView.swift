@@ -480,8 +480,10 @@ struct MealDetailView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 72)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .copilotDockScrollMargins()
+        .copilotScrollTracked(tab: scrollContext.activeTab, isActive: true)
         .background(Theme.ceramic)
         .navigationTitle((meal ?? initialMeal).name.capitalized)
         .navigationBarTitleDisplayMode(.inline)
@@ -505,11 +507,8 @@ struct MealDetailView: View {
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            DetailActionFAB(
-                systemImage: "ellipsis.circle.fill",
-                accessibilityLabel: "Meal actions"
-            ) {
+        .tabDockAction(tag: scrollContext.activeTab) {
+            IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Meal actions") {
                 Button { Task { await cook() } } label: {
                     Label("Cook meal", systemImage: "flame")
                 }
@@ -537,6 +536,12 @@ struct MealDetailView: View {
         }
         .onChange(of: desiredServings) { _, _ in
             Task { await loadAvailability() }
+        }
+        .onChange(of: isSelectedForSupply) { _, _ in
+            env.tabDock.bumpContentEpoch()
+        }
+        .onChange(of: isTogglingSupply) { _, _ in
+            env.tabDock.bumpContentEpoch()
         }
         .sheet(isPresented: $showingEdit) {
             MealFormView(mode: .edit(meal ?? initialMeal)) {

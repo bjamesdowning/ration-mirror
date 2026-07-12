@@ -39,6 +39,7 @@ final class CargoDetailViewModel {
 
 struct CargoDetailView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(CopilotScrollContext.self) private var scrollContext
     @Environment(\.dismiss) private var dismiss
     let itemId: String
     @State private var model = CargoDetailViewModel()
@@ -66,6 +67,9 @@ struct CargoDetailView: View {
                     }
                     .padding(16)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .copilotDockScrollMargins()
+                .copilotScrollTracked(tab: scrollContext.activeTab, isActive: true)
             } else {
                 cargoLoadFailureView
             }
@@ -73,18 +77,13 @@ struct CargoDetailView: View {
         .background(Theme.ceramic)
         .navigationTitle(model.item?.name.capitalized ?? "Cargo")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            if model.item != nil {
-                DetailActionFAB(
-                    systemImage: "ellipsis.circle.fill",
-                    accessibilityLabel: "Cargo actions"
-                ) {
-                    Button { showingEdit = true } label: {
-                        Label("Edit", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) { showingDeleteConfirm = true } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+        .tabDockAction(tag: scrollContext.activeTab, isActive: model.item != nil) {
+            IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
+                Button { showingEdit = true } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) { showingDeleteConfirm = true } label: {
+                    Label("Delete", systemImage: "trash")
                 }
             }
         }

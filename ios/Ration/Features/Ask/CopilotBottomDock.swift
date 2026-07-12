@@ -50,6 +50,7 @@ struct CopilotBottomDock: View {
 
     @ViewBuilder
     private var dockContent: some View {
+        let _ = tabDock.contentEpoch
         if scrollContext.isExpanded {
             VStack(alignment: .trailing, spacing: CopilotDockLayout.dockRowSpacing) {
                 if let action = tabDock.action(for: selectedTab) {

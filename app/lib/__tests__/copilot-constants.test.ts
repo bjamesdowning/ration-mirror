@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { creditsForCopilotTokens } from "../copilot/constants";
+import {
+	COPILOT_DISPLAY_BRACKETS,
+	creditsForCopilotTokens,
+} from "../copilot/constants";
+
+describe("COPILOT_DISPLAY_BRACKETS", () => {
+	it("excludes tiers above the session cap", () => {
+		expect(COPILOT_DISPLAY_BRACKETS).toHaveLength(3);
+		expect(
+			COPILOT_DISPLAY_BRACKETS.every((bracket) => bracket.maxTokens !== null),
+		).toBe(true);
+	});
+});
 
 describe("creditsForCopilotTokens", () => {
 	it.each([

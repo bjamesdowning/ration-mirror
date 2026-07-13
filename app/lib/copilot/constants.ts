@@ -21,6 +21,12 @@ export const COPILOT_COST_BRACKETS = [
 	{ maxTokens: null, credits: 4 },
 ] as const;
 
+/** User-facing bracket table — excludes unreachable tiers above the session cap. */
+export const COPILOT_DISPLAY_BRACKETS = COPILOT_COST_BRACKETS.filter(
+	(bracket): bracket is (typeof COPILOT_COST_BRACKETS)[number] =>
+		bracket.maxTokens !== null,
+);
+
 export type CopilotCostBracket = (typeof COPILOT_COST_BRACKETS)[number];
 
 export function creditsForCopilotTokens(totalTokens: number): number {

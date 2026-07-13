@@ -7,7 +7,7 @@ import {
 import type { CopilotAuthSource } from "./auth.server";
 import {
 	COPILOT_CONVERSATION_FLOOR_COST,
-	COPILOT_COST_BRACKETS,
+	COPILOT_DISPLAY_BRACKETS,
 	COPILOT_SESSION_IDLE_MS,
 	CREW_COPILOT_DAILY_CONVERSATIONS,
 	creditsForCopilotTokens,
@@ -165,7 +165,7 @@ export async function getCopilotStatus(
 		autoDeductConsent,
 		conversationFloorCost: COPILOT_CONVERSATION_FLOOR_COST,
 		sessionIdleMs: COPILOT_SESSION_IDLE_MS,
-		brackets: COPILOT_COST_BRACKETS,
+		brackets: COPILOT_DISPLAY_BRACKETS,
 		onboardingBriefingEligible: onboardingBriefing.eligible,
 		onboardingBriefingConsumed: onboardingBriefing.consumed,
 	};

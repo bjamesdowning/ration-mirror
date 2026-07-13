@@ -16,6 +16,13 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("Do not narrate read-only lookups or search_docs");
 		expect(prompt).toContain("created, updated, deleted, imported, consumed");
 	});
+
+	it("includes readable output formatting guidance", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain("Output format:");
+		expect(prompt).toContain("bullet or numbered lists");
+		expect(prompt).toContain("Avoid dense walls of text");
+	});
 });
 
 describe("buildAgentTemporalContext", () => {

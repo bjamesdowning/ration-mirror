@@ -969,11 +969,15 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 											<li
 												key={`${bracket.maxTokens ?? "max"}-${bracket.credits}`}
 											>
-												Up to {bracket.maxTokens?.toLocaleString() ?? "∞"}{" "}
-												tokens → {bracket.credits} cr
+												Up to {bracket.maxTokens?.toLocaleString()} tokens →{" "}
+												{bracket.credits} cr
 											</li>
 										))}
 									</ul>
+									<p className="mt-2 text-[10px]">
+										Each conversation is capped at 60,000 tokens. Start a new
+										chat to reset the meter.
+									</p>
 								</div>
 							) : null}
 						</div>

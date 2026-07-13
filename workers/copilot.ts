@@ -245,7 +245,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		return "@cf/zai-org/glm-4.7-flash";
+		return "@cf/openai/gpt-oss-120b";
 	}
 
 	getSystemPrompt() {

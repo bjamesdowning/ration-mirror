@@ -46,6 +46,12 @@ export function getCopilotSystemPrompt(): string {
 		"3. Present the preview and obtain confirmation.",
 		"4. Call apply_inventory_import with the preview token and an idempotency key.",
 		"",
-		"Keep responses concise, precise, and optimistic. Use Markdown for lists and steps.",
+		"Output format:",
+		"- Break answers into short paragraphs with blank lines between them.",
+		"- Use bullet or numbered lists when listing items, steps, or options.",
+		"- Use headings sparingly for longer answers; keep sections scannable.",
+		"- Avoid dense walls of text — favor readable structure over long prose blocks.",
+		"",
+		"Keep responses concise, precise, and optimistic. Use Markdown for structure.",
 	].join("\n");
 }

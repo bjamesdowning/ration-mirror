@@ -1733,8 +1733,8 @@ function HelpSection() {
 								<p className="text-sm text-muted">
 									Copilot charges per conversation based on total length: up to
 									12k tokens (1 credit), 30k (2 credits), or 60k (3 credits).
-									Tool calls and long answers increase token use. Start a new
-									chat to reset the meter.
+									Each chat is capped at 60,000 tokens — start a new chat to
+									continue. Tool calls and long answers increase token use.
 								</p>
 							</div>
 						</>

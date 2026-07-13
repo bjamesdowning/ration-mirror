@@ -11,8 +11,14 @@ import {
 	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { useCallback, useEffect, useState } from "react";
-import { data, Link, useFetcher } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	data,
+	isRouteErrorResponse,
+	Link,
+	useFetcher,
+	useRevalidator,
+} from "react-router";
 
 import * as schema from "../db/schema";
 import {
@@ -26,317 +32,335 @@ import {
 import {
 	type AdminUserRow,
 	type AdminUsersListResult,
+	DEFAULT_ADMIN_USERS_LIMIT,
+	DEFAULT_ADMIN_USERS_ORDER,
+	DEFAULT_ADMIN_USERS_SORT,
 	getLoggedInUsers,
+	listAdminUsers,
 } from "../lib/admin-users.server";
 import { requireAdmin } from "../lib/auth.server";
 import { getExpiringCargoBounds } from "../lib/cargo-utils";
-import { handleApiError } from "../lib/error-handler";
+import { handleApiError, runRouteLoader } from "../lib/error-handler";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
 	const adminUser = await requireAdmin(args.context, args.request);
 
-	const env = args.context.cloudflare.env;
-	const db = drizzle(env.DB, { schema });
-	const now = new Date();
-	const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-	const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-	const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-	const { startOfToday: cargoExpiringFrom, endOfWindow: cargoExpiringThrough } =
-		getExpiringCargoBounds(7, now);
+	return runRouteLoader(async () => {
+		const env = args.context.cloudflare.env;
+		const db = drizzle(env.DB, { schema });
+		const now = new Date();
+		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+		const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+		const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+		const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+		const {
+			startOfToday: cargoExpiringFrom,
+			endOfWindow: cargoExpiringThrough,
+		} = getExpiringCargoBounds(7, now);
 
-	const [
-		// Overview totals
-		userCount,
-		inventoryCount,
-		burnedResult,
-		crewMemberCountResult,
-		totalCreditsResult,
-		// Activity / sessions
-		activeUsersResult,
-		activeSessionsResult,
-		newSignups7dResult,
-		newSignups30dResult,
-		// 24h deltas
-		newSignups24hResult,
-		newCargo24hResult,
-		newMeals24hResult,
-		creditsAdded24hResult,
-		creditsConsumed24hResult,
-		aiCalls24hResult,
-		crewConversions24hResult,
-		// Feature usage totals
-		groupCount,
-		mealCount,
-		activeMealCount,
-		groceryListCount,
-		scanCountResult,
-		mealPlanCount,
-		// Platform health
-		pendingInvitesResult,
-		expiringItemsResult,
-		verifiedUsersResult,
-		// Heavy hitters: top 5 orgs by cargo count
-		topOrgsByCargoResult,
-		// Heavy hitters: top 5 orgs by meal count
-		topOrgsByMealResult,
-		// Logged in now + usage metrics
-		loggedInResult,
-		dauWauMau,
-		activationRate,
-		crewHealth,
-		orgMedians,
-		platformSplit,
-		aiBurnByFeature,
-	] = await Promise.all([
-		// ── Overview totals ──────────────────────────────────────────────────
-		db.$count(schema.user),
-		db.$count(schema.cargo),
-		db
-			.select({
-				burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
-			})
-			.from(schema.ledger)
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(eq(schema.user.tier, "crew_member"))
-			.get(),
-		db
-			.select({
-				total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
-			})
-			.from(schema.organization)
-			.get(),
+		const [
+			// Overview totals
+			userCount,
+			inventoryCount,
+			burnedResult,
+			crewMemberCountResult,
+			totalCreditsResult,
+			// Activity / sessions
+			activeUsersResult,
+			activeSessionsResult,
+			newSignups7dResult,
+			newSignups30dResult,
+			// 24h deltas
+			newSignups24hResult,
+			newCargo24hResult,
+			newMeals24hResult,
+			creditsAdded24hResult,
+			creditsConsumed24hResult,
+			aiCalls24hResult,
+			crewConversions24hResult,
+			// Feature usage totals
+			groupCount,
+			mealCount,
+			activeMealCount,
+			groceryListCount,
+			scanCountResult,
+			mealPlanCount,
+			// Platform health
+			pendingInvitesResult,
+			expiringItemsResult,
+			verifiedUsersResult,
+			// Heavy hitters: top 5 orgs by cargo count
+			topOrgsByCargoResult,
+			// Heavy hitters: top 5 orgs by meal count
+			topOrgsByMealResult,
+			// Logged in now + usage metrics
+			loggedInResult,
+			dauWauMau,
+			activationRate,
+			crewHealth,
+			orgMedians,
+			platformSplit,
+			aiBurnByFeature,
+			initialUsers,
+		] = await Promise.all([
+			// ── Overview totals ──────────────────────────────────────────────────
+			db.$count(schema.user),
+			db.$count(schema.cargo),
+			db
+				.select({
+					burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
+				})
+				.from(schema.ledger)
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(eq(schema.user.tier, "crew_member"))
+				.get(),
+			db
+				.select({
+					total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
+				})
+				.from(schema.organization)
+				.get(),
 
-		// ── Activity / sessions ──────────────────────────────────────────────
-		db
-			.select({
-				count: sql<number>`count(distinct ${schema.session.userId})`,
-			})
-			.from(schema.session)
-			.where(gt(schema.session.expiresAt, now))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.session)
-			.where(gt(schema.session.expiresAt, now))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(gt(schema.user.createdAt, sevenDaysAgo))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(gt(schema.user.createdAt, thirtyDaysAgo))
-			.get(),
+			// ── Activity / sessions ──────────────────────────────────────────────
+			db
+				.select({
+					count: sql<number>`count(distinct ${schema.session.userId})`,
+				})
+				.from(schema.session)
+				.where(gt(schema.session.expiresAt, now))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.session)
+				.where(gt(schema.session.expiresAt, now))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(gt(schema.user.createdAt, sevenDaysAgo))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(gt(schema.user.createdAt, thirtyDaysAgo))
+				.get(),
 
-		// ── 24h deltas ───────────────────────────────────────────────────────
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(gt(schema.user.createdAt, oneDayAgo))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.cargo)
-			.where(gt(schema.cargo.createdAt, oneDayAgo))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.meal)
-			.where(gt(schema.meal.createdAt, oneDayAgo))
-			.get(),
-		db
-			.select({
-				total: sql<number>`coalesce(sum(${schema.ledger.amount}), 0)`,
-			})
-			.from(schema.ledger)
-			.where(
-				and(
-					gt(schema.ledger.amount, 0),
-					gt(schema.ledger.createdAt, oneDayAgo),
-				),
-			)
-			.get(),
-		db
-			.select({
-				total: sql<number>`coalesce(sum(abs(${schema.ledger.amount})), 0)`,
-			})
-			.from(schema.ledger)
-			.where(
-				and(
-					lt(schema.ledger.amount, 0),
-					gt(schema.ledger.createdAt, oneDayAgo),
-				),
-			)
-			.get(),
-		// AI calls last 24h: any ledger debit that isn't a refund
-		db
-			.select({ count: count() })
-			.from(schema.ledger)
-			.where(
-				and(
-					lt(schema.ledger.amount, 0),
-					gt(schema.ledger.createdAt, oneDayAgo),
-				),
-			)
-			.get(),
-		// Crew conversions 24h: users who first subscribed to crew in the last 24h
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(
-				and(
-					eq(schema.user.tier, "crew_member"),
-					gt(schema.user.crewSubscribedAt, oneDayAgo),
-				),
-			)
-			.get(),
+			// ── 24h deltas ───────────────────────────────────────────────────────
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(gt(schema.user.createdAt, oneDayAgo))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.cargo)
+				.where(gt(schema.cargo.createdAt, oneDayAgo))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.meal)
+				.where(gt(schema.meal.createdAt, oneDayAgo))
+				.get(),
+			db
+				.select({
+					total: sql<number>`coalesce(sum(${schema.ledger.amount}), 0)`,
+				})
+				.from(schema.ledger)
+				.where(
+					and(
+						gt(schema.ledger.amount, 0),
+						gt(schema.ledger.createdAt, oneDayAgo),
+					),
+				)
+				.get(),
+			db
+				.select({
+					total: sql<number>`coalesce(sum(abs(${schema.ledger.amount})), 0)`,
+				})
+				.from(schema.ledger)
+				.where(
+					and(
+						lt(schema.ledger.amount, 0),
+						gt(schema.ledger.createdAt, oneDayAgo),
+					),
+				)
+				.get(),
+			// AI calls last 24h: any ledger debit that isn't a refund
+			db
+				.select({ count: count() })
+				.from(schema.ledger)
+				.where(
+					and(
+						lt(schema.ledger.amount, 0),
+						gt(schema.ledger.createdAt, oneDayAgo),
+					),
+				)
+				.get(),
+			// Crew conversions 24h: users who first subscribed to crew in the last 24h
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(
+					and(
+						eq(schema.user.tier, "crew_member"),
+						gt(schema.user.crewSubscribedAt, oneDayAgo),
+					),
+				)
+				.get(),
 
-		// ── Feature usage totals ─────────────────────────────────────────────
-		db.$count(schema.organization),
-		db.$count(schema.meal),
-		db.$count(schema.activeMealSelection),
-		db.$count(schema.supplyList),
-		db
-			.select({ count: count() })
-			.from(schema.ledger)
-			.where(eq(schema.ledger.reason, "scan"))
-			.get(),
-		db.$count(schema.mealPlan),
+			// ── Feature usage totals ─────────────────────────────────────────────
+			db.$count(schema.organization),
+			db.$count(schema.meal),
+			db.$count(schema.activeMealSelection),
+			db.$count(schema.supplyList),
+			db
+				.select({ count: count() })
+				.from(schema.ledger)
+				.where(eq(schema.ledger.reason, "scan"))
+				.get(),
+			db.$count(schema.mealPlan),
 
-		// ── Platform health ──────────────────────────────────────────────────
-		db
-			.select({ count: count() })
-			.from(schema.invitation)
-			.where(eq(schema.invitation.status, "pending"))
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.cargo)
-			.where(
-				and(
-					gte(schema.cargo.expiresAt, cargoExpiringFrom),
-					lte(schema.cargo.expiresAt, cargoExpiringThrough),
-				),
-			)
-			.get(),
-		db
-			.select({ count: count() })
-			.from(schema.user)
-			.where(eq(schema.user.emailVerified, true))
-			.get(),
+			// ── Platform health ──────────────────────────────────────────────────
+			db
+				.select({ count: count() })
+				.from(schema.invitation)
+				.where(eq(schema.invitation.status, "pending"))
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.cargo)
+				.where(
+					and(
+						gte(schema.cargo.expiresAt, cargoExpiringFrom),
+						lte(schema.cargo.expiresAt, cargoExpiringThrough),
+					),
+				)
+				.get(),
+			db
+				.select({ count: count() })
+				.from(schema.user)
+				.where(eq(schema.user.emailVerified, true))
+				.get(),
 
-		// ── Heavy hitters: top 5 orgs by cargo ──────────────────────────────
-		db
-			.select({
-				organizationId: schema.cargo.organizationId,
-				itemCount: count(),
-			})
-			.from(schema.cargo)
-			.groupBy(schema.cargo.organizationId)
-			.orderBy(desc(count()))
-			.limit(5),
+			// ── Heavy hitters: top 5 orgs by cargo ──────────────────────────────
+			db
+				.select({
+					organizationId: schema.cargo.organizationId,
+					itemCount: count(),
+				})
+				.from(schema.cargo)
+				.groupBy(schema.cargo.organizationId)
+				.orderBy(desc(count()))
+				.limit(5),
 
-		// ── Heavy hitters: top 5 orgs by meals ──────────────────────────────
-		db
-			.select({
-				organizationId: schema.meal.organizationId,
-				mealCount: count(),
-			})
-			.from(schema.meal)
-			.groupBy(schema.meal.organizationId)
-			.orderBy(desc(count()))
-			.limit(5),
+			// ── Heavy hitters: top 5 orgs by meals ──────────────────────────────
+			db
+				.select({
+					organizationId: schema.meal.organizationId,
+					mealCount: count(),
+				})
+				.from(schema.meal)
+				.groupBy(schema.meal.organizationId)
+				.orderBy(desc(count()))
+				.limit(5),
 
-		getLoggedInUsers(db, now, 15),
-		getDauWauMau(db, now),
-		getActivationRate(db),
-		getCrewHealth(db, now, sevenDaysFromNow),
-		getOrgEngagementMedians(db),
-		getPlatformSplit(db, now),
-		getAiBurnByFeature(db, oneDayAgo, sevenDaysAgo),
-	]);
+			getLoggedInUsers(db, now, 15),
+			getDauWauMau(db, now),
+			getActivationRate(db),
+			getCrewHealth(db, now, sevenDaysFromNow),
+			getOrgEngagementMedians(db),
+			getPlatformSplit(db, now),
+			getAiBurnByFeature(db, oneDayAgo, sevenDaysAgo),
+			listAdminUsers(db, {
+				page: 1,
+				limit: DEFAULT_ADMIN_USERS_LIMIT,
+				sort: DEFAULT_ADMIN_USERS_SORT,
+				order: DEFAULT_ADMIN_USERS_ORDER,
+			}),
+		]);
 
-	// Resolve org names for heavy hitters
-	const heavyHitterOrgIds = Array.from(
-		new Set([
-			...topOrgsByCargoResult.map((r) => r.organizationId),
-			...topOrgsByMealResult.map((r) => r.organizationId),
-		]),
-	);
+		// Resolve org names for heavy hitters
+		const heavyHitterOrgIds = Array.from(
+			new Set([
+				...topOrgsByCargoResult.map((r) => r.organizationId),
+				...topOrgsByMealResult.map((r) => r.organizationId),
+			]),
+		);
 
-	const orgNames: Record<string, string> = {};
-	if (heavyHitterOrgIds.length > 0) {
-		const orgs = await db
-			.select({ id: schema.organization.id, name: schema.organization.name })
-			.from(schema.organization)
-			.where(inArray(schema.organization.id, heavyHitterOrgIds))
-			.limit(10);
-		for (const org of orgs) {
-			orgNames[org.id] = org.name;
+		const orgNames: Record<string, string> = {};
+		if (heavyHitterOrgIds.length > 0) {
+			const orgs = await db
+				.select({ id: schema.organization.id, name: schema.organization.name })
+				.from(schema.organization)
+				.where(inArray(schema.organization.id, heavyHitterOrgIds))
+				.limit(10);
+			for (const org of orgs) {
+				orgNames[org.id] = org.name;
+			}
 		}
-	}
 
-	return {
-		currentUserId: adminUser.id,
-		// Overview
-		userCount,
-		inventoryCount,
-		burnedCredits: burnedResult?.burned || 0,
-		crewMemberCount: crewMemberCountResult?.count ?? 0,
-		totalCredits: totalCreditsResult?.total ?? 0,
-		// Activity
-		activeUsers: activeUsersResult?.count ?? 0,
-		activeSessions: activeSessionsResult?.count ?? 0,
-		newSignups7d: newSignups7dResult?.count ?? 0,
-		newSignups30d: newSignups30dResult?.count ?? 0,
-		// 24h deltas
-		newSignups24h: newSignups24hResult?.count ?? 0,
-		newCargo24h: newCargo24hResult?.count ?? 0,
-		newMeals24h: newMeals24hResult?.count ?? 0,
-		creditsAdded24h: creditsAdded24hResult?.total ?? 0,
-		creditsConsumed24h: creditsConsumed24hResult?.total ?? 0,
-		aiCalls24h: aiCalls24hResult?.count ?? 0,
-		crewConversions24h: crewConversions24hResult?.count ?? 0,
-		// Feature usage
-		groupCount,
-		mealCount,
-		activeMealCount,
-		groceryListCount,
-		scanCount: scanCountResult?.count ?? 0,
-		mealPlanCount,
-		// Platform health
-		pendingInvites: pendingInvitesResult?.count ?? 0,
-		expiringItems: expiringItemsResult?.count ?? 0,
-		verifiedEmailRate:
-			userCount > 0 ? ((verifiedUsersResult?.count ?? 0) / userCount) * 100 : 0,
-		// Heavy hitters
-		topOrgsByCargo: topOrgsByCargoResult.map((r) => ({
-			orgId: r.organizationId,
-			orgName: orgNames[r.organizationId] ?? r.organizationId,
-			count: r.itemCount,
-		})),
-		topOrgsByMeal: topOrgsByMealResult.map((r) => ({
-			orgId: r.organizationId,
-			orgName: orgNames[r.organizationId] ?? r.organizationId,
-			count: r.mealCount,
-		})),
-		loggedInUsers: loggedInResult.users,
-		totalLoggedIn: loggedInResult.totalLoggedIn,
-		dauWauMau,
-		activationRate,
-		crewHealth,
-		orgMedians,
-		platformSplit,
-		aiBurnByFeature,
-	};
+		return {
+			currentUserId: adminUser.id,
+			// Overview
+			userCount,
+			inventoryCount,
+			burnedCredits: burnedResult?.burned || 0,
+			crewMemberCount: crewMemberCountResult?.count ?? 0,
+			totalCredits: totalCreditsResult?.total ?? 0,
+			// Activity
+			activeUsers: activeUsersResult?.count ?? 0,
+			activeSessions: activeSessionsResult?.count ?? 0,
+			newSignups7d: newSignups7dResult?.count ?? 0,
+			newSignups30d: newSignups30dResult?.count ?? 0,
+			// 24h deltas
+			newSignups24h: newSignups24hResult?.count ?? 0,
+			newCargo24h: newCargo24hResult?.count ?? 0,
+			newMeals24h: newMeals24hResult?.count ?? 0,
+			creditsAdded24h: creditsAdded24hResult?.total ?? 0,
+			creditsConsumed24h: creditsConsumed24hResult?.total ?? 0,
+			aiCalls24h: aiCalls24hResult?.count ?? 0,
+			crewConversions24h: crewConversions24hResult?.count ?? 0,
+			// Feature usage
+			groupCount,
+			mealCount,
+			activeMealCount,
+			groceryListCount,
+			scanCount: scanCountResult?.count ?? 0,
+			mealPlanCount,
+			// Platform health
+			pendingInvites: pendingInvitesResult?.count ?? 0,
+			expiringItems: expiringItemsResult?.count ?? 0,
+			verifiedEmailRate:
+				userCount > 0
+					? ((verifiedUsersResult?.count ?? 0) / userCount) * 100
+					: 0,
+			// Heavy hitters
+			topOrgsByCargo: topOrgsByCargoResult.map((r) => ({
+				orgId: r.organizationId,
+				orgName: orgNames[r.organizationId] ?? r.organizationId,
+				count: r.itemCount,
+			})),
+			topOrgsByMeal: topOrgsByMealResult.map((r) => ({
+				orgId: r.organizationId,
+				orgName: orgNames[r.organizationId] ?? r.organizationId,
+				count: r.mealCount,
+			})),
+			loggedInUsers: loggedInResult.users,
+			totalLoggedIn: loggedInResult.totalLoggedIn,
+			dauWauMau,
+			activationRate,
+			crewHealth,
+			orgMedians,
+			platformSplit,
+			aiBurnByFeature,
+			initialUsers,
+		};
+	});
 }
 
 export async function action(args: Route.ActionArgs) {
@@ -592,22 +616,90 @@ function EmailRevealCell({
 
 type AdminUserSort = "createdAt" | "lastLogin" | "lastActive" | "name";
 
-function buildAdminUsersUrl(opts: {
+interface UsersQueryState {
 	q: string;
 	page: number;
 	sort: AdminUserSort;
 	order: "asc" | "desc";
-}): string {
+}
+
+type UsersFetcherData =
+	| AdminUsersListResult
+	| { error: string; retryAfter?: number; resetAt?: number };
+
+const INITIAL_USERS_QUERY: UsersQueryState = {
+	q: "",
+	page: 1,
+	sort: DEFAULT_ADMIN_USERS_SORT,
+	order: DEFAULT_ADMIN_USERS_ORDER,
+};
+
+function isUsersListResult(
+	data: UsersFetcherData,
+): data is AdminUsersListResult {
+	return data !== null && typeof data === "object" && "users" in data;
+}
+
+function isInitialUsersQuery(query: UsersQueryState): boolean {
+	return (
+		query.q === INITIAL_USERS_QUERY.q &&
+		query.page === INITIAL_USERS_QUERY.page &&
+		query.sort === INITIAL_USERS_QUERY.sort &&
+		query.order === INITIAL_USERS_QUERY.order
+	);
+}
+
+function buildAdminUsersUrl(query: UsersQueryState): string {
 	const params = new URLSearchParams({
-		page: String(opts.page),
-		limit: "50",
-		sort: opts.sort,
-		order: opts.order,
+		page: String(query.page),
+		limit: String(DEFAULT_ADMIN_USERS_LIMIT),
+		sort: query.sort,
+		order: query.order,
 	});
-	if (opts.q) {
-		params.set("q", opts.q);
+	if (query.q) {
+		params.set("q", query.q);
 	}
 	return `/api/admin/users?${params.toString()}`;
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+	let message = "Admin metrics could not be loaded.";
+	if (isRouteErrorResponse(error)) {
+		const loaderMessage =
+			typeof error.data === "object" &&
+			error.data !== null &&
+			"error" in error.data &&
+			typeof (error.data as { error?: unknown }).error === "string"
+				? (error.data as { error: string }).error
+				: null;
+		message = loaderMessage ?? error.statusText ?? message;
+	} else if (error instanceof Error) {
+		message = error.message;
+	}
+
+	return (
+		<div className="min-h-screen bg-ceramic text-carbon flex flex-col items-center justify-center p-6">
+			<h1 className="text-display text-2xl text-carbon mb-2">
+				Admin Dashboard Unavailable
+			</h1>
+			<p className="text-sm text-muted mb-6 max-w-md text-center">{message}</p>
+			<div className="flex items-center gap-4">
+				<Link
+					to="/hub"
+					className="inline-flex items-center gap-2 px-4 py-2 btn-secondary rounded-lg font-medium"
+				>
+					Back to Dashboard
+				</Link>
+				<button
+					type="button"
+					onClick={() => window.location.reload()}
+					className="px-4 py-2 bg-hyper-green/10 text-hyper-green rounded-lg font-medium text-sm hover:bg-hyper-green/20 transition-colors"
+				>
+					Retry
+				</button>
+			</div>
+		</div>
+	);
 }
 
 export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
@@ -648,15 +740,20 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		orgMedians,
 		platformSplit,
 		aiBurnByFeature,
+		initialUsers,
 	} = loaderData;
 
-	const usersFetcher = useFetcher<AdminUsersListResult>();
+	const usersFetcher = useFetcher<UsersFetcherData>();
 	const toggleFetcher = useFetcher();
+	const revalidator = useRevalidator();
+	const pendingToggleUserIdRef = useRef<string | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [debouncedQuery, setDebouncedQuery] = useState("");
-	const [page, setPage] = useState(1);
-	const [sort, setSort] = useState<AdminUserSort>("lastLogin");
-	const [order, setOrder] = useState<"asc" | "desc">("desc");
+	const [usersQuery, setUsersQuery] =
+		useState<UsersQueryState>(INITIAL_USERS_QUERY);
+	const [usersData, setUsersData] =
+		useState<AdminUsersListResult>(initialUsers);
+	const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
+	const [rateLimitRetryAt, setRateLimitRetryAt] = useState<number | null>(null);
 	const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
 	const [revealedEmailIds, setRevealedEmailIds] = useState<Set<string>>(
 		new Set(),
@@ -673,55 +770,90 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		});
 	}, []);
 
-	const loadUsers = useCallback(() => {
-		usersFetcher.load(
-			buildAdminUsersUrl({
-				q: debouncedQuery,
-				page,
-				sort,
-				order,
-			}),
-		);
-	}, [usersFetcher, debouncedQuery, page, sort, order]);
+	const needsClientFetch = useMemo(
+		() => !isInitialUsersQuery(usersQuery),
+		[usersQuery],
+	);
+
+	const loadUsers = useCallback(
+		(query: UsersQueryState) => {
+			usersFetcher.load(buildAdminUsersUrl(query));
+		},
+		[usersFetcher],
+	);
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
-			setDebouncedQuery(searchQuery.trim());
-		}, 300);
+			const trimmed = searchQuery.trim();
+			setUsersQuery((prev) => {
+				if (prev.q === trimmed) return prev;
+				return { ...prev, q: trimmed, page: 1 };
+			});
+		}, 600);
 		return () => clearTimeout(timer);
 	}, [searchQuery]);
 
-	// Reset pagination when search or sort changes
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset page when filters change
 	useEffect(() => {
-		setPage(1);
-	}, [debouncedQuery, sort, order]);
+		if (!needsClientFetch) {
+			setUsersData(initialUsers);
+			setRateLimitMessage(null);
+			setRateLimitRetryAt(null);
+			return;
+		}
+
+		loadUsers(usersQuery);
+	}, [needsClientFetch, usersQuery, loadUsers, initialUsers]);
 
 	useEffect(() => {
-		loadUsers();
-	}, [loadUsers]);
+		if (usersFetcher.state !== "idle" || !usersFetcher.data) return;
 
-	const users = usersFetcher.data?.users ?? [];
-	const usersTotal = usersFetcher.data?.total ?? 0;
-	const usersTotalPages = usersFetcher.data?.totalPages ?? 0;
-	const isLoadingUsers = usersFetcher.state === "loading";
+		if (isUsersListResult(usersFetcher.data)) {
+			setUsersData(usersFetcher.data);
+			setRateLimitMessage(null);
+			setRateLimitRetryAt(null);
+			return;
+		}
 
-	const handleSort = useCallback(
-		(column: AdminUserSort) => {
-			if (sort === column) {
-				setOrder((prev) => (prev === "desc" ? "asc" : "desc"));
-			} else {
-				setSort(column);
-				setOrder("desc");
+		if ("error" in usersFetcher.data) {
+			setRateLimitMessage(usersFetcher.data.error);
+			if (usersFetcher.data.retryAfter) {
+				setRateLimitRetryAt(Date.now() + usersFetcher.data.retryAfter * 1000);
 			}
-		},
-		[sort],
-	);
+		}
+	}, [usersFetcher.state, usersFetcher.data]);
+
+	useEffect(() => {
+		if (!rateLimitRetryAt) return;
+
+		const delayMs = Math.max(0, rateLimitRetryAt - Date.now());
+		const timer = setTimeout(() => {
+			loadUsers(usersQuery);
+		}, delayMs);
+
+		return () => clearTimeout(timer);
+	}, [rateLimitRetryAt, usersQuery, loadUsers]);
+
+	const handleSort = useCallback((column: AdminUserSort) => {
+		setUsersQuery((prev) => {
+			if (prev.sort === column) {
+				return {
+					...prev,
+					order: prev.order === "desc" ? "asc" : "desc",
+				};
+			}
+			return { ...prev, sort: column, order: "desc", page: 1 };
+		});
+	}, []);
+
+	const handlePageChange = useCallback((nextPage: number) => {
+		setUsersQuery((prev) => ({ ...prev, page: nextPage }));
+	}, []);
 
 	const handleToggleClick = useCallback(
 		(user: AdminUserRow) => {
 			if (user.id === currentUserId) return;
 			if (confirmingUserId === user.id) {
+				pendingToggleUserIdRef.current = user.id;
 				toggleFetcher.submit(
 					{ intent: "toggle-admin", userId: user.id },
 					{ method: "POST" },
@@ -740,15 +872,48 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 
 	useEffect(() => {
 		if (
-			toggleFetcher.state === "idle" &&
-			(toggleFetcher.data as { success?: boolean } | undefined)?.success
+			toggleFetcher.state !== "idle" ||
+			!(toggleFetcher.data as { success?: boolean } | undefined)?.success
 		) {
-			loadUsers();
+			return;
 		}
-	}, [toggleFetcher.state, toggleFetcher.data, loadUsers]);
 
-	const pageStart = usersTotal === 0 ? 0 : (page - 1) * 50 + 1;
-	const pageEnd = Math.min(page * 50, usersTotal);
+		const toggledUserId = pendingToggleUserIdRef.current;
+		if (toggledUserId) {
+			setUsersData((prev) => ({
+				...prev,
+				users: prev.users.map((user) =>
+					user.id === toggledUserId
+						? { ...user, isAdmin: !user.isAdmin }
+						: user,
+				),
+			}));
+			pendingToggleUserIdRef.current = null;
+		}
+
+		revalidator.revalidate();
+		if (needsClientFetch) {
+			loadUsers(usersQuery);
+		}
+	}, [
+		toggleFetcher.state,
+		toggleFetcher.data,
+		usersQuery,
+		loadUsers,
+		needsClientFetch,
+		revalidator,
+	]);
+
+	const users = usersData.users;
+	const usersTotal = usersData.total;
+	const usersTotalPages = usersData.totalPages;
+	const { page, sort, order } = usersQuery;
+	const isLoadingUsers = usersFetcher.state === "loading";
+	const isRateLimited = rateLimitMessage !== null;
+
+	const pageStart =
+		usersTotal === 0 ? 0 : (page - 1) * DEFAULT_ADMIN_USERS_LIMIT + 1;
+	const pageEnd = Math.min(page * DEFAULT_ADMIN_USERS_LIMIT, usersTotal);
 
 	const webPerMobileUser =
 		platformSplit.distinctMobileUsers > 0
@@ -1238,9 +1403,23 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 							placeholder="Search by name or email..."
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
-							className="w-full px-4 py-3 rounded-lg border border-carbon/10 bg-ceramic text-carbon placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50 mb-6"
+							disabled={isRateLimited}
+							className="w-full px-4 py-3 rounded-lg border border-carbon/10 bg-ceramic text-carbon placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-hyper-green/50 mb-6 disabled:opacity-50"
 							aria-label="Search users"
 						/>
+						{rateLimitMessage && (
+							<div
+								role="alert"
+								className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+							>
+								{rateLimitMessage}
+								{rateLimitRetryAt && (
+									<span className="block text-xs text-muted mt-1">
+										Retrying automatically…
+									</span>
+								)}
+							</div>
+						)}
 						{isLoadingUsers && (
 							<div className="text-sm text-muted mb-4">Loading users...</div>
 						)}
@@ -1252,7 +1431,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											<button
 												type="button"
 												onClick={() => handleSort("name")}
-												className="hover:text-carbon transition-colors"
+												disabled={isRateLimited}
+												className="hover:text-carbon transition-colors disabled:opacity-50"
 											>
 												Name{" "}
 												{sort === "name" ? (order === "desc" ? "↓" : "↑") : ""}
@@ -1264,7 +1444,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											<button
 												type="button"
 												onClick={() => handleSort("lastLogin")}
-												className="hover:text-carbon transition-colors"
+												disabled={isRateLimited}
+												className="hover:text-carbon transition-colors disabled:opacity-50"
 											>
 												Last Login{" "}
 												{sort === "lastLogin"
@@ -1278,7 +1459,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											<button
 												type="button"
 												onClick={() => handleSort("lastActive")}
-												className="hover:text-carbon transition-colors"
+												disabled={isRateLimited}
+												className="hover:text-carbon transition-colors disabled:opacity-50"
 											>
 												Last Active{" "}
 												{sort === "lastActive"
@@ -1292,7 +1474,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 											<button
 												type="button"
 												onClick={() => handleSort("createdAt")}
-												className="hover:text-carbon transition-colors"
+												disabled={isRateLimited}
+												className="hover:text-carbon transition-colors disabled:opacity-50"
 											>
 												Joined{" "}
 												{sort === "createdAt"
@@ -1409,8 +1592,8 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 								<div className="flex items-center gap-2">
 									<button
 										type="button"
-										onClick={() => setPage((p) => Math.max(1, p - 1))}
-										disabled={page <= 1 || isLoadingUsers}
+										onClick={() => handlePageChange(Math.max(1, page - 1))}
+										disabled={page <= 1 || isLoadingUsers || isRateLimited}
 										className="px-3 py-1.5 rounded-lg text-sm font-medium btn-secondary disabled:opacity-40"
 									>
 										Prev
@@ -1421,9 +1604,11 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() =>
-											setPage((p) => Math.min(usersTotalPages, p + 1))
+											handlePageChange(Math.min(usersTotalPages, page + 1))
 										}
-										disabled={page >= usersTotalPages || isLoadingUsers}
+										disabled={
+											page >= usersTotalPages || isLoadingUsers || isRateLimited
+										}
 										className="px-3 py-1.5 rounded-lg text-sm font-medium btn-secondary disabled:opacity-40"
 									>
 										Next

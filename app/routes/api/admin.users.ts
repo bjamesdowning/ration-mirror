@@ -9,19 +9,6 @@ import type { Route } from "./+types/admin.users";
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAdmin(context, request);
 
-	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
-		"admin_search",
-		user.id,
-	);
-	if (!rateLimitResult.allowed) {
-		throw rateLimitResponse(
-			rateLimitResult,
-			"Too many search requests. Please try again later.",
-			{ includeBodyMetadata: true },
-		);
-	}
-
 	const url = new URL(request.url);
 	const params = AdminUsersListSchema.parse({
 		q: url.searchParams.get("q") ?? undefined,
@@ -30,6 +17,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		sort: url.searchParams.get("sort") ?? undefined,
 		order: url.searchParams.get("order") ?? undefined,
 	});
+
+	const isSearch = Boolean(params.q?.trim());
+	const rateLimitResult = await checkRateLimit(
+		context.cloudflare.env.RATION_KV,
+		isSearch ? "admin_search" : "admin_list",
+		user.id,
+	);
+	if (!rateLimitResult.allowed) {
+		// Return (not throw) so fetchers receive the data instead of hitting ErrorBoundary
+		return rateLimitResponse(
+			rateLimitResult,
+			isSearch
+				? "Too many search requests. Please try again later."
+				: "Too many list requests. Please try again later.",
+			{ includeBodyMetadata: true },
+		);
+	}
 
 	const db = drizzle(context.cloudflare.env.DB, { schema });
 	return listAdminUsers(db, params);

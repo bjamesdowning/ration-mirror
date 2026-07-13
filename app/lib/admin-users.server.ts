@@ -7,12 +7,13 @@ import {
 	gt,
 	isNull,
 	like,
+	max,
 	or,
 	sql,
 } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
-import { timestampToMs, userLastActiveUnixSql } from "./user-activity.server";
+import { timestampToMs } from "./user-activity.server";
 
 export type LoggedInPlatform = "web" | "mobile" | "both";
 
@@ -32,6 +33,10 @@ export interface LoggedInUsersResult {
 
 export type AdminUserSort = "createdAt" | "lastLogin" | "lastActive" | "name";
 export type AdminUserOrder = "asc" | "desc";
+
+export const DEFAULT_ADMIN_USERS_LIMIT = 25;
+export const DEFAULT_ADMIN_USERS_SORT: AdminUserSort = "createdAt";
+export const DEFAULT_ADMIN_USERS_ORDER: AdminUserOrder = "desc";
 
 export interface AdminUsersListParams {
 	q?: string;
@@ -166,44 +171,92 @@ export function computeLastLoginMs(
 	return Math.max(sessionCreatedMs, mobileCreatedMs);
 }
 
-function lastLoginUnixSql() {
-	return sql<number>`MAX(
-		COALESCE(
-			(
-				SELECT MAX(${schema.session.createdAt})
-				FROM ${schema.session}
-				WHERE ${schema.session.userId} = ${schema.user.id}
-			),
-			0
-		),
-		COALESCE(
-			(
-				SELECT MAX(${schema.mobileRefreshToken.createdAt})
-				FROM ${schema.mobileRefreshToken}
-				WHERE ${schema.mobileRefreshToken.userId} = ${schema.user.id}
-			),
-			0
-		)
-	)`;
+/** Pure helper: derive last-active timestamp from pre-aggregated sources. */
+export function computeLastActiveMs(
+	sessionActiveMs: number,
+	apiKeyActiveMs: number,
+	settingsActiveMs: number,
+): number {
+	return Math.max(sessionActiveMs, apiKeyActiveMs, settingsActiveMs);
 }
 
-function buildUserSearchFilter(q?: string) {
+export function buildUserSearchFilter(q?: string) {
 	const trimmed = q?.trim();
 	if (!trimmed) return undefined;
 	const pattern = `%${trimmed}%`;
 	return or(like(schema.user.name, pattern), like(schema.user.email, pattern));
 }
 
-function sortColumn(sort: AdminUserSort) {
+function sessionAggSubquery(db: DrizzleD1Database<typeof schema>) {
+	return db
+		.select({
+			userId: schema.session.userId,
+			maxLogin: max(schema.session.createdAt).as("max_login"),
+			maxActive: max(schema.session.updatedAt).as("max_active"),
+		})
+		.from(schema.session)
+		.groupBy(schema.session.userId)
+		.as("session_agg");
+}
+
+function mobileAggSubquery(db: DrizzleD1Database<typeof schema>) {
+	return db
+		.select({
+			userId: schema.mobileRefreshToken.userId,
+			maxLogin: max(schema.mobileRefreshToken.createdAt).as("max_login"),
+		})
+		.from(schema.mobileRefreshToken)
+		.groupBy(schema.mobileRefreshToken.userId)
+		.as("mobile_agg");
+}
+
+function apiKeyAggSubquery(db: DrizzleD1Database<typeof schema>) {
+	return db
+		.select({
+			userId: schema.apiKey.userId,
+			maxActive: max(schema.apiKey.lastUsedAt).as("max_active"),
+		})
+		.from(schema.apiKey)
+		.groupBy(schema.apiKey.userId)
+		.as("api_key_agg");
+}
+
+function lastLoginUnixExpr(
+	sessionAgg: ReturnType<typeof sessionAggSubquery>,
+	mobileAgg: ReturnType<typeof mobileAggSubquery>,
+) {
+	return sql<number>`MAX(COALESCE(${sessionAgg.maxLogin}, 0), COALESCE(${mobileAgg.maxLogin}, 0))`;
+}
+
+function lastActiveUnixExpr(
+	sessionAgg: ReturnType<typeof sessionAggSubquery>,
+	apiKeyAgg: ReturnType<typeof apiKeyAggSubquery>,
+) {
+	return sql<number>`MAX(
+		COALESCE(${sessionAgg.maxActive}, 0),
+		COALESCE(${apiKeyAgg.maxActive}, 0),
+		COALESCE(unixepoch(json_extract(${schema.user.settings}, '$.lastActiveAt')), 0)
+	)`;
+}
+
+/** Resolve ORDER BY expression for admin user list (JOIN-based aggregates). */
+export function adminUserSortExpression(
+	sort: AdminUserSort,
+	aggregates: {
+		sessionAgg: ReturnType<typeof sessionAggSubquery>;
+		mobileAgg: ReturnType<typeof mobileAggSubquery>;
+		apiKeyAgg: ReturnType<typeof apiKeyAggSubquery>;
+	},
+) {
 	switch (sort) {
 		case "name":
 			return schema.user.name;
 		case "createdAt":
 			return schema.user.createdAt;
 		case "lastLogin":
-			return lastLoginUnixSql();
+			return lastLoginUnixExpr(aggregates.sessionAgg, aggregates.mobileAgg);
 		case "lastActive":
-			return userLastActiveUnixSql();
+			return lastActiveUnixExpr(aggregates.sessionAgg, aggregates.apiKeyAgg);
 	}
 }
 
@@ -281,6 +334,11 @@ export async function listAdminUsers(
 	const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 	const offset = (page - 1) * limit;
 
+	const sessionAgg = sessionAggSubquery(db);
+	const mobileAgg = mobileAggSubquery(db);
+	const apiKeyAgg = apiKeyAggSubquery(db);
+	const aggregates = { sessionAgg, mobileAgg, apiKeyAgg };
+
 	const orderFn = order === "asc" ? asc : desc;
 	const rows = await db
 		.select({
@@ -289,12 +347,15 @@ export async function listAdminUsers(
 			email: schema.user.email,
 			isAdmin: schema.user.isAdmin,
 			createdAt: schema.user.createdAt,
-			lastLoginUnix: lastLoginUnixSql(),
-			lastActiveUnix: userLastActiveUnixSql(),
+			lastLoginUnix: lastLoginUnixExpr(sessionAgg, mobileAgg),
+			lastActiveUnix: lastActiveUnixExpr(sessionAgg, apiKeyAgg),
 		})
 		.from(schema.user)
+		.leftJoin(sessionAgg, eq(schema.user.id, sessionAgg.userId))
+		.leftJoin(mobileAgg, eq(schema.user.id, mobileAgg.userId))
+		.leftJoin(apiKeyAgg, eq(schema.user.id, apiKeyAgg.userId))
 		.where(whereClause)
-		.orderBy(orderFn(sortColumn(sort)))
+		.orderBy(orderFn(adminUserSortExpression(sort, aggregates)))
 		.limit(limit)
 		.offset(offset);
 

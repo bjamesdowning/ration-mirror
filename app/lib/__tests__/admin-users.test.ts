@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+	buildUserSearchFilter,
+	computeLastActiveMs,
 	computeLastLoginMs,
+	DEFAULT_ADMIN_USERS_LIMIT,
+	DEFAULT_ADMIN_USERS_ORDER,
+	DEFAULT_ADMIN_USERS_SORT,
 	mergeLoggedInUsers,
 	resolvePlatform,
 } from "../admin-users.server";
@@ -141,5 +146,36 @@ describe("computeLastLoginMs", () => {
 	it("handles zero values", () => {
 		expect(computeLastLoginMs(0, 500)).toBe(500);
 		expect(computeLastLoginMs(0, 0)).toBe(0);
+	});
+});
+
+describe("computeLastActiveMs", () => {
+	it("returns the greatest activity timestamp across sources", () => {
+		expect(computeLastActiveMs(1000, 2000, 500)).toBe(2000);
+		expect(computeLastActiveMs(3000, 2000, 2500)).toBe(3000);
+	});
+	it("handles zero values", () => {
+		expect(computeLastActiveMs(0, 0, 0)).toBe(0);
+		expect(computeLastActiveMs(0, 500, 0)).toBe(500);
+	});
+});
+
+describe("buildUserSearchFilter", () => {
+	it("returns undefined for empty or whitespace query", () => {
+		expect(buildUserSearchFilter()).toBeUndefined();
+		expect(buildUserSearchFilter("")).toBeUndefined();
+		expect(buildUserSearchFilter("   ")).toBeUndefined();
+	});
+
+	it("returns a filter for non-empty query", () => {
+		expect(buildUserSearchFilter("alice")).toBeDefined();
+	});
+});
+
+describe("admin user list defaults", () => {
+	it("uses createdAt desc with page size 25", () => {
+		expect(DEFAULT_ADMIN_USERS_SORT).toBe("createdAt");
+		expect(DEFAULT_ADMIN_USERS_ORDER).toBe("desc");
+		expect(DEFAULT_ADMIN_USERS_LIMIT).toBe(25);
 	});
 });

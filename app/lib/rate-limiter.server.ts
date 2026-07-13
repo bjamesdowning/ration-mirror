@@ -329,6 +329,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		maxRequests: 30,
 		keyPrefix: "rate:admin_search",
 	},
+	admin_list: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:admin_list",
+	},
 	status_poll: {
 		windowMs: 60_000,
 		maxRequests: 60,

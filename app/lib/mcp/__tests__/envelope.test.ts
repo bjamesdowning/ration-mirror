@@ -2,7 +2,40 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { AGENT_CLAIM_REISSUE_PATH } from "../../agent/claim.constants";
 import { CapacityExceededError } from "../../capacity.server";
-import { mapErrorToEnvelope, zodValidationDetails } from "../envelope";
+import {
+	decodeInventoryCursor,
+	encodeInventoryCursor,
+	mapErrorToEnvelope,
+	zodValidationDetails,
+} from "../envelope";
+
+describe("inventory cursors", () => {
+	it("round-trips expiresAt sort cursor", () => {
+		const encoded = encodeInventoryCursor({
+			sortBy: "expiresAt",
+			expiresAt: "2026-07-13T00:00:00.000Z",
+			id: "cargo-1",
+		});
+		expect(decodeInventoryCursor(encoded)).toEqual({
+			sortBy: "expiresAt",
+			expiresAt: "2026-07-13T00:00:00.000Z",
+			id: "cargo-1",
+		});
+	});
+
+	it("round-trips createdAt sort cursor", () => {
+		const encoded = encodeInventoryCursor({
+			sortBy: "createdAt",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			id: "cargo-2",
+		});
+		expect(decodeInventoryCursor(encoded)).toEqual({
+			sortBy: "createdAt",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			id: "cargo-2",
+		});
+	});
+});
 
 describe("zodValidationDetails", () => {
 	it("returns field keys with first message only", () => {

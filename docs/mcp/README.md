@@ -40,7 +40,9 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 
 | Prompt | What happens |
 |--------|----------------|
+| "How's my kitchen?" | `get_kitchen_summary` |
 | "List my pantry and what's expiring this week." | `list_inventory` + `get_expiring_items` |
+| "What already expired in my pantry?" | `get_expired_items` |
 | "What meals can I make with what we have?" | `match_meals` (strict or partial matches) |
 | "Plan dinners through Friday and add anything missing to the list." | `get_meal_plan` → `bulk_add_meal_plan_entries` → `sync_supply_from_selected_meals` |
 | "We cooked lentil soup for four — update inventory." | `consume_meal` deducts ingredients via semantic matching |
@@ -105,13 +107,15 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions. Safe to call first. |
+| `get_context` | `mcp:read` | Return org id, scopes, kitchen tier/usage/credits/lastActivityAt, capabilities, suggested next actions, and `temporal` (todayUtc, server time, expiry semantics). Safe to call first. |
 | `search_ingredients` | `mcp:read` | Semantic pantry search by meaning — find items without knowing the exact name. |
-| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter. |
+| `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. |
 | `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields). |
-| `get_expiring_items` | `mcp:read` | List items expiring within N days (default 7). Plan rescue meals and reduce waste. |
+| `get_kitchen_summary` | `mcp:read` | Single-call operational snapshot (cargo, manifest, supply, tier/credits). Optional `manifestDays` (1–7). |
+| `get_expiring_items` | `mcp:read` | List items expiring within N UTC calendar days (defaults to user `expirationAlertDays`). |
+| `get_expired_items` | `mcp:read` | List items whose expiry date is before today (UTC). Optional `daysBack` (default 30). |
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
-| `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` (fully cookable) or `delta` (partial + gaps). |
+| `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
 | `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (breakfast, lunch, dinner, snack). |
 | `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |

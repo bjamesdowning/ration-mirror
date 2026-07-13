@@ -1,4 +1,15 @@
-import { and, count, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	gt,
+	gte,
+	inArray,
+	lt,
+	lte,
+	sql,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useCallback, useEffect, useState } from "react";
 import { data, Link, useFetcher } from "react-router";
@@ -18,6 +29,7 @@ import {
 	getLoggedInUsers,
 } from "../lib/admin-users.server";
 import { requireAdmin } from "../lib/auth.server";
+import { getExpiringCargoBounds } from "../lib/cargo-utils";
 import { handleApiError } from "../lib/error-handler";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
@@ -32,6 +44,8 @@ export async function loader(args: Route.LoaderArgs) {
 	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 	const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 	const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+	const { startOfToday: cargoExpiringFrom, endOfWindow: cargoExpiringThrough } =
+		getExpiringCargoBounds(7, now);
 
 	const [
 		// Overview totals
@@ -208,8 +222,8 @@ export async function loader(args: Route.LoaderArgs) {
 			.from(schema.cargo)
 			.where(
 				and(
-					gt(schema.cargo.expiresAt, now),
-					lt(schema.cargo.expiresAt, sevenDaysFromNow),
+					gte(schema.cargo.expiresAt, cargoExpiringFrom),
+					lte(schema.cargo.expiresAt, cargoExpiringThrough),
 				),
 			)
 			.get(),

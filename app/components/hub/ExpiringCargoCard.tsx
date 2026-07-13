@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { PrimitiveLink } from "~/components/shell/PrimitiveLink";
 import type { cargo } from "~/db/schema";
+import { computeDaysUntilExpiry } from "~/lib/cargo-utils";
 import { AlertIcon, SuccessIcon } from "../icons/HubIcons";
 
 interface ExpiringCargoCardProps {
@@ -10,20 +11,17 @@ interface ExpiringCargoCardProps {
 
 function formatDaysUntilExpiry(expiresAt: Date | null): string {
 	if (!expiresAt) return "Unknown";
-	const now = new Date();
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const days = Math.ceil((expiresAt.getTime() - now.getTime()) / msPerDay);
-	if (days <= 0) return "Expired";
+	const days = computeDaysUntilExpiry(expiresAt);
+	if (days < 0) return "Expired";
+	if (days === 0) return "Today";
 	if (days === 1) return "1 day";
 	return `${days} days`;
 }
 
 function getExpiryStatusColor(expiresAt: Date | null): string {
 	if (!expiresAt) return "text-muted";
-	const now = new Date();
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const days = Math.ceil((expiresAt.getTime() - now.getTime()) / msPerDay);
-	if (days <= 0) return "text-danger";
+	const days = computeDaysUntilExpiry(expiresAt);
+	if (days < 0) return "text-danger";
 	if (days <= 2) return "text-warning";
 	return "text-hyper-green";
 }

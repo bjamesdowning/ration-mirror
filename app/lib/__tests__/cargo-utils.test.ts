@@ -144,19 +144,19 @@ describe("calculateInventoryStatus", () => {
 		expect(calculateInventoryStatus(exactly3Days, NOW)).toBe("stable");
 	});
 
-	it("returns 'decay_imminent' when item expires in 2.9 days", () => {
-		const nearExpiry = new Date(NOW.getTime() + 2.9 * 24 * 60 * 60 * 1000);
-		expect(calculateInventoryStatus(nearExpiry, NOW)).toBe("decay_imminent");
+	it("returns 'decay_imminent' when item expires in fewer than 3 UTC calendar days", () => {
+		const twoDaysOut = new Date("2025-06-17T00:00:00Z");
+		expect(calculateInventoryStatus(twoDaysOut, NOW)).toBe("decay_imminent");
 	});
 
-	it("returns 'biohazard' when item has already expired", () => {
-		const past = new Date("2025-06-10T12:00:00Z"); // 5 days before NOW
+	it("returns 'biohazard' when item has already expired (calendar day before today)", () => {
+		const past = new Date("2025-06-10T00:00:00Z"); // expiry date before NOW's UTC day
 		expect(calculateInventoryStatus(past, NOW)).toBe("biohazard");
 	});
 
-	it("returns 'biohazard' when item expires exactly now (boundary: < 0)", () => {
-		// daysUntilExpiry = 0 → NOT < 0 → decay_imminent (0 is not negative)
-		expect(calculateInventoryStatus(NOW, NOW)).toBe("decay_imminent");
+	it("returns 'decay_imminent' when item expires today (UTC calendar day)", () => {
+		const todayMidnight = new Date("2025-06-15T00:00:00Z");
+		expect(calculateInventoryStatus(todayMidnight, NOW)).toBe("decay_imminent");
 	});
 
 	it("uses current time when 'now' is omitted (smoke test)", () => {
@@ -177,8 +177,13 @@ describe("isCargoUsableForMatching", () => {
 		expect(isCargoUsableForMatching(future, NOW)).toBe(true);
 	});
 
-	it("returns false when item is biohazard (past expiry)", () => {
-		const past = new Date("2025-06-10T12:00:00Z");
+	it("returns false when item is biohazard (past expiry calendar day)", () => {
+		const past = new Date("2025-06-10T00:00:00Z");
 		expect(isCargoUsableForMatching(past, NOW)).toBe(false);
+	});
+
+	it("returns true when item expires today (UTC calendar day)", () => {
+		const todayMidnight = new Date("2025-06-15T00:00:00Z");
+		expect(isCargoUsableForMatching(todayMidnight, NOW)).toBe(true);
 	});
 });

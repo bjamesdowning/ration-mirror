@@ -50,6 +50,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				limit: query.limit,
 				cursor: cursorPayload
 					? {
+							sortBy: "createdAt",
 							createdAt: new Date(cursorPayload.createdAt),
 							id: cursorPayload.id,
 						}
@@ -60,12 +61,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			getActiveCargoIds(context.cloudflare.env.DB, organizationId),
 		]);
 
-		const nextCursor = page.nextCursor
-			? encodeCursor({
-					createdAt: page.nextCursor.createdAt.toISOString(),
-					id: page.nextCursor.id,
-				})
-			: null;
+		const nextCursor =
+			page.nextCursor?.sortBy === "createdAt"
+				? encodeCursor({
+						createdAt: page.nextCursor.createdAt.toISOString(),
+						id: page.nextCursor.id,
+					})
+				: null;
 
 		const itemsWithTags = await attachTagsToCargo(
 			context.cloudflare.env.DB,

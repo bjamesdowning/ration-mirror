@@ -1,4 +1,8 @@
 import { formatCargoStatus } from "~/lib/cargo";
+import {
+	calculateInventoryStatus,
+	computeDaysUntilExpiry,
+} from "~/lib/cargo-utils";
 
 interface StatusGaugeProps {
 	status?: string | null;
@@ -14,17 +18,12 @@ function parseDate(value?: Date | string | null) {
 
 function inferStatus(expiresAt?: Date | null) {
 	if (!expiresAt) return "stable";
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const daysUntilExpiry = (expiresAt.getTime() - Date.now()) / msPerDay;
-	if (daysUntilExpiry < 0) return "biohazard";
-	if (daysUntilExpiry < 3) return "decay_imminent";
-	return "stable";
+	return calculateInventoryStatus(expiresAt);
 }
 
 function getGaugeWidth(expiresAt?: Date | null) {
 	if (!expiresAt) return 100;
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const daysUntilExpiry = (expiresAt.getTime() - Date.now()) / msPerDay;
+	const daysUntilExpiry = computeDaysUntilExpiry(expiresAt);
 	const clampedDays = Math.max(0, Math.min(30, daysUntilExpiry));
 	return Math.round((clampedDays / 30) * 100);
 }

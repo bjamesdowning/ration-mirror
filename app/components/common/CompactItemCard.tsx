@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { computeDaysUntilExpiry } from "~/lib/cargo-utils";
 
 type StatusColor = "green" | "yellow" | "red" | "gray";
 
@@ -131,11 +132,11 @@ export function getStatusColor(
 	if (status === "decay_imminent") return "yellow";
 	if (status === "stable") return "green";
 
-	// Infer from expiration
+	// Infer from expiration (UTC calendar-day semantics)
 	if (expiresAt) {
 		const expiry =
 			typeof expiresAt === "string" ? new Date(expiresAt) : expiresAt;
-		const daysUntil = (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+		const daysUntil = computeDaysUntilExpiry(expiry);
 		if (daysUntil < 0) return "red";
 		if (daysUntil < 3) return "yellow";
 		return "green";

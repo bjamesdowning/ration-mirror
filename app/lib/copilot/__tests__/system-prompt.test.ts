@@ -1,31 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { getCopilotSystemPrompt } from "../system-prompt.server";
+import { buildAgentTemporalContext } from "~/lib/agent/temporal-context.server";
+import { getCopilotSystemPrompt } from "~/lib/copilot/system-prompt.server";
 
 describe("getCopilotSystemPrompt", () => {
-	it("defines Ration scope and refuses unrelated software work", () => {
+	it("includes temporal and expiry tool guidance", () => {
 		const prompt = getCopilotSystemPrompt();
-
-		expect(prompt).toContain("Stay within Ration and kitchen logistics");
-		expect(prompt).toContain("Do not write code, scripts, or software");
-		expect(prompt).toContain("Do not call tools for out-of-scope requests");
+		expect(prompt).toContain("injected temporal context");
+		expect(prompt).toContain("get_expired_items");
+		expect(prompt).toContain("get_kitchen_summary");
 	});
 
-	it("includes native-feature due diligence and deep links", () => {
+	it("requires action reporting for writes but not read-only tools", () => {
 		const prompt = getCopilotSystemPrompt();
-
-		expect(prompt).toContain("due diligence, not upselling");
-		expect(prompt).toContain("ration://scan");
-		expect(prompt).toContain("ration://galley/import");
-		expect(prompt).toContain("ration://galley/generate");
-		expect(prompt).toContain("ration://manifest/plan-week");
+		expect(prompt).toContain("Action reporting:");
+		expect(prompt).toContain("Do not narrate read-only lookups or search_docs");
+		expect(prompt).toContain("created, updated, deleted, imported, consumed");
 	});
+});
 
-	it("includes meal planning and inventory import workflows", () => {
-		const prompt = getCopilotSystemPrompt();
-
-		expect(prompt).toContain("bulk_add_meal_plan_entries");
-		expect(prompt).toContain("sync_supply_from_selected_meals");
-		expect(prompt).toContain("preview_inventory_import");
-		expect(prompt).toContain("apply_inventory_import");
+describe("buildAgentTemporalContext", () => {
+	it("returns UTC calendar metadata", () => {
+		const now = new Date("2026-07-13T16:34:00.000Z");
+		expect(buildAgentTemporalContext(now)).toEqual({
+			todayUtc: "2026-07-13",
+			serverTimeIso: "2026-07-13T16:34:00.000Z",
+			expirySemantics: "utc_calendar_day",
+		});
 	});
 });

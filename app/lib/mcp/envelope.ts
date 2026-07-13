@@ -211,22 +211,63 @@ export function encodeCursor(payload: {
 	return Buffer.from(json, "utf8").toString("base64");
 }
 
+export type InventoryListCursor = {
+	sortBy: "createdAt" | "expiresAt";
+	createdAt?: string;
+	expiresAt?: string;
+	id: string;
+};
+
+/** Inventory list cursor — supports createdAt or expiresAt pagination. */
+export function encodeInventoryCursor(payload: InventoryListCursor): string {
+	const json = JSON.stringify(payload);
+	if (typeof btoa === "function") return btoa(json);
+	return Buffer.from(json, "utf8").toString("base64");
+}
+
 /** Cursor decode helper. Returns null on malformed input. */
 export function decodeCursor(
 	cursor: string,
 ): { createdAt: string; id: string } | null {
+	const parsed = decodeInventoryCursor(cursor);
+	if (!parsed || parsed.sortBy !== "createdAt" || !parsed.createdAt) {
+		return null;
+	}
+	return { createdAt: parsed.createdAt, id: parsed.id };
+}
+
+export function decodeInventoryCursor(
+	cursor: string,
+): InventoryListCursor | null {
 	try {
 		const json =
 			typeof atob === "function"
 				? atob(cursor)
 				: Buffer.from(cursor, "base64").toString("utf8");
-		const parsed = JSON.parse(json);
-		if (
-			parsed &&
-			typeof parsed.createdAt === "string" &&
-			typeof parsed.id === "string"
-		) {
-			return { createdAt: parsed.createdAt, id: parsed.id };
+		const parsed = JSON.parse(json) as Partial<InventoryListCursor>;
+		if (!parsed || typeof parsed.id !== "string") return null;
+		if (parsed.sortBy === "expiresAt") {
+			if (typeof parsed.expiresAt !== "string") return null;
+			return {
+				sortBy: "expiresAt",
+				expiresAt: parsed.expiresAt,
+				id: parsed.id,
+			};
+		}
+		if (typeof parsed.createdAt === "string") {
+			return {
+				sortBy: "createdAt",
+				createdAt: parsed.createdAt,
+				id: parsed.id,
+			};
+		}
+		// Legacy cursors without sortBy
+		if (typeof (parsed as { createdAt?: string }).createdAt === "string") {
+			return {
+				sortBy: "createdAt",
+				createdAt: (parsed as { createdAt: string }).createdAt,
+				id: parsed.id,
+			};
 		}
 		return null;
 	} catch {

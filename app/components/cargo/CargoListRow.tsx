@@ -8,6 +8,10 @@ import { TagChip } from "~/components/shared/TagChip";
 import { Toast } from "~/components/shell/Toast";
 import type { cargo } from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
+import {
+	calculateInventoryStatus,
+	computeDaysUntilExpiry,
+} from "~/lib/cargo-utils";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
@@ -40,17 +44,12 @@ function getStatusColor(status?: string | null, expiresAt?: Date | null) {
 
 function inferStatus(expiresAt?: Date | null) {
 	if (!expiresAt) return "stable";
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const daysUntilExpiry = (expiresAt.getTime() - Date.now()) / msPerDay;
-	if (daysUntilExpiry < 0) return "biohazard";
-	if (daysUntilExpiry < 3) return "decay_imminent";
-	return "stable";
+	return calculateInventoryStatus(expiresAt);
 }
 
 function formatExpiry(expiresAt?: Date | null): string {
 	if (!expiresAt) return "No expiry";
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const days = Math.round((expiresAt.getTime() - Date.now()) / msPerDay);
+	const days = computeDaysUntilExpiry(expiresAt);
 	if (days < 0) return "Expired";
 	if (days === 0) return "Today";
 	if (days === 1) return "1d";

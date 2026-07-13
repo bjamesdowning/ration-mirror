@@ -44,8 +44,106 @@ export function normalizeTags(tags: unknown): string[] {
 	return [];
 }
 
+/** UTC calendar date YYYY-MM-DD for a timestamp (expiry dates are stored at UTC midnight). */
+export function toExpiryDateISO(expiresAt: Date): string {
+	const y = expiresAt.getUTCFullYear();
+	const m = String(expiresAt.getUTCMonth() + 1).padStart(2, "0");
+	const d = String(expiresAt.getUTCDate()).padStart(2, "0");
+	return `${y}-${m}-${d}`;
+}
+
+/** Today as YYYY-MM-DD in UTC. */
+export function getUtcTodayISO(now = new Date()): string {
+	return toExpiryDateISO(now);
+}
+
+export function parseUtcDateISO(iso: string): Date {
+	return new Date(`${iso}T00:00:00.000Z`);
+}
+
+/** Add calendar days to a UTC YYYY-MM-DD string. */
+export function addUtcDays(iso: string, days: number): string {
+	const d = parseUtcDateISO(iso);
+	d.setUTCDate(d.getUTCDate() + days);
+	return toExpiryDateISO(d);
+}
+
+/** Signed calendar-day distance from `from` to `to` (both YYYY-MM-DD UTC). */
+export function daysBetweenUtcDates(from: string, to: string): number {
+	const fromMs = parseUtcDateISO(from).getTime();
+	const toMs = parseUtcDateISO(to).getTime();
+	return Math.round((toMs - fromMs) / (1000 * 60 * 60 * 24));
+}
+
+/** Calendar days until expiry: 0 = today, negative = expired. */
+export function computeDaysUntilExpiry(
+	expiresAt: Date,
+	now = new Date(),
+): number {
+	return daysBetweenUtcDates(getUtcTodayISO(now), toExpiryDateISO(expiresAt));
+}
+
+/** True when the expiry calendar date is strictly before today (UTC). */
+export function isExpiredOnUtcCalendar(
+	expiresAt: Date,
+	now = new Date(),
+): boolean {
+	return computeDaysUntilExpiry(expiresAt, now) < 0;
+}
+
+/** True when expiry is today or within the next N calendar days (inclusive). */
+export function isExpiringWithinDays(
+	expiresAt: Date,
+	days: number,
+	now = new Date(),
+): boolean {
+	const until = computeDaysUntilExpiry(expiresAt, now);
+	return until >= 0 && until <= days;
+}
+
+export function startOfUtcDay(now = new Date()): Date {
+	return parseUtcDateISO(getUtcTodayISO(now));
+}
+
+export type ExpiryDisplayStatus = "expired" | "today" | "soon";
+
+export function expiryDisplayStatus(
+	expiresAt: Date,
+	now = new Date(),
+): ExpiryDisplayStatus {
+	const days = computeDaysUntilExpiry(expiresAt, now);
+	if (days < 0) return "expired";
+	if (days === 0) return "today";
+	return "soon";
+}
+
+/** SQL bounds for items expiring within N UTC calendar days (includes today). */
+export function getExpiringCargoBounds(
+	daysUntilExpiry: number,
+	now = new Date(),
+): { startOfToday: Date; endOfWindow: Date } {
+	const today = getUtcTodayISO(now);
+	return {
+		startOfToday: parseUtcDateISO(today),
+		endOfWindow: parseUtcDateISO(addUtcDays(today, daysUntilExpiry)),
+	};
+}
+
+/** SQL bounds for items expired before today UTC, optionally limited by lookback. */
+export function getExpiredCargoBounds(
+	daysBack: number,
+	now = new Date(),
+): { startOfToday: Date; earliest: Date } {
+	const today = getUtcTodayISO(now);
+	return {
+		startOfToday: parseUtcDateISO(today),
+		earliest: parseUtcDateISO(addUtcDays(today, -daysBack)),
+	};
+}
+
 /**
  * Computes the display status for an inventory item based on its expiry date.
+ * Uses UTC calendar-day semantics: an item expiring today is still valid today.
  * @param now - Injectable for deterministic testing (defaults to current time)
  */
 export function calculateInventoryStatus(
@@ -53,8 +151,7 @@ export function calculateInventoryStatus(
 	now = new Date(),
 ): string {
 	if (!expiresAt) return "stable";
-	const msPerDay = 1000 * 60 * 60 * 24;
-	const daysUntilExpiry = (expiresAt.getTime() - now.getTime()) / msPerDay;
+	const daysUntilExpiry = computeDaysUntilExpiry(expiresAt, now);
 	if (daysUntilExpiry < 0) return "biohazard";
 	if (daysUntilExpiry < 3) return "decay_imminent";
 	return "stable";

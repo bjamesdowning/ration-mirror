@@ -170,11 +170,12 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 							type: "text",
 							text:
 								"You are an agent helping plan meals for the next 7 days. Steps:\n" +
-								"1. Call get_expiring_items(days: 10) to find items at risk.\n" +
-								"2. Call match_meals(mode: 'delta', minMatch: 60) to find meals that use those items.\n" +
-								"3. Propose a 7-day plan and confirm with the user.\n" +
-								"4. On confirm, call bulk_add_meal_plan_entries with the chosen entries.\n" +
-								"5. Optionally call sync_supply_from_selected_meals to build a shopping list.",
+								"1. Call get_context or use injected temporal context for today's UTC date.\n" +
+								"2. Call get_expiring_items(days: 10) to find items at risk; get_expired_items for already expired lines.\n" +
+								"3. Call match_meals(mode: 'delta', minMatch: 60) to find meals that use those items.\n" +
+								"4. Propose a 7-day plan and confirm with the user.\n" +
+								"5. On confirm, call bulk_add_meal_plan_entries with the chosen entries.\n" +
+								"6. Optionally call sync_supply_from_selected_meals to build a shopping list.",
 						},
 					},
 				],

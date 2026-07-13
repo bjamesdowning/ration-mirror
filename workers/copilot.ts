@@ -8,6 +8,7 @@ import {
 } from "@cloudflare/think";
 import { routeAgentRequest } from "agents";
 import type { ToolSet } from "ai";
+import { formatCopilotTemporalContextAppend } from "../app/lib/agent/temporal-context.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
 import {
 	COPILOT_SESSION_MAX_MESSAGES,
@@ -363,6 +364,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			};
 		}
 		return {
+			system: `${ctx.system}${formatCopilotTemporalContextAppend()}`,
 			activeTools: Object.keys(ctx.tools),
 			maxSteps: 10,
 			stopWhen: () => this.billingBlocked,

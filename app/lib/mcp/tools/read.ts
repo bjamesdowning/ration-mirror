@@ -1,9 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { buildKitchenSummary } from "../../agent/kitchen-summary.server";
+import { buildAgentTemporalContext } from "../../agent/temporal-context.server";
+import { detectAllergens, parseAllergens } from "../../allergens";
+import { getUserSettings } from "../../auth.server";
 import {
+	type CargoPageCursor,
 	getCargoByIds,
 	getCargoItem,
 	getCargoPage,
+	getExpiredCargo,
 	getExpiringCargo,
 } from "../../cargo.server";
 import {
@@ -18,7 +24,15 @@ import { getSupplyList, getSupplyListById } from "../../supply.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { MCP_SERVER_VERSION } from "../../version";
-import { decodeCursor, encodeCursor, err, ok } from "../envelope";
+import {
+	decodeCursor,
+	decodeInventoryCursor,
+	encodeCursor,
+	encodeInventoryCursor,
+	err,
+	ok,
+} from "../envelope";
+import { mapExpiryCargoItems } from "../expiry-map";
 import {
 	defineSharedTool,
 	type McpToolsEnv,
@@ -29,6 +43,22 @@ const MAX_PAGE_LIMIT = 200;
 const MAX_MATCH_MEALS_LIMIT = 50;
 const MAX_EXPIRING_DAYS = 90;
 const MAX_EXPIRING_ITEMS = 200;
+const MAX_EXPIRED_DAYS_BACK = 90;
+const DEFAULT_EXPIRED_DAYS_BACK = 30;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+async function resolveExpirationAlertDays(
+	db: D1Database,
+	userId: string,
+	explicitDays?: number,
+): Promise<number> {
+	if (explicitDays !== undefined) {
+		return Math.min(explicitDays, MAX_EXPIRING_DAYS);
+	}
+	const settings = await getUserSettings(db, userId);
+	const fromPrefs = settings.expirationAlertDays ?? 7;
+	return Math.min(Math.max(fromPrefs, 1), MAX_EXPIRING_DAYS);
+}
 
 export function createReadToolDefs(env: McpToolsEnv) {
 	return [
@@ -73,6 +103,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					kitchen,
 					capabilities,
 					suggestedNextActions,
+					temporal: buildAgentTemporalContext(),
 					versions: { mcp: MCP_SERVER_VERSION },
 				});
 			},
@@ -122,7 +153,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "list_inventory",
 			description:
-				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200.",
+				"Retrieve ingredients in the pantry. Cursor-paginated: pass `cursor` from a previous response to fetch the next page. Default limit 100, max 200. Optional UTC expiry filters and expiresAt sort.",
 			inputSchema: z.object({
 				domain: z
 					.enum(["food", "household", "alcohol"])
@@ -139,13 +170,31 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.string()
 					.optional()
 					.describe("Cursor from a previous response's meta.nextCursor"),
+				expiresBefore: z
+					.string()
+					.regex(ISO_DATE, "Must be YYYY-MM-DD format")
+					.optional()
+					.describe("Include items expiring on or before this UTC date"),
+				expiresAfter: z
+					.string()
+					.regex(ISO_DATE, "Must be YYYY-MM-DD format")
+					.optional()
+					.describe("Include items expiring on or after this UTC date"),
+				sortBy: z
+					.enum(["createdAt", "expiresAt"])
+					.optional()
+					.default("createdAt")
+					.describe(
+						"Sort order: createdAt (newest first) or expiresAt (soonest first; omits items without expiry)",
+					),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
 				const limit = a.limit ?? 100;
-				const decoded = a.cursor ? decodeCursor(a.cursor) : null;
+				const sortBy = a.sortBy ?? "createdAt";
+				const decoded = a.cursor ? decodeInventoryCursor(a.cursor) : null;
 				if (a.cursor && !decoded) {
 					return err(
 						"list_inventory",
@@ -153,13 +202,38 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						"Malformed cursor; omit it to start from the first page.",
 					);
 				}
-				const cursor = decoded
-					? { createdAt: new Date(decoded.createdAt), id: decoded.id }
-					: null;
+				if (decoded && decoded.sortBy !== sortBy) {
+					return err(
+						"list_inventory",
+						"invalid_input",
+						"Cursor sortBy does not match the current sortBy parameter.",
+					);
+				}
+				let pageCursor: CargoPageCursor | null = null;
+				if (decoded?.sortBy === "expiresAt" && decoded.expiresAt) {
+					pageCursor = {
+						sortBy: "expiresAt",
+						expiresAt: new Date(decoded.expiresAt),
+						id: decoded.id,
+					};
+				} else if (decoded?.sortBy === "createdAt" && decoded.createdAt) {
+					pageCursor = {
+						sortBy: "createdAt",
+						createdAt: new Date(decoded.createdAt),
+						id: decoded.id,
+					};
+				}
 				const { items, nextCursor } = await getCargoPage(
 					env.DB,
 					ctx.organizationId,
-					{ limit, cursor, domain: a.domain },
+					{
+						limit,
+						cursor: pageCursor,
+						domain: a.domain,
+						expiresBefore: a.expiresBefore,
+						expiresAfter: a.expiresAfter,
+						sortBy,
+					},
 				);
 				const tagMap = await getTagsForCargoIds(
 					env.DB,
@@ -177,10 +251,19 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				return ok("list_inventory", mapped, {
 					meta: {
 						nextCursor: nextCursor
-							? encodeCursor({
-									createdAt: nextCursor.createdAt.toISOString(),
-									id: nextCursor.id,
-								})
+							? encodeInventoryCursor(
+									nextCursor.sortBy === "expiresAt"
+										? {
+												sortBy: "expiresAt",
+												expiresAt: nextCursor.expiresAt.toISOString(),
+												id: nextCursor.id,
+											}
+										: {
+												sortBy: "createdAt",
+												createdAt: nextCursor.createdAt.toISOString(),
+												id: nextCursor.id,
+											},
+								)
 							: null,
 					},
 				});
@@ -365,7 +448,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "match_meals",
 			description:
-				"Find meals that can be made with the current pantry. Use 'strict' for fully cookable, 'delta' to see partial matches with what's missing.",
+				"Find meals that can be made with the current pantry. Use 'strict' for fully cookable, 'delta' to see partial matches with what's missing. When the user has allergens configured, each result includes allergenFlags; use allergenPolicy 'exclude' to omit unsafe meals.",
 			inputSchema: z.object({
 				mode: z.enum(["strict", "delta"]).optional().default("strict"),
 				minMatch: z.number().min(0).max(100).optional().default(50),
@@ -377,37 +460,72 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.optional()
 					.default(10),
 				tags: z.string().optional(),
+				allergenPolicy: z
+					.enum(["flag", "exclude"])
+					.optional()
+					.default("flag")
+					.describe(
+						"flag: include allergenFlags on each meal; exclude: omit meals matching user allergens",
+					),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_search",
 			audit: false,
 			handler: async (ctx, a) => {
 				const limit = Math.min(a.limit ?? 10, MAX_MATCH_MEALS_LIMIT);
+				const settings = await getUserSettings(env.DB, ctx.userId);
+				const userAllergens = parseAllergens(settings.allergens);
+				const allergenPolicy = a.allergenPolicy ?? "flag";
+				const queryLimit =
+					allergenPolicy === "exclude" && userAllergens.length > 0
+						? Math.min(MAX_MATCH_MEALS_LIMIT, Math.max(limit, limit * 3))
+						: limit;
 				const results = await matchMeals(env, ctx.organizationId, {
 					mode: a.mode ?? "strict",
 					minMatch: a.minMatch ?? 50,
-					limit,
+					limit: queryLimit,
 					preLimit: 200,
 					tags: a.tags,
 				});
-				const mapped = results.map((r) => ({
-					mealId: r.meal.id,
-					mealName: r.meal.name,
-					matchPercentage: Math.round(r.matchPercentage),
-					canMake: r.canMake,
-					missingIngredients: r.missingIngredients.map((m) => ({
-						name: m.name,
-						needed: `${m.requiredQuantity} ${m.unit}`,
-						optional: m.isOptional,
-					})),
-				}));
+
+				const mapped = results
+					.map((r) => {
+						const ingredientNames = (r.meal.ingredients ?? []).map(
+							(i) => i.ingredientName,
+						);
+						const allergenFlags =
+							userAllergens.length > 0
+								? detectAllergens(ingredientNames, userAllergens)
+								: [];
+						return {
+							mealId: r.meal.id,
+							mealName: r.meal.name,
+							matchPercentage: Math.round(r.matchPercentage),
+							canMake: r.canMake,
+							allergenSafe: allergenFlags.length === 0,
+							allergenFlags,
+							missingIngredients: r.missingIngredients.map((m) => ({
+								name: m.name,
+								needed: `${m.requiredQuantity} ${m.unit}`,
+								optional: m.isOptional,
+							})),
+						};
+					})
+					.filter(
+						(row) =>
+							allergenPolicy !== "exclude" ||
+							userAllergens.length === 0 ||
+							row.allergenSafe,
+					)
+					.slice(0, limit);
+
 				return ok("match_meals", mapped);
 			},
 		}),
 		defineSharedTool({
 			name: "get_expiring_items",
 			description:
-				"List pantry items that are expiring soon. Useful for reducing food waste and planning rescue meals.",
+				"List pantry items expiring soon (UTC calendar days). Defaults to the user's expirationAlertDays when days is omitted. Useful for reducing food waste and planning rescue meals.",
 			inputSchema: z.object({
 				days: z
 					.number()
@@ -415,37 +533,97 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.positive()
 					.max(MAX_EXPIRING_DAYS)
 					.optional()
-					.default(7),
+					.describe(
+						"Lookahead window in UTC calendar days (defaults to user expirationAlertDays, usually 7)",
+					),
 			}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
 			audit: false,
 			handler: async (ctx, a) => {
 				const now = new Date();
-				const lookaheadDays = Math.min(a.days ?? 7, MAX_EXPIRING_DAYS);
+				const lookaheadDays = await resolveExpirationAlertDays(
+					env.DB,
+					ctx.userId,
+					a.days,
+				);
 				const expiringItems = await getExpiringCargo(
 					env.DB,
 					ctx.organizationId,
 					lookaheadDays,
 					MAX_EXPIRING_ITEMS,
+					undefined,
+					now,
 				);
-				const mapped = expiringItems.map((item) => {
-					const expiresAt = item.expiresAt ? new Date(item.expiresAt) : null;
-					const daysUntilExpiry = expiresAt
-						? Math.ceil(
-								(expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-							)
-						: null;
-					return {
-						id: item.id,
-						name: item.name,
-						quantity: item.quantity,
-						unit: item.unit,
-						expiresAt: item.expiresAt,
-						daysUntilExpiry,
-					};
-				});
-				return ok("get_expiring_items", mapped);
+				return ok(
+					"get_expiring_items",
+					mapExpiryCargoItems(expiringItems, now),
+				);
+			},
+		}),
+		defineSharedTool({
+			name: "get_expired_items",
+			description:
+				"List pantry items whose expiry calendar date is before today (UTC). Useful for waste cleanup and confirming what has already expired.",
+			inputSchema: z.object({
+				daysBack: z
+					.number()
+					.int()
+					.positive()
+					.max(MAX_EXPIRED_DAYS_BACK)
+					.optional()
+					.default(DEFAULT_EXPIRED_DAYS_BACK)
+					.describe(
+						"How many UTC calendar days back to search (default 30, max 90)",
+					),
+			}),
+			scopes: ["mcp:read"],
+			rateLimitCategory: "mcp_list",
+			audit: false,
+			handler: async (ctx, a) => {
+				const now = new Date();
+				const daysBack = Math.min(
+					a.daysBack ?? DEFAULT_EXPIRED_DAYS_BACK,
+					MAX_EXPIRED_DAYS_BACK,
+				);
+				const expiredItems = await getExpiredCargo(
+					env.DB,
+					ctx.organizationId,
+					daysBack,
+					MAX_EXPIRING_ITEMS,
+					undefined,
+					now,
+				);
+				return ok("get_expired_items", mapExpiryCargoItems(expiredItems, now));
+			},
+		}),
+		defineSharedTool({
+			name: "get_kitchen_summary",
+			description:
+				"Single-call operational snapshot: temporal context, tier/credits/capacity, cargo stats with expiring/expired previews, meal plan entries, and active supply list preview. Prefer this for 'how is my kitchen?' before fanning out to granular tools.",
+			inputSchema: z.object({
+				manifestDays: z
+					.number()
+					.int()
+					.min(1)
+					.max(7)
+					.optional()
+					.default(1)
+					.describe(
+						"Meal plan lookahead in UTC calendar days starting today (default 1, max 7)",
+					),
+			}),
+			scopes: ["mcp:read"],
+			rateLimitCategory: "mcp_list",
+			audit: false,
+			handler: async (ctx, a) => {
+				const summary = await buildKitchenSummary(
+					env,
+					ctx.organizationId,
+					ctx.userId,
+					{ manifestDays: a.manifestDays ?? 1 },
+				);
+				return ok("get_kitchen_summary", summary);
 			},
 		}),
 	];

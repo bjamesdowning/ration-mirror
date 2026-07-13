@@ -18,10 +18,12 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `list_inventory` | `mcp:read` | Cursor-paginated cargo list (default 100, max 200). Returns `meta.nextCursor` when more pages remain. Optional `domain` filter. |
+| `list_inventory` | `mcp:read` | Cursor-paginated cargo list (default 100, max 200). Optional `domain`, `expiresBefore` / `expiresAfter` (UTC YYYY-MM-DD), and `sortBy: expiresAt`. |
 | `get_cargo_item` | `mcp:read` | Fetch one item by id with all fields (tags, expiresAt, customFields). |
 | `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning. |
-| `get_expiring_items` | `mcp:read` | Pantry lines expiring within N days (default 7). |
+| `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. Returns `expiresOn`, `daysUntilExpiry`, and `status` (`today` / `soon`). |
+| `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). Optional `daysBack` (default 30, max 90). Same response shape as `get_expiring_items`. |
+| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot: temporal context, tier/credits/capacity, cargo stats + expiring/expired previews, meal plan entries, supply preview. Optional `manifestDays` (1–7, default 1). |
 | `add_cargo_item` | `mcp:inventory:write` | Add pantry stock. Skips embedding generation (zero credit cost). |
 | `update_cargo_item` | `mcp:inventory:write` | Update pantry fields (quantity, unit, expiry, domain, tags). |
 | `remove_cargo_item` | `mcp:inventory:write` | Remove a pantry item. **Requires `confirm: true`.** |
@@ -42,7 +44,7 @@ The intended pattern is: agent's LLM parses a receipt → calls `preview_invento
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Pass `includeIngredients: false` to skip ingredient fan-out. |
-| `match_meals` | `mcp:read` | Meals you can cook (`strict`) or partial matches (`delta`) with gaps. |
+| `match_meals` | `mcp:read` | Meals you can cook (`strict`) or partial matches (`delta`) with gaps. Includes `allergenFlags` / `allergenSafe` when user allergens are set; `allergenPolicy: exclude` omits unsafe meals. |
 | `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
 | `update_meal` | `mcp:galley:write` | Update a recipe; pass full meal payload from `list_meals` with edits. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
@@ -76,7 +78,7 @@ The intended pattern is: agent's LLM parses a receipt → calls `preview_invento
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_context` | `mcp:read` | Returns the org/key context the request is operating under. |
+| `get_context` | `mcp:read` | Returns org/key context, kitchen snapshot, suggested actions, and `temporal` (`todayUtc`, `serverTimeIso`, `expirySemantics: utc_calendar_day`). |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, default unit mode. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch one or more preference fields. |
 

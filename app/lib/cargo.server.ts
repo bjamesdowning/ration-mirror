@@ -61,7 +61,13 @@ export {
 } from "./tags.server";
 
 import { computeBaseFields } from "./base-quantity";
-import { calculateInventoryStatus, normalizeForCargoKey } from "./cargo-utils";
+import {
+	calculateInventoryStatus,
+	getExpiredCargoBounds,
+	getExpiringCargoBounds,
+	normalizeForCargoKey,
+	parseUtcDateISO,
+} from "./cargo-utils";
 import { normalizeCargoQuantity } from "./format-quantity";
 import { dedupeTagSlugs, type TagRecord } from "./tags";
 import { getTagsForCargoIds, resolveTagIds, setCargoTags } from "./tags.server";
@@ -126,30 +132,84 @@ export async function getCargo(
 	return await query;
 }
 
+export type CargoPageSortBy = "createdAt" | "expiresAt";
+
+export type CargoPageCursor =
+	| { sortBy: "createdAt"; createdAt: Date; id: string }
+	| { sortBy: "expiresAt"; expiresAt: Date; id: string };
+
 /**
- * Cursor-paginated cargo fetch using `(createdAt desc, id asc)` ordering.
+ * Cursor-paginated cargo fetch.
  *
- * Returns up to `limit` rows strictly after the supplied cursor. Pass
- * `cursor` from a previous page to continue. The caller is expected to
- * encode/decode the cursor (see `app/lib/mcp/envelope.ts`).
+ * Default order: `(createdAt desc, id asc)`.
+ * With `sortBy: "expiresAt"`: `(expiresAt asc, id asc)` — items without expiry are omitted.
  */
 export async function getCargoPage(
 	db: D1Database,
 	organizationId: string,
 	options: {
 		limit: number;
-		cursor?: { createdAt: Date; id: string } | null;
+		cursor?: CargoPageCursor | null;
 		domain?: (typeof ITEM_DOMAINS)[number];
+		expiresBefore?: string;
+		expiresAfter?: string;
+		sortBy?: CargoPageSortBy;
 	},
 ) {
 	const d1 = drizzle(db);
+	const sortBy = options.sortBy ?? "createdAt";
 	const conditions = [eq(cargo.organizationId, organizationId)];
 	if (options.domain) {
 		conditions.push(eq(cargo.domain, options.domain));
 	}
-	if (options.cursor) {
-		// Page after the cursor: rows with (createdAt < cursor.createdAt) OR
-		// (createdAt = cursor.createdAt AND id > cursor.id) — matches DESC ordering.
+	if (options.expiresBefore) {
+		conditions.push(
+			isNotNull(cargo.expiresAt),
+			lte(cargo.expiresAt, parseUtcDateISO(options.expiresBefore)),
+		);
+	}
+	if (options.expiresAfter) {
+		conditions.push(
+			isNotNull(cargo.expiresAt),
+			gte(cargo.expiresAt, parseUtcDateISO(options.expiresAfter)),
+		);
+	}
+
+	if (sortBy === "expiresAt") {
+		conditions.push(isNotNull(cargo.expiresAt));
+		const cursor = options.cursor;
+		if (cursor?.sortBy === "expiresAt") {
+			const cursorClause = or(
+				gt(cargo.expiresAt, cursor.expiresAt),
+				and(eq(cargo.expiresAt, cursor.expiresAt), gt(cargo.id, cursor.id)),
+			);
+			if (cursorClause) conditions.push(cursorClause);
+		} else if (cursor?.sortBy === "createdAt") {
+			// Mismatched cursor/sort — ignore cursor and start fresh
+		}
+
+		const rows = await d1
+			.select()
+			.from(cargo)
+			.where(and(...conditions))
+			.orderBy(asc(cargo.expiresAt), asc(cargo.id))
+			.limit(options.limit + 1);
+
+		const hasMore = rows.length > options.limit;
+		const items = hasMore ? rows.slice(0, options.limit) : rows;
+		const last = items[items.length - 1];
+		const nextCursor =
+			hasMore && last?.expiresAt
+				? ({
+						sortBy: "expiresAt" as const,
+						expiresAt: last.expiresAt,
+						id: last.id,
+					} satisfies CargoPageCursor)
+				: null;
+		return { items, nextCursor };
+	}
+
+	if (options.cursor?.sortBy === "createdAt") {
 		const cursorClause = or(
 			lt(cargo.createdAt, options.cursor.createdAt),
 			and(
@@ -171,7 +231,13 @@ export async function getCargoPage(
 	const items = hasMore ? rows.slice(0, options.limit) : rows;
 	const last = items[items.length - 1];
 	const nextCursor =
-		hasMore && last ? { createdAt: last.createdAt, id: last.id } : null;
+		hasMore && last
+			? ({
+					sortBy: "createdAt" as const,
+					createdAt: last.createdAt,
+					id: last.id,
+				} satisfies CargoPageCursor)
+			: null;
 	return { items, nextCursor };
 }
 
@@ -967,12 +1033,12 @@ export async function getExpiringCargo(
 	daysUntilExpiry = 7,
 	limit = 10,
 	domain?: string,
+	now = new Date(),
 ) {
 	const d1 = drizzle(db);
-
-	const now = new Date();
-	const futureDate = new Date(
-		now.getTime() + daysUntilExpiry * 24 * 60 * 60 * 1000,
+	const { startOfToday, endOfWindow } = getExpiringCargoBounds(
+		daysUntilExpiry,
+		now,
 	);
 
 	return await d1
@@ -982,12 +1048,43 @@ export async function getExpiringCargo(
 			and(
 				eq(cargo.organizationId, organizationId),
 				isNotNull(cargo.expiresAt),
-				lte(cargo.expiresAt, futureDate),
-				gte(cargo.expiresAt, now), // Only items not yet expired
+				lte(cargo.expiresAt, endOfWindow),
+				gte(cargo.expiresAt, startOfToday),
 				...(domain ? [eq(cargo.domain, domain)] : []),
 			),
 		)
 		.orderBy(asc(cargo.expiresAt))
+		.limit(limit);
+}
+
+/**
+ * Fetch inventory items whose expiry calendar date is before today (UTC).
+ * Optional lookback limits how far back to search (default 30 days).
+ */
+export async function getExpiredCargo(
+	db: D1Database,
+	organizationId: string,
+	daysBack = 30,
+	limit = 200,
+	domain?: string,
+	now = new Date(),
+) {
+	const d1 = drizzle(db);
+	const { startOfToday, earliest } = getExpiredCargoBounds(daysBack, now);
+
+	return await d1
+		.select()
+		.from(cargo)
+		.where(
+			and(
+				eq(cargo.organizationId, organizationId),
+				isNotNull(cargo.expiresAt),
+				lt(cargo.expiresAt, startOfToday),
+				gte(cargo.expiresAt, earliest),
+				...(domain ? [eq(cargo.domain, domain)] : []),
+			),
+		)
+		.orderBy(desc(cargo.expiresAt))
 		.limit(limit);
 }
 
@@ -997,11 +1094,14 @@ export async function getExpiringCargo(
  * @param db - D1 Database instance
  * @param organizationId - Organization ID to filter inventory
  */
-export async function getCargoStats(db: D1Database, organizationId: string) {
+export async function getCargoStats(
+	db: D1Database,
+	organizationId: string,
+	now = new Date(),
+) {
 	const d1 = drizzle(db);
 
-	const now = new Date();
-	const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+	const { startOfToday, endOfWindow } = getExpiringCargoBounds(7, now);
 
 	// Three SQL COUNT aggregates in a single D1 batch round-trip.
 	// Evaluates entirely inside D1 (SQLite) using the cargo_org_idx index —
@@ -1018,8 +1118,8 @@ export async function getCargoStats(db: D1Database, organizationId: string) {
 				and(
 					eq(cargo.organizationId, organizationId),
 					isNotNull(cargo.expiresAt),
-					gte(cargo.expiresAt, now),
-					lte(cargo.expiresAt, sevenDaysOut),
+					gte(cargo.expiresAt, startOfToday),
+					lte(cargo.expiresAt, endOfWindow),
 				),
 			),
 		d1
@@ -1029,7 +1129,7 @@ export async function getCargoStats(db: D1Database, organizationId: string) {
 				and(
 					eq(cargo.organizationId, organizationId),
 					isNotNull(cargo.expiresAt),
-					lt(cargo.expiresAt, now),
+					lt(cargo.expiresAt, startOfToday),
 				),
 			),
 	]);

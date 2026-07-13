@@ -10,6 +10,7 @@ vi.mock("~/lib/cargo.server", () => ({
 	getCargoItem: vi.fn(),
 	getCargoPage: vi.fn(),
 	getExpiringCargo: vi.fn().mockResolvedValue([]),
+	getExpiredCargo: vi.fn().mockResolvedValue([]),
 	ingestCargoItems: vi.fn(),
 	jettisonItem: vi.fn(),
 	updateItem: vi.fn(),
@@ -90,6 +91,16 @@ vi.mock("~/lib/vector.server", () => ({
 	findSimilarCargoBatch: vi.fn(),
 }));
 
+vi.mock("~/lib/agent/kitchen-summary.server", () => ({
+	buildKitchenSummary: vi.fn().mockResolvedValue({
+		temporal: { todayUtc: "2026-07-13", expirationAlertDays: 7 },
+		kitchen: { credits: 5 },
+		cargo: { stats: {}, expiringSoon: [], expiredRecently: [] },
+		mealPlan: { planId: null, entries: [] },
+		supply: null,
+	}),
+}));
+
 // D1 direct query in get_expiring_items — mock drizzle-orm/d1 chain
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: vi.fn(() => ({
@@ -103,11 +114,16 @@ vi.mock("drizzle-orm/d1", () => ({
 
 const {
 	getCargoPage,
+	getExpiredCargo,
 	getExpiringCargo,
 	ingestCargoItems,
 	jettisonItem,
 	updateItem,
 } = await import("~/lib/cargo.server");
+const { getUserSettings } = await import("~/lib/auth.server");
+const { buildKitchenSummary } = await import(
+	"~/lib/agent/kitchen-summary.server"
+);
 const { checkBalance } = await import("~/lib/ledger.server");
 const {
 	ensureMealPlan,
@@ -298,7 +314,11 @@ describe("MCP tools", () => {
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				})),
-				nextCursor: { createdAt: new Date("2026-01-01"), id: "c99" },
+				nextCursor: {
+					sortBy: "createdAt",
+					createdAt: new Date("2026-01-01"),
+					id: "c99",
+				},
 			} as never);
 			const server = makeServer();
 			const result = await getToolHandler(server, "list_inventory")({});
@@ -1162,7 +1182,83 @@ describe("MCP tools", () => {
 				"org-test-123",
 				7,
 				200,
+				undefined,
+				expect.any(Date),
 			);
+		});
+	});
+
+	describe("get_expired_items", () => {
+		it("returns empty array when no expired items", async () => {
+			vi.mocked(getExpiredCargo).mockResolvedValueOnce([]);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"get_expired_items",
+			)({
+				daysBack: 30,
+			});
+			const data = parseOk(result);
+			expect(data).toEqual([]);
+			expect(getExpiredCargo).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				30,
+				200,
+				undefined,
+				expect.any(Date),
+			);
+		});
+	});
+
+	describe("get_kitchen_summary", () => {
+		it("returns aggregated kitchen snapshot", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"get_kitchen_summary",
+			)({
+				manifestDays: 1,
+			});
+			const data = parseOk(result);
+			expect(data.kitchen.credits).toBe(5);
+			expect(buildKitchenSummary).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				"user-test-123",
+				{ manifestDays: 1 },
+			);
+		});
+	});
+
+	describe("match_meals allergens", () => {
+		it("flags allergens from user preferences", async () => {
+			vi.mocked(getUserSettings).mockResolvedValueOnce({
+				allergens: ["peanuts"],
+			} as never);
+			vi.mocked(matchMeals).mockResolvedValueOnce([
+				{
+					meal: {
+						id: "meal-1",
+						name: "PB Sandwich",
+						ingredients: [{ ingredientName: "peanut butter" }],
+					},
+					matchPercentage: 90,
+					canMake: true,
+					missingIngredients: [],
+					availableIngredients: [],
+				},
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"match_meals",
+			)({
+				allergenPolicy: "flag",
+			});
+			const data = parseOk(result);
+			expect(data[0]?.allergenSafe).toBe(false);
+			expect(data[0]?.allergenFlags).toContain("peanuts");
 		});
 	});
 

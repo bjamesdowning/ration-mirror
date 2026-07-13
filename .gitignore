@@ -36,3 +36,6 @@ worker-configuration.d.ts
 # Vitest CI artifacts
 /coverage/
 /reports/
+
+# Local-only account seed utility (not pushed to GitLab)
+/scripts/seed-account/

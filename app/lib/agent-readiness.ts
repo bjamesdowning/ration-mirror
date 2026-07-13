@@ -51,6 +51,8 @@ export const MCP_TOOL_GROUPS = [
 			"update_cargo_item",
 			"remove_cargo_item",
 			"get_expiring_items",
+			"get_expired_items",
+			"get_kitchen_summary",
 			"inventory_import_schema",
 			"preview_inventory_import",
 			"apply_inventory_import",

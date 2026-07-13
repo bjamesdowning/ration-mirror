@@ -192,7 +192,7 @@ npx wrangler r2 bucket lifecycle add ration-storage \
 
 Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
 
-**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket, support persistent multi-turn streaming with explicit Stop controls, and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status. Copilot exposes the full 35-tool MCP catalog plus `search_docs`, so it can manage Cargo, Galley, Manifest, Supply, and preferences. Image scanning and recipe URL extraction remain native-only. For overlapping AI recipe or week-planning requests, the Worker first disables tools and explains the purpose-built native option; a subsequent explicit choice can continue through deterministic chat tools. Destructive and high-impact tools use the AI SDK approval protocol before execution. Its system prompt declines code generation and other requests unrelated to Ration or kitchen logistics.
+**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket, support persistent multi-turn streaming with explicit Stop controls, and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status. Copilot exposes the full 38-tool MCP catalog plus `search_docs`, so it can manage Cargo, Galley, Manifest, Supply, and preferences. Image scanning and recipe URL extraction remain native-only. For overlapping AI recipe or week-planning requests, the Worker first disables tools and explains the purpose-built native option; a subsequent explicit choice can continue through deterministic chat tools. Destructive and high-impact tools use the AI SDK approval protocol before execution. Its system prompt declines code generation and other requests unrelated to Ration or kitchen logistics.
 
 **Copilot billing:** Billing is per conversation, not per message. Crew orgs receive 3 free copilot conversations per UTC day via KV allowance; after that, or for free-tier orgs from the first conversation, the existing ledger charges `AI_COSTS.COPILOT_TURN` as a 1-credit floor and reconciles upward by cumulative token brackets. The server enforces the `ration-copilot` Flagship flag and `copilot_connect`/`copilot` rate limits.
 
@@ -643,7 +643,7 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 - **CSV import/export** — Via `POST /api/v1/inventory/import` and `GET /api/cargo/export`. Validated against `CargoCsvRowSchema` (max 500 rows per import).
 - **Vectorize write-through** — Every cargo create/update triggers `upsertCargoVector`, keeping the Vectorize index in sync with D1. Deletes call `deleteCargoVectors`.
 
-**Why `fetchOrgCargoIndex()`?** Matching and dedup need a narrow projection (`id`, `name`, `domain`, `quantity`, `unit`, `base_quantity`, `base_unit`, `expires_at`). Expired rows remain in the index but are excluded from availability math via `isCargoUsableForMatching()`. Tags live in junction tables, not on the cargo row. Using the narrow index cuts serialisation cost and is enforced as a workspace rule.
+**Expiry dates:** Pantry `expiresAt` values are **UTC calendar days** (stored at midnight UTC). An item expiring on 13 July is valid for the entire 13 July UTC day and becomes expired from 14 July UTC onward. Hub widgets, Copilot (`get_expiring_items` / `get_expired_items`), and meal matching all use this semantics.
 
 #### Tagging
 
@@ -718,7 +718,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 | `meals-ready` | Vectorize meal match (strict) | Meals cookable right now |
 | `meals-partial` | Vectorize meal match (delta) | Meals with most ingredients available |
 | `snacks-ready` | Vectorize provision match (strict) | Quick snacks available |
-| `cargo-expiring` | D1 `WHERE expires_at < NOW() + 7 days` | Items to use soon |
+| `cargo-expiring` | D1 UTC calendar-day window (`expirationAlertDays`, default 7) | Items to use soon |
 | `supply-preview` | D1 supply list | Shopping summary |
 | `manifest-preview` | D1 meal plan entries | Next 7 days |
 

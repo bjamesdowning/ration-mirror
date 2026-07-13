@@ -36,6 +36,16 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Checked expiring items",
 		error: "Expiry check failed",
 	},
+	get_expired_items: {
+		running: "Checking expired items…",
+		done: "Checked expired items",
+		error: "Expired check failed",
+	},
+	get_kitchen_summary: {
+		running: "Summarizing your kitchen…",
+		done: "Kitchen summary ready",
+		error: "Kitchen summary failed",
+	},
 	get_supply_list: {
 		running: "Loading your Supply list…",
 		done: "Loaded Supply list",

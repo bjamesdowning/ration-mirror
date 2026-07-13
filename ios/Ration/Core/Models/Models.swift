@@ -105,6 +105,23 @@ struct CopilotCostBracket: Codable, Sendable, Identifiable {
     var id: String { "\(maxTokens.map(String.init) ?? "max")-\(credits)" }
 }
 
+struct CopilotSessionUsage: Codable, Sendable, Equatable {
+    let totalTokens: Int
+    let maxTokens: Int
+    let messageCount: Int
+    let maxMessages: Int
+    let creditsCharged: Int
+    let creditBalance: Int
+    let nextBracketAt: Int?
+}
+
+struct CopilotSessionLimitWarning: Codable, Sendable, Equatable {
+    let severity: String
+    let message: String
+
+    var isUrgent: Bool { severity == "urgent" }
+}
+
 struct CopilotMessage: Codable, Sendable, Identifiable, Equatable {
     let id: String
     let role: String
@@ -160,6 +177,44 @@ struct CopilotStreamEvent: Codable, Sendable {
     let title: String?
     let description: String?
     let blocked: CopilotBlockedFeature?
+    let usage: CopilotSessionUsage?
+    let warning: CopilotSessionLimitWarning?
+
+    init(
+        type: String,
+        message: CopilotMessage? = nil,
+        messageId: String? = nil,
+        text: String? = nil,
+        usageTokens: Int? = nil,
+        status: CopilotToolStatus? = nil,
+        toolCallId: String? = nil,
+        ok: Bool? = nil,
+        error: CopilotToolError? = nil,
+        approvalId: String? = nil,
+        toolName: String? = nil,
+        title: String? = nil,
+        description: String? = nil,
+        blocked: CopilotBlockedFeature? = nil,
+        usage: CopilotSessionUsage? = nil,
+        warning: CopilotSessionLimitWarning? = nil
+    ) {
+        self.type = type
+        self.message = message
+        self.messageId = messageId
+        self.text = text
+        self.usageTokens = usageTokens
+        self.status = status
+        self.toolCallId = toolCallId
+        self.ok = ok
+        self.error = error
+        self.approvalId = approvalId
+        self.toolName = toolName
+        self.title = title
+        self.description = description
+        self.blocked = blocked
+        self.usage = usage
+        self.warning = warning
+    }
 }
 
 // MARK: - Groups

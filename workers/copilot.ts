@@ -28,6 +28,11 @@ import {
 	getOnboardingBriefingSystemPromptAppend,
 	isOnboardingBriefingPrompt,
 } from "../app/lib/copilot/onboarding-briefing.server";
+import {
+	buildSessionUsageSnapshot,
+	evaluateSessionLimitWarning,
+	type SessionLimitWarningSeverity,
+} from "../app/lib/copilot/session-usage";
 import { getCopilotSystemPrompt } from "../app/lib/copilot/system-prompt.server";
 import {
 	COPILOT_MCP_SCOPES,
@@ -37,7 +42,10 @@ import {
 	buildFlagContext,
 	isFeatureEnabled,
 } from "../app/lib/feature-flags/flags.server";
-import { InsufficientCreditsError } from "../app/lib/ledger.server";
+import {
+	checkBalance,
+	InsufficientCreditsError,
+} from "../app/lib/ledger.server";
 import { log, redactId } from "../app/lib/logging.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
 
@@ -194,9 +202,50 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
 	private billingBlocked = false;
+	private sessionMessageCount = 0;
+	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
+
+	private maybeEmitSessionLimitWarning(
+		totalTokens: number,
+		messageCount: number,
+	): void {
+		const warning = evaluateSessionLimitWarning({
+			totalTokens,
+			messageCount,
+			emittedSoft: this.sessionWarningsEmitted.has("soft"),
+			emittedUrgent: this.sessionWarningsEmitted.has("urgent"),
+		});
+		if (!warning) return;
+		this.sessionWarningsEmitted.add(warning.severity);
+		this.broadcast(
+			JSON.stringify({
+				type: "session_limit_warning",
+				warning,
+			}),
+		);
+	}
+
+	private async broadcastSessionUsageUpdate(
+		identity: ReturnType<typeof decodeAgentName>,
+		messageCount: number,
+		creditsCharged: number,
+	): Promise<void> {
+		const creditBalance = await checkBalance(this.env, identity.organizationId);
+		this.broadcast(
+			JSON.stringify({
+				type: "session_usage_update",
+				usage: buildSessionUsageSnapshot({
+					totalTokens: this.totalUsageTokens,
+					messageCount,
+					creditsCharged,
+					creditBalance,
+				}),
+			}),
+		);
+	}
 
 	getModel() {
-		return "@cf/moonshotai/kimi-k2.6";
+		return "@cf/zai-org/glm-4.7-flash";
 	}
 
 	getSystemPrompt() {
@@ -215,6 +264,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		this.sessionMessageCount = ctx.messages.length;
 		const charge = await getConversationCharge(
 			this.env,
 			identity.organizationId,
@@ -333,6 +383,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				maxSteps: 1,
 			};
 		}
+		this.maybeEmitSessionLimitWarning(
+			this.totalUsageTokens,
+			ctx.messages.length,
+		);
 		const userText = lastUserText(ctx);
 		const blocked = detectBlockedCopilotIntent(userText);
 		if (blocked) {
@@ -452,6 +506,15 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				blobs: [charge.mode],
 				doubles: [this.totalUsageTokens, charge.bracketCreditsCharged],
 			},
+		);
+		await this.broadcastSessionUsageUpdate(
+			identity,
+			this.sessionMessageCount,
+			charge.bracketCreditsCharged,
+		);
+		this.maybeEmitSessionLimitWarning(
+			this.totalUsageTokens,
+			this.sessionMessageCount,
 		);
 		if (charge.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
 			const nextCharge = {

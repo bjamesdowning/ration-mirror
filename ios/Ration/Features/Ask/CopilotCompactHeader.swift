@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CopilotCompactHeader: View {
     let status: CopilotStatusResponse?
+    let sessionUsage: CopilotSessionUsage?
     let onClose: () -> Void
     let onNewChat: () -> Void
 
@@ -46,10 +47,20 @@ struct CopilotCompactHeader: View {
     }
 
     private func statusSummary(_ status: CopilotStatusResponse) -> String {
+        if let sessionUsage {
+            return "~\(formatTokens(sessionUsage.totalTokens)) · \(sessionUsage.creditsCharged) cr"
+        }
         if status.freeConversationsRemaining > 0 {
             return "\(status.freeConversationsRemaining) free · \(status.creditBalance) cr"
         }
         return "\(status.creditBalance) cr"
+    }
+
+    private func formatTokens(_ count: Int) -> String {
+        if count >= 10_000 {
+            return "\(Int((Double(count) / 1000).rounded()))k"
+        }
+        return count.formatted()
     }
 
     private func statusAccessibilityLabel(_ status: CopilotStatusResponse) -> String {

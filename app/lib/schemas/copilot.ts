@@ -69,6 +69,25 @@ export type CopilotAllowanceStatus = z.infer<
 	typeof CopilotAllowanceStatusSchema
 >;
 
+export const CopilotSessionUsageSchema = z.object({
+	totalTokens: z.number().int().min(0),
+	maxTokens: z.number().int().positive(),
+	messageCount: z.number().int().min(0),
+	maxMessages: z.number().int().positive(),
+	creditsCharged: z.number().int().min(0),
+	creditBalance: z.number().int().min(0),
+	nextBracketAt: z.number().int().positive().nullable(),
+});
+export type CopilotSessionUsage = z.infer<typeof CopilotSessionUsageSchema>;
+
+export const CopilotSessionLimitWarningSchema = z.object({
+	severity: z.enum(["soft", "urgent"]),
+	message: z.string().min(1),
+});
+export type CopilotSessionLimitWarning = z.infer<
+	typeof CopilotSessionLimitWarningSchema
+>;
+
 export const CopilotStreamEventSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("message_start"),
@@ -111,6 +130,14 @@ export const CopilotStreamEventSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("allowance_update"),
 		status: CopilotAllowanceStatusSchema,
+	}),
+	z.object({
+		type: z.literal("session_usage_update"),
+		usage: CopilotSessionUsageSchema,
+	}),
+	z.object({
+		type: z.literal("session_limit_warning"),
+		warning: CopilotSessionLimitWarningSchema,
 	}),
 	z.object({
 		type: z.literal("blocked_feature"),

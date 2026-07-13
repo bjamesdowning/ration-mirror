@@ -1726,6 +1726,17 @@ function HelpSection() {
 									support@mayutic.com
 								</a>
 							</p>
+							<div className="mt-4 rounded-lg border border-platinum/70 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+								<h4 className="text-xs text-label text-muted mb-2">
+									Ask Ration pricing
+								</h4>
+								<p className="text-sm text-muted">
+									Copilot charges per conversation based on total length: up to
+									12k tokens (1 credit), 30k (2 credits), or 60k (3 credits).
+									Tool calls and long answers increase token use. Start a new
+									chat to reset the meter.
+								</p>
+							</div>
 						</>
 					) : (
 						<>

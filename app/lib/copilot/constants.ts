@@ -1,5 +1,5 @@
 export const COPILOT_CONVERSATION_FLOOR_COST = 1;
-export const CREW_COPILOT_DAILY_CONVERSATIONS = 3;
+export const CREW_COPILOT_DAILY_CONVERSATIONS = 1;
 export const FREE_TIER_DAILY_CONVERSATIONS = 0;
 
 /** One-time iOS welcome briefing — single assistant response, no tools. */

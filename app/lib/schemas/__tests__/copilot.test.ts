@@ -58,4 +58,31 @@ describe("copilot schemas", () => {
 		});
 		expect(parsed.freeConversationsRemaining).toBe(2);
 	});
+
+	it("validates session usage stream events", () => {
+		const parsed = CopilotStreamEventSchema.parse({
+			type: "session_usage_update",
+			usage: {
+				totalTokens: 12_000,
+				maxTokens: 60_000,
+				messageCount: 8,
+				maxMessages: 40,
+				creditsCharged: 1,
+				creditBalance: 10,
+				nextBracketAt: 18_001,
+			},
+		});
+		expect(parsed.type).toBe("session_usage_update");
+	});
+
+	it("validates session limit warning stream events", () => {
+		const parsed = CopilotStreamEventSchema.parse({
+			type: "session_limit_warning",
+			warning: {
+				severity: "soft",
+				message: "This chat is getting long.",
+			},
+		});
+		expect(parsed.type).toBe("session_limit_warning");
+	});
 });

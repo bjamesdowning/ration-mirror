@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import MarkdownUI
+import UIKit
 
 struct AskView: View {
     @Environment(AppEnvironment.self) private var env
@@ -8,11 +9,18 @@ struct AskView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var followsLatest = true
     @FocusState private var isComposerFocused: Bool
+    @State private var showingPaywall = false
+    @State private var transcriptCopied = false
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: model.status)
+    }
+    private var isComposerBlocked: Bool {
+        isCopilotExhausted
+            || model.blocksComposerForSessionWarning
+            || model.blocksComposerForBillingState
     }
     private var activityDisplay: CopilotActivityDisplay {
         model.activityDisplay
@@ -21,9 +29,18 @@ struct AskView: View {
         VStack(spacing: 0) {
             CopilotCompactHeader(
                 status: model.status,
+                sessionUsage: model.sessionUsage,
                 onClose: closeSheet,
                 onNewChat: startNewChat
             )
+            if model.sessionUsage != nil || model.sessionLimitWarning != nil {
+                CopilotSessionMeter(
+                    usage: model.sessionUsage,
+                    warning: model.sessionLimitWarning,
+                    onAcknowledgeWarning: { model.acknowledgeSessionLimitWarning() },
+                    onNewChat: startNewChat
+                )
+            }
             transcript
         }
         .background(Theme.ceramic.ignoresSafeArea())
@@ -46,6 +63,22 @@ struct AskView: View {
                 organizationId: organizationId,
                 snapshots: env.snapshots
             )
+        }
+        .sheet(isPresented: $showingPaywall, onDismiss: {
+            Task {
+                guard let organizationId else { return }
+                if let draft = await model.refreshStatusAfterCredits(
+                    api: env.api,
+                    auth: env.auth,
+                    organizationId: organizationId,
+                    snapshots: env.snapshots
+                ) {
+                    ask.draft = draft
+                    isComposerFocused = true
+                }
+            }
+        }) {
+            PaywallView()
         }
     }
 
@@ -139,6 +172,27 @@ struct AskView: View {
         Haptics.light()
     }
 
+    private func continueInNewChat() {
+        guard let organizationId else { return }
+        followsLatest = true
+        transcriptCopied = false
+        model.newChat(
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
+        ask.draft = CopilotContinuationCopy.continuationDraft()
+        isComposerFocused = true
+        Haptics.light()
+    }
+
+    private func copyTranscript() {
+        let text = CopilotContinuationCopy.transcriptForCopy(model.messages)
+        guard !text.isEmpty else { return }
+        UIPasteboard.general.string = text
+        Haptics.light()
+    }
+
     private func scrollToBottom(proxy: ScrollViewProxy, force: Bool = false) {
         guard followsLatest || force else { return }
         withAnimation(.easeOut(duration: 0.2)) {
@@ -177,6 +231,35 @@ struct AskView: View {
             CreditCard(message: message) {
                 Task { await model.enableAutoDeduct(api: env.api) }
             }
+        case let .insufficientCredits(message):
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Copilot needs more credits").rationHeadline()
+                    Text(message).rationCaption()
+                    HStack(spacing: 10) {
+                        Button("Add credits") { showingPaywall = true }
+                            .buttonStyle(PrimaryButtonStyle())
+                        Button("New chat") { startNewChat() }
+                            .buttonStyle(SecondaryButtonStyle())
+                    }
+                }
+            }
+        case let .sessionLimitReached(message):
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Start a new chat to continue").rationHeadline()
+                    Text(message).rationCaption()
+                    Text("Your conversation stays below. Continue in a fresh chat and add what you still need help with.")
+                        .rationCaption()
+                    Button("Continue in new chat") { continueInNewChat() }
+                        .buttonStyle(PrimaryButtonStyle())
+                    Button(transcriptCopied ? "Copied" : "Copy transcript") {
+                        copyTranscript()
+                        transcriptCopied = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            }
         case let .error(message):
             ErrorBanner(message: message)
         case .streaming, .idle:
@@ -192,7 +275,7 @@ struct AskView: View {
             ),
             isFocused: $isComposerFocused,
             mode: .sheet,
-            isExhausted: isCopilotExhausted,
+            isExhausted: isComposerBlocked,
             isTurnActive: model.isTurnActive,
             isStopping: model.isStopping,
             isAwaitingApproval: model.isAwaitingApproval,

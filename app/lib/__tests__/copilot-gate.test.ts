@@ -83,9 +83,9 @@ describe("copilot gate", () => {
 		ledger.withCreditGate.mockClear();
 	});
 
-	it("uses three Crew allowance conversations before credits", async () => {
+	it("uses one Crew allowance conversation before credits", async () => {
 		const e = env();
-		for (let i = 0; i < 3; i += 1) {
+		for (let i = 0; i < 1; i += 1) {
 			const charge = await openCopilotConversation(e, identity);
 			expect(charge.mode).toBe("allowance");
 		}
@@ -97,7 +97,7 @@ describe("copilot gate", () => {
 
 	it("deducts after allowance when consent is enabled", async () => {
 		const e = env();
-		for (let i = 0; i < 3; i += 1) {
+		for (let i = 0; i < 1; i += 1) {
 			await openCopilotConversation(e, identity);
 		}
 		await setCopilotAutoDeductConsent(e, identity, true);
@@ -110,7 +110,7 @@ describe("copilot gate", () => {
 		const e = env();
 		await openCopilotConversation(e, identity);
 		const status = await getCopilotStatus(e, identity);
-		expect(status.freeConversationsRemaining).toBe(2);
+		expect(status.freeConversationsRemaining).toBe(0);
 		expect(status.creditBalance).toBe(10);
 	});
 

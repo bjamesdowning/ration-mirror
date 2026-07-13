@@ -355,7 +355,7 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertFalse(model.isTurnActive)
     }
 
-    func testSessionLimitClearsConversationAndRotatesSocket() {
+    func testSessionLimitPreservesTranscriptAndShowsContinuationState() {
         let socket = TestAskSocketClient()
         let model = AskViewModel(socket: socket)
         model.apply(Self.event(type: "text_delta", text: "Existing"))
@@ -370,10 +370,13 @@ final class AskViewModelTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(model.messages, [])
-        XCTAssertEqual(socket.conversationId, "new-test-conversation")
+        XCTAssertEqual(model.messages.count, 1)
+        XCTAssertEqual(model.messages.first?.content, "Existing")
         XCTAssertFalse(model.isTurnActive)
-        XCTAssertEqual(model.state, .error("Start a new conversation."))
+        XCTAssertEqual(
+            model.state,
+            .sessionLimitReached("Start a new conversation.")
+        )
     }
 
     func testApprovalIgnoredWhileStopping() async {

@@ -11,6 +11,8 @@ final class AskViewModel {
         case awaitingApproval(id: String, title: String, description: String)
         case blocked(CopilotBlockedFeature)
         case allowanceExhausted(String)
+        case insufficientCredits(String)
+        case sessionLimitReached(String)
         case error(String)
     }
 
@@ -38,6 +40,9 @@ final class AskViewModel {
     private(set) var turnPhase: TurnPhase = .idle
     private(set) var messages: [CopilotMessage] = []
     private(set) var status: CopilotStatusResponse?
+    private(set) var sessionUsage: CopilotSessionUsage?
+    private(set) var sessionLimitWarning: CopilotSessionLimitWarning?
+    private(set) var urgentWarningAcknowledged = false
     private(set) var activeTool: CopilotToolStatus?
     private(set) var completedTool: CompletedTool?
     private(set) var lastSyncedLabel: String?
@@ -66,6 +71,45 @@ final class AskViewModel {
         self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
     }
 
+    var blocksComposerForSessionWarning: Bool {
+        sessionLimitWarning?.isUrgent == true && !urgentWarningAcknowledged
+    }
+
+    var blocksComposerForBillingState: Bool {
+        switch state {
+        case .sessionLimitReached, .insufficientCredits:
+            return true
+        default:
+            return false
+        }
+    }
+
+    func acknowledgeSessionLimitWarning() {
+        urgentWarningAcknowledged = true
+    }
+
+    @discardableResult
+    func refreshStatusAfterCredits(
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> String? {
+        do {
+            let nextStatus = try await api.copilotStatus()
+            status = nextStatus
+            if case .insufficientCredits = state,
+               nextStatus.creditBalance >= nextStatus.conversationFloorCost {
+                newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
+                completeTurn(state: .idle)
+                return CopilotContinuationCopy.continuationDraft()
+            }
+        } catch {
+            // Keep the existing credits banner if status refresh fails.
+        }
+        return nil
+    }
+
     var activityDisplay: CopilotActivityDisplay {
         CopilotActivityDisplayResolver.resolve(
             turnPhase: turnPhase,
@@ -89,6 +133,9 @@ final class AskViewModel {
             messages = []
             activeTool = nil
             completedTool = nil
+            sessionUsage = nil
+            sessionLimitWarning = nil
+            urgentWarningAcknowledged = false
             state = .idle
             turnPhase = .idle
             lastSyncedLabel = nil
@@ -154,6 +201,9 @@ final class AskViewModel {
         organizationId: String,
         snapshots: SnapshotStore
     ) async -> Bool {
+        if case .sessionLimitReached = state { return false }
+        if case .insufficientCredits = state { return false }
+        if blocksComposerForSessionWarning { return false }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               !isSubmitting,
@@ -291,6 +341,9 @@ final class AskViewModel {
         messages = []
         activeTool = nil
         completedTool = nil
+        sessionUsage = nil
+        sessionLimitWarning = nil
+        urgentWarningAcknowledged = false
         completeTurn(state: .idle)
         Task {
             await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
@@ -321,7 +374,11 @@ final class AskViewModel {
     }
 
     func shouldAcceptObservedEvent(_ event: CopilotStreamEvent) -> Bool {
-        isTurnActive || event.type == "message_end" || event.type == "error"
+        isTurnActive
+            || event.type == "message_end"
+            || event.type == "error"
+            || event.type == "session_usage_update"
+            || event.type == "session_limit_warning"
     }
 
     func apply(_ event: CopilotStreamEvent) {
@@ -412,6 +469,31 @@ final class AskViewModel {
             } else {
                 completeTurn(state: .error("Copilot sent an invalid blocked action."))
             }
+        case "session_usage_update":
+            if let usage = event.usage {
+                sessionUsage = usage
+                if let currentStatus = status {
+                    status = CopilotStatusResponse(
+                        tier: currentStatus.tier,
+                        freeConversationsRemaining: currentStatus.freeConversationsRemaining,
+                        allowanceResetAt: currentStatus.allowanceResetAt,
+                        creditBalance: usage.creditBalance,
+                        autoDeductConsent: currentStatus.autoDeductConsent,
+                        conversationFloorCost: currentStatus.conversationFloorCost,
+                        sessionIdleMs: currentStatus.sessionIdleMs,
+                        brackets: currentStatus.brackets,
+                        onboardingBriefingEligible: currentStatus.onboardingBriefingEligible,
+                        onboardingBriefingConsumed: currentStatus.onboardingBriefingConsumed
+                    )
+                }
+            }
+        case "session_limit_warning":
+            if let warning = event.warning {
+                sessionLimitWarning = warning
+                if warning.isUrgent {
+                    urgentWarningAcknowledged = false
+                }
+            }
         case "error":
             let wasTurnActive = isTurnActive
             if event.error?.code == "onboarding_briefing_exhausted" {
@@ -421,17 +503,20 @@ final class AskViewModel {
             }
             isConnected = false
             if event.error?.code == "session_limit_reached" {
-                messages = []
-                activeTool = nil
-                completedTool = nil
-                socket?.newConversation()
-                if let organizationId, let snapshots {
-                    Task {
-                        await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
-                    }
-                }
-                lastSyncedLabel = nil
-            } else if !wasTurnActive {
+                // Preserve transcript and let the user start a new chat explicitly.
+                socket?.disconnect()
+                completeTurn(state: .sessionLimitReached(event.error?.message ?? "This Copilot chat is full. Start a new chat to continue."))
+                scheduleImmediateSnapshotSave()
+                return
+            }
+            if event.error?.code == "insufficient_credits" {
+                // Preserve transcript; user needs to add credits before continuing.
+                socket?.disconnect()
+                completeTurn(state: .insufficientCredits(event.error?.message ?? "Copilot needs more credits."))
+                scheduleImmediateSnapshotSave()
+                return
+            }
+            if !wasTurnActive {
                 return
             }
             completeTurn(

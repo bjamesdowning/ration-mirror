@@ -1,4 +1,4 @@
-import { ArrowDown, Send, Sparkles, Square, X } from "lucide-react";
+import { ArrowDown, Info, Send, Sparkles, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouteLoaderData } from "react-router";
 import { FilterSheet } from "~/components/shell/FilterSheet";
@@ -11,11 +11,16 @@ import {
 	decodeAgentResponseFrame,
 } from "~/lib/copilot/agent-frame.client";
 import {
+	buildCopilotContinuationDraft,
+	formatCopilotTranscriptForCopy,
+} from "~/lib/copilot/continuation";
+import {
 	clearCopilotSession,
 	loadCopilotSession,
 	resolveCopilotOrgHydration,
 	touchCopilotSession,
 } from "~/lib/copilot/session-storage.client";
+import { formatCopilotTokenCount } from "~/lib/copilot/session-usage";
 import { resolveCopilotToolEnd } from "~/lib/copilot/tool-event.client";
 import {
 	type CopilotTurnEvent,
@@ -54,6 +59,21 @@ type AgentUiMessage = {
 	parts: Array<{ type: "text"; text: string }>;
 };
 
+type CopilotSessionUsage = {
+	totalTokens: number;
+	maxTokens: number;
+	messageCount: number;
+	maxMessages: number;
+	creditsCharged: number;
+	creditBalance: number;
+	nextBracketAt: number | null;
+};
+
+type CopilotSessionLimitWarning = {
+	severity: "soft" | "urgent";
+	message: string;
+};
+
 type CopilotEvent = {
 	type: string;
 	message?: CopilotMessage;
@@ -70,6 +90,8 @@ type CopilotEvent = {
 	id?: string;
 	body?: string;
 	done?: boolean;
+	usage?: CopilotSessionUsage;
+	warning?: CopilotSessionLimitWarning;
 };
 
 type ApprovalRequest = {
@@ -135,9 +157,20 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const organizationId = root?.activeOrganizationId ?? null;
 
 	const [status, setStatus] = useState<CopilotStatus | null>(null);
+	const [showPricingDetails, setShowPricingDetails] = useState(false);
 	const [messages, setMessages] = useState<CopilotMessage[]>([]);
 	const [draft, setDraft] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [needsCredits, setNeedsCredits] = useState<string | null>(null);
+	const [limitReached, setLimitReached] = useState<string | null>(null);
+	const [sessionUsage, setSessionUsage] = useState<CopilotSessionUsage | null>(
+		null,
+	);
+	const [sessionLimitWarning, setSessionLimitWarning] =
+		useState<CopilotSessionLimitWarning | null>(null);
+	const [urgentWarningAcknowledged, setUrgentWarningAcknowledged] =
+		useState(false);
+	const [transcriptCopied, setTranscriptCopied] = useState(false);
 	const [blocked, setBlocked] = useState<CopilotEvent["blocked"] | null>(null);
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [needsConsent, setNeedsConsent] = useState(false);
@@ -179,7 +212,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		draft.trim().length > 0 &&
 		!isConnecting &&
 		!isTurnActive &&
-		!isAwaitingApproval;
+		!isAwaitingApproval &&
+		!limitReached &&
+		!needsCredits &&
+		!(sessionLimitWarning?.severity === "urgent" && !urgentWarningAcknowledged);
+	const sessionUsagePercent = sessionUsage
+		? Math.min(100, (sessionUsage.totalTokens / sessionUsage.maxTokens) * 100)
+		: 0;
 	const latestContentLength =
 		messages[messages.length - 1]?.content.length ?? 0;
 	const socketUrl = useMemo(
@@ -239,6 +278,17 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					persistSession(current);
 					return current;
 				});
+			}
+			if (isOpen) {
+				void fetch("/api/copilot/status")
+					.then((response) => {
+						if (!response.ok) throw new Error("Unable to load copilot status.");
+						return response.json() as Promise<CopilotStatus>;
+					})
+					.then((nextStatus) => {
+						setStatus(nextStatus);
+					})
+					.catch(() => undefined);
 			}
 			if (isOpen && options.focus !== false) {
 				requestAnimationFrame(() => composerRef.current?.focus());
@@ -307,9 +357,25 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 		const snapshot = loadCopilotSession(organizationId, status.sessionIdleMs);
 		const hydration = resolveCopilotOrgHydration(snapshot);
+		const clearSessionBillingState = () => {
+			setNeedsCredits(null);
+			setLimitReached(null);
+			setSessionUsage(null);
+			setSessionLimitWarning(null);
+			setUrgentWarningAcknowledged(false);
+			setTranscriptCopied(false);
+		};
 		if (hydration.kind === "restore") {
 			setConversationId(hydration.conversationId);
 			setMessages(hydration.messages);
+			setBlocked(null);
+			setNeedsConsent(false);
+			setApproval(null);
+			setError(null);
+			clearSessionBillingState();
+			setActiveToolName(null);
+			setCompletedToolName(null);
+			setToolSucceeded(null);
 		} else {
 			setConversationId(crypto.randomUUID());
 			setMessages([]);
@@ -317,6 +383,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setNeedsConsent(false);
 			setApproval(null);
 			setError(null);
+			clearSessionBillingState();
 			setActiveToolName(null);
 			setCompletedToolName(null);
 			setToolSucceeded(null);
@@ -471,6 +538,25 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					setBlocked(event.blocked ?? null);
 					endTurn();
 					break;
+				case "session_usage_update":
+					if (event.usage) {
+						const usage = event.usage;
+						setSessionUsage(usage);
+						setStatus((current) =>
+							current
+								? { ...current, creditBalance: usage.creditBalance }
+								: current,
+						);
+					}
+					break;
+				case "session_limit_warning":
+					if (event.warning) {
+						setSessionLimitWarning(event.warning);
+						if (event.warning.severity === "urgent") {
+							setUrgentWarningAcknowledged(false);
+						}
+					}
+					break;
 				case "approval_request":
 					setTurnPhase("idle");
 					if (!event.approvalId) {
@@ -498,12 +584,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						socketRef.current = null;
 						connectPromiseRef.current = null;
 						clearToolLinger();
-						const nextConversationId = crypto.randomUUID();
-						setConversationId(nextConversationId);
-						setMessages([]);
-						if (organizationId) clearCopilotSession(organizationId);
-						setError(event.error.message);
-						endTurn({ persist: false });
+						setLimitReached(event.error.message);
+						setError(null);
+						setNeedsCredits(null);
+						endTurn({ persist: true, focus: false });
+						return;
+					}
+					if (
+						typeof event.error === "object" &&
+						event.error?.code === "insufficient_credits"
+					) {
+						setNeedsCredits(event.error.message);
+						setError(null);
+						endTurn({ persist: true, focus: false });
 						return;
 					}
 					setError(
@@ -519,7 +612,6 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			appendAssistant,
 			clearToolLinger,
 			endTurn,
-			organizationId,
 			persistSession,
 			scheduleToolDoneLinger,
 			transitionTurn,
@@ -661,6 +753,8 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setToolSucceeded(null);
 		setBlocked(null);
 		setError(null);
+		setNeedsCredits(null);
+		setLimitReached(null);
 		setFollowsLatest(true);
 		try {
 			const socket = await connectSocket();
@@ -726,7 +820,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		}
 	}
 
-	function newChat() {
+	function resetConversationState(options?: { preserveDraft?: boolean }) {
 		const { activeRequestId } = turnStateRef.current;
 		cancelCopilotRequest(socketRef.current, activeRequestId);
 		transitionTurn({ type: "ended" });
@@ -743,11 +837,41 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setNeedsConsent(false);
 		setApproval(null);
 		setError(null);
+		setNeedsCredits(null);
+		setLimitReached(null);
+		setSessionUsage(null);
+		setSessionLimitWarning(null);
+		setUrgentWarningAcknowledged(false);
+		setTranscriptCopied(false);
 		setActiveToolName(null);
 		setCompletedToolName(null);
 		setToolSucceeded(null);
 		setTurnPhase("idle");
+		if (!options?.preserveDraft) {
+			setDraft("");
+		}
 		if (organizationId) clearCopilotSession(organizationId);
+	}
+
+	function newChat() {
+		resetConversationState();
+	}
+
+	async function copyTranscript() {
+		if (messages.length === 0) return;
+		const text = formatCopilotTranscriptForCopy(messages);
+		try {
+			await navigator.clipboard.writeText(text);
+			setTranscriptCopied(true);
+		} catch {
+			setError("Unable to copy the transcript.");
+		}
+	}
+
+	function continueInNewChat() {
+		resetConversationState({ preserveDraft: true });
+		setDraft(buildCopilotContinuationDraft());
+		requestAnimationFrame(() => composerRef.current?.focus());
 	}
 
 	function approveTool(approved: boolean) {
@@ -812,20 +936,115 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			<div className="flex h-[70vh] flex-col gap-3">
 				<div className="rounded-2xl border border-platinum/70 bg-white/70 p-3 text-sm text-muted dark:border-white/10 dark:bg-white/[0.06]">
 					{status ? (
-						<div className="flex items-center justify-between gap-3">
-							<span>
-								{status.freeConversationsRemaining > 0
-									? `${status.freeConversationsRemaining} free chats today`
-									: `${status.conversationFloorCost} credit floor per new chat`}
-							</span>
-							<span className="rounded-full bg-hyper-green/15 px-2 py-1 font-mono text-hyper-green">
-								{status.creditBalance} cr
-							</span>
+						<div className="space-y-2">
+							<div className="flex items-center justify-between gap-3">
+								<span className="flex items-center gap-2">
+									{status.freeConversationsRemaining > 0
+										? `${status.freeConversationsRemaining} free chats today`
+										: `${status.conversationFloorCost} credit floor per new chat`}
+									<button
+										type="button"
+										onClick={() => setShowPricingDetails((v) => !v)}
+										aria-label={
+											showPricingDetails
+												? "Hide Copilot pricing details"
+												: "Show Copilot pricing details"
+										}
+										className="grid size-6 place-items-center rounded-full border border-platinum/70 bg-white/80 text-muted hover:text-carbon dark:border-white/10 dark:bg-white/[0.04] dark:hover:text-white"
+									>
+										<Info className="size-3.5" />
+									</button>
+								</span>
+								<span className="rounded-full bg-hyper-green/15 px-2 py-1 font-mono text-hyper-green">
+									{status.creditBalance} cr
+								</span>
+							</div>
+							{showPricingDetails ? (
+								<div className="rounded-xl border border-platinum/70 bg-white/70 p-2 text-xs text-muted dark:border-white/10 dark:bg-white/[0.04]">
+									<p className="font-mono uppercase tracking-[0.18em] text-[10px] text-muted">
+										Pricing
+									</p>
+									<ul className="mt-1 space-y-1">
+										{status.brackets.map((bracket) => (
+											<li
+												key={`${bracket.maxTokens ?? "max"}-${bracket.credits}`}
+											>
+												Up to {bracket.maxTokens?.toLocaleString() ?? "∞"}{" "}
+												tokens → {bracket.credits} cr
+											</li>
+										))}
+									</ul>
+								</div>
+							) : null}
 						</div>
 					) : (
 						"Loading copilot status..."
 					)}
 				</div>
+
+				{sessionUsage ? (
+					<div className="rounded-2xl border border-platinum/70 bg-white/70 p-3 text-xs text-muted dark:border-white/10 dark:bg-white/[0.06]">
+						<div className="flex items-center justify-between gap-3 font-mono">
+							<span>
+								~{formatCopilotTokenCount(sessionUsage.totalTokens)} /{" "}
+								{formatCopilotTokenCount(sessionUsage.maxTokens)} tokens
+							</span>
+							<span className="text-hyper-green">
+								{sessionUsage.creditsCharged} cr this chat
+							</span>
+						</div>
+						<div
+							className="mt-2 h-1 overflow-hidden rounded-full bg-platinum/60 dark:bg-white/10"
+							role="progressbar"
+							aria-valuenow={Math.round(sessionUsagePercent)}
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-label="Copilot session token usage"
+						>
+							<div
+								className="h-full rounded-full bg-hyper-green transition-[width] duration-300"
+								style={{ width: `${sessionUsagePercent}%` }}
+							/>
+						</div>
+						{sessionUsage.nextBracketAt ? (
+							<p className="mt-1 text-[10px]">
+								Next bracket in ~
+								{formatCopilotTokenCount(sessionUsage.nextBracketAt)} tokens
+							</p>
+						) : null}
+					</div>
+				) : null}
+
+				{sessionLimitWarning ? (
+					<div
+						className={`rounded-xl border p-3 text-sm ${
+							sessionLimitWarning.severity === "urgent"
+								? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+								: "border-platinum/70 bg-white/70 text-muted dark:border-white/10 dark:bg-white/[0.04]"
+						}`}
+					>
+						<p>{sessionLimitWarning.message}</p>
+						{sessionLimitWarning.severity === "urgent" &&
+						!urgentWarningAcknowledged ? (
+							<div className="mt-2 flex flex-wrap gap-2">
+								<button
+									type="button"
+									onClick={() => setUrgentWarningAcknowledged(true)}
+									className="rounded-full border border-platinum px-3 py-1 font-mono text-xs uppercase tracking-[0.18em] dark:border-white/10"
+								>
+									Continue anyway
+								</button>
+								<button
+									type="button"
+									onClick={newChat}
+									className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+								>
+									New chat
+								</button>
+							</div>
+						) : null}
+					</div>
+				) : null}
 
 				<div
 					ref={transcriptRef}
@@ -960,6 +1179,59 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						>
 							Allow credit use
 						</button>
+					</div>
+				) : null}
+				{needsCredits ? (
+					<div className="rounded-xl border border-platinum bg-white/80 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+						<p className="font-semibold">Copilot needs more credits</p>
+						<p className="text-muted">{needsCredits}</p>
+						<div className="mt-2 flex flex-wrap gap-2">
+							<a
+								href="/hub/pricing"
+								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+							>
+								Add credits
+							</a>
+							<button
+								type="button"
+								onClick={newChat}
+								className="rounded-full border border-platinum px-3 py-1 font-mono text-muted text-xs uppercase tracking-[0.18em] dark:border-white/10"
+							>
+								New chat
+							</button>
+						</div>
+					</div>
+				) : null}
+				{limitReached ? (
+					<div className="rounded-xl border border-platinum bg-white/80 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+						<p className="font-semibold">Start a new chat to continue</p>
+						<p className="text-muted">{limitReached}</p>
+						<p className="mt-1 text-xs text-muted">
+							Your conversation stays below. Continue in a fresh chat and add
+							what you still need help with.
+						</p>
+						<div className="mt-2 flex flex-wrap gap-2">
+							<button
+								type="button"
+								onClick={continueInNewChat}
+								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+							>
+								Continue in new chat
+							</button>
+							<button
+								type="button"
+								onClick={() => void copyTranscript()}
+								className="rounded-full border border-platinum px-3 py-1 font-mono text-muted text-xs uppercase tracking-[0.18em] dark:border-white/10"
+							>
+								{transcriptCopied ? "Copied" : "Copy transcript"}
+							</button>
+							<a
+								href="/hub/pricing"
+								className="rounded-full border border-platinum px-3 py-1 font-mono text-muted text-xs uppercase tracking-[0.18em] dark:border-white/10"
+							>
+								Pricing
+							</a>
+						</div>
 					</div>
 				) : null}
 				{error ? (

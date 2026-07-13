@@ -245,7 +245,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		return "@cf/openai/gpt-oss-120b";
+		return "@cf/moonshotai/kimi-k2.7-code";
 	}
 
 	getSystemPrompt() {

@@ -15,19 +15,20 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import type {
 	AdminUserRow,
+	AdminUserSort,
 	AdminUsersListParams,
 	AdminUsersListResult,
-	AdminUserSort,
 	LoggedInUserRow,
 	LoggedInUsersResult,
 } from "./admin-users";
 import { resolvePlatform } from "./admin-users";
+
 export type {
 	AdminUserOrder,
 	AdminUserRow,
+	AdminUserSort,
 	AdminUsersListParams,
 	AdminUsersListResult,
-	AdminUserSort,
 	LoggedInPlatform,
 	LoggedInUserRow,
 	LoggedInUsersResult,
@@ -40,6 +41,7 @@ export {
 	DEFAULT_ADMIN_USERS_SORT,
 	resolvePlatform,
 } from "./admin-users";
+
 import { timestampToMs } from "./user-activity.server";
 
 /** D1 returns MAX(timestamp) as unix seconds, not Date. */

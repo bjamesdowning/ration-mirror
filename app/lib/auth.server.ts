@@ -41,6 +41,7 @@ import {
 	buildOAuthAccessTokenClaims,
 	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
+import { CURRENT_TOS_VERSION } from "./tos.constants";
 import type { UserSettings } from "./types";
 import { touchUserLastActive } from "./user-activity.server";
 
@@ -287,7 +288,7 @@ export function createAuth(env: Cloudflare.Env) {
 									.update(schema.user)
 									.set({
 										tosAcceptedAt: new Date(),
-										tosVersion: "2026-03-11",
+										tosVersion: CURRENT_TOS_VERSION,
 									})
 									.where(eq(schema.user.id, user.id)),
 								// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex

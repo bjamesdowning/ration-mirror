@@ -11,6 +11,7 @@ import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { CheckoutFormSchema } from "~/lib/schemas/checkout";
 import {
+	buildEmbeddedCheckoutSessionBase,
 	CREDIT_PACKS,
 	clearStripeCustomerId,
 	getCreditPackPriceId,
@@ -104,9 +105,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			if ((checkoutType === "subscription" || checkoutType === "tier") && sub) {
 				const selectedSubscription = SUBSCRIPTION_PRODUCTS[sub];
 				return stripe.checkout.sessions.create({
-					ui_mode: "embedded",
+					...buildEmbeddedCheckoutSessionBase(customerId),
 					mode: "subscription",
-					customer: customerId,
 					line_items: [
 						{
 							price: getSubscriptionPriceId(
@@ -139,9 +139,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			if (!pack) throw new Error("Pack required"); // validated above
 			const welcomeVoucherRedeemed = userRow.welcomeVoucherRedeemed ?? false;
 			return stripe.checkout.sessions.create({
-				ui_mode: "embedded",
+				...buildEmbeddedCheckoutSessionBase(customerId),
 				mode: "payment",
-				customer: customerId,
 				line_items: [
 					{
 						price: getCreditPackPriceId(

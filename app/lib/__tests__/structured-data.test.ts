@@ -25,6 +25,15 @@ describe("organizationSchema", () => {
 		expect(schema.logo).toContain("/static/ration-logo.svg");
 	});
 
+	it("includes address and omits vatID when not registered", () => {
+		const schema = organizationSchema() as Record<string, unknown>;
+		expect(schema.address).toMatchObject({
+			"@type": "PostalAddress",
+			addressCountry: "IE",
+		});
+		expect("vatID" in schema).toBe(false);
+	});
+
 	it("includes sameAs and founder when provided", () => {
 		const schema = organizationSchema({
 			sameAs: ["https://github.com/test"],

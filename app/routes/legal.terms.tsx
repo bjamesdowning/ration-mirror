@@ -1,7 +1,12 @@
+import { TraderDisclosure } from "~/components/legal/TraderDisclosure";
 import { JsonLd } from "~/components/seo/JsonLd";
+import { LEGAL_ENTITY } from "~/lib/legal-entity.constants";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
 import { breadcrumbSchema, webPageSchema } from "~/lib/structured-data";
+import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
 import type { Route } from "./+types/legal.terms";
+
+const TOS_DATE = CURRENT_TOS_VERSION;
 
 export const meta: Route.MetaFunction = () => {
 	const title = "Terms of Service | Ration";
@@ -19,7 +24,7 @@ const schemas = [
 		name: "Terms of Service",
 		description: "Terms of Service for the Ration platform.",
 		path: "/legal/terms",
-		dateModified: "2026-03-11",
+		dateModified: TOS_DATE,
 	}),
 	breadcrumbSchema([
 		{ name: "Home", path: "/" },
@@ -34,15 +39,17 @@ export default function TermsOfService() {
 			<JsonLd data={schemas} />
 			<h1>Terms of Service</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: March 11, 2026
+				Last Updated: July 15, 2026
 			</p>
 
 			<h2>1. Acceptance of Terms</h2>
 			<p>
-				By accessing or using the Ration platform ("Service"), you agree to be
-				bound by these Terms of Service ("Terms"). If you disagree with any part
-				of the terms, you may not access the Service. The Service is operated by
-				Ration Operating Company ("Company", "we", "us", or "our").
+				By accessing or using the Ration platform (&quot;Service&quot;), you
+				agree to be bound by these Terms of Service (&quot;Terms&quot;). If you
+				disagree with any part of the terms, you may not access the Service. The
+				Service is operated by {LEGAL_ENTITY.businessName} (&quot;we&quot;,
+				&quot;us&quot;, or &quot;our&quot;), which provides the{" "}
+				{LEGAL_ENTITY.productName} platform.
 			</p>
 
 			<h2>2. Description of Service</h2>
@@ -65,8 +72,10 @@ export default function TermsOfService() {
 				and warrant that you meet this requirement. If you are a parent or
 				guardian who has discovered that your child has created an account
 				without your consent, please contact us at{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> and we will
-				delete the account promptly.
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>{" "}
+				and we will delete the account promptly.
 			</p>
 
 			<h2>4. User Accounts & Security</h2>
@@ -97,17 +106,18 @@ export default function TermsOfService() {
 				</li>
 				<li>
 					To transmit, or procure the sending of, any advertising or promotional
-					material, including any "junk mail", "chain letter," "spam," or any
-					other similar solicitation.
+					material, including any &quot;junk mail&quot;, &quot;chain
+					letter,&quot; &quot;spam,&quot; or any other similar solicitation.
 				</li>
 				<li>
-					To impersonate or attempt to impersonate the Company, a Company
-					employee, another user, or any other person or entity.
+					To impersonate or attempt to impersonate {LEGAL_ENTITY.businessName},
+					our personnel, another user, or any other person or entity.
 				</li>
 				<li>
-					To engage in any other conduct that restricts or inhibits anyone's use
-					or enjoyment of the Service, or which, as determined by us, may harm
-					the Company or users of the Service, or expose them to liability.
+					To engage in any other conduct that restricts or inhibits
+					anyone&apos;s use or enjoyment of the Service, or which, as determined
+					by us, may harm us or users of the Service, or expose them to
+					liability.
 				</li>
 				<li>
 					<strong>Specifically:</strong> You explicitly agree not to abuse or
@@ -119,11 +129,11 @@ export default function TermsOfService() {
 			<p>
 				The Service and its original content (excluding Content provided by
 				users), features, and functionality are and will remain the exclusive
-				property of Ration Operating Company and its licensors. The Service is
-				protected by copyright, trademark, and other laws of both the United
-				States and foreign countries. Our trademarks and trade dress may not be
-				used in connection with any product or service without the prior written
-				consent of Ration Operating Company.
+				property of {LEGAL_ENTITY.businessName} and its licensors. The Service
+				is protected by copyright, trademark, and other laws of Ireland, the
+				European Union, and other applicable jurisdictions. Our trademarks and
+				trade dress may not be used in connection with any product or service
+				without our prior written consent.
 			</p>
 
 			<h2>7. Termination</h2>
@@ -138,10 +148,17 @@ export default function TermsOfService() {
 			<h2>8. Payments, Subscriptions & Refunds</h2>
 			<p>
 				Certain features of the Service require the purchase of credits or an
-				active subscription, processed via Stripe on the web or Apple on iOS. By
-				completing a purchase you agree to the following terms:
+				active subscription. Purchases on the web are processed by Stripe and
+				sold by {LEGAL_ENTITY.businessName} as merchant of record. iOS purchases
+				are processed by Apple via the App Store. By completing a purchase you
+				agree to the following terms:
 			</p>
 			<ul>
+				<li>
+					<strong>Pricing and VAT:</strong> Prices displayed in EUR for
+					consumers in the European Union include VAT where applicable. The
+					total price shown at checkout is the amount you will be charged.
+				</li>
 				<li>
 					<strong>Credits:</strong> Credit packs are non-refundable once
 					purchased. Credits that have already been consumed (e.g. used for
@@ -160,18 +177,32 @@ export default function TermsOfService() {
 					subject to the same non-refundable terms as purchased credits.
 				</li>
 				<li>
+					<strong>Right of withdrawal (EU/EEA consumers):</strong> If you are a
+					consumer in the European Union or European Economic Area, you
+					generally have a 14-day right to withdraw from distance contracts. For
+					digital content supplied immediately (credits, subscriptions, and
+					digital features), you acknowledge that performance begins upon
+					purchase and expressly consent to immediate supply when you complete
+					checkout or accept these Terms at sign-up, which may limit or exclude
+					your withdrawal right once digital delivery has begun, as permitted by
+					applicable law.
+				</li>
+				<li>
 					<strong>Exceptions:</strong> We will issue a full refund for any
 					charge that results from a technical error on our part (e.g. a
 					duplicate charge). Refund requests must be submitted to{" "}
-					<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> within 14
-					days of the charge.
+					<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+						{LEGAL_ENTITY.emails.legal}
+					</a>{" "}
+					within 14 days of the charge.
 				</li>
 				<li>
-					<strong>Payment processor:</strong> All payment information is
-					collected and stored by Stripe, Inc. for web purchases or Apple for
-					iOS App Store purchases. RevenueCat manages subscription entitlement
-					status across platforms. We do not store card or App Store payment
-					details. See Stripe&apos;s Privacy Policy at{" "}
+					<strong>Payment processors:</strong> Payment information is collected
+					and stored by Stripe, Inc. for web purchases or Apple for iOS App
+					Store purchases. RevenueCat manages subscription entitlement status
+					across platforms. We do not store card or App Store payment details.
+					Billing address may be collected at checkout for tax compliance and is
+					processed by Stripe. See Stripe&apos;s Privacy Policy at{" "}
 					<a
 						href="https://stripe.com/privacy"
 						target="_blank"
@@ -194,24 +225,25 @@ export default function TermsOfService() {
 			<h2>9. Disclaimer</h2>
 			<p>
 				Your use of the Service is at your sole risk. The Service is provided on
-				an "AS IS" and "AS AVAILABLE" basis. The Service is provided without
-				warranties of any kind, whether express or implied, including, but not
-				limited to, implied warranties of merchantability, fitness for a
-				particular purpose, non-infringement, or course of performance.
+				an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis. The Service is
+				provided without warranties of any kind, whether express or implied,
+				including, but not limited to, implied warranties of merchantability,
+				fitness for a particular purpose, non-infringement, or course of
+				performance.
 			</p>
 			<p>
-				Ration Operating Company uses third-party AI providers for certain
+				{LEGAL_ENTITY.businessName} uses third-party AI providers for certain
 				features. We do not guarantee the accuracy, completeness, or reliability
 				of any AI-generated content or analysis.
 			</p>
 
 			<h2>10. Limitation of Liability</h2>
 			<p>
-				In no event shall Ration Operating Company, nor its directors,
-				employees, partners, agents, suppliers, or affiliates, be liable for any
-				indirect, incidental, special, consequential or punitive damages,
-				including without limitation, loss of profits, data, use, goodwill, or
-				other intangible losses, resulting from (i) your access to or use of or
+				To the fullest extent permitted by applicable law,{" "}
+				{LEGAL_ENTITY.businessName} shall not be liable for any indirect,
+				incidental, special, consequential or punitive damages, including
+				without limitation, loss of profits, data, use, goodwill, or other
+				intangible losses, resulting from (i) your access to or use of or
 				inability to access or use the Service; (ii) any conduct or content of
 				any third party on the Service; (iii) any content obtained from the
 				Service; and (iv) unauthorized access, use or alteration of your
@@ -220,12 +252,19 @@ export default function TermsOfService() {
 				been informed of the possibility of such damage, and even if a remedy
 				set forth herein is found to have failed of its essential purpose.
 			</p>
+			<p>
+				Nothing in these Terms excludes or limits liability that cannot be
+				excluded or limited under Irish or EU consumer protection law.
+			</p>
 
 			<h2>11. Governing Law</h2>
 			<p>
 				These Terms shall be governed and construed in accordance with the laws
-				of Delaware, United States, without regard to its conflict of law
-				provisions.
+				of Ireland, without regard to its conflict of law provisions. You agree
+				that the courts of Ireland shall have exclusive jurisdiction to settle
+				any dispute arising from or connected with these Terms, subject to
+				mandatory consumer protections that may entitle you to bring proceedings
+				in your country of residence.
 			</p>
 
 			<h2>12. Changes</h2>
@@ -233,13 +272,46 @@ export default function TermsOfService() {
 				We reserve the right, at our sole discretion, to modify or replace these
 				Terms at any time. If a revision is material we will provide at least 30
 				days notice prior to any new terms taking effect. What constitutes a
-				material change will be determined at our sole discretion.
+				material change will be determined at our sole discretion. Continued use
+				of the Service after updated Terms take effect may require your
+				re-acceptance, as indicated at sign-in or in the Service.
 			</p>
 
-			<h2>13. Contact Us</h2>
+			<section id="trader-information">
+				<h2>13. Trader Information</h2>
+				<p>
+					In accordance with applicable e-commerce regulations, the following
+					information identifies the service provider:
+				</p>
+				<TraderDisclosure className="glass-panel rounded-lg p-4 my-4 not-prose" />
+			</section>
+
+			<h2>14. Online Dispute Resolution</h2>
+			<p>
+				The European Commission provides an Online Dispute Resolution (ODR)
+				platform for consumers in the EU. You can access it at{" "}
+				<a
+					href="https://ec.europa.eu/consumers/odr"
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					ec.europa.eu/consumers/odr
+				</a>
+				. We are not obliged to participate in alternative dispute resolution
+				proceedings before a consumer arbitration board, but we will consider
+				reasonable requests to resolve complaints directly via{" "}
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>
+				.
+			</p>
+
+			<h2>15. Contact Us</h2>
 			<p>
 				If you have any questions about these Terms, please contact us at:{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>
 			</p>
 		</>
 	);

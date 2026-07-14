@@ -12,6 +12,10 @@
  * answer engines should always see the canonical production URL.
  */
 
+import {
+	LEGAL_ENTITY,
+	traderPostalAddressSchema,
+} from "./legal-entity.constants";
 import { absoluteSiteUrl, OG_IMAGE, SITE_ORIGIN } from "./seo";
 
 /* -------------------------------------------------------------------------- */
@@ -70,6 +74,10 @@ export function organizationSchema(opts?: {
 	};
 	if (opts?.sameAs && opts.sameAs.length > 0) {
 		schema.sameAs = opts.sameAs;
+	}
+	schema.address = traderPostalAddressSchema();
+	if (LEGAL_ENTITY.vatNumber) {
+		schema.vatID = LEGAL_ENTITY.vatNumber;
 	}
 	if (opts?.founder) {
 		schema.founder = personSchema(opts.founder, { embed: true });

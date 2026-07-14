@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { TraderDisclosure } from "~/components/legal/TraderDisclosure";
 import { APP_VERSION } from "~/lib/version";
 
 type PublicFooterProps = {
@@ -63,46 +64,59 @@ export function PublicFooter({
 	if (variant === "compact") {
 		return (
 			<footer className="relative z-20 border-t border-carbon/10 py-8 bg-ceramic">
-				<div className="max-w-5xl mx-auto px-6 flex flex-wrap justify-between items-center gap-4 text-xs text-muted">
-					<p>
-						© {year} Mayutic. All rights reserved.
-						{showVersion ? <span className="ml-3">v{APP_VERSION}</span> : null}
+				<div className="max-w-5xl mx-auto px-6 flex flex-col gap-3">
+					<div className="flex flex-wrap justify-between items-center gap-4 text-xs text-muted">
+						<p>
+							© {year} Mayutic. All rights reserved.
+							{showVersion ? (
+								<span className="ml-3">v{APP_VERSION}</span>
+							) : null}
+						</p>
+						<nav className="flex flex-wrap gap-5" aria-label="Footer">
+							<Link to="/" className="hover:text-hyper-green transition-colors">
+								Home
+							</Link>
+							<Link
+								to="/blog"
+								className="hover:text-hyper-green transition-colors"
+							>
+								Blog
+							</Link>
+							<Link
+								to="/tools"
+								className="hover:text-hyper-green transition-colors"
+							>
+								Tools
+							</Link>
+							<Link
+								to="/about"
+								className="hover:text-hyper-green transition-colors"
+							>
+								About
+							</Link>
+							<Link
+								to="/legal/privacy"
+								className="hover:text-hyper-green transition-colors"
+							>
+								Privacy
+							</Link>
+							<Link
+								to="/legal/terms"
+								className="hover:text-hyper-green transition-colors"
+							>
+								Terms
+							</Link>
+						</nav>
+					</div>
+					<TraderDisclosure variant="compact" />
+					<p className="text-xs text-muted">
+						<Link
+							to="/legal/terms#trader-information"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Trader information
+						</Link>
 					</p>
-					<nav className="flex flex-wrap gap-5" aria-label="Footer">
-						<Link to="/" className="hover:text-hyper-green transition-colors">
-							Home
-						</Link>
-						<Link
-							to="/blog"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Blog
-						</Link>
-						<Link
-							to="/tools"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Tools
-						</Link>
-						<Link
-							to="/about"
-							className="hover:text-hyper-green transition-colors"
-						>
-							About
-						</Link>
-						<Link
-							to="/legal/privacy"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Privacy
-						</Link>
-						<Link
-							to="/legal/terms"
-							className="hover:text-hyper-green transition-colors"
-						>
-							Terms
-						</Link>
-					</nav>
 				</div>
 			</footer>
 		);
@@ -132,16 +146,27 @@ export function PublicFooter({
 						</div>
 					))}
 				</div>
-				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pt-6 border-t border-carbon/10 text-xs text-muted">
-					<div className="flex items-center gap-3">
-						<div className="w-2 h-2 rounded-full bg-hyper-green shadow-glow-sm" />
-						<span className="font-bold text-carbon">Ration</span>
-						<span>by Mayutic</span>
-						{showVersion ? (
-							<span className="ml-1 font-mono">v{APP_VERSION}</span>
-						) : null}
+				<div className="flex flex-col gap-3 pt-6 border-t border-carbon/10 text-xs text-muted">
+					<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+						<div className="flex items-center gap-3">
+							<div className="w-2 h-2 rounded-full bg-hyper-green shadow-glow-sm" />
+							<span className="font-bold text-carbon">Ration</span>
+							<span>by Mayutic</span>
+							{showVersion ? (
+								<span className="ml-1 font-mono">v{APP_VERSION}</span>
+							) : null}
+						</div>
+						<p>© {year} Mayutic. All rights reserved.</p>
 					</div>
-					<p>© {year} Mayutic. All rights reserved.</p>
+					<TraderDisclosure variant="compact" />
+					<p>
+						<Link
+							to="/legal/terms#trader-information"
+							className="hover:text-hyper-green transition-colors"
+						>
+							Trader information
+						</Link>
+					</p>
 				</div>
 			</div>
 		</footer>

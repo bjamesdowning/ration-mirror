@@ -1,4 +1,5 @@
 import { Link, Outlet } from "react-router";
+import { TraderDisclosure } from "~/components/legal/TraderDisclosure";
 
 export default function LegalLayout() {
 	return (
@@ -40,9 +41,15 @@ export default function LegalLayout() {
 
 			{/* Footer */}
 			<footer className="border-t border-carbon/10 py-8 mt-12 bg-ceramic">
-				<div className="max-w-4xl mx-auto px-6 flex justify-between items-center text-xs text-muted">
-					<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
-					<Link to="/" className="hover:text-hyper-green transition-colors">
+				<div className="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs text-muted">
+					<div className="space-y-2">
+						<p>© {new Date().getFullYear()} Mayutic. All rights reserved.</p>
+						<TraderDisclosure variant="compact" />
+					</div>
+					<Link
+						to="/"
+						className="hover:text-hyper-green transition-colors shrink-0"
+					>
 						Back to Home
 					</Link>
 				</div>

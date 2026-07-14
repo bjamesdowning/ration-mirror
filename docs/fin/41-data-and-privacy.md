@@ -2,9 +2,9 @@
 
 ## Canonical legal text
 
-The binding policies are hosted on the product domain:
+The binding policies are hosted on the product domain and identify **Mayutic** (Ireland) as operator and data controller:
 
-- **Terms of service:** `/legal/terms`
+- **Terms of service:** `/legal/terms` (includes trader information at `#trader-information`)
 - **Privacy policy:** `/legal/privacy`
 
 Open these paths on the **same host** you use for Ration (for example your production domain). This knowledge article **summarizes** common questions—it does **not** replace those pages.
@@ -33,5 +33,14 @@ Cloudflare, Stripe, email providers, and AI gateways may process data in their r
 ## Contact
 
 Use the **contact channel** listed in the privacy policy for privacy requests (access, correction, deletion) subject to verification.
+
+## External platform checklist (operator manual)
+
+After deploying legal updates, align these outside the codebase:
+
+- **Stripe Dashboard:** legal name *Billy Downing trading as Mayutic* (invoices only), business address, VAT number when assigned, Stripe Tax for Ireland, then enable `automatic_tax` in checkout code
+- **App Store Connect:** seller entity, tax forms, privacy/support URLs
+- **Google OAuth consent screen:** publisher name Mayutic
+- **Codebase:** set `LEGAL_ENTITY.vatNumber` in `app/lib/legal-entity.constants.ts` when Revenue assigns your number
 
 If this summary and the legal pages disagree, the **legal pages win**.

@@ -1,6 +1,9 @@
+import { TraderDisclosure } from "~/components/legal/TraderDisclosure";
 import { JsonLd } from "~/components/seo/JsonLd";
+import { LEGAL_ENTITY } from "~/lib/legal-entity.constants";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
 import { breadcrumbSchema, webPageSchema } from "~/lib/structured-data";
+import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
 import type { Route } from "./+types/legal.privacy";
 
 export const meta: Route.MetaFunction = () => {
@@ -19,7 +22,7 @@ const schemas = [
 		name: "Privacy Policy",
 		description: "Privacy Policy for the Ration platform.",
 		path: "/legal/privacy",
-		dateModified: "2026-04-27",
+		dateModified: CURRENT_TOS_VERSION,
 	}),
 	breadcrumbSchema([
 		{ name: "Home", path: "/" },
@@ -34,16 +37,18 @@ export default function PrivacyPolicy() {
 			<JsonLd data={schemas} />
 			<h1>Privacy Policy</h1>
 			<p className="text-sm text-muted mb-8 glass-panel rounded-lg p-4">
-				Last Updated: April 27, 2026
+				Last Updated: July 15, 2026
 			</p>
 
 			<h2>1. Introduction</h2>
 			<p>
-				Ration Operating Company ("us", "we", or "our") operates the Ration
-				platform (the "Service"). This page informs you of our policies
-				regarding the collection, use, and disclosure of personal data when you
-				use our Service and the choices you have associated with that data.
+				{LEGAL_ENTITY.businessName} (&quot;we&quot;, &quot;us&quot;, or
+				&quot;our&quot;) is the data controller for the Ration platform (the
+				&quot;Service&quot;). This page informs you of our policies regarding
+				the collection, use, and disclosure of personal data when you use our
+				Service and the choices you have associated with that data.
 			</p>
+			<TraderDisclosure className="glass-panel rounded-lg p-4 my-4 not-prose" />
 
 			<h2>2. Information We Collect</h2>
 			<p>
@@ -65,6 +70,10 @@ export default function PrivacyPolicy() {
 				<li>First name and last name</li>
 				<li>Profile picture (via OAuth providers)</li>
 				<li>Cookies and Usage Data</li>
+				<li>
+					Billing address (collected at checkout via Stripe for tax compliance;
+					we do not store card details)
+				</li>
 			</ul>
 
 			<h3>Usage Data</h3>
@@ -145,8 +154,10 @@ export default function PrivacyPolicy() {
 				knowingly collect personal data from children. If you are a parent or
 				guardian and believe your child has provided us with personal data,
 				please contact us at{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a> and we will
-				delete that information promptly.
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>{" "}
+				and we will delete that information promptly.
 			</p>
 			<p>
 				If you are located in the United States, our Service is also not
@@ -188,8 +199,8 @@ export default function PrivacyPolicy() {
 				</li>
 				<li>
 					<strong>Legal obligation (Art. 6(1)(c)):</strong> Payment records and
-					transaction history retained to comply with applicable tax and
-					financial reporting laws.
+					transaction history retained to comply with applicable tax, VAT, and
+					financial reporting laws, including obligations to Revenue in Ireland.
 				</li>
 				<li>
 					<strong>Legitimate interests (Art. 6(1)(f)):</strong> Security
@@ -281,9 +292,9 @@ export default function PrivacyPolicy() {
 					.
 				</li>
 				<li>
-					<strong>Stripe:</strong> Payment processing. We do not store or
-					collect your payment card details. That information is provided
-					directly to Stripe.
+					<strong>Stripe:</strong> Payment processing and billing address
+					collection at checkout. We do not store or collect your payment card
+					details. That information is provided directly to Stripe.
 				</li>
 				<li>
 					<strong>RevenueCat and Apple:</strong> Subscription and in-app
@@ -382,12 +393,14 @@ export default function PrivacyPolicy() {
 
 			<h2>10. International Data Transfers</h2>
 			<p>
-				Our Service Providers may process personal data in countries outside
-				your country of residence, including the United States. Where GDPR or UK
-				GDPR applies and personal data is transferred outside the EEA/UK, we
-				rely on appropriate safeguards such as the European Commission's
-				Standard Contractual Clauses (SCCs) or the UK International Data
-				Transfer Agreement (or the UK Addendum to SCCs), as applicable.
+				{LEGAL_ENTITY.businessName} is established in Ireland at{" "}
+				{LEGAL_ENTITY.formattedAddress}. Our Service Providers may process
+				personal data in countries outside your country of residence, including
+				the United States. Where GDPR or UK GDPR applies and personal data is
+				transferred outside the EEA/UK, we rely on appropriate safeguards such
+				as the European Commission&apos;s Standard Contractual Clauses (SCCs) or
+				the UK International Data Transfer Agreement (or the UK Addendum to
+				SCCs), as applicable.
 			</p>
 			<ul>
 				<li>
@@ -414,11 +427,12 @@ export default function PrivacyPolicy() {
 				</li>
 			</ul>
 			<p>
-				Ration Operating Company is established in the United States. We have
-				not designated a formal EU/EEA representative under GDPR Article 27 at
-				this time. If you have questions or wish to exercise your rights, please
-				contact us directly at{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>.
+				If you have questions or wish to exercise your rights, please contact us
+				directly at{" "}
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>
+				.
 			</p>
 
 			<h2>11. Data Retention & Deletion</h2>
@@ -506,8 +520,10 @@ export default function PrivacyPolicy() {
 			</ul>
 			<p>
 				To exercise your California privacy rights, contact us at{" "}
-				<a href="mailto:legal@mayutic.com">legal@mayutic.com</a>. We will
-				respond within 45 days of receiving a verifiable request.
+				<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+					{LEGAL_ENTITY.emails.legal}
+				</a>
+				. We will respond within 45 days of receiving a verifiable request.
 			</p>
 
 			<h2>15. Changes to This Privacy Policy</h2>
@@ -528,7 +544,10 @@ export default function PrivacyPolicy() {
 			</p>
 			<ul>
 				<li>
-					By email: <a href="mailto:legal@mayutic.com">legal@mayutic.com</a>
+					By email:{" "}
+					<a href={`mailto:${LEGAL_ENTITY.emails.legal}`}>
+						{LEGAL_ENTITY.emails.legal}
+					</a>
 				</li>
 			</ul>
 			<p>
@@ -540,8 +559,18 @@ export default function PrivacyPolicy() {
 			<p>
 				<strong>Right to lodge a complaint (GDPR Art. 77):</strong> You have the
 				right to lodge a complaint with a supervisory authority. If you are in
-				the EU or EEA, you may contact your local Data Protection Authority. A
-				list of EU supervisory authorities is available at{" "}
+				Ireland, you may contact the{" "}
+				<a
+					href="https://www.dataprotection.ie"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-hyper-green hover:underline"
+				>
+					Data Protection Commission (Ireland)
+				</a>
+				. If you are elsewhere in the EU or EEA, you may contact your local Data
+				Protection Authority. A list of EU supervisory authorities is available
+				at{" "}
 				<a
 					href="https://edpb.europa.eu/about-edpb/about-edpb/members_en"
 					target="_blank"
@@ -551,7 +580,7 @@ export default function PrivacyPolicy() {
 					edpb.europa.eu
 				</a>
 				. If you are in the United Kingdom, you may contact the Information
-				Commissioner's Office (ICO) at{" "}
+				Commissioner&apos;s Office (ICO) at{" "}
 				<a
 					href="https://ico.org.uk"
 					target="_blank"

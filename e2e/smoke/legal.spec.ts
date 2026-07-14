@@ -9,6 +9,13 @@ test.describe("legal", () => {
 			timeout: 5000,
 		});
 		await expect(page.getByText("Acceptance of Terms")).toBeVisible();
+		const traderSection = page.locator("#trader-information");
+		await expect(traderSection).toBeVisible();
+		await expect(traderSection).toContainText("Mayutic");
+		await expect(traderSection).toContainText("777497");
+		await expect(traderSection).toContainText(
+			"6 Dundrum Wood, Ballinteer Road",
+		);
 	});
 
 	test("privacy policy page loads", async ({ page }) => {
@@ -19,5 +26,9 @@ test.describe("legal", () => {
 			timeout: 5000,
 		});
 		await expect(page.getByText("Information We Collect")).toBeVisible();
+		await expect(page.getByText("data controller")).toBeVisible();
+		await expect(
+			page.getByText("Data Protection Commission (Ireland)"),
+		).toBeVisible();
 	});
 });

@@ -2,6 +2,7 @@
  * Email delivery via Cloudflare Email Service Workers binding.
  */
 
+import { traderFooterLine } from "./legal-entity.constants";
 import {
 	MCP_ENDPOINT_URL,
 	MCP_SETUP_STEPS_SHORT,
@@ -287,7 +288,8 @@ export function buildWelcomeEmail(params: {
                 <a href="${hubUrl}" style="color:#00E088;word-break:break-all;">${hubUrl}</a>
               </p>`;
 
-	const footerHtml = `You're receiving this because you created a Ration account. <a href="${privacyUrl}" style="color:#00E088;">Privacy policy</a> · Built by Mayutic`;
+	const traderLine = traderFooterLine();
+	const footerHtml = `You're receiving this because you created a Ration account. <a href="${privacyUrl}" style="color:#00E088;">Privacy policy</a> · Built by Mayutic · ${traderLine}`;
 
 	const html = wrapEmailLayout({
 		preheader,
@@ -308,7 +310,7 @@ ${buildMcpConnectSectionText(connectUrl)}
 
 You're receiving this because you created a Ration account.
 Privacy policy: ${privacyUrl}
-Built by Mayutic`;
+Built by Mayutic · ${traderLine}`;
 
 	return { subject, html, text };
 }
@@ -351,7 +353,8 @@ export function buildReengagementEmail(params: {
                 <a href="${hubUrl}" style="color:#00E088;word-break:break-all;">${hubUrl}</a>
               </p>`;
 
-	const footerHtml = `You're receiving this because your Ration account has been inactive for ${inactiveDays} days. <a href="${privacyUrl}" style="color:#00E088;">Privacy policy</a> · Built by Mayutic`;
+	const traderLine = traderFooterLine();
+	const footerHtml = `You're receiving this because your Ration account has been inactive for ${inactiveDays} days. <a href="${privacyUrl}" style="color:#00E088;">Privacy policy</a> · Built by Mayutic · ${traderLine}`;
 
 	const html = wrapEmailLayout({
 		preheader,
@@ -373,7 +376,7 @@ ${buildMcpConnectSectionText(connectUrl)}
 
 You're receiving this because your Ration account has been inactive for ${inactiveDays} days.
 Privacy policy: ${privacyUrl}
-Built by Mayutic`;
+Built by Mayutic · ${traderLine}`;
 
 	return { subject, html, text };
 }

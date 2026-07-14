@@ -281,3 +281,18 @@ export async function getOrCreateStripeCustomer(
 
 	return updated?.stripeCustomerId ?? customer.id;
 }
+
+/** Shared Stripe Embedded Checkout options for EU B2C VAT place-of-supply. */
+export function buildEmbeddedCheckoutSessionBase(
+	customerId: string,
+): Pick<
+	Stripe.Checkout.SessionCreateParams,
+	"ui_mode" | "customer" | "billing_address_collection" | "customer_update"
+> {
+	return {
+		ui_mode: "embedded",
+		customer: customerId,
+		billing_address_collection: "required",
+		customer_update: { address: "auto" },
+	};
+}

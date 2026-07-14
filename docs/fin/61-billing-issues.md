@@ -9,9 +9,9 @@
 
 ## Subscription status
 
-Use **Manage billing** / customer portal from **Pricing** or **Settings** when available. Cancellations and payment method updates happen in **Stripe’s** portal.
+Use **Manage billing** / customer portal from **Pricing** or **Settings** when available. Cancellations and payment method updates happen in **Stripe’s** portal (web) or the **App Store** (iOS), depending on where you subscribed.
 
-If **Fin** is configured with Ration’s billing connectors, users can also ask in chat whether they are subscribed, when renewal is, or to **cancel at period end** / **resume** (undo a pending cancellation). Answers must match the live API; if chat and the app disagree, **the app wins**—update Fin articles and connector behavior.
+**Ask Ration** can report live subscription tier, renewal or end date, and credit balance via `get_billing_summary`. For changes (cancel, update payment method), it directs you to **Manage billing** in Settings or the App Store — it does not mutate billing in chat. If chat and the app disagree, **the app wins**—refresh Settings or Pricing and update support docs if needed.
 
 ## Wrong amount charged
 

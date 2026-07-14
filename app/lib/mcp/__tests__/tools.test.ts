@@ -72,6 +72,10 @@ vi.mock("~/lib/ledger.server", () => ({
 	checkBalance: vi.fn(),
 }));
 
+vi.mock("~/lib/billing.server", () => ({
+	getBillingAccountSummary: vi.fn(),
+}));
+
 vi.mock("~/lib/rate-limiter.server", () => ({
 	checkRateLimit: vi.fn(),
 }));
@@ -125,6 +129,7 @@ const { buildKitchenSummary } = await import(
 	"~/lib/agent/kitchen-summary.server"
 );
 const { checkBalance } = await import("~/lib/ledger.server");
+const { getBillingAccountSummary } = await import("~/lib/billing.server");
 const {
 	ensureMealPlan,
 	addEntry,
@@ -1227,6 +1232,61 @@ describe("MCP tools", () => {
 				"org-test-123",
 				"user-test-123",
 				{ manifestDays: 1 },
+			);
+		});
+	});
+
+	describe("get_billing_summary", () => {
+		it("returns live billing snapshot scoped to the authenticated user", async () => {
+			vi.mocked(getBillingAccountSummary).mockResolvedValueOnce({
+				account: {
+					tier: "free",
+					tierExpired: false,
+					renewsOrEndsAt: null,
+					cancelAtPeriodEnd: false,
+					crewSubscribedAt: null,
+				},
+				organization: {
+					id: "org-test-123",
+					name: "Test Org",
+					credits: 7,
+					effectiveTier: "free",
+					effectiveTierExpired: false,
+					userRole: "owner",
+				},
+				subscription: {
+					active: false,
+					store: null,
+					managementUrl: null,
+					canPurchaseOnWeb: true,
+					purchaseBlockReason: null,
+					billingUnavailable: false,
+				},
+				actions: {
+					pricingUrl: "https://ration.mayutic.com/hub/pricing",
+					settingsUrl: "https://ration.mayutic.com/hub/settings",
+					portalAvailable: false,
+				},
+				copilot: {
+					freeConversationsRemaining: 0,
+					creditBalance: 7,
+					autoDeductConsent: false,
+					tokensPerCredit: 20_000,
+					sessionMaxTokens: 128_000,
+				},
+			});
+
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_billing_summary")({});
+			const data = parseOk(result);
+
+			expect(data.organization.credits).toBe(7);
+			expect(getBillingAccountSummary).toHaveBeenCalledWith(expect.anything(), {
+				userId: "user-test-123",
+				organizationId: "org-test-123",
+			});
+			expect(JSON.stringify(data).toLowerCase()).not.toContain(
+				"stripecustomerid",
 			);
 		});
 	});

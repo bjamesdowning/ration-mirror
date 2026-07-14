@@ -1,6 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { RevenueCatWebhookEventSchema } from "~/lib/schemas/billing";
+import {
+	BillingAccountSummarySchema,
+	RevenueCatWebhookEventSchema,
+} from "~/lib/schemas/billing";
 import { MobileBillingStatusSchema } from "~/lib/schemas/mobile/billing";
+
+describe("BillingAccountSummarySchema", () => {
+	it("accepts a full billing account summary shape", () => {
+		const parsed = BillingAccountSummarySchema.safeParse({
+			account: {
+				tier: "crew_member",
+				tierExpired: false,
+				renewsOrEndsAt: "2099-01-01T00:00:00.000Z",
+				cancelAtPeriodEnd: false,
+				crewSubscribedAt: "2098-01-01T00:00:00.000Z",
+			},
+			organization: {
+				id: "org-1",
+				name: "Kitchen",
+				credits: 10,
+				effectiveTier: "crew_member",
+				effectiveTierExpired: false,
+				userRole: "owner",
+			},
+			subscription: {
+				active: true,
+				store: "stripe",
+				managementUrl: "https://billing.stripe.com/test",
+				canPurchaseOnWeb: true,
+				purchaseBlockReason: null,
+				billingUnavailable: false,
+			},
+			actions: {
+				pricingUrl: "https://ration.mayutic.com/hub/pricing",
+				settingsUrl: "https://ration.mayutic.com/hub/settings",
+				portalAvailable: true,
+			},
+			copilot: {
+				freeConversationsRemaining: 1,
+				creditBalance: 10,
+				autoDeductConsent: false,
+				tokensPerCredit: 20_000,
+				sessionMaxTokens: 128_000,
+			},
+		});
+		expect(parsed.success).toBe(true);
+	});
+});
 
 describe("RevenueCatWebhookEventSchema", () => {
 	it("parses a minimal INITIAL_PURCHASE event", () => {

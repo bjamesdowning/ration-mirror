@@ -2047,11 +2047,25 @@ bun install --frozen-lockfile && bun run build && bunx wrangler deploy
 bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.mcp.jsonc
 ```
 
+Before deploy (or when billing tools need cross-store subscription data), set the RevenueCat secret on the MCP worker (per-Worker; does not inherit from `ration`):
+
+```bash
+wrangler secret put REVENUECAT_API_KEY --config wrangler.mcp.jsonc
+```
+
 **Copilot worker (`ration-copilot`, [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc)):**
 
 ```bash
 bun install --frozen-lockfile && bunx wrangler deploy --config wrangler.copilot.jsonc
 ```
+
+Set RevenueCat on the Copilot worker for live `get_billing_summary` store and management URLs:
+
+```bash
+wrangler secret put REVENUECAT_API_KEY --config wrangler.copilot.jsonc
+```
+
+`ration-copilot` already requires `BETTER_AUTH_SECRET` (see [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc)). `STRIPE_SECRET_KEY` stays on the main `ration` worker only.
 
 `postinstall` runs [`scripts/postinstall.ts`](scripts/postinstall.ts) (cf-typegen via `wrangler types` when dependencies are intact). The MCP and Copilot workers do not need `bun run build` — Wrangler bundles `workers/mcp.ts` and `workers/copilot.ts` directly.
 

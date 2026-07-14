@@ -9,6 +9,7 @@ import {
 	runTool,
 	type SharedToolDefinition,
 } from "../mcp/tool-runtime";
+import { createBillingToolDefs } from "../mcp/tools/billing";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
 import { createInventoryToolDefs } from "../mcp/tools/inventory";
 import { createManifestToolDefs } from "../mcp/tools/manifest";
@@ -139,6 +140,7 @@ export function createCopilotToolDefs(
 	return [
 		createSearchDocsToolDef(env),
 		...createReadToolDefs(env),
+		...createBillingToolDefs(env),
 		...createInventoryToolDefs(env),
 		...createGalleyToolDefs(env),
 		...createManifestToolDefs(env),

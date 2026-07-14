@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "~/db/schema";
 import {
 	CREW_ANNUAL_CREDIT_BONUS,
 	RC_ENTITLEMENT_CREW_MEMBER,
@@ -15,15 +18,26 @@ import {
 	resolveBillingOrganizationId,
 	revokeCrewMemberTier,
 } from "~/lib/billing-tier.server";
-import { addCredits } from "~/lib/ledger.server";
+import { getEffectiveTier, getGroupTierLimits } from "~/lib/capacity.server";
+import { getCopilotStatus } from "~/lib/copilot/gate.server";
+import { toExpiryDate } from "~/lib/date-utils";
+import { addCredits, checkBalance } from "~/lib/ledger.server";
 import { log, redactId } from "~/lib/logging.server";
+import { getMemberRole } from "~/lib/org-supply-settings.server";
 import {
 	getSubscriber,
 	isRevenueCatApiConfigured,
 	isRevenueCatFulfillmentEnabled,
 	type RevenueCatEntitlementInfo,
 } from "~/lib/revenuecat.server";
-import { RevenueCatWebhookEventSchema } from "~/lib/schemas/billing";
+import {
+	type BillingAccountSummary,
+	BillingAccountSummarySchema,
+	RevenueCatWebhookEventSchema,
+} from "~/lib/schemas/billing";
+import type { TierSlug } from "~/lib/tiers.server";
+
+export type { BillingAccountSummary };
 
 export type BillingStatus = {
 	tier: string;
@@ -281,6 +295,114 @@ export async function processRevenueCatWebhookEvent(
 		}
 		throw error;
 	}
+}
+
+function toIsoTimestamp(
+	value: Date | number | string | null | undefined,
+): string | null {
+	const date = toExpiryDate(value);
+	return date ? date.toISOString() : null;
+}
+
+function hubUrl(origin: string, path: string): string {
+	const base = origin.replace(/\/$/, "");
+	return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/**
+ * Live billing/account snapshot for MCP and Ask Ration.
+ * Scoped to the authenticated user and active organization only.
+ */
+export async function getBillingAccountSummary(
+	env: Env,
+	input: { userId: string; organizationId: string },
+): Promise<BillingAccountSummary> {
+	const origin = (env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
+	const db = drizzle(env.DB, { schema });
+
+	const [userRow, orgRow, userRole, effectiveOrgTier] = await Promise.all([
+		db.query.user.findFirst({
+			where: eq(schema.user.id, input.userId),
+			columns: {
+				tier: true,
+				tierExpiresAt: true,
+				subscriptionCancelAtPeriodEnd: true,
+				crewSubscribedAt: true,
+				stripeCustomerId: true,
+			},
+		}),
+		db.query.organization.findFirst({
+			where: eq(schema.organization.id, input.organizationId),
+			columns: { id: true, name: true },
+		}),
+		getMemberRole(env.DB, input.organizationId, input.userId),
+		getGroupTierLimits(env, input.organizationId),
+	]);
+
+	if (!userRole) {
+		throw new Error("Organization membership not found");
+	}
+
+	const rawAccountTier: TierSlug =
+		userRow?.tier === "crew_member" ? "crew_member" : "free";
+	const { tier: accountTier, isExpired: accountTierExpired } = getEffectiveTier(
+		rawAccountTier,
+		userRow?.tierExpiresAt ?? null,
+	);
+
+	const [credits, billingStatus, copilotStatus] = await Promise.all([
+		checkBalance(env, input.organizationId),
+		getBillingStatusForUser(env, input.userId, accountTier),
+		getCopilotStatus(env, {
+			userId: input.userId,
+			organizationId: input.organizationId,
+			tier: effectiveOrgTier.tier,
+		}),
+	]);
+
+	const managementUrl = billingStatus.management.url;
+	const portalAvailable =
+		Boolean(userRow?.stripeCustomerId) || Boolean(managementUrl);
+
+	const summary: BillingAccountSummary = {
+		account: {
+			tier: accountTier,
+			tierExpired: accountTierExpired,
+			renewsOrEndsAt: toIsoTimestamp(userRow?.tierExpiresAt ?? null),
+			cancelAtPeriodEnd: Boolean(userRow?.subscriptionCancelAtPeriodEnd),
+			crewSubscribedAt: toIsoTimestamp(userRow?.crewSubscribedAt ?? null),
+		},
+		organization: {
+			id: input.organizationId,
+			name: orgRow?.name ?? "",
+			credits,
+			effectiveTier: effectiveOrgTier.tier,
+			effectiveTierExpired: effectiveOrgTier.isExpired,
+			userRole,
+		},
+		subscription: {
+			active: billingStatus.entitlements.crew_member.active,
+			store: billingStatus.management.store,
+			managementUrl,
+			canPurchaseOnWeb: billingStatus.canPurchaseSubscription,
+			purchaseBlockReason: billingStatus.purchaseBlockReason,
+			billingUnavailable: billingStatus.billingUnavailable,
+		},
+		actions: {
+			pricingUrl: hubUrl(origin, "/hub/pricing"),
+			settingsUrl: hubUrl(origin, "/hub/settings"),
+			portalAvailable,
+		},
+		copilot: {
+			freeConversationsRemaining: copilotStatus.freeConversationsRemaining,
+			creditBalance: copilotStatus.creditBalance,
+			autoDeductConsent: copilotStatus.autoDeductConsent,
+			tokensPerCredit: copilotStatus.tokensPerCredit,
+			sessionMaxTokens: copilotStatus.sessionMaxTokens,
+		},
+	};
+
+	return BillingAccountSummarySchema.parse(summary);
 }
 
 /** Re-export for Stripe legacy fulfillment idempotency keys. */

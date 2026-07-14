@@ -20,6 +20,9 @@
 		"BETTER_AUTH_URL": "https://ration.mayutic.com",
 		"MCP_OAUTH_ENABLED": "true"
 	},
+	/**
+	 * Secrets (set via CLI): REVENUECAT_API_KEY for get_billing_summary cross-store data.
+	 */
 	"d1_databases": [
 		{
 			"binding": "DB",

@@ -191,6 +191,11 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Loaded context",
 		error: "Context lookup failed",
 	},
+	get_billing_summary: {
+		running: "Loading billing summary…",
+		done: "Loaded billing summary",
+		error: "Billing lookup failed",
+	},
 	get_user_preferences: {
 		running: "Loading preferences…",
 		done: "Loaded preferences",

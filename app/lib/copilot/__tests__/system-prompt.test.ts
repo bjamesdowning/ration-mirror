@@ -10,6 +10,12 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("get_kitchen_summary");
 	});
 
+	it("includes billing tool guidance", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain("get_billing_summary");
+		expect(prompt).toContain("Never ask for card numbers");
+	});
+
 	it("requires action reporting for writes but not read-only tools", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Action reporting:");

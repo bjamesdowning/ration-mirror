@@ -24,6 +24,7 @@
 	 * Secrets (set via CLI, not in this file):
 	 *   - BETTER_AUTH_SECRET
 	 *   - COPILOT_PURGE_SECRET (dedicated internal purge token; falls back to BETTER_AUTH_SECRET if absent)
+	 *   - REVENUECAT_API_KEY (live get_billing_summary store/management URLs)
 	 */
 	"durable_objects": {
 		"bindings": [{ "name": "PROJECT_THINK", "class_name": "ProjectThinkAgent" }]

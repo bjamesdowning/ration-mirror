@@ -1731,10 +1731,13 @@ function HelpSection() {
 									Ask Ration pricing
 								</h4>
 								<p className="text-sm text-muted">
-									Copilot charges per conversation based on total length: up to
-									12k tokens (1 credit), 30k (2 credits), or 60k (3 credits).
-									Each chat is capped at 60,000 tokens — start a new chat to
-									continue. Tool calls and long answers increase token use.
+									Copilot charges per conversation based on total length:{" "}
+									<strong className="font-medium text-carbon dark:text-ceramic">
+										1 credit per 20,000 tokens
+									</strong>{" "}
+									(minimum 1 per chat). Each chat is capped at 128,000 tokens —
+									start a new chat to continue. Tool calls and long answers
+									increase token use.
 								</p>
 							</div>
 						</>

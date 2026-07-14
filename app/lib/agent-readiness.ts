@@ -97,7 +97,12 @@ export const MCP_TOOL_GROUPS = [
 	},
 	{
 		name: "Account",
-		tools: ["get_context", "get_user_preferences", "update_user_preferences"],
+		tools: [
+			"get_context",
+			"get_billing_summary",
+			"get_user_preferences",
+			"update_user_preferences",
+		],
 	},
 ] as const;
 

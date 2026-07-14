@@ -22,9 +22,11 @@ When the app offers **Manage billing** / portal, use it to update payment method
 
 ## Ask Ration and billing
 
-Ask Ration can explain how credits, Crew Member, checkout, and the billing portal work using the Copilot knowledge hub. It should send users to the in-app billing portal for subscription changes rather than performing billing mutations in chat.
+Ask Ration uses the live **`get_billing_summary`** tool for subscription tier, renewal or end date, credit balance, org role, and which store manages your plan (App Store vs Stripe). It explains how credits, Crew Member, checkout, and the billing portal work using docs plus that live snapshot.
 
-Copilot answers should not ask for card numbers or Stripe subscription IDs. If a user needs to cancel, resume, update a payment method, or dispute a charge, direct them to **Manage billing** or human support.
+For subscription changes (cancel, resume, update payment method), Ask Ration directs you to **Hub → Settings → Manage billing** (Stripe) or the App Store management URL when applicable — it does not perform billing mutations in chat.
+
+Copilot answers should not ask for card numbers or Stripe subscription IDs. If a user needs to cancel, resume, update a payment method, or dispute a charge, direct them to **Manage billing**, the App Store, or human support.
 
 ## Refunds and disputes
 

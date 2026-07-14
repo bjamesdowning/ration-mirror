@@ -3,7 +3,6 @@ import {
 	buildSessionUsageSnapshot,
 	evaluateSessionLimitWarning,
 	formatCopilotTokenCount,
-	tokensUntilNextBracket,
 } from "../copilot/session-usage";
 
 describe("formatCopilotTokenCount", () => {
@@ -14,17 +13,6 @@ describe("formatCopilotTokenCount", () => {
 
 	it("formats small counts literally", () => {
 		expect(formatCopilotTokenCount(999)).toBe("999");
-	});
-});
-
-describe("tokensUntilNextBracket", () => {
-	it.each([
-		[10_000, 10_001],
-		[12_000, 8_001],
-		[20_000, 1],
-		[128_000, null],
-	])("maps %i tokens to %s until next credit", (tokens, expected) => {
-		expect(tokensUntilNextBracket(tokens)).toBe(expected);
 	});
 });
 

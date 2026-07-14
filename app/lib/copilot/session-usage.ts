@@ -91,9 +91,4 @@ export function evaluateSessionLimitWarning(input: {
 	return null;
 }
 
-/** @deprecated Use tokensUntilNextCredit from constants.ts */
-export function tokensUntilNextBracket(totalTokens: number): number | null {
-	return tokensUntilNextCredit(totalTokens);
-}
-
 export { creditsForCopilotTokens };

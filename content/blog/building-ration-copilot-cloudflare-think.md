@@ -2,7 +2,7 @@
 title: "Building Ration Copilot on Cloudflare Think: Workers, AI Search, and Durable Objects"
 description: "A technical walkthrough of Ration's first-party AI assistant: Project Think on Durable Objects, managed AI Search for docs, Vectorize for pantry semantics, and shared MCP tool runtime on Cloudflare Workers."
 date: 2026-07-10
-dateModified: 2026-07-11
+dateModified: 2026-07-14
 authorName: "Ration"
 image: "/static/og/building-ration-copilot-cloudflare-think.png"
 tags:
@@ -63,7 +63,7 @@ sequenceDiagram
   Client->>App: POST handshake token
   Client->>Copilot: WebSocket connect
   Copilot->>DO: routeAgentRequest
-  DO->>DO: Think loop maxSteps 6
+  DO->>DO: Think loop preset maxSteps
   DO->>Tools: tool call
   Tools->>Data: query or write
   Data-->>Tools: result
@@ -81,8 +81,9 @@ The agent class lives in `workers/copilot.ts` as `ProjectThinkAgent`, extending 
 
 Key configuration:
 
-- **Model:** `@cf/moonshotai/kimi-k2.6` via Workers AI
-- **Tool loop:** `maxSteps: 6` per user turn
+- **Model:** `@cf/openai/gpt-oss-120b` via Workers AI
+- **Presets:** Fast (default) and Deep — per-conversation `modelPreset` tunes `maxSteps`, output tokens, temperature, and optional `reasoning_effort`
+- **Tool loop:** up to 8 steps (Fast) or 10 steps (Deep) per user turn
 - **Workspace bash:** disabled (`workspaceBash = false`)
 - **DO identity:** `{orgId}:{userId}:{tier}:{conversationId}`
 
@@ -90,11 +91,11 @@ Each conversation maps to one Durable Object instance. Think persists session st
 
 Lifecycle hooks cover the operational concerns:
 
-- `beforeTurn` enforces rate limits, session message caps (40), token caps (60,000), and intent guard checks for blocked features
+- `beforeTurn` enforces rate limits, session message caps (40), token caps (128,000), and intent guard checks for blocked features
 - `beforeToolCall` / `afterToolCall` emit Analytics Engine events
 - `onStepFinish` reconciles cumulative token usage into credit charges
 
-There is no separate chain-of-thought channel exposed to clients. Users see **Copilot is thinking** between messages and tool-specific labels like **Checking your Cargo…** while tools run.
+There is no raw chain-of-thought dump in the main reply stream. Users see **Copilot is thinking** between messages, tool-specific labels like **Checking your Cargo…** while tools run, and — in **Deep** mode — a collapsed-by-default **thinking** disclosure built from streamed reasoning tokens (excluded from transcript copy and session restore).
 
 ---
 
@@ -207,9 +208,9 @@ Identity always includes a verified `organizationId`. Client-supplied org IDs ar
 
 **Billing model:**
 
-- Crew orgs: 3 free Copilot conversations per UTC day (KV allowance)
+- Crew orgs: 1 free Copilot conversation per UTC day (KV allowance)
 - After allowance: requires auto-deduct consent (crew) or credits from the first conversation (free tier)
-- Per conversation: 1-credit floor, reconciled upward by token brackets at 12k, 30k, and 60k cumulative tokens
+- Per conversation: 1-credit floor, reconciled upward linearly (**1 credit per 20,000 tokens**, up to **128,000** cumulative tokens per chat)
 - Not per message
 
 **Kill switch:** Flagship flag `ration-copilot` gates the feature server-side. UI-only hiding is not sufficient.
@@ -233,8 +234,8 @@ Session caps prevent runaway cost:
 | Limit | Value |
 | ----- | ----- |
 | Max messages | 40 |
-| Max tokens | 60,000 |
-| Max tool-loop steps per turn | 10 |
+| Max tokens | 128,000 |
+| Max tool-loop steps per turn | 8 (Fast) / 10 (Deep) |
 | Idle TTL | 20 minutes (KV conversation keys) |
 
 Rate limiting uses the same `checkRateLimit()` helper as other AI endpoints.
@@ -247,8 +248,8 @@ A few things are worth naming because absence is a design decision:
 
 1. **Custom RAG pipeline.** AI Search handles docs retrieval. Vectorize handles pantry semantics. No LangChain-style orchestration in app code.
 2. **HTTP MCP hop for Copilot.** Tools call domain handlers directly. Lower latency, fewer failure modes.
-3. **Per-message billing.** Conversations are the billing unit. Token brackets scale cost within a session.
-4. **Visible chain-of-thought.** Users see phase labels, not raw reasoning tokens.
+3. **Per-message billing.** Conversations are the billing unit. Token usage scales cost linearly within a session (1 credit per 20k tokens).
+4. **Raw reasoning in the main answer.** Users see phase labels and an optional collapsed thinking block in Deep mode, not interleaved reasoning prose in the primary reply.
 
 These choices keep the copilot worker small and keep behavior aligned with the main app and MCP server.
 
@@ -292,7 +293,7 @@ Yes. The full tool catalog, schemas, handlers, and `runTool()` middleware are sh
 
 **What model does Copilot use?**
 
-`@cf/moonshotai/kimi-k2.6` through Workers AI, configured in `ProjectThinkAgent.getModel()`.
+`@cf/openai/gpt-oss-120b` through Workers AI, configured in `ProjectThinkAgent.getModel()`. Fast and Deep presets are resolved in `beforeTurn` from the client's `modelPreset` body field.
 
 **How do I connect an external agent instead of using Copilot?**
 

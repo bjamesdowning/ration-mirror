@@ -114,7 +114,7 @@ describe("copilot gate", () => {
 		expect(status.creditBalance).toBe(10);
 	});
 
-	it("deducts only incremental bracket deltas", async () => {
+	it("deducts only incremental credit deltas for linear billing", async () => {
 		const e = env();
 		const next = await reconcileCopilotConversationUsage(
 			e,
@@ -122,12 +122,12 @@ describe("copilot gate", () => {
 			{ mode: "credits", preauthorizedCredits: 1, bracketCreditsCharged: 1 },
 			30_001,
 		);
-		expect(next.bracketCreditsCharged).toBe(3);
+		expect(next.bracketCreditsCharged).toBe(2);
 		expect(ledger.deductCredits).toHaveBeenCalledWith(
 			e,
 			"org_1",
 			"user_1",
-			2,
+			1,
 			"Copilot",
 		);
 	});

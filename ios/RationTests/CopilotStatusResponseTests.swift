@@ -12,7 +12,8 @@ final class CopilotStatusResponseTests: XCTestCase {
           "autoDeductConsent": false,
           "conversationFloorCost": 1,
           "sessionIdleMs": 1200000,
-          "brackets": [],
+          "tokensPerCredit": 20000,
+          "sessionMaxTokens": 128000,
           "onboardingBriefingEligible": true,
           "onboardingBriefingConsumed": false
         }
@@ -35,7 +36,8 @@ final class CopilotStatusResponseTests: XCTestCase {
           "autoDeductConsent": true,
           "conversationFloorCost": 1,
           "sessionIdleMs": 1200000,
-          "brackets": []
+          "tokensPerCredit": 20000,
+          "sessionMaxTokens": 128000
         }
         """.data(using: .utf8)!
 

@@ -223,7 +223,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				get: {
 					summary: "Copilot allowance and credit status",
 					description:
-						"Returns the per-conversation copilot allowance, credit balance, auto-deduct consent, idle timeout, and token brackets for the active organization.",
+						"Returns the per-conversation copilot allowance, credit balance, auto-deduct consent, idle timeout, and linear token pricing for the active organization.",
 					security: [{ bearerAuth: [] }],
 					responses: {
 						"200": {

@@ -524,7 +524,7 @@ private final class StreamingTestAskSocketClient: AskSocketClient {
         connectCount += 1
     }
 
-    func send(_ messages: [CopilotMessage]) async throws {
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws {
         sentMessages.append(messages)
     }
 
@@ -555,7 +555,7 @@ private final class TestAskSocketClient: AskSocketClient {
     }
 
     func connect() async throws {}
-    func send(_ messages: [CopilotMessage]) async throws {}
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws {}
 
     func approve(_ approvalId: String, approved: Bool) async throws {
         approvalResponses.append((approvalId, approved))

@@ -54,7 +54,8 @@ describe("copilot schemas", () => {
 			autoDeductConsent: false,
 			conversationFloorCost: 1,
 			sessionIdleMs: 1_200_000,
-			brackets: [{ maxTokens: 12_000, credits: 1 }],
+			tokensPerCredit: 20_000,
+			sessionMaxTokens: 128_000,
 		});
 		expect(parsed.freeConversationsRemaining).toBe(2);
 	});
@@ -64,12 +65,13 @@ describe("copilot schemas", () => {
 			type: "session_usage_update",
 			usage: {
 				totalTokens: 12_000,
-				maxTokens: 60_000,
+				maxTokens: 128_000,
 				messageCount: 8,
 				maxMessages: 40,
 				creditsCharged: 1,
 				creditBalance: 10,
-				nextBracketAt: 18_001,
+				nextCreditAt: 8_001,
+				nextCreditThreshold: 20_001,
 			},
 		});
 		expect(parsed.type).toBe("session_usage_update");

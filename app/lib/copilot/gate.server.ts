@@ -7,12 +7,14 @@ import {
 import type { CopilotAuthSource } from "./auth.server";
 import {
 	COPILOT_CONVERSATION_FLOOR_COST,
-	COPILOT_DISPLAY_BRACKETS,
 	COPILOT_SESSION_IDLE_MS,
+	COPILOT_SESSION_MAX_TOKENS,
+	COPILOT_TOKENS_PER_CREDIT,
 	CREW_COPILOT_DAILY_CONVERSATIONS,
 	creditsForCopilotTokens,
 	FREE_TIER_DAILY_CONVERSATIONS,
 } from "./constants";
+import type { CopilotModelPreset } from "./model-profiles";
 import {
 	claimOnboardingBriefing,
 	getOnboardingBriefingStatus,
@@ -46,6 +48,7 @@ export interface CopilotConversationCharge {
 	mode: CopilotChargeMode;
 	preauthorizedCredits: number;
 	bracketCreditsCharged: number;
+	modelPreset?: CopilotModelPreset;
 	onboardingTurnsUsed?: number;
 	onboardingConsumed?: boolean;
 }
@@ -165,7 +168,8 @@ export async function getCopilotStatus(
 		autoDeductConsent,
 		conversationFloorCost: COPILOT_CONVERSATION_FLOOR_COST,
 		sessionIdleMs: COPILOT_SESSION_IDLE_MS,
-		brackets: COPILOT_DISPLAY_BRACKETS,
+		tokensPerCredit: COPILOT_TOKENS_PER_CREDIT,
+		sessionMaxTokens: COPILOT_SESSION_MAX_TOKENS,
 		onboardingBriefingEligible: onboardingBriefing.eligible,
 		onboardingBriefingConsumed: onboardingBriefing.consumed,
 	};

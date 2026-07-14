@@ -22,6 +22,11 @@ import {
 	reconcileAndPersistCopilotConversationUsage,
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
+import {
+	COPILOT_MODEL_PRESETS,
+	type CopilotModelPreset,
+	resolveCopilotModelPreset,
+} from "../app/lib/copilot/model-profiles";
 import { detectNativeFeatureSuggestion } from "../app/lib/copilot/native-feature-hints.server";
 import {
 	finalizeOnboardingBriefing,
@@ -204,6 +209,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private billingBlocked = false;
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
+	private conversationModelPreset: CopilotModelPreset = "fast";
 
 	private maybeEmitSessionLimitWarning(
 		totalTokens: number,
@@ -245,7 +251,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		return "@cf/moonshotai/kimi-k2.7-code";
+		return "@cf/openai/gpt-oss-120b";
 	}
 
 	getSystemPrompt() {
@@ -417,10 +423,38 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				maxSteps: 1,
 			};
 		}
+
+		const preset = resolveCopilotModelPreset(
+			ctx.body?.modelPreset,
+			this.conversationModelPreset ?? charge?.modelPreset,
+		);
+		this.conversationModelPreset = preset;
+		if (charge && charge.modelPreset !== preset) {
+			await persistConversationCharge(
+				this.env,
+				identity.organizationId,
+				identity.conversationId,
+				{ ...charge, modelPreset: preset },
+			);
+		}
+
+		const profile = COPILOT_MODEL_PRESETS[preset];
+		const workersAiOptions: Record<string, unknown> = {};
+		if (profile.reasoningEffort !== null) {
+			workersAiOptions.reasoning_effort = profile.reasoningEffort;
+		}
+
 		return {
 			system: `${ctx.system}${formatCopilotTemporalContextAppend()}`,
 			activeTools: Object.keys(ctx.tools),
-			maxSteps: 10,
+			maxSteps: profile.maxSteps,
+			maxOutputTokens: profile.maxOutputTokens,
+			temperature: profile.temperature,
+			topP: profile.topP,
+			sendReasoning: true,
+			providerOptions: {
+				"workers-ai": workersAiOptions,
+			},
 			stopWhen: () => this.billingBlocked,
 		};
 	}

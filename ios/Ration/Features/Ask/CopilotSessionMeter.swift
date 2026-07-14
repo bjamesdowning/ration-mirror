@@ -31,6 +31,12 @@ struct CopilotSessionMeter: View {
                 ProgressView(value: Double(usage.totalTokens), total: Double(max(usage.maxTokens, 1)))
                     .tint(Theme.hyperGreen)
                     .accessibilityLabel("Copilot session token usage")
+
+                if let nextCreditAt = usage.nextCreditAt {
+                    Text("Next credit in ~\(formatTokens(nextCreditAt)) tokens")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                }
             }
         }
         .padding(.horizontal, 16)

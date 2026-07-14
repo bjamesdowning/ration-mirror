@@ -90,6 +90,26 @@ describe("decodeAgentResponseFrame", () => {
 		).toEqual({ kind: "noop" });
 	});
 
+	it("maps reasoning stream chunks", () => {
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(JSON.stringify({ type: "reasoning-start" })),
+			),
+		).toEqual({ kind: "reasoning_start" });
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({ type: "reasoning-delta", delta: "Plan meals" }),
+				),
+			),
+		).toEqual({ kind: "reasoning_delta", text: "Plan meals" });
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(JSON.stringify({ type: "reasoning-end" })),
+			),
+		).toEqual({ kind: "reasoning_end" });
+	});
+
 	it("maps agent errors with their message", () => {
 		expect(
 			decodeAgentResponseFrame(

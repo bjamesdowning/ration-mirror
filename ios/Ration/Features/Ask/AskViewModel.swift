@@ -28,6 +28,37 @@ final class AskViewModel {
     struct Snapshot: Codable, Sendable {
         let conversationId: String
         let messages: [CopilotMessage]
+        let modelPreset: String
+
+        init(
+            conversationId: String,
+            messages: [CopilotMessage],
+            modelPreset: String = "fast"
+        ) {
+            self.conversationId = conversationId
+            self.messages = messages
+            self.modelPreset = modelPreset
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            conversationId = try container.decode(String.self, forKey: .conversationId)
+            messages = try container.decode([CopilotMessage].self, forKey: .messages)
+            modelPreset = try container.decodeIfPresent(String.self, forKey: .modelPreset) ?? "fast"
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(conversationId, forKey: .conversationId)
+            try container.encode(messages, forKey: .messages)
+            try container.encode(modelPreset, forKey: .modelPreset)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case conversationId
+            case messages
+            case modelPreset
+        }
     }
 
     struct CompletedTool: Equatable {
@@ -51,6 +82,7 @@ final class AskViewModel {
     private(set) var isAwaitingApproval = false
     private(set) var briefingComplete = false
     var tracksBriefingSession = false
+    private(set) var modelPreset: String = "fast"
 
     private var socket: (any AskSocketClient)?
     private var streamTask: Task<Void, Never>?
@@ -131,6 +163,7 @@ final class AskViewModel {
         if orgChanged {
             disconnect()
             messages = []
+            modelPreset = "fast"
             activeTool = nil
             completedTool = nil
             sessionUsage = nil
@@ -156,6 +189,7 @@ final class AskViewModel {
 
         if let cached = await snapshots.load(Snapshot.self, domain: SnapshotDomain.ask, organizationId: organizationId) {
             messages = cached.payload.messages
+            modelPreset = cached.payload.modelPreset
             socket = AskWebSocketClient(auth: auth, conversationId: cached.payload.conversationId)
             lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
         } else {
@@ -169,6 +203,7 @@ final class AskViewModel {
                Date().timeIntervalSince(syncedAt) * 1000 > Double(status.sessionIdleMs) {
                 await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
                 messages = []
+                modelPreset = "fast"
                 socket = AskWebSocketClient(auth: auth)
                 lastSyncedLabel = nil
             }
@@ -244,7 +279,7 @@ final class AskViewModel {
             activeTool = nil
             completedTool = nil
             do {
-                try await socket.send(messages)
+                try await socket.send(messages, modelPreset: modelPreset)
             } catch {
                 if messages.last?.id == userMessage.id {
                     messages.removeLast()
@@ -339,6 +374,7 @@ final class AskViewModel {
         socket = AskWebSocketClient(auth: auth)
         isConnected = false
         messages = []
+        modelPreset = "fast"
         activeTool = nil
         completedTool = nil
         sessionUsage = nil
@@ -349,6 +385,11 @@ final class AskViewModel {
             await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
         }
         lastSyncedLabel = nil
+    }
+
+    func setModelPreset(_ preset: String) {
+        guard preset == "fast" || preset == "deep" else { return }
+        modelPreset = preset
     }
 
     func disconnect() {
@@ -406,6 +447,16 @@ final class AskViewModel {
             state = .streaming
             turnPhase = .streaming
             persistSnapshotDebounced()
+        case "reasoning_start":
+            beginTurnIfNeeded()
+            appendReasoningDelta("", mode: .start, messageId: event.messageId)
+            turnPhase = .thinking
+        case "reasoning_delta":
+            beginTurnIfNeeded()
+            appendReasoningDelta(event.text ?? "", mode: .delta, messageId: event.messageId)
+            turnPhase = .thinking
+        case "reasoning_end":
+            appendReasoningDelta("", mode: .end, messageId: event.messageId)
         case "message_end":
             clearTransientError()
             if tracksBriefingSession {
@@ -481,7 +532,8 @@ final class AskViewModel {
                         autoDeductConsent: currentStatus.autoDeductConsent,
                         conversationFloorCost: currentStatus.conversationFloorCost,
                         sessionIdleMs: currentStatus.sessionIdleMs,
-                        brackets: currentStatus.brackets,
+                        tokensPerCredit: currentStatus.tokensPerCredit,
+                        sessionMaxTokens: currentStatus.sessionMaxTokens,
                         onboardingBriefingEligible: currentStatus.onboardingBriefingEligible,
                         onboardingBriefingConsumed: currentStatus.onboardingBriefingConsumed
                     )
@@ -527,6 +579,45 @@ final class AskViewModel {
         }
     }
 
+    private enum ReasoningAppendMode {
+        case start
+        case delta
+        case end
+    }
+
+    private func appendReasoningDelta(
+        _ text: String,
+        mode: ReasoningAppendMode,
+        messageId: String?
+    ) {
+        if messages.last?.role == "assistant", let index = messages.indices.last {
+            var message = messages[index]
+            switch mode {
+            case .start:
+                message.reasoning = message.reasoning ?? ""
+                message.reasoningState = "streaming"
+            case .delta:
+                message.reasoning = (message.reasoning ?? "") + text
+                message.reasoningState = "streaming"
+            case .end:
+                message.reasoningState = "complete"
+            }
+            messages[index] = message
+            return
+        }
+
+        guard mode != .end else { return }
+        messages.append(
+            CopilotMessage(
+                id: messageId ?? UUID().uuidString,
+                role: "assistant",
+                content: "",
+                reasoning: mode == .delta ? text : "",
+                reasoningState: "streaming"
+            )
+        )
+    }
+
     private func appendAssistantDelta(_ text: String, messageId: String?) {
         if messages.last?.role == "assistant", let index = messages.indices.last {
             messages[index].content += text
@@ -562,7 +653,11 @@ final class AskViewModel {
         guard let organizationId, let snapshots else { return }
         let conversationId = socket?.conversationId ?? UUID().uuidString
         await snapshots.save(
-            Snapshot(conversationId: conversationId, messages: messages),
+            Snapshot(
+                conversationId: conversationId,
+                messages: messages,
+                modelPreset: modelPreset
+            ),
             domain: SnapshotDomain.ask,
             organizationId: organizationId
         )

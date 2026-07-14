@@ -12,27 +12,35 @@ export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 700;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;
 export const COPILOT_SESSION_MAX_MESSAGES = 40;
-export const COPILOT_SESSION_MAX_TOKENS = 60_000;
-
-export const COPILOT_COST_BRACKETS = [
-	{ maxTokens: 12_000, credits: 1 },
-	{ maxTokens: 30_000, credits: 2 },
-	{ maxTokens: 60_000, credits: 3 },
-	{ maxTokens: null, credits: 4 },
-] as const;
-
-/** User-facing bracket table — excludes unreachable tiers above the session cap. */
-export const COPILOT_DISPLAY_BRACKETS = COPILOT_COST_BRACKETS.filter(
-	(bracket): bracket is (typeof COPILOT_COST_BRACKETS)[number] =>
-		bracket.maxTokens !== null,
-);
-
-export type CopilotCostBracket = (typeof COPILOT_COST_BRACKETS)[number];
+/** gpt-oss-120b context window — linear billing caps sessions here. */
+export const COPILOT_SESSION_MAX_TOKENS = 128_000;
+export const COPILOT_TOKENS_PER_CREDIT = 20_000;
 
 export function creditsForCopilotTokens(totalTokens: number): number {
 	const normalized = Math.max(0, Math.ceil(totalTokens));
-	const bracket = COPILOT_COST_BRACKETS.find(
-		(b) => b.maxTokens === null || normalized <= b.maxTokens,
+	return Math.max(
+		COPILOT_CONVERSATION_FLOOR_COST,
+		Math.ceil(normalized / COPILOT_TOKENS_PER_CREDIT),
 	);
-	return bracket?.credits ?? COPILOT_CONVERSATION_FLOOR_COST;
+}
+
+/** Tokens until the next credit tier (linear 20k steps). Null at session cap. */
+export function tokensUntilNextCredit(totalTokens: number): number | null {
+	const normalized = Math.max(0, Math.ceil(totalTokens));
+	if (normalized >= COPILOT_SESSION_MAX_TOKENS) return null;
+	const currentCredits = creditsForCopilotTokens(normalized);
+	const nextTierStart = currentCredits * COPILOT_TOKENS_PER_CREDIT + 1;
+	if (nextTierStart > COPILOT_SESSION_MAX_TOKENS) return null;
+	return Math.max(1, nextTierStart - normalized);
+}
+
+/** Absolute token count where the next credit tier begins. Null at session cap. */
+export function nextCreditThreshold(totalTokens: number): number | null {
+	const normalized = Math.max(0, Math.ceil(totalTokens));
+	if (normalized >= COPILOT_SESSION_MAX_TOKENS) return null;
+	const credits = creditsForCopilotTokens(normalized);
+	return Math.min(
+		credits * COPILOT_TOKENS_PER_CREDIT + 1,
+		COPILOT_SESSION_MAX_TOKENS,
+	);
 }

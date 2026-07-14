@@ -1,3 +1,5 @@
+import type { CopilotModelPreset } from "./model-profiles";
+
 export type CopilotStoredMessage = {
 	id: string;
 	role: "user" | "assistant";
@@ -7,11 +9,22 @@ export type CopilotStoredMessage = {
 export type CopilotSessionSnapshot = {
 	conversationId: string;
 	messages: CopilotStoredMessage[];
+	modelPreset: CopilotModelPreset;
 	lastActivityAt: number;
 };
 
 function storageKey(organizationId: string): string {
 	return `ration:copilot:${organizationId}`;
+}
+
+export function toStoredCopilotMessages(
+	messages: Array<{
+		id: string;
+		role: "user" | "assistant";
+		content: string;
+	}>,
+): CopilotStoredMessage[] {
+	return messages.map(({ id, role, content }) => ({ id, role, content }));
 }
 
 export function loadCopilotSession(
@@ -35,7 +48,10 @@ export function loadCopilotSession(
 			sessionStorage.removeItem(storageKey(organizationId));
 			return null;
 		}
-		return parsed;
+		return {
+			...parsed,
+			modelPreset: parsed.modelPreset === "deep" ? "deep" : "fast",
+		};
 	} catch {
 		sessionStorage.removeItem(storageKey(organizationId));
 		return null;
@@ -64,7 +80,10 @@ export function clearCopilotSession(organizationId: string): void {
 
 export function touchCopilotSession(
 	organizationId: string,
-	partial: Pick<CopilotSessionSnapshot, "conversationId" | "messages">,
+	partial: Pick<
+		CopilotSessionSnapshot,
+		"conversationId" | "messages" | "modelPreset"
+	>,
 ): void {
 	saveCopilotSession(organizationId, {
 		...partial,
@@ -77,6 +96,7 @@ export type CopilotOrgHydration =
 			kind: "restore";
 			conversationId: string;
 			messages: CopilotStoredMessage[];
+			modelPreset: CopilotModelPreset;
 	  }
 	| { kind: "fresh" };
 
@@ -88,6 +108,7 @@ export function resolveCopilotOrgHydration(
 			kind: "restore",
 			conversationId: snapshot.conversationId,
 			messages: snapshot.messages,
+			modelPreset: snapshot.modelPreset,
 		};
 	}
 	return { kind: "fresh" };

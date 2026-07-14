@@ -6,6 +6,8 @@ import {
 	CopilotActivityIndicator,
 	type TurnPhase,
 } from "~/components/support/CopilotActivityIndicator";
+import { CopilotModelPresetSelector } from "~/components/support/CopilotModelPresetSelector";
+import { CopilotReasoningBlock } from "~/components/support/CopilotReasoningBlock";
 import {
 	type AgentResponseFrame,
 	decodeAgentResponseFrame,
@@ -14,10 +16,12 @@ import {
 	buildCopilotContinuationDraft,
 	formatCopilotTranscriptForCopy,
 } from "~/lib/copilot/continuation";
+import type { CopilotModelPreset } from "~/lib/copilot/model-profiles";
 import {
 	clearCopilotSession,
 	loadCopilotSession,
 	resolveCopilotOrgHydration,
+	toStoredCopilotMessages,
 	touchCopilotSession,
 } from "~/lib/copilot/session-storage.client";
 import { formatCopilotTokenCount } from "~/lib/copilot/session-usage";
@@ -39,7 +43,8 @@ type CopilotStatus = {
 	autoDeductConsent: boolean;
 	conversationFloorCost: number;
 	sessionIdleMs: number;
-	brackets: Array<{ maxTokens: number | null; credits: number }>;
+	tokensPerCredit: number;
+	sessionMaxTokens: number;
 };
 
 type CopilotTokenResponse = {
@@ -51,6 +56,8 @@ type CopilotMessage = {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	reasoning?: string;
+	reasoningState?: "streaming" | "complete";
 };
 
 type AgentUiMessage = {
@@ -66,7 +73,8 @@ type CopilotSessionUsage = {
 	maxMessages: number;
 	creditsCharged: number;
 	creditBalance: number;
-	nextBracketAt: number | null;
+	nextCreditAt: number | null;
+	nextCreditThreshold: number | null;
 };
 
 type CopilotSessionLimitWarning = {
@@ -188,6 +196,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const [conversationId, setConversationId] = useState<string>(() =>
 		crypto.randomUUID(),
 	);
+	const [modelPreset, setModelPreset] = useState<CopilotModelPreset>("fast");
 	const socketRef = useRef<WebSocket | null>(null);
 	const connectPromiseRef = useRef<Promise<WebSocket> | null>(null);
 	const connectionGenerationRef = useRef(0);
@@ -231,14 +240,19 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		!status.autoDeductConsent;
 
 	const persistSession = useCallback(
-		(nextMessages: CopilotMessage[], nextConversationId = conversationId) => {
+		(
+			nextMessages: CopilotMessage[],
+			nextConversationId = conversationId,
+			nextModelPreset = modelPreset,
+		) => {
 			if (!organizationId) return;
 			touchCopilotSession(organizationId, {
 				conversationId: nextConversationId,
-				messages: nextMessages,
+				messages: toStoredCopilotMessages(nextMessages),
+				modelPreset: nextModelPreset,
 			});
 		},
-		[conversationId, organizationId],
+		[conversationId, modelPreset, organizationId],
 	);
 
 	const clearToolLinger = useCallback(() => {
@@ -368,6 +382,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		if (hydration.kind === "restore") {
 			setConversationId(hydration.conversationId);
 			setMessages(hydration.messages);
+			setModelPreset(hydration.modelPreset);
 			setBlocked(null);
 			setNeedsConsent(false);
 			setApproval(null);
@@ -379,6 +394,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		} else {
 			setConversationId(crypto.randomUUID());
 			setMessages([]);
+			setModelPreset("fast");
 			setBlocked(null);
 			setNeedsConsent(false);
 			setApproval(null);
@@ -424,6 +440,43 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		[persistSession],
 	);
 
+	const appendReasoning = useCallback(
+		(text: string, mode: "start" | "delta" | "end") => {
+			setMessages((current) => {
+				const last = current[current.length - 1];
+				if (last?.role !== "assistant") {
+					if (mode === "end") return current;
+					const next: CopilotMessage[] = [
+						...current,
+						{
+							id: crypto.randomUUID(),
+							role: "assistant",
+							content: "",
+							reasoning: mode === "delta" ? text : "",
+							reasoningState: "streaming",
+						},
+					];
+					return next;
+				}
+				const reasoning =
+					mode === "delta"
+						? `${last.reasoning ?? ""}${text}`
+						: (last.reasoning ?? "");
+				const nextMessage: CopilotMessage = {
+					...last,
+					reasoning,
+					reasoningState:
+						mode === "end" ? "complete" : (last.reasoningState ?? "streaming"),
+				};
+				return [...current.slice(0, -1), nextMessage];
+			});
+			if (mode !== "end") {
+				setTurnPhase("thinking");
+			}
+		},
+		[],
+	);
+
 	const handleEvent = useCallback(
 		(event: CopilotEvent) => {
 			if (event.type === "cf_agent_use_chat_response") {
@@ -437,6 +490,15 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				switch (action.kind) {
 					case "text_delta":
 						appendAssistant(action.text);
+						break;
+					case "reasoning_start":
+						appendReasoning("", "start");
+						break;
+					case "reasoning_delta":
+						appendReasoning(action.text, "delta");
+						break;
+					case "reasoning_end":
+						appendReasoning("", "end");
 						break;
 					case "tool_start":
 						clearToolLinger();
@@ -610,6 +672,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		},
 		[
 			appendAssistant,
+			appendReasoning,
 			clearToolLinger,
 			endTurn,
 			persistSession,
@@ -776,6 +839,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						body: JSON.stringify({
 							messages: toAgentMessages(nextMessages),
 							trigger: "submit-message",
+							modelPreset,
 						}),
 					},
 				}),
@@ -843,6 +907,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		setSessionLimitWarning(null);
 		setUrgentWarningAcknowledged(false);
 		setTranscriptCopied(false);
+		setModelPreset("fast");
 		setActiveToolName(null);
 		setCompletedToolName(null);
 		setToolSucceeded(null);
@@ -964,19 +1029,14 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 									<p className="font-mono uppercase tracking-[0.18em] text-[10px] text-muted">
 										Pricing
 									</p>
-									<ul className="mt-1 space-y-1">
-										{status.brackets.map((bracket) => (
-											<li
-												key={`${bracket.maxTokens ?? "max"}-${bracket.credits}`}
-											>
-												Up to {bracket.maxTokens?.toLocaleString()} tokens →{" "}
-												{bracket.credits} cr
-											</li>
-										))}
-									</ul>
+									<p className="mt-1">
+										1 credit per {status.tokensPerCredit.toLocaleString()}{" "}
+										tokens (minimum {status.conversationFloorCost} per chat).
+										Conversations can use up to{" "}
+										{status.sessionMaxTokens.toLocaleString()} tokens.
+									</p>
 									<p className="mt-2 text-[10px]">
-										Each conversation is capped at 60,000 tokens. Start a new
-										chat to reset the meter.
+										Start a new chat to reset the meter.
 									</p>
 								</div>
 							) : null}
@@ -1010,10 +1070,10 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 								style={{ width: `${sessionUsagePercent}%` }}
 							/>
 						</div>
-						{sessionUsage.nextBracketAt ? (
+						{sessionUsage.nextCreditAt ? (
 							<p className="mt-1 text-[10px]">
-								Next bracket in ~
-								{formatCopilotTokenCount(sessionUsage.nextBracketAt)} tokens
+								Next credit in ~
+								{formatCopilotTokenCount(sessionUsage.nextCreditAt)} tokens
 							</p>
 						) : null}
 					</div>
@@ -1084,6 +1144,10 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 									>
 										{message.role === "assistant" ? (
 											<span className="inline">
+												<CopilotReasoningBlock
+													reasoning={message.reasoning}
+													reasoningState={message.reasoningState}
+												/>
 												<AssistantMarkdown content={message.content} />
 												{turnPhase === "streaming" &&
 												index === messages.length - 1 ? (
@@ -1251,54 +1315,66 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					</div>
 				) : null}
 
-				<div className="flex items-end gap-2">
-					<button
-						type="button"
-						onClick={newChat}
-						className="rounded-xl border border-platinum px-3 py-2 text-sm text-muted"
-					>
-						New
-					</button>
-					<textarea
-						ref={composerRef}
-						value={draft}
-						onChange={(event) => setDraft(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter" && !event.shiftKey && canSend) {
-								event.preventDefault();
-								void send();
+				<div className="space-y-2">
+					<div className="flex flex-wrap items-end justify-between gap-3">
+						<CopilotModelPresetSelector
+							value={modelPreset}
+							onChange={setModelPreset}
+							disabled={isTurnActive || isConnecting}
+						/>
+						<span className="font-mono text-[10px] text-muted">
+							1 cr / 20k tokens · min 1 per chat
+						</span>
+					</div>
+					<div className="flex items-end gap-2">
+						<button
+							type="button"
+							onClick={newChat}
+							className="rounded-xl border border-platinum px-3 py-2 text-sm text-muted"
+						>
+							New
+						</button>
+						<textarea
+							ref={composerRef}
+							value={draft}
+							onChange={(event) => setDraft(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Enter" && !event.shiftKey && canSend) {
+									event.preventDefault();
+									void send();
+								}
+							}}
+							rows={2}
+							placeholder={
+								isAwaitingApproval
+									? "Confirm the action above to continue..."
+									: "Ask Ration..."
 							}
-						}}
-						rows={2}
-						placeholder={
-							isAwaitingApproval
-								? "Confirm the action above to continue..."
-								: "Ask Ration..."
-						}
-						aria-label="Message Ration Copilot"
-						className="min-h-[44px] flex-1 resize-none rounded-xl border border-platinum bg-white px-3 py-2 text-sm outline-none focus:border-hyper-green dark:border-white/10 dark:bg-white/[0.06]"
-					/>
-					{isTurnActive ? (
-						<button
-							type="button"
-							disabled={isStopping}
-							onClick={stopTurn}
-							aria-label={isStopping ? "Stopping Copilot" : "Stop Copilot"}
-							className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
-						>
-							<Square className="size-3.5 fill-current" />
-						</button>
-					) : (
-						<button
-							type="button"
-							disabled={!canSend}
-							onClick={() => void send()}
-							aria-label="Send message to Copilot"
-							className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
-						>
-							<Send className="size-4" />
-						</button>
-					)}
+							aria-label="Message Ration Copilot"
+							className="min-h-[44px] flex-1 resize-none rounded-xl border border-platinum bg-white px-3 py-2 text-sm outline-none focus:border-hyper-green dark:border-white/10 dark:bg-white/[0.06]"
+						/>
+						{isTurnActive ? (
+							<button
+								type="button"
+								disabled={isStopping}
+								onClick={stopTurn}
+								aria-label={isStopping ? "Stopping Copilot" : "Stop Copilot"}
+								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
+							>
+								<Square className="size-3.5 fill-current" />
+							</button>
+						) : (
+							<button
+								type="button"
+								disabled={!canSend}
+								onClick={() => void send()}
+								aria-label="Send message to Copilot"
+								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
+							>
+								<Send className="size-4" />
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
 		</FilterSheet>

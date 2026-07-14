@@ -85,7 +85,8 @@ struct CopilotStatusResponse: Codable, Sendable {
     let autoDeductConsent: Bool
     let conversationFloorCost: Int
     let sessionIdleMs: Int
-    let brackets: [CopilotCostBracket]
+    let tokensPerCredit: Int
+    let sessionMaxTokens: Int
     let onboardingBriefingEligible: Bool?
     let onboardingBriefingConsumed: Bool?
 
@@ -98,13 +99,6 @@ struct CopilotConsentRequest: Encodable {
     let autoDeductConsent: Bool
 }
 
-struct CopilotCostBracket: Codable, Sendable, Identifiable {
-    let maxTokens: Int?
-    let credits: Int
-
-    var id: String { "\(maxTokens.map(String.init) ?? "max")-\(credits)" }
-}
-
 struct CopilotSessionUsage: Codable, Sendable, Equatable {
     let totalTokens: Int
     let maxTokens: Int
@@ -112,7 +106,8 @@ struct CopilotSessionUsage: Codable, Sendable, Equatable {
     let maxMessages: Int
     let creditsCharged: Int
     let creditBalance: Int
-    let nextBracketAt: Int?
+    let nextCreditAt: Int?
+    let nextCreditThreshold: Int?
 }
 
 struct CopilotSessionLimitWarning: Codable, Sendable, Equatable {
@@ -128,19 +123,53 @@ struct CopilotMessage: Codable, Sendable, Identifiable, Equatable {
     var content: String
     let createdAt: Date?
     let toolCallId: String?
+    var reasoning: String?
+    var reasoningState: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case content
+        case createdAt
+        case toolCallId
+    }
 
     init(
         id: String = UUID().uuidString,
         role: String,
         content: String,
         createdAt: Date? = Date(),
-        toolCallId: String? = nil
+        toolCallId: String? = nil,
+        reasoning: String? = nil,
+        reasoningState: String? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.toolCallId = toolCallId
+        self.reasoning = reasoning
+        self.reasoningState = reasoningState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        role = try container.decode(String.self, forKey: .role)
+        content = try container.decode(String.self, forKey: .content)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        toolCallId = try container.decodeIfPresent(String.self, forKey: .toolCallId)
+        reasoning = nil
+        reasoningState = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(role, forKey: .role)
+        try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
     }
 }
 

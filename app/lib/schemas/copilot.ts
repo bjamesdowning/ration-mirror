@@ -56,12 +56,8 @@ export const CopilotAllowanceStatusSchema = z.object({
 	autoDeductConsent: z.boolean(),
 	conversationFloorCost: z.number().int().positive(),
 	sessionIdleMs: z.number().int().positive(),
-	brackets: z.array(
-		z.object({
-			maxTokens: z.number().int().positive().nullable(),
-			credits: z.number().int().positive(),
-		}),
-	),
+	tokensPerCredit: z.number().int().positive(),
+	sessionMaxTokens: z.number().int().positive(),
 	onboardingBriefingEligible: z.boolean().optional(),
 	onboardingBriefingConsumed: z.boolean().optional(),
 });
@@ -76,7 +72,8 @@ export const CopilotSessionUsageSchema = z.object({
 	maxMessages: z.number().int().positive(),
 	creditsCharged: z.number().int().min(0),
 	creditBalance: z.number().int().min(0),
-	nextBracketAt: z.number().int().positive().nullable(),
+	nextCreditAt: z.number().int().positive().nullable(),
+	nextCreditThreshold: z.number().int().positive().nullable(),
 });
 export type CopilotSessionUsage = z.infer<typeof CopilotSessionUsageSchema>;
 

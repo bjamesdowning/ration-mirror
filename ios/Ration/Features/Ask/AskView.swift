@@ -50,6 +50,12 @@ struct AskView: View {
                     CopilotActivityIndicator(display: activityDisplay)
                         .padding(.horizontal, 16)
                 }
+                CopilotModelPresetSelector(
+                    selection: model.modelPreset,
+                    isDisabled: model.isTurnActive || model.isStopping,
+                    onSelect: { model.setModelPreset($0) }
+                )
+                .padding(.horizontal, 16)
                 composer
                     .padding(.horizontal, 16)
             }
@@ -323,10 +329,16 @@ private struct MessageBubble: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             } else {
-                HStack(alignment: .bottom, spacing: 4) {
-                    MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
-                    if isStreaming {
-                        CopilotStreamingCursor()
+                VStack(alignment: .leading, spacing: 8) {
+                    CopilotReasoningBlock(
+                        reasoning: message.reasoning,
+                        reasoningState: message.reasoningState
+                    )
+                    HStack(alignment: .bottom, spacing: 4) {
+                        MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
+                        if isStreaming {
+                            CopilotStreamingCursor()
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -105,6 +105,57 @@ enum CopilotWebSocketDecoder {
         let toolCallId = stringValue(chunk, "toolCallId")
 
         switch type {
+        case "reasoning-start":
+            return CopilotStreamEvent(
+                type: "reasoning_start",
+                message: nil,
+                messageId: chunkId ?? frameId ?? "assistant",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        case "reasoning-delta":
+            return CopilotStreamEvent(
+                type: "reasoning_delta",
+                message: nil,
+                messageId: chunkId ?? frameId ?? "assistant",
+                text: delta ?? text ?? "",
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        case "reasoning-end":
+            return CopilotStreamEvent(
+                type: "reasoning_end",
+                message: nil,
+                messageId: chunkId ?? frameId ?? "assistant",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
         case "text-delta":
             return CopilotStreamEvent(
                 type: "text_delta",

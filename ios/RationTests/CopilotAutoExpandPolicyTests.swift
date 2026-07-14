@@ -11,7 +11,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )
@@ -28,7 +29,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )
@@ -45,7 +47,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )
@@ -62,7 +65,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )
@@ -79,7 +83,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: false,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )
@@ -96,7 +101,8 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             autoDeductConsent: true,
             conversationFloorCost: 1,
             sessionIdleMs: 1_200_000,
-            brackets: [],
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
             onboardingBriefingEligible: nil,
             onboardingBriefingConsumed: nil
         )

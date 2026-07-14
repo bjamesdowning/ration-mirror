@@ -23,6 +23,16 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertNil(event.error)
     }
 
+    func testReasoningDeltaFrameMapsToReasoningDeltaEvent() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"resp-reason","body":"{\\"type\\":\\"reasoning-delta\\",\\"delta\\":\\"Plan meals\\"}"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "reasoning_delta")
+        XCTAssertEqual(event.text, "Plan meals")
+    }
+
     func testTextDeltaFrameMapsToTextDeltaEvent() {
         let json = """
         {"type":"cf_agent_use_chat_response","id":"resp-3","body":"{\\"type\\":\\"text-delta\\",\\"id\\":\\"assistant-1\\",\\"delta\\":\\"Hello\\"}"}

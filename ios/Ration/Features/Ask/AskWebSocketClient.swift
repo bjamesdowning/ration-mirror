@@ -6,7 +6,7 @@ protocol AskSocketClient: AnyObject {
 
     func events() -> AsyncStream<CopilotStreamEvent>
     func connect() async throws
-    func send(_ messages: [CopilotMessage]) async throws
+    func send(_ messages: [CopilotMessage], modelPreset: String) async throws
     func approve(_ approvalId: String, approved: Bool) async throws
     func cancelActiveRequest() async throws
     func newConversation()
@@ -72,7 +72,7 @@ final class AskWebSocketClient: AskSocketClient {
         Task { await receiveLoop() }
     }
 
-    func send(_ messages: [CopilotMessage]) async throws {
+    func send(_ messages: [CopilotMessage], modelPreset: String = "fast") async throws {
         guard let task else { throw ClientError.notConnected }
         // Think is server-authoritative: submitting a turn uses the AI SDK
         // "use chat request" envelope (a POST with the messages in the body),
@@ -85,7 +85,11 @@ final class AskWebSocketClient: AskSocketClient {
                 parts: [AgentChatPart(type: "text", text: message.content)]
             )
         }
-        let bodyPayload = AgentChatRequestBody(messages: uiMessages, trigger: "submit-message")
+        let bodyPayload = AgentChatRequestBody(
+            messages: uiMessages,
+            trigger: "submit-message",
+            modelPreset: modelPreset
+        )
         let bodyData = try JSON.encoder.encode(bodyPayload)
         guard let bodyString = String(data: bodyData, encoding: .utf8) else {
             throw ClientError.invalidMessage
@@ -271,6 +275,7 @@ private struct AgentRequestInit: Encodable {
 private struct AgentChatRequestBody: Encodable {
     let messages: [AgentChatMessage]
     let trigger: String
+    let modelPreset: String
 }
 
 private struct AgentChatMessage: Encodable {

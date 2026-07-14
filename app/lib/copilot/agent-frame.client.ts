@@ -9,6 +9,9 @@ export type AgentResponseFrame = {
 export type AgentFrameAction =
 	| { kind: "noop" }
 	| { kind: "text_delta"; text: string }
+	| { kind: "reasoning_start" }
+	| { kind: "reasoning_delta"; text: string }
+	| { kind: "reasoning_end" }
 	| { kind: "tool_start"; toolName: string; toolCallId?: string }
 	| {
 			kind: "tool_end";
@@ -65,6 +68,15 @@ export function decodeAgentResponseFrame(
 				kind: "text_delta",
 				text: chunk.delta ?? chunk.text ?? "",
 			};
+		case "reasoning-start":
+			return { kind: "reasoning_start" };
+		case "reasoning-delta":
+			return {
+				kind: "reasoning_delta",
+				text: chunk.delta ?? chunk.text ?? "",
+			};
+		case "reasoning-end":
+			return { kind: "reasoning_end" };
 		case "tool-input-start":
 		case "tool-input-available":
 			return {

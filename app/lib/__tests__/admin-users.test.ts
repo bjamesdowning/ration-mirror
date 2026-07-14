@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-	buildUserSearchFilter,
 	computeLastActiveMs,
 	computeLastLoginMs,
 	DEFAULT_ADMIN_USERS_LIMIT,
 	DEFAULT_ADMIN_USERS_ORDER,
 	DEFAULT_ADMIN_USERS_SORT,
-	mergeLoggedInUsers,
 	resolvePlatform,
+} from "../admin-users";
+import {
+	buildUserSearchFilter,
+	mergeLoggedInUsers,
 } from "../admin-users.server";
 
 describe("mergeLoggedInUsers", () => {

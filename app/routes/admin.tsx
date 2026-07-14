@@ -35,9 +35,8 @@ import {
 	DEFAULT_ADMIN_USERS_LIMIT,
 	DEFAULT_ADMIN_USERS_ORDER,
 	DEFAULT_ADMIN_USERS_SORT,
-	getLoggedInUsers,
-	listAdminUsers,
-} from "../lib/admin-users.server";
+} from "../lib/admin-users";
+import { getLoggedInUsers, listAdminUsers } from "../lib/admin-users.server";
 import { requireAdmin } from "../lib/auth.server";
 import { getExpiringCargoBounds } from "../lib/cargo-utils";
 import { handleApiError, runRouteLoader } from "../lib/error-handler";

@@ -95,7 +95,7 @@ final class AskCoordinator {
         snapshots: SnapshotStore
     ) async -> Bool {
         model.tracksBriefingSession = true
-        model.setModelPreset("deep")
+        model.setModelPreset("fast")
         model.markSeedTurnStarted()
         return await send(
             OnboardingBriefingCopy.seedPrompt,

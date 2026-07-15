@@ -24,28 +24,35 @@ struct OnboardingBriefingView: View {
 
     private var model: AskViewModel { ask.model }
 
-    /// Seed CTA only after intro reply has finished and the UI has settled.
+    /// Seed CTA only after a successful intro reply has finished and the UI has settled.
     private var canRevealSeedPrompt: Bool {
-        phase == .seedReady && !model.isTurnActive && model.liveBriefingActive
+        phase == .seedReady
+            && !model.isTurnActive
+            && model.liveBriefingActive
+            && model.introSucceeded
     }
 
     private var phase: OnboardingBriefingPhase {
         if env.onboarding.isStaticReplay { return .staticReplay }
         if model.seedComplete { return .seedComplete }
         if model.isTurnActive, model.seedTurnStarted { return .seeding }
-        // Prefer live session state over status flag — status alone was hiding the seed CTA
-        // after a successful intro (and static fallback never offered any continuation chips).
-        if model.introComplete, model.liveBriefingActive, !model.seedComplete {
+        if model.introSucceeded, model.liveBriefingActive, !model.seedComplete {
             return .seedReady
         }
+        if model.introComplete, !model.introSucceeded { return .streamingIntro }
         if model.introComplete { return .staticReplay }
         if model.isTurnActive || !model.messages.isEmpty { return .streamingIntro }
         return .connecting
     }
 
     private var canGetStarted: Bool {
-        // Allow skip/escape even while seeding — previously locked users mid-turn.
-        (model.introComplete || env.onboarding.isStaticReplay) && !env.onboarding.isSaving
+        // Escape hatch after any progress, error, or static replay — including mid-seed / intro timeout.
+        if env.onboarding.isSaving { return false }
+        if env.onboarding.isStaticReplay || model.introComplete || !model.messages.isEmpty {
+            return true
+        }
+        if case .error = model.state { return true }
+        return false
     }
 
     private var seedCardState: StarterSeedCardState {
@@ -192,7 +199,7 @@ struct OnboardingBriefingView: View {
                     if shouldShowSeedPromptInTranscript {
                         StarterSeedCard(
                             state: seedCardState,
-                            subtitle: OnboardingBriefingCopy.seedCardSubtitle
+                            promptPreview: OnboardingBriefingCopy.seedPrompt
                         ) {
                             Task { await runSeed() }
                         }
@@ -202,6 +209,10 @@ struct OnboardingBriefingView: View {
                     }
 
                     briefingStateCard
+
+                    if case let .error(message) = model.state {
+                        briefingErrorRecovery(message: message)
+                    }
 
                     Color.clear
                         .frame(height: 1)
@@ -249,11 +260,28 @@ struct OnboardingBriefingView: View {
         switch model.state {
         case .connecting:
             connectingCard
-        case let .error(message):
-            ErrorBanner(message: message)
         default:
             EmptyView()
         }
+    }
+
+    @ViewBuilder
+    private func briefingErrorRecovery(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ErrorBanner(message: message)
+            HStack(spacing: 8) {
+                if !model.briefingComplete, !model.introSucceeded {
+                    BriefingChip(title: OnboardingBriefingCopy.retryIntroTitle, systemImage: "arrow.clockwise") {
+                        await retryIntro()
+                    }
+                } else if !model.briefingComplete, !model.seedComplete, model.introSucceeded {
+                    BriefingChip(title: OnboardingBriefingCopy.retrySeedTitle, systemImage: "arrow.clockwise") {
+                        await retrySeed()
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 
     private var bottomInset: some View {
@@ -408,16 +436,40 @@ struct OnboardingBriefingView: View {
     private func runSeed() async {
         guard let organizationId = env.session.activeOrganizationId else { return }
         guard seedCardState == .idle else { return }
-        _ = await ask.sendOnboardingSeed(
+        let sent = await ask.sendOnboardingSeed(
             api: env.api,
             auth: env.auth,
             organizationId: organizationId,
             snapshots: env.snapshots
         )
+        if !sent, case .error = model.state {
+            return
+        }
+        if !sent {
+            model.surfaceBriefingError(OnboardingBriefingCopy.seedSendFailedMessage)
+        }
+    }
+
+    private func retryIntro() async {
+        model.prepareIntroRetry()
+        didBootstrap = false
+        await runBootstrapIfNeeded()
+    }
+
+    private func retrySeed() async {
+        model.prepareSeedRetry()
+        await runSeed()
     }
 
     private func enterRation(openCargo: Bool = false) async {
         Haptics.success()
+        if model.isTurnActive {
+            await model.stop()
+            // Don't wait forever on a hung cancel — hard-tear the turn so complete() always proceeds.
+            if model.isTurnActive {
+                model.forceEndBriefingTurn()
+            }
+        }
         let seeded = model.seedComplete
         let shouldOpenCargo = openCargo || seeded
         let organizationId = env.session.activeOrganizationId

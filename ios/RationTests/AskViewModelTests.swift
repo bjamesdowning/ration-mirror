@@ -89,10 +89,28 @@ final class AskViewModelTests: XCTestCase {
     func testBriefingSessionTracksIntroThenSeed() {
         let model = AskViewModel()
         model.beginOnboardingBriefingSession()
-        XCTAssertEqual(model.modelPreset, "deep")
+        XCTAssertEqual(model.modelPreset, "fast")
         XCTAssertTrue(model.tracksBriefingSession)
         XCTAssertTrue(model.liveBriefingActive)
 
+        model.apply(
+            CopilotStreamEvent(
+                type: "text_delta",
+                message: nil,
+                messageId: "asst-1",
+                text: "Ration connects Cargo to Galley.",
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
         model.apply(
             CopilotStreamEvent(
                 type: "message_end",
@@ -112,6 +130,7 @@ final class AskViewModelTests: XCTestCase {
             )
         )
         XCTAssertTrue(model.introComplete)
+        XCTAssertTrue(model.introSucceeded)
         XCTAssertFalse(model.seedComplete)
         XCTAssertFalse(model.briefingComplete)
 
@@ -187,6 +206,7 @@ final class AskViewModelTests: XCTestCase {
         let model = AskViewModel()
         model.showStaticBriefing("Static welcome")
         XCTAssertTrue(model.introComplete)
+        XCTAssertTrue(model.introSucceeded)
         XCTAssertTrue(model.briefingComplete)
         XCTAssertFalse(model.liveBriefingActive)
         XCTAssertFalse(model.seedComplete)
@@ -214,6 +234,7 @@ final class AskViewModelTests: XCTestCase {
             )
         )
         XCTAssertTrue(model.introComplete)
+        XCTAssertFalse(model.introSucceeded)
         // Late/idle message_end after intro must not mark seed complete.
         model.apply(
             CopilotStreamEvent(
@@ -235,6 +256,95 @@ final class AskViewModelTests: XCTestCase {
         )
         XCTAssertFalse(model.seedComplete)
         XCTAssertFalse(model.briefingComplete)
+        XCTAssertFalse(model.introSucceeded)
+    }
+
+    func testBriefingTurnTimeoutSurfacesError() async {
+        let socket = StreamingTestAskSocketClient()
+        let model = AskViewModel(
+            socket: socket,
+            stopTimeoutNanoseconds: 50_000_000,
+            briefingTurnTimeoutNanoseconds: 80_000_000
+        )
+        model.beginOnboardingBriefingSession()
+        // Simulate an active turn the way send() does.
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_start",
+                message: CopilotMessage(id: "a1", role: "assistant", content: ""),
+                messageId: "a1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertTrue(model.isTurnActive)
+
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertFalse(model.isTurnActive)
+        if case let .error(message) = model.state {
+            XCTAssertEqual(message, AskViewModel.briefingTurnTimeoutMessage)
+        } else {
+            XCTFail("Expected timeout error state, got \(model.state)")
+        }
+    }
+
+    func testOnboardingInvalidPromptSurfacesError() {
+        let model = AskViewModel()
+        model.beginOnboardingBriefingSession()
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_start",
+                message: CopilotMessage(id: "a1", role: "assistant", content: ""),
+                messageId: "a1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.apply(
+            CopilotStreamEvent(
+                type: "error",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: CopilotToolError(
+                    code: "onboarding_briefing_invalid_prompt",
+                    message: "That prompt isn't part of the welcome briefing."
+                ),
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertFalse(model.isTurnActive)
+        if case let .error(message) = model.state {
+            XCTAssertTrue(message.contains("welcome briefing"))
+        } else {
+            XCTFail("Expected error state, got \(model.state)")
+        }
     }
 
     func testToolEndLingersThenClears() async {

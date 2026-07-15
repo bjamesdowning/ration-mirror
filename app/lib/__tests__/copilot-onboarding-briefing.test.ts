@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS,
 	ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT,
+	ONBOARDING_BRIEFING_INTRO_MAX_STEPS,
 	ONBOARDING_BRIEFING_MAX_TURNS,
 	ONBOARDING_BRIEFING_SEED_MAX_STEPS,
 	ONBOARDING_BRIEFING_SEED_PROMPT,
@@ -14,6 +17,7 @@ import {
 	getOnboardingBriefingTurnPolicy,
 	isEligibleForOnboardingBriefing,
 	isIosCopilotClient,
+	isOnboardingAgentStepContinuing,
 	isOnboardingBriefingExhausted,
 	isOnboardingBriefingPrompt,
 	isOnboardingIncomplete,
@@ -139,8 +143,8 @@ describe("onboarding briefing", () => {
 
 	it("exposes intro vs seed tool policy", () => {
 		expect(getOnboardingBriefingTurnPolicy("bootstrap")).toEqual({
-			activeTools: [],
-			maxSteps: 1,
+			activeTools: ["search_docs"],
+			maxSteps: ONBOARDING_BRIEFING_INTRO_MAX_STEPS,
 		});
 		expect(getOnboardingBriefingTurnPolicy("seed")).toEqual({
 			activeTools: ["add_cargo_item"],
@@ -151,10 +155,58 @@ describe("onboarding briefing", () => {
 			true,
 		);
 		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
+			"search_docs",
+		);
+		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
 			"Stock my kitchen",
 		);
 		expect(getOnboardingBriefingSystemPromptAppend("seed")).toContain(
 			"add_cargo_item",
+		);
+	});
+
+	it("defers grant counting while tool steps continue", () => {
+		expect(
+			isOnboardingAgentStepContinuing({ finishReason: "tool-calls" }),
+		).toBe(true);
+		expect(
+			isOnboardingAgentStepContinuing({
+				finishReason: "stop",
+				toolCallsLength: 0,
+			}),
+		).toBe(false);
+		expect(
+			isOnboardingAgentStepContinuing({
+				finishReason: "length",
+				toolCallsLength: 0,
+			}),
+		).toBe(false);
+		expect(
+			isOnboardingAgentStepContinuing({
+				finishReason: undefined,
+				toolCallsLength: 2,
+			}),
+		).toBe(true);
+	});
+
+	it("matches iOS OnboardingBriefingCopy prompts to server allowlist", async () => {
+		const swiftPath = join(
+			process.cwd(),
+			"ios/Ration/Features/Onboarding/OnboardingBriefingCopy.swift",
+		);
+		const swift = readFileSync(swiftPath, "utf8");
+		const bootstrapMatch = swift.match(
+			/static let bootstrapPrompt = "([^"]+)"/,
+		);
+		expect(bootstrapMatch?.[1]).toBe(ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT);
+
+		const seedMatch = swift.match(/static let seedPrompt = """\n([\s\S]*?)"""/);
+		expect(seedMatch?.[1]).toBeDefined();
+		const iosSeed = (seedMatch?.[1] ?? "").replace(/\n$/, "");
+		expect(iosSeed).toBe(ONBOARDING_BRIEFING_SEED_PROMPT);
+		expect(await resolveOnboardingBriefingTurn(iosSeed)).toBe("seed");
+		expect(await resolveOnboardingBriefingTurn(bootstrapMatch?.[1] ?? "")).toBe(
+			"bootstrap",
 		);
 	});
 

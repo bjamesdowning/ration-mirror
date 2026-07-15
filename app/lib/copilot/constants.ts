@@ -2,7 +2,7 @@ export const COPILOT_CONVERSATION_FLOOR_COST = 1;
 export const CREW_COPILOT_DAILY_CONVERSATIONS = 1;
 export const FREE_TIER_DAILY_CONVERSATIONS = 0;
 
-/** Turn 1 — auto-sent intro (no tools). */
+/** Turn 1 — auto-sent intro (search_docs then answer). */
 export const ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT = "What is Ration?";
 
 /** Turn 2 — starter kitchen seed via add_cargo_item (selective expiry + tags). */
@@ -29,7 +29,9 @@ export const ONBOARDING_BRIEFING_MAX_TURNS = 2;
 /** Pending briefing claims bind to a conversation for this long (legacy constant; claim uses session idle). */
 export const ONBOARDING_BRIEFING_PENDING_TTL_SEC = 300;
 export const ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+/** Fast-level output budget — do not lower aggressively (truncation/errors hurt reliability). */
 export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 2048;
+export const ONBOARDING_BRIEFING_INTRO_MAX_STEPS = 3;
 export const ONBOARDING_BRIEFING_SEED_MAX_STEPS = 8;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;

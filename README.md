@@ -760,7 +760,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 
 **FAB padding:** Cargo, Galley, Supply, and Manifest routes use `pb-36 md:pb-0` on the main content area to reserve space for the floating action bar on mobile.
 
-**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) on **web**. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. Settings includes **Restart Tutorial**. **iOS** replaces the tour with an interactive **Ask Ration welcome briefing** (Concept E — starter kitchen seed): when `copilot-onboarding-free` is on, new users get a live Deep intro (“What is Ration?”); after the reply settles, an inline **Suggested** “Stock my kitchen” bubble appears in the transcript (tap when ready to seed 5 staples). **Get Started** remains available after intro. When the free briefing is unavailable, iOS shows static welcome copy plus **See in Cargo** / **Get Started** chips (never a dead-end). Settings → Tutorial replays static briefing only (no extra LLM grant). See `app/lib/copilot/onboarding-briefing.server.ts` and `ios/Ration/Features/Onboarding/`.
+**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) on **web**. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. Settings includes **Restart Tutorial**. **iOS** replaces the tour with an interactive **Ask Ration welcome briefing** (Concept E — starter kitchen seed): when `copilot-onboarding-free` is on, new users get a live Fast intro (“What is Ration?” via `search_docs`) then an inline **Suggested** bubble showing the full “Stock my kitchen” seed prompt — tap sends it as a normal user message so Copilot can `add_cargo_item`. Briefing turns use a 45s client timeout with retry. **Get Started** remains available after intro. When the free briefing is unavailable, iOS shows static welcome copy plus **See in Cargo** / **Get Started** chips (never a dead-end). Settings → Tutorial replays static briefing only (no extra LLM grant). See `app/lib/copilot/onboarding-briefing.server.ts` and `ios/Ration/Features/Onboarding/`.
 
 ---
 
@@ -2273,7 +2273,7 @@ Usage reconciles after each agent step (`onStepFinish`). Insufficient credits mi
 ### 14.8 Client session persistence
 
 - **Web:** [`session-storage.client.ts`](app/lib/copilot/session-storage.client.ts) — localStorage keyed by org, hydrated on open, pruned after `sessionIdleMs`.
-- **iOS:** equivalent persistence in Ask view models; onboarding briefing uses server-enforced two-turn mode (`copilot-onboarding-free` flag, Deep preset, seed turn allows `add_cargo_item` only).
+- **iOS:** equivalent persistence in Ask view models; onboarding briefing uses server-enforced two-turn mode (`copilot-onboarding-free` flag, Fast preset, intro allows `search_docs`, seed allows `add_cargo_item`).
 - **Continuation:** [`continuation.ts`](app/lib/copilot/continuation.ts) — copy transcript / draft follow-up prompts.
 
 WebSocket event types consumed by clients include streamed messages, `session_usage_update`, `session_limit_warning` (soft at 50% tokens / 30 messages; urgent at 85% / 36 messages), `blocked_feature`, tool approval requests, and structured errors (`rate_limited`, `insufficient_credits`, `session_limit_reached`, `onboarding_briefing_exhausted`).
@@ -2304,7 +2304,7 @@ WebSocket traffic hits `ration-copilot` directly — not proxied through `ration
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `ration-copilot` | off | Master kill switch — server returns 404 when disabled; exposed to clients as `rationCopilot` |
-| `copilot-onboarding-free` | off | One-time iOS welcome briefing (intro + starter kitchen seed, Deep preset, no credit charge) |
+| `copilot-onboarding-free` | off | One-time iOS welcome briefing (intro + starter kitchen seed, Fast preset, no credit charge) |
 
 Registry: [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts). Flagship binding on `ration-copilot`: see [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc).
 

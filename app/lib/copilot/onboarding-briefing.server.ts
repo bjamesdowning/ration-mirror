@@ -8,6 +8,7 @@ import {
 	COPILOT_SESSION_IDLE_MS,
 	ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS,
 	ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT,
+	ONBOARDING_BRIEFING_INTRO_MAX_STEPS,
 	ONBOARDING_BRIEFING_MAX_TURNS,
 	ONBOARDING_BRIEFING_SEED_MAX_STEPS,
 	ONBOARDING_BRIEFING_SEED_PROMPT,
@@ -92,7 +93,26 @@ export function getOnboardingBriefingTurnPolicy(turn: OnboardingBriefingTurn): {
 			maxSteps: ONBOARDING_BRIEFING_SEED_MAX_STEPS,
 		};
 	}
-	return { activeTools: [], maxSteps: 1 };
+	return {
+		activeTools: ["search_docs"],
+		maxSteps: ONBOARDING_BRIEFING_INTRO_MAX_STEPS,
+	};
+}
+
+/**
+ * Whether an agent step still belongs to an in-progress user turn
+ * (tool-calls → more steps follow). Used so free-grant counting waits
+ * until the full intro/seed turn finishes.
+ */
+export function isOnboardingAgentStepContinuing(input: {
+	finishReason?: string | null;
+	toolCallsLength?: number;
+}): boolean {
+	if (input.finishReason === "tool-calls") return true;
+	if (input.finishReason === "stop" || input.finishReason === "length") {
+		return false;
+	}
+	return (input.toolCallsLength ?? 0) > 0;
 }
 
 function parseKvState(raw: string | null): OnboardingBriefingKvState | null {
@@ -253,16 +273,17 @@ export function getOnboardingBriefingSystemPromptAppend(
 			"- If an item fails, continue with the rest and report partial success.",
 			"- Reply in under 200 words summarizing what was added, with expiry/tag highlights.",
 			"- Do not mention pricing or credits.",
+			"- Do not call search_docs or get_context on this turn.",
 		].join("\n");
 	}
 	return [
 		"",
 		"Onboarding briefing mode (turn 1 — intro):",
-		"- Reply in under 150 words.",
-		"- Explain what Ration is in plain language and how Cargo, Galley, Manifest, and Supply connect.",
+		"- Use search_docs to ground product facts (Cargo, Galley, Manifest, Supply) so the answer stays current.",
+		"- After searching, reply in under 150 words in plain language.",
 		"- Do not mention pricing, credits, or subscriptions.",
 		'- End by inviting the user to tap "Stock my kitchen" to try Copilot with their pantry.',
-		"- No tools are available for this turn.",
+		"- Do not call get_context or any write tools on this turn — only search_docs is available.",
 	].join("\n");
 }
 

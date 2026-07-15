@@ -145,7 +145,7 @@ describe("copilot gate", () => {
 		);
 		expect(charge.mode).toBe("onboarding_briefing");
 		expect(charge.onboardingConsumed).toBe(false);
-		expect(charge.modelPreset).toBe("deep");
+		expect(charge.modelPreset).toBe("fast");
 
 		const secondOpen = await openCopilotConversation(
 			e,

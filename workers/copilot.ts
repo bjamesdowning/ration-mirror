@@ -34,6 +34,7 @@ import {
 	finalizeOnboardingBriefing,
 	getOnboardingBriefingSystemPromptAppend,
 	getOnboardingBriefingTurnPolicy,
+	isOnboardingAgentStepContinuing,
 	isOnboardingBriefingExhausted,
 	type OnboardingBriefingTurn,
 	resolveAllowedOnboardingBriefingTurn,
@@ -407,7 +408,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				maxOutputTokens,
 				temperature: profile.temperature,
 				topP: profile.topP,
-				sendReasoning: true,
+				sendReasoning: false,
 				providerOptions: {
 					"workers-ai": workersAiOptions,
 				},
@@ -553,10 +554,12 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			};
 		}
 		if (this.onboardingActiveTurn === "bootstrap") {
-			return {
-				action: "block",
-				reason: "Tools are not available during the welcome intro.",
-			};
+			if (ctx.toolName !== "search_docs") {
+				return {
+					action: "block",
+					reason: "Only search_docs is available during the welcome intro.",
+				};
+			}
 		}
 		if (
 			this.onboardingActiveTurn === "seed" &&
@@ -661,7 +664,18 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			if (!this.onboardingShouldCountTurn) {
 				return;
 			}
+			// Multi-step tool loops re-enter beforeTurn; only burn the grant when
+			// this user turn is finished (not after the first tool step).
+			if (
+				isOnboardingAgentStepContinuing({
+					finishReason: ctx.finishReason,
+					toolCallsLength: ctx.toolCalls?.length ?? 0,
+				})
+			) {
+				return;
+			}
 			this.onboardingShouldCountTurn = false;
+			this.onboardingActiveTurn = null;
 			const nextTurnsUsed = (charge.onboardingTurnsUsed ?? 0) + 1;
 			const consumed = isOnboardingBriefingExhausted(nextTurnsUsed);
 			const nextCharge = {

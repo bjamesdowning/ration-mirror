@@ -42,7 +42,7 @@ describe("COPILOT_MODEL_PRESETS", () => {
 		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
 	});
 
-	it("onboarding briefing forces deep preset", () => {
-		expect(ONBOARDING_BRIEFING_MODEL_PRESET).toBe("deep");
+	it("onboarding briefing forces fast preset", () => {
+		expect(ONBOARDING_BRIEFING_MODEL_PRESET).toBe("fast");
 	});
 });

@@ -26,7 +26,7 @@ Use today's date from context to calculate expiry dates. Add each item with add_
 
     static let seedCardTitle = "Stock my kitchen"
     static let seedCardSubtitle =
-        "Add butter, eggs, milk, flour & olive oil — with a few expiries and tags so you can see Cargo in action"
+        "Tap to send this prompt — watch Copilot add staples with expiry & tags"
     static let seedCardDisabledSubtitle = "Requires Copilot briefing"
     static let seedSuggestedLabel = "Suggested"
     static let seedSuccessToast = "5 items added to Cargo"
@@ -37,6 +37,9 @@ Use today's date from context to calculate expiry dates. Add each item with add_
     static let emptyStateTitle = "Welcome briefing"
     static let emptyStateMessage =
         "Ration Copilot will explain how the app works, then you can stock a starter kitchen."
+    static let retryIntroTitle = "Retry intro"
+    static let retrySeedTitle = "Retry seed"
+    static let seedSendFailedMessage = "Couldn't start the kitchen seed. Tap retry or Get Started."
 
     static let staticReplayTitle = "Welcome to Ration"
 

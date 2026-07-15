@@ -82,6 +82,8 @@ final class AskViewModel {
     private(set) var isAwaitingApproval = false
     private(set) var briefingComplete = false
     private(set) var introComplete = false
+    /// True when the intro assistant reply had usable content (not empty / failed soft end).
+    private(set) var introSucceeded = false
     private(set) var seedComplete = false
     private(set) var seedTurnStarted = false
     /// True when the welcome intro came from a live Copilot turn (not static markdown).
@@ -95,18 +97,25 @@ final class AskViewModel {
     private var toolLingerTask: Task<Void, Never>?
     private var snapshotSaveTask: Task<Void, Never>?
     private var stopTimeoutTask: Task<Void, Never>?
+    private var briefingTurnTimeoutTask: Task<Void, Never>?
     private var isConnected = false
     private var isSubmitting = false
     private var organizationId: String?
     private var snapshots: SnapshotStore?
     private let stopTimeoutNanoseconds: UInt64
+    private let briefingTurnTimeoutNanoseconds: UInt64
+
+    static let briefingTurnTimeoutMessage =
+        "Copilot took too long. Tap retry to try again, or Get Started to continue."
 
     init(
         socket: (any AskSocketClient)? = nil,
-        stopTimeoutNanoseconds: UInt64 = 2_000_000_000
+        stopTimeoutNanoseconds: UInt64 = 2_000_000_000,
+        briefingTurnTimeoutNanoseconds: UInt64 = 45_000_000_000
     ) {
         self.socket = socket
         self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
+        self.briefingTurnTimeoutNanoseconds = briefingTurnTimeoutNanoseconds
     }
 
     var blocksComposerForSessionWarning: Bool {
@@ -223,26 +232,65 @@ final class AskViewModel {
         tracksBriefingSession = false
         briefingComplete = false
         introComplete = false
+        introSucceeded = false
         seedComplete = false
         seedTurnStarted = false
         liveBriefingActive = false
         seedItemsAdded = 0
         modelPreset = "fast"
+        cancelBriefingTurnTimeout()
     }
 
     func beginOnboardingBriefingSession() {
         tracksBriefingSession = true
         briefingComplete = false
         introComplete = false
+        introSucceeded = false
         seedComplete = false
         seedTurnStarted = false
         liveBriefingActive = true
         seedItemsAdded = 0
-        modelPreset = "deep"
+        modelPreset = "fast"
     }
 
     func markSeedTurnStarted() {
         seedTurnStarted = true
+    }
+
+    func clearBriefingError() {
+        if case .error = state {
+            state = .idle
+        }
+    }
+
+    /// Reset intro flags so bootstrap can be re-sent after a failed/empty reply.
+    func prepareIntroRetry() {
+        cancelBriefingTurnTimeout()
+        introComplete = false
+        introSucceeded = false
+        seedTurnStarted = false
+        seedComplete = false
+        briefingComplete = false
+        messages = []
+        clearBriefingError()
+    }
+
+    /// Allow seed to be re-sent after a timeout or failed send.
+    func prepareSeedRetry() {
+        seedTurnStarted = false
+        clearBriefingError()
+    }
+
+    func surfaceBriefingError(_ message: String) {
+        state = .error(message)
+    }
+
+    /// Tear down a stuck briefing turn so Get Started can always proceed.
+    func forceEndBriefingTurn() {
+        cancelBriefingTurnTimeout()
+        socket?.disconnect()
+        isConnected = false
+        completeTurn(state: .idle)
     }
 
     var seedSuccessMessage: String {
@@ -261,6 +309,7 @@ final class AskViewModel {
         tracksBriefingSession = false
         liveBriefingActive = false
         introComplete = true
+        introSucceeded = true
         briefingComplete = true
         seedComplete = false
         seedTurnStarted = false
@@ -291,6 +340,7 @@ final class AskViewModel {
         self.snapshots = snapshots
 
         if let status,
+           !tracksBriefingSession,
            status.tier == "crew_member",
            status.freeConversationsRemaining <= 0,
            !status.autoDeductConsent {
@@ -400,6 +450,7 @@ final class AskViewModel {
         snapshotSaveTask?.cancel()
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
+        cancelBriefingTurnTimeout()
         streamTask?.cancel()
         streamTask = nil
         toolLingerTask?.cancel()
@@ -502,6 +553,7 @@ final class AskViewModel {
             if tracksBriefingSession {
                 if !introComplete {
                     introComplete = true
+                    introSucceeded = lastAssistantHasUsableContent
                 } else if seedTurnStarted, isTurnActive {
                     seedComplete = true
                     briefingComplete = true
@@ -596,13 +648,25 @@ final class AskViewModel {
             }
         case "error":
             let wasTurnActive = isTurnActive
-            if event.error?.code == "onboarding_briefing_exhausted"
-                || event.error?.code == "onboarding_briefing_invalid_prompt" {
-                if event.error?.code == "onboarding_briefing_exhausted" {
-                    briefingComplete = true
-                    introComplete = true
-                }
-                completeTurn(state: .idle)
+            if event.error?.code == "onboarding_briefing_exhausted" {
+                briefingComplete = true
+                introComplete = true
+                // Don't unlock seed on a soft-deny — surface escape copy instead.
+                completeTurn(
+                    state: .error(
+                        event.error?.message
+                            ?? "Your welcome briefing is complete. Tap Get Started to continue."
+                    )
+                )
+                return
+            }
+            if event.error?.code == "onboarding_briefing_invalid_prompt" {
+                completeTurn(
+                    state: .error(
+                        event.error?.message
+                            ?? "That prompt isn't part of the welcome briefing. Tap Stock my kitchen or Get Started."
+                    )
+                )
                 return
             }
             isConnected = false
@@ -684,6 +748,11 @@ final class AskViewModel {
         }
     }
 
+    private var lastAssistantHasUsableContent: Bool {
+        guard let last = messages.last(where: { $0.role == "assistant" }) else { return false }
+        return !last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private func persistSnapshotDebounced() {
         snapshotSaveTask?.cancel()
         snapshotSaveTask = Task { [weak self] in
@@ -728,6 +797,7 @@ final class AskViewModel {
         isTurnActive = true
         isStopping = false
         isAwaitingApproval = false
+        scheduleBriefingTurnTimeoutIfNeeded()
     }
 
     private func beginTurnIfNeeded() {
@@ -736,9 +806,34 @@ final class AskViewModel {
         }
     }
 
+    private func scheduleBriefingTurnTimeoutIfNeeded() {
+        cancelBriefingTurnTimeout()
+        guard tracksBriefingSession else { return }
+        briefingTurnTimeoutTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.briefingTurnTimeoutNanoseconds)
+            guard !Task.isCancelled else { return }
+            guard self.tracksBriefingSession, self.isTurnActive else { return }
+            do {
+                try await self.socket?.cancelActiveRequest()
+            } catch {
+                // Best-effort cancel; still force-complete the turn below.
+            }
+            self.socket?.disconnect()
+            self.isConnected = false
+            self.completeTurn(state: .error(Self.briefingTurnTimeoutMessage))
+        }
+    }
+
+    private func cancelBriefingTurnTimeout() {
+        briefingTurnTimeoutTask?.cancel()
+        briefingTurnTimeoutTask = nil
+    }
+
     private func completeTurn(state: State) {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
+        cancelBriefingTurnTimeout()
         toolLingerTask?.cancel()
         toolLingerTask = nil
         activeTool = nil

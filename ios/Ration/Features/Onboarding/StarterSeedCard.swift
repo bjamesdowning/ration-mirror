@@ -8,10 +8,10 @@ enum StarterSeedCardState: Equatable {
 }
 
 /// Chat-native suggested prompt bubble for the starter-kitchen seed turn.
-/// Sits in the transcript after the intro reply — not a bottom-sheet modal.
+/// Shows the full prompt preview so users see the input before sending.
 struct StarterSeedCard: View {
     let state: StarterSeedCardState
-    let subtitle: String
+    let promptPreview: String
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -28,20 +28,29 @@ struct StarterSeedCard: View {
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
 
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
                         Text(OnboardingBriefingCopy.seedCardTitle)
                             .font(Typography.headline())
                             .foregroundStyle(Theme.carbon)
                             .multilineTextAlignment(.leading)
-                        Text(subtitle)
-                            .font(Typography.caption())
-                            .foregroundStyle(Theme.muted)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        trailingAccessory
                     }
 
-                    trailingAccessory
+                    Text(OnboardingBriefingCopy.seedCardSubtitle)
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(promptPreview)
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.carbon.opacity(0.9))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(12)
                 .background(Theme.hyperGreen.opacity(state == .idle ? 0.22 : 0.12))
@@ -51,14 +60,13 @@ struct StarterSeedCard: View {
                         .stroke(Theme.hyperGreen.opacity(0.55), lineWidth: 1)
                 )
             }
-            .frame(maxWidth: 320, alignment: .trailing)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .buttonStyle(StarterSeedCardButtonStyle())
         .disabled(state != .idle)
         .opacity(state == .completed || state == .disabled ? 0.72 : 1)
         .accessibilityLabel("Stock my kitchen with five pantry staples")
-        .accessibilityHint("Sends a suggested prompt to add butter, eggs, milk, flour, and olive oil to your cargo")
+        .accessibilityHint("Sends this suggested prompt to Copilot to add items to your cargo")
         .accessibilityValue(accessibilityValue)
     }
 

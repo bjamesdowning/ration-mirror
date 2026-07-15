@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, redirect, useLoaderData } from "react-router";
+import { Form, redirect, useLoaderData, useNavigation } from "react-router";
 import {
 	buildMagicLinkVerifyUrl,
 	MAGIC_LINK_VERIFY_PARAMS,
@@ -63,6 +64,22 @@ export function meta() {
 
 export default function MagicLinkContinue() {
 	const { isMobileHandoff, hiddenFields } = useLoaderData<typeof loader>();
+	const navigation = useNavigation();
+	const submittedRef = useRef(false);
+	const prevNavStateRef = useRef(navigation.state);
+	const [optimisticPending, setOptimisticPending] = useState(false);
+	const isContinuing = optimisticPending || navigation.state !== "idle";
+
+	// Unlock only after a submit cycle settles back to idle without navigating away
+	// (e.g. network abort). Successful verify redirects leave this page.
+	useEffect(() => {
+		const prev = prevNavStateRef.current;
+		prevNavStateRef.current = navigation.state;
+		if (prev !== "idle" && navigation.state === "idle") {
+			submittedRef.current = false;
+			setOptimisticPending(false);
+		}
+	}, [navigation.state]);
 
 	return (
 		<div className="min-h-screen bg-ceramic flex items-center justify-center p-6">
@@ -77,15 +94,38 @@ export default function MagicLinkContinue() {
 						<> Open this link on the same device where you requested sign-in.</>
 					) : null}
 				</p>
-				<Form method="post" className="space-y-3">
+				<Form
+					method="post"
+					className="space-y-3"
+					onSubmit={(event) => {
+						if (submittedRef.current) {
+							event.preventDefault();
+							return;
+						}
+						submittedRef.current = true;
+						setOptimisticPending(true);
+					}}
+				>
 					{Object.entries(hiddenFields).map(([key, value]) => (
 						<input key={key} type="hidden" name={key} value={value} readOnly />
 					))}
 					<button
 						type="submit"
-						className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
+						disabled={isContinuing}
+						aria-busy={isContinuing}
+						className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						Continue sign-in →
+						{isContinuing ? (
+							<>
+								<span
+									className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin"
+									aria-hidden="true"
+								/>
+								Signing you in…
+							</>
+						) : (
+							"Continue sign-in →"
+						)}
 					</button>
 				</Form>
 				<p className="text-xs text-muted mt-4 leading-relaxed">

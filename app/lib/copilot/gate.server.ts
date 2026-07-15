@@ -14,7 +14,10 @@ import {
 	creditsForCopilotTokens,
 	FREE_TIER_DAILY_CONVERSATIONS,
 } from "./constants";
-import type { CopilotModelPreset } from "./model-profiles";
+import {
+	type CopilotModelPreset,
+	ONBOARDING_BRIEFING_MODEL_PRESET,
+} from "./model-profiles";
 import {
 	claimOnboardingBriefing,
 	getOnboardingBriefingStatus,
@@ -57,6 +60,7 @@ export interface OpenCopilotConversationOptions {
 	autoDeductConsent?: boolean;
 	request?: Request;
 	source?: CopilotAuthSource;
+	conversationId?: string;
 }
 
 function isCrewTier(tier: string | null | undefined): boolean {
@@ -182,6 +186,7 @@ export async function openCopilotConversation(
 ): Promise<CopilotConversationCharge> {
 	if (
 		options?.source === "mobile" &&
+		options.conversationId &&
 		(await isEligibleForOnboardingBriefing({
 			env,
 			userId: identity.userId,
@@ -189,12 +194,17 @@ export async function openCopilotConversation(
 			request: options.request,
 		}))
 	) {
-		const claimed = await claimOnboardingBriefing(env, identity.userId);
+		const claimed = await claimOnboardingBriefing(
+			env,
+			identity.userId,
+			options.conversationId,
+		);
 		if (claimed) {
 			return {
 				mode: "onboarding_briefing",
 				preauthorizedCredits: 0,
 				bracketCreditsCharged: 0,
+				modelPreset: ONBOARDING_BRIEFING_MODEL_PRESET,
 				onboardingTurnsUsed: 0,
 				onboardingConsumed: false,
 			};
@@ -292,7 +302,10 @@ export async function ensureCopilotConversationOpen(
 		return existing as CopilotConversationCharge;
 	}
 
-	const charge = await openCopilotConversation(env, identity, options);
+	const charge = await openCopilotConversation(env, identity, {
+		...options,
+		conversationId,
+	});
 	await persistConversationCharge(
 		env,
 		identity.organizationId,

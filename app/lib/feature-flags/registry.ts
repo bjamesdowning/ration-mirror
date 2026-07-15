@@ -23,7 +23,8 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 	},
 	"copilot-onboarding-free": {
 		defaultEnabled: false,
-		description: "One-time iOS Ask Ration welcome briefing for new users",
+		description:
+			"One-time iOS Ask Ration welcome briefing (intro + starter kitchen seed) for new users",
 	},
 };
 

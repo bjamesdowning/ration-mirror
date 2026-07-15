@@ -13,6 +13,7 @@ import { authenticateCopilot } from "../app/lib/copilot/auth.server";
 import {
 	COPILOT_SESSION_MAX_MESSAGES,
 	COPILOT_SESSION_MAX_TOKENS,
+	ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS,
 } from "../app/lib/copilot/constants";
 import {
 	CopilotNeedsConsentError,
@@ -25,13 +26,17 @@ import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.serv
 import {
 	COPILOT_MODEL_PRESETS,
 	type CopilotModelPreset,
+	ONBOARDING_BRIEFING_MODEL_PRESET,
 	resolveCopilotModelPreset,
 } from "../app/lib/copilot/model-profiles";
 import { detectNativeFeatureSuggestion } from "../app/lib/copilot/native-feature-hints.server";
 import {
 	finalizeOnboardingBriefing,
 	getOnboardingBriefingSystemPromptAppend,
-	isOnboardingBriefingPrompt,
+	getOnboardingBriefingTurnPolicy,
+	isOnboardingBriefingExhausted,
+	type OnboardingBriefingTurn,
+	resolveAllowedOnboardingBriefingTurn,
 } from "../app/lib/copilot/onboarding-briefing.server";
 import {
 	buildSessionUsageSnapshot,
@@ -210,6 +215,12 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
+	/** Soft-deny onboarding turns must not burn the free grant. */
+	private onboardingTurnDenied = false;
+	/** Active allowlisted onboarding turn (for tool hard-allowlist). */
+	private onboardingActiveTurn: OnboardingBriefingTurn | null = null;
+	/** Count the free grant once per allowlisted user turn (not per agent step). */
+	private onboardingShouldCountTurn = false;
 
 	private maybeEmitSessionLimitWarning(
 		totalTokens: number,
@@ -277,11 +288,41 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			identity.conversationId,
 		);
 		if (charge?.mode === "onboarding_briefing") {
+			this.onboardingTurnDenied = false;
+			this.onboardingActiveTurn = null;
+			this.onboardingShouldCountTurn = false;
+
+			const rl = await checkRateLimit(
+				this.env.RATION_KV,
+				"copilot",
+				identity.userId,
+			);
+			if (!rl.allowed) {
+				this.onboardingTurnDenied = true;
+				this.broadcast(
+					JSON.stringify({
+						type: "error",
+						error: {
+							code: "rate_limited",
+							message: "Copilot is cooling down. Please try again shortly.",
+						},
+					}),
+				);
+				return {
+					system: `${ctx.system}\n\nThe current request is rate limited. Respond briefly that Copilot is cooling down and the user should try again shortly.`,
+					activeTools: [],
+					maxSteps: 1,
+					maxOutputTokens: 64,
+				};
+			}
+
+			const turnsUsed = charge.onboardingTurnsUsed ?? 0;
 			if (
 				charge.onboardingConsumed ||
-				(charge.onboardingTurnsUsed ?? 0) >= 1 ||
-				countUserMessages(ctx) > 1
+				isOnboardingBriefingExhausted(turnsUsed) ||
+				countUserMessages(ctx) > turnsUsed + 1
 			) {
+				this.onboardingTurnDenied = true;
 				writeCopilotMetric(
 					this.env,
 					"onboarding_briefing_blocked_attempt",
@@ -302,30 +343,74 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					system: `${ctx.system}\n\nThe welcome briefing is complete. Do not answer further questions.`,
 					activeTools: [],
 					maxSteps: 1,
+					maxOutputTokens: 64,
 				};
 			}
 			const userText = lastUserText(ctx);
-			if (!(await isOnboardingBriefingPrompt(userText))) {
+			const briefingTurn = await resolveAllowedOnboardingBriefingTurn({
+				userText,
+				turnsUsed,
+			});
+			if (!briefingTurn) {
+				this.onboardingTurnDenied = true;
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_invalid_prompt",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+				);
 				this.broadcast(
 					JSON.stringify({
 						type: "error",
 						error: {
-							code: "onboarding_briefing_exhausted",
+							code: "onboarding_briefing_invalid_prompt",
 							message:
-								"Your welcome briefing is complete. Unlock Ask Ration with credits or Crew Member.",
+								"That prompt isn't part of the welcome briefing. Tap Stock my kitchen or Get Started.",
 						},
 					}),
 				);
 				return {
-					system: `${ctx.system}\n\nThe welcome briefing only accepts the canonical onboarding prompt.`,
+					system: `${ctx.system}\n\nThe welcome briefing only accepts the canonical onboarding prompts. Reply with a single short sentence directing the user to use the onboarding buttons.`,
 					activeTools: [],
 					maxSteps: 1,
+					maxOutputTokens: 64,
 				};
 			}
+
+			this.onboardingActiveTurn = briefingTurn;
+			this.onboardingShouldCountTurn = true;
+			const policy = getOnboardingBriefingTurnPolicy(briefingTurn);
+			const preset = ONBOARDING_BRIEFING_MODEL_PRESET;
+			this.conversationModelPreset = preset;
+			if (charge.modelPreset !== preset) {
+				await persistConversationCharge(
+					this.env,
+					identity.organizationId,
+					identity.conversationId,
+					{ ...charge, modelPreset: preset },
+				);
+			}
+			const profile = COPILOT_MODEL_PRESETS[preset];
+			const workersAiOptions: Record<string, unknown> = {};
+			if (profile.reasoningEffort !== null) {
+				workersAiOptions.reasoning_effort = profile.reasoningEffort;
+			}
+			const maxOutputTokens =
+				briefingTurn === "bootstrap"
+					? ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS
+					: profile.maxOutputTokens;
+
 			return {
-				system: `${ctx.system}${getOnboardingBriefingSystemPromptAppend()}`,
-				activeTools: [],
-				maxSteps: 1,
+				system: `${ctx.system}${formatCopilotTemporalContextAppend()}${getOnboardingBriefingSystemPromptAppend(briefingTurn)}`,
+				activeTools: policy.activeTools,
+				maxSteps: policy.maxSteps,
+				maxOutputTokens,
+				temperature: profile.temperature,
+				topP: profile.topP,
+				sendReasoning: true,
+				providerOptions: {
+					"workers-ai": workersAiOptions,
+				},
 			};
 		}
 		if (this.billingBlocked) {
@@ -467,6 +552,22 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					"Copilot cannot run more tools because this conversation exhausted its credit allowance.",
 			};
 		}
+		if (this.onboardingActiveTurn === "bootstrap") {
+			return {
+				action: "block",
+				reason: "Tools are not available during the welcome intro.",
+			};
+		}
+		if (
+			this.onboardingActiveTurn === "seed" &&
+			ctx.toolName !== "add_cargo_item"
+		) {
+			return {
+				action: "block",
+				reason:
+					"Only add_cargo_item is available during the starter kitchen seed.",
+			};
+		}
 		const identity = decodeAgentName(this.name);
 		writeCopilotMetric(
 			this.env,
@@ -551,10 +652,23 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			this.sessionMessageCount,
 		);
 		if (charge.mode === "onboarding_briefing" && !charge.onboardingConsumed) {
+			if (this.onboardingTurnDenied) {
+				this.onboardingTurnDenied = false;
+				this.onboardingShouldCountTurn = false;
+				this.onboardingActiveTurn = null;
+				return;
+			}
+			if (!this.onboardingShouldCountTurn) {
+				return;
+			}
+			this.onboardingShouldCountTurn = false;
+			const nextTurnsUsed = (charge.onboardingTurnsUsed ?? 0) + 1;
+			const consumed = isOnboardingBriefingExhausted(nextTurnsUsed);
 			const nextCharge = {
 				...charge,
-				onboardingTurnsUsed: 1,
-				onboardingConsumed: true,
+				modelPreset: ONBOARDING_BRIEFING_MODEL_PRESET,
+				onboardingTurnsUsed: nextTurnsUsed,
+				onboardingConsumed: consumed,
 			};
 			await persistConversationCharge(
 				this.env,
@@ -562,13 +676,23 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				identity.conversationId,
 				nextCharge,
 			);
-			await finalizeOnboardingBriefing(this.env, identity.userId);
-			writeCopilotMetric(
-				this.env,
-				"onboarding_briefing_completed",
-				{ ...identity, source: "agent" },
-				identity.conversationId,
-			);
+			if (consumed) {
+				await finalizeOnboardingBriefing(this.env, identity.userId);
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_completed",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+				);
+			} else {
+				writeCopilotMetric(
+					this.env,
+					"onboarding_briefing_turn_completed",
+					{ ...identity, source: "agent" },
+					identity.conversationId,
+					{ doubles: [nextTurnsUsed] },
+				);
+			}
 		}
 	}
 

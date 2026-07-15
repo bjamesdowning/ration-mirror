@@ -1,16 +1,52 @@
 import SwiftUI
 import MarkdownUI
 
-/// Full-screen Ask-first onboarding: one briefing response, navigation chips, Enter Ration.
+enum OnboardingBriefingPhase: Equatable {
+    case connecting
+    case streamingIntro
+    case seedReady
+    case seeding
+    case seedComplete
+    case staticReplay
+}
+
+/// Full-screen Ask-first onboarding: intro turn, optional starter seed, Get Started.
 struct OnboardingBriefingView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(AskCoordinator.self) private var ask
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var followsLatest = true
-    @State private var showingPaywall = false
     @State private var didBootstrap = false
+    @State private var showSeedSuccessToast = false
+    @State private var seedCardAppeared = false
     @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
+
+    private var phase: OnboardingBriefingPhase {
+        if env.onboarding.isStaticReplay { return .staticReplay }
+        if model.seedComplete { return .seedComplete }
+        if model.isTurnActive, model.seedTurnStarted { return .seeding }
+        if model.introComplete, model.status?.canUseOnboardingBriefing == true {
+            return .seedReady
+        }
+        if model.introComplete { return .staticReplay }
+        if model.isTurnActive || !model.messages.isEmpty { return .streamingIntro }
+        return .connecting
+    }
+
+    private var canGetStarted: Bool {
+        !model.isTurnActive && (model.introComplete || env.onboarding.isStaticReplay)
+    }
+
+    private var seedCardState: StarterSeedCardState {
+        if model.seedComplete { return .completed }
+        if env.onboarding.isStaticReplay { return .disabled }
+        if model.status?.canUseOnboardingBriefing != true { return .disabled }
+        if phase == .seeding { return .loading }
+        if phase == .seedReady { return .idle }
+        return .disabled
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,24 +55,38 @@ struct OnboardingBriefingView: View {
         }
         .background(Theme.ceramic.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 12) {
-                if model.briefingComplete || env.onboarding.isStaticReplay {
-                    navigationChips
+            bottomInset
+        }
+        .overlay(alignment: .bottom) {
+            if showSeedSuccessToast {
+                TransientSuccessToast(message: model.seedSuccessMessage) {
+                    withAnimation(MotionPolicy.shortFade) {
+                        showSeedSuccessToast = false
+                    }
                 }
-                if activityDisplay != .hidden {
-                    CopilotActivityIndicator(display: activityDisplay)
-                        .padding(.horizontal, 16)
-                }
-                composer
-                    .padding(.horizontal, 16)
+                .padding(.bottom, 96)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityAddTraits(.isStaticText)
             }
-            .padding(.vertical, 8)
         }
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView()
-        }
+        .animation(MotionPolicy.dockSpring, value: phase)
+        .animation(MotionPolicy.shortFade, value: showSeedSuccessToast)
         .task(id: bootstrapTaskKey) {
             await runBootstrapIfNeeded()
+        }
+        .onChange(of: model.seedComplete) { _, complete in
+            guard complete else { return }
+            Haptics.success()
+            withAnimation(MotionPolicy.dockSpring) {
+                showSeedSuccessToast = true
+            }
+        }
+        .onChange(of: phase) { _, next in
+            if next == .seedReady {
+                withAnimation(MotionPolicy.dockSpring) {
+                    seedCardAppeared = true
+                }
+            }
         }
     }
 
@@ -59,19 +109,28 @@ struct OnboardingBriefingView: View {
             Spacer(minLength: 4)
 
             Button {
-                Task { await enterRation() }
+                Task { await enterRation(openCargo: model.seedComplete) }
             } label: {
                 if env.onboarding.isSaving {
-                    ProgressView().tint(Theme.hyperGreen)
+                    ProgressView().tint(Theme.onHyperGreen)
                 } else {
-                    Text(OnboardingBriefingCopy.enterRationTitle)
+                    Text(OnboardingBriefingCopy.getStartedTitle)
                         .font(Typography.caption())
                         .fontWeight(.semibold)
                 }
             }
             .buttonStyle(.borderedProminent)
             .tint(Theme.hyperGreen)
-            .disabled(env.onboarding.isSaving || model.isTurnActive)
+            .disabled(!canGetStarted || env.onboarding.isSaving)
+            .opacity(canGetStarted ? 1 : 0.55)
+            .scaleEffect(canGetStarted && !reduceMotion ? 1 : 0.98)
+            .animation(MotionPolicy.dockSpring, value: canGetStarted)
+            .accessibilityLabel(OnboardingBriefingCopy.getStartedTitle)
+            .accessibilityHint(
+                model.seedComplete
+                    ? "Enter Ration and open Cargo"
+                    : "Enter Ration and explore the app"
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -84,11 +143,15 @@ struct OnboardingBriefingView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    if model.messages.isEmpty, !env.onboarding.isStaticReplay {
+                    if model.messages.isEmpty, phase == .connecting {
+                        connectingCard
+                            .padding(.top, 32)
+                            .transition(.opacity)
+                    } else if model.messages.isEmpty, !env.onboarding.isStaticReplay {
                         EmptyStateView(
                             icon: "sparkles",
-                            title: "Welcome briefing",
-                            message: "Ration Copilot will explain how the app works — one quick overview, then you're in."
+                            title: OnboardingBriefingCopy.emptyStateTitle,
+                            message: OnboardingBriefingCopy.emptyStateMessage
                         )
                         .padding(.top, 32)
                     }
@@ -99,6 +162,12 @@ struct OnboardingBriefingView: View {
                             isStreaming: isStreamingBubble(message)
                         )
                         .id(message.id)
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            )
+                        )
                     }
 
                     briefingStateCard
@@ -108,6 +177,7 @@ struct OnboardingBriefingView: View {
                         .id("briefing-transcript-bottom")
                 }
                 .padding(16)
+                .animation(MotionPolicy.dockSpring, value: model.messages.count)
             }
             .onChange(of: model.streamingContentLength) { _, _ in
                 scrollToBottom(proxy: proxy)
@@ -118,21 +188,82 @@ struct OnboardingBriefingView: View {
         }
     }
 
+    private var connectingCard: some View {
+        GlassCard {
+            VStack(spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(Typography.heroIcon(28))
+                    .foregroundStyle(Theme.hyperGreen)
+                    .symbolEffect(
+                        .pulse,
+                        options: .repeating,
+                        isActive: !reduceMotion
+                    )
+                Text(OnboardingBriefingCopy.connectingTitle)
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                ProgressView().tint(Theme.hyperGreen)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+
     @ViewBuilder
     private var briefingStateCard: some View {
         switch model.state {
         case .connecting:
-            GlassCard {
-                HStack {
-                    ProgressView().tint(Theme.hyperGreen)
-                    Text("Linking to Ration Copilot…").rationCaption()
-                }
-            }
+            connectingCard
         case let .error(message):
             ErrorBanner(message: message)
         default:
             EmptyView()
         }
+    }
+
+    private var bottomInset: some View {
+        VStack(spacing: 12) {
+            if shouldShowSeedCard {
+                StarterSeedCard(
+                    state: seedCardState,
+                    subtitle: seedCardSubtitle
+                ) {
+                    Task { await runSeed() }
+                }
+                .padding(.horizontal, 16)
+                .offset(y: seedCardAppeared || reduceMotion ? 0 : 12)
+                .opacity(seedCardAppeared || reduceMotion ? 1 : 0)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            if phase == .seedComplete {
+                navigationChips
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            if activityDisplay != .hidden {
+                CopilotActivityIndicator(display: activityDisplay)
+                    .padding(.horizontal, 16)
+                    .transition(.opacity)
+            }
+
+            composer
+                .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var shouldShowSeedCard: Bool {
+        switch phase {
+        case .seedReady, .seeding, .seedComplete:
+            return true
+        case .staticReplay, .connecting, .streamingIntro:
+            return false
+        }
+    }
+
+    private var seedCardSubtitle: String {
+        OnboardingBriefingCopy.seedCardSubtitle
     }
 
     private var navigationChips: some View {
@@ -144,11 +275,9 @@ struct OnboardingBriefingView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    BriefingChip(title: "Add first item", systemImage: "plus.circle") {
+                    BriefingChip(title: OnboardingBriefingCopy.seeInCargoTitle, systemImage: "shippingbox") {
+                        Haptics.light()
                         await enterRation(openCargo: true)
-                    }
-                    BriefingChip(title: "How credits work", systemImage: "creditcard") {
-                        showingPaywall = true
                     }
                 }
                 .padding(.horizontal, 4)
@@ -171,11 +300,11 @@ struct OnboardingBriefingView: View {
             onOpenSheet: {},
             onSend: { _ in false },
             onStop: {},
-            onExhaustedTap: { showingPaywall = true },
+            onExhaustedTap: {},
             placeholderOverride: OnboardingBriefingCopy.composerLockedPlaceholder
         )
         .allowsHitTesting(false)
-        .opacity(model.briefingComplete || env.onboarding.isStaticReplay ? 1 : 0.6)
+        .opacity(model.introComplete || env.onboarding.isStaticReplay ? 1 : 0.6)
     }
 
     private func isStreamingBubble(_ message: CopilotMessage) -> Bool {
@@ -185,7 +314,7 @@ struct OnboardingBriefingView: View {
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         guard followsLatest else { return }
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(MotionPolicy.shortFade) {
             proxy.scrollTo("briefing-transcript-bottom", anchor: .bottom)
         }
     }
@@ -207,8 +336,14 @@ struct OnboardingBriefingView: View {
             snapshots: env.snapshots
         )
         ask.isOnboardingBriefing = true
+        // Always start briefing on a clean conversation so the free grant binds correctly.
+        ask.model.newChat(
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
 
-        if model.status?.onboardingBriefingEligible == true {
+        if model.status?.canUseOnboardingBriefing == true {
             didBootstrap = true
             _ = await ask.sendOnboardingBootstrap(
                 api: env.api,
@@ -222,14 +357,39 @@ struct OnboardingBriefingView: View {
         }
     }
 
+    private func runSeed() async {
+        guard let organizationId = env.session.activeOrganizationId else { return }
+        guard seedCardState == .idle else { return }
+        _ = await ask.sendOnboardingSeed(
+            api: env.api,
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
+    }
+
     private func enterRation(openCargo: Bool = false) async {
+        Haptics.success()
+        let seeded = model.seedComplete
+        let shouldOpenCargo = openCargo || seeded
+        let organizationId = env.session.activeOrganizationId
+        if shouldOpenCargo, let organizationId {
+            await env.snapshots.clear(domain: SnapshotDomain.cargo, organizationId: organizationId)
+        }
         guard let settings = await env.onboarding.complete(api: env.api) else { return }
         env.launch.updateUserSettings(settings)
         env.onboarding.reset()
-        ask.isOnboardingBriefing = false
-        ask.model.resetBriefingSession()
-        Haptics.success()
-        if openCargo {
+        if let organizationId {
+            ask.endOnboardingBriefing(
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+        } else {
+            ask.isOnboardingBriefing = false
+            ask.model.resetBriefingSession()
+        }
+        if shouldOpenCargo {
             env.deepLinkRouter.enqueue(.cargo)
         }
     }
@@ -238,6 +398,8 @@ struct OnboardingBriefingView: View {
 private struct BriefingMessageBubble: View {
     let message: CopilotMessage
     let isStreaming: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulseDot = false
 
     var body: some View {
         if message.role == "user" {
@@ -261,6 +423,12 @@ private struct BriefingMessageBubble: View {
                     Circle()
                         .fill(Theme.hyperGreen)
                         .frame(width: 8, height: 8)
+                        .opacity(reduceMotion ? 1 : (pulseDot ? 1 : 0.35))
+                        .onAppear { pulseDot = true }
+                        .animation(
+                            MotionPolicy.repeatingPulse(duration: 0.7),
+                            value: pulseDot
+                        )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,5 +454,6 @@ private struct BriefingChip: View {
                 .clipShape(Capsule())
         }
         .foregroundStyle(Theme.carbon)
+        .accessibilityLabel(title)
     }
 }

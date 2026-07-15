@@ -40,6 +40,9 @@ export const COPILOT_MODEL_PRESETS: Record<
 
 export const COPILOT_DEFAULT_MODEL_PRESET: CopilotModelPreset = "fast";
 
+/** Forced model preset for iOS onboarding briefing turns. */
+export const ONBOARDING_BRIEFING_MODEL_PRESET: CopilotModelPreset = "deep";
+
 export const CopilotModelPresetSchema = z.enum(["fast", "deep"]);
 
 export function parseCopilotModelPreset(

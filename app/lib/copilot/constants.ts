@@ -2,13 +2,35 @@ export const COPILOT_CONVERSATION_FLOOR_COST = 1;
 export const CREW_COPILOT_DAILY_CONVERSATIONS = 1;
 export const FREE_TIER_DAILY_CONVERSATIONS = 0;
 
-/** One-time iOS welcome briefing — single assistant response, no tools. */
-export const ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT =
-	"I'm new to Ration on iOS. In plain language: what is it, how do Cargo, Galley, Manifest, and Supply work together, and what's the fastest way to get started?";
+/** Turn 1 — auto-sent intro (no tools). */
+export const ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT = "What is Ration?";
 
+/** Turn 2 — starter kitchen seed via add_cargo_item (selective expiry + tags). */
+export const ONBOARDING_BRIEFING_SEED_PROMPT = `Please add these common kitchen staples to my cargo with sensible quantities and units:
+
+- 500g butter
+- 12 eggs
+- 2 litres milk
+- 1kg flour
+- 500ml olive oil
+
+For a few items, also set expiry and tags to show how that works — you don't need tags or expiry on everything:
+
+- Milk: expires in about 2 weeks, tag as dairy
+- Eggs: expires in about 3 weeks, tag as dairy
+- Butter: expires in about 4 weeks, tag as dairy
+- Flour: tag as staple
+
+Use today's date from context to calculate expiry dates. Add each item with add_cargo_item. When done, tell me how many items you added and which ones have expiry dates or tags.`;
+
+/** Max user turns allowed during free onboarding briefing (intro + seed). */
+export const ONBOARDING_BRIEFING_MAX_TURNS = 2;
+
+/** Pending briefing claims bind to a conversation for this long (legacy constant; claim uses session idle). */
 export const ONBOARDING_BRIEFING_PENDING_TTL_SEC = 300;
 export const ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
 export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 700;
+export const ONBOARDING_BRIEFING_SEED_MAX_STEPS = 8;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;
 export const COPILOT_SESSION_MAX_MESSAGES = 40;

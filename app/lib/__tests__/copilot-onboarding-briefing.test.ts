@@ -2,15 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS,
 	ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT,
+	ONBOARDING_BRIEFING_MAX_TURNS,
+	ONBOARDING_BRIEFING_SEED_MAX_STEPS,
+	ONBOARDING_BRIEFING_SEED_PROMPT,
 } from "../copilot/constants";
 import {
 	claimOnboardingBriefing,
 	finalizeOnboardingBriefing,
 	getOnboardingBriefingKvState,
+	getOnboardingBriefingSystemPromptAppend,
+	getOnboardingBriefingTurnPolicy,
 	isEligibleForOnboardingBriefing,
 	isIosCopilotClient,
+	isOnboardingBriefingExhausted,
 	isOnboardingBriefingPrompt,
+	isOnboardingIncomplete,
 	onboardingBriefingKey,
+	parseUserSettings,
+	resolveAllowedOnboardingBriefingTurn,
+	resolveOnboardingBriefingTurn,
 } from "../copilot/onboarding-briefing.server";
 
 vi.mock("../feature-flags/flags.server", () => ({
@@ -71,11 +81,81 @@ describe("onboarding briefing", () => {
 		expect(isIosCopilotClient(new Request("https://x"))).toBe(false);
 	});
 
-	it("matches canonical bootstrap prompt hash", async () => {
+	it("parses D1 settings JSON strings", () => {
+		expect(
+			parseUserSettings('{"onboardingCompletedAt":"2026-01-01T00:00:00.000Z"}')
+				.onboardingCompletedAt,
+		).toBe("2026-01-01T00:00:00.000Z");
+		expect(parseUserSettings("{}")).toEqual({});
+		expect(parseUserSettings("not-json")).toEqual({});
+		expect(
+			parseUserSettings({ onboardingCompletedAt: "2026-01-01T00:00:00.000Z" })
+				.onboardingCompletedAt,
+		).toBe("2026-01-01T00:00:00.000Z");
+	});
+
+	it("matches canonical bootstrap and seed prompt hashes", async () => {
 		expect(
 			await isOnboardingBriefingPrompt(ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT),
 		).toBe(true);
+		expect(
+			await isOnboardingBriefingPrompt(ONBOARDING_BRIEFING_SEED_PROMPT),
+		).toBe(true);
 		expect(await isOnboardingBriefingPrompt("tell me a joke")).toBe(false);
+		expect(await resolveOnboardingBriefingTurn("What is Ration?")).toBe(
+			"bootstrap",
+		);
+		expect(
+			await resolveOnboardingBriefingTurn(ONBOARDING_BRIEFING_SEED_PROMPT),
+		).toBe("seed");
+	});
+
+	it("routes allowlisted prompts to the correct turn index", async () => {
+		expect(
+			await resolveAllowedOnboardingBriefingTurn({
+				userText: ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT,
+				turnsUsed: 0,
+			}),
+		).toBe("bootstrap");
+		expect(
+			await resolveAllowedOnboardingBriefingTurn({
+				userText: ONBOARDING_BRIEFING_SEED_PROMPT,
+				turnsUsed: 1,
+			}),
+		).toBe("seed");
+		expect(
+			await resolveAllowedOnboardingBriefingTurn({
+				userText: ONBOARDING_BRIEFING_SEED_PROMPT,
+				turnsUsed: 0,
+			}),
+		).toBeNull();
+		expect(
+			await resolveAllowedOnboardingBriefingTurn({
+				userText: ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT,
+				turnsUsed: 1,
+			}),
+		).toBeNull();
+	});
+
+	it("exposes intro vs seed tool policy", () => {
+		expect(getOnboardingBriefingTurnPolicy("bootstrap")).toEqual({
+			activeTools: [],
+			maxSteps: 1,
+		});
+		expect(getOnboardingBriefingTurnPolicy("seed")).toEqual({
+			activeTools: ["add_cargo_item"],
+			maxSteps: ONBOARDING_BRIEFING_SEED_MAX_STEPS,
+		});
+		expect(isOnboardingBriefingExhausted(0)).toBe(false);
+		expect(isOnboardingBriefingExhausted(ONBOARDING_BRIEFING_MAX_TURNS)).toBe(
+			true,
+		);
+		expect(getOnboardingBriefingSystemPromptAppend("bootstrap")).toContain(
+			"Stock my kitchen",
+		);
+		expect(getOnboardingBriefingSystemPromptAppend("seed")).toContain(
+			"add_cargo_item",
+		);
 	});
 
 	it("grants eligibility for new iOS free users", async () => {
@@ -103,14 +183,18 @@ describe("onboarding briefing", () => {
 		expect(eligible).toBe(false);
 	});
 
-	it("rejects completed onboarding", async () => {
+	it("rejects completed onboarding from JSON string settings", async () => {
 		const kv = new MemoryKV();
 		const nowSec = Math.floor(Date.now() / 1000);
-		const eligible = await isEligibleForOnboardingBriefing({
-			env: env(kv, {
-				settings: { onboardingCompletedAt: "2026-01-01T00:00:00.000Z" },
-				created_at: nowSec,
+		const e = env(kv, {
+			settings: JSON.stringify({
+				onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
 			}),
+			created_at: nowSec,
+		});
+		expect(await isOnboardingIncomplete(e, "user_1")).toBe(false);
+		const eligible = await isEligibleForOnboardingBriefing({
+			env: e,
 			userId: "user_1",
 			tier: "free",
 			request: iosRequest(),
@@ -132,17 +216,18 @@ describe("onboarding briefing", () => {
 		expect(eligible).toBe(false);
 	});
 
-	it("claims pending then finalizes consumed", async () => {
+	it("binds pending claim to a single conversation id", async () => {
 		const kv = new MemoryKV();
 		const e = { RATION_KV: kv } as unknown as Env;
-		expect(await claimOnboardingBriefing(e, "user_1")).toBe(true);
+		expect(await claimOnboardingBriefing(e, "user_1", "conv_a")).toBe(true);
 		expect(
 			await getOnboardingBriefingKvState(
 				kv as unknown as KVNamespace,
 				"user_1",
 			),
 		).toBe("pending");
-		expect(await claimOnboardingBriefing(e, "user_1")).toBe(true);
+		expect(await claimOnboardingBriefing(e, "user_1", "conv_a")).toBe(true);
+		expect(await claimOnboardingBriefing(e, "user_1", "conv_b")).toBe(false);
 		await finalizeOnboardingBriefing(e, "user_1");
 		expect(
 			await getOnboardingBriefingKvState(
@@ -150,6 +235,6 @@ describe("onboarding briefing", () => {
 				"user_1",
 			),
 		).toBe("consumed");
-		expect(await claimOnboardingBriefing(e, "user_1")).toBe(false);
+		expect(await claimOnboardingBriefing(e, "user_1", "conv_a")).toBe(false);
 	});
 });

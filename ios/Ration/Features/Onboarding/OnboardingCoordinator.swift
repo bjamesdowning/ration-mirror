@@ -6,7 +6,7 @@ enum OnboardingPhase: Equatable {
     case askBriefing
 }
 
-/// Drives Ask-first onboarding: one briefing response, then Enter Ration.
+/// Drives Ask-first onboarding: Copilot intro + optional starter seed, then Get Started.
 @MainActor
 @Observable
 final class OnboardingCoordinator {

@@ -86,6 +86,146 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.state, .blocked(blocked))
     }
 
+    func testBriefingSessionTracksIntroThenSeed() {
+        let model = AskViewModel()
+        model.beginOnboardingBriefingSession()
+        XCTAssertEqual(model.modelPreset, "deep")
+        XCTAssertTrue(model.tracksBriefingSession)
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "asst-1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertTrue(model.introComplete)
+        XCTAssertFalse(model.seedComplete)
+        XCTAssertFalse(model.briefingComplete)
+
+        model.markSeedTurnStarted()
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_start",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: CopilotToolStatus(toolCallId: "t1", toolName: "add_cargo_item", label: "Adding…"),
+                toolCallId: "t1",
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: "add_cargo_item",
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_end",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: "t1",
+                ok: true,
+                error: nil,
+                approvalId: nil,
+                toolName: "add_cargo_item",
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertEqual(model.seedItemsAdded, 1)
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "asst-2",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertTrue(model.seedComplete)
+        XCTAssertTrue(model.briefingComplete)
+        XCTAssertEqual(model.seedSuccessMessage, "1 item added to Cargo")
+
+        model.resetBriefingSession()
+        XCTAssertEqual(model.modelPreset, "fast")
+        XCTAssertFalse(model.introComplete)
+        XCTAssertEqual(model.seedItemsAdded, 0)
+    }
+
+    func testIdleMessageEndDoesNotFakeSeedComplete() {
+        let model = AskViewModel()
+        model.beginOnboardingBriefingSession()
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "asst-1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertTrue(model.introComplete)
+        // Late/idle message_end after intro must not mark seed complete.
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "asst-ghost",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertFalse(model.seedComplete)
+        XCTAssertFalse(model.briefingComplete)
+    }
+
     func testToolEndLingersThenClears() async {
         let model = AskViewModel()
 

@@ -3,6 +3,13 @@ import SwiftUI
 /// Auth gate — routes between launch splash, sign-in, onboarding, and the main tab shell.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var onboardingTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.98))
+    }
 
     var body: some View {
         switch env.auth.phase {
@@ -26,12 +33,17 @@ struct RootView: View {
                     .padding(24)
                     .background(Theme.ceramic)
                 case .ready:
-                    if env.launch.needsOnboarding, !env.session.needsOrgSelection {
-                        OnboardingBriefingView()
-                            .environment(env.ask)
-                    } else {
-                        MainTabView()
+                    Group {
+                        if env.launch.needsOnboarding, !env.session.needsOrgSelection {
+                            OnboardingBriefingView()
+                                .environment(env.ask)
+                                .transition(onboardingTransition)
+                        } else {
+                            MainTabView()
+                                .transition(onboardingTransition)
+                        }
                     }
+                    .animation(MotionPolicy.shortFade, value: env.launch.needsOnboarding)
                 }
             }
             .fullScreenCover(isPresented: Binding(

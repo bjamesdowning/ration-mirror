@@ -77,7 +77,7 @@ final class AskCoordinator {
         organizationId: String,
         snapshots: SnapshotStore
     ) async -> Bool {
-        model.tracksBriefingSession = true
+        model.beginOnboardingBriefingSession()
         return await send(
             OnboardingBriefingCopy.bootstrapPrompt,
             api: api,
@@ -86,6 +86,36 @@ final class AskCoordinator {
             snapshots: snapshots,
             presentsSheet: false
         )
+    }
+
+    func sendOnboardingSeed(
+        api: RationAPI,
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> Bool {
+        model.tracksBriefingSession = true
+        model.setModelPreset("deep")
+        model.markSeedTurnStarted()
+        return await send(
+            OnboardingBriefingCopy.seedPrompt,
+            api: api,
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots,
+            presentsSheet: false
+        )
+    }
+
+    /// Tear down briefing conversation so MainTab Ask starts a paid/fresh chat.
+    func endOnboardingBriefing(
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) {
+        isOnboardingBriefing = false
+        model.resetBriefingSession()
+        model.newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
     }
 
     private func send(

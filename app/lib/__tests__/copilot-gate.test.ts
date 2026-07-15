@@ -137,18 +137,38 @@ describe("copilot gate", () => {
 		const charge = await openCopilotConversation(
 			e,
 			{ userId: "user_ios", organizationId: "org_1", tier: "free" },
-			{ source: "mobile", request: iosRequest() },
+			{
+				source: "mobile",
+				request: iosRequest(),
+				conversationId: "conv_onboarding_1",
+			},
 		);
 		expect(charge.mode).toBe("onboarding_briefing");
 		expect(charge.onboardingConsumed).toBe(false);
+		expect(charge.modelPreset).toBe("deep");
 
-		await finalizeOnboardingBriefing(e, "user_ios");
-		const second = await openCopilotConversation(
+		const secondOpen = await openCopilotConversation(
 			e,
 			{ userId: "user_ios", organizationId: "org_1", tier: "free" },
-			{ source: "mobile", request: iosRequest() },
+			{
+				source: "mobile",
+				request: iosRequest(),
+				conversationId: "conv_onboarding_2",
+			},
 		);
-		expect(second.mode).toBe("credits");
+		expect(secondOpen.mode).toBe("credits");
+
+		await finalizeOnboardingBriefing(e, "user_ios");
+		const afterConsume = await openCopilotConversation(
+			e,
+			{ userId: "user_ios", organizationId: "org_1", tier: "free" },
+			{
+				source: "mobile",
+				request: iosRequest(),
+				conversationId: "conv_onboarding_3",
+			},
+		);
+		expect(afterConsume.mode).toBe("credits");
 	});
 
 	it("reports onboarding briefing eligibility in status", async () => {

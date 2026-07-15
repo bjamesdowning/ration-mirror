@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	COPILOT_DEFAULT_MODEL_PRESET,
 	COPILOT_MODEL_PRESETS,
+	ONBOARDING_BRIEFING_MODEL_PRESET,
 	parseCopilotModelPreset,
 	resolveCopilotModelPreset,
 } from "../model-profiles";
@@ -39,5 +40,9 @@ describe("COPILOT_MODEL_PRESETS", () => {
 
 	it("deep uses high reasoning effort", () => {
 		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
+	});
+
+	it("onboarding briefing forces deep preset", () => {
+		expect(ONBOARDING_BRIEFING_MODEL_PRESET).toBe("deep");
 	});
 });

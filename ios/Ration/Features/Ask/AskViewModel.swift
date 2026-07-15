@@ -81,6 +81,10 @@ final class AskViewModel {
     private(set) var isStopping = false
     private(set) var isAwaitingApproval = false
     private(set) var briefingComplete = false
+    private(set) var introComplete = false
+    private(set) var seedComplete = false
+    private(set) var seedTurnStarted = false
+    private(set) var seedItemsAdded = 0
     var tracksBriefingSession = false
     private(set) var modelPreset: String = "fast"
 
@@ -216,6 +220,33 @@ final class AskViewModel {
     func resetBriefingSession() {
         tracksBriefingSession = false
         briefingComplete = false
+        introComplete = false
+        seedComplete = false
+        seedTurnStarted = false
+        seedItemsAdded = 0
+        modelPreset = "fast"
+    }
+
+    func beginOnboardingBriefingSession() {
+        tracksBriefingSession = true
+        briefingComplete = false
+        introComplete = false
+        seedComplete = false
+        seedTurnStarted = false
+        seedItemsAdded = 0
+        modelPreset = "deep"
+    }
+
+    func markSeedTurnStarted() {
+        seedTurnStarted = true
+    }
+
+    var seedSuccessMessage: String {
+        if seedItemsAdded <= 0 {
+            return "Kitchen stocked in Cargo"
+        }
+        let noun = seedItemsAdded == 1 ? "item" : "items"
+        return "\(seedItemsAdded) \(noun) added to Cargo"
     }
 
     func showStaticBriefing(_ markdown: String) {
@@ -223,7 +254,9 @@ final class AskViewModel {
             CopilotMessage(role: "user", content: OnboardingBriefingCopy.bootstrapPrompt),
             CopilotMessage(role: "assistant", content: markdown),
         ]
+        introComplete = true
         briefingComplete = true
+        seedComplete = false
         state = .idle
         turnPhase = .idle
     }
@@ -460,7 +493,12 @@ final class AskViewModel {
         case "message_end":
             clearTransientError()
             if tracksBriefingSession {
-                briefingComplete = true
+                if !introComplete {
+                    introComplete = true
+                } else if seedTurnStarted, isTurnActive {
+                    seedComplete = true
+                    briefingComplete = true
+                }
             }
             completeTurn(state: .idle)
             scheduleImmediateSnapshotSave()
@@ -480,6 +518,9 @@ final class AskViewModel {
         case "tool_end":
             let toolName = activeTool?.toolName ?? "tool"
             let succeeded = event.ok == true
+            if tracksBriefingSession, toolName == "add_cargo_item", succeeded {
+                seedItemsAdded += 1
+            }
             activeTool = nil
             completedTool = CompletedTool(
                 toolName: toolName,
@@ -548,8 +589,12 @@ final class AskViewModel {
             }
         case "error":
             let wasTurnActive = isTurnActive
-            if event.error?.code == "onboarding_briefing_exhausted" {
-                briefingComplete = true
+            if event.error?.code == "onboarding_briefing_exhausted"
+                || event.error?.code == "onboarding_briefing_invalid_prompt" {
+                if event.error?.code == "onboarding_briefing_exhausted" {
+                    briefingComplete = true
+                    introComplete = true
+                }
                 completeTurn(state: .idle)
                 return
             }

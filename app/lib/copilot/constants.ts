@@ -29,7 +29,7 @@ export const ONBOARDING_BRIEFING_MAX_TURNS = 2;
 /** Pending briefing claims bind to a conversation for this long (legacy constant; claim uses session idle). */
 export const ONBOARDING_BRIEFING_PENDING_TTL_SEC = 300;
 export const ONBOARDING_BRIEFING_ACCOUNT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
-export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 700;
+export const ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS = 2048;
 export const ONBOARDING_BRIEFING_SEED_MAX_STEPS = 8;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;

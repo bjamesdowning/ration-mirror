@@ -27,7 +27,9 @@ struct OnboardingBriefingView: View {
         if env.onboarding.isStaticReplay { return .staticReplay }
         if model.seedComplete { return .seedComplete }
         if model.isTurnActive, model.seedTurnStarted { return .seeding }
-        if model.introComplete, model.status?.canUseOnboardingBriefing == true {
+        // Prefer live session state over status flag — status alone was hiding the seed CTA
+        // after a successful intro (and static fallback never offered any continuation chips).
+        if model.introComplete, model.liveBriefingActive, !model.seedComplete {
             return .seedReady
         }
         if model.introComplete { return .staticReplay }
@@ -41,8 +43,7 @@ struct OnboardingBriefingView: View {
 
     private var seedCardState: StarterSeedCardState {
         if model.seedComplete { return .completed }
-        if env.onboarding.isStaticReplay { return .disabled }
-        if model.status?.canUseOnboardingBriefing != true { return .disabled }
+        if !model.liveBriefingActive { return .disabled }
         if phase == .seeding { return .loading }
         if phase == .seedReady { return .idle }
         return .disabled
@@ -236,7 +237,7 @@ struct OnboardingBriefingView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            if phase == .seedComplete {
+            if phase == .seedComplete || phase == .staticReplay {
                 navigationChips
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -268,7 +269,7 @@ struct OnboardingBriefingView: View {
 
     private var navigationChips: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Next steps")
+            Text(OnboardingBriefingCopy.fallbackNextStepsTitle)
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 4)
@@ -279,11 +280,25 @@ struct OnboardingBriefingView: View {
                         Haptics.light()
                         await enterRation(openCargo: true)
                     }
+                    if phase == .staticReplay {
+                        BriefingChip(title: OnboardingBriefingCopy.getStartedTitle, systemImage: "arrow.right.circle") {
+                            await enterRation(openCargo: false)
+                        }
+                    }
                 }
                 .padding(.horizontal, 4)
             }
         }
         .padding(.horizontal, 12)
+        .onAppear {
+            if reduceMotion {
+                seedCardAppeared = true
+            } else if phase == .staticReplay {
+                withAnimation(MotionPolicy.dockSpring) {
+                    seedCardAppeared = true
+                }
+            }
+        }
     }
 
     private var composer: some View {
@@ -345,12 +360,16 @@ struct OnboardingBriefingView: View {
 
         if model.status?.canUseOnboardingBriefing == true {
             didBootstrap = true
-            _ = await ask.sendOnboardingBootstrap(
+            let sent = await ask.sendOnboardingBootstrap(
                 api: env.api,
                 auth: env.auth,
                 organizationId: organizationId,
                 snapshots: env.snapshots
             )
+            if !sent {
+                // Live send failed (network / gate) — keep onboarding useful with fallback + chips.
+                model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
+            }
         } else {
             didBootstrap = true
             model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)

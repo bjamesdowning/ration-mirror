@@ -91,6 +91,7 @@ final class AskViewModelTests: XCTestCase {
         model.beginOnboardingBriefingSession()
         XCTAssertEqual(model.modelPreset, "deep")
         XCTAssertTrue(model.tracksBriefingSession)
+        XCTAssertTrue(model.liveBriefingActive)
 
         model.apply(
             CopilotStreamEvent(
@@ -178,7 +179,17 @@ final class AskViewModelTests: XCTestCase {
         model.resetBriefingSession()
         XCTAssertEqual(model.modelPreset, "fast")
         XCTAssertFalse(model.introComplete)
+        XCTAssertFalse(model.liveBriefingActive)
         XCTAssertEqual(model.seedItemsAdded, 0)
+    }
+
+    func testStaticBriefingDoesNotActivateLiveSeedPath() {
+        let model = AskViewModel()
+        model.showStaticBriefing("Static welcome")
+        XCTAssertTrue(model.introComplete)
+        XCTAssertTrue(model.briefingComplete)
+        XCTAssertFalse(model.liveBriefingActive)
+        XCTAssertFalse(model.seedComplete)
     }
 
     func testIdleMessageEndDoesNotFakeSeedComplete() {

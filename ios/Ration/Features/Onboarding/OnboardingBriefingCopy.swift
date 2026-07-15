@@ -43,11 +43,13 @@ Use today's date from context to calculate expiry dates. Add each item with add_
 
     **Cargo** is your pantry. **Galley** holds recipes mapped to those ingredients. **Manifest** is your weekly meal plan. **Supply** turns that plan into a shopping list.
 
-    When Copilot onboarding is available, you can tap **Stock my kitchen** to add a few staples with expiry dates and tags — a quick way to see how Cargo works.
+    **Fastest start:** open **Cargo** and add a few pantry items. Once Cargo reflects what you have, Galley and Manifest become much more useful.
 
-    Tap **Get Started** when you're ready to explore the app.
+    Tap **Get Started** when you're ready to explore the app — or **See in Cargo** below to jump straight to your pantry.
     """
 
     static let composerLockedPlaceholder =
         "Welcome briefing complete. Unlock Ask with credits or Crew Member."
+
+    static let fallbackNextStepsTitle = "Next steps"
 }

@@ -84,6 +84,8 @@ final class AskViewModel {
     private(set) var introComplete = false
     private(set) var seedComplete = false
     private(set) var seedTurnStarted = false
+    /// True when the welcome intro came from a live Copilot turn (not static markdown).
+    private(set) var liveBriefingActive = false
     private(set) var seedItemsAdded = 0
     var tracksBriefingSession = false
     private(set) var modelPreset: String = "fast"
@@ -223,6 +225,7 @@ final class AskViewModel {
         introComplete = false
         seedComplete = false
         seedTurnStarted = false
+        liveBriefingActive = false
         seedItemsAdded = 0
         modelPreset = "fast"
     }
@@ -233,6 +236,7 @@ final class AskViewModel {
         introComplete = false
         seedComplete = false
         seedTurnStarted = false
+        liveBriefingActive = true
         seedItemsAdded = 0
         modelPreset = "deep"
     }
@@ -254,9 +258,12 @@ final class AskViewModel {
             CopilotMessage(role: "user", content: OnboardingBriefingCopy.bootstrapPrompt),
             CopilotMessage(role: "assistant", content: markdown),
         ]
+        tracksBriefingSession = false
+        liveBriefingActive = false
         introComplete = true
         briefingComplete = true
         seedComplete = false
+        seedTurnStarted = false
         state = .idle
         turnPhase = .idle
     }

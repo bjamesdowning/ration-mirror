@@ -195,10 +195,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
-			handler: async (
-				ctx,
-				a,
-			): Promise<ToolEnvelope<AdjustCargoItemData>> => {
+			handler: async (ctx, a): Promise<ToolEnvelope<AdjustCargoItemData>> => {
 				if (!a.itemId && !a.name) {
 					return err(
 						"adjust_cargo_item",

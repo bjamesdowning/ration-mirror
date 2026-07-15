@@ -318,6 +318,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **iOS UX fixes (1.1.40, web v1.5.81):** Supply dock FAB is always visible (`+` menu): empty list offers Add item + Refresh; populated list offers Dock from Receipt (direct to source picker), Dock from List, and Add item. Manual supply add uses `SupplyAddItemSheet` (`POST /supply/items`). Cargo detail FAB adds Add to Supply / Remove from Supply with quantity sheet. Domain filters on Cargo/Galley trigger server reload; Supply applies domain + search client-side on the full list. Cargo and Galley search debounces remote queries (≥2 chars) — Cargo via `/search`, Galley via meals `q` param. Scan review opens a full edit sheet (name, qty, unit, domain, tags, expiry) before batch add to Cargo.
 
+**Search polish (1.1.41, web v1.5.82):** Galley match mode passes `q` to `/meals/match` (server-side name filter) instead of client-only search. Cargo/Galley `ListCountHeader` shows a mini spinner while debounced remote search runs. Supply list shows a “No matches” empty state when filters/search hide all items but the list still has entries.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.

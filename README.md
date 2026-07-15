@@ -1,8 +1,8 @@
 # Ration — AI-Powered Kitchen Management
 
-> **Architecture:** React Router v7 (SSR) + Drizzle ORM + Better Auth | **Platform:** Cloudflare Workers | **Domain:** `ration.mayutic.com` | **AI connectivity:** MCP server at `mcp.ration.mayutic.com`
+> **Architecture:** React Router v7 (SSR) + Drizzle ORM + Better Auth | **Platform:** Cloudflare Workers | **Domain:** `ration.mayutic.com` | **AI connectivity:** MCP at `mcp.ration.mayutic.com`, Copilot at `copilot.ration.mayutic.com`
 
-An AI-powered pantry and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, semantic ingredient matching, meal generation, weekly meal planning, tiered subscriptions, and multi-tenant group sharing. Agents connect via **MCP** (Model Context Protocol) to operate inventory, recipes, meal plans, and shopping lists from Claude, Cursor, ChatGPT, and other compatible clients. Built for the Cloudflare paid plan — design decisions prioritise correctness, latency, and scale over free-tier frugality.
+An AI-powered pantry and meal-planning application built as a Cloudflare Worker with SSR, AI-powered receipt scanning, semantic ingredient matching, meal generation, weekly meal planning, tiered subscriptions, and multi-tenant group sharing. **Ration Copilot** (Ask Ration) is the first-party assistant on web and iOS; external agents connect via **MCP** (Model Context Protocol) to operate inventory, recipes, meal plans, and shopping lists from Claude, Cursor, ChatGPT, and other compatible clients. Built for the Cloudflare paid plan — design decisions prioritise correctness, latency, and scale over free-tier frugality.
 
 ---
 
@@ -48,7 +48,8 @@ An AI-powered pantry and meal-planning application built as a Cloudflare Worker 
 - [12. Testing](#12-testing)
 - [13. Local Development & Deployment](#13-local-development--deployment)
   - [13.1 Feature flags (Flagship)](#131-feature-flags-flagship)
-- [14. Copilot knowledge hub (support)](#14-copilot-knowledge-hub-support)
+- [14. Ration Copilot](#14-ration-copilot)
+- [15. Copilot knowledge hub (support)](#15-copilot-knowledge-hub-support)
 
 ---
 
@@ -61,13 +62,14 @@ The application runs on Cloudflare's edge network with the main Worker (`ration`
 ```mermaid
 flowchart LR
     subgraph Internet["Internet"]
-        User["User — Browser"]
+        User["User — Browser / iOS"]
         AIAgent["AI Agent — MCP Client"]
     end
 
     subgraph DNS["Cloudflare DNS"]
         CustomDomain["ration.mayutic.com"]
         McpDomain["mcp.ration.mayutic.com"]
+        CopilotDomain["copilot.ration.mayutic.com"]
     end
 
     subgraph Edge["Cloudflare Edge"]
@@ -78,12 +80,15 @@ flowchart LR
     subgraph Workers["Workers"]
         Worker["ration"]
         McpHandler["ration-mcp"]
+        CopilotHandler["ration-copilot"]
     end
 
     User -->|HTTPS| CustomDomain
-    AIAgent -->|HTTPS + X-Api-Key| McpDomain
+    User -->|WebSocket| CopilotDomain
+    AIAgent -->|HTTPS + OAuth / API key| McpDomain
     CustomDomain --> CDN --> SmartPlacement --> Worker
     McpDomain --> McpHandler
+    CopilotDomain --> CopilotHandler
 ```
 
 #### 1.2 Main Worker (ration) — internal stack
@@ -125,13 +130,31 @@ flowchart TB
     end
 ```
 
-#### 1.4 Shared Cloudflare bindings — storage and AI
+#### 1.4 Copilot Worker (ration-copilot) — first-party Ask experience
+
+```mermaid
+flowchart TB
+    subgraph CopilotWorker["Cloudflare Worker: ration-copilot"]
+        CopilotHandler["workers/copilot.ts"]
+        CopilotAuth["Session / handshake token / mobile bearer"]
+        ThinkDO["ProjectThinkAgent — @cloudflare/think Durable Object"]
+        CopilotTools["Shared MCP tool runtime + search_docs"]
+        CopilotHandler --> CopilotAuth
+        CopilotHandler --> ThinkDO
+        ThinkDO --> CopilotTools
+    end
+```
+
+See [§14 Ration Copilot](#14-ration-copilot) for connection flow, billing, and client architecture.
+
+#### 1.5 Shared Cloudflare bindings — storage and AI
 
 ```mermaid
 flowchart TB
     subgraph Workers["Workers"]
         Worker["ration"]
         McpHandler["ration-mcp"]
+        CopilotHandler["ration-copilot"]
     end
 
     subgraph Storage["Cloudflare Storage"]
@@ -140,12 +163,14 @@ flowchart TB
         KV[("KV — RATION_KV")]
         Assets["Static Assets"]
         Queues[("Queues — scan, meal-generate, plan-week, import-url")]
+        ThinkDO[("Durable Object — ProjectThinkAgent")]
     end
 
     subgraph AI["Cloudflare AI"]
-        AIBinding["Workers AI — Embedding"]
+        AIBinding["Workers AI — Embedding + gpt-oss-120b"]
         Vectorize[("Vectorize — ration-cargo")]
         AIGateway["AI Gateway → Google AI Studio"]
+        AISearch["AI Search — ration-docs"]
     end
 
     Worker --> D1
@@ -161,6 +186,14 @@ flowchart TB
     McpHandler --> KV
     McpHandler --> AIBinding
     McpHandler --> Vectorize
+
+    CopilotHandler --> D1
+    CopilotHandler --> R2
+    CopilotHandler --> KV
+    CopilotHandler --> AIBinding
+    CopilotHandler --> Vectorize
+    CopilotHandler --> AISearch
+    CopilotHandler --> ThinkDO
 ```
 
 ### Bindings Reference
@@ -171,8 +204,11 @@ flowchart TB
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
-| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) |
+| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via `@cf/openai/gpt-oss-120b` on `ration-copilot` |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
+| `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
+| `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
+| `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash` for scan, generate, plan, import |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
@@ -192,13 +228,9 @@ npx wrangler r2 bucket lifecycle add ration-storage \
 
 Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `npx wrangler r2 bucket lifecycle list ration-storage`. This rule has not yet been applied in this environment — track it as an outstanding operator action, not a code deliverable.
 
-**Ration Copilot:** Intercom/Fin has been replaced by the first-party Ask experience. Web uses the hub header **Ask Ration** launcher and `AskPanel`; iOS uses the native `AskView` sheet. Both connect to the dedicated `ration-copilot` Worker (`workers/copilot.ts`, `wrangler.copilot.jsonc`) over WebSocket, support persistent multi-turn streaming with explicit Stop controls, and use `/api/mobile/v1/copilot/status` or `/api/copilot/status` for allowance/credit status. Copilot exposes the full 38-tool MCP catalog plus `search_docs`, so it can manage Cargo, Galley, Manifest, Supply, and preferences. Image scanning and recipe URL extraction remain native-only. For overlapping AI recipe or week-planning requests, the Worker first disables tools and explains the purpose-built native option; a subsequent explicit choice can continue through deterministic chat tools. Destructive and high-impact tools use the AI SDK approval protocol before execution. Its system prompt declines code generation and other requests unrelated to Ration or kitchen logistics.
-
-**Copilot billing:** Billing is per conversation, not per message. Crew orgs receive 1 free copilot conversation per UTC day via KV allowance; after that, or for free-tier orgs from the first conversation, the ledger charges `AI_COSTS.COPILOT_TURN` as a 1-credit floor and reconciles upward linearly (**1 credit per 20,000 tokens**, minimum 1 per chat, up to **128,000 tokens** per conversation). Ask Ration supports per-chat **Fast / Deep** presets (reasoning effort and step limits) and a collapsed-by-default **thinking** disclosure in the stream. The server enforces the `ration-copilot` Flagship flag and `copilot_connect`/`copilot` rate limits.
+**Ration Copilot:** Intercom/Fin has been replaced by the first-party **Ask Ration** experience. Web uses the hub header launcher and [`AskPanel`](app/components/support/AskPanel.tsx); iOS uses native [`AskView`](ios/Ration/Features/Ask/AskView.swift). Both stream over WebSocket to `ration-copilot` at `copilot.ration.mayutic.com`. See [§14 Ration Copilot](#14-ration-copilot) for architecture, auth, billing, tools, and deployment.
 
 **Public splash experience:** `/` presents Ration as a closed-loop AI pantry management system: Cargo → Galley → Manifest → Supply → Dock. A lightweight scroll-activated system diagram explains that loop, while paired Copilot and MCP panels distinguish the built-in assistant from external AI control. The page keeps `#pricing` and `#signup` deep links stable and includes an `#ios` section marked **coming soon** until the public App Store listing is available.
-
-**AI Search:** Copilot grounds docs/blog answers through Cloudflare AI Search via the `AI_SEARCH` namespace binding. Create the `ration-docs` instance (both corpora share its R2-backed index) and trigger sync jobs with Wrangler; see [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Retrieval, chunking, embeddings, hybrid BM25/vector search, and reranking are managed by Cloudflare AI Search, not app code.
 
 **Why AI Gateway instead of calling Google AI directly?** The gateway provides request logging, cost analytics, caching, guardrails, spend limits, retries/timeouts, model fallback, and unified billing — configurable from the Cloudflare dashboard and via per-request `cf-aig-*` headers. All four AI consumers (`scan`, `meal_generate`, `plan_week`, `import_url`) route through a centralized client ([`app/lib/ai-gateway.server.ts`](app/lib/ai-gateway.server.ts)) that applies feature-specific timeouts, retries, caching policy, and observability metadata. The Google API key stays on the gateway; Workers authenticate with `CF_AIG_TOKEN` only.
 
@@ -1271,6 +1303,8 @@ flowchart TB
     ApiKeyRequired --> K5["/api/v1/supply/export"]
 ```
 
+**Admin dashboard (`/admin`):** God-mode metrics for `user.is_admin = true`. The page loader fetches critical counts and the first user page; heavy engagement metrics load progressively from `GET /api/admin/metrics` (KV-cached, rate-limited). If `/admin` fails in production, tail worker logs (`bunx wrangler tail`) and smoke-test D1 query shapes with `bun run verify:admin-d1` (remote prod DB).
+
 **Guard functions** (all in `app/lib/auth.server.ts` / `app/lib/api-key.server.ts`):
 
 | Function | Returns | Redirects/throws on fail |
@@ -1512,6 +1546,8 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
+| Copilot WebSocket connect (`/copilot/*`) | userId | 60s | 20 | Connection abuse (`copilot_connect`) |
+| Copilot turns (inside Durable Object) | userId | 60s | 30 | Per-message throttle (`copilot`) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---
@@ -1749,7 +1785,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/provisions` | Create provision (single-item snack/staple) |
 | `GET` / `PATCH` / `DELETE` | `/api/mobile/v1/meals/:id` | Meal detail / update / delete |
 | `GET` | `/api/mobile/v1/meals/tags` | Distinct meal tags |
-| `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo |
+| `GET` | `/api/mobile/v1/meals/match` | Match meals to cargo (optional `q` name filter) |
 | `POST` | `/api/mobile/v1/meals/generate` | AI meal ideas (2 credits) |
 | `GET` | `/api/mobile/v1/meals/generate/:requestId` | Poll generate job |
 | `POST` | `/api/mobile/v1/meals/import` | URL recipe import (1 credit) |
@@ -1970,6 +2006,7 @@ bun run test:e2e:ui   # Playwright UI mode
 bun run test:e2e:headed # Playwright headed (visible browser)
 bun run test:e2e:report # Open last HTML report
 bun run typecheck     # cf-typegen + react-router typegen + tsc -b
+bun run verify:admin-d1 # Smoke-test admin D1 queries against remote ration-db
 bun run lint          # Biome v2 lint check
 bun run lint:fix      # Biome v2 auto-fix
 ```
@@ -2033,7 +2070,7 @@ bun run test:unit
 
 ### Cloudflare Workers Builds
 
-Both Workers share this repo and `package.json`. Configure build commands in the Cloudflare dashboard (Workers Builds has no repo-side config file):
+All three Workers share this repo and `package.json`. Configure build commands in the Cloudflare dashboard (Workers Builds has no repo-side config file):
 
 **Main HTTP worker (`ration`, [`wrangler.jsonc`](wrangler.jsonc)):**
 
@@ -2076,7 +2113,7 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 - **Developer guide:** [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md)
 - **Add a flag to a feature:** `/add-feature-flag` Cursor command
 - **Validate registry:** `bun run flag:check`
-- **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, and `wrangler.local.jsonc`; run `bun run cf-typegen` after changing `app_id`
+- **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, `wrangler.local.jsonc`, and `wrangler.copilot.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
 **Manual deploy (local):**
 
@@ -2089,6 +2126,210 @@ bun run deploy:copilot    # Copilot worker
 
 ---
 
-## 14. Copilot knowledge hub (support)
+## 14. Ration Copilot
 
-Customer-facing Markdown for **Ration Copilot** lives in [`docs/fin/`](docs/fin/) for continuity with the original support corpus. See [`docs/fin/README.md`](docs/fin/README.md), [`docs/fin/INDEX.md`](docs/fin/INDEX.md), and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md). AI Search setup lives in [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Keep articles aligned with sections 3–11 of this README when user-visible behavior changes.
+A dedicated Cloudflare Worker (`ration-copilot`) powers the first-party **Ask Ration** assistant on web and iOS. It runs at `copilot.ration.mayutic.com`, shares D1/KV/R2/Vectorize with the main Worker, and uses a **Project Think** Durable Object (`ProjectThinkAgent`) for persistent multi-turn streaming. Copilot reuses the MCP tool runtime for kitchen mutations and adds Copilot-only tools for docs retrieval and billing.
+
+**Clients:** Web — hub header **Ask Ration** → [`AskPanel`](app/components/support/AskPanel.tsx). iOS — [`AskView`](ios/Ration/Features/Ask/AskView.swift) sheet with native composer, scroll, and dock layout. Both support explicit **Stop**, **Fast / Deep** model presets, collapsed-by-default **thinking** disclosure, and local session persistence keyed by organization.
+
+**Version:** Copilot worker identity uses `COPILOT_SERVER_VERSION` from [`app/lib/version.ts`](app/lib/version.ts), which tracks `package.json` — bump both together on every release.
+
+### 14.1 Connection and turn lifecycle
+
+```mermaid
+sequenceDiagram
+    participant Client as Web / iOS client
+    participant Ration as ration worker
+    participant Copilot as ration-copilot worker
+    participant DO as ProjectThinkAgent (DO)
+    participant KV as RATION_KV
+    participant D1 as D1
+
+    Client->>Ration: GET /api/copilot/status (or /api/mobile/v1/copilot/status)
+    Ration->>KV: allowance, auto-deduct consent, onboarding state
+    Ration->>D1: credit balance
+    Ration-->>Client: tier, allowance, credits, session limits
+
+    alt Web client
+        Client->>Ration: POST /api/copilot/token
+        Ration->>KV: store 60s handshake token (single-use)
+        Ration-->>Client: { token, expiresAt }
+    end
+
+    Client->>Copilot: WebSocket wss://copilot.ration.mayutic.com/copilot/{conversationId}
+    Note over Client,Copilot: Web: ?handshakeToken=… · iOS: Authorization Bearer mobile JWT
+
+    Copilot->>Copilot: authenticateCopilot + ration-copilot flag
+    Copilot->>KV: copilot_connect rate limit
+    Copilot->>KV: ensureCopilotConversationOpen (allowance / credits / onboarding)
+    Copilot->>DO: routeAgentRequest → /agents/project-think/{org}:{user}:{tier}:{conversationId}
+
+    loop Multi-turn chat
+        Client->>DO: user message (+ optional modelPreset)
+        DO->>DO: beforeTurn — intent guard, native hints, rate limit, session caps
+        DO->>D1: MCP tools via shared tool-runtime (Vectorize on search)
+        DO->>KV: reconcile token usage → credit brackets
+        DO-->>Client: stream text, reasoning, tool events, approvals, session_usage_update
+    end
+```
+
+**WebSocket URL:** `wss://copilot.ration.mayutic.com/copilot/{conversationId}` (override locally with `VITE_COPILOT_WS_URL`). Conversation IDs match `/^[A-Za-z0-9_-]{1,80}$/`; clients default to `default`.
+
+**Durable Object identity:** Agent name `{organizationId}:{userId}:{tier}:{conversationId}` (URL-encoded). The Worker routes via `routeAgentRequest` to `/agents/project-think/…` — the path segment must match the `PROJECT_THINK` binding name (`project-think`), not the class name.
+
+### 14.2 Authentication
+
+| Client | Handshake | Validation |
+|--------|-----------|------------|
+| **Web** | `POST /api/copilot/token` → single-use KV token (60s TTL) passed as `?handshakeToken=` on WebSocket upgrade | [`consumeCopilotWebSessionToken`](app/lib/copilot/web-session-token.server.ts) |
+| **iOS** | Mobile access JWT in `Authorization: Bearer` | [`verifyMobileAccessToken`](app/lib/mobile/token.server.ts) + org membership |
+| **Fallback (web)** | Better Auth session cookies on WebSocket upgrade | [`authenticateCopilot`](app/lib/copilot/auth.server.ts) → active org membership |
+
+CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts, `BETTER_AUTH_URL`). The `ration-copilot` Flagship flag must be enabled or the Worker returns **404** (fail closed).
+
+### 14.3 Code layout
+
+| Path | Role |
+|------|------|
+| [`workers/copilot.ts`](workers/copilot.ts) | Worker entry, `ProjectThinkAgent` Think hooks, WebSocket routing |
+| [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc) | Bindings, `copilot.ration.mayutic.com` route, DO migration |
+| [`app/lib/copilot/`](app/lib/copilot/) | Auth, billing gate, tools, system prompt, session usage, client helpers |
+| [`app/lib/copilot/tools.server.ts`](app/lib/copilot/tools.server.ts) | Wraps shared MCP defs + `search_docs` → AI SDK tools |
+| [`app/lib/mcp/tool-runtime.ts`](app/lib/mcp/tool-runtime.ts) | Shared `runTool`, rate limits, approval metadata, audit |
+| [`app/components/support/AskPanel.tsx`](app/components/support/AskPanel.tsx) | Web UI — socket, approvals, session meter, presets |
+| [`ios/Ration/Features/Ask/`](ios/Ration/Features/Ask/) | Native Ask UI, WebSocket client, scroll/dock policies |
+
+### 14.4 Model, presets, and inference
+
+- **Model:** `@cf/openai/gpt-oss-120b` via Workers AI (`getModel()` on `ProjectThinkAgent`).
+- **Presets** ([`model-profiles.ts`](app/lib/copilot/model-profiles.ts)):
+
+| Preset | Reasoning | maxSteps | maxOutputTokens | Use case |
+|--------|-----------|----------|-----------------|----------|
+| **Fast** (default) | off | 8 | 2048 | Quick answers, lower token use |
+| **Deep** | high | 10 | 4096 | Multi-step planning |
+
+Deep preset sets `workers-ai.reasoning_effort = high` and streams reasoning parts (`sendReasoning: true`). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
+
+**System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, native-feature due diligence, and post-mutation action reporting.
+
+### 14.5 Tools
+
+Copilot exposes **all 38 MCP tools** through the shared tool runtime, plus two Copilot-only tools:
+
+| Tool | Source | Purpose |
+|------|--------|---------|
+| `search_docs` | Copilot-only | Hybrid AI Search over `ration-docs` (`docs/fin` + `content/blog`) |
+| `get_billing_summary` | Copilot-only | Live tier, credits, renewal, store/management URLs (requires `REVENUECAT_API_KEY` on the Copilot worker) |
+
+MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`. Tool calls inherit MCP rate categories (`mcp_list`, `mcp_search`, `mcp_write`, `mcp_supply_sync`) keyed on the synthetic credential `copilot:{userId}`.
+
+**Not available in Copilot:** Receipt scan and recipe URL import (hard-blocked). Queue-backed AI pipelines (AI meal generation, AI plan week) are native-only; chat can still create recipes or schedule plans via deterministic MCP write tools after the user opts into chat. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
+
+**Destructive tools:** AI SDK `needsApproval` mirrors MCP — e.g. `remove_cargo_item`, `delete_meal`, `complete_supply_list`, `clear_active_meals`, and insufficient-cargo overrides require explicit user approval in the client before execution.
+
+### 14.6 Intent guards and native feature hints
+
+```mermaid
+flowchart TD
+    UserMsg["User message"]
+    Onboarding{"Onboarding briefing mode?"}
+    Blocked{"detectBlockedCopilotIntent"}
+    Native{"detectNativeFeatureSuggestion"}
+    Tools["Full tool loop"]
+
+    UserMsg --> Onboarding
+    Onboarding -->|yes| Briefing["Tools disabled — single welcome response"]
+    Onboarding -->|no| Blocked
+    Blocked -->|scan / import_url| Block["Tools disabled — deep link to native flow"]
+    Blocked -->|no| Native
+    Native -->|generate_meal / plan_week| Hint["Tools disabled this turn — offer native vs chat"]
+    Native -->|no or user chose chat| Tools
+```
+
+- **Hard blocks** ([`intent-guard.server.ts`](app/lib/copilot/intent-guard.server.ts)): scan/OCR and recipe URL import — emits `blocked_feature` with `ration://` deep links. These cannot continue in chat.
+- **Soft hints** ([`native-feature-hints.server.ts`](app/lib/copilot/native-feature-hints.server.ts)): AI recipe generation and plan-week requests — first turn explains native Galley/Manifest options unless the user already said to continue in chat. If the user chooses chat, subsequent turns use **deterministic MCP tools** (`create_meal`, `bulk_add_meal_plan_entries`, etc.) — not the queue-backed AI generate/plan-week pipelines (those remain native-only).
+
+### 14.7 Billing and conversation gate
+
+Billing is **per conversation**, not per message. Constants live in [`constants.ts`](app/lib/copilot/constants.ts); gate logic in [`gate.server.ts`](app/lib/copilot/gate.server.ts).
+
+| Rule | Value |
+|------|-------|
+| Crew daily allowance | **1** free conversation per org per UTC day (KV `copilot:allowance:{orgId}`) |
+| Free tier allowance | **0** — first conversation charges credits |
+| Floor cost | **1** credit (`AI_COSTS.COPILOT_TURN`) preauthorized at open |
+| Token reconciliation | **1 credit per 20,000 tokens** (linear, minimum 1 per chat) |
+| Session token cap | **128,000** tokens — hard stop, start new chat |
+| Session message cap | **40** messages |
+| Session idle TTL | **20 minutes** on KV conversation charge records |
+| Crew after allowance | Requires **auto-deduct consent** (`POST /api/copilot/consent`) or returns **402** `copilot_consent_required` |
+
+Usage reconciles after each agent step (`onStepFinish`). Insufficient credits mid-conversation sets `billingBlocked` — further tool calls are blocked and the user must add credits and start a new chat.
+
+**Status API** (`GET /api/copilot/status`, `GET /api/mobile/v1/copilot/status`): returns `freeConversationsRemaining`, `allowanceResetAt`, `creditBalance`, `autoDeductConsent`, `conversationFloorCost`, `sessionIdleMs`, `tokensPerCredit`, `sessionMaxTokens`, and iOS onboarding briefing eligibility.
+
+### 14.8 Client session persistence
+
+- **Web:** [`session-storage.client.ts`](app/lib/copilot/session-storage.client.ts) — localStorage keyed by org, hydrated on open, pruned after `sessionIdleMs`.
+- **iOS:** equivalent persistence in Ask view models; onboarding briefing uses server-enforced single-turn mode (`copilot-onboarding-free` flag, tools disabled).
+- **Continuation:** [`continuation.ts`](app/lib/copilot/continuation.ts) — copy transcript / draft follow-up prompts.
+
+WebSocket event types consumed by clients include streamed messages, `session_usage_update`, `session_limit_warning` (soft at 50% tokens / 30 messages; urgent at 85% / 36 messages), `blocked_feature`, tool approval requests, and structured errors (`rate_limited`, `insufficient_credits`, `session_limit_reached`, `onboarding_briefing_exhausted`).
+
+### 14.9 AI Search (docs grounding)
+
+Copilot grounds product answers through Cloudflare **AI Search** — not custom embeddings in app code. The `search_docs` tool queries instance `ration-docs` (R2-backed, shared `ration-copilot-docs` bucket for `docs/fin` + `content/blog`). Setup, sync jobs, and verification commands: [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md).
+
+### 14.10 Telemetry, purge, and GDPR
+
+- **Analytics Engine:** `COPILOT_ANALYTICS` dataset (`ration_copilot` / `ration_copilot_dev`) — events include `conversation_open`, `tool_start`/`tool_end`, `usage_reconciled`, `blocked_feature`, onboarding briefing lifecycle. Indexed by redacted org id.
+- **User deletion:** [`purge.server.ts`](app/lib/copilot/purge.server.ts) — lists KV conversation indexes, POSTs `/internal/purge` on each Durable Object (authenticated via `COPILOT_PURGE_SECRET` or `BETTER_AUTH_SECRET` fallback), clears allowance/auto-deduct keys. Called from [`user-purge.server.ts`](app/lib/user-purge.server.ts).
+
+### 14.11 API routes (main Worker)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/copilot/status` | GET | Allowance, credits, consent, session limits (web) |
+| `/api/copilot/consent` | POST | Set auto-deduct consent (web) |
+| `/api/copilot/token` | POST | Issue 60s WebSocket handshake token (web) |
+| `/api/mobile/v1/copilot/status` | GET | Same status payload (mobile JWT) |
+| `/api/mobile/v1/copilot/consent` | POST | Same consent mutation (mobile JWT) |
+
+WebSocket traffic hits `ration-copilot` directly — not proxied through `ration`.
+
+### 14.12 Feature flags
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `ration-copilot` | off | Master kill switch — server returns 404 when disabled; exposed to clients as `rationCopilot` |
+| `copilot-onboarding-free` | off | One-time iOS welcome briefing (single LLM turn, no tools, no credit charge) |
+
+Registry: [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts). Flagship binding on `ration-copilot`: see [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc).
+
+### 14.13 Tests
+
+Copilot logic is covered by unit tests under:
+
+- [`app/lib/copilot/__tests__/`](app/lib/copilot/__tests__/) — tools, system prompt, model profiles, native hints
+- [`app/lib/__tests__/copilot-*.test.ts`](app/lib/__tests__/) — gate, auth token, session usage, intent guard, turn lifecycle, exhaustion, onboarding
+- [`app/lib/schemas/__tests__/copilot.test.ts`](app/lib/schemas/__tests__/copilot.test.ts) — Zod schemas
+
+Run `bun run test:unit`. iOS Copilot UI policies have XCTest coverage under [`ios/RationTests/`](ios/RationTests/).
+
+### 14.14 Local development and deploy
+
+| Command | Config | Notes |
+|---------|--------|-------|
+| `bun run dev:copilot` | [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc) `--env dev` | Remote D1/KV/R2/AI/Vectorize/AI Search/Flagship |
+| `bun run deploy:copilot` | production | No `bun run build` — Wrangler bundles `workers/copilot.ts` directly |
+
+**Secrets (Copilot worker):** `BETTER_AUTH_SECRET` (required), `COPILOT_PURGE_SECRET` (optional dedicated purge token), `REVENUECAT_API_KEY` (live billing URLs in `get_billing_summary`). `STRIPE_SECRET_KEY` stays on `ration` only.
+
+See [§13 Local Development & Deployment](#13-local-development--deployment) for Workers Builds CI commands.
+
+---
+
+## 15. Copilot knowledge hub (support)
+
+Customer-facing Markdown for **Ration Copilot** lives in [`docs/fin/`](docs/fin/) for continuity with the original support corpus. See [`docs/fin/README.md`](docs/fin/README.md), [`docs/fin/INDEX.md`](docs/fin/INDEX.md), and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md). AI Search setup lives in [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Keep articles aligned with sections 3–14 of this README when user-visible behavior changes.

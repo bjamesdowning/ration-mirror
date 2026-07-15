@@ -277,7 +277,7 @@ struct GalleyView: View {
                 .listRowBackground(Color.clear)
             }
             if !model.isLoading {
-                ListCountHeader(count: galleyCount)
+                ListCountHeader(count: galleyCount, isLoading: model.isSearching)
             }
             Section {
                 ForEach(model.displayedMeals) { meal in
@@ -338,7 +338,7 @@ struct GalleyView: View {
                 .listRowBackground(Color.clear)
             }
             if !model.isLoading {
-                ListCountHeader(count: galleyCount)
+                ListCountHeader(count: galleyCount, isLoading: model.isSearching)
             }
             Section {
                 ForEach(model.displayedMatches) { match in

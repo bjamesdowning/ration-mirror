@@ -74,7 +74,10 @@ final class GalleyViewModel {
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
     var listHeaderCount: Int {
-        isMatchMode ? matchTotal : mealTotal
+        if isMatchMode {
+            return isRemoteSearchActive ? displayedMatches.count : matchTotal
+        }
+        return isRemoteSearchActive ? displayedMeals.count : mealTotal
     }
 
     func isMealSelected(_ mealId: String) -> Bool {
@@ -89,18 +92,28 @@ final class GalleyViewModel {
         filters.selectedTags.count == 1 ? filters.selectedTags.first : nil
     }
 
+    private var serverSearchQuery: String? {
+        isRemoteSearchActive
+            ? filters.search.trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
+    }
+
+    private var clientSearchText: String {
+        isRemoteSearchActive ? "" : filters.search
+    }
+
     func refreshDisplayedContent() {
         displayedMeals = PageFilterEngine.filterMeals(
             meals,
             domain: filters.domain,
             tags: filters.selectedTags,
-            search: filters.search
+            search: clientSearchText
         )
         let filteredMeals = PageFilterEngine.filterMeals(
             matches.map(\.meal),
             domain: filters.domain,
             tags: filters.selectedTags,
-            search: filters.search
+            search: clientSearchText
         )
         let ids = Set(filteredMeals.map(\.id))
         displayedMatches = matches.filter { ids.contains($0.meal.id) }
@@ -132,17 +145,21 @@ final class GalleyViewModel {
 
         if isMatchMode {
             do {
+                let searchQuery = serverSearchQuery
                 async let matchTask = api.matchMeals(
                     limit: Self.matchFetchLimit,
                     minMatch: 0,
                     tag: serverTagFilter,
-                    domain: filters.domain
+                    domain: filters.domain,
+                    q: searchQuery
                 )
                 async let mealsTask = api.meals(tag: serverTagFilter, domain: filters.domain)
                 let response = try await matchTask
                 let mealsResponse = try await mealsTask
                 matches = response.matches
-                matchTotal = response.total ?? response.matches.count
+                matchTotal = searchQuery != nil
+                    ? response.matches.count
+                    : (response.total ?? response.matches.count)
                 matchByMealId = GalleyMatchMapBuilder.build(from: response.matches)
                 activeMealIds = Set(mealsResponse.activeMealIds ?? [])
                 if let refreshOutcomes {
@@ -173,7 +190,7 @@ final class GalleyViewModel {
             }
         } else {
             do {
-                let searchQuery = isRemoteSearchActive ? filters.search.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+                let searchQuery = serverSearchQuery
                 let mealsResponse = try await api.meals(
                     tag: serverTagFilter,
                     domain: filters.domain,

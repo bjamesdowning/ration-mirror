@@ -279,7 +279,8 @@ final class RationAPI {
         minMatch: Int? = nil,
         servings: Int? = nil,
         tag: String? = nil,
-        domain: CargoDomain? = nil
+        domain: CargoDomain? = nil,
+        q: String? = nil
     ) async throws -> MealMatchResponse {
         var query: [URLQueryItem] = [
             URLQueryItem(name: "mode", value: mode),
@@ -296,6 +297,9 @@ final class RationAPI {
         }
         if let domain {
             query.append(URLQueryItem(name: "domain", value: domain.rawValue))
+        }
+        if let q, !q.isEmpty {
+            query.append(URLQueryItem(name: "q", value: q))
         }
         return try await client.get("meals/match", query: query)
     }

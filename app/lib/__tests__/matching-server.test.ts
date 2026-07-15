@@ -87,6 +87,21 @@ describe("getMatchCacheKey — tags field", () => {
 		const key2 = getMatchCacheKey("org-2", base);
 		expect(key1).not.toBe(key2);
 	});
+
+	it("includes normalised searchQuery in cache key", () => {
+		const keyA = getMatchCacheKey("org-1", {
+			...base,
+			searchQuery: "Pasta",
+		});
+		const keyB = getMatchCacheKey("org-1", {
+			...base,
+			searchQuery: "pasta",
+		});
+		const keyC = getMatchCacheKey("org-1", base);
+		expect(keyA).toBe(keyB);
+		expect(keyA).not.toBe(keyC);
+		expect(keyA).toContain(":pasta");
+	});
 });
 
 // ---------------------------------------------------------------------------

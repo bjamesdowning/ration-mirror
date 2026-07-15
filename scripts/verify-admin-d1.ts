@@ -99,6 +99,34 @@ async function main() {
 		),
 	);
 
+	assertOk(
+		"admin user list aggregates",
+		d1Remote(
+			`SELECT u.id, u.name, u.email, u.is_admin, u.created_at,
+        MAX(COALESCE(session_agg.session_max_login, 0), COALESCE(mobile_agg.mobile_max_login, 0)) as last_login_unix,
+        MAX(
+          COALESCE(session_agg.session_max_active, 0),
+          COALESCE(api_key_agg.api_key_max_active, 0),
+          COALESCE(unixepoch(json_extract(u.settings, '$.lastActiveAt')), 0)
+        ) as last_active_unix
+      FROM user u
+      LEFT JOIN (
+        SELECT user_id, MAX(created_at) as session_max_login, MAX(updated_at) as session_max_active
+        FROM session GROUP BY user_id
+      ) session_agg ON u.id = session_agg.user_id
+      LEFT JOIN (
+        SELECT user_id, MAX(created_at) as mobile_max_login
+        FROM mobile_refresh_token GROUP BY user_id
+      ) mobile_agg ON u.id = mobile_agg.user_id
+      LEFT JOIN (
+        SELECT user_id, MAX(last_used_at) as api_key_max_active
+        FROM api_key GROUP BY user_id
+      ) api_key_agg ON u.id = api_key_agg.user_id
+      ORDER BY u.created_at DESC
+      LIMIT 25`,
+		),
+	);
+
 	console.log("\nAll admin D1 queries verified successfully.");
 }
 

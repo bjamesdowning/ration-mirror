@@ -48,6 +48,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		servings: url.searchParams.get("servings") ?? undefined,
 		type: url.searchParams.get("type") ?? undefined,
 		domain: url.searchParams.get("domain") ?? undefined,
+		q: url.searchParams.get("q") ?? undefined,
 	};
 
 	const parsed = MealMatchQuerySchema.safeParse(raw);
@@ -64,6 +65,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		servings: parsed.data.servings,
 		...(parsed.data.type ? { type: parsed.data.type } : {}),
 		...(parsed.data.domain ? { domain: parsed.data.domain } : {}),
+		...(parsed.data.q ? { searchQuery: parsed.data.q } : {}),
 	};
 
 	try {

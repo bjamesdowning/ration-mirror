@@ -47,6 +47,11 @@ final class SupplyViewModel {
         list?.items.count ?? 0
     }
 
+    var showsFilteredEmptyState: Bool {
+        guard let list, !list.items.isEmpty else { return false }
+        return displayedItems.isEmpty && filters.hasActiveFilters
+    }
+
     var progressFraction: Double {
         guard totalCount > 0 else { return 0 }
         return Double(purchasedCount) / Double(totalCount)
@@ -848,32 +853,43 @@ struct SupplyView: View {
                     organizationId: organizationId
                 )
             }
-            ForEach(model.displayedItems) { item in
-                SupplyListItemRow(
-                    item: item,
-                    cargoLinkRows: model.cargoLinkRows,
-                    onCheckOff: {
-                        if item.isPurchased {
+            if model.showsFilteredEmptyState {
+                Section {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: "No matches",
+                        message: "Try adjusting your filters or search."
+                    )
+                    .listRowBackground(Color.clear)
+                }
+            } else {
+                ForEach(model.displayedItems) { item in
+                    SupplyListItemRow(
+                        item: item,
+                        cargoLinkRows: model.cargoLinkRows,
+                        onCheckOff: {
+                            if item.isPurchased {
+                                Task {
+                                    await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                                }
+                            } else {
+                                checkOffItem = CheckOffPresentationItem(item: item)
+                            }
+                        },
+                        onCheck: {
                             Task {
                                 await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                             }
-                        } else {
-                            checkOffItem = CheckOffPresentationItem(item: item)
+                        },
+                        onSnooze: { snoozeItem = item },
+                        onDelete: {
+                            Task {
+                                await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
+                            }
                         }
-                    },
-                    onCheck: {
-                        Task {
-                            await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                        }
-                    },
-                    onSnooze: { snoozeItem = item },
-                    onDelete: {
-                        Task {
-                            await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
-                        }
-                    }
-                )
-                .listRowBackground(Theme.surface)
+                    )
+                    .listRowBackground(Theme.surface)
+                }
             }
         }
         .listStyle(.insetGrouped)

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { CapacityExceededError, getEffectiveTier } from "~/lib/capacity.server";
-import { handleApiError, isD1ContentionError } from "~/lib/error-handler";
+import {
+	handleApiError,
+	isD1ContentionError,
+	isD1SchemaError,
+} from "~/lib/error-handler";
 
 const NOW = new Date("2025-06-15T12:00:00Z");
 
@@ -16,10 +20,18 @@ describe("isD1ContentionError", () => {
 		expect(isD1ContentionError(42)).toBe(false);
 	});
 
-	it("returns true for D1_ERROR pattern", () => {
+	it("returns false for generic D1_ERROR without transient markers", () => {
 		expect(isD1ContentionError(new Error("D1_ERROR: some db error"))).toBe(
-			true,
+			false,
 		);
+	});
+
+	it("returns false for failed query SQL errors", () => {
+		expect(
+			isD1ContentionError(
+				new Error("Failed query: select ... ambiguous column"),
+			),
+		).toBe(false);
 	});
 
 	it("returns true for SQLITE_BUSY pattern", () => {
@@ -114,6 +126,26 @@ describe("retryOnD1Contention", () => {
 	});
 });
 
+describe("isD1SchemaError", () => {
+	it("detects failed query and schema drift messages", () => {
+		expect(
+			isD1SchemaError(new Error("Failed query: select ... max_login ...")),
+		).toBe(true);
+		expect(
+			isD1SchemaError(new Error("no such table: mobile_refresh_token")),
+		).toBe(true);
+		expect(isD1SchemaError(new Error("ambiguous column name: max_login"))).toBe(
+			true,
+		);
+	});
+
+	it("returns false for transient contention errors", () => {
+		expect(isD1SchemaError(new Error("SQLITE_BUSY: database is busy"))).toBe(
+			false,
+		);
+	});
+});
+
 describe("runRouteLoader", () => {
 	it("returns loader data on success", async () => {
 		const { runRouteLoader } = await import("~/lib/error-handler");
@@ -150,6 +182,36 @@ describe("runRouteLoader", () => {
 				throw redirect;
 			}),
 		).rejects.toBe(redirect);
+	});
+
+	it("throws a 500 data response for D1 schema/query errors", async () => {
+		const { runRouteLoader } = await import("~/lib/error-handler");
+
+		await expect(
+			runRouteLoader(async () => {
+				throw new Error("Failed query: select ...");
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			init: { status: 500 },
+			data: { code: "admin_schema_error" },
+		});
+	});
+});
+
+describe("runAdminLoader", () => {
+	it("maps unhandled loader failures to admin_load_failed", async () => {
+		const { runAdminLoader } = await import("~/lib/error-handler");
+
+		await expect(
+			runAdminLoader(async () => {
+				throw new Error("unexpected runtime failure");
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			init: { status: 500 },
+			data: { code: "admin_load_failed" },
+		});
 	});
 });
 

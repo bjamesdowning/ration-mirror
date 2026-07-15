@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal, mealIngredient, mealTag, tag } from "../db/schema";
 import { effectiveBaseFields } from "./base-quantity";
@@ -68,6 +68,8 @@ export interface MealMatchQuery {
 	type?: "recipe" | "provision";
 	/** Filter by domain, e.g. 'food' */
 	domain?: string;
+	/** Case-insensitive substring filter on meal name */
+	searchQuery?: string;
 }
 
 /**
@@ -361,6 +363,7 @@ export async function matchMeals(
 		servings,
 		type,
 		domain,
+		searchQuery,
 	} = query;
 
 	// Normalise tags to a string array (or empty) for consistent handling
@@ -377,6 +380,7 @@ export async function matchMeals(
 		servings,
 		type,
 		domain,
+		searchQuery: searchQuery ? "[redacted]" : undefined,
 	});
 
 	// 0. KV cache lookup (10s TTL; repeat Hub visits return immediately)
@@ -403,6 +407,7 @@ export async function matchMeals(
 		...(needsTagJoin ? [inArray(tag.slug, tagFilter)] : []),
 		...(type ? [eq(meal.type, type)] : []),
 		...(domain ? [eq(meal.domain, domain)] : []),
+		...(searchQuery ? [like(meal.name, `%${searchQuery.trim()}%`)] : []),
 	];
 
 	let mealQuery = needsTagJoin
@@ -826,11 +831,13 @@ export function getMatchCacheKey(
 		servings,
 		type,
 		domain,
+		searchQuery,
 	} = query;
 	// Normalise tags to a sorted, stable string so equivalent queries share the same key
 	const tagsKey =
 		tags === undefined
 			? "all"
 			: (Array.isArray(tags) ? [...tags].sort() : [tags]).join("+") || "all";
-	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}`;
+	const searchKey = searchQuery?.trim().toLowerCase() ?? "all";
+	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
 }

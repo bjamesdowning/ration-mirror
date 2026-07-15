@@ -4,15 +4,31 @@ import { CapacityExceededError } from "./capacity.server";
 import { log } from "./logging.server";
 
 /**
+ * Returns true for permanent D1/SQL failures (schema drift, bad queries).
+ * These should not be retried or mislabeled as transient load issues.
+ */
+export function isD1SchemaError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const msg = error.message.toLowerCase();
+	return (
+		msg.includes("no such table") ||
+		msg.includes("no such column") ||
+		msg.includes("syntax error") ||
+		msg.includes("ambiguous column") ||
+		msg.includes("failed query")
+	);
+}
+
+/**
  * Returns true for errors that indicate D1 write contention or transient
  * infrastructure failures. Detected via error message patterns from D1 and
  * Cloudflare Workers runtime.
  */
 export function isD1ContentionError(error: unknown): boolean {
 	if (!(error instanceof Error)) return false;
+	if (isD1SchemaError(error)) return false;
 	const msg = error.message.toLowerCase();
 	return (
-		msg.includes("d1_error") ||
 		msg.includes("sqlite_busy") ||
 		msg.includes("sqlite_range") ||
 		msg.includes("too many bound parameters") ||
@@ -95,7 +111,45 @@ export function rethrowRouteLoaderError(error: unknown): never {
 		);
 	}
 
+	if (isD1SchemaError(error)) {
+		log.critical("[loader] D1 schema or query error", error);
+		throw data(
+			{
+				error: "Admin data is temporarily unavailable. Please try again later.",
+				code: "admin_schema_error" as const,
+			},
+			{ status: 500 },
+		);
+	}
+
 	throw error;
+}
+
+/**
+ * Admin route loader wrapper — maps unhandled failures to structured responses
+ * and logs server-side detail without exposing SQL internals to clients.
+ */
+export async function runAdminLoader<T>(fn: () => Promise<T>): Promise<T> {
+	try {
+		return await runRouteLoader(fn);
+	} catch (error) {
+		if (error instanceof Response) {
+			throw error;
+		}
+
+		if (isDataWithResponseInit(error)) {
+			throw error;
+		}
+
+		log.error("[admin.loader] Unhandled loader failure", error);
+		throw data(
+			{
+				error: "Admin metrics unavailable. Please try again.",
+				code: "admin_load_failed" as const,
+			},
+			{ status: 500 },
+		);
+	}
 }
 
 /**
@@ -181,6 +235,17 @@ export function handleApiError(error: unknown) {
 				status: 503,
 				headers: { "Retry-After": "5" },
 			},
+		);
+	}
+
+	if (isD1SchemaError(error)) {
+		log.critical("[API] D1 schema or query error", error);
+		return data(
+			{
+				error: "Admin data is temporarily unavailable. Please try again later.",
+				code: "admin_schema_error" as const,
+			},
+			{ status: 500 },
 		);
 	}
 

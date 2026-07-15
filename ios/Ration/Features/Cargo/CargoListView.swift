@@ -200,7 +200,7 @@ struct CargoListView: View {
                 .listRowBackground(Color.clear)
             }
             if !model.isLoading {
-                ListCountHeader(count: model.total)
+                ListCountHeader(count: model.total, isLoading: model.isSearching)
             }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)

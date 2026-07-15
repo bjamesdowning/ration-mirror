@@ -1,15 +1,4 @@
-import {
-	and,
-	count,
-	desc,
-	eq,
-	gt,
-	gte,
-	inArray,
-	lt,
-	lte,
-	sql,
-} from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -21,13 +10,15 @@ import {
 } from "react-router";
 
 import * as schema from "../db/schema";
-import {
-	getActivationRate,
-	getAiBurnByFeature,
-	getCrewHealth,
-	getDauWauMau,
-	getOrgEngagementMedians,
-	getPlatformSplit,
+import type { AdminHeavyMetricsResponse } from "../lib/admin-loader.server";
+import { loadCriticalAdminDashboard } from "../lib/admin-loader.server";
+import type {
+	ActivationRateResult,
+	AiBurnRow,
+	CrewHealthResult,
+	DauWauMauResult,
+	OrgEngagementMedians,
+	PlatformSplitResult,
 } from "../lib/admin-metrics.server";
 import {
 	type AdminUserRow,
@@ -36,328 +27,20 @@ import {
 	DEFAULT_ADMIN_USERS_ORDER,
 	DEFAULT_ADMIN_USERS_SORT,
 } from "../lib/admin-users";
-import { getLoggedInUsers, listAdminUsers } from "../lib/admin-users.server";
 import { requireAdmin } from "../lib/auth.server";
-import { getExpiringCargoBounds } from "../lib/cargo-utils";
-import { handleApiError, runRouteLoader } from "../lib/error-handler";
+import { handleApiError, runAdminLoader } from "../lib/error-handler";
 import { ToggleAdminSchema } from "../lib/schemas/admin";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
-	const adminUser = await requireAdmin(args.context, args.request);
-
-	return runRouteLoader(async () => {
-		const env = args.context.cloudflare.env;
-		const db = drizzle(env.DB, { schema });
-		const now = new Date();
-		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-		const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-		const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-		const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-		const {
-			startOfToday: cargoExpiringFrom,
-			endOfWindow: cargoExpiringThrough,
-		} = getExpiringCargoBounds(7, now);
-
-		const [
-			// Overview totals
-			userCount,
-			inventoryCount,
-			burnedResult,
-			crewMemberCountResult,
-			totalCreditsResult,
-			// Activity / sessions
-			activeUsersResult,
-			activeSessionsResult,
-			newSignups7dResult,
-			newSignups30dResult,
-			// 24h deltas
-			newSignups24hResult,
-			newCargo24hResult,
-			newMeals24hResult,
-			creditsAdded24hResult,
-			creditsConsumed24hResult,
-			aiCalls24hResult,
-			crewConversions24hResult,
-			// Feature usage totals
-			groupCount,
-			mealCount,
-			activeMealCount,
-			groceryListCount,
-			scanCountResult,
-			mealPlanCount,
-			// Platform health
-			pendingInvitesResult,
-			expiringItemsResult,
-			verifiedUsersResult,
-			// Heavy hitters: top 5 orgs by cargo count
-			topOrgsByCargoResult,
-			// Heavy hitters: top 5 orgs by meal count
-			topOrgsByMealResult,
-			// Logged in now + usage metrics
-			loggedInResult,
-			dauWauMau,
-			activationRate,
-			crewHealth,
-			orgMedians,
-			platformSplit,
-			aiBurnByFeature,
-			initialUsers,
-		] = await Promise.all([
-			// ── Overview totals ──────────────────────────────────────────────────
-			db.$count(schema.user),
-			db.$count(schema.cargo),
-			db
-				.select({
-					burned: sql<number>`sum(case when ${schema.ledger.amount} < 0 then abs(${schema.ledger.amount}) else 0 end)`,
-				})
-				.from(schema.ledger)
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(eq(schema.user.tier, "crew_member"))
-				.get(),
-			db
-				.select({
-					total: sql<number>`coalesce(sum(${schema.organization.credits}), 0)`,
-				})
-				.from(schema.organization)
-				.get(),
-
-			// ── Activity / sessions ──────────────────────────────────────────────
-			db
-				.select({
-					count: sql<number>`count(distinct ${schema.session.userId})`,
-				})
-				.from(schema.session)
-				.where(gt(schema.session.expiresAt, now))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.session)
-				.where(gt(schema.session.expiresAt, now))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(gt(schema.user.createdAt, sevenDaysAgo))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(gt(schema.user.createdAt, thirtyDaysAgo))
-				.get(),
-
-			// ── 24h deltas ───────────────────────────────────────────────────────
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(gt(schema.user.createdAt, oneDayAgo))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.cargo)
-				.where(gt(schema.cargo.createdAt, oneDayAgo))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.meal)
-				.where(gt(schema.meal.createdAt, oneDayAgo))
-				.get(),
-			db
-				.select({
-					total: sql<number>`coalesce(sum(${schema.ledger.amount}), 0)`,
-				})
-				.from(schema.ledger)
-				.where(
-					and(
-						gt(schema.ledger.amount, 0),
-						gt(schema.ledger.createdAt, oneDayAgo),
-					),
-				)
-				.get(),
-			db
-				.select({
-					total: sql<number>`coalesce(sum(abs(${schema.ledger.amount})), 0)`,
-				})
-				.from(schema.ledger)
-				.where(
-					and(
-						lt(schema.ledger.amount, 0),
-						gt(schema.ledger.createdAt, oneDayAgo),
-					),
-				)
-				.get(),
-			// AI calls last 24h: any ledger debit that isn't a refund
-			db
-				.select({ count: count() })
-				.from(schema.ledger)
-				.where(
-					and(
-						lt(schema.ledger.amount, 0),
-						gt(schema.ledger.createdAt, oneDayAgo),
-					),
-				)
-				.get(),
-			// Crew conversions 24h: users who first subscribed to crew in the last 24h
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(
-					and(
-						eq(schema.user.tier, "crew_member"),
-						gt(schema.user.crewSubscribedAt, oneDayAgo),
-					),
-				)
-				.get(),
-
-			// ── Feature usage totals ─────────────────────────────────────────────
-			db.$count(schema.organization),
-			db.$count(schema.meal),
-			db.$count(schema.activeMealSelection),
-			db.$count(schema.supplyList),
-			db
-				.select({ count: count() })
-				.from(schema.ledger)
-				.where(eq(schema.ledger.reason, "scan"))
-				.get(),
-			db.$count(schema.mealPlan),
-
-			// ── Platform health ──────────────────────────────────────────────────
-			db
-				.select({ count: count() })
-				.from(schema.invitation)
-				.where(eq(schema.invitation.status, "pending"))
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.cargo)
-				.where(
-					and(
-						gte(schema.cargo.expiresAt, cargoExpiringFrom),
-						lte(schema.cargo.expiresAt, cargoExpiringThrough),
-					),
-				)
-				.get(),
-			db
-				.select({ count: count() })
-				.from(schema.user)
-				.where(eq(schema.user.emailVerified, true))
-				.get(),
-
-			// ── Heavy hitters: top 5 orgs by cargo ──────────────────────────────
-			db
-				.select({
-					organizationId: schema.cargo.organizationId,
-					itemCount: count(),
-				})
-				.from(schema.cargo)
-				.groupBy(schema.cargo.organizationId)
-				.orderBy(desc(count()))
-				.limit(5),
-
-			// ── Heavy hitters: top 5 orgs by meals ──────────────────────────────
-			db
-				.select({
-					organizationId: schema.meal.organizationId,
-					mealCount: count(),
-				})
-				.from(schema.meal)
-				.groupBy(schema.meal.organizationId)
-				.orderBy(desc(count()))
-				.limit(5),
-
-			getLoggedInUsers(db, now, 15),
-			getDauWauMau(db, now),
-			getActivationRate(db),
-			getCrewHealth(db, now, sevenDaysFromNow),
-			getOrgEngagementMedians(db),
-			getPlatformSplit(db, now),
-			getAiBurnByFeature(db, oneDayAgo, sevenDaysAgo),
-			listAdminUsers(db, {
-				page: 1,
-				limit: DEFAULT_ADMIN_USERS_LIMIT,
-				sort: DEFAULT_ADMIN_USERS_SORT,
-				order: DEFAULT_ADMIN_USERS_ORDER,
-			}),
-		]);
-
-		// Resolve org names for heavy hitters
-		const heavyHitterOrgIds = Array.from(
-			new Set([
-				...topOrgsByCargoResult.map((r) => r.organizationId),
-				...topOrgsByMealResult.map((r) => r.organizationId),
-			]),
-		);
-
-		const orgNames: Record<string, string> = {};
-		if (heavyHitterOrgIds.length > 0) {
-			const orgs = await db
-				.select({ id: schema.organization.id, name: schema.organization.name })
-				.from(schema.organization)
-				.where(inArray(schema.organization.id, heavyHitterOrgIds))
-				.limit(10);
-			for (const org of orgs) {
-				orgNames[org.id] = org.name;
-			}
-		}
+	return runAdminLoader(async () => {
+		const adminUser = await requireAdmin(args.context, args.request);
+		const db = drizzle(args.context.cloudflare.env.DB, { schema });
+		const dashboard = await loadCriticalAdminDashboard(db);
 
 		return {
 			currentUserId: adminUser.id,
-			// Overview
-			userCount,
-			inventoryCount,
-			burnedCredits: burnedResult?.burned || 0,
-			crewMemberCount: crewMemberCountResult?.count ?? 0,
-			totalCredits: totalCreditsResult?.total ?? 0,
-			// Activity
-			activeUsers: activeUsersResult?.count ?? 0,
-			activeSessions: activeSessionsResult?.count ?? 0,
-			newSignups7d: newSignups7dResult?.count ?? 0,
-			newSignups30d: newSignups30dResult?.count ?? 0,
-			// 24h deltas
-			newSignups24h: newSignups24hResult?.count ?? 0,
-			newCargo24h: newCargo24hResult?.count ?? 0,
-			newMeals24h: newMeals24hResult?.count ?? 0,
-			creditsAdded24h: creditsAdded24hResult?.total ?? 0,
-			creditsConsumed24h: creditsConsumed24hResult?.total ?? 0,
-			aiCalls24h: aiCalls24hResult?.count ?? 0,
-			crewConversions24h: crewConversions24hResult?.count ?? 0,
-			// Feature usage
-			groupCount,
-			mealCount,
-			activeMealCount,
-			groceryListCount,
-			scanCount: scanCountResult?.count ?? 0,
-			mealPlanCount,
-			// Platform health
-			pendingInvites: pendingInvitesResult?.count ?? 0,
-			expiringItems: expiringItemsResult?.count ?? 0,
-			verifiedEmailRate:
-				userCount > 0
-					? ((verifiedUsersResult?.count ?? 0) / userCount) * 100
-					: 0,
-			// Heavy hitters
-			topOrgsByCargo: topOrgsByCargoResult.map((r) => ({
-				orgId: r.organizationId,
-				orgName: orgNames[r.organizationId] ?? r.organizationId,
-				count: r.itemCount,
-			})),
-			topOrgsByMeal: topOrgsByMealResult.map((r) => ({
-				orgId: r.organizationId,
-				orgName: orgNames[r.organizationId] ?? r.organizationId,
-				count: r.mealCount,
-			})),
-			loggedInUsers: loggedInResult.users,
-			totalLoggedIn: loggedInResult.totalLoggedIn,
-			dauWauMau,
-			activationRate,
-			crewHealth,
-			orgMedians,
-			platformSplit,
-			aiBurnByFeature,
-			initialUsers,
+			...dashboard,
 		};
 	});
 }
@@ -440,6 +123,16 @@ function formatDateTime(value: Date | string | null | undefined): string {
 		dateStyle: "medium",
 		timeStyle: "short",
 	});
+}
+
+function MetricCardSkeleton() {
+	return (
+		<div className="glass-panel rounded-2xl p-6 animate-pulse">
+			<div className="h-3 w-24 bg-platinum/60 rounded mb-4" />
+			<div className="h-10 w-20 bg-platinum/60 rounded mb-3" />
+			<div className="h-3 w-32 bg-platinum/40 rounded" />
+		</div>
+	);
 }
 
 function MetricCard({
@@ -671,7 +364,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 			typeof (error.data as { error?: unknown }).error === "string"
 				? (error.data as { error: string }).error
 				: null;
-		message = loaderMessage ?? error.statusText ?? message;
+		const fallbackMessage =
+			error.statusText === "Unexpected Server Error"
+				? "Admin metrics unavailable. Please try again."
+				: (error.statusText ?? message);
+		message = loaderMessage ?? fallbackMessage;
 	} else if (error instanceof Error) {
 		message = error.message;
 	}
@@ -733,15 +430,10 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 		topOrgsByMeal,
 		loggedInUsers,
 		totalLoggedIn,
-		dauWauMau,
-		activationRate,
-		crewHealth,
-		orgMedians,
-		platformSplit,
-		aiBurnByFeature,
 		initialUsers,
 	} = loaderData;
 
+	const metricsFetcher = useFetcher<AdminHeavyMetricsResponse>();
 	const usersFetcher = useFetcher<UsersFetcherData>();
 	const toggleFetcher = useFetcher();
 	const revalidator = useRevalidator();
@@ -768,6 +460,49 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 			return next;
 		});
 	}, []);
+
+	const metricsLoadedRef = useRef(false);
+	useEffect(() => {
+		if (!metricsLoadedRef.current) {
+			metricsLoadedRef.current = true;
+			metricsFetcher.load("/api/admin/metrics");
+		}
+	}, [metricsFetcher]);
+
+	const heavyMetrics = metricsFetcher.data;
+	const metricsApiError =
+		heavyMetrics != null &&
+		typeof heavyMetrics === "object" &&
+		"error" in heavyMetrics;
+	const hasHeavyMetrics =
+		heavyMetrics != null && !metricsApiError && "dauWauMau" in heavyMetrics;
+	const isLoadingMetrics = !hasHeavyMetrics && !metricsApiError;
+	const metricsLoadFailed = metricsApiError;
+
+	const dauWauMau: DauWauMauResult | null =
+		heavyMetrics?.dauWauMau.status === "ok"
+			? heavyMetrics.dauWauMau.data
+			: null;
+	const activationRate: ActivationRateResult | null =
+		heavyMetrics?.activationRate.status === "ok"
+			? heavyMetrics.activationRate.data
+			: null;
+	const crewHealth: CrewHealthResult | null =
+		heavyMetrics?.crewHealth.status === "ok"
+			? heavyMetrics.crewHealth.data
+			: null;
+	const orgMedians: OrgEngagementMedians | null =
+		heavyMetrics?.orgMedians.status === "ok"
+			? heavyMetrics.orgMedians.data
+			: null;
+	const platformSplit: PlatformSplitResult | null =
+		heavyMetrics?.platformSplit.status === "ok"
+			? heavyMetrics.platformSplit.data
+			: null;
+	const aiBurnByFeature: AiBurnRow[] =
+		heavyMetrics?.aiBurnByFeature.status === "ok"
+			? heavyMetrics.aiBurnByFeature.data
+			: [];
 
 	const needsClientFetch = useMemo(
 		() => !isInitialUsersQuery(usersQuery),
@@ -915,7 +650,7 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 	const pageEnd = Math.min(page * DEFAULT_ADMIN_USERS_LIMIT, usersTotal);
 
 	const webPerMobileUser =
-		platformSplit.distinctMobileUsers > 0
+		platformSplit && platformSplit.distinctMobileUsers > 0
 			? (
 					platformSplit.activeWebSessions / platformSplit.distinctMobileUsers
 				).toFixed(1)
@@ -1150,100 +885,163 @@ export default function AdminDashboard({ loaderData }: Route.ComponentProps) {
 				<section>
 					<SectionHeading>Usage &amp; Engagement</SectionHeading>
 
+					{metricsLoadFailed && (
+						<p className="text-sm text-warning mb-4">
+							Usage metrics could not be loaded.{" "}
+							<button
+								type="button"
+								onClick={() => metricsFetcher.load("/api/admin/metrics")}
+								className="underline hover:text-carbon"
+							>
+								Retry
+							</button>
+						</p>
+					)}
+
 					<SubSectionHeading>Active Users</SubSectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-						<MetricCard
-							title="DAU"
-							value={dauWauMau.dau}
-							subtitle="Distinct users active in 24h"
-							iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-						<MetricCard
-							title="WAU"
-							value={dauWauMau.wau}
-							subtitle="Distinct users active in 7 days"
-							iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-						/>
-						<MetricCard
-							title="MAU"
-							value={dauWauMau.mau}
-							subtitle={`${dauWauMau.stickiness.toFixed(1)}% DAU/MAU stickiness`}
-							iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-						/>
+						{isLoadingMetrics || !dauWauMau ? (
+							<>
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+							</>
+						) : (
+							<>
+								<MetricCard
+									title="DAU"
+									value={dauWauMau.dau}
+									subtitle="Distinct users active in 24h"
+									iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+								<MetricCard
+									title="WAU"
+									value={dauWauMau.wau}
+									subtitle="Distinct users active in 7 days"
+									iconPath="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+								/>
+								<MetricCard
+									title="MAU"
+									value={dauWauMau.mau}
+									subtitle={`${dauWauMau.stickiness.toFixed(1)}% DAU/MAU stickiness`}
+									iconPath="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+								/>
+							</>
+						)}
 					</div>
 
 					<SubSectionHeading>Onboarding &amp; Subscriptions</SubSectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-						<MetricCard
-							title="Activation Rate"
-							value={`${activationRate.rate.toFixed(1)}%`}
-							subtitle={`${activationRate.activatedCount} of ${activationRate.totalUsers} users with cargo in 7d`}
-							iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-						<MetricCard
-							title="Active Crew"
-							value={crewHealth.activeCrew}
-							subtitle="Paid tier subscriptions"
-							iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-						/>
-						<MetricCard
-							title="Expiring Soon"
-							value={crewHealth.expiringSoon}
-							subtitle="Crew tier expiring in 7 days"
-							iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-							warning={crewHealth.expiringSoon > 0}
-						/>
-						<MetricCard
-							title="Cancel Pending"
-							value={crewHealth.cancelPending}
-							subtitle="Crew cancel at period end"
-							iconPath="M6 18L18 6M6 6l12 12"
-							warning={crewHealth.cancelPending > 0}
-						/>
+						{isLoadingMetrics || !activationRate || !crewHealth ? (
+							<>
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+							</>
+						) : (
+							<>
+								<MetricCard
+									title="Activation Rate"
+									value={`${activationRate.rate.toFixed(1)}%`}
+									subtitle={`${activationRate.activatedCount} of ${activationRate.totalUsers} users with cargo in 7d`}
+									iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+								<MetricCard
+									title="Active Crew"
+									value={crewHealth.activeCrew}
+									subtitle="Paid tier subscriptions"
+									iconPath="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+								/>
+								<MetricCard
+									title="Expiring Soon"
+									value={crewHealth.expiringSoon}
+									subtitle="Crew tier expiring in 7 days"
+									iconPath="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+									warning={crewHealth.expiringSoon > 0}
+								/>
+								<MetricCard
+									title="Cancel Pending"
+									value={crewHealth.cancelPending}
+									subtitle="Crew cancel at period end"
+									iconPath="M6 18L18 6M6 6l12 12"
+									warning={crewHealth.cancelPending > 0}
+								/>
+							</>
+						)}
 					</div>
 
 					<SubSectionHeading>Median Engagement per Org</SubSectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-						<MetricCard
-							title="Median Cargo / Org"
-							value={orgMedians.medianCargo}
-							subtitle="Typical pantry size (median)"
-							iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-						/>
-						<MetricCard
-							title="Median Meals / Org"
-							value={orgMedians.medianMeals}
-							subtitle="Typical recipe count (median)"
-							iconPath="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-						/>
-						<MetricCard
-							title="Median Scans / Org"
-							value={orgMedians.medianScans}
-							subtitle="Typical AI scan usage (median)"
-							iconPath="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-						/>
+						{isLoadingMetrics || !orgMedians ? (
+							<>
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+							</>
+						) : (
+							<>
+								<MetricCard
+									title="Median Cargo / Org"
+									value={orgMedians.medianCargo}
+									subtitle="Typical pantry size (median)"
+									iconPath="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+								/>
+								<MetricCard
+									title="Median Meals / Org"
+									value={orgMedians.medianMeals}
+									subtitle="Typical recipe count (median)"
+									iconPath="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+								/>
+								<MetricCard
+									title="Median Scans / Org"
+									value={orgMedians.medianScans}
+									subtitle="Typical AI scan usage (median)"
+									iconPath="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+								/>
+							</>
+						)}
 					</div>
 
 					<SubSectionHeading>Platform Split</SubSectionHeading>
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-						<MetricCard
-							title="Web Sessions"
-							value={platformSplit.activeWebSessions}
-							subtitle={`${platformSplit.distinctWebUsers} distinct users · ${webPerMobileUser} sessions per mobile user`}
-							iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-						/>
-						<MetricCard
-							title="Mobile Tokens"
-							value={platformSplit.activeMobileTokens}
-							subtitle={`${platformSplit.distinctMobileUsers} distinct mobile users`}
-							iconPath="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
-						/>
+						{isLoadingMetrics || !platformSplit ? (
+							<>
+								<MetricCardSkeleton />
+								<MetricCardSkeleton />
+							</>
+						) : (
+							<>
+								<MetricCard
+									title="Web Sessions"
+									value={platformSplit.activeWebSessions}
+									subtitle={`${platformSplit.distinctWebUsers} distinct users · ${webPerMobileUser} sessions per mobile user`}
+									iconPath="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+								/>
+								<MetricCard
+									title="Mobile Tokens"
+									value={platformSplit.activeMobileTokens}
+									subtitle={`${platformSplit.distinctMobileUsers} distinct mobile users`}
+									iconPath="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+								/>
+							</>
+						)}
 					</div>
 
 					<SubSectionHeading>AI Burn by Feature</SubSectionHeading>
 					<div className="glass-panel rounded-2xl p-6">
-						{aiBurnByFeature.length === 0 ? (
-							<p className="text-muted text-sm">No credit burn recorded yet.</p>
+						{isLoadingMetrics ? (
+							<div className="space-y-3 animate-pulse">
+								<div className="h-4 w-full bg-platinum/50 rounded" />
+								<div className="h-4 w-5/6 bg-platinum/40 rounded" />
+								<div className="h-4 w-4/6 bg-platinum/40 rounded" />
+							</div>
+						) : aiBurnByFeature.length === 0 ? (
+							<p className="text-muted text-sm">
+								{heavyMetrics?.aiBurnByFeature.status === "error"
+									? "AI burn metrics unavailable."
+									: "No credit burn recorded yet."}
+							</p>
 						) : (
 							<div className="overflow-x-auto">
 								<table className="w-full text-left">

@@ -146,8 +146,8 @@ function sessionAggSubquery(db: DrizzleD1Database<typeof schema>) {
 	return db
 		.select({
 			userId: schema.session.userId,
-			maxLogin: max(schema.session.createdAt).as("max_login"),
-			maxActive: max(schema.session.updatedAt).as("max_active"),
+			maxLogin: max(schema.session.createdAt).as("session_max_login"),
+			maxActive: max(schema.session.updatedAt).as("session_max_active"),
 		})
 		.from(schema.session)
 		.groupBy(schema.session.userId)
@@ -158,7 +158,7 @@ function mobileAggSubquery(db: DrizzleD1Database<typeof schema>) {
 	return db
 		.select({
 			userId: schema.mobileRefreshToken.userId,
-			maxLogin: max(schema.mobileRefreshToken.createdAt).as("max_login"),
+			maxLogin: max(schema.mobileRefreshToken.createdAt).as("mobile_max_login"),
 		})
 		.from(schema.mobileRefreshToken)
 		.groupBy(schema.mobileRefreshToken.userId)
@@ -169,7 +169,7 @@ function apiKeyAggSubquery(db: DrizzleD1Database<typeof schema>) {
 	return db
 		.select({
 			userId: schema.apiKey.userId,
-			maxActive: max(schema.apiKey.lastUsedAt).as("max_active"),
+			maxActive: max(schema.apiKey.lastUsedAt).as("api_key_max_active"),
 		})
 		.from(schema.apiKey)
 		.groupBy(schema.apiKey.userId)

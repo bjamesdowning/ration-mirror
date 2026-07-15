@@ -35,6 +35,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			servings: url.searchParams.get("servings") ?? undefined,
 			type: url.searchParams.get("type") ?? undefined,
 			domain: url.searchParams.get("domain") ?? undefined,
+			q: url.searchParams.get("q") ?? undefined,
 		});
 		if (!parsed.success) {
 			throw handleApiError(parsed.error);
@@ -52,6 +53,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			servings: parsed.data.servings,
 			...(parsed.data.type ? { type: parsed.data.type } : {}),
 			...(parsed.data.domain ? { domain: parsed.data.domain } : {}),
+			...(parsed.data.q ? { searchQuery: parsed.data.q } : {}),
 		};
 
 		const matches = await matchMeals(

@@ -3,6 +3,12 @@ import XCTest
 
 final class CargoViewModelSearchTests: XCTestCase {
     @MainActor
+    override func tearDown() {
+        CargoViewModel.searchDebounceNanosecondsForTesting = nil
+        super.tearDown()
+    }
+
+    @MainActor
     func testEditingSubmittedSearchRestoresLocalInventoryProjection() async throws {
         let organizationId = "org-search-\(UUID().uuidString)"
         let snapshots = SnapshotStore()
@@ -31,6 +37,79 @@ final class CargoViewModelSearchTests: XCTestCase {
         }
         XCTAssertEqual(items.map(\.name), ["salt", "pepper"])
         XCTAssertEqual(model.total, 2)
+    }
+
+    @MainActor
+    func testRemoteSearchActiveRequiresTwoCharacters() {
+        let model = CargoViewModel()
+        model.filters.search = "s"
+        XCTAssertFalse(model.isRemoteSearchActive)
+        model.filters.search = "sa"
+        XCTAssertTrue(model.isRemoteSearchActive)
+    }
+
+    @MainActor
+    func testSingleCharacterSearchUsesClientFilterWithoutSearchingFlag() async throws {
+        let organizationId = "org-search-\(UUID().uuidString)"
+        let snapshots = SnapshotStore()
+        defer { Task { await snapshots.clear(domain: SnapshotDomain.cargo, organizationId: organizationId) } }
+        let page = try decodePage()
+        await snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
+
+        let auth = AuthManager()
+        let api = RationAPI(client: APIClient(auth: auth))
+        let model = CargoViewModel()
+        await model.reload(
+            api: api,
+            snapshots: snapshots,
+            online: false,
+            organizationId: organizationId
+        )
+
+        model.filters.search = "s"
+        model.handleSearchChange(
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: organizationId
+        )
+
+        XCTAssertFalse(model.isSearching)
+        guard case let .inventory(items) = model.listContent else {
+            return XCTFail("Expected client-filtered inventory")
+        }
+        XCTAssertEqual(items.map(\.name), ["salt"])
+    }
+
+    @MainActor
+    func testDebouncedSearchSetsSearchingFlagDuringRemoteLookup() async throws {
+        CargoViewModel.searchDebounceNanosecondsForTesting = 1_000_000
+        let organizationId = "org-search-\(UUID().uuidString)"
+        let snapshots = SnapshotStore()
+        defer { Task { await snapshots.clear(domain: SnapshotDomain.cargo, organizationId: organizationId) } }
+        let page = try decodePage()
+        await snapshots.save(page, domain: SnapshotDomain.cargo, organizationId: organizationId)
+
+        let auth = AuthManager()
+        let api = RationAPI(client: APIClient(auth: auth))
+        let model = CargoViewModel()
+        await model.reload(
+            api: api,
+            snapshots: snapshots,
+            online: false,
+            organizationId: organizationId
+        )
+
+        model.filters.search = "salt"
+        model.handleSearchChange(
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: organizationId
+        )
+
+        try await Task.sleep(nanoseconds: 5_000_000)
+        XCTAssertFalse(model.isSearching)
     }
 
     private func decodePage() throws -> CargoPage {

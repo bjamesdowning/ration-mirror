@@ -43,7 +43,18 @@ final class CargoViewModel {
     private var rawItems: [CargoItem] = []
     private var searchTask: Task<Void, Never>?
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000
+    #if DEBUG
+    static var searchDebounceNanosecondsForTesting: UInt64?
+    #endif
     private static let remoteSearchMinLength = 2
+
+    private static var effectiveSearchDebounceNanoseconds: UInt64 {
+        #if DEBUG
+        searchDebounceNanosecondsForTesting ?? searchDebounceNanoseconds
+        #else
+        searchDebounceNanoseconds
+        #endif
+    }
 
     var displayedInventory: [CargoItem] {
         PageFilterEngine.filterCargo(rawItems, domain: filters.domain, tags: filters.selectedTags, search: filters.search)
@@ -176,7 +187,7 @@ final class CargoViewModel {
             return
         }
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+            try? await Task.sleep(nanoseconds: Self.effectiveSearchDebounceNanoseconds)
             guard !Task.isCancelled else { return }
             await search(api: api)
         }

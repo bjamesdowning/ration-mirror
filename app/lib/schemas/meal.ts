@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ITEM_DOMAINS } from "../domain";
 import { normalizeUnitAlias } from "../units";
 import { parseDirections, serializeDirections } from "./directions";
+import { SearchQuerySchema } from "./search";
 import { TagSlugsInputSchema } from "./tag";
 import { UnitSchema } from "./units";
 
@@ -209,6 +210,7 @@ export const MealMatchQuerySchema = z.object({
 		.string()
 		.optional()
 		.transform((v) => (v === "" || !v ? undefined : v)),
+	q: SearchQuerySchema.optional(),
 });
 
 export type MealMatchQueryInput = z.infer<typeof MealMatchQuerySchema>;

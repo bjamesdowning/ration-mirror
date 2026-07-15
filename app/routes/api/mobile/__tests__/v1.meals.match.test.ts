@@ -114,7 +114,24 @@ describe("GET /api/mobile/v1/meals/match preLimit", () => {
 		});
 	});
 
-	it("rejects limit above the schema maximum", async () => {
+	it("forwards q as searchQuery to matchMeals", async () => {
+		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
+		await loader({
+			request: getRequest({ q: "pasta" }),
+			context: ctx,
+			params: {},
+		} as never);
+
+		expect(matchMeals).toHaveBeenCalledTimes(1);
+		const [, , query] = matchMeals.mock.calls[0] as [
+			unknown,
+			unknown,
+			{ searchQuery?: string },
+		];
+		expect(query.searchQuery).toBe("pasta");
+	});
+
+	it("rejects q shorter than two characters", async () => {
 		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
 		await expect(
 			loader({

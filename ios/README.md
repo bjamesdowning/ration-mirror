@@ -320,6 +320,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Search polish (1.1.41, web v1.5.82):** Galley match mode passes `q` to `/meals/match` (server-side name filter) instead of client-only search. Cargo/Galley `ListCountHeader` shows a mini spinner while debounced remote search runs. Supply list shows a “No matches” empty state when filters/search hide all items but the list still has entries.
 
+**Group & dock UX (1.1.42, web v1.6.0):** Web ownership transfer shows API errors (banner + toast) including recipient capacity limits. iOS meal edit removes redundant header Edit button; credit transfer uses amount text field with source balance cap. `TabDockActionModifier` pops the registered tab tag so switching tabs after Cargo detail no longer removes Galley’s `+` FAB.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
@@ -327,6 +329,7 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
 - Hub edit mode: scan FAB hidden; Supply empty list: `+` FAB shows Add item and Refresh.
 - Cargo item detail: `⋯` includes Add to Supply; pop back restores list FAB.
+- Cargo tab: open item detail, switch to Galley tab — Galley `+` FAB must remain visible.
 - Galley meal detail: same `⋯` dock behavior; scroll last card clears dock; dock collapse on scroll still works.
 - Galley meal → ingredient link → cargo detail (tab 2): `⋯` replaces Galley `+` on active tab.
 - Manifest entry → meal detail: `⋯` replaces Manifest tab FAB.

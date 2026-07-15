@@ -34,7 +34,10 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
-import { getGroupTierLimits } from "~/lib/capacity.server";
+import {
+	checkOwnedGroupCapacity,
+	getGroupTierLimits,
+} from "~/lib/capacity.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { toExpiryDate } from "~/lib/date-utils";
 import { getUserDisplayName } from "~/lib/display-name";
@@ -310,6 +313,27 @@ export async function loader(args: Route.LoaderArgs) {
 			}
 		}
 
+		const transferRecipientEligibility: Record<
+			string,
+			{ allowed: boolean; limit: number; current: number }
+		> = {};
+		if (isOwner) {
+			const nonOwnerMembers = members.filter((m) => m.role !== "owner");
+			const capacities = await Promise.all(
+				nonOwnerMembers.map(async (member) => {
+					const capacity = await checkOwnedGroupCapacity(env, member.userId);
+					return { memberId: member.id, capacity };
+				}),
+			);
+			for (const { memberId, capacity } of capacities) {
+				transferRecipientEligibility[memberId] = {
+					allowed: capacity.allowed,
+					limit: capacity.limit,
+					current: capacity.current,
+				};
+			}
+		}
+
 		return {
 			settings,
 			members,
@@ -333,6 +357,7 @@ export async function loader(args: Route.LoaderArgs) {
 			agentKitchens,
 			origin: url.origin,
 			ownedGroupsWithNoOtherMembers,
+			transferRecipientEligibility,
 			organizationTags,
 			unusedTags,
 			supplyWindow: supplyContext.window,
@@ -722,6 +747,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							members={members}
 							ownedGroupsWithNoOtherMembers={
 								loaderData.ownedGroupsWithNoOtherMembers ?? []
+							}
+							transferRecipientEligibility={
+								loaderData.transferRecipientEligibility ?? {}
 							}
 						/>
 					)}
@@ -1980,6 +2008,7 @@ function DangerSection({
 	organizationId,
 	members,
 	ownedGroupsWithNoOtherMembers,
+	transferRecipientEligibility,
 }: {
 	isOwner: boolean;
 	organizationId: string;
@@ -1989,6 +2018,10 @@ function DangerSection({
 		user: { id: string; name: string | null; email: string };
 	}>;
 	ownedGroupsWithNoOtherMembers: string[];
+	transferRecipientEligibility: Record<
+		string,
+		{ allowed: boolean; limit: number; current: number }
+	>;
 }) {
 	const { confirm } = useConfirm();
 	const purgeFetcher = useFetcher();
@@ -2000,12 +2033,25 @@ function DangerSection({
 	}>();
 	const revalidator = useRevalidator();
 	const successToast = useToast({ duration: 3000 });
+	const errorToast = useToast({ duration: 5000 });
 	const isPurging = purgeFetcher.state !== "idle";
 	const isDeletingGroup = deleteGroupFetcher.state !== "idle";
 	const isTransferring = transferOwnershipFetcher.state !== "idle";
 
 	const nonOwnerMembers = members.filter((m) => m.role !== "owner");
 	const canTransferOwnership = isOwner && nonOwnerMembers.length > 0;
+	const eligibleTransferMembers = nonOwnerMembers.filter(
+		(m) => transferRecipientEligibility[m.id]?.allowed !== false,
+	);
+
+	const transferError = transferOwnershipFetcher.data?.error;
+	const transferErrorMessage =
+		transferOwnershipFetcher.data?.message ??
+		(transferError && transferError !== "recipient_capacity_exceeded"
+			? transferError
+			: undefined);
+	const isRecipientCapacityExceeded =
+		transferError === "recipient_capacity_exceeded";
 
 	// Revalidate and show toast on transfer success
 	useEffect(() => {
@@ -2021,6 +2067,19 @@ function DangerSection({
 		transferOwnershipFetcher.data,
 		revalidator,
 		successToast.show,
+	]);
+
+	useEffect(() => {
+		if (
+			transferOwnershipFetcher.state === "idle" &&
+			transferOwnershipFetcher.data?.error
+		) {
+			errorToast.show();
+		}
+	}, [
+		transferOwnershipFetcher.state,
+		transferOwnershipFetcher.data?.error,
+		errorToast.show,
 	]);
 
 	return (
@@ -2088,6 +2147,26 @@ function DangerSection({
 							your account. You will become a regular member. The new owner's
 							subscription tier will determine group limits (Crew vs free).
 						</p>
+						{transferError && transferOwnershipFetcher.state === "idle" && (
+							<div className="mb-4 p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm space-y-2">
+								{isRecipientCapacityExceeded ? (
+									<>
+										<p>
+											{transferOwnershipFetcher.data?.message ??
+												"This member cannot take ownership of another group."}
+										</p>
+										<Link
+											to="/hub/pricing"
+											className="inline-block text-hyper-green font-medium hover:underline"
+										>
+											View Crew plans
+										</Link>
+									</>
+								) : (
+									<p>{transferErrorMessage ?? transferError}</p>
+								)}
+							</div>
+						)}
 						<select
 							id="transfer-owner-select"
 							className="mb-3 w-full max-w-sm px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50"
@@ -2099,6 +2178,9 @@ function DangerSection({
 									(m) => m.id === newOwnerMemberId,
 								);
 								if (!targetMember) return;
+								const eligibility =
+									transferRecipientEligibility[targetMember.id];
+								if (eligibility && !eligibility.allowed) return;
 								const displayName = getUserDisplayName(targetMember.user);
 								if (
 									!(await confirm({
@@ -2127,24 +2209,55 @@ function DangerSection({
 							disabled={isTransferring}
 						>
 							<option value="">Select member to transfer to…</option>
-							{nonOwnerMembers.map((m) => (
-								<option key={m.id} value={m.id}>
-									{getUserDisplayName(m.user)} ({m.role})
-								</option>
-							))}
+							{nonOwnerMembers.map((m) => {
+								const eligibility = transferRecipientEligibility[m.id];
+								const ineligible =
+									eligibility !== undefined && !eligibility.allowed;
+								return (
+									<option key={m.id} value={m.id} disabled={ineligible}>
+										{getUserDisplayName(m.user)} ({m.role})
+										{ineligible
+											? ` — owns max groups (${eligibility.limit})`
+											: ""}
+									</option>
+								);
+							})}
 						</select>
+						{eligibleTransferMembers.length === 0 &&
+							nonOwnerMembers.length > 0 && (
+								<p className="text-sm text-muted mt-2 max-w-md">
+									No members can take ownership — each already owns the maximum
+									number of groups for their tier. They may need Crew to own
+									more groups.
+								</p>
+							)}
 						{isTransferring && (
 							<span className="text-hyper-green animate-pulse text-sm block mt-1">
 								Transferring...
 							</span>
 						)}
-						{transferOwnershipFetcher.data?.error && (
-							<p className="text-sm text-danger mt-1">
-								{transferOwnershipFetcher.data.message ??
-									transferOwnershipFetcher.data.error}
-							</p>
-						)}
 					</div>
+				)}
+
+				{successToast.isOpen && (
+					<Toast
+						variant="success"
+						title="Ownership transferred"
+						description="Group ownership has been updated."
+						onDismiss={successToast.hide}
+					/>
+				)}
+				{errorToast.isOpen && transferError && (
+					<Toast
+						variant="error"
+						title="Transfer failed"
+						description={
+							transferOwnershipFetcher.data?.message ??
+							transferErrorMessage ??
+							transferError
+						}
+						onDismiss={errorToast.hide}
+					/>
 				)}
 
 				{/* Delete Group — owner only */}
@@ -2377,7 +2490,7 @@ function TransferCreditsSection({
 						max={maxAmount}
 						disabled={!sourceId}
 						required
-						className="w-full px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50 disabled:opacity-60"
+						className="w-full px-4 py-2 bg-platinum/50 border border-carbon/10 rounded-lg text-carbon text-sm focus:outline-none focus:ring-2 focus:ring-hyper-green/50 disabled:opacity-60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 						placeholder={sourceId ? `Max ${maxAmount}` : "Select source first"}
 					/>
 					{sourceId && (

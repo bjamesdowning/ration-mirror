@@ -79,4 +79,13 @@ final class TabDockContextTests: XCTestCase {
         XCTAssertEqual(tabDock.contentEpoch, 1)
         XCTAssertEqual(tabDock.revision, revisionAfterPush, "Content refresh must not animate dock layout")
     }
+
+    func testPopWrongTagDoesNotAffectOtherTagStack() {
+        let tabDock = TabDockContext()
+        tabDock.pushAction(for: 2) { Text("Galley") }
+
+        tabDock.popAction(for: 1)
+
+        XCTAssertTrue(tabDock.hasAction(for: 2), "Popping an empty/wrong tag must not drain another tab's stack")
+    }
 }

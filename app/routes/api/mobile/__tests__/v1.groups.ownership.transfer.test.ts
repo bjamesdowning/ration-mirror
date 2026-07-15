@@ -113,7 +113,7 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		expect(invalidateTierCache).toHaveBeenCalledWith(env, "org_1");
 	});
 
-	it("rejects non-owners with 403", async () => {
+	it("returns 403 when actor is not owner", async () => {
 		findFirstMember.mockReset();
 		findFirstMember
 			.mockResolvedValueOnce({
@@ -129,13 +129,15 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		const { action } = await import(
 			"~/routes/api/mobile/v1.groups.ownership.transfer"
 		);
-		await expect(
-			action({
-				request: postRequest(),
-				context: ctx,
-				params: {},
-			} as never),
-		).rejects.toMatchObject({ init: { status: 403 } });
+		const result = await action({
+			request: postRequest(),
+			context: ctx,
+			params: {},
+		} as never);
+		expect(result).toMatchObject({
+			init: { status: 403 },
+			data: { error: "Only the group owner can transfer ownership" },
+		});
 		expect(dbBatch).not.toHaveBeenCalled();
 	});
 
@@ -154,7 +156,7 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		expect(dbBatch).not.toHaveBeenCalled();
 	});
 
-	it("rejects when recipient is at owned-group capacity with 403", async () => {
+	it("returns 403 when recipient is at owned-group capacity", async () => {
 		assertCanOwnAnotherGroup.mockResolvedValue({
 			allowed: false,
 			current: 5,
@@ -165,13 +167,12 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 		const { action } = await import(
 			"~/routes/api/mobile/v1.groups.ownership.transfer"
 		);
-		await expect(
-			action({
-				request: postRequest(),
-				context: ctx,
-				params: {},
-			} as never),
-		).rejects.toMatchObject({
+		const result = await action({
+			request: postRequest(),
+			context: ctx,
+			params: {},
+		} as never);
+		expect(result).toMatchObject({
 			init: { status: 403 },
 			data: {
 				error: "recipient_capacity_exceeded",

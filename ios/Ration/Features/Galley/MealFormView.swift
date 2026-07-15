@@ -26,6 +26,7 @@ struct MealFormView: View {
     @State private var cargoItems: [CargoItem] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var editMode: EditMode = .active
 
     init(mode: Mode, onSaved: @escaping () async -> Void = {}) {
         self.mode = mode
@@ -100,6 +101,7 @@ struct MealFormView: View {
                     DirectionsEditorView(steps: $directionSteps)
                 }
             }
+            .environment(\.editMode, $editMode)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -107,9 +109,6 @@ struct MealFormView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    EditButton()
                 }
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }

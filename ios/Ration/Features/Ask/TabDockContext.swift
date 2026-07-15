@@ -69,6 +69,7 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
     @ViewBuilder let action: () -> Action
     @State private var actionHandle = TabDockActionHandle()
     @State private var isRegistered = false
+    @State private var registeredTag: Int?
 
     func body(content: Content) -> some View {
         actionHandle.update { AnyView(action()) }
@@ -76,22 +77,24 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
         return content
             .onAppear { sync() }
             .onChange(of: isActive) { _, _ in sync() }
-            .onDisappear {
-                if isRegistered {
-                    tabDock.popAction(for: tag)
-                    isRegistered = false
-                }
-            }
+            .onDisappear { unregisterFromDock() }
     }
 
     private func sync() {
         if isActive && !isRegistered {
             tabDock.pushAction(for: tag) { actionHandle.makeView() }
             isRegistered = true
+            registeredTag = tag
         } else if !isActive && isRegistered {
-            tabDock.popAction(for: tag)
-            isRegistered = false
+            unregisterFromDock()
         }
+    }
+
+    private func unregisterFromDock() {
+        guard isRegistered, let registeredTag else { return }
+        tabDock.popAction(for: registeredTag)
+        isRegistered = false
+        self.registeredTag = nil
     }
 }
 

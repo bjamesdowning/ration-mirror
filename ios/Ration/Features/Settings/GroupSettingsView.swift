@@ -493,6 +493,11 @@ struct TransferCreditsSection: View {
         organizations.filter { $0.id != sourceId }
     }
 
+    private var maxAmount: Int {
+        let sourceCredits = sourceOrgs.first(where: { $0.id == sourceId })?.credits ?? 0
+        return min(max(sourceCredits, 1), 10_000)
+    }
+
     var body: some View {
         Section("Transfer credits") {
             if let errorMessage {
@@ -507,13 +512,22 @@ struct TransferCreditsSection: View {
                     Text("\(org.name) (\(org.credits))").tag(org.id)
                 }
             }
+            .onChange(of: sourceId) { _, _ in
+                amount = min(max(amount, 1), maxAmount)
+            }
             Picker("To", selection: $destinationId) {
                 Text("Select destination").tag("")
                 ForEach(destinationOrgs) { org in
                     Text(org.name).tag(org.id)
                 }
             }
-            Stepper("Amount: \(amount)", value: $amount, in: 1...10_000)
+            TextField("Amount", value: $amount, format: .number)
+                .keyboardType(.numberPad)
+            if !sourceId.isEmpty {
+                Text("Max: \(maxAmount) CR")
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+            }
             Button("Transfer credits") {
                 Task { await transfer() }
             }
@@ -524,6 +538,7 @@ struct TransferCreditsSection: View {
             if destinationId.isEmpty {
                 destinationId = destinationOrgs.first?.id ?? ""
             }
+            amount = min(max(amount, 1), maxAmount)
         }
     }
 
@@ -532,11 +547,13 @@ struct TransferCreditsSection: View {
         errorMessage = nil
         successMessage = nil
         defer { isTransferring = false }
+        let clampedAmount = min(max(amount, 1), maxAmount)
+        amount = clampedAmount
         do {
             _ = try await api.transferCredits(
                 sourceOrganizationId: sourceId,
                 destinationOrganizationId: destinationId,
-                amount: amount
+                amount: clampedAmount
             )
             successMessage = "Credits transferred"
             Haptics.success()

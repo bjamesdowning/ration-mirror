@@ -59,25 +59,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 		]);
 
 		if (!actorMembership || actorMembership.role !== "owner") {
-			throw data(
+			return data(
 				{ error: "Only the group owner can transfer ownership" },
 				{ status: 403 },
 			);
 		}
 
 		if (!targetMembership) {
-			throw data({ error: "Member not found" }, { status: 404 });
+			return data({ error: "Member not found" }, { status: 404 });
 		}
 
 		if (targetMembership.role === "owner") {
-			throw data(
+			return data(
 				{ error: "The selected member is already the owner" },
 				{ status: 400 },
 			);
 		}
 
 		if (targetMembership.userId === actorId) {
-			throw data(
+			return data(
 				{ error: "You cannot transfer ownership to yourself" },
 				{ status: 400 },
 			);
@@ -88,7 +88,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			targetMembership.userId,
 		);
 		if (!recipientCapacity.allowed) {
-			throw data(buildRecipientCapacityExceededPayload(recipientCapacity), {
+			return data(buildRecipientCapacityExceededPayload(recipientCapacity), {
 				status: 403,
 			});
 		}

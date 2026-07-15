@@ -18,10 +18,16 @@ struct OnboardingBriefingView: View {
     @State private var followsLatest = true
     @State private var didBootstrap = false
     @State private var showSeedSuccessToast = false
-    @State private var seedCardAppeared = false
+    @State private var seedPromptRevealed = false
+    @State private var seedRevealTask: Task<Void, Never>?
     @FocusState private var isComposerFocused: Bool
 
     private var model: AskViewModel { ask.model }
+
+    /// Seed CTA only after intro reply has finished and the UI has settled.
+    private var canRevealSeedPrompt: Bool {
+        phase == .seedReady && !model.isTurnActive && model.liveBriefingActive
+    }
 
     private var phase: OnboardingBriefingPhase {
         if env.onboarding.isStaticReplay { return .staticReplay }
@@ -38,14 +44,15 @@ struct OnboardingBriefingView: View {
     }
 
     private var canGetStarted: Bool {
-        !model.isTurnActive && (model.introComplete || env.onboarding.isStaticReplay)
+        // Allow skip/escape even while seeding — previously locked users mid-turn.
+        (model.introComplete || env.onboarding.isStaticReplay) && !env.onboarding.isSaving
     }
 
     private var seedCardState: StarterSeedCardState {
         if model.seedComplete { return .completed }
         if !model.liveBriefingActive { return .disabled }
         if phase == .seeding { return .loading }
-        if phase == .seedReady { return .idle }
+        if canRevealSeedPrompt, seedPromptRevealed { return .idle }
         return .disabled
     }
 
@@ -72,6 +79,7 @@ struct OnboardingBriefingView: View {
         }
         .animation(MotionPolicy.dockSpring, value: phase)
         .animation(MotionPolicy.shortFade, value: showSeedSuccessToast)
+        .animation(MotionPolicy.dockSpring, value: seedPromptRevealed)
         .task(id: bootstrapTaskKey) {
             await runBootstrapIfNeeded()
         }
@@ -82,12 +90,22 @@ struct OnboardingBriefingView: View {
                 showSeedSuccessToast = true
             }
         }
-        .onChange(of: phase) { _, next in
-            if next == .seedReady {
-                withAnimation(MotionPolicy.dockSpring) {
-                    seedCardAppeared = true
-                }
+        .onChange(of: canRevealSeedPrompt) { _, ready in
+            if ready {
+                scheduleSeedPromptReveal()
             }
+        }
+        .onChange(of: phase) { _, next in
+            switch next {
+            case .connecting, .streamingIntro, .staticReplay:
+                seedRevealTask?.cancel()
+                seedPromptRevealed = false
+            default:
+                break
+            }
+        }
+        .onDisappear {
+            seedRevealTask?.cancel()
         }
     }
 
@@ -171,6 +189,18 @@ struct OnboardingBriefingView: View {
                         )
                     }
 
+                    if shouldShowSeedPromptInTranscript {
+                        StarterSeedCard(
+                            state: seedCardState,
+                            subtitle: OnboardingBriefingCopy.seedCardSubtitle
+                        ) {
+                            Task { await runSeed() }
+                        }
+                        .id("briefing-seed-prompt")
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .accessibilitySortPriority(10)
+                    }
+
                     briefingStateCard
 
                     Color.clear
@@ -179,12 +209,16 @@ struct OnboardingBriefingView: View {
                 }
                 .padding(16)
                 .animation(MotionPolicy.dockSpring, value: model.messages.count)
+                .animation(MotionPolicy.dockSpring, value: seedPromptRevealed)
             }
             .onChange(of: model.streamingContentLength) { _, _ in
                 scrollToBottom(proxy: proxy)
             }
             .onChange(of: model.messages.count) { _, _ in
                 scrollToBottom(proxy: proxy)
+            }
+            .onChange(of: seedPromptRevealed) { _, revealed in
+                if revealed { scrollToBottom(proxy: proxy) }
             }
         }
     }
@@ -224,19 +258,6 @@ struct OnboardingBriefingView: View {
 
     private var bottomInset: some View {
         VStack(spacing: 12) {
-            if shouldShowSeedCard {
-                StarterSeedCard(
-                    state: seedCardState,
-                    subtitle: seedCardSubtitle
-                ) {
-                    Task { await runSeed() }
-                }
-                .padding(.horizontal, 16)
-                .offset(y: seedCardAppeared || reduceMotion ? 0 : 12)
-                .opacity(seedCardAppeared || reduceMotion ? 1 : 0)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             if phase == .seedComplete || phase == .staticReplay {
                 navigationChips
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -254,17 +275,16 @@ struct OnboardingBriefingView: View {
         .padding(.vertical, 8)
     }
 
-    private var shouldShowSeedCard: Bool {
+    /// Inline after the intro reply — never a bottom-sheet that covers the transcript.
+    private var shouldShowSeedPromptInTranscript: Bool {
         switch phase {
-        case .seedReady, .seeding, .seedComplete:
-            return true
+        case .seedReady:
+            return seedPromptRevealed && model.liveBriefingActive
+        case .seeding, .seedComplete:
+            return model.liveBriefingActive
         case .staticReplay, .connecting, .streamingIntro:
             return false
         }
-    }
-
-    private var seedCardSubtitle: String {
-        OnboardingBriefingCopy.seedCardSubtitle
     }
 
     private var navigationChips: some View {
@@ -290,15 +310,6 @@ struct OnboardingBriefingView: View {
             }
         }
         .padding(.horizontal, 12)
-        .onAppear {
-            if reduceMotion {
-                seedCardAppeared = true
-            } else if phase == .staticReplay {
-                withAnimation(MotionPolicy.dockSpring) {
-                    seedCardAppeared = true
-                }
-            }
-        }
     }
 
     private var composer: some View {
@@ -314,12 +325,30 @@ struct OnboardingBriefingView: View {
             onDismissKeyboard: { isComposerFocused = false },
             onOpenSheet: {},
             onSend: { _ in false },
-            onStop: {},
+            onStop: {
+                await model.stop()
+            },
             onExhaustedTap: {},
             placeholderOverride: OnboardingBriefingCopy.composerLockedPlaceholder
         )
-        .allowsHitTesting(false)
-        .opacity(model.introComplete || env.onboarding.isStaticReplay ? 1 : 0.6)
+        // Hit-test only while a turn is active so Stop works; otherwise lock the exhausted composer.
+        .allowsHitTesting(model.isTurnActive)
+        .opacity(model.introComplete || env.onboarding.isStaticReplay || model.isTurnActive ? 1 : 0.6)
+    }
+
+    private func scheduleSeedPromptReveal() {
+        guard !seedPromptRevealed else { return }
+        seedRevealTask?.cancel()
+        seedRevealTask = Task { @MainActor in
+            // Let the user finish reading the intro before offering the seed action.
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(900))
+            }
+            guard !Task.isCancelled, canRevealSeedPrompt else { return }
+            withAnimation(MotionPolicy.dockSpring) {
+                seedPromptRevealed = true
+            }
+        }
     }
 
     private func isStreamingBubble(_ message: CopilotMessage) -> Bool {

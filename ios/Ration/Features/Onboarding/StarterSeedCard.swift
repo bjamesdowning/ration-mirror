@@ -7,7 +7,8 @@ enum StarterSeedCardState: Equatable {
     case disabled
 }
 
-/// Prominence CTA for the starter-kitchen seed turn during iOS onboarding.
+/// Chat-native suggested prompt bubble for the starter-kitchen seed turn.
+/// Sits in the transcript after the intro reply — not a bottom-sheet modal.
 struct StarterSeedCard: View {
     let state: StarterSeedCardState
     let subtitle: String
@@ -21,50 +22,43 @@ struct StarterSeedCard: View {
             Haptics.light()
             action()
         }) {
-            HStack(alignment: .center, spacing: 14) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Theme.hyperGreen)
-                    .frame(width: 4)
-                    .padding(.vertical, 4)
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(OnboardingBriefingCopy.seedSuggestedLabel)
+                    .font(Typography.caption())
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
 
-                Image(systemName: iconName)
-                    .font(Typography.heroIcon(22))
-                    .foregroundStyle(Theme.hyperGreen)
-                    .symbolEffect(
-                        .pulse,
-                        options: .repeating,
-                        isActive: !reduceMotion && state == .idle
-                    )
-                    .accessibilityHidden(true)
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(OnboardingBriefingCopy.seedCardTitle)
+                            .font(Typography.headline())
+                            .foregroundStyle(Theme.carbon)
+                            .multilineTextAlignment(.leading)
+                        Text(subtitle)
+                            .font(Typography.caption())
+                            .foregroundStyle(Theme.muted)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(OnboardingBriefingCopy.seedCardTitle)
-                        .font(Typography.headline())
-                        .foregroundStyle(Theme.carbon)
-                    Text(subtitle)
-                        .font(Typography.caption())
-                        .foregroundStyle(Theme.muted)
-                        .multilineTextAlignment(.leading)
+                    trailingAccessory
                 }
-
-                Spacer(minLength: 8)
-
-                trailingAccessory
+                .padding(12)
+                .background(Theme.hyperGreen.opacity(state == .idle ? 0.22 : 0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Theme.hyperGreen.opacity(0.55), lineWidth: 1)
+                )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .background(Theme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Theme.platinum, lineWidth: 1)
-            )
+            .frame(maxWidth: 320, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .buttonStyle(StarterSeedCardButtonStyle())
         .disabled(state != .idle)
         .opacity(state == .completed || state == .disabled ? 0.72 : 1)
         .accessibilityLabel("Stock my kitchen with five pantry staples")
-        .accessibilityHint("Adds butter, eggs, milk, flour, and olive oil to your cargo")
+        .accessibilityHint("Sends a suggested prompt to add butter, eggs, milk, flour, and olive oil to your cargo")
         .accessibilityValue(accessibilityValue)
     }
 
@@ -74,13 +68,6 @@ struct StarterSeedCard: View {
         case .loading: "Stocking pantry"
         case .completed: "Completed"
         case .disabled: "Unavailable"
-        }
-    }
-
-    private var iconName: String {
-        switch state {
-        case .completed: "checkmark.circle.fill"
-        default: "basket.fill"
         }
     }
 
@@ -94,9 +81,14 @@ struct StarterSeedCard: View {
                 .foregroundStyle(Theme.hyperGreen)
                 .accessibilityHidden(true)
         case .idle, .disabled:
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.muted)
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Theme.hyperGreen)
+                .symbolEffect(
+                    .pulse,
+                    options: .repeating,
+                    isActive: !reduceMotion && state == .idle
+                )
                 .accessibilityHidden(true)
         }
     }

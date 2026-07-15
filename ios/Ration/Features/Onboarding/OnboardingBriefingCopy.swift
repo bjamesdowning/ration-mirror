@@ -25,8 +25,10 @@ Use today's date from context to calculate expiry dates. Add each item with add_
 """
 
     static let seedCardTitle = "Stock my kitchen"
-    static let seedCardSubtitle = "Add 5 staples with expiry & tags — see how Cargo works"
+    static let seedCardSubtitle =
+        "Add butter, eggs, milk, flour & olive oil — with a few expiries and tags so you can see Cargo in action"
     static let seedCardDisabledSubtitle = "Requires Copilot briefing"
+    static let seedSuggestedLabel = "Suggested"
     static let seedSuccessToast = "5 items added to Cargo"
     static let seeInCargoTitle = "See in Cargo"
     static let getStartedTitle = "Get Started"

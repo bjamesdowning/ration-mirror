@@ -44,6 +44,7 @@ final class GalleyViewModel {
     private(set) var isLoading = false
     private(set) var isRefreshing = false
     private(set) var isClearingSelections = false
+    private(set) var isSearching = false
     var errorMessage: String?
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
@@ -64,6 +65,13 @@ final class GalleyViewModel {
     var isSearchActive: Bool {
         !filters.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    var isRemoteSearchActive: Bool {
+        filters.search.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+    }
+
+    private var searchTask: Task<Void, Never>?
+    private static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
     var listHeaderCount: Int {
         isMatchMode ? matchTotal : mealTotal
@@ -124,7 +132,12 @@ final class GalleyViewModel {
 
         if isMatchMode {
             do {
-                async let matchTask = api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
+                async let matchTask = api.matchMeals(
+                    limit: Self.matchFetchLimit,
+                    minMatch: 0,
+                    tag: serverTagFilter,
+                    domain: filters.domain
+                )
                 async let mealsTask = api.meals(tag: serverTagFilter, domain: filters.domain)
                 let response = try await matchTask
                 let mealsResponse = try await mealsTask
@@ -160,9 +173,16 @@ final class GalleyViewModel {
             }
         } else {
             do {
-                let mealsResponse = try await api.meals(tag: serverTagFilter, domain: filters.domain)
+                let searchQuery = isRemoteSearchActive ? filters.search.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+                let mealsResponse = try await api.meals(
+                    tag: serverTagFilter,
+                    domain: filters.domain,
+                    q: searchQuery
+                )
                 meals = mealsResponse.meals
-                mealTotal = mealsResponse.total ?? mealsResponse.meals.count
+                mealTotal = searchQuery != nil
+                    ? mealsResponse.meals.count
+                    : (mealsResponse.total ?? mealsResponse.meals.count)
                 activeMealIds = Set(mealsResponse.activeMealIds ?? [])
                 await snapshots.save(mealsResponse, domain: SnapshotDomain.galley, organizationId: organizationId)
                 if let refreshOutcomes {
@@ -196,6 +216,37 @@ final class GalleyViewModel {
         refreshDisplayedContent()
     }
 
+    func handleSearchChange(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) {
+        searchTask?.cancel()
+        let query = filters.search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            searchTask = Task {
+                await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+            }
+            return
+        }
+        if query.count < 2 {
+            refreshDisplayedContent()
+            return
+        }
+        guard online else {
+            refreshDisplayedContent()
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            isSearching = true
+            defer { isSearching = false }
+            await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        }
+    }
+
     func refreshAvailabilityMatches(api: RationAPI, online: Bool) async {
         guard online else {
             matchByMealId = [:]
@@ -203,7 +254,12 @@ final class GalleyViewModel {
             return
         }
         do {
-            let response = try await api.matchMeals(limit: Self.matchFetchLimit, minMatch: 0)
+            let response = try await api.matchMeals(
+                limit: Self.matchFetchLimit,
+                minMatch: 0,
+                tag: serverTagFilter,
+                domain: filters.domain
+            )
             if isMatchMode {
                 matches = response.matches
                 matchTotal = response.total ?? response.matches.count

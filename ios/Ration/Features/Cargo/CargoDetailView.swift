@@ -7,6 +7,8 @@ final class CargoDetailViewModel {
     private(set) var item: CargoItem?
     private(set) var connectedMeals: [ConnectedCargoMeal] = []
     private(set) var isLoading = false
+    private(set) var isSelectedForRestock = false
+    private(set) var isTogglingRestock = false
     var errorMessage: String?
 
     func load(id: String, api: RationAPI) async {
@@ -14,12 +16,37 @@ final class CargoDetailViewModel {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let response = try await api.cargoItem(id: id)
+            async let detailTask = api.cargoItem(id: id)
+            async let activeTask = api.cargo(cursor: nil, limit: 1)
+            let response = try await detailTask
+            let activePage = try await activeTask
             item = response.item
             connectedMeals = response.connectedMeals ?? []
+            isSelectedForRestock = activePage.activeCargoIds?.contains(id) ?? false
         } catch {
             item = nil
             connectedMeals = []
+            isSelectedForRestock = false
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func toggleRestock(quantity: Double? = nil, api: RationAPI) async {
+        guard let item else { return }
+        let activating = !isSelectedForRestock
+        isTogglingRestock = true
+        if activating {
+            isSelectedForRestock = true
+        } else {
+            isSelectedForRestock = false
+        }
+        defer { isTogglingRestock = false }
+        do {
+            let response = try await api.toggleCargoRestock(id: item.id, quantity: quantity)
+            isSelectedForRestock = response.isActive
+            Haptics.light()
+        } catch {
+            isSelectedForRestock = !activating
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
@@ -45,6 +72,7 @@ struct CargoDetailView: View {
     @State private var model = CargoDetailViewModel()
     @State private var showingEdit = false
     @State private var showingDeleteConfirm = false
+    @State private var showingRestockQuantity = false
     @State private var connectedMealsSort: ConnectedMealsSort = .alphabetical
     @State private var expandedMealIds: Set<String> = []
     @State private var showAllConnectedMeals = false
@@ -79,6 +107,15 @@ struct CargoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .tabDockAction(tag: scrollContext.activeTab, isActive: model.item != nil) {
             IconFABMenuCore(systemImage: "ellipsis.circle.fill", accessibilityLabel: "Cargo actions") {
+                Button {
+                    Task { await handleSupplyToggle() }
+                } label: {
+                    Label(
+                        model.isSelectedForRestock ? "Remove from Supply" : "Add to Supply",
+                        systemImage: model.isSelectedForRestock ? "cart.fill.badge.minus" : "cart.badge.plus"
+                    )
+                }
+                .disabled(model.isTogglingRestock || !env.network.isOnline)
                 Button { showingEdit = true } label: {
                     Label("Edit", systemImage: "pencil")
                 }
@@ -88,11 +125,24 @@ struct CargoDetailView: View {
                 .destructiveDeleteTint()
             }
         }
+        .onChange(of: model.isSelectedForRestock) { _, _ in
+            env.tabDock.bumpContentEpoch()
+        }
+        .onChange(of: model.isTogglingRestock) { _, _ in
+            env.tabDock.bumpContentEpoch()
+        }
         .task { await model.load(id: itemId, api: env.api) }
         .sheet(isPresented: $showingEdit) {
             if let item = model.item {
                 CargoFormView(mode: .edit(item)) {
                     await model.load(id: itemId, api: env.api)
+                }
+            }
+        }
+        .sheet(isPresented: $showingRestockQuantity) {
+            if let item = model.item {
+                CargoRestockQuantitySheet(item: item) { quantity in
+                    await model.toggleRestock(quantity: quantity, api: env.api)
                 }
             }
         }
@@ -102,6 +152,14 @@ struct CargoDetailView: View {
                     if await model.delete(api: env.api) { dismiss() }
                 }
             }
+        }
+    }
+
+    private func handleSupplyToggle() async {
+        if model.isSelectedForRestock {
+            await model.toggleRestock(api: env.api)
+        } else {
+            showingRestockQuantity = true
         }
     }
 

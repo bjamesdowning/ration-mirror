@@ -316,13 +316,15 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Copilot keyboard positioning and dismiss (iOS 1.1.19 build 12):** Inline dock overlays ignore SwiftUI's automatic keyboard safe area so manual `keyboardInset` padding is the single source of truth — the composer stays directly above the keyboard instead of flying to the top. Shared `CopilotKeyboardDismissPolicy` and a UIKit pan bridge on the composer capsule provide interactive swipe-down dismiss on both the dock and Ask sheet; dock padding interpolates with drag progress. Ask transcript always uses `scrollDismissesKeyboard(.interactively)`. Standard dismiss paths: swipe down on the composer, scroll the content behind it, or tap outside the dock.
 
+**iOS UX fixes (1.1.40, web v1.5.81):** Supply dock FAB is always visible (`+` menu): empty list offers Add item + Refresh; populated list offers Dock from Receipt (direct to source picker), Dock from List, and Add item. Manual supply add uses `SupplyAddItemSheet` (`POST /supply/items`). Cargo detail FAB adds Add to Supply / Remove from Supply with quantity sheet. Domain filters on Cargo/Galley trigger server reload; Supply applies domain + search client-side on the full list. Cargo and Galley search debounces remote queries (≥2 chars) — Cargo via `/search`, Galley via meals `q` param. Scan review opens a full edit sheet (name, qty, unit, domain, tags, expiry) before batch add to Cargo.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.
 - List rows scroll visibly behind the glass dock — no large blank band above the controls.
 - Ask sheet: send a tool turn (e.g. “add butter to cargo”) — tool card appears, no red decode error banner after completion.
-- Hub edit mode: scan FAB hidden; Supply empty list: replenish FAB hidden.
-- Cargo item detail: only `⋯` visible (no `+`), not hidden under Copilot composer; pop back restores `+` FAB.
+- Hub edit mode: scan FAB hidden; Supply empty list: `+` FAB shows Add item and Refresh.
+- Cargo item detail: `⋯` includes Add to Supply; pop back restores list FAB.
 - Galley meal detail: same `⋯` dock behavior; scroll last card clears dock; dock collapse on scroll still works.
 - Galley meal → ingredient link → cargo detail (tab 2): `⋯` replaces Galley `+` on active tab.
 - Manifest entry → meal detail: `⋯` replaces Manifest tab FAB.

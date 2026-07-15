@@ -6,6 +6,7 @@ import {
 	gt,
 	inArray,
 	isNull,
+	like,
 	lt,
 	or,
 	sql,
@@ -187,7 +188,7 @@ export async function getMeals(
 	organizationId: string,
 	tag?: string,
 	domain?: (typeof meal.$inferSelect)["domain"],
-	options?: { limit?: number; offset?: number },
+	options?: { limit?: number; offset?: number; searchQuery?: string },
 ) {
 	const d1 = drizzle(db);
 	const conditions = [eq(meal.organizationId, organizationId)];
@@ -197,6 +198,10 @@ export async function getMeals(
 	}
 	if (domain) {
 		conditions.push(eq(meal.domain, domain));
+	}
+	if (options?.searchQuery) {
+		const q = options.searchQuery.trim();
+		conditions.push(like(meal.name, `%${q}%`));
 	}
 
 	// Base query to get meals

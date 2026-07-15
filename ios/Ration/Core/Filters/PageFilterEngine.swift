@@ -39,10 +39,19 @@ enum PageFilterEngine {
 
     static func filterSupplyItems(
         _ items: [SupplyItem],
+        domain: CargoDomain? = nil,
+        search: String = "",
         sortMode: SupplySortMode,
         hidePurchased: Bool
     ) -> [SupplyItem] {
         var result = items
+        if let domain {
+            result = result.filter { $0.domain == domain.rawValue }
+        }
+        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        if !query.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        }
         if hidePurchased {
             result = result.filter { !$0.isPurchased }
         }

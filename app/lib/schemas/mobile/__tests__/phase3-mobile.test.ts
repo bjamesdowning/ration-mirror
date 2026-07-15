@@ -27,6 +27,16 @@ describe("MobileMealsListQuerySchema", () => {
 		}
 	});
 
+	it("accepts optional search query q", () => {
+		const result = MobileMealsListQuerySchema.safeParse({
+			q: "pasta",
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.q).toBe("pasta");
+		}
+	});
+
 	it("rejects invalid domain", () => {
 		const result = MobileMealsListQuerySchema.safeParse({
 			domain: "pets",

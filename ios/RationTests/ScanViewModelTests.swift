@@ -58,6 +58,53 @@ final class EditableScanResultItemTests: XCTestCase {
         XCTAssertEqual(batch.unit, "kg")
     }
 
+    func testToBatchCargoItemIncludesTagsAndExpiry() {
+        let expiry = Date(timeIntervalSince1970: 1_735_689_600)
+        let item = EditableScanResultItem(
+            from: ScanResultItem(
+                id: "item-2",
+                name: "Milk",
+                quantity: 1,
+                unit: "l",
+                domain: "food",
+                tags: ["dairy"],
+                expiresAt: "2025-01-01T00:00:00.000Z",
+                confidence: 0.9
+            )
+        )
+        guard case let .saved(updated) = item.applyingEdit(
+            name: "Milk",
+            quantityText: "2",
+            unit: "l",
+            domain: "food",
+            tags: ["dairy", "organic"],
+            hasExpiry: true,
+            expiresAt: expiry
+        ) else {
+            return XCTFail("Expected saved result")
+        }
+        let batch = updated.toBatchCargoItem()
+        XCTAssertEqual(batch.tags, ["dairy", "organic"])
+        XCTAssertEqual(batch.expiresAt, expiry)
+    }
+
+    func testScanResultExpiryIsPreservedFromAPI() {
+        let item = EditableScanResultItem(
+            from: ScanResultItem(
+                id: "item-3",
+                name: "Yogurt",
+                quantity: 1,
+                unit: "unit",
+                domain: "food",
+                tags: ["dairy"],
+                expiresAt: "2025-06-15T00:00:00.000Z",
+                confidence: 0.8
+            )
+        )
+        XCTAssertNotNil(item.expiresAt)
+        XCTAssertEqual(item.tags, ["dairy"])
+    }
+
     func testLowConfidenceFlag() {
         let confident = sampleItem()
         XCTAssertFalse(confident.isLowConfidence)

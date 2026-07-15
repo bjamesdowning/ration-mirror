@@ -72,6 +72,35 @@ final class PageFilterEngineTests: XCTestCase {
         XCTAssertEqual(filtered[0].name, "eggs")
     }
 
+    func testFilterSupplyByDomain() {
+        let items = [
+            SupplyItem(id: "1", name: "rice", quantity: 1, unit: "kg", domain: "food", isPurchased: false),
+            SupplyItem(id: "2", name: "soap", quantity: 1, unit: "unit", domain: "household", isPurchased: false),
+        ]
+        let filtered = PageFilterEngine.filterSupplyItems(
+            items,
+            domain: .household,
+            sortMode: .alpha,
+            hidePurchased: false
+        )
+        XCTAssertEqual(filtered.map(\.name), ["soap"])
+    }
+
+    func testFilterSupplyBySearch() {
+        let items = [
+            SupplyItem(id: "1", name: "brown rice", quantity: 1, unit: "kg", domain: "food", isPurchased: false),
+            SupplyItem(id: "2", name: "salt", quantity: 1, unit: "unit", domain: "food", isPurchased: false),
+        ]
+        let filtered = PageFilterEngine.filterSupplyItems(
+            items,
+            search: "rice",
+            sortMode: .alpha,
+            hidePurchased: false
+        )
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered[0].name, "brown rice")
+    }
+
     private func mealItem(name: String, tags: [String] = []) -> Meal {
         Meal(
             id: "meal_\(name)",

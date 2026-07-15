@@ -35,6 +35,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			limit: url.searchParams.get("limit") ?? undefined,
 			tag: url.searchParams.get("tag") ?? undefined,
 			domain: url.searchParams.get("domain") ?? undefined,
+			q: url.searchParams.get("q") ?? undefined,
 		});
 
 		const [meals, total, activeMealIds] = await Promise.all([
@@ -43,7 +44,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				organizationId,
 				query.tag,
 				query.domain,
-				{ limit: query.limit },
+				{
+					limit: query.limit,
+					searchQuery: query.q,
+				},
 			),
 			getMealsCount(context.cloudflare.env.DB, organizationId),
 			getActiveMealIds(context.cloudflare.env.DB, organizationId),

@@ -120,9 +120,17 @@ struct GalleyView: View {
                 MealFormView(mode: .edit(meal)) { await reload() }
             }
             .onChange(of: model.filters.matchingEnabled) { _, _ in Task { await reload() } }
-            .onChange(of: model.filters.domain) { _, _ in model.refreshDisplayedContent() }
-            .onChange(of: model.filters.selectedTags) { _, _ in model.refreshDisplayedContent() }
-            .onChange(of: model.filters.search) { _, _ in model.refreshDisplayedContent() }
+            .onChange(of: model.filters.domain) { _, _ in Task { await reload() } }
+            .onChange(of: model.filters.selectedTags) { _, _ in Task { await reload() } }
+            .onChange(of: model.filters.search) { _, _ in
+                guard let organizationId else { return }
+                model.handleSearchChange(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
+            }
             .onChange(of: env.cargoDataRevision) { _, _ in
                 Task {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)

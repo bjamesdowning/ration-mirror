@@ -210,10 +210,18 @@ final class RationAPI {
     }
 
     // Galley
-    func meals(limit: Int = 50, tag: String? = nil, domain: CargoDomain? = nil) async throws -> MealsResponse {
+    func meals(
+        limit: Int = 50,
+        tag: String? = nil,
+        domain: CargoDomain? = nil,
+        q: String? = nil
+    ) async throws -> MealsResponse {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if let tag, !tag.isEmpty { query.append(URLQueryItem(name: "tag", value: tag)) }
         if let domain { query.append(URLQueryItem(name: "domain", value: domain.rawValue)) }
+        if let q, !q.trimmingCharacters(in: .whitespaces).isEmpty {
+            query.append(URLQueryItem(name: "q", value: q))
+        }
         return try await client.get("meals", query: query)
     }
 
@@ -269,7 +277,9 @@ final class RationAPI {
         mode: String = "delta",
         limit: Int = 20,
         minMatch: Int? = nil,
-        servings: Int? = nil
+        servings: Int? = nil,
+        tag: String? = nil,
+        domain: CargoDomain? = nil
     ) async throws -> MealMatchResponse {
         var query: [URLQueryItem] = [
             URLQueryItem(name: "mode", value: mode),
@@ -280,6 +290,12 @@ final class RationAPI {
         }
         if let servings {
             query.append(URLQueryItem(name: "servings", value: String(servings)))
+        }
+        if let tag, !tag.isEmpty {
+            query.append(URLQueryItem(name: "tag", value: tag))
+        }
+        if let domain {
+            query.append(URLQueryItem(name: "domain", value: domain.rawValue))
         }
         return try await client.get("meals/match", query: query)
     }

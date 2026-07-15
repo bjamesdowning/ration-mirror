@@ -59,10 +59,24 @@ struct CargoListView: View {
             }
             .navigationTitle("Cargo")
             .searchable(text: $model.filters.search, prompt: "Search cargo")
-            .onSubmit(of: .search) { Task { await reload(forceRemoteSearch: true) } }
-            .onChange(of: model.filters.search) { _, _ in model.applyClientFilters() }
-            .onChange(of: model.filters.domain) { _, _ in model.applyClientFilters() }
-            .onChange(of: model.filters.selectedTags) { _, _ in model.applyClientFilters() }
+            .onSubmit(of: .search) {
+                Task { await reload(forceRemoteSearch: true, organizationId: organizationId) }
+            }
+            .onChange(of: model.filters.search) { _, _ in
+                guard let organizationId else { return }
+                model.handleSearchChange(
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
+            }
+            .onChange(of: model.filters.domain) { _, _ in
+                Task { await reload(forceRemoteSearch: false, organizationId: organizationId) }
+            }
+            .onChange(of: model.filters.selectedTags) { _, _ in
+                Task { await reload(forceRemoteSearch: false, organizationId: organizationId) }
+            }
             .background(Theme.ceramic)
             .toolbar {
                 GlobalPageToolbar(

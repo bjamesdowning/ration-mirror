@@ -22,13 +22,21 @@ final class SupplyViewModel {
     private let pollDelayNanoseconds: UInt64 = 1_500_000_000
 
     var filters = PageFilterState(configuration: PageFilterConfiguration(
+        supportsDomain: true,
+        supportsSearch: true,
         supportsSupplySort: true,
         supportsSupplyUnitMode: true
     ))
 
     var displayedItems: [SupplyItem] {
         guard let items = list?.items else { return [] }
-        return PageFilterEngine.filterSupplyItems(items, sortMode: filters.supplySort, hidePurchased: filters.hidePurchased)
+        return PageFilterEngine.filterSupplyItems(
+            items,
+            domain: filters.domain,
+            search: filters.search,
+            sortMode: filters.supplySort,
+            hidePurchased: filters.hidePurchased
+        )
     }
 
     var purchasedCount: Int {
@@ -229,6 +237,39 @@ final class SupplyViewModel {
         }
     }
 
+    @discardableResult
+    func addItem(
+        _ request: CreateSupplyItemRequest,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async -> Bool {
+        guard online else {
+            errorMessage = "Adding items requires a network connection."
+            return false
+        }
+        do {
+            let response = try await api.addSupplyItem(request)
+            if var current = list {
+                current = SupplyList(
+                    id: current.id,
+                    name: current.name,
+                    items: current.items + [response.item]
+                )
+                list = current
+                await snapshots.save(SupplyResponse(list: current), domain: SnapshotDomain.supply, organizationId: organizationId)
+            } else {
+                await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+            }
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+    }
+
     func dock(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard let list else { return }
         guard online else {
@@ -421,8 +462,8 @@ struct SupplyView: View {
     @State private var supplyWindow: SupplyPlanningWindow?
     @State private var snoozeItem: SupplyItem?
     @State private var showingPaywall = false
+    @State private var showingAddItem = false
     @State private var hasTriggeredAutoSync = false
-    @State private var showingReplenishSheet = false
     @State private var showingReplenishReceipt = false
     @State private var showingSupplyScanCamera = false
     @State private var showingSupplyScanPhotoLibrary = false
@@ -446,20 +487,25 @@ struct SupplyView: View {
             Group {
                 if model.isLoading && model.list == nil {
                     LoadingView()
-                } else if let list = model.list, !list.items.isEmpty, let organizationId {
+                } else if let list = model.list, (model.totalCount > 0 || model.filters.hasActiveFilters), let organizationId {
                     listView(list, organizationId: organizationId)
                 } else {
                     CopilotTrackableScrollSurface(
                         tab: 4,
                         isActive: isTabActive,
-                        hasTabAction: false
+                        hasTabAction: true
                     ) {
                         VStack(spacing: 16) {
                             EmptyStateView(
                                 icon: "cart",
                                 title: "No supply delta yet",
-                                message: "Select meals in Galley, mark Cargo for restock, or plan meals in Manifest. Your list refreshes when you open Supply."
+                                message: "Add items manually, select meals in Galley, mark Cargo for restock, or plan meals in Manifest."
                             )
+                            Button("Add item") {
+                                showingAddItem = true
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(!env.network.isOnline)
                             Button("Refresh list") {
                                 Task {
                                     guard let organizationId else { return }
@@ -480,6 +526,7 @@ struct SupplyView: View {
                 }
             }
             .navigationTitle("Supply")
+            .searchable(text: $model.filters.search, prompt: "Search items")
             .toolbar {
                 GlobalPageToolbar(
                     hasActiveFilters: model.filters.hasActiveFilters,
@@ -583,29 +630,21 @@ struct SupplyView: View {
                 }
             }
             .sheet(isPresented: $showingPaywall) { PaywallView() }
-            .sheet(isPresented: $showingReplenishSheet) {
-                ReplenishSheet(
-                    purchasedCount: model.purchasedCount,
-                    isDocking: model.isDocking,
-                    scanCost: scanCreditCost,
-                    onScanReceipt: {
-                        showingReplenishSheet = false
-                        showingReplenishReceipt = true
-                    },
-                    onDockPurchased: {
-                        showingReplenishSheet = false
-                        Task {
-                            guard let organizationId else { return }
-                            await model.dock(
-                                api: env.api,
-                                snapshots: env.snapshots,
-                                online: env.network.isOnline,
-                                organizationId: organizationId
-                            )
-                            env.notifyCargoDataChanged()
-                        }
-                    }
-                )
+            .sheet(isPresented: $showingAddItem) {
+                SupplyAddItemSheet(
+                    defaultDomain: model.filters.domain?.rawValue ?? "food",
+                    serverError: $model.errorMessage
+                ) { request in
+                    guard let organizationId else { return false }
+                    let success = await model.addItem(
+                        request,
+                        api: env.api,
+                        snapshots: env.snapshots,
+                        online: env.network.isOnline,
+                        organizationId: organizationId
+                    )
+                    return success
+                }
             }
             .sheet(isPresented: $showingReplenishReceipt) {
                 ReplenishReceiptSheet(
@@ -693,16 +732,55 @@ struct SupplyView: View {
                 }
             }
         }
-        .tabDockAction(tag: 4, isActive: model.totalCount > 0) {
+        .tabDockAction(tag: 4) {
             IconFABMenuCore(
-                systemImage: "shippingbox.and.arrow.backward.fill",
-                accessibilityLabel: "Replenish Cargo",
+                systemImage: "plus.circle.fill",
+                accessibilityLabel: "Supply actions",
                 disabled: model.isDocking || model.isScanning || !env.network.isOnline
             ) {
+                if model.totalCount > 0 {
+                    Button {
+                        showingReplenishReceipt = true
+                    } label: {
+                        Label("Dock from Receipt", systemImage: "camera.fill")
+                    }
+                    Button {
+                        Task {
+                            guard let organizationId else { return }
+                            await model.dock(
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
+                            )
+                            env.notifyCargoDataChanged()
+                        }
+                    } label: {
+                        Label("Dock from List", systemImage: "checkmark.circle.fill")
+                    }
+                    .disabled(model.purchasedCount == 0 || model.isDocking)
+                }
                 Button {
-                    showingReplenishSheet = true
+                    showingAddItem = true
                 } label: {
-                    Label("Replenish Cargo", systemImage: "shippingbox.and.arrow.backward")
+                    Label("Add item", systemImage: "plus")
+                }
+                if model.totalCount == 0 {
+                    Button {
+                        Task {
+                            guard let organizationId else { return }
+                            model.refreshOutcomes = env.refreshOutcomes
+                            await model.sync(
+                                api: env.api,
+                                snapshots: env.snapshots,
+                                online: env.network.isOnline,
+                                organizationId: organizationId
+                            )
+                        }
+                    } label: {
+                        Label("Refresh list", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(model.isSyncing)
                 }
             }
         }
@@ -823,7 +901,7 @@ struct SupplyView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins(
-            hasTabAction: model.totalCount > 0
+            hasTabAction: true
         )
         .copilotScrollTracked(tab: 4, isActive: isTabActive)
     }
@@ -883,103 +961,6 @@ struct SupplyView: View {
         ) {
             supplyScanReviewContext = context
         }
-    }
-}
-
-struct ReplenishSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let purchasedCount: Int
-    let isDocking: Bool
-    var scanCost: Int?
-    let onScanReceipt: () -> Void
-    let onDockPurchased: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("After shopping, dock items from your list or scan a receipt to reconcile and add to Cargo.")
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-
-                Button(action: onScanReceipt) {
-                    replenishOption(
-                        icon: "camera.fill",
-                        title: "Dock from Receipt",
-                        subtitle: scanSubtitle,
-                        highlighted: true
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onDockPurchased) {
-                    replenishOption(
-                        icon: "checkmark.circle.fill",
-                        title: "Dock from List",
-                        subtitle: purchasedCount > 0
-                            ? "Dock \(purchasedCount) checked-off item\(purchasedCount == 1 ? "" : "s")"
-                            : "Check off items while shopping first",
-                        highlighted: false
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(purchasedCount == 0 || isDocking)
-                .opacity(purchasedCount == 0 || isDocking ? 0.5 : 1)
-
-                Spacer()
-            }
-            .padding(20)
-            .navigationTitle("Replenish Cargo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
-            .background(Theme.ceramic)
-        }
-        .presentationDetents([.medium])
-    }
-
-    private var scanSubtitle: String {
-        var text = "Scan or upload — match to your supply list"
-        if let scanCost {
-            text += " · \(scanCost) credit\(scanCost == 1 ? "" : "s")"
-        }
-        return text
-    }
-
-    @ViewBuilder
-    private func replenishOption(
-        icon: String,
-        title: String,
-        subtitle: String,
-        highlighted: Bool
-    ) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(highlighted ? Theme.hyperGreen : Theme.carbon)
-                .frame(width: 40, height: 40)
-                .background(highlighted ? Theme.hyperGreen.opacity(0.15) : Theme.platinum)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .rationBody()
-                    .fontWeight(.semibold)
-                Text(subtitle)
-                    .rationCaption()
-                    .foregroundStyle(Theme.muted)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.platinum, lineWidth: 1)
-        )
     }
 }
 

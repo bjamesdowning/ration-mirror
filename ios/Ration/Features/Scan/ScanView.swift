@@ -118,6 +118,14 @@ final class ScanViewModel {
         editingItemId = nil
     }
 
+    func saveEdit(_ updated: EditableScanResultItem) -> String? {
+        guard let index = reviewItems.firstIndex(where: { $0.id == updated.id }) else { return nil }
+        reviewItems[index] = updated
+        editingItemId = nil
+        Haptics.light()
+        return nil
+    }
+
     func saveEdit(id: String, name: String, quantityText: String, unit: String) -> String? {
         guard let index = reviewItems.firstIndex(where: { $0.id == id }) else { return nil }
         switch reviewItems[index].applyingEdit(name: name, quantityText: quantityText, unit: unit) {
@@ -172,6 +180,7 @@ struct ScanView: View {
     @State private var showingCamera = false
     @State private var consent = AIConsentCoordinator()
     @State private var showingPaywall = false
+    @State private var editingItem: EditableScanResultItem?
 
     private var scanCreditCost: Int {
         env.session.session?.aiCosts?.scan ?? 1
@@ -218,6 +227,11 @@ struct ScanView: View {
             }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
+            }
+            .sheet(item: $editingItem) { item in
+                ScanItemEditSheet(item: item) { updated in
+                    model.saveEdit(updated)
+                }
             }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraPicker { image in
@@ -280,7 +294,7 @@ struct ScanView: View {
                         Text("Ready to review").rationHeadline()
                         Text("\(model.reviewItems.count) item\(model.reviewItems.count == 1 ? "" : "s") from scan \(requestId.prefix(8))…")
                             .rationCaption()
-                        Text("Tap edit to fix names, quantities, or units")
+                        Text("Tap edit to adjust name, quantity, tags, domain, or expiry")
                             .rationCaption()
                             .foregroundStyle(Theme.muted)
                     }
@@ -295,23 +309,18 @@ struct ScanView: View {
                     ForEach(model.reviewItems) { item in
                         ScanReviewItemRow(
                             item: item,
-                            isEditing: model.editingItemId == item.id,
                             onToggleSelection: { model.toggleSelection(item.id) },
-                            onStartEdit: { model.startEditing(item.id) },
-                            onSave: { name, quantity, unit in
-                                model.saveEdit(id: item.id, name: name, quantityText: quantity, unit: unit)
-                            },
-                            onCancelEdit: { model.cancelEditing() }
+                            onStartEdit: { editingItem = item }
                         )
                     }
                     Button("Add selected to Cargo") {
                         Task { await model.confirmToCargo(api: env.api) }
                     }
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(model.selectedCount == 0 || model.isEditing)
+                    .disabled(model.selectedCount == 0 || model.isEditing || editingItem != nil)
                     Button("Scan another") { model.reset() }
                         .buttonStyle(SecondaryButtonStyle())
-                        .disabled(model.isEditing)
+                        .disabled(model.isEditing || editingItem != nil)
                 }
             }
             .padding(16)

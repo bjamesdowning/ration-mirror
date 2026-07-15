@@ -16,6 +16,7 @@ final class CargoViewModel {
     private(set) var isRefreshing = false
     private(set) var isLoadingMore = false
     private(set) var isClearingSelections = false
+    private(set) var isSearching = false
     var errorMessage: String?
     var availableTags: [String] = []
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
@@ -32,10 +33,17 @@ final class CargoViewModel {
         !filters.search.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    var isRemoteSearchActive: Bool {
+        filters.search.trimmingCharacters(in: .whitespaces).count >= Self.remoteSearchMinLength
+    }
+
     private var nextCursor: String?
     private var inventoryNextCursor: String?
     private var inventoryTotal = 0
     private var rawItems: [CargoItem] = []
+    private var searchTask: Task<Void, Never>?
+    private static let searchDebounceNanoseconds: UInt64 = 300_000_000
+    private static let remoteSearchMinLength = 2
 
     var displayedInventory: [CargoItem] {
         PageFilterEngine.filterCargo(rawItems, domain: filters.domain, tags: filters.selectedTags, search: filters.search)
@@ -70,14 +78,14 @@ final class CargoViewModel {
     ) async {
         errorMessage = nil
 
-        if isSearchActive, online, forceRemoteSearch {
+        if isSearchActive, online, forceRemoteSearch || isRemoteSearchActive {
             isLoading = listContentIsEmpty
             defer { isLoading = false }
             await search(api: api)
             return
         }
 
-        if isSearchActive, !forceRemoteSearch {
+        if isSearchActive, !forceRemoteSearch, !isRemoteSearchActive {
             applyClientFilters()
             return
         }
@@ -140,21 +148,67 @@ final class CargoViewModel {
         nextCursor = inventoryNextCursor
     }
 
+    func handleSearchChange(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) {
+        searchTask?.cancel()
+        let query = filters.search.trimmingCharacters(in: .whitespaces)
+        if query.isEmpty {
+            searchTask = Task {
+                await reload(
+                    api: api,
+                    snapshots: snapshots,
+                    online: online,
+                    organizationId: organizationId
+                )
+            }
+            return
+        }
+        if query.count < Self.remoteSearchMinLength {
+            applyClientFilters()
+            return
+        }
+        guard online else {
+            applyClientFilters()
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await search(api: api)
+        }
+    }
+
+    func cancelSearchTasks() {
+        searchTask?.cancel()
+        searchTask = nil
+    }
+
     private func search(api: RationAPI) async {
-        let query = filters.search
+        let query = filters.search.trimmingCharacters(in: .whitespaces)
+        guard query.count >= Self.remoteSearchMinLength else { return }
+        isSearching = true
+        defer { isSearching = false }
         do {
             let response = try await api.search(query: query)
-            guard query == filters.search else { return }
+            guard query == filters.search.trimmingCharacters(in: .whitespaces) else { return }
             applyRemoteSearchResults(response.results)
         } catch {
-            guard query == filters.search else { return }
+            guard query == filters.search.trimmingCharacters(in: .whitespaces) else { return }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
     func applyRemoteSearchResults(_ results: [SearchResult]) {
-        listContent = .search(results)
-        total = results.count
+        var filtered = results
+        if let domain = filters.domain {
+            filtered = filtered.filter { $0.domain == domain.rawValue }
+        }
+        listContent = .search(filtered)
+        total = filtered.count
         nextCursor = nil
     }
 
@@ -285,6 +339,6 @@ final class CargoViewModel {
     }
 
     private var hasLocalFilters: Bool {
-        isSearchActive || !filters.selectedTags.isEmpty
+        isSearchActive || !filters.selectedTags.isEmpty || filters.domain != nil
     }
 }

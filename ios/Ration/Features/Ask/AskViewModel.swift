@@ -549,11 +549,33 @@ final class AskViewModel {
         case "reasoning_end":
             appendReasoningDelta("", mode: .end, messageId: event.messageId)
         case "message_end":
+            // Late frames after a briefing turn already ended in `.error` must not wipe
+            // the retry affordance unless usable content arrived and we can recover.
+            if tracksBriefingSession, !isTurnActive, case .error = state {
+                if lastAssistantHasUsableContent {
+                    if !introComplete {
+                        introComplete = true
+                        introSucceeded = true
+                    } else if seedTurnStarted, !seedComplete {
+                        seedComplete = true
+                        briefingComplete = true
+                    }
+                    completeTurn(state: .idle)
+                    scheduleImmediateSnapshotSave()
+                }
+                return
+            }
+
             clearTransientError()
             if tracksBriefingSession {
                 if !introComplete {
                     introComplete = true
                     introSucceeded = lastAssistantHasUsableContent
+                    if !introSucceeded {
+                        completeTurn(state: .error(OnboardingBriefingCopy.emptyIntroMessage))
+                        scheduleImmediateSnapshotSave()
+                        return
+                    }
                 } else if seedTurnStarted, isTurnActive {
                     seedComplete = true
                     briefingComplete = true

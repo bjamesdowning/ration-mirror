@@ -451,9 +451,19 @@ struct OnboardingBriefingView: View {
     }
 
     private func retryIntro() async {
+        guard let organizationId = env.session.activeOrganizationId else { return }
+        // Keep the existing conversationId — claimOnboardingBriefing rejects a second id
+        // while the grant is still pending on the first conversation.
         model.prepareIntroRetry()
-        didBootstrap = false
-        await runBootstrapIfNeeded()
+        let sent = await ask.sendOnboardingBootstrap(
+            api: env.api,
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
+        if !sent {
+            model.surfaceBriefingError(OnboardingBriefingCopy.introRetryFailedMessage)
+        }
     }
 
     private func retrySeed() async {

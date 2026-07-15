@@ -235,7 +235,12 @@ final class AskViewModelTests: XCTestCase {
         )
         XCTAssertTrue(model.introComplete)
         XCTAssertFalse(model.introSucceeded)
-        // Late/idle message_end after intro must not mark seed complete.
+        if case let .error(message) = model.state {
+            XCTAssertEqual(message, OnboardingBriefingCopy.emptyIntroMessage)
+        } else {
+            XCTFail("Expected empty-intro error, got \(model.state)")
+        }
+        // Late/idle message_end after intro must not mark seed complete or clear the error.
         model.apply(
             CopilotStreamEvent(
                 type: "message_end",
@@ -256,6 +261,62 @@ final class AskViewModelTests: XCTestCase {
         )
         XCTAssertFalse(model.seedComplete)
         XCTAssertFalse(model.briefingComplete)
+        XCTAssertFalse(model.introSucceeded)
+        if case let .error(message) = model.state {
+            XCTAssertEqual(message, OnboardingBriefingCopy.emptyIntroMessage)
+        } else {
+            XCTFail("Expected empty-intro error to persist, got \(model.state)")
+        }
+    }
+
+    func testLateMessageEndAfterTimeoutKeepsErrorUnlessContentArrives() {
+        let model = AskViewModel()
+        model.beginOnboardingBriefingSession()
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_start",
+                message: CopilotMessage(id: "a1", role: "assistant", content: ""),
+                messageId: "a1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.forceEndBriefingTurn()
+        model.surfaceBriefingError(AskViewModel.briefingTurnTimeoutMessage)
+        XCTAssertFalse(model.isTurnActive)
+
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "a1",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        if case let .error(message) = model.state {
+            XCTAssertEqual(message, AskViewModel.briefingTurnTimeoutMessage)
+        } else {
+            XCTFail("Expected timeout error to persist, got \(model.state)")
+        }
         XCTAssertFalse(model.introSucceeded)
     }
 

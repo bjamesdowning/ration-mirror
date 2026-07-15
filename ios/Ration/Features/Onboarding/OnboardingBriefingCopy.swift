@@ -40,6 +40,10 @@ Use today's date from context to calculate expiry dates. Add each item with add_
     static let retryIntroTitle = "Retry intro"
     static let retrySeedTitle = "Retry seed"
     static let seedSendFailedMessage = "Couldn't start the kitchen seed. Tap retry or Get Started."
+    static let emptyIntroMessage =
+        "Copilot didn't return a welcome reply. Tap retry to try again, or Get Started to continue."
+    static let introRetryFailedMessage =
+        "Couldn't restart the welcome intro. Tap Get Started to continue."
 
     static let staticReplayTitle = "Welcome to Ration"
 

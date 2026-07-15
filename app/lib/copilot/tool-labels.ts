@@ -76,6 +76,11 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Updated Cargo",
 		error: "Could not update Cargo",
 	},
+	adjust_cargo_item: {
+		running: "Adjusting Cargo…",
+		done: "Adjusted Cargo",
+		error: "Could not adjust Cargo",
+	},
 	remove_cargo_item: {
 		running: "Removing from Cargo…",
 		done: "Removed from Cargo",

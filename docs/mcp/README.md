@@ -49,6 +49,7 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 | "Add eggs and butter to the shopping list." | `add_supply_item` |
 | "I bought everything on the list — mark it purchased." | `mark_supply_purchased` |
 | "Parse this receipt and add new items to Cargo." | Agent parses text → `preview_inventory_import` → `apply_inventory_import` (no Ration AI credits) |
+| "I ate two cans of tuna." | `adjust_cargo_item` with `delta: -2` (floors at 0; line stays for restock) |
 
 MCP tool calls are **deterministic and do not consume Ration credits**. Receipt parsing runs in *your* LLM; Ration ingests structured items. Visual scan and AI meal generation in the web app use optional credit packs.
 
@@ -125,9 +126,10 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 
 | Tool | Scope | Description |
 |------|-------|-------------|
-| `add_cargo_item` | `mcp:inventory:write` | Add pantry stock. No credits charged; vectors backfilled async. |
-| `update_cargo_item` | `mcp:inventory:write` | Update name, quantity, unit, expiry, domain, or tags. |
-| `remove_cargo_item` | `mcp:inventory:write` | Remove a pantry item. **Requires `confirm: true`.** |
+| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (qty > 0). No credits; vectors backfilled async. Prefer import tools for bulk. |
+| `update_cargo_item` | `mcp:inventory:write` | Set absolute fields. Quantity may be **0** (kept as a restock reminder). |
+| `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2` when the user ate 2). Floors at 0; keeps the row. |
+| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 | `inventory_import_schema` | `mcp:read` | JSON schema for bulk import fields, units, and row limits. |
 | `preview_inventory_import` | `mcp:read` | Dry-run receipt/bulk import — returns `previewToken` and per-row match/create/skip. |
 | `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import. Idempotent via `idempotencyKey`. |

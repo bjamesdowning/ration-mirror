@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MCP_TOOL_GROUPS } from "~/lib/agent-readiness";
 import type { McpToolsEnv } from "~/lib/mcp/tool-runtime";
 import { createMockEnv } from "~/test/helpers/mock-env";
@@ -8,6 +8,26 @@ import {
 	createCopilotToolDefs,
 	toAiSdkTools,
 } from "../tools.server";
+
+vi.mock("~/lib/cargo.server", () => ({
+	getCargo: vi.fn(),
+	getCargoByIds: vi.fn(),
+	getCargoItem: vi.fn().mockResolvedValue(null),
+	getCargoPage: vi.fn(),
+	getExpiringCargo: vi.fn().mockResolvedValue([]),
+	getExpiredCargo: vi.fn().mockResolvedValue([]),
+	ingestCargoItems: vi.fn(),
+	jettisonItem: vi.fn(),
+	updateItem: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("~/lib/rate-limiter.server", () => ({
+	checkRateLimit: vi.fn().mockResolvedValue({
+		allowed: true,
+		remaining: 10,
+		resetAt: Date.now() + 60_000,
+	}),
+}));
 
 describe("createCopilotToolDefs", () => {
 	function makeEnv(): McpToolsEnv {
@@ -53,6 +73,19 @@ describe("createCopilotToolDefs", () => {
 				name: "Milk",
 				quantity: 1,
 				unit: "",
+			}).success,
+		).toBe(false);
+		const cargoId = "11111111-1111-4111-8111-111111111111";
+		expect(
+			definitions.get("update_cargo_item")?.inputSchema.safeParse({
+				itemId: cargoId,
+				quantity: 0,
+			}).success,
+		).toBe(true);
+		expect(
+			definitions.get("update_cargo_item")?.inputSchema.safeParse({
+				itemId: cargoId,
+				quantity: -1,
 			}).success,
 		).toBe(false);
 	});
@@ -103,5 +136,32 @@ describe("createCopilotToolDefs", () => {
 
 		expect(tools.remove_cargo_item?.needsApproval).toBe(true);
 		expect(tools.add_cargo_item?.needsApproval).toBeUndefined();
+	});
+
+	it("returns structured ok:false tool results instead of throwing", async () => {
+		const env = createMockEnv() as Cloudflare.Env;
+		const tools = toAiSdkTools(env, {
+			organizationId: "org-test-123",
+			userId: "user-test-123",
+			scopes: [...COPILOT_MCP_SCOPES],
+			preClaim: false,
+		});
+		const execute = tools.update_cargo_item?.execute;
+		expect(execute).toBeTypeOf("function");
+		const result = await execute?.(
+			{
+				itemId: "00000000-0000-0000-0000-000000000001",
+				quantity: 1,
+			},
+			{ toolCallId: "test", messages: [], abortSignal: undefined as never },
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			error: {
+				code: "not_found",
+				message: expect.stringContaining("not found"),
+			},
+		});
+		expect(result).toHaveProperty("error.recoveryHint");
 	});
 });

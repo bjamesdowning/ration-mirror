@@ -44,6 +44,7 @@ describe("decodeAgentResponseFrame", () => {
 						type: "tool-output-available",
 						toolName: "list_inventory",
 						toolCallId: "tool-1",
+						output: { items: [] },
 					}),
 				),
 			),
@@ -52,6 +53,30 @@ describe("decodeAgentResponseFrame", () => {
 			toolName: "list_inventory",
 			toolCallId: "tool-1",
 			succeeded: true,
+		});
+
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({
+						type: "tool-output-available",
+						toolName: "update_cargo_item",
+						toolCallId: "tool-2",
+						output: {
+							ok: false,
+							error: {
+								code: "not_found",
+								message: "Cargo item missing.",
+							},
+						},
+					}),
+				),
+			),
+		).toEqual({
+			kind: "tool_end",
+			toolName: "update_cargo_item",
+			toolCallId: "tool-2",
+			succeeded: false,
 		});
 	});
 

@@ -56,6 +56,17 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertNil(event.error)
     }
 
+    func testStructuredToolFailureOutputMapsToUnsuccessfulToolEnd() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"resp-4b","body":"{\\"type\\":\\"tool-output-available\\",\\"toolCallId\\":\\"call-2\\",\\"output\\":{\\"ok\\":false,\\"error\\":{\\"code\\":\\"not_found\\",\\"message\\":\\"Missing\\"}}}"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "tool_end")
+        XCTAssertEqual(event.toolCallId, "call-2")
+        XCTAssertEqual(event.ok, false)
+    }
+
     func testMalformedBodyReturnsNoopNotError() {
         let json = """
         {"type":"cf_agent_use_chat_response","id":"resp-5","body":"not-json"}

@@ -21,6 +21,9 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("Action reporting:");
 		expect(prompt).toContain("Do not narrate read-only lookups or search_docs");
 		expect(prompt).toContain("created, updated, deleted, imported, consumed");
+		expect(prompt).toContain("ok: false");
+		expect(prompt).toContain("adjust_cargo_item");
+		expect(prompt).toContain("restock reminder");
 	});
 
 	it("includes readable output formatting guidance", () => {

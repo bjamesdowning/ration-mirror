@@ -60,11 +60,18 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		}),
 		defineSharedTool({
 			name: "update_supply_item",
-			description: "Update an existing supply list item.",
+			description:
+				"Update an existing supply list item. Quantity may be 0 (still needed / reminder to buy); the line stays on the list. Use remove_supply_item to delete the line.",
 			inputSchema: z.object({
 				itemId: z.string().uuid(),
 				name: z.string().min(1).optional(),
-				quantity: z.number().positive().optional(),
+				quantity: z
+					.number()
+					.min(
+						0,
+						"Quantity cannot be negative. 0 keeps the line as a buy reminder.",
+					)
+					.optional(),
 				unit: z.string().optional(),
 			}),
 			scopes: ["mcp:supply:write"],
@@ -91,6 +98,10 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 						"update_supply_item",
 						"not_found",
 						`Item ${a.itemId} not found on supply list.`,
+						{
+							recoveryHint:
+								"Call get_supply_list to find a valid itemId on the active list.",
+						},
 					);
 				}
 				return ok("update_supply_item", {
@@ -103,7 +114,8 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		}),
 		defineSharedTool({
 			name: "remove_supply_item",
-			description: "Remove an item from the supply list.",
+			description:
+				"Remove an item from the supply list. If the user bought it, prefer mark_supply_purchased then complete_supply_list.",
 			inputSchema: z.object({ itemId: z.string().uuid() }),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",

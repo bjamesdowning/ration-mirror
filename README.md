@@ -1592,9 +1592,10 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
-| `add_cargo_item` | Write | `mcp:inventory:write` | Add pantry stock (skips embedding generation, no credit cost) | mcp_write (15/min) |
-| `update_cargo_item` | Write | `mcp:inventory:write` | Update pantry item (name, quantity, unit, expiry, domain, tags) | mcp_write (15/min) |
-| `remove_cargo_item` | Write | `mcp:inventory:write` | Remove a pantry item (requires `confirm: true`) | mcp_write (15/min) |
+| `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
+| `update_cargo_item` | Write | `mcp:inventory:write` | Set absolute fields; quantity may be 0 (restock reminder; item kept) | mcp_write (15/min) |
+| `adjust_cargo_item` | Write | `mcp:inventory:write` | Relative `delta` (e.g. -2); floors at 0; keeps the row | mcp_write (15/min) |
+| `remove_cargo_item` | Write | `mcp:inventory:write` | Permanently delete a pantry line (requires `confirm: true`) | mcp_write (15/min) |
 | `create_meal` | Write | `mcp:galley:write` | Create a new Galley recipe (structured data) | mcp_write (15/min) |
 | `update_meal` | Write | `mcp:galley:write` | Update any aspect of a Galley recipe | mcp_write (15/min) |
 | `delete_meal` | Write | `mcp:galley:write` | Delete a recipe (requires `confirm: true`) | mcp_write (15/min) |
@@ -1606,7 +1607,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `update_meal_plan_entry` | Write | `mcp:manifest:write` | Patch date/slot/servings/notes/order; cannot edit consumed | mcp_write (15/min) |
 | `remove_meal_plan_entry` | Write | `mcp:manifest:write` | Remove a meal plan entry by id | mcp_write (15/min) |
 | `add_supply_item` | Write | `mcp:supply:write` | Add item to the active supply/shopping list | mcp_write (15/min) |
-| `update_supply_item` | Write | `mcp:supply:write` | Update a supply list item (name, quantity, unit) | mcp_write (15/min) |
+| `update_supply_item` | Write | `mcp:supply:write` | Update a supply list item; quantity may be 0 (buy reminder) | mcp_write (15/min) |
 | `remove_supply_item` | Write | `mcp:supply:write` | Remove item from the supply list | mcp_write (15/min) |
 | `mark_supply_purchased` | Write | `mcp:supply:write` | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
 | `sync_supply_from_selected_meals` | Write | `mcp:supply:write` | Rebuild supply from manifest + Galley selections | mcp_supply_sync (8/min) |
@@ -2215,12 +2216,12 @@ Deep preset sets `workers-ai.reasoning_effort = high` and streams reasoning part
 
 ### 14.5 Tools
 
-Copilot exposes **all 38 MCP tools** through the shared tool runtime, plus two Copilot-only tools:
+Copilot exposes **all 39 MCP tools** through the shared tool runtime, plus Copilot-only `search_docs`:
 
 | Tool | Source | Purpose |
 |------|--------|---------|
 | `search_docs` | Copilot-only | Hybrid AI Search over `ration-docs` (`docs/fin` + `content/blog`) |
-| `get_billing_summary` | Copilot-only | Live tier, credits, renewal, store/management URLs (requires `REVENUECAT_API_KEY` on the Copilot worker) |
+| `get_billing_summary` | Shared MCP | Live tier, credits, renewal, store/management URLs |
 
 MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`. Tool calls inherit MCP rate categories (`mcp_list`, `mcp_search`, `mcp_write`, `mcp_supply_sync`) keyed on the synthetic credential `copilot:{userId}`.
 

@@ -1,3 +1,5 @@
+import { isStructuredCopilotToolFailure } from "./tool-result";
+
 export type AgentResponseFrame = {
 	type: string;
 	id?: string;
@@ -30,6 +32,7 @@ type AgentChunk = {
 	text?: string;
 	toolName?: string;
 	toolCallId?: string;
+	output?: unknown;
 };
 
 export function decodeAgentResponseFrame(
@@ -85,13 +88,19 @@ export function decodeAgentResponseFrame(
 				toolCallId: chunk.toolCallId ?? chunk.id,
 			};
 		case "tool-output-available":
+			return {
+				kind: "tool_end",
+				toolName: chunk.toolName ?? "tool",
+				toolCallId: chunk.toolCallId ?? chunk.id,
+				succeeded: !isStructuredCopilotToolFailure(chunk.output),
+			};
 		case "tool-output-error":
 		case "tool-output-denied":
 			return {
 				kind: "tool_end",
 				toolName: chunk.toolName ?? "tool",
 				toolCallId: chunk.toolCallId ?? chunk.id,
-				succeeded: chunk.type === "tool-output-available",
+				succeeded: false,
 			};
 		case "approval-requested":
 			return {

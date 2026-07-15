@@ -49,6 +49,7 @@ export const MCP_TOOL_GROUPS = [
 			"get_cargo_item",
 			"add_cargo_item",
 			"update_cargo_item",
+			"adjust_cargo_item",
 			"remove_cargo_item",
 			"get_expiring_items",
 			"get_expired_items",

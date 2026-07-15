@@ -66,11 +66,22 @@ describe("mapErrorToEnvelope", () => {
 		if (envelope.ok) return;
 
 		expect(envelope.error.code).toBe("invalid_input");
-		expect(envelope.error.message).toContain("query");
+		expect(envelope.error.message).toContain("query:");
 		expect(envelope.error.details).toEqual({
 			query: [expect.any(String)],
 		});
 		expect(envelope.error.details).not.toHaveProperty("formErrors");
+	});
+
+	it("maps not-found throws to not_found with recoveryHint", () => {
+		const envelope = mapErrorToEnvelope(
+			"update_meal",
+			new Error("Meal not found or unauthorized"),
+		);
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+		expect(envelope.error.code).toBe("not_found");
+		expect(envelope.error.recoveryHint).toBeTruthy();
 	});
 
 	it("adds claim recovery paths on capacity_exceeded when preClaim", () => {

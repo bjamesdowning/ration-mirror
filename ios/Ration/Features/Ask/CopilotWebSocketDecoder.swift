@@ -93,6 +93,20 @@ enum CopilotWebSocketDecoder {
         dictionary[key] as? String
     }
 
+    /// Matches web `isStructuredCopilotToolFailure` — tool execute returns
+    /// `{ ok: false, error: { code, message } }` on failure instead of throwing.
+    private static func isStructuredToolFailure(_ output: Any?) -> Bool {
+        guard let dictionary = output as? [String: Any],
+              dictionary["ok"] as? Bool == false,
+              let error = dictionary["error"] as? [String: Any],
+              error["code"] is String,
+              error["message"] is String
+        else {
+            return false
+        }
+        return true
+    }
+
     private static func mapChunk(_ chunk: [String: Any], frameId: String?) -> CopilotStreamEvent {
         guard let type = stringValue(chunk, "type") else {
             return noop(frameId: frameId)
@@ -215,7 +229,8 @@ enum CopilotWebSocketDecoder {
                 description: "Copilot wants to run \(resolvedToolName).",
                 blocked: nil
             )
-        case "tool-output-available", "tool-output-error", "tool-output-denied":
+        case "tool-output-available":
+            let succeeded = !isStructuredToolFailure(chunk["output"])
             return CopilotStreamEvent(
                 type: "tool_end",
                 message: nil,
@@ -224,7 +239,24 @@ enum CopilotWebSocketDecoder {
                 usageTokens: nil,
                 status: nil,
                 toolCallId: toolCallId ?? chunkId,
-                ok: type == "tool-output-available",
+                ok: succeeded,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        case "tool-output-error", "tool-output-denied":
+            return CopilotStreamEvent(
+                type: "tool_end",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: toolCallId ?? chunkId,
+                ok: false,
                 error: nil,
                 approvalId: nil,
                 toolName: nil,

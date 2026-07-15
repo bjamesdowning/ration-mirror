@@ -27,6 +27,7 @@ enum CopilotToolLabels {
         "match_meals": LabelSet(running: "Matching meals to Cargo…", done: "Matched meals", error: "Meal matching failed"),
         "add_cargo_item": LabelSet(running: "Adding to Cargo…", done: "Added to Cargo", error: "Could not add to Cargo"),
         "update_cargo_item": LabelSet(running: "Updating Cargo…", done: "Updated Cargo", error: "Could not update Cargo"),
+        "adjust_cargo_item": LabelSet(running: "Adjusting Cargo…", done: "Adjusted Cargo", error: "Could not adjust Cargo"),
         "remove_cargo_item": LabelSet(running: "Removing from Cargo…", done: "Removed from Cargo", error: "Could not remove from Cargo"),
         "add_supply_item": LabelSet(running: "Adding to Supply…", done: "Added to Supply", error: "Could not add to Supply"),
         "update_supply_item": LabelSet(running: "Updating Supply…", done: "Updated Supply", error: "Could not update Supply"),

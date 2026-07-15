@@ -1,6 +1,6 @@
 # MCP tools reference
 
-All tools are scoped to the **authorized household** (OAuth grant or API key organization). **MCP calls do not consume AI credits**; they use **rate limits** instead. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, meta? }` or `{ ok: false, tool, error }`) so agents can parse responses deterministically.
+All tools are scoped to the **authorized household** (OAuth grant or API key organization). **MCP calls do not consume AI credits**; they use **rate limits** instead. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, meta? }` or `{ ok: false, tool, error }`) so agents can parse responses deterministically. Failures include `error.code`, a human `error.message` (field rules when validation fails), optional `error.details`, and often `error.recoveryHint` for the next tool or user-facing step. Copilot returns the same failure object to the model instead of hard-throwing, so the assistant can explain the issue immediately.
 
 ## Rate limit categories
 
@@ -24,9 +24,10 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. Returns `expiresOn`, `daysUntilExpiry`, and `status` (`today` / `soon`). |
 | `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). Optional `daysBack` (default 30, max 90). Same response shape as `get_expiring_items`. |
 | `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot: temporal context, tier/credits/capacity, cargo stats + expiring/expired previews, meal plan entries, supply preview. Optional `manifestDays` (1–7, default 1). |
-| `add_cargo_item` | `mcp:inventory:write` | Add pantry stock. Skips embedding generation (zero credit cost). |
-| `update_cargo_item` | `mcp:inventory:write` | Update pantry fields (quantity, unit, expiry, domain, tags). |
-| `remove_cargo_item` | `mcp:inventory:write` | Remove a pantry item. **Requires `confirm: true`.** |
+| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (quantity > 0). Skips embedding generation (zero credit cost). For 2+ items, use the import tools. |
+| `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0** (out of stock; item remains as a restock reminder). |
+| `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`, e.g. `-2` when the user ate 2). Floors at 0; keeps the row. Prefer for “used/ate N”. Name lookup returns `requiresDisambiguation` + candidates when matches are close. |
+| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** Prefer quantity 0 when the user still wants a restock reminder. |
 
 ### Receipt → pantry workflow (no credits)
 

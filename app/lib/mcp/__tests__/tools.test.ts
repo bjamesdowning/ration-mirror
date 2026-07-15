@@ -117,6 +117,7 @@ vi.mock("drizzle-orm/d1", () => ({
 }));
 
 const {
+	getCargoItem,
 	getCargoPage,
 	getExpiredCargo,
 	getExpiringCargo,
@@ -721,6 +722,10 @@ describe("MCP tools", () => {
 		});
 
 		it("removes item and returns confirmation when confirm:true", async () => {
+			vi.mocked(getCargoItem).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "tuna",
+			} as never);
 			vi.mocked(jettisonItem).mockResolvedValueOnce(undefined as never);
 			const server = makeServer();
 			const result = await getToolHandler(
@@ -732,6 +737,23 @@ describe("MCP tools", () => {
 			});
 			const data = parseOk(result);
 			expect(data.removed).toBe(true);
+			expect(jettisonItem).toHaveBeenCalled();
+		});
+
+		it("returns not_found when item missing", async () => {
+			vi.mocked(getCargoItem).mockResolvedValueOnce(null as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"remove_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				confirm: true,
+			});
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("not_found");
+			expect(jettisonItem).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1395,6 +1417,158 @@ describe("MCP tools", () => {
 			const env = parseEnvelope(result);
 			expect(env.ok).toBe(false);
 			expect(env.error.code).toBe("not_found");
+		});
+
+		it("allows quantity 0 and keeps the row (does not jettison)", async () => {
+			const itemId = "11111111-1111-4111-8111-111111111111";
+			const mockItem = {
+				id: itemId,
+				name: "tuna",
+				quantity: 0,
+				unit: "can",
+				domain: "food",
+				expiresAt: null,
+			};
+			vi.mocked(updateItem).mockResolvedValueOnce(mockItem as never);
+			const server = makeServer();
+			const defs = (
+				await import("~/lib/mcp/tools/inventory")
+			).createInventoryToolDefs({
+				...createMockEnv(),
+				__mcp: {
+					organizationId: "org-test-123",
+					apiKeyId: "key-test-123",
+					userId: "user-test-123",
+					keyName: "Test Key",
+					keyPrefix: "ration_test",
+					scopes: ["mcp"],
+				},
+			} as never);
+			const updateDef = defs.find((d) => d.name === "update_cargo_item");
+			expect(
+				updateDef?.inputSchema.safeParse({
+					itemId,
+					quantity: 0,
+				}).success,
+			).toBe(true);
+			expect(
+				updateDef?.inputSchema.safeParse({
+					itemId,
+					quantity: -1,
+				}).success,
+			).toBe(false);
+
+			const result = await getToolHandler(
+				server,
+				"update_cargo_item",
+			)({
+				itemId,
+				quantity: 0,
+			});
+			const data = parseOk(result);
+			expect(data).toMatchObject({ id: itemId, quantity: 0, name: "tuna" });
+			expect(updateItem).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				itemId,
+				expect.objectContaining({ quantity: 0 }),
+			);
+			expect(jettisonItem).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("adjust_cargo_item", () => {
+		it("applies negative delta and floors at 0 with warning", async () => {
+			vi.mocked(getCargoItem).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "tuna",
+				quantity: 2,
+				unit: "can",
+			} as never);
+			vi.mocked(updateItem).mockResolvedValueOnce({
+				id: "00000000-0000-0000-0000-000000000001",
+				name: "tuna",
+				quantity: 0,
+				unit: "can",
+			} as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				itemId: "00000000-0000-0000-0000-000000000001",
+				delta: -5,
+			});
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data).toMatchObject({
+				adjusted: true,
+				quantity: 0,
+				previousQuantity: 2,
+				deltaRequested: -5,
+				deltaApplied: -2,
+			});
+			expect(envelope.warnings?.[0]).toContain("Clamped to 0");
+			expect(jettisonItem).not.toHaveBeenCalled();
+		});
+
+		it("returns invalid_input when neither itemId nor name provided", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				delta: -1,
+			});
+			const env = parseEnvelope(result);
+			expect(env.ok).toBe(false);
+			expect(env.error.code).toBe("invalid_input");
+			expect(env.error.recoveryHint).toBeTruthy();
+		});
+
+		it("asks for disambiguation when name matches are close", async () => {
+			const { getCargoByIds } = await import("~/lib/cargo.server");
+			vi.mocked(findSimilarCargoBatch).mockResolvedValueOnce(
+				new Map([
+					[
+						"tuna",
+						[
+							{ itemId: "11111111-1111-4111-8111-111111111111", score: 0.82 },
+							{ itemId: "22222222-2222-4222-8222-222222222222", score: 0.8 },
+						],
+					],
+				]) as never,
+			);
+			vi.mocked(getCargoByIds).mockResolvedValueOnce([
+				{
+					id: "11111111-1111-4111-8111-111111111111",
+					name: "tuna in oil",
+					quantity: 2,
+					unit: "can",
+				},
+				{
+					id: "22222222-2222-4222-8222-222222222222",
+					name: "tuna in water",
+					quantity: 1,
+					unit: "can",
+				},
+			] as never);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"adjust_cargo_item",
+			)({
+				name: "tuna",
+				delta: -1,
+			});
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data).toMatchObject({
+				adjusted: false,
+				requiresDisambiguation: true,
+			});
+			expect(envelope.data.candidates).toHaveLength(2);
+			expect(updateItem).not.toHaveBeenCalled();
 		});
 	});
 

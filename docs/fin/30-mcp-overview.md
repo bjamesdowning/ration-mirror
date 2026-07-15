@@ -24,7 +24,7 @@ Supported clients include Cursor, Claude Desktop, ChatGPT desktop, Zed, and any 
 OAuth consent and API keys can use granular **`mcp:*`** scopes:
 
 - **`mcp:read`** — list/search inventory, meals, plan, expiring items, user preferences (no mutation).
-- **`mcp:inventory:write`** — `add_cargo_item`, `update_cargo_item`, `remove_cargo_item`, `apply_inventory_import`, `import_inventory_csv`.
+- **`mcp:inventory:write`** — `add_cargo_item`, `update_cargo_item`, `adjust_cargo_item`, `remove_cargo_item`, `apply_inventory_import`, `import_inventory_csv`.
 - **`mcp:galley:write`** — `create_meal`, `update_meal`, `delete_meal`, `consume_meal`, `toggle_meal_active`, `clear_active_meals`.
 - **`mcp:manifest:write`** — meal-plan entry CRUD and bulk add.
 - **`mcp:supply:write`** — supply list item CRUD, mark purchased, sync from selected meals, `complete_supply_list`.

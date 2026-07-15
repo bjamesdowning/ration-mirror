@@ -91,7 +91,7 @@ function createSearchDocsToolDef(env: Cloudflare.Env): SharedToolDefinition {
 	return defineSharedTool({
 		name: "search_docs",
 		description:
-			"Search official Ration support docs and blog content. Use before answering questions about how the app works.",
+			"Search official Ration support docs and blog content. Use before answering questions about how the app works. Do not use for live pantry, meals, or shopping state — use inventory/read tools instead.",
 		inputSchema: z.object({
 			query: z.string().min(1),
 		}),
@@ -127,6 +127,10 @@ function createSearchDocsToolDef(env: Cloudflare.Env): SharedToolDefinition {
 					"search_docs",
 					"internal_error",
 					"Ration Copilot knowledge search is unavailable.",
+					{
+						recoveryHint:
+							"Tell the user docs search is temporarily unavailable; answer from general Ration product knowledge cautiously or ask them to retry.",
+					},
 				);
 			}
 			return ok("search_docs", { query: args.query, results });
@@ -163,9 +167,12 @@ export function toAiSdkTools(env: Cloudflare.Env, ctx: CopilotToolContext) {
 				execute: async (args) => {
 					const envelope = await runTool(toolEnv, def, args);
 					if (!envelope.ok) {
-						throw new Error(
-							`${envelope.error.code}: ${envelope.error.message}`,
-						);
+						// Return structured failure so the model continues the turn
+						// (throwing often ends the turn with only reasoning).
+						return {
+							ok: false as const,
+							error: envelope.error,
+						};
 					}
 					return envelope.data;
 				},

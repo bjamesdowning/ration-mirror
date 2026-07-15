@@ -25,6 +25,15 @@ export interface ToolMeta {
 	};
 }
 
+export type ToolErrorBody = {
+	code: ToolErrorCode;
+	message: string;
+	details?: unknown;
+	retryAfter?: number;
+	/** One-line next step for agents to paraphrase to the user. */
+	recoveryHint?: string;
+};
+
 export type ToolEnvelope<T = unknown> =
 	| {
 			ok: true;
@@ -36,12 +45,7 @@ export type ToolEnvelope<T = unknown> =
 	| {
 			ok: false;
 			tool: string;
-			error: {
-				code: ToolErrorCode;
-				message: string;
-				details?: unknown;
-				retryAfter?: number;
-			};
+			error: ToolErrorBody;
 	  };
 
 export type ToolErrorCode =
@@ -90,20 +94,26 @@ export function err(
 	tool: string,
 	code: ToolErrorCode,
 	message: string,
-	extra?: { details?: unknown; retryAfter?: number },
+	extra?: { details?: unknown; retryAfter?: number; recoveryHint?: string },
 ): ToolEnvelope<never> {
-	const error: {
-		code: ToolErrorCode;
-		message: string;
-		details?: unknown;
-		retryAfter?: number;
-	} = {
+	const error: ToolErrorBody = {
 		code,
 		message,
 	};
 	if (extra?.details !== undefined) error.details = extra.details;
 	if (extra?.retryAfter !== undefined) error.retryAfter = extra.retryAfter;
+	if (extra?.recoveryHint !== undefined)
+		error.recoveryHint = extra.recoveryHint;
 	return { ok: false, tool, error };
+}
+
+/** Convenience for validation / bad-arg failures with an optional recovery hint. */
+export function invalidInput(
+	tool: string,
+	message: string,
+	extra?: { details?: unknown; recoveryHint?: string },
+): ToolEnvelope<never> {
+	return err(tool, "invalid_input", message, extra);
 }
 
 /** Trim Zod failures to field keys and first message per field (no formErrors blob). */
@@ -133,11 +143,15 @@ export function mapErrorToEnvelope(
 	if (error instanceof z.ZodError) {
 		const details = zodValidationDetails(error);
 		const fieldKeys = Object.keys(details);
+		const parts = fieldKeys.map((key) => {
+			const msg = details[key]?.[0];
+			return msg ? `${key}: ${msg}` : key;
+		});
 		return err(
 			tool,
 			"invalid_input",
-			fieldKeys.length > 0
-				? `Validation failed: ${fieldKeys.join(", ")}`
+			parts.length > 0
+				? `Validation failed — ${parts.join("; ")}`
 				: "Validation failed.",
 			{ details },
 		);
@@ -156,26 +170,43 @@ export function mapErrorToEnvelope(
 			details.reissueClaimUri = recovery.reissueClaimUri;
 			details.claimRequiredForOwnership = true;
 		}
-		return err(tool, "capacity_exceeded", error.message, { details });
+		return err(tool, "capacity_exceeded", error.message, {
+			details,
+			recoveryHint:
+				"Call get_billing_summary for upgrade options, or free capacity by removing items.",
+		});
 	}
 
 	if (error instanceof Error) {
 		if (error.message.startsWith("Insufficient Cargo for:")) {
-			return err(tool, "insufficient_cargo", error.message);
+			return err(tool, "insufficient_cargo", error.message, {
+				recoveryHint:
+					"Explain the shortfall to the user. Retry with confirmInsufficient:true only after they confirm a partial cook.",
+			});
 		}
 		if (error.message.startsWith("capacity_exceeded")) {
 			return err(
 				tool,
 				"capacity_exceeded",
 				"Tier limit reached. Upgrade or remove items.",
+				{
+					recoveryHint:
+						"Call get_billing_summary for upgrade options, or free capacity by removing items.",
+				},
 			);
+		}
+		if (/not found/i.test(error.message)) {
+			return err(tool, "not_found", error.message, {
+				recoveryHint:
+					"Look up a valid id with the matching list/search tool, then retry.",
+			});
 		}
 		if (isD1ContentionError(error)) {
 			return err(
 				tool,
 				"internal_error",
 				"The server is under heavy load. Please wait a moment and try again.",
-				{ retryAfter: 5 },
+				{ retryAfter: 5, recoveryHint: "Wait a few seconds and retry." },
 			);
 		}
 	}

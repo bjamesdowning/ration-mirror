@@ -144,8 +144,15 @@ struct GroupSettingsView: View {
             {
                 TransferCreditsSection(
                     organizations: session.organizations,
-                    api: env.api,
-                    onTransferred: { Task { await model.load(api: env.api) } }
+                    performTransfer: { sourceId, destinationId, amount in
+                        await model.transferCredits(
+                            sourceOrganizationId: sourceId,
+                            destinationOrganizationId: destinationId,
+                            amount: amount,
+                            api: env.api,
+                            env: env
+                        )
+                    }
                 )
             }
 
@@ -491,8 +498,8 @@ struct GroupSettingsView: View {
 
 struct TransferCreditsSection: View {
     let organizations: [OrgMembership]
-    let api: RationAPI
-    var onTransferred: () -> Void = {}
+    /// Runs the transfer and SessionStore refresh. Returns `nil` on success, else an error message.
+    let performTransfer: (String, String, Int) async -> String?
 
     @State private var sourceId: String = ""
     @State private var destinationId: String = ""
@@ -511,7 +518,7 @@ struct TransferCreditsSection: View {
 
     private var maxAmount: Int {
         let sourceCredits = sourceOrgs.first(where: { $0.id == sourceId })?.credits ?? 0
-        return min(max(sourceCredits, 1), 10_000)
+        return GroupSettingsSupport.maxTransferAmount(sourceCredits: sourceCredits)
     }
 
     var body: some View {
@@ -529,7 +536,8 @@ struct TransferCreditsSection: View {
                 }
             }
             .onChange(of: sourceId) { _, _ in
-                amount = min(max(amount, 1), maxAmount)
+                let sourceCredits = sourceOrgs.first(where: { $0.id == sourceId })?.credits ?? 0
+                amount = GroupSettingsSupport.clampedTransferAmount(amount, sourceCredits: sourceCredits)
             }
             Picker("To", selection: $destinationId) {
                 Text("Select destination").tag("")
@@ -554,7 +562,8 @@ struct TransferCreditsSection: View {
             if destinationId.isEmpty {
                 destinationId = destinationOrgs.first?.id ?? ""
             }
-            amount = min(max(amount, 1), maxAmount)
+            let sourceCredits = sourceOrgs.first(where: { $0.id == sourceId })?.credits ?? 0
+            amount = GroupSettingsSupport.clampedTransferAmount(amount, sourceCredits: sourceCredits)
         }
     }
 
@@ -563,19 +572,13 @@ struct TransferCreditsSection: View {
         errorMessage = nil
         successMessage = nil
         defer { isTransferring = false }
-        let clampedAmount = min(max(amount, 1), maxAmount)
+        let sourceCredits = sourceOrgs.first(where: { $0.id == sourceId })?.credits ?? 0
+        let clampedAmount = GroupSettingsSupport.clampedTransferAmount(amount, sourceCredits: sourceCredits)
         amount = clampedAmount
-        do {
-            _ = try await api.transferCredits(
-                sourceOrganizationId: sourceId,
-                destinationOrganizationId: destinationId,
-                amount: clampedAmount
-            )
+        if let error = await performTransfer(sourceId, destinationId, clampedAmount) {
+            errorMessage = error
+        } else {
             successMessage = "Credits transferred"
-            Haptics.success()
-            onTransferred()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

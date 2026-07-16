@@ -160,6 +160,32 @@ final class GroupSettingsViewModel {
         }
     }
 
+    /// Transfers credits between groups, then reloads `SessionStore` so OrgSwitcherBar
+    /// and the group header reflect the new active-org balance without an org switch.
+    /// - Returns: `nil` on success, or an error message for the transfer section UI.
+    func transferCredits(
+        sourceOrganizationId: String,
+        destinationOrganizationId: String,
+        amount: Int,
+        api: RationAPI,
+        env: AppEnvironment
+    ) async -> String? {
+        do {
+            _ = try await api.transferCredits(
+                sourceOrganizationId: sourceOrganizationId,
+                destinationOrganizationId: destinationOrganizationId,
+                amount: amount
+            )
+            // Must refresh the global store — local `model.load` alone leaves chrome stale.
+            _ = await env.session.load(api: api)
+            session = env.session.session
+            Haptics.success()
+            return nil
+        } catch {
+            return (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     func deleteGroup(api: RationAPI, env: AppEnvironment) async -> DeleteGroupOutcome {
         guard let orgId = session?.organizations.first(where: \.isActive)?.id else {
             return .failure("No active group to delete.")
@@ -222,4 +248,11 @@ final class GroupSettingsViewModel {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
+
+    /// Test seam: mirrors `session = env.session.session` after SessionStore.load.
+    #if DEBUG
+    func applySessionForTesting(_ value: SessionResponse?) {
+        session = value
+    }
+    #endif
 }

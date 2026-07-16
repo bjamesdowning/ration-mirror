@@ -59,6 +59,37 @@ final class GroupSettingsViewModelTests: XCTestCase {
         XCTAssertFalse(GroupSettingsSupport.canTransferCredits(organizations: noCredits))
     }
 
+    func testMaxTransferAmountCapsAtSourceBalanceAndApiLimit() {
+        XCTAssertEqual(GroupSettingsSupport.maxTransferAmount(sourceCredits: 5), 5)
+        XCTAssertEqual(GroupSettingsSupport.maxTransferAmount(sourceCredits: 50_000), 10_000)
+        XCTAssertEqual(GroupSettingsSupport.maxTransferAmount(sourceCredits: 0), 1)
+    }
+
+    func testClampedTransferAmountStaysWithinSourceAndApiBounds() {
+        XCTAssertEqual(GroupSettingsSupport.clampedTransferAmount(3, sourceCredits: 5), 3)
+        XCTAssertEqual(GroupSettingsSupport.clampedTransferAmount(0, sourceCredits: 5), 1)
+        XCTAssertEqual(GroupSettingsSupport.clampedTransferAmount(99, sourceCredits: 5), 5)
+        XCTAssertEqual(GroupSettingsSupport.clampedTransferAmount(20_000, sourceCredits: 50_000), 10_000)
+    }
+
+    /// Regression: chrome credits bind to SessionStore; after transfer the settings VM
+    /// must adopt the refreshed global session (not a local-only reload).
+    @MainActor
+    func testSessionAfterCreditTransferUsesGlobalStoreCredits() {
+        let staleLocal = SessionResponse.fixture(credits: 10, orgCredits: [("a", 10), ("b", 5)])
+        let refreshedGlobal = SessionResponse.fixture(credits: 15, orgCredits: [("a", 15), ("b", 0)])
+
+        let model = GroupSettingsViewModel()
+        model.applySessionForTesting(staleLocal)
+        XCTAssertEqual(model.session?.credits, 10)
+
+        // Mirrors transferCredits: session = env.session.session after SessionStore.load
+        model.applySessionForTesting(refreshedGlobal)
+        XCTAssertEqual(model.session?.credits, 15)
+        XCTAssertEqual(model.session?.organizations.first(where: { $0.id == "a" })?.credits, 15)
+        XCTAssertEqual(model.session?.organizations.first(where: { $0.id == "b" })?.credits, 0)
+    }
+
     func testSlugSuggestionNormalizesName() {
         XCTAssertEqual(GroupSettingsSupport.slugSuggestion(from: "Home Kitchen"), "home-kitchen")
         XCTAssertEqual(GroupSettingsSupport.slugSuggestion(from: "  Space Station 1  "), "space-station-1")
@@ -196,5 +227,38 @@ final class GroupSettingsViewModelTests: XCTestCase {
             webOrigin: URL(string: "https://ration.mayutic.com")!
         )
         XCTAssertEqual(url.absoluteString, "https://ration.mayutic.com/invitations/accept?id=abc-123")
+    }
+}
+
+private extension SessionResponse {
+    static func fixture(credits: Int, orgCredits: [(String, Int)]) -> SessionResponse {
+        let orgs = orgCredits.enumerated().map { index, pair in
+            OrgMembership(
+                id: pair.0,
+                name: pair.0.uppercased(),
+                slug: pair.0,
+                logo: nil,
+                credits: pair.1,
+                role: "owner",
+                isActive: index == 0,
+                isPersonal: nil
+            )
+        }
+        let active = orgs[0]
+        return SessionResponse(
+            user: MobileUser(id: "u1", name: "Test", email: "test@example.com", image: nil),
+            organization: Organization(
+                id: active.id,
+                name: active.name,
+                slug: active.slug,
+                logo: nil,
+                credits: credits
+            ),
+            credits: credits,
+            tier: "free",
+            isTierExpired: false,
+            organizations: orgs,
+            aiCosts: nil
+        )
     }
 }

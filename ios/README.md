@@ -322,6 +322,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Group & dock UX (1.1.42, web v1.6.0):** Web ownership transfer shows API errors (banner + toast) including recipient capacity limits. iOS meal edit removes redundant header Edit button; credit transfer uses amount text field with source balance cap. `TabDockActionModifier` pops the registered tab tag so switching tabs after Cargo detail no longer removes Galley’s `+` FAB.
 
+**Credit transfer sync (1.2.2):** After a successful group credit transfer, `GroupSettingsViewModel.transferCredits` reloads `SessionStore` (then copies into the settings VM) so OrgSwitcherBar and the group header show the new active-org balance without switching groups.
+
 **Copilot device QA checklist (before release):**
 - Galley expanded: input spans full width; `+` FAB sits above trailing edge (not beside input).
 - Galley/Cargo scroll down: bar collapses to chat chip; FAB animates down to bottom-right row.

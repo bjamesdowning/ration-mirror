@@ -39,6 +39,17 @@ enum GroupSettingsSupport {
         return ownerWithCredits && organizations.count >= 2
     }
 
+    /// Clamps a transfer amount to `[1, min(sourceCredits, 10_000)]`.
+    static func clampedTransferAmount(_ amount: Int, sourceCredits: Int) -> Int {
+        let maxAmount = min(max(sourceCredits, 1), 10_000)
+        return min(max(amount, 1), maxAmount)
+    }
+
+    /// Max transferable from a source org (same cap as the mobile/web API).
+    static func maxTransferAmount(sourceCredits: Int) -> Int {
+        min(max(sourceCredits, 1), 10_000)
+    }
+
     static func ownedGroupCount(in organizations: [OrgMembership]) -> Int {
         organizations.filter { $0.role == "owner" }.count
     }

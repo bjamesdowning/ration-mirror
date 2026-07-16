@@ -2,7 +2,7 @@ import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
-import { matchMeals } from "~/lib/matching.server";
+import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "~/lib/matching.server";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyItemStats,
@@ -11,11 +11,10 @@ import {
 import { getCargoTagIndex, getOrganizationTags } from "~/lib/tags.server";
 
 /**
- * Meal-matching pre-fetch bound shared across the hub widgets and
- * `/meals/match` (see H-5) — kept in one place so the two call sites can't
- * drift independently.
+ * @deprecated Use `MEAL_MATCH_CANDIDATE_CAP` — kept as an alias so older
+ * imports keep compiling during the P1-A rollout.
  */
-export const MOBILE_PRE_LIMIT = 12;
+export const MOBILE_PRE_LIMIT = MEAL_MATCH_CANDIDATE_CAP;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
 const MOBILE_MANIFEST_ENTRY_CAP = 50;
 const MOBILE_SUPPLY_ITEMS_SLICE = 20;

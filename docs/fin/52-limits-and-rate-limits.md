@@ -23,6 +23,8 @@ Ration throttles expensive or abuse-prone routes **per user** or **per IP** over
 
 Exact numbers can change; when the API returns a **rate limit** response, **wait and retry** slower.
 
+During a **KV outage**, AI and search-spend throttles **fail closed** (requests are denied briefly) so platform spend cannot runaway. Ordinary read/mutation limits may still fail open for availability.
+
 ## MCP rate limits
 
 **Per organization** (shared by all keys for that org):
@@ -45,5 +47,9 @@ Heavy supply rebuilds use `mcp_supply_sync`, separate from ordinary `mcp_write`.
 ## CSV / JSON import caps
 
 Programmatic imports enforce **row counts** and **payload sizes**—see *REST API (v1) overview*.
+
+## Meal match candidate vs result limits
+
+Meal matching scores up to **`MEAL_MATCH_CANDIDATE_CAP` (200)** meals (most recently updated) on every surface — web API, web Galley, iOS Galley, mobile match API, MCP, and hub. That is separate from how many matches a UI **shows**: web and iOS Galley request result `limit = 100`; hub widgets show ~6 from the same scored pool.
 
 For “why was I blocked?”, include **which action** (hub button vs API vs MCP) and **approximate time** when contacting support.

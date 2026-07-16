@@ -11,7 +11,10 @@ import { parseAllergens } from "~/lib/allergens";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { getMealsForPicker } from "~/lib/manifest.server";
-import { updateQueueJobResult } from "~/lib/queue-job.server";
+import {
+	runIdempotentAiJob,
+	updateQueueJobResult,
+} from "~/lib/queue-job.server";
 import {
 	WeekPlanAIResponseSchema,
 	type WeekPlanRequest,
@@ -55,6 +58,16 @@ export async function runPlanWeekConsumerJob(
 	env: Env,
 	message: PlanWeekQueueMessage,
 ): Promise<void> {
+	const { requestId } = message;
+	await runIdempotentAiJob(env.DB, requestId, async () => {
+		await executePlanWeekConsumerJob(env, message);
+	});
+}
+
+async function executePlanWeekConsumerJob(
+	env: Env,
+	message: PlanWeekQueueMessage,
+): Promise<void> {
 	const { requestId, planId, organizationId, userId, config, cost } = message;
 
 	const failJob = async (error: string) => {
@@ -65,7 +78,7 @@ export async function runPlanWeekConsumerJob(
 			cost,
 			reason: PLAN_WEEK_CREDIT_REASON,
 			writeStatus: async () => {
-				await updateQueueJobResult(env.DB, requestId, "failed", {
+				return updateQueueJobResult(env.DB, requestId, "failed", {
 					status: "failed",
 					organizationId,
 					error,

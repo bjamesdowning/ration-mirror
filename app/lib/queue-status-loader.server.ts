@@ -6,7 +6,7 @@
 import type { AppLoadContext } from "react-router";
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
-import { getQueueJob } from "~/lib/queue-job.server";
+import { getQueueJob, toClientQueueJobStatus } from "~/lib/queue-job.server";
 import { RequestIdSchema } from "~/lib/schemas/queue";
 
 export const NO_STORE = { "Cache-Control": "no-store" } as const;
@@ -61,7 +61,7 @@ export async function requireQueueJobForStatus(
 
 	return {
 		job: {
-			status: job.status as "pending" | "completed" | "failed",
+			status: toClientQueueJobStatus(job.status),
 			organizationId: job.organizationId,
 			resultJson: job.resultJson,
 		},

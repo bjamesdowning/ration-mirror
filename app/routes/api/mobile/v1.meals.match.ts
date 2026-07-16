@@ -1,8 +1,10 @@
 import { handleApiError } from "~/lib/error-handler";
-import type { MealMatchQuery } from "~/lib/matching.server";
-import { matchMeals } from "~/lib/matching.server";
+import {
+	MEAL_MATCH_CANDIDATE_CAP,
+	type MealMatchQuery,
+	matchMeals,
+} from "~/lib/matching.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { MOBILE_PRE_LIMIT } from "~/lib/mobile/hub.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MealMatchQuerySchema } from "~/lib/schemas/meal";
 import type { Route } from "./+types/v1.meals.match";
@@ -45,10 +47,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			mode: parsed.data.mode,
 			minMatch: parsed.data.minMatch,
 			limit: parsed.data.limit,
-			// Bounds the meal query before matching runs (see H-5) — must stay
-			// >= the effective `limit`, or results would be truncated before
-			// matching even starts.
-			preLimit: Math.max(MOBILE_PRE_LIMIT, parsed.data.limit),
+			// Shared candidate pool across web / iOS / MCP / hub (P1-A).
+			preLimit: MEAL_MATCH_CANDIDATE_CAP,
 			tags: parsed.data.tag ? [parsed.data.tag] : undefined,
 			servings: parsed.data.servings,
 			...(parsed.data.type ? { type: parsed.data.type } : {}),

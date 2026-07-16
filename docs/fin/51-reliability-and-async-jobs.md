@@ -8,6 +8,8 @@
 
 Credit-gated jobs **reserve** cost up front with ledger discipline. If the job **fails** after deduction, the system is designed to **refund** credits so you are not charged for a failed run. Temporary UI lag can still occur—**refresh** balances before opening a ticket.
 
+Queue consumers are **idempotent** with respect to terminal job status: if a job is already **completed** or **failed**, a platform retry does not call the model again. You are not charged twice for the same `requestId`; a stuck-looking job may simply take longer while the worker recovers.
+
 ## What you should do as a user
 
 - Leave the page open or return later; **status** updates when polling succeeds.

@@ -18,9 +18,13 @@ vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
 	};
 });
 
-vi.mock("~/lib/matching.server", () => ({
-	matchMeals: (...args: unknown[]) => matchMeals(...args),
-}));
+vi.mock("~/lib/matching.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/matching.server")>();
+	return {
+		...actual,
+		matchMeals: (...args: unknown[]) => matchMeals(...args),
+	};
+});
 
 const ctx = { cloudflare: { env: { DB: {}, RATION_KV: {} } } } as never;
 
@@ -58,24 +62,7 @@ describe("GET /api/mobile/v1/meals/match preLimit", () => {
 		expect(query.preLimit as number).toBeGreaterThanOrEqual(query.limit);
 	});
 
-	it("raises preLimit above the shared floor when a larger explicit limit is requested", async () => {
-		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
-		await loader({
-			request: getRequest({ limit: "80" }),
-			context: ctx,
-			params: {},
-		} as never);
-
-		const [, , query] = matchMeals.mock.calls[0] as [
-			unknown,
-			unknown,
-			{ limit: number; preLimit?: number },
-		];
-		expect(query.limit).toBe(80);
-		expect(query.preLimit as number).toBeGreaterThanOrEqual(80);
-	});
-
-	it("keeps preLimit at the shared floor when the requested limit is small", async () => {
+	it("uses MEAL_MATCH_CANDIDATE_CAP (200) as preLimit for all result limits", async () => {
 		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
 		await loader({
 			request: getRequest({ limit: "1" }),
@@ -89,7 +76,24 @@ describe("GET /api/mobile/v1/meals/match preLimit", () => {
 			{ limit: number; preLimit?: number },
 		];
 		expect(query.limit).toBe(1);
-		expect(query.preLimit).toBe(12);
+		expect(query.preLimit).toBe(200);
+	});
+
+	it("keeps candidate cap at 200 when result limit is large", async () => {
+		const { loader } = await import("~/routes/api/mobile/v1.meals.match");
+		await loader({
+			request: getRequest({ limit: "80" }),
+			context: ctx,
+			params: {},
+		} as never);
+
+		const [, , query] = matchMeals.mock.calls[0] as [
+			unknown,
+			unknown,
+			{ limit: number; preLimit?: number },
+		];
+		expect(query.limit).toBe(80);
+		expect(query.preLimit).toBe(200);
 	});
 
 	it("returns total equal to the number of matches", async () => {

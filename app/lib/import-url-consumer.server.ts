@@ -14,7 +14,10 @@ import {
 } from "~/lib/browser-rendering.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
-import { updateQueueJobResult } from "~/lib/queue-job.server";
+import {
+	runIdempotentAiJob,
+	updateQueueJobResult,
+} from "~/lib/queue-job.server";
 import { isBlockedImportUrl } from "~/lib/recipe-import-submit.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -335,10 +338,20 @@ export async function runImportUrlConsumerJob(
 	env: Env,
 	message: ImportUrlQueueMessage,
 ): Promise<void> {
+	const { requestId } = message;
+	await runIdempotentAiJob(env.DB, requestId, async () => {
+		await executeImportUrlConsumerJob(env, message);
+	});
+}
+
+async function executeImportUrlConsumerJob(
+	env: Env,
+	message: ImportUrlQueueMessage,
+): Promise<void> {
 	const { requestId, organizationId, userId, url, cost } = message;
 
 	const writeResult = async (result: ImportUrlJobResult) => {
-		await updateQueueJobResult(env.DB, requestId, result.status, result);
+		return updateQueueJobResult(env.DB, requestId, result.status, result);
 	};
 
 	const failJob = async (result: Omit<ImportUrlJobResult, "status">) => {
@@ -349,7 +362,7 @@ export async function runImportUrlConsumerJob(
 			cost,
 			reason: IMPORT_URL_CREDIT_REASON,
 			writeStatus: async () => {
-				await writeResult({
+				return writeResult({
 					status: "failed",
 					success: false,
 					...result,

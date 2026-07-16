@@ -846,7 +846,7 @@ The matching engine (in [`app/lib/matching.server.ts`](app/lib/matching.server.t
 **Resolution pipeline inside `matchMeals()`:**
 
 1. KV cache check (10s TTL, key `match:<orgId>:mode:...`) — absorbs repeated calls during page load.
-2. Fetch meals with optional tag/type/domain filters + `preLimit` pre-filter.
+2. Fetch meals ordered by `updatedAt DESC` with optional tag/type/domain filters; candidate pool defaults to `MEAL_MATCH_CANDIDATE_CAP` (200).
 3. Batch-fetch ingredients and tags in parallel.
 4. `fetchOrgCargoIndex()` — narrow 5-column projection.
 5. Phase 1: exact key lookup against normalised cargo names.
@@ -1361,7 +1361,7 @@ flowchart LR
         DistributedRL["KV-backed Sliding Window — global"]
         PerUserLimits["Per-user limits on authenticated endpoints"]
         PerIPLimits["Per-IP limits on public endpoints"]
-        TwoTierRL["L1 in-memory + L2 KV — fail-open on KV error"]
+        TwoTierRL["L1 in-memory + L2 KV — fail-closed on spend buckets"]
     end
 
     subgraph L5["Layer 5 — Data Integrity"]
@@ -1502,11 +1502,11 @@ flowchart TB
 | Service | Scaling Model | Bottleneck | Mitigation |
 |---------|--------------|------------|------------|
 | **Worker** | Auto-scales to thousands of isolates. V8 isolate reuse — no cold starts within a PoP. | CPU time per request. | Heavy AI work offloaded to Queues. Module-level auth instance caching. |
-| **Queues** | Batch processing; consumer invokes per message. | AI vision/LLM latency (5–30s). | Scan and meal-generate offloaded; no Worker timeout. `queue_job` TTL cleanup via CRON. |
+| **Queues** | Batch processing; consumer invokes per message. | AI vision/LLM latency (5–30s). | Scan and meal-generate offloaded; no Worker timeout. `queue_job` TTL cleanup via CRON. Consumers use `runIdempotentAiJob` (terminal skip + `pending`→`processing` claim) so retries after a successful write do not re-invoke Gemini. |
 | **D1 (SQLite)** | Single-region writer with read replicas. Drizzle batch for atomicity. | Write throughput to single leader. | Compound indexes on hot paths. `WHERE org_id = ?` narrows scan windows. Smart Placement co-locates Worker with D1. |
-| **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec per namespace; 60s eventual consistency on reads. | Rate limit windows use TTL-expiring keys (self-cleaning). Fails open on KV errors. |
+| **KV** | Globally replicated reads (eventually consistent). Low-latency reads from every PoP. | 1,000 writes/sec per namespace; 60s eventual consistency on reads. | Rate limit windows use TTL-expiring keys (self-cleaning). Spend-sensitive buckets fail closed on KV errors; read-light buckets fail open. |
 | **Workers AI** | Metered per token, Workers-native. | Embedding throughput (100 texts per batch). | KV embedding cache eliminates repeat calls. Batch embedding for all ingredients in a single AI call. |
-| **Vectorize** | Distributed ANN index. Namespaced per org. | Parallel query concurrency limits. | All ingredient names for a single resolution are batched into one `findSimilarCargoBatch` call with `Promise.all` per name. |
+| **Vectorize** | Distributed ANN index. Namespaced per org. | Parallel query concurrency limits. | Ingredient misses go through `findSimilarCargoBatch` with embeddings batched (≤100) and Vectorize queries capped at `VECTORIZE_QUERY_CONCURRENCY` (12) per chunk. |
 | **AI Gateway** | Managed proxy with queuing, retry, caching, guardrails, spend limits. | Upstream Google AI Studio rate limits. | Centralized `callGemini` client with per-feature `cf-aig-*` headers. Credit system + KV rate limits. Async consumer failures refund credits via `failAiJobWithRefund`. |
 | **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
 | **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
@@ -1517,13 +1517,16 @@ flowchart TB
 
 All rate limits use a **sliding window counter** algorithm implemented in [`app/lib/rate-limiter.server.ts`](app/lib/rate-limiter.server.ts). Limits are enforced globally via KV (not per-isolate). The L1 in-memory layer absorbs burst traffic within the same isolate within the same 5s window before touching KV.
 
+**KV failure policy:** buckets with `failClosed: true` (AI spend / embedding / Vectorize) **deny** the request with a short `Retry-After` when KV get/put fails. Other buckets (including `status_poll`) still **fail open** so auth, polls, and ordinary mutations stay available during a KV incident.
+
 | Endpoint | Identifier | Window | Max | Purpose |
 |----------|------------|--------|-----|---------|
-| `POST /api/scan` | userId | 60s | 20 | AI cost control |
-| `POST /api/meals/generate` | userId | 60s | 10 | AI cost control |
-| `POST /api/meals/import` | userId | 60s | 10 | AI cost control |
-| `POST /api/meal-plans/:id/plan-week` | userId | 60s | 5 | AI cost control (most expensive op) |
-| `GET /api/search` | userId | 10s | 30 | Prevent D1 abuse |
+| `POST /api/scan` | userId | 60s | 20 | AI cost control (fail-closed) |
+| `POST /api/meals/generate` | userId | 60s | 10 | AI cost control (fail-closed) |
+| `POST /api/meals/import` | userId | 60s | 10 | AI cost control (fail-closed) |
+| `POST /api/meal-plans/:id/plan-week` | userId | 60s | 5 | AI cost control (fail-closed) |
+| Meal match (`meal_match`) | userId | 60s | 20 | Match / Vectorize cost (fail-closed) |
+| `GET /api/search` | userId | 10s | 30 | Prevent D1 abuse (fail-open) |
 | `POST /api/checkout` | userId | 60s | 10 | Payment spam prevention |
 | `POST /api/groups/create` | userId | 60s | 5 | Spam prevention |
 | `POST /api/groups/invitations/create` | userId | 60s | 10 | Invitation spam |
@@ -1541,13 +1544,14 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | Supply list mutations | userId | 60s | 60 | Write storm protection (Hub Supply → Update list, REST) |
 | `GET /api/mobile/v1/hub` | userId | 60s | 60 | `hub_read` — 10-way parallel fan-out per call; same tier class as `cargo_list`/`meal_list` |
 | `GET /api/mobile/v1/supply` | userId | 60s | 60 | `supply_read` — read-only, same tier class as `cargo_list` |
-| MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost (mcp_search) |
+| MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost `mcp_search` (fail-closed) |
 | MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, inventory_import_schema, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
-| Copilot WebSocket connect (`/copilot/*`) | userId | 60s | 20 | Connection abuse (`copilot_connect`) |
-| Copilot turns (inside Durable Object) | userId | 60s | 30 | Per-message throttle (`copilot`) |
+| Copilot WebSocket connect (`/copilot/*`) | userId | 60s | 20 | Connection abuse `copilot_connect` (fail-closed) |
+| Copilot turns (inside Durable Object) | userId | 60s | 30 | Per-message throttle `copilot` (fail-closed) |
+| Status poll (`status_poll`) | userId | 60s | 60 | Poll storm guard (fail-open — avoid false UI timeouts on KV outage) |
 | `POST /api/automation/trigger` | userId | 60s | 10 | Automation abuse |
 
 ---

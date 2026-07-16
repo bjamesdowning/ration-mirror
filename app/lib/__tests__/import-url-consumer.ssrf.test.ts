@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const updateQueueJobResult = vi.fn();
+const updateQueueJobResult = vi.fn().mockResolvedValue(true);
 
 vi.mock("~/lib/queue-job.server", () => ({
 	updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
+	runIdempotentAiJob: async (
+		_db: unknown,
+		_requestId: string,
+		work: () => Promise<void>,
+	) => {
+		await work();
+		return { ran: true, claimed: true };
+	},
 }));
 
 vi.mock("~/lib/ledger.server", async (importOriginal) => {
@@ -12,7 +20,7 @@ vi.mock("~/lib/ledger.server", async (importOriginal) => {
 		...actual,
 		failAiJobWithRefund: async (
 			_env: Cloudflare.Env,
-			options: { writeStatus: () => Promise<void> },
+			options: { writeStatus: () => Promise<boolean> },
 		) => {
 			await options.writeStatus();
 		},

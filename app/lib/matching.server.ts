@@ -1,4 +1,4 @@
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal, mealIngredient, mealTag, tag } from "../db/schema";
 import { effectiveBaseFields } from "./base-quantity";
@@ -22,6 +22,24 @@ import {
 } from "./vector.server";
 
 export { normalizeForCargoDedup, normalizeForMatch };
+
+/**
+ * How many meals are scored (considered) before ranking — shared by web,
+ * iOS, mobile API, MCP, and hub. Separate from the result `limit` each UI shows.
+ */
+export const MEAL_MATCH_CANDIDATE_CAP = 200;
+
+/**
+ * Resolve the SQL candidate cap: default 200, never exceed 200, always ≥ result limit.
+ */
+export function resolveMealMatchPreLimit(
+	limit: number,
+	preLimit?: number,
+): number {
+	const resultLimit = Math.min(Math.max(limit, 1), MEAL_MATCH_CANDIDATE_CAP);
+	const requested = preLimit ?? MEAL_MATCH_CANDIDATE_CAP;
+	return Math.min(Math.max(requested, resultLimit), MEAL_MATCH_CANDIDATE_CAP);
+}
 
 /**
  * Type definitions for meal matching
@@ -366,6 +384,8 @@ export async function matchMeals(
 		searchQuery,
 	} = query;
 
+	const effectivePreLimit = resolveMealMatchPreLimit(limit, preLimit);
+
 	// Normalise tags to a string array (or empty) for consistent handling
 	const tagFilter: string[] =
 		tags === undefined ? [] : Array.isArray(tags) ? tags : [tags];
@@ -375,7 +395,7 @@ export async function matchMeals(
 		mode,
 		minMatch,
 		limit,
-		preLimit,
+		preLimit: effectivePreLimit,
 		tags: tagFilter,
 		servings,
 		type,
@@ -385,7 +405,10 @@ export async function matchMeals(
 
 	// 0. KV cache lookup (10s TTL; repeat Hub visits return immediately)
 	if (env.RATION_KV) {
-		const cacheKey = getMatchCacheKey(organizationId, query);
+		const cacheKey = getMatchCacheKey(organizationId, {
+			...query,
+			preLimit: effectivePreLimit,
+		});
 		try {
 			const cached = await env.RATION_KV.get(cacheKey, "json");
 			if (Array.isArray(cached) && cached.length >= 0) {
@@ -398,7 +421,7 @@ export async function matchMeals(
 	}
 
 	// 1. Fetch organization's meals (with optional tag, type, domain filters)
-	// preLimit caps meals before matching — bounds work for large orgs.
+	// Candidate cap bounds work for large orgs (200 most recently updated).
 	// When tags are provided we JOIN against meal_tag with an inArray condition
 	// (OR logic: a meal matching *any* of the specified tags is included).
 	const needsTagJoin = tagFilter.length > 0;
@@ -432,14 +455,14 @@ export async function matchMeals(
 				.innerJoin(mealTag, eq(meal.id, mealTag.mealId))
 				.innerJoin(tag, eq(mealTag.tagId, tag.id))
 				.where(and(...baseConditions))
+				.orderBy(desc(meal.updatedAt), meal.id)
 		: d1
 				.select()
 				.from(meal)
-				.where(and(...baseConditions));
+				.where(and(...baseConditions))
+				.orderBy(desc(meal.updatedAt), meal.id);
 
-	if (preLimit != null && preLimit > 0) {
-		mealQuery = mealQuery.limit(preLimit) as typeof mealQuery;
-	}
+	mealQuery = mealQuery.limit(effectivePreLimit) as typeof mealQuery;
 
 	const meals = await mealQuery;
 	log.info("[matchMeals] Found meals", { count: meals.length });
@@ -553,7 +576,10 @@ export async function matchMeals(
 
 	// 10. Store in KV cache for repeat visits (10s TTL)
 	if (env.RATION_KV) {
-		const cacheKey = getMatchCacheKey(organizationId, query);
+		const cacheKey = getMatchCacheKey(organizationId, {
+			...query,
+			preLimit: effectivePreLimit,
+		});
 		try {
 			await env.RATION_KV.put(cacheKey, JSON.stringify(limited), {
 				expirationTtl: MATCH_CACHE_TTL,
@@ -839,5 +865,5 @@ export function getMatchCacheKey(
 			? "all"
 			: (Array.isArray(tags) ? [...tags].sort() : [tags]).join("+") || "all";
 	const searchKey = searchQuery?.trim().toLowerCase() ?? "all";
-	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? "none"}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
+	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? MEAL_MATCH_CANDIDATE_CAP}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
 }

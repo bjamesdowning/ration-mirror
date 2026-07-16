@@ -93,13 +93,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			}
 		: null;
 
-	// Deferred — raw promises; meal/snack widgets show skeletons until resolved
-	// preLimit: 12 caps meals matched; bounds vector work for large orgs
+	// Deferred — raw promises; meal/snack widgets show skeletons until resolved.
+	// Score the shared 200-candidate pool; widget `limit` controls display rows only.
 	const mealMatches = matchMeals(context.cloudflare.env, groupId, {
 		mode: "delta",
 		minMatch: 50,
 		limit: mealsReadyConfig?.filters?.limit ?? 6,
-		preLimit: 12,
 		type: "recipe",
 		domain: "food",
 		tags: mealsReadyConfig?.filters?.tags,
@@ -108,7 +107,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		mode: "delta",
 		minMatch: 50,
 		limit: snacksReadyConfig?.filters?.limit ?? 6,
-		preLimit: 12,
 		type: "provision",
 		domain: "food",
 		tags: snacksReadyConfig?.filters?.tags,
@@ -118,7 +116,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		mode: "delta",
 		minMatch: 50,
 		limit: mealsPartialConfig?.filters?.limit ?? 6,
-		preLimit: 12,
 		type: "recipe",
 		domain: "food",
 		tags: mealsPartialConfig?.filters?.tags,

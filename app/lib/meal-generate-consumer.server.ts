@@ -11,7 +11,10 @@ import { getUserSettings } from "~/lib/auth.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
-import { updateQueueJobResult } from "~/lib/queue-job.server";
+import {
+	runIdempotentAiJob,
+	updateQueueJobResult,
+} from "~/lib/queue-job.server";
 import {
 	type AIResponse,
 	AIResponseSchema,
@@ -54,6 +57,16 @@ export async function runMealGenerateConsumerJob(
 	env: Env,
 	message: MealGenerateQueueMessage,
 ): Promise<void> {
+	const { requestId } = message;
+	await runIdempotentAiJob(env.DB, requestId, async () => {
+		await executeMealGenerateConsumerJob(env, message);
+	});
+}
+
+async function executeMealGenerateConsumerJob(
+	env: Env,
+	message: MealGenerateQueueMessage,
+): Promise<void> {
 	const { requestId, organizationId, userId, customization, cost } = message;
 
 	const failJob = async (error: string) => {
@@ -64,7 +77,7 @@ export async function runMealGenerateConsumerJob(
 			cost,
 			reason: MEAL_GENERATE_CREDIT_REASON,
 			writeStatus: async () => {
-				await updateQueueJobResult(env.DB, requestId, "failed", {
+				return updateQueueJobResult(env.DB, requestId, "failed", {
 					status: "failed",
 					organizationId,
 					error,

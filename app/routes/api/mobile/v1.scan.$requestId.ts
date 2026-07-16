@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
-import { getQueueJob } from "~/lib/queue-job.server";
+import { getQueueJob, toClientQueueJobStatus } from "~/lib/queue-job.server";
 import { NO_STORE, parseJobResultJson } from "~/lib/queue-status-loader.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { toUserFacingScanError } from "~/lib/scan-user-error";
@@ -46,7 +46,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			);
 		}
 
-		if (job.status === "pending") {
+		if (toClientQueueJobStatus(job.status) === "pending") {
 			return data({ status: "pending" }, { headers: NO_STORE });
 		}
 

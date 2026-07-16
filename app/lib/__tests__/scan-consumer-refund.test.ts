@@ -1,17 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const updateQueueJobResult = vi.fn();
+const updateQueueJobResult = vi.fn().mockResolvedValue(true);
 const fetchOrgCargoIndex = vi.fn().mockResolvedValue([]);
 const storageGet = vi.fn().mockResolvedValue(null);
 const storageDelete = vi.fn().mockResolvedValue(undefined);
 const failAiJobWithRefund = vi.fn(
-	async (options: { writeStatus: () => Promise<void> }) => {
+	async (options: { writeStatus: () => Promise<boolean> }) => {
 		await options.writeStatus();
 	},
 );
 
 vi.mock("~/lib/queue-job.server", () => ({
 	updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
+	runIdempotentAiJob: async (
+		_db: unknown,
+		_requestId: string,
+		work: () => Promise<void>,
+	) => {
+		await work();
+		return { ran: true, claimed: true };
+	},
 }));
 
 vi.mock("~/lib/cargo-index.server", () => ({

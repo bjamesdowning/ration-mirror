@@ -67,6 +67,8 @@ export async function submitVisualScan(
 				httpMetadata: { contentType: mimeType },
 			});
 
+			await insertQueueJobPending(env.DB, requestId, "scan", organizationId);
+
 			await SCAN_QUEUE.send({
 				requestId,
 				organizationId,
@@ -76,8 +78,6 @@ export async function submitVisualScan(
 				filename: imageFile.name || undefined,
 				cost: AI_COSTS.SCAN,
 			});
-
-			await insertQueueJobPending(env.DB, requestId, "scan", organizationId);
 
 			return { status: "processing" as const, requestId };
 		},

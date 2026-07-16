@@ -105,6 +105,12 @@ export async function submitRecipeImport(
 		},
 		async () => {
 			const requestId = crypto.randomUUID();
+			await insertQueueJobPending(
+				env.DB,
+				requestId,
+				"import_url",
+				organizationId,
+			);
 			await queue.send({
 				requestId,
 				organizationId,
@@ -112,12 +118,6 @@ export async function submitRecipeImport(
 				url: validatedUrl,
 				cost: AI_COSTS.IMPORT_URL,
 			});
-			await insertQueueJobPending(
-				env.DB,
-				requestId,
-				"import_url",
-				organizationId,
-			);
 			return { status: "processing" as const, requestId };
 		},
 	);

@@ -53,6 +53,7 @@ vi.mock("~/lib/manifest.server", () => ({
 
 vi.mock("~/lib/matching.server", () => ({
 	matchMeals: vi.fn(),
+	MEAL_MATCH_CANDIDATE_CAP: 200,
 }));
 
 vi.mock("~/lib/meals.server", () => ({

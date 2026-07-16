@@ -16,7 +16,9 @@ import { log } from "./logging.server";
  * KV's eventual consistency already makes limits approximate across PoPs; the
  * in-memory cache adds at most 5s of extra staleness on top.
  *
- * KV failures fail open to avoid cascading 500s; log.warn emitted.
+ * KV failures: spend-sensitive buckets (`failClosed: true`) deny the request to
+ * prevent AI/search spend runaway (SR-002). Other buckets still fail open for
+ * availability; log.warn is emitted in both cases.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +27,11 @@ interface RateLimitConfig {
 	windowMs: number; // Window duration in milliseconds
 	maxRequests: number; // Maximum requests per window
 	keyPrefix: string; // KV key prefix for this limit type
+	/**
+	 * When true, KV get/put failures deny the request (short retryAfter).
+	 * Use for AI / embedding / Vectorize spend paths. Default false (fail-open).
+	 */
+	failClosed?: boolean;
 }
 
 export interface RateLimitResult {
@@ -96,6 +103,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,
 		keyPrefix: "rate:scan",
+		failClosed: true,
 	},
 	search: {
 		windowMs: 10_000, // 10 seconds
@@ -106,26 +114,31 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,
 		keyPrefix: "rate:meal_match",
+		failClosed: true,
 	},
 	generate_meal: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,
 		keyPrefix: "rate:generate_meal",
+		failClosed: true,
 	},
 	recipe_import: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,
 		keyPrefix: "rate:recipe_import",
+		failClosed: true,
 	},
 	copilot_connect: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,
 		keyPrefix: "rate:copilot_connect",
+		failClosed: true,
 	},
 	copilot: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 30,
 		keyPrefix: "rate:copilot",
+		failClosed: true,
 	},
 	group_create: {
 		windowMs: 60_000, // 1 minute
@@ -151,6 +164,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20, // AI embedding calls — matches scan limit
 		keyPrefix: "rate:mcp_search",
+		failClosed: true,
 	},
 	mcp_list: {
 		windowMs: 60_000, // 1 minute
@@ -296,6 +310,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute — expensive AI call, keep tight
 		maxRequests: 5,
 		keyPrefix: "rate:plan_week",
+		failClosed: true,
 	},
 	cargo_list: {
 		windowMs: 60_000, // 1 minute
@@ -343,6 +358,8 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000,
 		maxRequests: 60,
 		keyPrefix: "rate:status_poll",
+		// Fail-open: denying polls during KV outages causes UI timeouts even when
+		// the job already completed in D1 (clients treat non-OK polls as pending).
 	},
 	agent_auth_register: {
 		windowMs: 60_000,
@@ -385,6 +402,18 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
  */
 const KV_EDGE_CACHE_TTL = 60;
 
+/** Short retry hint when spend-sensitive buckets fail closed on KV errors. */
+const FAIL_CLOSED_RETRY_AFTER_SECONDS = 5;
+
+function failClosedResult(now: number): RateLimitResult {
+	return {
+		allowed: false,
+		remaining: 0,
+		resetAt: now + FAIL_CLOSED_RETRY_AFTER_SECONDS * 1000,
+		retryAfter: FAIL_CLOSED_RETRY_AFTER_SECONDS,
+	};
+}
+
 // ─── Core Rate Limiting ───────────────────────────────────────────────────────
 
 /**
@@ -413,6 +442,7 @@ export async function checkRateLimit(
 
 	const key = `${config.keyPrefix}:${identifier}`;
 	const now = Date.now();
+	const failClosed = config.failClosed === true;
 
 	// ── Phase 1: In-memory cache (L1) ──────────────────────────────────────
 	const cached = LOCAL_CACHE.get(key);
@@ -461,10 +491,18 @@ export async function checkRateLimit(
 			cacheTtl: KV_EDGE_CACHE_TTL,
 		});
 	} catch (err) {
-		log.warn("Rate limit KV get failed (failing open)", {
-			limitType,
-			errorMessage: err instanceof Error ? err.message : String(err),
-		});
+		log.warn(
+			failClosed
+				? "Rate limit KV get failed (failing closed)"
+				: "Rate limit KV get failed (failing open)",
+			{
+				limitType,
+				errorMessage: err instanceof Error ? err.message : String(err),
+			},
+		);
+		if (failClosed) {
+			return failClosedResult(now);
+		}
 	}
 
 	// Determine effective window by merging local cache with KV
@@ -523,10 +561,22 @@ export async function checkRateLimit(
 			expirationTtl: ttlSeconds,
 		});
 	} catch (err) {
-		log.warn("Rate limit KV put failed (failing open)", {
-			limitType,
-			errorMessage: err instanceof Error ? err.message : String(err),
-		});
+		log.warn(
+			failClosed
+				? "Rate limit KV put failed (failing closed)"
+				: "Rate limit KV put failed (failing open)",
+			{
+				limitType,
+				errorMessage: err instanceof Error ? err.message : String(err),
+			},
+		);
+		if (failClosed) {
+			// Roll back the optimistic L1 increment so a later success path does not
+			// under-count after we denied this request.
+			effectiveWindow.count = Math.max(0, effectiveWindow.count - 1);
+			LOCAL_CACHE.set(key, { window: effectiveWindow, cachedAt: now });
+			return failClosedResult(now);
+		}
 	}
 
 	return {
@@ -612,10 +662,19 @@ export async function getRateLimitStatus(
 			cacheTtl: KV_EDGE_CACHE_TTL,
 		});
 	} catch (err) {
-		log.warn("Rate limit KV get failed in status check (failing open)", {
-			limitType,
-			errorMessage: err instanceof Error ? err.message : String(err),
-		});
+		const failClosed = config.failClosed === true;
+		log.warn(
+			failClosed
+				? "Rate limit KV get failed in status check (failing closed)"
+				: "Rate limit KV get failed in status check (failing open)",
+			{
+				limitType,
+				errorMessage: err instanceof Error ? err.message : String(err),
+			},
+		);
+		if (failClosed) {
+			return failClosedResult(now);
+		}
 	}
 
 	if (!existingData || now - existingData.windowStart >= config.windowMs) {

@@ -84,7 +84,7 @@ export function MealGrid({
 					const params = new URLSearchParams({
 						mode: matchMode,
 						minMatch: minMatch.toString(),
-						limit: "50",
+						limit: "100",
 					});
 
 					const response = await fetch(`/api/meals/match?${params}`, {

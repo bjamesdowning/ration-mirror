@@ -316,6 +316,8 @@ export async function refundAiJobCredits(
 
 /**
  * Write a failed queue job result and refund enqueue-time credits.
+ * Refund runs only when the failed status write actually lands, so a late
+ * retry cannot refund after a peer already completed the job.
  */
 export async function failAiJobWithRefund(
 	env: Env,
@@ -325,10 +327,13 @@ export async function failAiJobWithRefund(
 		userId: string;
 		cost: number;
 		reason: string;
-		writeStatus: () => Promise<void>;
+		writeStatus: () => Promise<boolean>;
 	},
 ): Promise<void> {
-	await options.writeStatus();
+	const wrote = await options.writeStatus();
+	if (!wrote) {
+		return;
+	}
 	await refundAiJobCredits(env, {
 		requestId: options.requestId,
 		organizationId: options.organizationId,

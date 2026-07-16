@@ -7,7 +7,10 @@ import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { parseModelJson } from "~/lib/parse-model-json";
-import { updateQueueJobResult } from "~/lib/queue-job.server";
+import {
+	runIdempotentAiJob,
+	updateQueueJobResult,
+} from "~/lib/queue-job.server";
 import { SCAN_USER_ERROR, toUserFacingScanError } from "~/lib/scan-user-error";
 import {
 	SCAN_UNITS,
@@ -148,6 +151,33 @@ export async function runScanConsumerJob(
 		cost,
 	} = message;
 
+	await runIdempotentAiJob(env.DB, requestId, async () => {
+		await executeScanConsumerJob(env, {
+			requestId,
+			organizationId,
+			userId,
+			imageKey,
+			mimeType,
+			filename,
+			cost,
+		});
+	});
+}
+
+async function executeScanConsumerJob(
+	env: Env,
+	message: ScanQueueMessage,
+): Promise<void> {
+	const {
+		requestId,
+		organizationId,
+		userId,
+		imageKey,
+		mimeType,
+		filename,
+		cost,
+	} = message;
+
 	const failJob = async (error: string) => {
 		await failAiJobWithRefund(env, {
 			requestId,
@@ -156,7 +186,7 @@ export async function runScanConsumerJob(
 			cost,
 			reason: SCAN_CREDIT_REASON,
 			writeStatus: async () => {
-				await updateQueueJobResult(env.DB, requestId, "failed", {
+				return updateQueueJobResult(env.DB, requestId, "failed", {
 					status: "failed",
 					organizationId,
 					error,

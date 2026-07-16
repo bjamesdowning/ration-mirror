@@ -5,6 +5,7 @@
 
 import { sha256Hex } from "./crypto.server";
 import { log } from "./logging.server";
+import { chunkArray } from "./query-utils.server";
 
 const EMBEDDING_MODEL = "@cf/google/embeddinggemma-300m";
 const EMBED_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
@@ -240,6 +241,9 @@ export interface SimilarCargoMatch {
 	score: number;
 }
 
+/** Max parallel Vectorize queries per batch (bounds Worker subrequests/CPU). */
+export const VECTORIZE_QUERY_CONCURRENCY = 12;
+
 /** Batch query for multiple ingredient names (uses KV cache for embeddings) */
 export async function findSimilarCargoBatch(
 	env: Env,
@@ -257,35 +261,39 @@ export async function findSimilarCargoBatch(
 		returnMetadata: "indexed" as const,
 		namespace: organizationId,
 	};
-	await Promise.all(
-		ingredientNames.map(async (name, i) => {
-			const vec = vectors[i];
-			if (!vec || vec.length !== 768) return;
-			try {
-				const result = await env.VECTORIZE.query(vec, queryOpts);
-				const matches =
-					(
-						result as {
-							matches?: Array<{
-								id?: string;
-								score?: number;
-								metadata?: Record<string, string>;
-							}>;
-						}
-					).matches ?? [];
-				const filtered = matches
-					.filter((m) => m.score != null && m.score >= threshold)
-					.map((m) => ({
-						itemId: m.id ?? "",
-						itemName: ((m.metadata?.name ?? "").trim() || m.id) ?? "",
-						score: m.score ?? 0,
-					}))
-					.filter((m) => m.itemId && m.itemName);
-				out.set(name, filtered);
-			} catch {
-				out.set(name, []);
-			}
-		}),
-	);
+
+	const indexed = ingredientNames.map((name, i) => ({ name, i }));
+	for (const chunk of chunkArray(indexed, VECTORIZE_QUERY_CONCURRENCY)) {
+		await Promise.all(
+			chunk.map(async ({ name, i }) => {
+				const vec = vectors[i];
+				if (!vec || vec.length !== 768) return;
+				try {
+					const result = await env.VECTORIZE.query(vec, queryOpts);
+					const matches =
+						(
+							result as {
+								matches?: Array<{
+									id?: string;
+									score?: number;
+									metadata?: Record<string, string>;
+								}>;
+							}
+						).matches ?? [];
+					const filtered = matches
+						.filter((m) => m.score != null && m.score >= threshold)
+						.map((m) => ({
+							itemId: m.id ?? "",
+							itemName: ((m.metadata?.name ?? "").trim() || m.id) ?? "",
+							score: m.score ?? 0,
+						}))
+						.filter((m) => m.itemId && m.itemName);
+					out.set(name, filtered);
+				} catch {
+					out.set(name, []);
+				}
+			}),
+		);
+	}
 	return out;
 }

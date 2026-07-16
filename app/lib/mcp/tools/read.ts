@@ -18,7 +18,7 @@ import {
 	getWeekEntries,
 } from "../../manifest.server";
 import { addDays } from "../../manifest-dates";
-import { matchMeals } from "../../matching.server";
+import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
@@ -484,7 +484,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					mode: a.mode ?? "strict",
 					minMatch: a.minMatch ?? 50,
 					limit: queryLimit,
-					preLimit: 200,
+					preLimit: MEAL_MATCH_CANDIDATE_CAP,
 					tags: a.tags,
 				});
 

@@ -72,6 +72,13 @@ export async function submitPlanWeek(
 		async () => {
 			const requestId = crypto.randomUUID();
 
+			await insertQueueJobPending(
+				env.DB,
+				requestId,
+				"plan_week",
+				organizationId,
+			);
+
 			await PLAN_WEEK_QUEUE.send({
 				requestId,
 				planId,
@@ -80,13 +87,6 @@ export async function submitPlanWeek(
 				config,
 				cost: AI_COSTS.MEAL_PLAN_WEEKLY,
 			});
-
-			await insertQueueJobPending(
-				env.DB,
-				requestId,
-				"plan_week",
-				organizationId,
-			);
 
 			return { status: "processing" as const, requestId };
 		},

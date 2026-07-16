@@ -39,6 +39,7 @@ vi.mock("~/lib/manifest.server", () => ({
 
 vi.mock("~/lib/matching.server", () => ({
 	matchMeals: () => matchMeals(),
+	MEAL_MATCH_CANDIDATE_CAP: 200,
 }));
 
 vi.mock("~/lib/supply.server", async (importOriginal) => {

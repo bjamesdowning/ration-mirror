@@ -40,6 +40,13 @@ export async function submitMealGenerate(
 
 			const requestId = crypto.randomUUID();
 
+			await insertQueueJobPending(
+				env.DB,
+				requestId,
+				"meal_generate",
+				organizationId,
+			);
+
 			await MEAL_GENERATE_QUEUE.send({
 				requestId,
 				organizationId,
@@ -47,13 +54,6 @@ export async function submitMealGenerate(
 				customization,
 				cost: AI_COSTS.MEAL_GENERATE,
 			});
-
-			await insertQueueJobPending(
-				env.DB,
-				requestId,
-				"meal_generate",
-				organizationId,
-			);
 
 			return { status: "queued" as const, requestId };
 		},

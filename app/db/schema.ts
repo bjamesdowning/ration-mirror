@@ -800,7 +800,7 @@ export const queueJob = sqliteTable(
 		}).notNull(),
 		organizationId: text("organization_id").notNull(),
 		status: text("status", {
-			enum: ["pending", "completed", "failed"],
+			enum: ["pending", "processing", "completed", "failed"],
 		}).notNull(),
 		resultJson: text("result_json"),
 		createdAt: integer("created_at", { mode: "timestamp" })

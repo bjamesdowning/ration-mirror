@@ -6,7 +6,9 @@ import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
+import { parseModelJson } from "~/lib/parse-model-json";
 import { updateQueueJobResult } from "~/lib/queue-job.server";
+import { SCAN_USER_ERROR, toUserFacingScanError } from "~/lib/scan-user-error";
 import {
 	SCAN_UNITS,
 	ScanAIResponseSchema,
@@ -125,12 +127,11 @@ export interface ScanJobResult {
 const SCAN_CREDIT_REASON = "Visual Scan";
 
 const SCAN_GATEWAY_MESSAGES = {
-	timeout: "The image took too long to process.",
-	rateLimited:
-		"Scan service is temporarily unavailable. Please try again later.",
-	blocked: "This image could not be processed due to content restrictions.",
-	configMissing: "Scan configuration missing",
-	error: "Scan processing failed",
+	timeout: SCAN_USER_ERROR.timeout,
+	rateLimited: SCAN_USER_ERROR.rateLimited,
+	blocked: SCAN_USER_ERROR.blocked,
+	configMissing: SCAN_USER_ERROR.config,
+	error: SCAN_USER_ERROR.generic,
 } as const;
 
 export async function runScanConsumerJob(
@@ -167,7 +168,7 @@ export async function runScanConsumerJob(
 	try {
 		const imageObj = await env.STORAGE.get(imageKey);
 		if (!imageObj) {
-			await failJob("Image not found in storage");
+			await failJob(SCAN_USER_ERROR.missingUpload);
 			return;
 		}
 
@@ -209,14 +210,26 @@ export async function runScanConsumerJob(
 
 		const modelText = gatewayResult.text;
 
-		const cleanedText = modelText
-			.replace(/^```(?:json)?\s*\n?/i, "")
-			.replace(/\n?```\s*$/i, "")
-			.trim();
-		const parsedJson = JSON.parse(cleanedText);
+		const parsedJson = parseModelJson(modelText);
+		if (parsedJson === null) {
+			log.error("Scan model returned unparseable JSON", {
+				requestId,
+				organizationId,
+				isPdf,
+				textLength: modelText.length,
+			});
+			await failJob(SCAN_USER_ERROR.parse);
+			return;
+		}
+
 		const parsedResult = ScanAIResponseSchema.safeParse(parsedJson);
 		if (!parsedResult.success) {
-			await failJob("Scan processing failed");
+			log.error("Scan model JSON failed schema validation", {
+				requestId,
+				organizationId,
+				issues: parsedResult.error.issues.slice(0, 5),
+			});
+			await failJob(SCAN_USER_ERROR.schema);
 			return;
 		}
 
@@ -269,7 +282,12 @@ export async function runScanConsumerJob(
 
 		const validatedScan = ScanResultSchema.safeParse(scanResultCandidate);
 		if (!validatedScan.success) {
-			await failJob("Scan processing failed");
+			log.error("Scan result failed final schema validation", {
+				requestId,
+				organizationId,
+				issues: validatedScan.error.issues.slice(0, 5),
+			});
+			await failJob(SCAN_USER_ERROR.schema);
 			return;
 		}
 
@@ -302,9 +320,7 @@ export async function runScanConsumerJob(
 		}
 	} catch (err) {
 		log.error("Scan consumer job failed", err);
-		await failJob(
-			err instanceof Error ? err.message : "Scan processing failed",
-		);
+		await failJob(toUserFacingScanError(err));
 		// Do not rethrow — status is stored; user can retry manually
 	}
 }

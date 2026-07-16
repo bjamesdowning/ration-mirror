@@ -4,6 +4,7 @@ import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getQueueJob } from "~/lib/queue-job.server";
 import { NO_STORE, parseJobResultJson } from "~/lib/queue-status-loader.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { toUserFacingScanError } from "~/lib/scan-user-error";
 import { RequestIdSchema } from "~/lib/schemas/queue";
 import type { Route } from "./+types/v1.scan.$requestId";
 
@@ -63,7 +64,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 				items: result.items,
 				existingInventory: result.existingInventory,
 				metadata: result.metadata,
-				error: result.error,
+				error: result.error ? toUserFacingScanError(result.error) : undefined,
 			},
 			{ headers: NO_STORE },
 		);

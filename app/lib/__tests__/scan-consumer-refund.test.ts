@@ -67,7 +67,7 @@ describe("runScanConsumerJob refund on failure", () => {
 			"failed",
 			expect.objectContaining({
 				status: "failed",
-				error: "Image not found in storage",
+				error: "We couldn't find your upload. Please try scanning again.",
 			}),
 		);
 		expect(failAiJobWithRefund).toHaveBeenCalledWith(

@@ -355,7 +355,7 @@ final class SupplyViewModel {
                 case "completed":
                     return true
                 case "failed":
-                    errorMessage = result.error ?? "Scan failed. Please try again."
+                    errorMessage = ScanUserFacingError.message(from: result.error)
                     return false
                 default:
                     scanStatusMessage = "Extracting items…"

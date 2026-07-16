@@ -10,6 +10,7 @@ import {
 	requireQueueJobForStatus,
 } from "~/lib/queue-status-loader.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { toUserFacingScanError } from "~/lib/scan-user-error";
 import type { Route } from "./+types/scan.status.$requestId";
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
@@ -66,7 +67,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 			items: result.items,
 			existingInventory: result.existingInventory,
 			metadata: result.metadata,
-			error: result.error,
+			error: result.error ? toUserFacingScanError(result.error) : undefined,
 		},
 		{ headers: NO_STORE },
 	);

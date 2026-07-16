@@ -361,7 +361,7 @@ sequenceDiagram
 
 **File pre-processing** (in the `CameraInput` component): For images, the browser resizes to a maximum of 1024px on either side at 0.8 JPEG quality on a canvas with a white background before upload. For PDFs (e.g. exported grocery receipts), the file is sent directly without canvas processing. Both types share a 5 MB client-side and server-side size limit. Accepted formats: JPEG, PNG, WebP, PDF.
 
-**PDF receipts**: When a PDF is uploaded the consumer selects a receipt-specific prompt optimised for parsing grocery receipt line items (item name, weight/count columns, brand-name stripping). The metadata `source` field is set to `"pdf"` to distinguish PDF scans from image scans.
+**PDF receipts**: When a PDF is uploaded the consumer selects a receipt-specific prompt optimised for parsing grocery receipt line items (item name, weight/count columns, brand-name stripping). The metadata `source` field is set to `"pdf"` to distinguish PDF scans from image scans. Model output is parsed via `parseModelJson` (fence strip, balanced extract, trailing-comma repair); parse/schema failures store customer-facing copy only — technical `JSON.parse` messages stay in server logs.
 
 **AI Gateway routing** (via [`callGemini`](app/lib/ai-gateway.server.ts)):
 ```

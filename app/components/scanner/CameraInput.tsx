@@ -10,6 +10,7 @@ import {
 import { useFetcher, useRevalidator } from "react-router";
 import { log } from "~/lib/logging.client";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
+import { toUserFacingScanError } from "~/lib/scan-user-error";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
 import type { SupplyScanMatchResult } from "~/lib/supply-scan-match.server";
 import { ScanResultsModal } from "./ScanResultsModal";
@@ -326,7 +327,12 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						setIsAnalyzing(false);
 						setPollRequestId(null);
 					} else if (data.status === "failed") {
-						showError(data.error ?? "Scan failed. Please try again.");
+						showError(
+							toUserFacingScanError(
+								data.error ??
+									"Something went wrong while scanning. Please try again.",
+							),
+						);
 						setIsAnalyzing(false);
 						setPollRequestId(null);
 					}

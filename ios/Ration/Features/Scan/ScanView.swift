@@ -79,7 +79,7 @@ final class ScanViewModel {
             interpretStatus: { result in
                 switch result.status {
                 case "completed": .completed
-                case "failed": .failed(result.error ?? "Scan failed. Please try again.")
+                case "failed": .failed(ScanUserFacingError.message(from: result.error))
                 default: .running
                 }
             }
@@ -98,10 +98,14 @@ final class ScanViewModel {
             state = .failed("Scan is still processing. Pull Cargo to refresh shortly.")
         } catch let AIJobPollError.failed(message) {
             guard isCurrent(generation) else { return }
-            state = .failed(message)
+            state = .failed(ScanUserFacingError.message(from: message))
         } catch {
             guard isCurrent(generation) else { return }
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            state = .failed(
+                ScanUserFacingError.message(
+                    from: (error as? APIError)?.errorDescription ?? error.localizedDescription
+                )
+            )
         }
     }
 

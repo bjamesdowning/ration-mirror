@@ -932,8 +932,34 @@ struct ConnectedCargoMeal: Codable, Sendable, Identifiable {
     let name: String
     let type: String
     let description: String?
-    let tags: [String]
+    let tags: [Tag]
     let connectedIngredients: [ConnectedCargoIngredient]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        type = try c.decode(String.self, forKey: .type)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        tags = c.decodeTolerantTags(forKey: .tags)
+        connectedIngredients = try c.decode([ConnectedCargoIngredient].self, forKey: .connectedIngredients)
+    }
+
+    init(
+        id: String,
+        name: String,
+        type: String,
+        description: String?,
+        tags: [Tag],
+        connectedIngredients: [ConnectedCargoIngredient]
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.description = description
+        self.tags = tags
+        self.connectedIngredients = connectedIngredients
+    }
 }
 
 // MARK: - Manifest

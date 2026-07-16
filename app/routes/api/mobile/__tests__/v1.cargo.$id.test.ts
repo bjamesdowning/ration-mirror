@@ -50,7 +50,15 @@ describe("GET /api/mobile/v1/cargo/:id loader", () => {
 				id: "meal_1",
 				name: "Pasta",
 				type: "recipe",
-				tags: ["dinner"],
+				tags: [
+					{
+						id: "tag_1",
+						slug: "dinner",
+						name: "Dinner",
+						color: null,
+						category: null,
+					},
+				],
 				connectedIngredients: [],
 			},
 		]);
@@ -64,12 +72,24 @@ describe("GET /api/mobile/v1/cargo/:id loader", () => {
 			params: { id: "cargo_1" },
 		} as never)) as {
 			item: { id: string };
-			connectedMeals: { name: string }[];
+			connectedMeals: {
+				name: string;
+				tags: { id: string; slug: string; name: string }[];
+			}[];
 		};
 
 		expect(result.item.id).toBe("cargo_1");
 		expect(result.connectedMeals).toHaveLength(1);
 		expect(result.connectedMeals[0].name).toBe("Pasta");
+		expect(result.connectedMeals[0].tags).toEqual([
+			{
+				id: "tag_1",
+				slug: "dinner",
+				name: "Dinner",
+				color: null,
+				category: null,
+			},
+		]);
 		expect(getMealsForCargo).toHaveBeenCalledWith(
 			{},
 			"org_1",

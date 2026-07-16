@@ -49,6 +49,59 @@ final class CargoDetailDecodingTests: XCTestCase {
         XCTAssertEqual(response.item.id, "item-1")
         XCTAssertEqual(response.connectedMeals?.count, 1)
         XCTAssertEqual(response.connectedMeals?.first?.connectedIngredients.first?.ingredientName, "tomatoes")
+        XCTAssertEqual(response.connectedMeals?.first?.tags.map(\.slug), ["dinner"])
+    }
+
+    func testDecodesConnectedMealTagsAsTagRecords() throws {
+        let json = """
+        {
+          "item": {
+            "id": "item-1",
+            "organizationId": "org-1",
+            "name": "tomatoes",
+            "quantity": 2,
+            "unit": "lb",
+            "domain": "food",
+            "tags": ["produce"],
+            "status": "fresh",
+            "expiresAt": null,
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "updatedAt": "2026-01-01T00:00:00.000Z"
+          },
+          "connectedMeals": [
+            {
+              "id": "meal-1",
+              "name": "pasta",
+              "type": "recipe",
+              "tags": [
+                {
+                  "id": "tag-1",
+                  "slug": "dinner",
+                  "name": "Dinner",
+                  "color": null,
+                  "category": null
+                }
+              ],
+              "connectedIngredients": [
+                {
+                  "id": "ing-1",
+                  "mealId": "meal-1",
+                  "ingredientName": "tomatoes",
+                  "quantity": 1,
+                  "unit": "lb",
+                  "connectionType": "direct"
+                }
+              ]
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try decoder.decode(CargoDetailResponse.self, from: json)
+        let tag = try XCTUnwrap(response.connectedMeals?.first?.tags.first)
+        XCTAssertEqual(tag.id, "tag-1")
+        XCTAssertEqual(tag.slug, "dinner")
+        XCTAssertEqual(tag.name, "Dinner")
     }
 
     func testDecodesCargoDetailWithoutConnectedMeals() throws {
@@ -137,5 +190,6 @@ final class CargoDetailDecodingTests: XCTestCase {
 
         let response = try decoder.decode(CargoDetailResponse.self, from: json)
         XCTAssertEqual(response.connectedMeals?.first?.description, "Fresh herb sauce")
+        XCTAssertEqual(response.connectedMeals?.first?.tags.map(\.slug), ["quick"])
     }
 }

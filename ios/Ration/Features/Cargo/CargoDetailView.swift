@@ -341,8 +341,8 @@ struct CargoDetailView: View {
 
             if !meal.tags.isEmpty {
                 FlowLayout(spacing: 6) {
-                    ForEach(meal.tags, id: \.self) { tag in
-                        Text(tag)
+                    ForEach(meal.tags) { tag in
+                        Text(tag.name)
                             .rationCaption()
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -398,7 +398,7 @@ struct CargoDetailView: View {
             cookTime: nil,
             createdAt: Date(),
             updatedAt: Date(),
-            tags: connected.tags.map { Tag(slug: $0) },
+            tags: connected.tags,
             ingredients: connected.connectedIngredients.map {
                 MealIngredient(
                     id: $0.id,

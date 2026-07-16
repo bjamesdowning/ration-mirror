@@ -1,8 +1,11 @@
 import SwiftUI
+import UIKit
 
-/// Shared Done toolbar for decimal-pad fields without a return key.
+/// Shared keyboard dismiss toolbar for decimal-pad fields without a return key.
+/// Attach once on a `Form` or outer container — never on `ForEach` or per-row content,
+/// or SwiftUI will stack one accessory button per child.
 struct RationFormKeyboardToolbar: ViewModifier {
-    var onDone: () -> Void
+    var onDismiss: () -> Void
 
     func body(content: Content) -> some View {
         content
@@ -10,14 +13,30 @@ struct RationFormKeyboardToolbar: ViewModifier {
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done", action: onDone)
+                    Button(action: onDismiss) {
+                        Image(systemName: "chevron.down")
+                            .foregroundStyle(Theme.hyperGreen)
+                    }
+                    .accessibilityLabel("Dismiss keyboard")
                 }
             }
     }
 }
 
 extension View {
-    func rationFormKeyboardToolbar(onDone: @escaping () -> Void = {}) -> some View {
-        modifier(RationFormKeyboardToolbar(onDone: onDone))
+    /// Dismisses the keyboard via `onDismiss`, or resigns first responder when omitted.
+    func rationFormKeyboardToolbar(onDismiss: (() -> Void)? = nil) -> some View {
+        modifier(
+            RationFormKeyboardToolbar(
+                onDismiss: onDismiss ?? {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil,
+                        from: nil,
+                        for: nil
+                    )
+                }
+            )
+        )
     }
 }

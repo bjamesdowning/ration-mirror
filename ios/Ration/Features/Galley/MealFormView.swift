@@ -112,6 +112,7 @@ struct MealFormView: View {
                 }
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
+            .rationFormKeyboardToolbar()
             .task {
                 async let tagsTask = env.api.mealTags()
                 async let cargoTask = env.api.cargo(limit: 100)

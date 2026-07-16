@@ -34,7 +34,7 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | Tool | Scope | Purpose |
 |------|-------|---------|
 | `inventory_import_schema` | `mcp:read` | Returns the exact JSON shape `preview_inventory_import` and `apply_inventory_import` expect. |
-| `preview_inventory_import` | `mcp:read` | Validates and classifies items as `match`/`new`/`skip`. Returns a `previewToken` valid for 10 minutes. |
+| `preview_inventory_import` | `mcp:read` | Validates and classifies items as `match`/`new`/`skip`. Returns a `previewToken` valid for 15 minutes. |
 | `apply_inventory_import` | `mcp:inventory:write` | Applies a preview. Idempotent via `idempotencyKey` (replays return the original result). |
 | `import_inventory_csv` | `mcp:inventory:write` | Convenience: parse a CSV string and apply directly. |
 

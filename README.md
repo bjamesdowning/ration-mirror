@@ -1589,7 +1589,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
 | `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
-| `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (10-min KV TTL) | mcp_write (15/min) |
+| `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
@@ -1620,7 +1620,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **MCP resources & prompts:** The server also publishes static resources (`ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`, `connection_guide`) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
 
-**No-credit boundary:** AI features that would charge credits (receipt scan, AI meal generation, AI plan week, URL recipe import) are **not** exposed as MCP tools. The agent's own LLM does any parsing locally, and the deterministic data path is the only thing that touches Ration. Cargo writes via MCP set `skipVectorPhase: true`, so adding pantry items costs zero credits. The `get_credit_balance` tool was intentionally removed.
+**No-credit boundary:** AI features that would charge credits (receipt scan, AI meal generation, AI plan week, URL recipe import) are **not** exposed as MCP tools. The agent's own LLM does any parsing locally, and the deterministic data path is the only thing that touches Ration. Cargo writes via MCP set `skipVectorPhase: true` (skips fuzzy Vectorize merge; exact-name merge still runs; new-row embeddings are still upserted), so adding pantry items costs zero Ration credits. The `get_credit_balance` tool was intentionally removed.
 
 **Integration example (OAuth — recommended):**
 

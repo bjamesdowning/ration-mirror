@@ -57,7 +57,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "add_cargo_item",
 			description:
-				"Add a single pantry item. Skips AI vector embedding (no credits). For 2+ items or a receipt/list, use inventory_import_schema → preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0.",
+				"Add a single pantry item. Skips fuzzy Vectorize merge (no Ration credits). Exact-name merge still applies. For 2+ items or a receipt/list, use inventory_import_schema → preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0.",
 			inputSchema: z.object({
 				name: z.string().min(1),
 				quantity: z
@@ -432,7 +432,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_import",
 			description:
-				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent: replaying the same idempotencyKey within 24h returns the original outcome with meta.replayed:true. If the token expired, call preview_inventory_import again.",
+				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent: replaying the same idempotencyKey within 24h returns the original outcome with meta.replayed:true. If the token expired, call preview_inventory_import again. Skips fuzzy Vectorize merge (exact-name merge only) so bulk apply stays fast and credit-free.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()

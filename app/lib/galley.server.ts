@@ -16,7 +16,7 @@ import type {
 	ManifestProvision,
 	ManifestRecipe,
 } from "./schemas/galley-manifest";
-import { dedupeTagSlugs } from "./tags";
+import { dedupeTagSlugs, uniqueTagSlugs } from "./tags";
 import { resolveTagIds, tagsToSlugs } from "./tags.server";
 import { normalizeUnitAlias } from "./units";
 
@@ -128,8 +128,8 @@ export async function applyGalleyImport(
 		for (const r of rows) existingIds.add(r.id);
 	}
 
-	const allTagSlugs = dedupeTagSlugs(
-		meals.flatMap((m) => ("tags" in m && m.tags ? m.tags : [])),
+	const allTagSlugs = uniqueTagSlugs(
+		meals.flatMap((m) => ("tags" in m && m.tags ? dedupeTagSlugs(m.tags) : [])),
 	);
 	const tagIdsBySlug = new Map<string, string>();
 	if (allTagSlugs.length > 0) {

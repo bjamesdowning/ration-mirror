@@ -69,7 +69,7 @@ import {
 	parseUtcDateISO,
 } from "./cargo-utils";
 import { normalizeCargoQuantity } from "./format-quantity";
-import { dedupeTagSlugs, type TagRecord } from "./tags";
+import { dedupeTagSlugs, type TagRecord, uniqueTagSlugs } from "./tags";
 import { getTagsForCargoIds, resolveTagIds, setCargoTags } from "./tags.server";
 
 const CargoItemBaseSchema = z.object({
@@ -822,19 +822,54 @@ export async function ingestCargoItems(
 		});
 		await trackWriteOperation(
 			"ingestCargoItems",
-			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-			() => d1.batch(batchOps as [any, ...any[]]),
+			async () => {
+				for (const opChunk of chunkArray(batchOps, D1_MAX_BOUND_PARAMS)) {
+					// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+					await d1.batch(opChunk as [any, ...any[]]);
+				}
+			},
 			{
 				organizationRef: organizationId,
 			},
 		);
 	}
 
-	for (const { resultIndex, cargoId, slugs } of pendingTagSets) {
-		const tags = await setCargoTags(env.DB, organizationId, cargoId, slugs);
-		const result = results[resultIndex];
-		if (result?.item) {
-			result.item = { ...result.item, tags } as typeof cargo.$inferSelect;
+	if (pendingTagSets.length > 0) {
+		// Per-row cap via dedupeTagSlugs; then uncapped union across the batch.
+		const allSlugs = uniqueTagSlugs(
+			pendingTagSets.flatMap((p) => dedupeTagSlugs(p.slugs)),
+		);
+		const tagIdsBySlug = new Map<string, string>();
+		if (allSlugs.length > 0) {
+			const resolvedTagIds = await resolveTagIds(
+				env.DB,
+				organizationId,
+				allSlugs,
+			);
+			for (let i = 0; i < allSlugs.length; i++) {
+				tagIdsBySlug.set(allSlugs[i], resolvedTagIds[i]);
+			}
+		}
+		const tagUpdates = pendingTagSets.map(({ cargoId, slugs }) => ({
+			cargoId,
+			tagIds: dedupeTagSlugs(slugs)
+				.map((slug) => tagIdsBySlug.get(slug))
+				.filter((id): id is string => typeof id === "string"),
+		}));
+		await applyCargoTagsForImportBatch(env.DB, tagUpdates);
+
+		const tagsByCargoId = await getTagsForCargoIds(
+			env.DB,
+			pendingTagSets.map((p) => p.cargoId),
+		);
+		for (const { resultIndex, cargoId } of pendingTagSets) {
+			const result = results[resultIndex];
+			if (result?.item) {
+				result.item = {
+					...result.item,
+					tags: tagsByCargoId.get(cargoId) ?? [],
+				} as typeof cargo.$inferSelect;
+			}
 		}
 	}
 
@@ -848,6 +883,10 @@ export async function ingestCargoItems(
 		});
 		if (options?.waitUntil) {
 			options.waitUntil(upsertPromise);
+		} else if (options?.skipVectorPhase) {
+			// Import/MCP paths skip fuzzy-merge AI but still need embeddings for
+			// later semantic search. No waitUntil on those callers — await here.
+			await upsertPromise;
 		}
 	}
 
@@ -1383,8 +1422,8 @@ export async function applyCargoImport(
 		);
 		const existingById = new Map(existingCargoRows.map((row) => [row.id, row]));
 
-		const allTagSlugs = dedupeTagSlugs(
-			toUpdate.flatMap((item) => item.tags ?? []),
+		const allTagSlugs = uniqueTagSlugs(
+			toUpdate.flatMap((item) => dedupeTagSlugs(item.tags ?? [])),
 		);
 		const tagIdsBySlug = new Map<string, string>();
 		if (allTagSlugs.length > 0) {
@@ -1424,6 +1463,9 @@ export async function applyCargoImport(
 			ingestItems,
 			{
 				strictMergeTarget: false,
+				// Import/MCP/Copilot path is credit-free: skip Workers AI + Vectorize
+				// fuzzy merge so apply stays fast and matches preview classification.
+				skipVectorPhase: true,
 			},
 		);
 		for (let i = 0; i < ingestResults.length; i++) {

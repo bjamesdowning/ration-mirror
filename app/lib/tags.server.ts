@@ -15,6 +15,7 @@ import {
 	sanitizeTagColor,
 	type TagRecord,
 	type TagWithCounts,
+	uniqueTagSlugs,
 } from "./tags";
 
 export type { TagRecord, TagWithCounts };
@@ -180,19 +181,20 @@ export async function resolveTagIds(
 	slugs: string[],
 	userId?: string | null,
 ): Promise<string[]> {
-	const normalized = dedupeTagSlugs(slugs);
+	// Uncapped dedupe — per-entity caps belong at setCargoTags/setMealTags.
+	const normalized = uniqueTagSlugs(slugs);
 	if (normalized.length === 0) return [];
 
 	const d1 = drizzle(db);
-	const existingRows = await d1
-		.select({ id: tag.id, slug: tag.slug })
-		.from(tag)
-		.where(
-			and(
-				eq(tag.organizationId, organizationId),
-				inArray(tag.slug, normalized),
+	// Chunk the initial lookup — D1 caps bound parameters at 100.
+	const existingRows = await chunkedQuery(normalized, (chunk) =>
+		d1
+			.select({ id: tag.id, slug: tag.slug })
+			.from(tag)
+			.where(
+				and(eq(tag.organizationId, organizationId), inArray(tag.slug, chunk)),
 			),
-		);
+	);
 
 	const bySlug = new Map(existingRows.map((row) => [row.slug, row.id]));
 
@@ -429,7 +431,12 @@ export async function setCargoTags(
 	userId?: string | null,
 ): Promise<TagRecord[]> {
 	const d1 = drizzle(db);
-	const tagIds = await resolveTagIds(db, organizationId, slugs, userId);
+	const tagIds = await resolveTagIds(
+		db,
+		organizationId,
+		dedupeTagSlugs(slugs),
+		userId,
+	);
 
 	await d1.delete(cargoTag).where(eq(cargoTag.cargoId, cargoId));
 
@@ -452,7 +459,12 @@ export async function setMealTags(
 	userId?: string | null,
 ): Promise<TagRecord[]> {
 	const d1 = drizzle(db);
-	const tagIds = await resolveTagIds(db, organizationId, slugs, userId);
+	const tagIds = await resolveTagIds(
+		db,
+		organizationId,
+		dedupeTagSlugs(slugs),
+		userId,
+	);
 
 	await d1.delete(mealTag).where(eq(mealTag.mealId, mealId));
 

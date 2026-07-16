@@ -52,8 +52,12 @@ export function sanitizeTagColor(
 	return TAG_COLOR_PATTERN.test(color) ? color : null;
 }
 
-/** Dedupe slugs preserving first-seen order. */
-export function dedupeTagSlugs(slugs: string[]): string[] {
+/** Dedupe/normalize slugs preserving first-seen order. Optional `max` cap. */
+export function uniqueTagSlugs(
+	slugs: string[],
+	options?: { max?: number },
+): string[] {
+	const max = options?.max;
 	const seen = new Set<string>();
 	const result: string[] = [];
 	for (const raw of slugs) {
@@ -61,9 +65,14 @@ export function dedupeTagSlugs(slugs: string[]): string[] {
 		if (!slug || !isValidTagSlug(slug) || seen.has(slug)) continue;
 		seen.add(slug);
 		result.push(slug);
-		if (result.length >= MAX_TAGS_PER_ENTITY) break;
+		if (max != null && result.length >= max) break;
 	}
 	return result;
+}
+
+/** Dedupe slugs for a single entity (capped at {@link MAX_TAGS_PER_ENTITY}). */
+export function dedupeTagSlugs(slugs: string[]): string[] {
+	return uniqueTagSlugs(slugs, { max: MAX_TAGS_PER_ENTITY });
 }
 
 /** Parse comma-separated or array tag input from forms. */

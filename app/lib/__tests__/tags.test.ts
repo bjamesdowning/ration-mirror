@@ -10,6 +10,7 @@ import {
 	tagsFromSearchParam,
 	tagsToSearchParam,
 	toTagSlugs,
+	uniqueTagSlugs,
 } from "../tags";
 
 describe("normalizeTagSlug", () => {
@@ -38,6 +39,13 @@ describe("dedupeTagSlugs", () => {
 		expect(dedupeTagSlugs(["Italian", "italian", "ITALIAN"])).toEqual([
 			"italian",
 		]);
+	});
+});
+
+describe("uniqueTagSlugs", () => {
+	it("dedupes without the per-entity cap", () => {
+		const slugs = Array.from({ length: 12 }, (_, i) => `tag-${i}`);
+		expect(uniqueTagSlugs(slugs)).toHaveLength(12);
 	});
 });
 

@@ -39,7 +39,7 @@ Legacy API keys with the blanket **`mcp`** scope still work for manual auth but 
 MCP is the **deterministic** surface for agents. By design it never charges Ration credits or invokes UI-only AI features:
 
 - **Receipt parsing** happens in the *agent's* LLM (Cursor/Claude). Ration only ingests the resulting structured items via `preview_inventory_import` → `apply_inventory_import`.
-- **Cargo embeddings** are deferred during MCP writes (`skipVectorPhase: true`), so adding items via MCP costs **zero credits**.
+- **Cargo write path** uses `skipVectorPhase: true` (single add + bulk import): fuzzy Vectorize *merge* is skipped so writes stay fast and cost **zero Ration credits**. Exact-name merge still runs. New rows still get embeddings upserted afterward so later semantic search keeps working.
 - **Visual scanning** and **AI meal generation** are reserved for the web app, where the user has explicit credit controls.
 
 If you want these AI capabilities, use the web app. If you want to drive everything from your own LLM, MCP is the surface for you.

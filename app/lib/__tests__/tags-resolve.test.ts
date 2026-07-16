@@ -77,4 +77,19 @@ describe("resolveTagIds", () => {
 			resolveTagIds({} as D1Database, "org-1", ["orphan"]),
 		).rejects.toThrow("tag_create_failed");
 	});
+
+	it("chunks the initial slug lookup when more than 100 distinct slugs", async () => {
+		const slugs = Array.from({ length: 101 }, (_, i) => `tag-${i}`);
+		mockSelectWhere
+			.mockResolvedValueOnce(
+				slugs.slice(0, 100).map((slug, i) => ({ id: `id-${i}`, slug })),
+			)
+			.mockResolvedValueOnce([{ id: "id-100", slug: "tag-100" }]);
+
+		const ids = await resolveTagIds({} as D1Database, "org-1", slugs);
+
+		expect(ids).toHaveLength(101);
+		expect(mockSelectWhere).toHaveBeenCalledTimes(2);
+		expect(mockBatch).not.toHaveBeenCalled();
+	});
 });

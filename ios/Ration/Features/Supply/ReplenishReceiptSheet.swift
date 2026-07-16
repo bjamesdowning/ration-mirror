@@ -8,10 +8,11 @@ struct ReplenishReceiptSheet: View {
     let creditCost: Int
     let onCamera: () -> Void
     let onPhotoLibrary: () -> Void
-    let onPDF: (Data, String) -> Void
+    let onFile: (Data, String, String) -> Void
 
     @State private var showingDocumentPicker = false
     @State private var showingPaywall = false
+    @State private var errorMessage: String?
 
     private var hasEnoughCredits: Bool {
         env.session.credits >= creditCost
@@ -26,8 +27,12 @@ struct ReplenishReceiptSheet: View {
                         detail: "AI reads your receipt, matches lines to your Supply list, then docks purchased items to Cargo.",
                         creditCost: creditCost,
                         costLabel: "per scan",
-                        nextSteps: "Choose camera or upload a receipt image/PDF, then review matches before docking to Cargo."
+                        nextSteps: "Choose camera, photo library, or upload a file, then review matches before docking to Cargo. Supported: JPEG, PNG, WebP, PDF · max 5MB."
                     )
+
+                    if let errorMessage {
+                        ErrorBanner(message: errorMessage)
+                    }
 
                     if hasEnoughCredits {
                         VStack(spacing: 12) {
@@ -51,9 +56,10 @@ struct ReplenishReceiptSheet: View {
 
                             sourceButton(
                                 icon: "doc.fill",
-                                title: "PDF receipt",
-                                subtitle: "Upload a PDF from Files"
+                                title: "Upload file",
+                                subtitle: "Choose a receipt from Files"
                             ) {
+                                errorMessage = nil
                                 showingDocumentPicker = true
                             }
                         }
@@ -73,13 +79,21 @@ struct ReplenishReceiptSheet: View {
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingDocumentPicker) {
-                DocumentPicker(contentTypes: [.pdf]) { url in
+                DocumentPicker(contentTypes: ReceiptFileImport.allowedContentTypes) { result in
                     showingDocumentPicker = false
-                    guard let url,
-                          let data = try? Data(contentsOf: url)
-                    else { return }
-                    dismiss()
-                    onPDF(data, url.lastPathComponent)
+                    switch result {
+                    case .success(let imported):
+                        // Let the nested picker sheet finish dismissing before parent dismiss + scan.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            dismiss()
+                            onFile(imported.data, imported.filename, imported.mimeType)
+                        }
+                    case .failure(.cancelled):
+                        break
+                    case .failure(let error):
+                        errorMessage = error.errorDescription
+                            ?? "Could not read the selected file."
+                    }
                 }
             }
             .sheet(isPresented: $showingPaywall) {

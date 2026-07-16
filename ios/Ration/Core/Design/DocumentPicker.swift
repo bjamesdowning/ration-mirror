@@ -1,32 +1,50 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// PDF / document picker shared by supply replenish and other flows.
+/// Document picker that copies selected files into the app sandbox for reliable reads.
 struct DocumentPicker: UIViewControllerRepresentable {
     let contentTypes: [UTType]
-    let onPick: (URL?) -> Void
+    let onPick: (Result<ReceiptFileImport.ImportedFile, ReceiptFileImport.ImportError>) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes)
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: contentTypes,
+            asCopy: true
+        )
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false
         return picker
     }
 
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {
+        context.coordinator.onPick = onPick
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: (URL?) -> Void
-        init(onPick: @escaping (URL?) -> Void) { self.onPick = onPick }
+        var onPick: (Result<ReceiptFileImport.ImportedFile, ReceiptFileImport.ImportError>) -> Void
+        init(onPick: @escaping (Result<ReceiptFileImport.ImportedFile, ReceiptFileImport.ImportError>) -> Void) {
+            self.onPick = onPick
+        }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            onPick(urls.first)
+            guard let url = urls.first else {
+                onPick(.failure(.unreadable))
+                return
+            }
+            do {
+                let imported = try ReceiptFileImport.importFile(from: url)
+                onPick(.success(imported))
+            } catch let error as ReceiptFileImport.ImportError {
+                onPick(.failure(error))
+            } catch {
+                onPick(.failure(.unreadable))
+            }
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            onPick(nil)
+            onPick(.failure(.cancelled))
         }
     }
 }

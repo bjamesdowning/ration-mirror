@@ -666,10 +666,10 @@ struct SupplyView: View {
                             showingSupplyScanPhotoLibrary = true
                         }
                     },
-                    onPDF: { data, filename in
+                    onFile: { data, filename, mimeType in
                         showingReplenishReceipt = false
                         scanConsent.presentIfNeeded(session: env.session) {
-                            Task { await runSupplyScan(data: data, filename: filename, mimeType: "application/pdf") }
+                            Task { await runSupplyScan(data: data, filename: filename, mimeType: mimeType) }
                         }
                     }
                 )

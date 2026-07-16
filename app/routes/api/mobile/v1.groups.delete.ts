@@ -7,7 +7,11 @@ import {
 	listMobileOrganizations,
 	requireMobileActiveGroup,
 } from "~/lib/mobile/auth.server";
-import { deleteOrganization } from "~/lib/organizations.server";
+import {
+	assertNotPersonalGroup,
+	beginOrganizationPurge,
+	PersonalGroupDeleteBlockedError,
+} from "~/lib/organizations.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileDeleteGroupSchema } from "~/lib/schemas/mobile/groups";
 import type { Route } from "./+types/v1.groups.delete";
@@ -67,16 +71,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 		}
 
+		try {
+			await assertNotPersonalGroup(env, organizationId, userId);
+		} catch (error) {
+			if (error instanceof PersonalGroupDeleteBlockedError) {
+				throw data({ error: error.message, code: error.code }, { status: 403 });
+			}
+			throw error;
+		}
+
 		log.info("[MobileDeleteGroup] Request to delete org", {
 			orgId: redactId(organizationId),
 			userId: redactId(userId),
 		});
 
-		await deleteOrganization(env, organizationId);
+		await beginOrganizationPurge(env, context.cloudflare.ctx, organizationId);
 
 		const organizations = await listMobileOrganizations(env, userId, null);
 
-		log.info("[MobileDeleteGroup] Successfully deleted org", {
+		log.info("[MobileDeleteGroup] Access revoked; purge scheduled", {
 			orgId: redactId(organizationId),
 		});
 

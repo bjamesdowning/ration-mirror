@@ -7,7 +7,8 @@ import {
 	assertMobileOrgMembership,
 	verifyMobileAccessToken,
 } from "~/lib/mobile/token.server";
-
+import { isPersonalOrganization } from "~/lib/personal-group";
+import { isUserPurgePending } from "~/lib/purge-pending.server";
 export interface MobileAuthContext {
 	userId: string;
 	organizationId: string;
@@ -32,6 +33,11 @@ export async function requireMobileUserAuth(
 
 	try {
 		const claims = await verifyMobileAccessToken(context.cloudflare.env, token);
+		if (
+			await isUserPurgePending(context.cloudflare.env.RATION_KV, claims.userId)
+		) {
+			throwMobileJsonError("Unauthorized", 401, "unauthorized");
+		}
 		return { userId: claims.userId };
 	} catch {
 		throwMobileJsonError("Unauthorized", 401, "unauthorized");
@@ -49,6 +55,11 @@ export async function requireMobileAuth(
 
 	try {
 		const claims = await verifyMobileAccessToken(context.cloudflare.env, token);
+		if (
+			await isUserPurgePending(context.cloudflare.env.RATION_KV, claims.userId)
+		) {
+			throwMobileJsonError("Unauthorized", 401, "unauthorized");
+		}
 		await assertMobileOrgMembership(
 			context.cloudflare.env,
 			claims.userId,
@@ -107,6 +118,7 @@ export async function listMobileOrganizations(
 					slug: true,
 					logo: true,
 					credits: true,
+					metadata: true,
 				},
 			},
 		},
@@ -119,5 +131,12 @@ export async function listMobileOrganizations(
 		credits: m.organization.credits,
 		role: m.role,
 		isActive: m.organization.id === activeOrganizationId,
+		isPersonal: isPersonalOrganization(
+			{
+				slug: m.organization.slug,
+				metadata: m.organization.metadata,
+			},
+			userId,
+		),
 	}));
 }

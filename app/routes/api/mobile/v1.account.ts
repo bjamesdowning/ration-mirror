@@ -2,11 +2,18 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
-import { handleApiError, retryOnD1Contention } from "~/lib/error-handler";
-import { log, redactId } from "~/lib/logging.server";
+import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
+import { getBillingStatusForUser } from "~/lib/billing.server";
+import { handleApiError } from "~/lib/error-handler";
 import { requireMobileUserAuth } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { purgeUserAccount } from "~/lib/user-purge.server";
+import { AccountDeletionPreviewSchema } from "~/lib/schemas/account-deletion";
+import {
+	AccountDeletionBlockedError,
+	assertAccountDeletionAllowed,
+	beginAccountPurge,
+	cancelStripeBeforeAccountPurge,
+} from "~/lib/user-purge.server";
 import type { Route } from "./+types/v1.account";
 
 /** Groups the user solely owns that will be deleted during account purge. */
@@ -43,11 +50,43 @@ async function ownedGroupsWithNoOtherMembers(
 export async function loader({ request, context }: Route.LoaderArgs) {
 	try {
 		const { userId } = await requireMobileUserAuth(context, request);
-		const ownedGroups = await ownedGroupsWithNoOtherMembers(
-			context.cloudflare.env,
+		const env = context.cloudflare.env;
+		const db = drizzle(env.DB, { schema });
+
+		const user = await db.query.user.findFirst({
+			where: eq(schema.user.id, userId),
+			columns: {
+				tier: true,
+				tierExpiresAt: true,
+				subscriptionCancelAtPeriodEnd: true,
+			},
+		});
+
+		const eligibility = evaluateAccountDeletionEligibility({
+			tier: user?.tier ?? "free",
+			tierExpiresAt: user?.tierExpiresAt ?? null,
+			subscriptionCancelAtPeriodEnd:
+				user?.subscriptionCancelAtPeriodEnd ?? false,
+		});
+
+		const billingStatus = await getBillingStatusForUser(
+			env,
 			userId,
+			eligibility.effectiveTier,
 		);
-		return { ownedGroupsWithNoOtherMembers: ownedGroups };
+
+		const ownedGroups = await ownedGroupsWithNoOtherMembers(env, userId);
+
+		return AccountDeletionPreviewSchema.parse({
+			ownedGroupsWithNoOtherMembers: ownedGroups,
+			canDelete: eligibility.canDelete,
+			blockReason: eligibility.blockReason,
+			cancelAtPeriodEnd: eligibility.cancelAtPeriodEnd,
+			tierExpiresAt: eligibility.tierExpiresAt,
+			message: eligibility.message,
+			managementUrl: billingStatus.management.url,
+			billingProvider: billingStatus.management.store,
+		});
 	} catch (e) {
 		return handleApiError(e);
 	}
@@ -60,9 +99,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const { userId } = await requireMobileUserAuth(context, request);
+		const env = context.cloudflare.env;
 
 		const rateLimitResult = await checkRateLimit(
-			context.cloudflare.env.RATION_KV,
+			env.RATION_KV,
 			"user_purge",
 			userId,
 		);
@@ -73,32 +113,31 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const db = drizzle(context.cloudflare.env.DB, { schema });
-		const user = await db.query.user.findFirst({
-			where: eq(schema.user.id, userId),
-			columns: { id: true, email: true },
-		});
-		if (!user) {
-			throw data({ error: "Not Found" }, { status: 404 });
-		}
+		const { email, stripeCustomerId } = await assertAccountDeletionAllowed(
+			env,
+			userId,
+		);
 
-		try {
-			await retryOnD1Contention(() =>
-				purgeUserAccount(context.cloudflare.env, {
-					userId: user.id,
-					email: user.email,
-				}),
-			);
-		} catch (error) {
-			log.error("[Purge] account deletion failed", {
-				userId: redactId(userId),
-				errorMessage: error instanceof Error ? error.message : String(error),
-			});
-			return handleApiError(error);
-		}
+		await cancelStripeBeforeAccountPurge(env, stripeCustomerId);
+
+		await beginAccountPurge(env, context.cloudflare.ctx, {
+			userId,
+			email,
+			stripeCustomerId,
+		});
 
 		return { success: true, deleted: true };
 	} catch (e) {
+		if (e instanceof AccountDeletionBlockedError) {
+			throw data(
+				{
+					error: e.message,
+					code: e.code,
+					eligibility: e.eligibility,
+				},
+				{ status: 409 },
+			);
+		}
 		return handleApiError(e);
 	}
 }

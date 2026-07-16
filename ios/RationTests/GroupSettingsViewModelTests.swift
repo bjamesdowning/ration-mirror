@@ -44,8 +44,8 @@ final class GroupSettingsViewModelTests: XCTestCase {
 
     func testCanTransferCreditsRequiresOwnerCreditsAndMultipleOrgs() {
         let orgs = [
-            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 5, role: "owner", isActive: true),
-            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false),
+            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 5, role: "owner", isActive: true, isPersonal: nil),
+            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false, isPersonal: nil),
         ]
         XCTAssertTrue(GroupSettingsSupport.canTransferCredits(organizations: orgs))
 
@@ -53,8 +53,8 @@ final class GroupSettingsViewModelTests: XCTestCase {
         XCTAssertFalse(GroupSettingsSupport.canTransferCredits(organizations: single))
 
         let noCredits = [
-            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 0, role: "owner", isActive: true),
-            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false),
+            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 0, role: "owner", isActive: true, isPersonal: nil),
+            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false, isPersonal: nil),
         ]
         XCTAssertFalse(GroupSettingsSupport.canTransferCredits(organizations: noCredits))
     }
@@ -102,9 +102,9 @@ final class GroupSettingsViewModelTests: XCTestCase {
 
     func testOwnedGroupCountCountsOwnerRoleOnly() {
         let orgs = [
-            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 0, role: "owner", isActive: true),
-            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false),
-            OrgMembership(id: "c", name: "C", slug: "c", logo: nil, credits: 0, role: "owner", isActive: false),
+            OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 0, role: "owner", isActive: true, isPersonal: nil),
+            OrgMembership(id: "b", name: "B", slug: "b", logo: nil, credits: 0, role: "member", isActive: false, isPersonal: nil),
+            OrgMembership(id: "c", name: "C", slug: "c", logo: nil, credits: 0, role: "owner", isActive: false, isPersonal: nil),
         ]
         XCTAssertEqual(GroupSettingsSupport.ownedGroupCount(in: orgs), 2)
     }
@@ -118,7 +118,8 @@ final class GroupSettingsViewModelTests: XCTestCase {
                 logo: nil,
                 credits: 0,
                 role: "owner",
-                isActive: i == 0
+                isActive: i == 0,
+                isPersonal: nil
             )
         }
         XCTAssertTrue(GroupSettingsSupport.canCreateGroup(organizations: orgs, isCrewMember: true))
@@ -133,7 +134,8 @@ final class GroupSettingsViewModelTests: XCTestCase {
                 logo: nil,
                 credits: 0,
                 role: "owner",
-                isActive: i == 0
+                isActive: i == 0,
+                isPersonal: nil
             )
         }
         XCTAssertFalse(GroupSettingsSupport.canCreateGroup(organizations: orgs, isCrewMember: true))

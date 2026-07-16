@@ -1,17 +1,22 @@
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 import { requireAuth } from "~/lib/auth.server";
-import { handleApiError, retryOnD1Contention } from "~/lib/error-handler";
-import { log, redactId } from "~/lib/logging.server";
+import { handleApiError } from "~/lib/error-handler";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { purgeUserAccount } from "~/lib/user-purge.server";
+import {
+	AccountDeletionBlockedError,
+	assertAccountDeletionAllowed,
+	beginAccountPurge,
+	cancelStripeBeforeAccountPurge,
+} from "~/lib/user-purge.server";
 import type { Route } from "./+types/purge";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const { user } = await requireAuth(context, request);
 	const userId = user.id;
+	const env = context.cloudflare.env;
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"user_purge",
 		userId,
 	);
@@ -23,17 +28,30 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		await retryOnD1Contention(() =>
-			purgeUserAccount(context.cloudflare.env, {
-				userId,
-				email: user.email,
-			}),
+		const { email, stripeCustomerId } = await assertAccountDeletionAllowed(
+			env,
+			userId,
 		);
-	} catch (error) {
-		log.error("[Purge] account deletion failed", {
-			userId: redactId(userId),
-			errorMessage: error instanceof Error ? error.message : String(error),
+
+		// Stripe first — while the user can still recover if cancel fails.
+		await cancelStripeBeforeAccountPurge(env, stripeCustomerId);
+
+		await beginAccountPurge(env, context.cloudflare.ctx, {
+			userId,
+			email,
+			stripeCustomerId,
 		});
+	} catch (error) {
+		if (error instanceof AccountDeletionBlockedError) {
+			throw data(
+				{
+					error: error.message,
+					code: error.code,
+					eligibility: error.eligibility,
+				},
+				{ status: 409 },
+			);
+		}
 		return handleApiError(error);
 	}
 

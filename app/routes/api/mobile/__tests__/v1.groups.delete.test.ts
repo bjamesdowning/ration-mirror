@@ -5,7 +5,8 @@ const listMobileOrganizations = vi.fn();
 const checkRateLimit = vi.fn();
 const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
-const deleteOrganization = vi.fn();
+const assertNotPersonalGroup = vi.fn();
+const beginOrganizationPurge = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
 	requireMobileActiveGroup: (...args: unknown[]) =>
@@ -23,9 +24,22 @@ vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
 	};
 });
 
-vi.mock("~/lib/organizations.server", () => ({
-	deleteOrganization: (...args: unknown[]) => deleteOrganization(...args),
-}));
+vi.mock("~/lib/organizations.server", () => {
+	class PersonalGroupDeleteBlockedError extends Error {
+		code = "personal_group" as const;
+		constructor(message = "Your personal group can't be deleted.") {
+			super(message);
+			this.name = "PersonalGroupDeleteBlockedError";
+		}
+	}
+	return {
+		assertNotPersonalGroup: (...args: unknown[]) =>
+			assertNotPersonalGroup(...args),
+		beginOrganizationPurge: (...args: unknown[]) =>
+			beginOrganizationPurge(...args),
+		PersonalGroupDeleteBlockedError,
+	};
+});
 
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: () => ({
@@ -37,7 +51,8 @@ vi.mock("drizzle-orm/d1", () => ({
 }));
 
 const env = { DB: {}, RATION_KV: {} };
-const ctx = { cloudflare: { env } } as never;
+const waitUntil = vi.fn();
+const ctx = { cloudflare: { env, ctx: { waitUntil } } } as never;
 const orgId = "11111111-1111-4111-8111-111111111111";
 
 function deleteRequest(
@@ -58,7 +73,9 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 			checkRateLimit,
 			findFirstMember,
 			findFirstOrg,
-			deleteOrganization,
+			assertNotPersonalGroup,
+			beginOrganizationPurge,
+			waitUntil,
 		]) {
 			m.mockReset();
 		}
@@ -77,10 +94,11 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 		checkRateLimit.mockResolvedValue({ allowed: true });
 		findFirstMember.mockResolvedValue({ role: "owner" });
 		findFirstOrg.mockResolvedValue({ slug: "home-kitchen" });
-		deleteOrganization.mockResolvedValue(undefined);
+		assertNotPersonalGroup.mockResolvedValue(undefined);
+		beginOrganizationPurge.mockResolvedValue({ jobId: "job-1" });
 	});
 
-	it("deletes a group when the caller is owner", async () => {
+	it("begins organization purge when the caller is owner", async () => {
 		const { action } = await import("~/routes/api/mobile/v1.groups.delete");
 		const result = (await action({
 			request: deleteRequest(),
@@ -90,10 +108,11 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 
 		expect(result.success).toBe(true);
 		expect(result.organizations).toHaveLength(1);
-		expect(listMobileOrganizations).toHaveBeenCalledWith(env, "user_1", null);
-		expect(requireMobileActiveGroup).toHaveBeenCalled();
-		expect(findFirstMember).toHaveBeenCalled();
-		expect(deleteOrganization).toHaveBeenCalledWith(env, orgId);
+		expect(beginOrganizationPurge).toHaveBeenCalledWith(
+			env,
+			expect.objectContaining({ waitUntil }),
+			orgId,
+		);
 	});
 
 	it("rejects non-owners with 403", async () => {
@@ -106,7 +125,7 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 403 } });
-		expect(deleteOrganization).not.toHaveBeenCalled();
+		expect(beginOrganizationPurge).not.toHaveBeenCalled();
 	});
 
 	it("rejects when rate limited with 429", async () => {
@@ -119,6 +138,24 @@ describe("POST /api/mobile/v1/groups/delete", () => {
 				params: {},
 			} as never),
 		).rejects.toMatchObject({ init: { status: 429 } });
-		expect(deleteOrganization).not.toHaveBeenCalled();
+		expect(beginOrganizationPurge).not.toHaveBeenCalled();
+	});
+
+	it("rejects personal groups with 403", async () => {
+		const { PersonalGroupDeleteBlockedError } = await import(
+			"~/lib/organizations.server"
+		);
+		assertNotPersonalGroup.mockRejectedValue(
+			new PersonalGroupDeleteBlockedError(),
+		);
+		const { action } = await import("~/routes/api/mobile/v1.groups.delete");
+		await expect(
+			action({
+				request: deleteRequest(),
+				context: ctx,
+				params: {},
+			} as never),
+		).rejects.toMatchObject({ init: { status: 403 } });
+		expect(beginOrganizationPurge).not.toHaveBeenCalled();
 	});
 });

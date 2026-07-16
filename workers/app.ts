@@ -3,6 +3,7 @@ import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
+import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
 import { isRegisteredWellKnownPath } from "../app/lib/well-known-routes";
 
@@ -120,6 +121,7 @@ export default {
 		ctx.waitUntil(purgeExpiredQueueJobs(env));
 		ctx.waitUntil(purgeOrphanAgentKitchens(env));
 		ctx.waitUntil(sendReengagementEmails(env));
+		ctx.waitUntil(retryFailedPurgeJobs(env));
 	},
 } satisfies ExportedHandler<Env>;
 

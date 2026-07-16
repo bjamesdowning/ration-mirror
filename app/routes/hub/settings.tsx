@@ -26,6 +26,7 @@ import { UserAvatar } from "~/components/shell/UserAvatar";
 import { SupplyHorizonPicker } from "~/components/supply/SupplyHorizonPicker";
 import * as schema from "~/db/schema";
 import { useToast } from "~/hooks/useToast";
+import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
 import { type AllergenSlug, parseAllergens } from "~/lib/allergens";
 import {
 	getUserSettings,
@@ -48,6 +49,7 @@ import {
 	getOrganizationMetadata,
 	resolveSupplyContext,
 } from "~/lib/org-supply-settings.server";
+import { isPersonalOrganization } from "~/lib/personal-group";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
 import { UnitDisplayModeSchema } from "~/lib/schemas/supply";
@@ -334,6 +336,21 @@ export async function loader(args: Route.LoaderArgs) {
 			}
 		}
 
+		const accountDeletion = evaluateAccountDeletionEligibility({
+			tier: user.tier ?? "free",
+			tierExpiresAt: user.tierExpiresAt ?? null,
+			subscriptionCancelAtPeriodEnd:
+				user.subscriptionCancelAtPeriodEnd ?? false,
+		});
+
+		const isPersonalGroup = isPersonalOrganization(
+			{
+				slug: currentOrg?.slug ?? null,
+				metadata: currentOrg?.metadata ?? null,
+			},
+			userId,
+		);
+
 		return {
 			settings,
 			members,
@@ -343,6 +360,7 @@ export async function loader(args: Route.LoaderArgs) {
 			organizationId: groupId,
 			organizationName: currentOrg?.name || "Unknown Group",
 			organizationLogo: currentOrg?.logo ?? null,
+			isPersonalGroup,
 			userOrganizations: userOrganizations.map((m) => m.organization),
 			userMemberships,
 			credits,
@@ -352,6 +370,7 @@ export async function loader(args: Route.LoaderArgs) {
 			tierExpiresAt: user.tierExpiresAt ?? null,
 			subscriptionCancelAtPeriodEnd:
 				user.subscriptionCancelAtPeriodEnd ?? false,
+			accountDeletion,
 			apiKeys,
 			connectedAgents,
 			agentKitchens,
@@ -744,6 +763,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 						<DangerSection
 							isOwner={isOwner}
 							organizationId={organizationId}
+							isPersonalGroup={loaderData.isPersonalGroup ?? false}
 							members={members}
 							ownedGroupsWithNoOtherMembers={
 								loaderData.ownedGroupsWithNoOtherMembers ?? []
@@ -751,6 +771,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 							transferRecipientEligibility={
 								loaderData.transferRecipientEligibility ?? {}
 							}
+							accountDeletion={loaderData.accountDeletion}
+							tierExpiresAt={loaderData.tierExpiresAt}
 						/>
 					)}
 				</div>
@@ -2006,12 +2028,16 @@ function AdminSection() {
 function DangerSection({
 	isOwner,
 	organizationId,
+	isPersonalGroup,
 	members,
 	ownedGroupsWithNoOtherMembers,
 	transferRecipientEligibility,
+	accountDeletion,
+	tierExpiresAt,
 }: {
 	isOwner: boolean;
 	organizationId: string;
+	isPersonalGroup: boolean;
 	members: Array<{
 		id: string;
 		role: string;
@@ -2022,10 +2048,13 @@ function DangerSection({
 		string,
 		{ allowed: boolean; limit: number; current: number }
 	>;
+	accountDeletion: ReturnType<typeof evaluateAccountDeletionEligibility>;
+	tierExpiresAt: Date | string | null;
 }) {
 	const { confirm } = useConfirm();
-	const purgeFetcher = useFetcher();
-	const deleteGroupFetcher = useFetcher();
+	const purgeFetcher = useFetcher<{ error?: string; code?: string }>();
+	const deleteGroupFetcher = useFetcher<{ error?: string; code?: string }>();
+	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
 	const transferOwnershipFetcher = useFetcher<{
 		success?: boolean;
 		error?: string;
@@ -2037,6 +2066,7 @@ function DangerSection({
 	const isPurging = purgeFetcher.state !== "idle";
 	const isDeletingGroup = deleteGroupFetcher.state !== "idle";
 	const isTransferring = transferOwnershipFetcher.state !== "idle";
+	const isOpeningPortal = billingPortalFetcher.state !== "idle";
 
 	const nonOwnerMembers = members.filter((m) => m.role !== "owner");
 	const canTransferOwnership = isOwner && nonOwnerMembers.length > 0;
@@ -2052,6 +2082,26 @@ function DangerSection({
 			: undefined);
 	const isRecipientCapacityExceeded =
 		transferError === "recipient_capacity_exceeded";
+
+	const purgeBlocked = !accountDeletion.canDelete;
+	const purgeError =
+		typeof purgeFetcher.data?.error === "string"
+			? purgeFetcher.data.error
+			: undefined;
+	const deleteGroupError =
+		typeof deleteGroupFetcher.data?.error === "string"
+			? deleteGroupFetcher.data.error
+			: undefined;
+
+	useEffect(() => {
+		if (billingPortalFetcher.data?.url) {
+			window.open(
+				billingPortalFetcher.data.url,
+				"_blank",
+				"noopener,noreferrer",
+			);
+		}
+	}, [billingPortalFetcher.data?.url]);
 
 	// Revalidate and show toast on transfer success
 	useEffect(() => {
@@ -2082,6 +2132,16 @@ function DangerSection({
 		errorToast.show,
 	]);
 
+	const periodEndLabel = (() => {
+		const date = toExpiryDate(tierExpiresAt);
+		if (!date) return null;
+		return date.toLocaleDateString(undefined, {
+			year: "numeric",
+			month: "short",
+			day: "numeric",
+		});
+	})();
+
 	return (
 		<div className="space-y-4">
 			<SectionHeading>Danger Zone</SectionHeading>
@@ -2094,18 +2154,51 @@ function DangerSection({
 						Complete removal of your account and data. This action deletes all
 						inventory, ledger history, and user records. This cannot be undone.
 					</p>
+					{purgeBlocked && (
+						<div className="mb-4 p-4 bg-warning/10 border border-warning/30 rounded-lg text-sm space-y-3 max-w-md">
+							<p className="text-carbon">{accountDeletion.message}</p>
+							<button
+								type="button"
+								disabled={isOpeningPortal}
+								onClick={() => {
+									billingPortalFetcher.submit(null, {
+										method: "post",
+										action: "/api/billing-portal",
+									});
+								}}
+								className="px-4 py-2 bg-hyper-green text-carbon rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm font-medium"
+							>
+								{isOpeningPortal ? "Opening…" : "Manage Subscription"}
+							</button>
+						</div>
+					)}
+					{!purgeBlocked && accountDeletion.cancelAtPeriodEnd && (
+						<p className="text-sm text-warning mb-4 max-w-md">
+							{accountDeletion.message}
+						</p>
+					)}
+					{purgeError && (
+						<p className="text-sm text-danger mb-3 max-w-md">{purgeError}</p>
+					)}
 					<button
 						type="button"
-						disabled={isPurging}
+						disabled={isPurging || purgeBlocked}
 						onClick={async () => {
 							const consequences = [
+								"You will be signed out immediately",
 								"All inventory items and their history",
 								"Your remaining credit balance (non-refundable)",
-								"Active subscription — no pro-rated refund",
 								"All meal plans and recipes",
 								"All group memberships and shared data you own",
 								"API keys — all integrations will stop working immediately",
 							];
+							if (accountDeletion.cancelAtPeriodEnd) {
+								consequences.unshift(
+									periodEndLabel
+										? `You forfeit remaining Crew access through ${periodEndLabel} — no refund`
+										: "You forfeit remaining paid Crew access immediately — no refund",
+								);
+							}
 							if (ownedGroupsWithNoOtherMembers.length > 0) {
 								consequences.push(
 									`Groups with no other members will be permanently deleted: ${ownedGroupsWithNoOtherMembers.join(", ")}`,
@@ -2114,8 +2207,9 @@ function DangerSection({
 							if (
 								!(await confirm({
 									title: "Delete your account permanently?",
-									message:
-										ownedGroupsWithNoOtherMembers.length > 0
+									message: accountDeletion.cancelAtPeriodEnd
+										? "You will lose access to all services immediately, including any remaining days on your cancelled subscription. Or wait until the period ends, then delete. There is no recovery path."
+										: ownedGroupsWithNoOtherMembers.length > 0
 											? "You own group(s) with no other members. These will be permanently deleted. If you invited people who haven't joined yet, consider waiting for them to accept or transferring ownership first."
 											: "There is no recovery path. This cannot be reversed by support.",
 									consequences,
@@ -2239,67 +2333,61 @@ function DangerSection({
 					</div>
 				)}
 
-				{successToast.isOpen && (
-					<Toast
-						variant="success"
-						title="Ownership transferred"
-						description="Group ownership has been updated."
-						onDismiss={successToast.hide}
-					/>
-				)}
-				{errorToast.isOpen && transferError && (
-					<Toast
-						variant="error"
-						title="Transfer failed"
-						description={
-							transferOwnershipFetcher.data?.message ??
-							transferErrorMessage ??
-							transferError
-						}
-						onDismiss={errorToast.hide}
-					/>
-				)}
-
-				{/* Delete Group — owner only */}
+				{/* Delete Group — owner only; personal groups blocked */}
 				{isOwner && (
 					<div className="pt-6 border-t border-danger/20">
 						<h3 className="text-sm font-bold text-danger mb-1">Delete Group</h3>
-						<p className="text-sm text-muted mb-4 max-w-md">
-							Permanently delete this group and all its data (inventory, meals,
-							lists). This cannot be undone.
-						</p>
-						<button
-							type="button"
-							disabled={isDeletingGroup}
-							onClick={async () => {
-								if (
-									!(await confirm({
-										title: "Delete this group permanently?",
-										message:
-											"All members will lose access immediately. This cannot be undone.",
-										consequences: [
-											"All shared inventory items",
-											"All meal plans and recipes",
-											"All supply lists",
-											"All member invitations and access",
-										],
-										requireTyped: "delete",
-										confirmLabel: "Delete Group",
-										variant: "danger",
-									}))
-								)
-									return;
-								const formData = new FormData();
-								formData.set("organizationId", organizationId);
-								deleteGroupFetcher.submit(formData, {
-									method: "post",
-									action: "/api/groups/delete",
-								});
-							}}
-							className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50 text-sm font-medium"
-						>
-							{isDeletingGroup ? "Deleting..." : "Delete Group"}
-						</button>
+						{isPersonalGroup ? (
+							<p className="text-sm text-muted mb-4 max-w-md">
+								Your personal group can&apos;t be deleted. To remove all your
+								data, delete your account instead.
+							</p>
+						) : (
+							<>
+								<p className="text-sm text-muted mb-4 max-w-md">
+									Permanently delete this group and all its data (inventory,
+									meals, lists). You will be sent to the group switcher
+									immediately. This cannot be undone.
+								</p>
+								{deleteGroupError && (
+									<p className="text-sm text-danger mb-3 max-w-md">
+										{deleteGroupError}
+									</p>
+								)}
+								<button
+									type="button"
+									disabled={isDeletingGroup}
+									onClick={async () => {
+										if (
+											!(await confirm({
+												title: "Delete this group permanently?",
+												message:
+													"All members will lose access immediately. This cannot be undone.",
+												consequences: [
+													"All shared inventory items",
+													"All meal plans and recipes",
+													"All supply lists",
+													"All member invitations and access",
+												],
+												requireTyped: "delete",
+												confirmLabel: "Delete Group",
+												variant: "danger",
+											}))
+										)
+											return;
+										const formData = new FormData();
+										formData.set("organizationId", organizationId);
+										deleteGroupFetcher.submit(formData, {
+											method: "post",
+											action: "/api/groups/delete",
+										});
+									}}
+									className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50 text-sm font-medium"
+								>
+									{isDeletingGroup ? "Deleting..." : "Delete Group"}
+								</button>
+							</>
+						)}
 					</div>
 				)}
 			</div>
@@ -2310,6 +2398,18 @@ function DangerSection({
 					title="Ownership transferred"
 					description="You are now a regular member."
 					onDismiss={successToast.hide}
+				/>
+			)}
+			{errorToast.isOpen && transferError && (
+				<Toast
+					variant="error"
+					title="Transfer failed"
+					description={
+						transferOwnershipFetcher.data?.message ??
+						transferErrorMessage ??
+						transferError
+					}
+					onDismiss={errorToast.hide}
 				/>
 			)}
 		</div>

@@ -296,3 +296,28 @@ export function buildEmbeddedCheckoutSessionBase(
 		customer_update: { address: "auto" },
 	};
 }
+
+/**
+ * Cancel all active/trialing Stripe subscriptions for a customer before account purge.
+ * Keeps the Stripe customer + invoice history; stops future renewals.
+ */
+export async function cancelStripeSubscriptionsForCustomer(
+	env: Env,
+	stripeCustomerId: string,
+): Promise<void> {
+	const stripe = getStripe(env);
+	for await (const subscription of stripe.subscriptions.list({
+		customer: stripeCustomerId,
+		status: "all",
+		limit: 100,
+	})) {
+		if (
+			subscription.status === "active" ||
+			subscription.status === "trialing" ||
+			subscription.status === "past_due" ||
+			subscription.status === "unpaid"
+		) {
+			await stripe.subscriptions.cancel(subscription.id);
+		}
+	}
+}

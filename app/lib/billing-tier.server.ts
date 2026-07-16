@@ -55,6 +55,7 @@ export async function grantCrewMemberTier(
 		tier: "crew_member",
 		tierExpiresAt: params.periodEnd,
 		crewSubscribedAt: sql`coalesce(crew_subscribed_at, unixepoch())`,
+		subscriptionCancelAtPeriodEnd: false,
 	};
 	if (params.stripeCustomerId) {
 		updatePayload.stripeCustomerId = params.stripeCustomerId;

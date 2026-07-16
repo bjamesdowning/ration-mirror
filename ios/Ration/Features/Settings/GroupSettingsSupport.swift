@@ -30,8 +30,8 @@ enum GroupSettingsSupport {
         isOwner && nonOwnerMemberCount > 0
     }
 
-    static func canDeleteGroup(isOwner: Bool) -> Bool {
-        isOwner
+    static func canDeleteGroup(isOwner: Bool, isPersonalGroup: Bool = false) -> Bool {
+        isOwner && !isPersonalGroup
     }
 
     static func canTransferCredits(organizations: [OrgMembership]) -> Bool {

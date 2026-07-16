@@ -156,8 +156,13 @@ struct GroupSettingsView: View {
                 transferOwnershipSection
             }
 
-            if GroupSettingsSupport.canDeleteGroup(isOwner: model.isOwner) {
+            if GroupSettingsSupport.canDeleteGroup(
+                isOwner: model.isOwner,
+                isPersonalGroup: env.session.activeOrg?.isPersonalGroup == true
+            ) {
                 deleteGroupSection
+            } else if model.isOwner, env.session.activeOrg?.isPersonalGroup == true {
+                personalGroupDeleteBlockedSection
             }
         }
         .listStyle(.insetGrouped)
@@ -458,6 +463,17 @@ struct GroupSettingsView: View {
     }
 
     @ViewBuilder
+    private var personalGroupDeleteBlockedSection: some View {
+        Section {
+            Text("Your personal group can't be deleted. To remove all your data, delete your account instead.")
+                .font(Typography.caption())
+                .foregroundStyle(Theme.muted)
+        } header: {
+            Text("Danger zone")
+        }
+    }
+
+    @ViewBuilder
     private var deleteGroupSection: some View {
         Section {
             Button("Delete group", role: .destructive) {
@@ -468,7 +484,7 @@ struct GroupSettingsView: View {
         } header: {
             Text("Danger zone")
         } footer: {
-            Text("Permanently delete this group and all its data. This cannot be undone.")
+            Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
         }
     }
 }

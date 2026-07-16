@@ -38,10 +38,15 @@ struct OrgMembership: Codable, Sendable, Identifiable {
     let credits: Int
     let role: String
     let isActive: Bool
+    let isPersonal: Bool?
 
     var canManageLogo: Bool { role == "owner" || role == "admin" }
     var canManageSupplySettings: Bool { role == "owner" || role == "admin" }
     var canManageGroupProfile: Bool { role == "owner" || role == "admin" }
+
+    var isPersonalGroup: Bool {
+        isPersonal ?? false
+    }
 }
 
 /// Credit costs for AI features — mirrors `AI_COSTS` from ledger.server.
@@ -1502,6 +1507,16 @@ struct AccountDeleteResponse: Codable, Sendable {
 
 struct AccountDeletionPreviewResponse: Codable, Sendable {
     let ownedGroupsWithNoOtherMembers: [String]
+    let canDelete: Bool
+    let blockReason: String?
+    let cancelAtPeriodEnd: Bool
+    let tierExpiresAt: String?
+    let message: String
+    let managementUrl: String?
+    let billingProvider: String?
+
+    var deletionAllowed: Bool { canDelete }
+    var isCancelAtPeriodEnd: Bool { cancelAtPeriodEnd }
 }
 
 // MARK: - Billing

@@ -124,7 +124,8 @@ struct SelectGroupView: View {
                 logo: nil,
                 credits: 0,
                 role: "owner",
-                isActive: false
+                isActive: false,
+                isPersonal: nil
             )
             try await env.session.activateOrg(
                 org,

@@ -4,7 +4,11 @@ import * as schema from "~/db/schema";
 import { requireAuth } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
-import { deleteOrganization } from "~/lib/organizations.server";
+import {
+	assertNotPersonalGroup,
+	beginOrganizationPurge,
+	PersonalGroupDeleteBlockedError,
+} from "~/lib/organizations.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import type { Route } from "./+types/groups.delete";
 
@@ -44,20 +48,33 @@ export async function action({ request, context }: Route.ActionArgs) {
 		);
 	}
 
+	try {
+		await assertNotPersonalGroup(env, organizationId, user.id);
+	} catch (error) {
+		if (error instanceof PersonalGroupDeleteBlockedError) {
+			throw data({ error: error.message, code: error.code }, { status: 403 });
+		}
+		throw error;
+	}
+
 	log.info("[DeleteGroup] Request to delete org", {
 		orgId: redactId(organizationId),
 		userId: redactId(user.id),
 	});
 
 	try {
-		await deleteOrganization(env, organizationId);
-		log.info("[DeleteGroup] Successfully deleted org", {
+		await beginOrganizationPurge(env, context.cloudflare.ctx, organizationId);
+		log.info("[DeleteGroup] Access revoked; purge scheduled", {
 			orgId: redactId(organizationId),
 		});
 	} catch (error) {
-		log.error("[DeleteGroup] FATAL: Failed to delete group", error, {
-			orgId: redactId(organizationId),
-		});
+		log.error(
+			"[DeleteGroup] FATAL: Failed to revoke/schedule group delete",
+			error,
+			{
+				orgId: redactId(organizationId),
+			},
+		);
 		return handleApiError(error);
 	}
 

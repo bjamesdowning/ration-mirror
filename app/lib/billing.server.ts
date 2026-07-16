@@ -208,11 +208,32 @@ export async function processRevenueCatWebhookEvent(
 		fulfillmentEnabled,
 	});
 
+	const userId = event.app_user_id;
+
+	// Cancel-at-period-end must update even when fulfillment is off so account
+	// delete gating works for App Store subscribers.
+	if (event.type === "CANCELLATION") {
+		const db = drizzle(env.DB, { schema });
+		await db
+			.update(schema.user)
+			.set({ subscriptionCancelAtPeriodEnd: true })
+			.where(eq(schema.user.id, userId));
+		if (!fulfillmentEnabled) {
+			return { handled: true, fulfilled: true };
+		}
+	}
+	if (event.type === "UNCANCELLATION") {
+		const db = drizzle(env.DB, { schema });
+		await db
+			.update(schema.user)
+			.set({ subscriptionCancelAtPeriodEnd: false })
+			.where(eq(schema.user.id, userId));
+	}
+
 	if (!fulfillmentEnabled) {
 		return { handled: true, fulfilled: false };
 	}
 
-	const userId = event.app_user_id;
 	const organizationId = await resolveBillingOrganizationId(env, userId);
 	const entitlementIds = event.entitlement_ids ?? [];
 	const hasCrewEntitlement = entitlementIds.includes(

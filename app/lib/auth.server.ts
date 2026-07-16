@@ -41,6 +41,7 @@ import {
 	buildOAuthAccessTokenClaims,
 	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
+import { isUserPurgePending } from "./purge-pending.server";
 import { CURRENT_TOS_VERSION } from "./tos.constants";
 import type { UserSettings } from "./types";
 import { touchUserLastActive } from "./user-activity.server";
@@ -468,6 +469,18 @@ export async function requireAuth(context: AppLoadContext, request: Request) {
 	const session = await auth.api.getSession({ headers: request.headers });
 
 	if (!session) {
+		throw redirect("/");
+	}
+
+	if (
+		await isUserPurgePending(context.cloudflare.env.RATION_KV, session.user.id)
+	) {
+		// Account deletion in progress — wipe leftover cookie session and bounce.
+		try {
+			await auth.api.signOut({ headers: request.headers });
+		} catch {
+			// ignore
+		}
 		throw redirect("/");
 	}
 

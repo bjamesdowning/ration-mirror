@@ -324,9 +324,17 @@ private struct MessageBubble: View {
                     Text(message.content)
                         .font(Typography.body())
                         .foregroundStyle(Theme.carbon)
+                        .textSelection(.enabled)
                         .padding(12)
                         .background(Theme.hyperGreen)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .contextMenu {
+                            if !message.content.isEmpty {
+                                Button("Copy") {
+                                    UIPasteboard.general.string = message.content
+                                }
+                            }
+                        }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
@@ -336,6 +344,13 @@ private struct MessageBubble: View {
                     )
                     HStack(alignment: .bottom, spacing: 4) {
                         MarkdownText(markdown: message.content.isEmpty ? " " : message.content)
+                            .contextMenu {
+                                if !message.content.isEmpty {
+                                    Button("Copy") {
+                                        UIPasteboard.general.string = message.content
+                                    }
+                                }
+                            }
                         if isStreaming {
                             CopilotStreamingCursor()
                         }
@@ -372,6 +387,7 @@ private struct MarkdownText: View {
                 FontFamily(.system())
                 ForegroundColor(Theme.carbon)
             }
+            .textSelection(.enabled)
     }
 }
 

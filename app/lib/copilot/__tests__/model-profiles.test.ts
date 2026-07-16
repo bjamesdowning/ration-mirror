@@ -42,6 +42,16 @@ describe("COPILOT_MODEL_PRESETS", () => {
 		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
 	});
 
+	it("deep allows longer multi-step tool runs", () => {
+		expect(COPILOT_MODEL_PRESETS.deep.maxSteps).toBe(25);
+		expect(COPILOT_MODEL_PRESETS.deep.maxOutputTokens).toBe(16384);
+	});
+
+	it("fast keeps a lower step and output budget", () => {
+		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(8);
+		expect(COPILOT_MODEL_PRESETS.fast.maxOutputTokens).toBe(2048);
+	});
+
 	it("onboarding briefing forces fast preset", () => {
 		expect(ONBOARDING_BRIEFING_MODEL_PRESET).toBe("fast");
 	});

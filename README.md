@@ -2208,7 +2208,7 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 | Preset | Reasoning | maxSteps | maxOutputTokens | Use case |
 |--------|-----------|----------|-----------------|----------|
 | **Fast** (default) | off | 8 | 2048 | Quick answers, lower token use |
-| **Deep** | high | 10 | 4096 | Multi-step planning |
+| **Deep** | high | 25 | 16384 | Multi-step planning |
 
 Deep preset sets `workers-ai.reasoning_effort = high` and streams reasoning parts (`sendReasoning: true`). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
 

@@ -2,8 +2,8 @@ import SwiftUI
 
 enum CopilotComposerHeightPolicy {
     static let singleLineHeight: CGFloat = 36
-    static let maxHeight: CGFloat = 120
-    static let maxLineCount = 5
+    static let maxHeight: CGFloat = 240
+    static let maxLineCount = 10
 
     static func clampedHeight(for measured: CGFloat) -> CGFloat {
         min(maxHeight, max(singleLineHeight, measured))
@@ -11,10 +11,12 @@ enum CopilotComposerHeightPolicy {
 
     static func measuredHeight(text: String, width: CGFloat) -> CGFloat {
         guard width > 32 else { return singleLineHeight }
+        guard !text.isEmpty else { return singleLineHeight }
+
         let font = composerFont
         let lineHeight = ceil(font.lineHeight)
-        let hasMultipleLines = text.contains("\n") || text.contains("\r")
-        guard hasMultipleLines else { return clampedHeight(for: lineHeight) }
+        // TextField chrome: singleLineHeight includes vertical padding beyond one line.
+        let verticalPadding = max(0, singleLineHeight - lineHeight)
 
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         let constraint = CGSize(width: width, height: .greatestFiniteMagnitude)
@@ -24,7 +26,7 @@ enum CopilotComposerHeightPolicy {
             attributes: attributes,
             context: nil
         )
-        return clampedHeight(for: ceil(rect.height))
+        return clampedHeight(for: ceil(rect.height) + verticalPadding)
     }
 
     static var composerFont: UIFont {
@@ -70,8 +72,13 @@ struct CopilotNativeComposer: View {
         .font(Typography.body())
         .foregroundStyle(Theme.carbon)
         .tint(Theme.hyperGreen)
-        .submitLabel(.send)
-        .onSubmit(onSubmit)
+        .submitLabel(.return)
+        .onSubmit {
+            // Multiline / growing: Return inserts a newline. Compact dock: Return sends.
+            if !usesGrowingAxis {
+                onSubmit()
+            }
+        }
         .onChange(of: isFocused) { _, focused in
             onFocusChange(focused)
         }

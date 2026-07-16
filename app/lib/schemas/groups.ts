@@ -7,7 +7,8 @@ export const RoleUpdateSchema = z.object({
 export type RoleUpdateInput = z.infer<typeof RoleUpdateSchema>;
 
 export const TransferOwnershipSchema = z.object({
-	newOwnerMemberId: z.string().uuid(),
+	// Better Auth member IDs are alphanumeric (not always UUIDs); membership is verified in-route.
+	newOwnerMemberId: z.string().min(1),
 });
 
 export type TransferOwnershipInput = z.infer<typeof TransferOwnershipSchema>;

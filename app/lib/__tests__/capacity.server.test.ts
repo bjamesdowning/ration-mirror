@@ -133,7 +133,7 @@ describe("checkCapacityWithTier", () => {
 });
 
 describe("buildRecipientCapacityExceededPayload", () => {
-	it("returns recipient_capacity_exceeded with limit in message", () => {
+	it("returns crew limit message when recipient is at Crew owned-group max", () => {
 		const payload = buildRecipientCapacityExceededPayload({
 			allowed: false,
 			current: 5,
@@ -146,5 +146,21 @@ describe("buildRecipientCapacityExceededPayload", () => {
 		expect(payload.limit).toBe(5);
 		expect(payload.current).toBe(5);
 		expect(payload.message).toContain("5");
+		expect(payload.message).toContain("cannot take ownership of another");
+	});
+
+	it("returns Crew upgrade message when recipient is on free plan", () => {
+		const payload = buildRecipientCapacityExceededPayload({
+			allowed: false,
+			current: 1,
+			limit: 1,
+			tier: "free",
+			canCreate: 0,
+		});
+
+		expect(payload.error).toBe("recipient_capacity_exceeded");
+		expect(payload.tier).toBe("free");
+		expect(payload.message).toContain("free plan");
+		expect(payload.message).toContain("Crew");
 	});
 });

@@ -155,6 +155,34 @@ final class GroupSettingsViewModelTests: XCTestCase {
         )
     }
 
+    func testTransferOwnershipErrorMessagePrefersServerFreeTierCopy() {
+        let error = APIError.server(
+            status: 403,
+            message: "This member is on the free plan and can only own 1 group. They need Crew to take ownership of another.",
+            code: nil,
+            errorCode: "recipient_capacity_exceeded",
+            limit: 1
+        )
+        XCTAssertEqual(
+            GroupSettingsSupport.transferOwnershipErrorMessage(from: error),
+            "This member is on the free plan and can only own 1 group. They need Crew to take ownership of another."
+        )
+    }
+
+    func testTransferOwnershipErrorMessageFallsBackWhenOnlyMachineCode() {
+        let error = APIError.server(
+            status: 403,
+            message: "recipient_capacity_exceeded",
+            code: nil,
+            errorCode: "recipient_capacity_exceeded",
+            limit: 1
+        )
+        XCTAssertEqual(
+            GroupSettingsSupport.transferOwnershipErrorMessage(from: error),
+            "This member already owns the maximum number of groups (1) and cannot take ownership of another."
+        )
+    }
+
     func testCreateGroupErrorMessageForCrewLimit() {
         XCTAssertEqual(
             GroupSettingsSupport.createGroupErrorMessage(from: .crewGroupLimitReached(limit: 5)),

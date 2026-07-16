@@ -28,6 +28,7 @@ describe("RoleUpdateSchema", () => {
 
 describe("TransferOwnershipSchema", () => {
 	const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+	const betterAuthId = "aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV";
 
 	it("accepts a valid UUID", () => {
 		const result = TransferOwnershipSchema.safeParse({
@@ -36,11 +37,11 @@ describe("TransferOwnershipSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("rejects invalid UUID", () => {
+	it("accepts Better Auth alphanumeric member IDs", () => {
 		const result = TransferOwnershipSchema.safeParse({
-			newOwnerMemberId: "not-a-uuid",
+			newOwnerMemberId: betterAuthId,
 		});
-		expect(result.success).toBe(false);
+		expect(result.success).toBe(true);
 	});
 
 	it("rejects empty newOwnerMemberId", () => {

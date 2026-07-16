@@ -299,9 +299,14 @@ export type OwnedGroupCapacity = Awaited<
 export function buildRecipientCapacityExceededPayload(
 	capacity: OwnedGroupCapacity,
 ) {
+	const message =
+		capacity.tier === "free"
+			? `This member is on the free plan and can only own ${capacity.limit} group${capacity.limit === 1 ? "" : "s"}. They need Crew to take ownership of another.`
+			: `This member already owns the maximum number of groups (${capacity.limit}) and cannot take ownership of another.`;
+
 	return {
 		error: "recipient_capacity_exceeded" as const,
-		message: `This member already owns the maximum number of groups (${capacity.limit}) and cannot take ownership of another.`,
+		message,
 		resource: "owned_groups" as const,
 		current: capacity.current,
 		limit: capacity.limit,

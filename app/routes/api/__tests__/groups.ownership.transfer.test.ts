@@ -116,10 +116,71 @@ describe("POST /api/groups/ownership/transfer", () => {
 				error: "recipient_capacity_exceeded",
 				limit: 5,
 				current: 5,
+				message:
+					"This member already owns the maximum number of groups (5) and cannot take ownership of another.",
 			},
 			init: { status: 403 },
 		});
 		expect(assertCanOwnAnotherGroup).toHaveBeenCalledWith(env, "user_2");
 		expect(dbBatch).not.toHaveBeenCalled();
+	});
+
+	it("returns free-tier Crew guidance when recipient cannot own another group", async () => {
+		assertCanOwnAnotherGroup.mockResolvedValue({
+			allowed: false,
+			current: 1,
+			limit: 1,
+			tier: "free",
+			canCreate: 0,
+		});
+		const { action } = await import("~/routes/api/groups.ownership.transfer");
+		const result = await action({
+			request: postRequest(),
+			context: ctx,
+			params: {},
+		} as never);
+		expect(result).toMatchObject({
+			data: {
+				error: "recipient_capacity_exceeded",
+				tier: "free",
+				limit: 1,
+				message:
+					"This member is on the free plan and can only own 1 group. They need Crew to take ownership of another.",
+			},
+			init: { status: 403 },
+		});
+		expect(dbBatch).not.toHaveBeenCalled();
+	});
+
+	it("accepts Better Auth alphanumeric member IDs", async () => {
+		const betterAuthId = "aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV";
+		findFirstMember.mockReset();
+		findFirstMember
+			.mockResolvedValueOnce({
+				id: actorMemberId,
+				role: "owner",
+				userId: "user_1",
+			})
+			.mockResolvedValueOnce({
+				id: betterAuthId,
+				role: "member",
+				userId: "user_2",
+			});
+		const { action } = await import("~/routes/api/groups.ownership.transfer");
+		const request = new Request(
+			"https://ration.mayutic.com/api/groups/ownership/transfer",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newOwnerMemberId: betterAuthId }),
+			},
+		);
+		const result = await action({
+			request,
+			context: ctx,
+			params: {},
+		} as never);
+		expect(result).toMatchObject({ success: true });
+		expect(dbBatch).toHaveBeenCalled();
 	});
 });

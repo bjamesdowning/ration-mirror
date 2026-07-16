@@ -317,7 +317,7 @@ export async function loader(args: Route.LoaderArgs) {
 
 		const transferRecipientEligibility: Record<
 			string,
-			{ allowed: boolean; limit: number; current: number }
+			{ allowed: boolean; limit: number; current: number; tier: string }
 		> = {};
 		if (isOwner) {
 			const nonOwnerMembers = members.filter((m) => m.role !== "owner");
@@ -332,6 +332,7 @@ export async function loader(args: Route.LoaderArgs) {
 					allowed: capacity.allowed,
 					limit: capacity.limit,
 					current: capacity.current,
+					tier: capacity.tier,
 				};
 			}
 		}
@@ -2046,7 +2047,7 @@ function DangerSection({
 	ownedGroupsWithNoOtherMembers: string[];
 	transferRecipientEligibility: Record<
 		string,
-		{ allowed: boolean; limit: number; current: number }
+		{ allowed: boolean; limit: number; current: number; tier: string }
 	>;
 	accountDeletion: ReturnType<typeof evaluateAccountDeletionEligibility>;
 	tierExpiresAt: Date | string | null;
@@ -2307,12 +2308,14 @@ function DangerSection({
 								const eligibility = transferRecipientEligibility[m.id];
 								const ineligible =
 									eligibility !== undefined && !eligibility.allowed;
+								const ineligibleLabel =
+									eligibility?.tier === "free"
+										? " — needs Crew to own another group"
+										: ` — owns max groups (${eligibility?.limit})`;
 								return (
 									<option key={m.id} value={m.id} disabled={ineligible}>
 										{getUserDisplayName(m.user)} ({m.role})
-										{ineligible
-											? ` — owns max groups (${eligibility.limit})`
-											: ""}
+										{ineligible ? ineligibleLabel : ""}
 									</option>
 								);
 							})}

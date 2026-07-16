@@ -178,9 +178,39 @@ describe("POST /api/mobile/v1/groups/ownership/transfer", () => {
 				error: "recipient_capacity_exceeded",
 				limit: 5,
 				current: 5,
+				message:
+					"This member already owns the maximum number of groups (5) and cannot take ownership of another.",
 			},
 		});
 		expect(assertCanOwnAnotherGroup).toHaveBeenCalledWith(env, "user_2");
+		expect(dbBatch).not.toHaveBeenCalled();
+	});
+
+	it("returns free-tier Crew guidance when recipient cannot own another group", async () => {
+		assertCanOwnAnotherGroup.mockResolvedValue({
+			allowed: false,
+			current: 1,
+			limit: 1,
+			tier: "free",
+			canCreate: 0,
+		});
+		const { action } = await import(
+			"~/routes/api/mobile/v1.groups.ownership.transfer"
+		);
+		const result = await action({
+			request: postRequest(),
+			context: ctx,
+			params: {},
+		} as never);
+		expect(result).toMatchObject({
+			init: { status: 403 },
+			data: {
+				error: "recipient_capacity_exceeded",
+				tier: "free",
+				message:
+					"This member is on the free plan and can only own 1 group. They need Crew to take ownership of another.",
+			},
+		});
 		expect(dbBatch).not.toHaveBeenCalled();
 	});
 });

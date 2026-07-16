@@ -104,10 +104,16 @@ enum GroupSettingsSupport {
     static func transferOwnershipErrorMessage(from error: APIError) -> String? {
         guard case .server = error else { return nil }
         if error.serverErrorCode == "recipient_capacity_exceeded" {
+            // Prefer human server message; skip when description is only the machine code
+            // (APIClient falls back to `error` when `message` is absent).
+            if let description = error.errorDescription,
+               !description.isEmpty,
+               description != error.serverErrorCode {
+                return description
+            }
             if let limit = error.serverLimit {
                 return "This member already owns the maximum number of groups (\(limit)) and cannot take ownership of another."
             }
-            return error.errorDescription
         }
         return error.errorDescription
     }

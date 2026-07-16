@@ -20,7 +20,7 @@ import {
 	getActiveCargoSelections,
 } from "./cargo-selection.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
-import { toExpiryDate } from "./date-utils";
+import { parseDockExpiresAt, toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
 import { log } from "./logging.server";
@@ -2497,7 +2497,7 @@ export async function completeSupplyFromScan(
 		domain: p.dock.domain as (typeof ITEM_DOMAINS)[number],
 		tags: p.dock.tags ?? [],
 		expiresAt: p.dock.expiresAt
-			? (toExpiryDate(p.dock.expiresAt) ?? undefined)
+			? (parseDockExpiresAt(p.dock.expiresAt) ?? undefined)
 			: undefined,
 		mergeTargetId: p.dock.mergeTargetId,
 	}));

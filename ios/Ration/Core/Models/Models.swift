@@ -1505,6 +1505,24 @@ struct SupplyScanCompletePair: Encodable, Sendable {
     let matchType: String
     let dock: SupplyScanCompleteDock
     var updateSupply: SupplyScanUpdateSupply?
+
+    enum CodingKeys: String, CodingKey {
+        case scanItemId, supplyItemId, matchType, dock, updateSupply
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(scanItemId, forKey: .scanItemId)
+        // Zod accepts uuid | null | omitted; encode null so receipt-only pairs validate.
+        if let supplyItemId {
+            try container.encode(supplyItemId, forKey: .supplyItemId)
+        } else {
+            try container.encodeNil(forKey: .supplyItemId)
+        }
+        try container.encode(matchType, forKey: .matchType)
+        try container.encode(dock, forKey: .dock)
+        try container.encodeIfPresent(updateSupply, forKey: .updateSupply)
+    }
 }
 
 struct SupplyScanUpdateSupply: Encodable, Sendable {

@@ -21,9 +21,53 @@ struct SupplyScanReviewRow: Identifiable, Sendable {
     var supplyItem: SupplyItem?
     var matchType: String
     var selected: Bool
+    /// Mutable dock draft (shared form fields with Cargo photo scan).
+    var dockName: String
     var dockQuantity: Double
     var dockUnit: String
+    var dockDomain: String
+    var dockTags: [String]
+    var dockExpiresAt: String?
     var hasDelta: Bool
+
+    func toEditableScanItem() -> EditableScanResultItem {
+        let proxy = ScanResultItem(
+            id: id,
+            name: dockName,
+            quantity: dockQuantity,
+            unit: dockUnit,
+            domain: dockDomain,
+            tags: dockTags,
+            expiresAt: dockExpiresAt,
+            confidence: scanItem.confidence
+        )
+        return EditableScanResultItem(from: proxy, selected: selected)
+    }
+
+    mutating func applyDockEdit(_ edited: EditableScanResultItem) {
+        let previousName = dockName
+        dockName = edited.name
+        dockQuantity = edited.quantity
+        dockUnit = edited.unit
+        dockDomain = edited.domain ?? "food"
+        dockTags = edited.tags
+        if let date = edited.expiresAt {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd"
+            dockExpiresAt = formatter.string(from: date)
+        } else {
+            dockExpiresAt = nil
+        }
+        if supplyItem != nil, dockName != previousName {
+            matchType = "manual"
+        }
+        if let supply = supplyItem {
+            hasDelta = abs(dockQuantity - supply.quantity) > 0.0001 || dockUnit != supply.unit
+        }
+    }
 }
 
 @MainActor
@@ -32,19 +76,26 @@ final class SupplyScanReviewViewModel {
     private(set) var rows: [SupplyScanReviewRow]
     private(set) var isSubmitting = false
     var errorMessage: String?
+    var editingItem: EditableScanResultItem?
 
     init(match: SupplyScanMatchResponse) {
         var built: [SupplyScanReviewRow] = match.pairs.map { pair in
             let confident = (pair.scanItem.confidence ?? 1) >= 0.7
             let autoSelect = confident && (pair.matchScore ?? 0) >= 0.7
+            let dockQty = pair.quantityProposal?.dockQuantity ?? pair.scanItem.quantity
+            let dockUnit = pair.quantityProposal?.dockUnit ?? pair.scanItem.unit
             return SupplyScanReviewRow(
                 id: pair.scanItem.id,
                 scanItem: pair.scanItem,
                 supplyItem: pair.supplyItem,
                 matchType: pair.matchType ?? "manual",
                 selected: autoSelect,
-                dockQuantity: pair.quantityProposal?.dockQuantity ?? pair.scanItem.quantity,
-                dockUnit: pair.quantityProposal?.dockUnit ?? pair.scanItem.unit,
+                dockName: pair.scanItem.name,
+                dockQuantity: dockQty,
+                dockUnit: dockUnit,
+                dockDomain: pair.scanItem.domain ?? "food",
+                dockTags: pair.scanItem.tags ?? [],
+                dockExpiresAt: pair.scanItem.expiresAt,
                 hasDelta: pair.quantityProposal?.hasDelta ?? false
             )
         }
@@ -59,8 +110,12 @@ final class SupplyScanReviewViewModel {
                     supplyItem: nil,
                     matchType: "manual",
                     selected: confident,
+                    dockName: item.name,
                     dockQuantity: item.quantity,
                     dockUnit: item.unit,
+                    dockDomain: item.domain ?? "food",
+                    dockTags: item.tags ?? [],
+                    dockExpiresAt: item.expiresAt,
                     hasDelta: false
                 )
             )
@@ -75,6 +130,20 @@ final class SupplyScanReviewViewModel {
     func toggleSelection(_ rowId: String) {
         guard let index = rows.firstIndex(where: { $0.id == rowId }) else { return }
         rows[index].selected.toggle()
+    }
+
+    func startEdit(_ rowId: String) {
+        guard let row = rows.first(where: { $0.id == rowId }) else { return }
+        editingItem = row.toEditableScanItem()
+    }
+
+    func saveEdit(_ updated: EditableScanResultItem) -> String? {
+        guard let index = rows.firstIndex(where: { $0.id == updated.id }) else {
+            return "Could not save this item."
+        }
+        rows[index].applyDockEdit(updated)
+        editingItem = nil
+        return nil
     }
 
     func complete(
@@ -98,12 +167,12 @@ final class SupplyScanReviewViewModel {
                 supplyItemId: row.supplyItem?.id,
                 matchType: row.matchType,
                 dock: SupplyScanCompleteDock(
-                    name: row.scanItem.name,
+                    name: row.dockName,
                     quantity: row.dockQuantity,
                     unit: row.dockUnit,
-                    domain: row.scanItem.domain ?? "food",
-                    tags: row.scanItem.tags ?? [],
-                    expiresAt: row.scanItem.expiresAt
+                    domain: row.dockDomain,
+                    tags: row.dockTags,
+                    expiresAt: row.dockExpiresAt
                 ),
                 updateSupply: row.supplyItem != nil && row.hasDelta
                     ? SupplyScanUpdateSupply(quantity: row.dockQuantity, unit: row.dockUnit)
@@ -141,6 +210,7 @@ struct SupplyScanReviewView: View {
     }
 
     var body: some View {
+        @Bindable var model = model
         NavigationStack {
             List {
                 if let errorMessage = model.errorMessage {
@@ -206,67 +276,89 @@ struct SupplyScanReviewView: View {
                 .padding(.vertical, 12)
                 .background(Theme.ceramic)
             }
+            .sheet(item: $model.editingItem) { item in
+                ScanItemEditSheet(item: item) { updated in
+                    model.saveEdit(updated)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private func reviewRow(_ row: SupplyScanReviewRow) -> some View {
-        Button {
-            model.toggleSelection(row.id)
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
+            Button {
+                model.toggleSelection(row.id)
+            } label: {
                 Image(systemName: row.selected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(row.selected ? Theme.hyperGreen : Theme.muted)
                     .padding(.top, 2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(row.selected ? "Deselect item" : "Select item")
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Receipt")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Receipt")
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                    .textCase(.uppercase)
+                Text(row.dockName.capitalized)
+                    .rationBody()
+                DisplayQuantityLabel(
+                    quantity: row.dockQuantity,
+                    unit: row.dockUnit,
+                    ingredientName: row.dockName
+                )
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+
+                if !row.dockDomain.isEmpty {
+                    Text(row.dockDomain.capitalized)
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
-                        .textCase(.uppercase)
-                    Text(row.scanItem.name.capitalized)
-                        .rationBody()
+                }
+
+                if let supplyItem = row.supplyItem {
+                    HStack(spacing: 4) {
+                        Image(systemName: "link")
+                            .font(.caption)
+                            .foregroundStyle(Theme.hyperGreen)
+                        Text("Supply: \(supplyItem.name.capitalized)")
+                            .rationCaption()
+                    }
                     DisplayQuantityLabel(
-                        quantity: row.scanItem.quantity,
-                        unit: row.scanItem.unit,
-                        ingredientName: row.scanItem.name
+                        quantity: supplyItem.quantity,
+                        unit: supplyItem.unit,
+                        baseQuantity: supplyItem.baseQuantity,
+                        baseUnit: supplyItem.baseUnit,
+                        ingredientName: supplyItem.name
                     )
                     .rationCaption()
                     .foregroundStyle(Theme.muted)
-
-                    if let supplyItem = row.supplyItem {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.caption)
-                                .foregroundStyle(Theme.hyperGreen)
-                            Text("Supply: \(supplyItem.name.capitalized)")
-                                .rationCaption()
-                        }
-                        DisplayQuantityLabel(
-                            quantity: supplyItem.quantity,
-                            unit: supplyItem.unit,
-                            baseQuantity: supplyItem.baseQuantity,
-                            baseUnit: supplyItem.baseUnit,
-                            ingredientName: supplyItem.name
-                        )
+                } else {
+                    Text("Receipt only")
                         .rationCaption()
                         .foregroundStyle(Theme.muted)
-                    } else {
-                        Text("Receipt only")
-                            .rationCaption()
-                            .foregroundStyle(Theme.muted)
-                    }
-
-                    if row.hasDelta {
-                        Text("Qty delta — dock \(row.dockQuantity.formatted()) \(row.dockUnit)")
-                            .rationCaption()
-                            .foregroundStyle(Theme.warning)
-                    }
                 }
-                Spacer(minLength: 0)
+
+                if row.hasDelta {
+                    Text("Qty delta — dock \(row.dockQuantity.formatted()) \(row.dockUnit)")
+                        .rationCaption()
+                        .foregroundStyle(Theme.warning)
+                }
             }
+
+            Spacer(minLength: 0)
+
+            Button {
+                model.startEdit(row.id)
+            } label: {
+                Image(systemName: "pencil")
+                    .foregroundStyle(Theme.muted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit item")
         }
-        .buttonStyle(.plain)
     }
 
     private func confirmDock() async {

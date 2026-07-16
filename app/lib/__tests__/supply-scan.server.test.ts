@@ -55,28 +55,30 @@ function supplyItem(
 }
 
 describe("sanitizeDockFromScanItem", () => {
-	it("uses receipt name/domain/tags regardless of client payload", () => {
+	it("honors client name/domain/tags within bounds", () => {
 		const result = sanitizeDockFromScanItem(scanItem(), {
-			name: "evil item",
+			name: "organic chicken",
 			quantity: 2,
 			unit: "lb",
 			domain: "alcohol",
 			tags: ["hack"],
 		});
-		expect(result.name).toBe("chicken breast");
-		expect(result.domain).toBe("food");
-		expect(result.tags).toEqual(["protein"]);
+		expect(result.name).toBe("organic chicken");
+		expect(result.domain).toBe("alcohol");
+		expect(result.tags).toEqual(["hack"]);
+		expect(result.quantity).toBe(2);
 	});
 
-	it("clamps quantity to a bounded multiplier of receipt qty", () => {
-		const result = sanitizeDockFromScanItem(scanItem({ quantity: 2 }), {
-			name: "chicken breast",
-			quantity: 999,
-			unit: "lb",
-			domain: "food",
-			tags: [],
-		});
-		expect(result.quantity).toBe(20);
+	it("rejects quantity above the bounded multiplier of receipt qty", () => {
+		expect(() =>
+			sanitizeDockFromScanItem(scanItem({ quantity: 2 }), {
+				name: "chicken breast",
+				quantity: 999,
+				unit: "lb",
+				domain: "food",
+				tags: [],
+			}),
+		).toThrow(/too high/i);
 	});
 
 	it("rejects incompatible dock units", () => {
@@ -112,7 +114,7 @@ describe("buildSanitizedScanCompleteInputs", () => {
 			[scanItem()],
 			[supplyItem()],
 		);
-		expect(inputs[0]?.dock.name).toBe("chicken breast");
+		expect(inputs[0]?.dock.name).toBe("ignored");
 		expect(inputs[0]?.supplyItemId).toBe(supplyId);
 	});
 

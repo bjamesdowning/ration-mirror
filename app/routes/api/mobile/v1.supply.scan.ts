@@ -1,9 +1,11 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { log } from "~/lib/logging.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
+	SUPPLY_SCAN_COMPLETE_INVALID_MESSAGE,
 	SupplyScanCompleteRequestSchema,
 	SupplyScanMatchQuerySchema,
 } from "~/lib/schemas/supply-scan";
@@ -96,8 +98,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const parsed = SupplyScanCompleteRequestSchema.safeParse(body);
 		if (!parsed.success) {
+			log.warn("Supply scan complete validation failed", {
+				issues: parsed.error.issues.slice(0, 8).map((i) => ({
+					path: i.path.join("."),
+					code: i.code,
+				})),
+			});
 			throw data(
-				{ error: "Invalid request", details: parsed.error.flatten() },
+				{ error: SUPPLY_SCAN_COMPLETE_INVALID_MESSAGE },
 				{ status: 400 },
 			);
 		}

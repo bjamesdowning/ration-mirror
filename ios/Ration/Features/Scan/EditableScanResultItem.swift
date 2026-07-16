@@ -21,6 +21,7 @@ struct EditableScanResultItem: Identifiable, Equatable, Sendable {
         if let expiresAtString = item.expiresAt {
             expiresAt = ISO8601DateFormatter.rationFractional.date(from: expiresAtString)
                 ?? ISO8601DateFormatter.rationBasic.date(from: expiresAtString)
+                ?? Self.parseCalendarDate(expiresAtString)
         } else {
             expiresAt = nil
         }
@@ -113,4 +114,15 @@ private extension ISO8601DateFormatter {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
+}
+
+private extension EditableScanResultItem {
+    static func parseCalendarDate(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: raw)
+    }
 }

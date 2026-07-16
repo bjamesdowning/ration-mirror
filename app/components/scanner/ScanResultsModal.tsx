@@ -1,13 +1,14 @@
 import { AlertTriangle, Calendar, Check, Edit2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
-import { DOMAIN_LABELS, ITEM_DOMAINS } from "~/lib/domain";
+import { DOMAIN_LABELS, type ITEM_DOMAINS } from "~/lib/domain";
 import { normalizeForMatch, tokenMatchScore } from "~/lib/matching";
 import {
 	areIngredientUnitsCompatible,
 	convertForIngredient,
 } from "~/lib/present-quantity";
 import type { ScanResult, ScanResultItem } from "~/lib/schemas/scan";
+import { DockItemFields } from "./DockItemFields";
 
 type ItemDomain = (typeof ITEM_DOMAINS)[number];
 
@@ -405,127 +406,31 @@ function ScanResultItemRow({
 	if (isEditing) {
 		return (
 			<div className="bg-carbon/30 border border-hyper-green/50 rounded-lg p-4 space-y-3">
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-					<div>
-						{/* biome-ignore lint/a11y/noLabelWithoutControl: label wraps input logically */}
-						<label className="text-xs text-muted block mb-1">Item Name</label>
-						<input
-							type="text"
-							inputMode="text"
-							value={editedItem.name}
-							onChange={(e) =>
-								setEditedItem({ ...editedItem, name: e.target.value })
-							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-white dark:text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						/>
-					</div>
-					<div>
-						<label
-							htmlFor="edit-quantity"
-							className="text-xs text-muted block mb-1"
-						>
-							Quantity
-						</label>
-						<input
-							id="edit-quantity"
-							type="number"
-							inputMode="decimal"
-							value={editedItem.quantity}
-							onChange={(e) =>
-								setEditedItem({
-									...editedItem,
-									quantity: Number(e.target.value),
-								})
-							}
-							min="0"
-							step="any"
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-white dark:text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						/>
-					</div>
-					<div>
-						<label
-							htmlFor="edit-unit"
-							className="text-xs text-muted block mb-1"
-						>
-							Unit
-						</label>
-						<select
-							id="edit-unit"
-							value={editedItem.unit}
-							onChange={(e) =>
-								setEditedItem({
-									...editedItem,
-									unit: e.target.value as
-										| "kg"
-										| "g"
-										| "lb"
-										| "oz"
-										| "l"
-										| "ml"
-										| "unit"
-										| "can"
-										| "pack",
-								})
-							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						>
-							<option value="unit">Unit</option>
-							<option value="kg">kg</option>
-							<option value="g">g</option>
-							<option value="lb">lb</option>
-							<option value="oz">oz</option>
-							<option value="l">L</option>
-							<option value="ml">mL</option>
-							<option value="can">Can</option>
-							<option value="pack">Pack</option>
-						</select>
-					</div>
-				</div>
-
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-					<div>
-						<label
-							className="text-xs text-muted block mb-1"
-							htmlFor="edit-domain"
-						>
-							Domain
-						</label>
-						<select
-							id="edit-domain"
-							value={editedItem.domain || "food"}
-							onChange={(e) =>
-								setEditedItem({
-									...editedItem,
-									domain: e.target.value as ItemDomain,
-								})
-							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						>
-							{ITEM_DOMAINS.map((domain) => (
-								<option key={domain} value={domain}>
-									{DOMAIN_LABELS[domain]}
-								</option>
-							))}
-						</select>
-					</div>
-					<div>
-						<label
-							htmlFor="edit-expiry"
-							className="text-xs text-muted block mb-1"
-						>
-							Expiry Date
-						</label>
-						<input
-							id="edit-expiry"
-							type="date"
-							value={editedItem.expiresAt || ""}
-							onChange={(e) =>
-								setEditedItem({ ...editedItem, expiresAt: e.target.value })
-							}
-							className="w-full bg-platinum/10 border border-hyper-green/30 rounded px-3 py-2 text-sm text-carbon focus:ring-2 focus:ring-hyper-green/50 focus:outline-none"
-						/>
-					</div>
-				</div>
+				<DockItemFields
+					key={`cargo-${item.id}`}
+					idPrefix={`cargo-${item.id}`}
+					value={{
+						name: editedItem.name,
+						quantity: editedItem.quantity,
+						unit: editedItem.unit,
+						domain: editedItem.domain || "food",
+						tags: editedItem.tags ?? [],
+						expiresAt: editedItem.expiresAt,
+					}}
+					onChange={(next) =>
+						setEditedItem({
+							...editedItem,
+							name: next.name,
+							quantity: Number.isFinite(next.quantity)
+								? next.quantity
+								: editedItem.quantity,
+							unit: next.unit as ScanResultItem["unit"],
+							domain: next.domain as ItemDomain,
+							tags: next.tags ?? [],
+							expiresAt: next.expiresAt || undefined,
+						})
+					}
+				/>
 
 				<div className="flex gap-2 justify-end">
 					<button

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { supplyItem } from "../db/schema";
 import { CapacityExceededError } from "./capacity.server";
+import { ITEM_DOMAINS } from "./domain";
 import { getQueueJob } from "./queue-job.server";
 import { parseJobResultJson } from "./queue-status-loader.server";
 import type { ScanResultItem } from "./schemas/scan";
@@ -18,6 +19,7 @@ import {
 	SUPPLY_SCAN_FUZZY_THRESHOLD,
 	scoreScanToSupplyItem,
 } from "./supply-scan-match.server";
+import { dedupeTagSlugs } from "./tags";
 import { getUnitMultiplier, toSupportedUnit } from "./units";
 
 const SCAN_COMPLETE_IDEMPOTENCY_TTL = 86_400;
@@ -97,8 +99,8 @@ export async function getSupplyScanMatch(
 }
 
 /**
- * Constrains client dock fields to the parsed receipt line. Quantity/unit may
- * be edited within compatible units and a bounded multiplier of the scan qty.
+ * Constrains client dock quantity/unit to the parsed receipt line.
+ * Name, domain, tags, and expiry may be edited by the user (validated client payload).
  */
 export function sanitizeDockFromScanItem(
 	scanItem: ScanResultItem,
@@ -122,15 +124,39 @@ export function sanitizeDockFromScanItem(
 		MAX_ABSOLUTE_QTY,
 		Math.max(scanQtyInClientUnit * MAX_QTY_MULTIPLIER, scanQtyInClientUnit + 1),
 	);
-	const quantity = Math.min(Math.max(0, clientDock.quantity), maxQty);
+	const quantityRaw = clientDock.quantity;
+	if (!Number.isFinite(quantityRaw) || quantityRaw < 0) {
+		throw new SupplyScanError(
+			"Enter a valid quantity for each item before docking.",
+			"invalid_pair",
+		);
+	}
+	if (quantityRaw > maxQty) {
+		throw new SupplyScanError(
+			"That quantity is too high for this receipt line. Lower it and try again.",
+			"invalid_pair",
+		);
+	}
+	const quantity = quantityRaw;
+
+	const name = (clientDock.name ?? scanItem.name).trim().slice(0, 200);
+	if (!name) {
+		throw new SupplyScanError("Dock item name is required", "invalid_pair");
+	}
+
+	const domain = (ITEM_DOMAINS as readonly string[]).includes(clientDock.domain)
+		? (clientDock.domain as (typeof ITEM_DOMAINS)[number])
+		: scanItem.domain;
+
+	const tags = dedupeTagSlugs(clientDock.tags ?? []);
 
 	return {
-		name: scanItem.name,
+		name,
 		quantity,
 		unit: clientUnit,
-		domain: scanItem.domain,
-		tags: scanItem.tags ?? [],
-		expiresAt: clientDock.expiresAt ?? scanItem.expiresAt,
+		domain,
+		tags,
+		expiresAt: clientDock.expiresAt ?? scanItem.expiresAt ?? undefined,
 		mergeTargetId: clientDock.mergeTargetId,
 	};
 }
@@ -195,7 +221,7 @@ export function buildSanitizedScanCompleteInputs(
 
 		return {
 			scanItemId: pair.scanItemId,
-			supplyItemId: pair.supplyItemId,
+			supplyItemId: pair.supplyItemId ?? null,
 			dock,
 			updateSupply,
 		};

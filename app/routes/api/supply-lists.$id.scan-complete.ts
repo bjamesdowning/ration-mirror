@@ -2,8 +2,12 @@ import { data } from "react-router";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { log } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { SupplyScanCompleteRequestSchema } from "~/lib/schemas/supply-scan";
+import {
+	SUPPLY_SCAN_COMPLETE_INVALID_MESSAGE,
+	SupplyScanCompleteRequestSchema,
+} from "~/lib/schemas/supply-scan";
 import {
 	completeSupplyScan,
 	SupplyScanError,
@@ -44,8 +48,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const json = await request.json();
 		const parsed = SupplyScanCompleteRequestSchema.safeParse(json);
 		if (!parsed.success) {
+			log.warn("Supply scan complete validation failed", {
+				issues: parsed.error.issues.slice(0, 8).map((i) => ({
+					path: i.path.join("."),
+					code: i.code,
+				})),
+			});
 			throw data(
-				{ error: "Invalid request", details: parsed.error.flatten() },
+				{ error: SUPPLY_SCAN_COMPLETE_INVALID_MESSAGE },
 				{ status: 400 },
 			);
 		}

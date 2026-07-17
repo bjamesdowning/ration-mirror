@@ -723,12 +723,12 @@ final class AskViewModelTests: XCTestCase {
         }
     }
 
-    func testNewChatClearsActiveTurnAndMessages() {
+    func testNewChatClearsActiveTurnAndMessages() async {
         let socket = TestAskSocketClient()
         let model = AskViewModel(socket: socket)
         model.apply(Self.event(type: "text_delta", text: "Partial"))
 
-        model.newChat(auth: AuthManager(), organizationId: "org-1", snapshots: SnapshotStore())
+        await model.newChat(auth: AuthManager(), organizationId: "org-1", snapshots: SnapshotStore())
 
         XCTAssertTrue(socket.didDisconnect)
         XCTAssertFalse(model.isTurnActive)

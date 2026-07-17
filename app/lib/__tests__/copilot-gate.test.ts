@@ -123,6 +123,7 @@ describe("copilot gate", () => {
 			30_001,
 		);
 		expect(next.bracketCreditsCharged).toBe(2);
+		expect(next.totalTokens).toBe(30_001);
 		expect(ledger.deductCredits).toHaveBeenCalledWith(
 			e,
 			"org_1",
@@ -130,6 +131,24 @@ describe("copilot gate", () => {
 			1,
 			"Copilot",
 		);
+	});
+
+	it("persists cumulative tokens for allowance chats without charging", async () => {
+		const e = env();
+		const next = await reconcileCopilotConversationUsage(
+			e,
+			identity,
+			{
+				mode: "allowance",
+				preauthorizedCredits: 0,
+				bracketCreditsCharged: 0,
+				totalTokens: 10_000,
+			},
+			12_500,
+		);
+		expect(next.mode).toBe("allowance");
+		expect(next.totalTokens).toBe(12_500);
+		expect(ledger.deductCredits).not.toHaveBeenCalled();
 	});
 
 	it("opens onboarding briefing for eligible iOS free users until consumed", async () => {
@@ -198,5 +217,13 @@ describe("copilot gate", () => {
 		);
 		expect(unchanged.mode).toBe("onboarding_briefing");
 		expect(ledger.deductCredits).not.toHaveBeenCalled();
+	});
+
+	it("assigns openedAt when opening a new conversation charge", async () => {
+		const e = env();
+		const before = Date.now();
+		const charge = await openCopilotConversation(e, identity);
+		expect(charge.openedAt).toBeGreaterThanOrEqual(before);
+		expect(charge.totalTokens).toBe(0);
 	});
 });

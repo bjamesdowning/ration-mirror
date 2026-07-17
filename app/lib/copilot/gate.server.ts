@@ -51,9 +51,36 @@ export interface CopilotConversationCharge {
 	mode: CopilotChargeMode;
 	preauthorizedCredits: number;
 	bracketCreditsCharged: number;
+	/** Cumulative session tokens — survives DO hibernation via KV. */
+	totalTokens?: number;
+	/**
+	 * Epoch ms when this charge record was created. Used to detect KV TTL
+	 * expiry + recreate so DO usage config cannot bill across charge boundaries.
+	 */
+	openedAt?: number;
 	modelPreset?: CopilotModelPreset;
 	onboardingTurnsUsed?: number;
 	onboardingConsumed?: boolean;
+}
+
+function normalizeConversationCharge(
+	charge: CopilotConversationCharge,
+	options?: { assignOpenedAtIfMissing?: boolean; now?: number },
+): CopilotConversationCharge {
+	const now = options?.now ?? Date.now();
+	const openedAt =
+		typeof charge.openedAt === "number" &&
+		Number.isFinite(charge.openedAt) &&
+		charge.openedAt > 0
+			? charge.openedAt
+			: options?.assignOpenedAtIfMissing
+				? now
+				: charge.openedAt;
+	return {
+		...charge,
+		totalTokens: Math.max(0, Math.ceil(charge.totalTokens ?? 0)),
+		...(openedAt !== undefined ? { openedAt } : {}),
+	};
 }
 
 export interface OpenCopilotConversationOptions {
@@ -204,6 +231,8 @@ export async function openCopilotConversation(
 				mode: "onboarding_briefing",
 				preauthorizedCredits: 0,
 				bracketCreditsCharged: 0,
+				totalTokens: 0,
+				openedAt: Date.now(),
 				modelPreset: ONBOARDING_BRIEFING_MODEL_PRESET,
 				onboardingTurnsUsed: 0,
 				onboardingConsumed: false,
@@ -224,6 +253,8 @@ export async function openCopilotConversation(
 				mode: "allowance",
 				preauthorizedCredits: 0,
 				bracketCreditsCharged: 0,
+				totalTokens: 0,
+				openedAt: Date.now(),
 			};
 		}
 
@@ -247,6 +278,8 @@ export async function openCopilotConversation(
 			mode: "credits" as const,
 			preauthorizedCredits: AI_COSTS.COPILOT_TURN,
 			bracketCreditsCharged: AI_COSTS.COPILOT_TURN,
+			totalTokens: 0,
+			openedAt: Date.now(),
 		}),
 	);
 }
@@ -264,7 +297,7 @@ export async function getConversationCharge(
 		"mode" in existing &&
 		"bracketCreditsCharged" in existing
 	) {
-		return existing as CopilotConversationCharge;
+		return normalizeConversationCharge(existing as CopilotConversationCharge);
 	}
 	return null;
 }
@@ -277,7 +310,9 @@ export async function persistConversationCharge(
 ): Promise<void> {
 	await env.RATION_KV.put(
 		conversationKey(organizationId, conversationId),
-		JSON.stringify(charge),
+		JSON.stringify(
+			normalizeConversationCharge(charge, { assignOpenedAtIfMissing: true }),
+		),
 		{ expirationTtl: Math.ceil(COPILOT_SESSION_IDLE_MS / 1000) },
 	);
 }
@@ -296,10 +331,14 @@ export async function ensureCopilotConversationOpen(
 		"mode" in existing &&
 		"bracketCreditsCharged" in existing
 	) {
-		await env.RATION_KV.put(key, JSON.stringify(existing), {
+		const charge = normalizeConversationCharge(
+			existing as CopilotConversationCharge,
+			{ assignOpenedAtIfMissing: true },
+		);
+		await env.RATION_KV.put(key, JSON.stringify(charge), {
 			expirationTtl: Math.ceil(COPILOT_SESSION_IDLE_MS / 1000),
 		});
-		return existing as CopilotConversationCharge;
+		return charge;
 	}
 
 	const charge = await openCopilotConversation(env, identity, {
@@ -322,13 +361,22 @@ export async function reconcileCopilotConversationUsage(
 	totalTokens: number,
 	conversationId?: string,
 ): Promise<CopilotConversationCharge> {
+	const normalizedTotal = Math.max(
+		charge.totalTokens ?? 0,
+		Math.ceil(totalTokens),
+	);
+	const withTokens = normalizeConversationCharge({
+		...charge,
+		totalTokens: normalizedTotal,
+	});
+
 	if (charge.mode === "allowance" || charge.mode === "onboarding_briefing") {
-		return charge;
+		return withTokens;
 	}
 
-	const targetCredits = creditsForCopilotTokens(totalTokens);
-	const delta = targetCredits - charge.bracketCreditsCharged;
-	if (delta <= 0) return charge;
+	const targetCredits = creditsForCopilotTokens(normalizedTotal);
+	const delta = targetCredits - withTokens.bracketCreditsCharged;
+	if (delta <= 0) return withTokens;
 
 	const bracketReason = conversationId
 		? `${COPILOT_LEDGER_REASON}:${conversationId}:bracket:${targetCredits}`
@@ -343,7 +391,7 @@ export async function reconcileCopilotConversationUsage(
 			.first();
 		if (existing) {
 			return {
-				...charge,
+				...withTokens,
 				bracketCreditsCharged: targetCredits,
 			};
 		}
@@ -358,7 +406,7 @@ export async function reconcileCopilotConversationUsage(
 	);
 
 	return {
-		...charge,
+		...withTokens,
 		bracketCreditsCharged: targetCredits,
 	};
 }
@@ -381,11 +429,16 @@ export async function reconcileAndPersistCopilotConversationUsage(
 		totalTokens,
 		conversationId,
 	);
-	if (nextCharge !== charge) {
-		await env.RATION_KV.put(
-			conversationKey(identity.organizationId, conversationId),
-			JSON.stringify(nextCharge),
-			{ expirationTtl: Math.ceil(COPILOT_SESSION_IDLE_MS / 1000) },
+	const tokensChanged =
+		(nextCharge.totalTokens ?? 0) !== (charge.totalTokens ?? 0);
+	const creditsChanged =
+		nextCharge.bracketCreditsCharged !== charge.bracketCreditsCharged;
+	if (tokensChanged || creditsChanged) {
+		await persistConversationCharge(
+			env,
+			identity.organizationId,
+			conversationId,
+			nextCharge,
 		);
 	}
 	return nextCharge;

@@ -29,15 +29,22 @@ final class AskViewModel {
         let conversationId: String
         let messages: [CopilotMessage]
         let modelPreset: String
+        let sessionUsage: CopilotSessionUsage?
+        /// Epoch ms of last user/assistant activity (not usage-only sync).
+        let lastActivityAtMs: Double?
 
         init(
             conversationId: String,
             messages: [CopilotMessage],
-            modelPreset: String = "fast"
+            modelPreset: String = "fast",
+            sessionUsage: CopilotSessionUsage? = nil,
+            lastActivityAtMs: Double? = nil
         ) {
             self.conversationId = conversationId
             self.messages = messages
             self.modelPreset = modelPreset
+            self.sessionUsage = sessionUsage
+            self.lastActivityAtMs = lastActivityAtMs
         }
 
         init(from decoder: Decoder) throws {
@@ -45,6 +52,8 @@ final class AskViewModel {
             conversationId = try container.decode(String.self, forKey: .conversationId)
             messages = try container.decode([CopilotMessage].self, forKey: .messages)
             modelPreset = try container.decodeIfPresent(String.self, forKey: .modelPreset) ?? "fast"
+            sessionUsage = try container.decodeIfPresent(CopilotSessionUsage.self, forKey: .sessionUsage)
+            lastActivityAtMs = try container.decodeIfPresent(Double.self, forKey: .lastActivityAtMs)
         }
 
         func encode(to encoder: Encoder) throws {
@@ -52,12 +61,16 @@ final class AskViewModel {
             try container.encode(conversationId, forKey: .conversationId)
             try container.encode(messages, forKey: .messages)
             try container.encode(modelPreset, forKey: .modelPreset)
+            try container.encodeIfPresent(sessionUsage, forKey: .sessionUsage)
+            try container.encodeIfPresent(lastActivityAtMs, forKey: .lastActivityAtMs)
         }
 
         enum CodingKeys: String, CodingKey {
             case conversationId
             case messages
             case modelPreset
+            case sessionUsage
+            case lastActivityAtMs
         }
     }
 
@@ -102,6 +115,7 @@ final class AskViewModel {
     private var isSubmitting = false
     private var organizationId: String?
     private var snapshots: SnapshotStore?
+    private var lastActivityAt = Date()
     private let stopTimeoutNanoseconds: UInt64
     private let briefingTurnTimeoutNanoseconds: UInt64
 
@@ -147,7 +161,7 @@ final class AskViewModel {
             status = nextStatus
             if case .insufficientCredits = state,
                nextStatus.creditBalance >= nextStatus.conversationFloorCost {
-                newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
+                await newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
                 completeTurn(state: .idle)
                 return CopilotContinuationCopy.continuationDraft()
             }
@@ -187,13 +201,16 @@ final class AskViewModel {
             state = .idle
             turnPhase = .idle
             lastSyncedLabel = nil
+            lastActivityAt = Date()
         }
 
         self.organizationId = organizationId
         self.snapshots = snapshots
+
         if !orgChanged, socket != nil {
             do {
                 status = try await api.copilotStatus()
+                await expireIdleConversationIfNeeded(auth: auth, organizationId: organizationId, snapshots: snapshots)
             } catch {
                 if !isTurnActive {
                     state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
@@ -205,27 +222,46 @@ final class AskViewModel {
         if let cached = await snapshots.load(Snapshot.self, domain: SnapshotDomain.ask, organizationId: organizationId) {
             messages = cached.payload.messages
             modelPreset = cached.payload.modelPreset
+            sessionUsage = cached.payload.sessionUsage
+            if let activityMs = cached.payload.lastActivityAtMs {
+                lastActivityAt = Date(timeIntervalSince1970: activityMs / 1000)
+            } else if let syncedAt = snapshots.syncedAt(domain: SnapshotDomain.ask, organizationId: organizationId) {
+                lastActivityAt = syncedAt
+            }
             socket = AskWebSocketClient(auth: auth, conversationId: cached.payload.conversationId)
             lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
         } else {
             socket = AskWebSocketClient(auth: auth)
+            lastActivityAt = Date()
         }
 
         do {
             status = try await api.copilotStatus()
-            if let syncedAt = snapshots.syncedAt(domain: SnapshotDomain.ask, organizationId: organizationId),
-               let status,
-               Date().timeIntervalSince(syncedAt) * 1000 > Double(status.sessionIdleMs) {
-                await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
-                messages = []
-                modelPreset = "fast"
-                socket = AskWebSocketClient(auth: auth)
-                lastSyncedLabel = nil
-            }
+            await expireIdleConversationIfNeeded(auth: auth, organizationId: organizationId, snapshots: snapshots)
         } catch {
             isConnected = false
             state = .error((error as? APIError)?.errorDescription ?? error.localizedDescription)
         }
+    }
+
+    /// Returns true when an idle session was expired and replaced with a fresh chat.
+    @discardableResult
+    func expireIdleConversationIfNeeded(
+        auth: AuthManager,
+        organizationId: String,
+        snapshots: SnapshotStore
+    ) async -> Bool {
+        guard let status else { return false }
+        guard !messages.isEmpty else { return false }
+        guard !CopilotSessionResumePolicy.canResume(
+            lastActivityAt: lastActivityAt,
+            now: Date(),
+            sessionIdleMs: status.sessionIdleMs
+        ) else {
+            return false
+        }
+        await newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
+        return true
     }
 
     func resetBriefingSession() {
@@ -331,9 +367,20 @@ final class AskViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               !isSubmitting,
-              !isTurnActive,
               !isAwaitingApproval,
               !briefingComplete else { return false }
+        _ = await expireIdleConversationIfNeeded(
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots
+        )
+        if CopilotSessionResumePolicy.shouldForceIdleAfterResume(
+            socketConnected: isConnected,
+            isTurnActive: isTurnActive || isStopping
+        ) {
+            completeTurn(state: .idle)
+        }
+        guard !isTurnActive else { return false }
         isSubmitting = true
         defer { isSubmitting = false }
         self.organizationId = organizationId
@@ -361,10 +408,12 @@ final class AskViewModel {
                 observe(socket)
                 try await socket.connect()
                 isConnected = true
+                clearTransientError()
             }
             clearTransientError()
             let userMessage = CopilotMessage(role: "user", content: trimmed)
             messages.append(userMessage)
+            lastActivityAt = Date()
             turnPhase = .thinking
             activeTool = nil
             completedTool = nil
@@ -446,7 +495,7 @@ final class AskViewModel {
         }
     }
 
-    func newChat(auth: AuthManager, organizationId: String, snapshots: SnapshotStore) {
+    func newChat(auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
         snapshotSaveTask?.cancel()
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
@@ -457,7 +506,7 @@ final class AskViewModel {
         toolLingerTask = nil
 
         let previousSocket = socket
-        if isTurnActive {
+        if isTurnActive || isStopping || isAwaitingApproval {
             Task { try? await previousSocket?.cancelActiveRequest() }
         }
         previousSocket?.newConversation()
@@ -471,10 +520,9 @@ final class AskViewModel {
         sessionUsage = nil
         sessionLimitWarning = nil
         urgentWarningAcknowledged = false
+        lastActivityAt = Date()
         completeTurn(state: .idle)
-        Task {
-            await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
-        }
+        await snapshots.clear(domain: SnapshotDomain.ask, organizationId: organizationId)
         lastSyncedLabel = nil
     }
 
@@ -493,6 +541,29 @@ final class AskViewModel {
         socket?.disconnect()
         isConnected = false
         completeTurn(state: .idle)
+    }
+
+    /// Close/X backgrounds the chat: cancel in-flight work, drop the socket,
+    /// keep transcript + conversationId for short-term resume.
+    func backgroundSession() {
+        stopTimeoutTask?.cancel()
+        stopTimeoutTask = nil
+        cancelBriefingTurnTimeout()
+        streamTask?.cancel()
+        streamTask = nil
+        toolLingerTask?.cancel()
+        toolLingerTask = nil
+        let previousSocket = socket
+        if isTurnActive || isStopping || isAwaitingApproval {
+            Task { try? await previousSocket?.cancelActiveRequest() }
+        }
+        previousSocket?.disconnect()
+        isConnected = false
+        isSubmitting = false
+        activeTool = nil
+        completedTool = nil
+        completeTurn(state: .idle)
+        clearTransientError()
     }
 
     private func observe(_ socket: any AskSocketClient) {
@@ -644,7 +715,10 @@ final class AskViewModel {
             }
         case "session_usage_update":
             if let usage = event.usage {
-                sessionUsage = usage
+                sessionUsage = CopilotSessionUsage.mergeMonotonic(
+                    previous: sessionUsage,
+                    incoming: usage
+                )
                 if let currentStatus = status {
                     status = CopilotStatusResponse(
                         tier: currentStatus.tier,
@@ -660,6 +734,7 @@ final class AskViewModel {
                         onboardingBriefingConsumed: currentStatus.onboardingBriefingConsumed
                     )
                 }
+                scheduleImmediateSnapshotSave(touchActivity: false)
             }
         case "session_limit_warning":
             if let warning = event.warning {
@@ -775,31 +850,36 @@ final class AskViewModel {
         return !last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func persistSnapshotDebounced() {
+    private func persistSnapshotDebounced(touchActivity: Bool = true) {
         snapshotSaveTask?.cancel()
         snapshotSaveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
-            await self?.persistSnapshotNow()
+            await self?.persistSnapshotNow(touchActivity: touchActivity)
         }
     }
 
-    private func scheduleImmediateSnapshotSave() {
+    private func scheduleImmediateSnapshotSave(touchActivity: Bool = true) {
         snapshotSaveTask?.cancel()
         snapshotSaveTask = Task { [weak self] in
             guard !Task.isCancelled else { return }
-            await self?.persistSnapshotNow()
+            await self?.persistSnapshotNow(touchActivity: touchActivity)
         }
     }
 
-    private func persistSnapshotNow() async {
+    private func persistSnapshotNow(touchActivity: Bool = true) async {
         guard let organizationId, let snapshots else { return }
+        if touchActivity {
+            lastActivityAt = Date()
+        }
         let conversationId = socket?.conversationId ?? UUID().uuidString
         await snapshots.save(
             Snapshot(
                 conversationId: conversationId,
                 messages: messages,
-                modelPreset: modelPreset
+                modelPreset: modelPreset,
+                sessionUsage: sessionUsage,
+                lastActivityAtMs: lastActivityAt.timeIntervalSince1970 * 1000
             ),
             domain: SnapshotDomain.ask,
             organizationId: organizationId

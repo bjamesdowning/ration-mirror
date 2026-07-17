@@ -6,7 +6,11 @@ import {
 	type ToolCallResultContext,
 	type TurnContext,
 } from "@cloudflare/think";
-import { routeAgentRequest } from "agents";
+import {
+	type Connection,
+	type ConnectionContext,
+	routeAgentRequest,
+} from "agents";
 import type { ToolSet } from "ai";
 import { formatCopilotTemporalContextAppend } from "../app/lib/agent/temporal-context.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
@@ -42,6 +46,7 @@ import {
 import {
 	buildSessionUsageSnapshot,
 	evaluateSessionLimitWarning,
+	resolveCumulativeUsageTokens,
 	type SessionLimitWarningSeverity,
 } from "../app/lib/copilot/session-usage";
 import { getCopilotSystemPrompt } from "../app/lib/copilot/system-prompt.server";
@@ -209,6 +214,13 @@ function countUserMessages(ctx: TurnContext): number {
 	return ctx.messages.filter((message) => message.role === "user").length;
 }
 
+type CopilotAgentUsageConfig = {
+	totalUsageTokens: number;
+	sessionWarningsEmitted: SessionLimitWarningSeverity[];
+	/** Must match CopilotConversationCharge.openedAt for the active KV charge. */
+	chargeOpenedAt?: number;
+};
+
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
@@ -216,12 +228,80 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
+	private boundChargeOpenedAt: number | null = null;
 	/** Soft-deny onboarding turns must not burn the free grant. */
 	private onboardingTurnDenied = false;
 	/** Active allowlisted onboarding turn (for tool hard-allowlist). */
 	private onboardingActiveTurn: OnboardingBriefingTurn | null = null;
 	/** Count the free grant once per allowlisted user turn (not per agent step). */
 	private onboardingShouldCountTurn = false;
+
+	private persistUsageConfig(): void {
+		this.configure<CopilotAgentUsageConfig>({
+			totalUsageTokens: this.totalUsageTokens,
+			sessionWarningsEmitted: [...this.sessionWarningsEmitted],
+			...(this.boundChargeOpenedAt != null
+				? { chargeOpenedAt: this.boundChargeOpenedAt }
+				: {}),
+		});
+	}
+
+	private resetUsageForCharge(chargeOpenedAt: number, totalTokens = 0): void {
+		this.totalUsageTokens = Math.max(0, Math.ceil(totalTokens));
+		this.sessionWarningsEmitted.clear();
+		this.boundChargeOpenedAt = chargeOpenedAt;
+		this.persistUsageConfig();
+	}
+
+	private applyUsageConfigCache(): void {
+		const cfg = this.getConfig<CopilotAgentUsageConfig>();
+		if (!cfg) return;
+		if (typeof cfg.chargeOpenedAt === "number") {
+			this.boundChargeOpenedAt = cfg.chargeOpenedAt;
+		}
+		this.totalUsageTokens = resolveCumulativeUsageTokens({
+			memory: this.totalUsageTokens,
+			config: cfg.totalUsageTokens,
+		});
+		for (const severity of cfg.sessionWarningsEmitted ?? []) {
+			if (severity === "soft" || severity === "urgent") {
+				this.sessionWarningsEmitted.add(severity);
+			}
+		}
+	}
+
+	private async hydrateCumulativeUsage(
+		identity: ReturnType<typeof decodeAgentName>,
+	): Promise<Awaited<ReturnType<typeof getConversationCharge>>> {
+		this.applyUsageConfigCache();
+		const charge = await getConversationCharge(
+			this.env,
+			identity.organizationId,
+			identity.conversationId,
+		);
+		if (!charge) {
+			this.totalUsageTokens = 0;
+			this.sessionWarningsEmitted.clear();
+			this.boundChargeOpenedAt = null;
+			this.configure<CopilotAgentUsageConfig>({
+				totalUsageTokens: 0,
+				sessionWarningsEmitted: [],
+			});
+			return null;
+		}
+		const chargeOpenedAt = charge.openedAt ?? Date.now();
+		if (this.boundChargeOpenedAt !== chargeOpenedAt) {
+			// Missing binding, legacy config, or recreated KV charge after TTL.
+			this.resetUsageForCharge(chargeOpenedAt, charge.totalTokens ?? 0);
+			return charge;
+		}
+		this.totalUsageTokens = resolveCumulativeUsageTokens({
+			memory: this.totalUsageTokens,
+			kv: charge.totalTokens,
+		});
+		this.persistUsageConfig();
+		return charge;
+	}
 
 	private maybeEmitSessionLimitWarning(
 		totalTokens: number,
@@ -235,6 +315,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		});
 		if (!warning) return;
 		this.sessionWarningsEmitted.add(warning.severity);
+		this.persistUsageConfig();
 		this.broadcast(
 			JSON.stringify({
 				type: "session_limit_warning",
@@ -262,6 +343,27 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		);
 	}
 
+	override async onConnect(
+		connection: Connection,
+		ctx: ConnectionContext,
+	): Promise<void> {
+		await super.onConnect(connection, ctx);
+		try {
+			const identity = decodeAgentName(this.name);
+			const charge = await this.hydrateCumulativeUsage(identity);
+			if (this.totalUsageTokens <= 0) {
+				return;
+			}
+			await this.broadcastSessionUsageUpdate(
+				identity,
+				this.sessionMessageCount,
+				charge?.bracketCreditsCharged ?? 0,
+			);
+		} catch (error) {
+			log.error("[Copilot] connect usage sync failed", error);
+		}
+	}
+
 	getModel() {
 		return "@cf/openai/gpt-oss-120b";
 	}
@@ -283,11 +385,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
 		this.sessionMessageCount = ctx.messages.length;
-		const charge = await getConversationCharge(
-			this.env,
-			identity.organizationId,
-			identity.conversationId,
-		);
+		const charge = await this.hydrateCumulativeUsage(identity);
 		if (charge?.mode === "onboarding_briefing") {
 			this.onboardingTurnDenied = false;
 			this.onboardingActiveTurn = null;
@@ -600,7 +698,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		const usageTokens =
 			ctx.usage.totalTokens ??
 			(ctx.usage.inputTokens ?? 0) + (ctx.usage.outputTokens ?? 0);
-		this.totalUsageTokens += usageTokens;
+		this.totalUsageTokens = resolveCumulativeUsageTokens({
+			memory: this.totalUsageTokens + usageTokens,
+		});
+		this.persistUsageConfig();
 		let charge: Awaited<
 			ReturnType<typeof reconcileAndPersistCopilotConversationUsage>
 		>;
@@ -611,6 +712,11 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				identity.conversationId,
 				this.totalUsageTokens,
 			);
+			this.totalUsageTokens = resolveCumulativeUsageTokens({
+				memory: this.totalUsageTokens,
+				kv: charge.totalTokens,
+			});
+			this.persistUsageConfig();
 		} catch (error) {
 			if (error instanceof InsufficientCreditsError) {
 				this.billingBlocked = true;

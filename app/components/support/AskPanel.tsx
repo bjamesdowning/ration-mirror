@@ -18,13 +18,22 @@ import {
 } from "~/lib/copilot/continuation";
 import type { CopilotModelPreset } from "~/lib/copilot/model-profiles";
 import {
+	backgroundCopilotSession,
+	canResumeCopilotSession,
+	prepareCopilotSendAfterResume,
+} from "~/lib/copilot/session-lifecycle.client";
+import {
 	clearCopilotSession,
 	loadCopilotSession,
 	resolveCopilotOrgHydration,
+	saveCopilotSession,
 	toStoredCopilotMessages,
 	touchCopilotSession,
 } from "~/lib/copilot/session-storage.client";
-import { formatCopilotTokenCount } from "~/lib/copilot/session-usage";
+import {
+	formatCopilotTokenCount,
+	mergeSessionUsageSnapshots,
+} from "~/lib/copilot/session-usage";
 import { resolveCopilotToolEnd } from "~/lib/copilot/tool-event.client";
 import {
 	type CopilotTurnEvent,
@@ -206,6 +215,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const toolLingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const stopFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const turnStateRef = useRef<CopilotTurnState>(INITIAL_COPILOT_TURN_STATE);
+	const sessionUsageRef = useRef<CopilotSessionUsage | null>(null);
+	const lastActivityAtRef = useRef<number>(Date.now());
+	const wasOpenRef = useRef(false);
 	const readTurnState = useCallback(
 		(): CopilotTurnState => turnStateRef.current,
 		[],
@@ -213,6 +225,8 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	const handleEventRef = useRef<(event: CopilotEvent) => void>(() => undefined);
 	const toolNameByCallIdRef = useRef(new Map<string, string>());
 	const hydratedOrgRef = useRef<string | null>(null);
+
+	sessionUsageRef.current = sessionUsage;
 
 	const isTurnActive = isCopilotTurnActive(turnState);
 	const isAwaitingApproval = turnState.status === "awaiting_approval";
@@ -244,15 +258,32 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			nextMessages: CopilotMessage[],
 			nextConversationId = conversationId,
 			nextModelPreset = modelPreset,
+			nextSessionUsage: CopilotSessionUsage | null = sessionUsageRef.current,
 		) => {
 			if (!organizationId) return;
+			lastActivityAtRef.current = Date.now();
 			touchCopilotSession(organizationId, {
 				conversationId: nextConversationId,
 				messages: toStoredCopilotMessages(nextMessages),
 				modelPreset: nextModelPreset,
+				sessionUsage: nextSessionUsage,
 			});
 		},
 		[conversationId, modelPreset, organizationId],
+	);
+
+	const persistSessionUsageOnly = useCallback(
+		(nextSessionUsage: CopilotSessionUsage) => {
+			if (!organizationId) return;
+			saveCopilotSession(organizationId, {
+				conversationId,
+				messages: toStoredCopilotMessages(messages),
+				modelPreset,
+				sessionUsage: nextSessionUsage,
+				lastActivityAt: lastActivityAtRef.current,
+			});
+		},
+		[conversationId, messages, modelPreset, organizationId],
 	);
 
 	const clearToolLinger = useCallback(() => {
@@ -268,6 +299,35 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			stopFallbackRef.current = null;
 		}
 	}, []);
+
+	const expireIdleConversation = useCallback(() => {
+		const { activeRequestId } = turnStateRef.current;
+		cancelCopilotRequest(socketRef.current, activeRequestId);
+		turnStateRef.current = INITIAL_COPILOT_TURN_STATE;
+		setTurnState(INITIAL_COPILOT_TURN_STATE);
+		connectionGenerationRef.current += 1;
+		socketRef.current?.close();
+		socketRef.current = null;
+		connectPromiseRef.current = null;
+		clearToolLinger();
+		clearStopFallback();
+		const nextConversationId = crypto.randomUUID();
+		setConversationId(nextConversationId);
+		setMessages([]);
+		setSessionUsage(null);
+		sessionUsageRef.current = null;
+		setSessionLimitWarning(null);
+		setUrgentWarningAcknowledged(false);
+		setError(null);
+		setNeedsCredits(null);
+		setLimitReached(null);
+		setBlocked(null);
+		setApproval(null);
+		setModelPreset("fast");
+		setTurnPhase("idle");
+		lastActivityAtRef.current = Date.now();
+		if (organizationId) clearCopilotSession(organizationId);
+	}, [clearStopFallback, clearToolLinger, organizationId]);
 
 	const transitionTurn = useCallback((event: CopilotTurnEvent) => {
 		const next = reduceCopilotTurnState(turnStateRef.current, event);
@@ -383,11 +443,18 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setConversationId(hydration.conversationId);
 			setMessages(hydration.messages);
 			setModelPreset(hydration.modelPreset);
+			setSessionUsage(hydration.sessionUsage);
+			sessionUsageRef.current = hydration.sessionUsage;
+			lastActivityAtRef.current = snapshot?.lastActivityAt ?? Date.now();
 			setBlocked(null);
 			setNeedsConsent(false);
 			setApproval(null);
 			setError(null);
-			clearSessionBillingState();
+			setNeedsCredits(null);
+			setLimitReached(null);
+			setSessionLimitWarning(null);
+			setUrgentWarningAcknowledged(false);
+			setTranscriptCopied(false);
 			setActiveToolName(null);
 			setCompletedToolName(null);
 			setToolSucceeded(null);
@@ -400,6 +467,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setApproval(null);
 			setError(null);
 			clearSessionBillingState();
+			lastActivityAtRef.current = Date.now();
 			setActiveToolName(null);
 			setCompletedToolName(null);
 			setToolSucceeded(null);
@@ -603,7 +671,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				case "session_usage_update":
 					if (event.usage) {
 						const usage = event.usage;
-						setSessionUsage(usage);
+						const merged = mergeSessionUsageSnapshots(
+							sessionUsageRef.current,
+							usage,
+						);
+						sessionUsageRef.current = merged;
+						setSessionUsage(merged);
+						persistSessionUsageOnly(merged);
 						setStatus((current) =>
 							current
 								? { ...current, creditBalance: usage.creditBalance }
@@ -676,6 +750,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			clearToolLinger,
 			endTurn,
 			persistSession,
+			persistSessionUsageOnly,
 			scheduleToolDoneLinger,
 			transitionTurn,
 		],
@@ -713,6 +788,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					reject(new Error("Copilot connection closed."));
 				};
 			});
+
+			setError((current) =>
+				current === "Copilot disconnected. You can send your message again."
+					? null
+					: current,
+			);
 
 			socket.onmessage = (event) => {
 				try {
@@ -784,6 +865,72 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		requestAnimationFrame(() => composerRef.current?.focus());
 	}, [isOpen]);
 
+	useEffect(() => {
+		const wasOpen = wasOpenRef.current;
+		wasOpenRef.current = isOpen;
+		if (wasOpen && !isOpen) {
+			const backgrounded = backgroundCopilotSession(turnStateRef.current);
+			if (backgrounded.shouldCancelActiveRequest) {
+				cancelCopilotRequest(
+					socketRef.current,
+					turnStateRef.current.activeRequestId,
+				);
+			}
+			turnStateRef.current = backgrounded.turnState;
+			setTurnState(backgrounded.turnState);
+			clearToolLinger();
+			clearStopFallback();
+			setTurnPhase("idle");
+			setApproval(null);
+			setActiveToolName(null);
+			setCompletedToolName(null);
+			setToolSucceeded(null);
+			setIsConnecting(false);
+			connectionGenerationRef.current += 1;
+			connectPromiseRef.current = null;
+			const socket = socketRef.current;
+			if (socket) {
+				socket.onmessage = null;
+				socket.onerror = null;
+				socket.onclose = null;
+				socket.close();
+			}
+			socketRef.current = null;
+			if (organizationId) {
+				saveCopilotSession(organizationId, {
+					conversationId,
+					messages: toStoredCopilotMessages(messages),
+					modelPreset,
+					sessionUsage: sessionUsageRef.current,
+					lastActivityAt: lastActivityAtRef.current,
+				});
+			}
+		}
+		if (
+			!wasOpen &&
+			isOpen &&
+			status &&
+			!canResumeCopilotSession(
+				lastActivityAtRef.current,
+				Date.now(),
+				status.sessionIdleMs,
+			) &&
+			messages.length > 0
+		) {
+			expireIdleConversation();
+		}
+	}, [
+		clearStopFallback,
+		clearToolLinger,
+		conversationId,
+		expireIdleConversation,
+		isOpen,
+		messages,
+		modelPreset,
+		organizationId,
+		status,
+	]);
+
 	const handleTranscriptScroll = useCallback(() => {
 		const transcript = transcriptRef.current;
 		if (!transcript) return;
@@ -794,6 +941,28 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	async function send() {
 		const text = draft.trim();
+		if (
+			status &&
+			!canResumeCopilotSession(
+				lastActivityAtRef.current,
+				Date.now(),
+				status.sessionIdleMs,
+			) &&
+			messages.length > 0
+		) {
+			expireIdleConversation();
+		}
+		const socketOpen = socketRef.current?.readyState === WebSocket.OPEN;
+		const prepared = prepareCopilotSendAfterResume({
+			turnState: turnStateRef.current,
+			socketOpen: Boolean(socketOpen),
+		});
+		if (prepared.shouldForceIdle) {
+			turnStateRef.current = prepared.turnState;
+			setTurnState(prepared.turnState);
+			setTurnPhase("idle");
+			setIsConnecting(false);
+		}
 		if (!text || isConnecting || readTurnState().status !== "idle") {
 			return;
 		}

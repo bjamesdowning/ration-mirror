@@ -2138,6 +2138,10 @@ A dedicated Cloudflare Worker (`ration-copilot`) powers the first-party **Ask Ra
 
 **Clients:** Web — hub header **Ask Ration** → [`AskPanel`](app/components/support/AskPanel.tsx). iOS 18+ — [`AskView`](ios/Ration/Features/Ask/AskView.swift) sheet with native growing composer, scroll, and dock layout. Assistant replies use [Textual](https://github.com/gonzalezreal/textual) `StructuredText` (structured markdown + native text selection). Both support explicit **Stop**, **Fast / Deep** model presets, collapsed-by-default **thinking** disclosure, and local session persistence keyed by organization.
 
+**Session resume:** Closing the Ask UI (web sheet X or iOS sheet dismiss) **backgrounds** the conversation — cancels any in-flight turn, drops the WebSocket, and keeps the transcript + `conversationId` for up to **20 minutes** of idle. Reopening or sending within that window reconnects and resumes. After idle expiry, the next open starts a fresh chat. On iOS, sending from the **collapsed dock** (sheet closed) with an existing transcript **starts a new conversation**; sends from the open sheet continue the same thread.
+
+**Session token meter:** Cumulative tokens for the chat are persisted on the KV conversation charge (`totalTokens`) and in Think `configure()` state so Durable Object hibernation cannot reset the bar. Clients also snapshot usage locally and apply non-decreasing merges on `session_usage_update`. The worker rebroadcasts usage on WebSocket connect.
+
 **Version:** Copilot worker identity uses `COPILOT_SERVER_VERSION` from [`app/lib/version.ts`](app/lib/version.ts), which tracks `package.json` — bump both together on every release.
 
 ### 14.1 Connection and turn lifecycle
@@ -2268,18 +2272,20 @@ Billing is **per conversation**, not per message. Constants live in [`constants.
 | Token reconciliation | **1 credit per 20,000 tokens** (linear, minimum 1 per chat) |
 | Session token cap | **128,000** tokens — hard stop, start new chat |
 | Session message cap | **40** messages |
-| Session idle TTL | **20 minutes** on KV conversation charge records |
+| Session idle TTL | **20 minutes** on KV conversation charge records and client session snapshots |
+| Cumulative token meter | Persisted on KV charge + Think config; restored on DO wake / client reconnect |
 | Crew after allowance | Requires **auto-deduct consent** (`POST /api/copilot/consent`) or returns **402** `copilot_consent_required` |
 
-Usage reconciles after each agent step (`onStepFinish`). Insufficient credits mid-conversation sets `billingBlocked` — further tool calls are blocked and the user must add credits and start a new chat.
+Usage reconciles after each agent step (`onStepFinish`), persisting cumulative `totalTokens` alongside credit brackets. Insufficient credits mid-conversation sets `billingBlocked` — further tool calls are blocked and the user must add credits and start a new chat.
 
 **Status API** (`GET /api/copilot/status`, `GET /api/mobile/v1/copilot/status`): returns `freeConversationsRemaining`, `allowanceResetAt`, `creditBalance`, `autoDeductConsent`, `conversationFloorCost`, `sessionIdleMs`, `tokensPerCredit`, `sessionMaxTokens`, and iOS onboarding briefing eligibility.
 
 ### 14.8 Client session persistence
 
-- **Web:** [`session-storage.client.ts`](app/lib/copilot/session-storage.client.ts) — localStorage keyed by org, hydrated on open, pruned after `sessionIdleMs`.
-- **iOS:** equivalent persistence in Ask view models; onboarding briefing uses server-enforced two-turn mode (`copilot-onboarding-free` flag, Fast preset, intro allows `search_docs`, seed allows `add_cargo_item`).
+- **Web:** [`session-storage.client.ts`](app/lib/copilot/session-storage.client.ts) — `sessionStorage` keyed by org (conversationId, messages, model preset, session usage), hydrated on open, pruned after `sessionIdleMs`. Close/X backgrounds without refreshing idle activity.
+- **iOS:** Ask snapshots include optional `sessionUsage`; dock-new-chat and resume policies live in [`CopilotSessionPolicies.swift`](ios/Ration/Features/Ask/CopilotSessionPolicies.swift). Onboarding briefing uses server-enforced two-turn mode (`copilot-onboarding-free` flag, Fast preset, intro allows `search_docs`, seed allows `add_cargo_item`).
 - **Continuation:** [`continuation.ts`](app/lib/copilot/continuation.ts) — copy transcript / draft follow-up prompts.
+- **Lifecycle helpers:** [`session-lifecycle.client.ts`](app/lib/copilot/session-lifecycle.client.ts) — background-on-close, resume window, dock-new-chat policy (shared with iOS semantics).
 
 WebSocket event types consumed by clients include streamed messages, `session_usage_update`, `session_limit_warning` (soft at 50% tokens / 30 messages; urgent at 85% / 36 messages), `blocked_feature`, tool approval requests, and structured errors (`rate_limited`, `insufficient_credits`, `session_limit_reached`, `onboarding_briefing_exhausted`).
 

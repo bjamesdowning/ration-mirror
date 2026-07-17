@@ -408,7 +408,7 @@ struct OnboardingBriefingView: View {
         )
         ask.isOnboardingBriefing = true
         // Always start briefing on a clean conversation so the free grant binds correctly.
-        ask.model.newChat(
+        await ask.model.newChat(
             auth: env.auth,
             organizationId: organizationId,
             snapshots: env.snapshots
@@ -489,7 +489,7 @@ struct OnboardingBriefingView: View {
         env.launch.updateUserSettings(settings)
         env.onboarding.reset()
         if let organizationId {
-            ask.endOnboardingBriefing(
+            await ask.endOnboardingBriefing(
                 auth: env.auth,
                 organizationId: organizationId,
                 snapshots: env.snapshots

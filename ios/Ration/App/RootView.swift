@@ -196,7 +196,19 @@ struct MainTabView: View {
                     isTurnActive: env.ask.model.isTurnActive,
                     isStopping: env.ask.model.isStopping,
                     isAwaitingApproval: env.ask.model.isAwaitingApproval,
-                    onOpenSheet: { env.ask.openSheet() },
+                    onOpenSheet: {
+                        guard let organizationId = env.session.activeOrganizationId else {
+                            env.ask.openSheet()
+                            return
+                        }
+                        Task {
+                            await env.ask.prepareSheetPresentation(
+                                auth: env.auth,
+                                organizationId: organizationId,
+                                snapshots: env.snapshots
+                            )
+                        }
+                    },
                     onSend: { text in
                         guard let organizationId = env.session.activeOrganizationId else { return false }
                         let accepted = await env.ask.sendFromBar(
@@ -217,7 +229,17 @@ struct MainTabView: View {
             get: { env.ask.isSheetPresented },
             set: { presented in
                 if presented {
-                    env.ask.openSheet()
+                    if let organizationId = env.session.activeOrganizationId {
+                        Task {
+                            await env.ask.prepareSheetPresentation(
+                                auth: env.auth,
+                                organizationId: organizationId,
+                                snapshots: env.snapshots
+                            )
+                        }
+                    } else {
+                        env.ask.openSheet()
+                    }
                 } else {
                     env.ask.closeSheet()
                 }
@@ -289,7 +311,19 @@ struct MainTabView: View {
             env.copilotScroll.setActiveTab(selectedTab)
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
-                openAskSheet: { env.ask.openSheet() },
+                openAskSheet: {
+                    guard let organizationId = env.session.activeOrganizationId else {
+                        env.ask.openSheet()
+                        return
+                    }
+                    Task {
+                        await env.ask.prepareSheetPresentation(
+                            auth: env.auth,
+                            organizationId: organizationId,
+                            snapshots: env.snapshots
+                        )
+                    }
+                },
                 openScan: { showingScan = true }
             )
             activatedTabs.insert(selectedTab)
@@ -300,7 +334,19 @@ struct MainTabView: View {
             else { return }
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
-                openAskSheet: { env.ask.openSheet() },
+                openAskSheet: {
+                    guard let organizationId = env.session.activeOrganizationId else {
+                        env.ask.openSheet()
+                        return
+                    }
+                    Task {
+                        await env.ask.prepareSheetPresentation(
+                            auth: env.auth,
+                            organizationId: organizationId,
+                            snapshots: env.snapshots
+                        )
+                    }
+                },
                 openScan: { showingScan = true }
             )
             activatedTabs.insert(selectedTab)

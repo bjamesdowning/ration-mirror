@@ -169,11 +169,13 @@ struct AskView: View {
         guard let organizationId else { return }
         followsLatest = true
         ask.draft = ""
-        model.newChat(
-            auth: env.auth,
-            organizationId: organizationId,
-            snapshots: env.snapshots
-        )
+        Task {
+            await model.newChat(
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+        }
         Haptics.light()
     }
 
@@ -181,11 +183,13 @@ struct AskView: View {
         guard let organizationId else { return }
         followsLatest = true
         transcriptCopied = false
-        model.newChat(
-            auth: env.auth,
-            organizationId: organizationId,
-            snapshots: env.snapshots
-        )
+        Task {
+            await model.newChat(
+                auth: env.auth,
+                organizationId: organizationId,
+                snapshots: env.snapshots
+            )
+        }
         ask.draft = CopilotContinuationCopy.continuationDraft()
         isComposerFocused = true
         Haptics.light()

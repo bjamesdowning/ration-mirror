@@ -33,7 +33,17 @@ final class AskCoordinator {
         isSheetPresented = true
     }
 
+    func prepareSheetPresentation(auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
+        _ = await model.expireIdleConversationIfNeeded(
+            auth: auth,
+            organizationId: organizationId,
+            snapshots: snapshots
+        )
+        openSheet()
+    }
+
     func closeSheet() {
+        model.backgroundSession()
         isSheetPresented = false
     }
 
@@ -44,7 +54,13 @@ final class AskCoordinator {
         organizationId: String,
         snapshots: SnapshotStore
     ) async -> Bool {
-        await send(
+        if CopilotDockNewChatPolicy.shouldStartNewChat(
+            sheetPresented: isSheetPresented,
+            messageCount: model.messages.count
+        ) {
+            await model.newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
+        }
+        return await send(
             text,
             api: api,
             auth: auth,
@@ -112,10 +128,10 @@ final class AskCoordinator {
         auth: AuthManager,
         organizationId: String,
         snapshots: SnapshotStore
-    ) {
+    ) async {
         isOnboardingBriefing = false
         model.resetBriefingSession()
-        model.newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
+        await model.newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
     }
 
     private func send(

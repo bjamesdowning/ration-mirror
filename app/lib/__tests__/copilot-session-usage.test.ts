@@ -3,6 +3,8 @@ import {
 	buildSessionUsageSnapshot,
 	evaluateSessionLimitWarning,
 	formatCopilotTokenCount,
+	mergeSessionUsageSnapshots,
+	resolveCumulativeUsageTokens,
 } from "../copilot/session-usage";
 
 describe("formatCopilotTokenCount", () => {
@@ -35,6 +37,50 @@ describe("buildSessionUsageSnapshot", () => {
 			nextCreditAt: 7_655,
 			nextCreditThreshold: 20_001,
 		});
+	});
+});
+
+describe("resolveCumulativeUsageTokens", () => {
+	it("takes the max across memory, config, and KV", () => {
+		expect(
+			resolveCumulativeUsageTokens({
+				memory: 0,
+				config: 12_000,
+				kv: 40_000,
+			}),
+		).toBe(40_000);
+	});
+
+	it("survives a DO reset that only has the latest step in memory", () => {
+		expect(
+			resolveCumulativeUsageTokens({
+				memory: 2_500,
+				config: null,
+				kv: 55_000,
+			}),
+		).toBe(55_000);
+	});
+});
+
+describe("mergeSessionUsageSnapshots", () => {
+	it("never decreases totalTokens within a conversation", () => {
+		const previous = buildSessionUsageSnapshot({
+			totalTokens: 40_000,
+			messageCount: 4,
+			creditsCharged: 2,
+			creditBalance: 8,
+		});
+		const incoming = buildSessionUsageSnapshot({
+			totalTokens: 3_000,
+			messageCount: 5,
+			creditsCharged: 1,
+			creditBalance: 7,
+		});
+		const merged = mergeSessionUsageSnapshots(previous, incoming);
+		expect(merged.totalTokens).toBe(40_000);
+		expect(merged.creditsCharged).toBe(2);
+		expect(merged.creditBalance).toBe(7);
+		expect(merged.messageCount).toBe(5);
 	});
 });
 

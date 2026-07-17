@@ -58,6 +58,44 @@ export function buildSessionUsageSnapshot(input: {
 	};
 }
 
+/** Monotonic merge across DO memory, Think config, and KV charge records. */
+export function resolveCumulativeUsageTokens(parts: {
+	memory: number;
+	config?: number | null;
+	kv?: number | null;
+}): number {
+	return Math.max(
+		0,
+		Math.ceil(parts.memory),
+		Math.ceil(parts.config ?? 0),
+		Math.ceil(parts.kv ?? 0),
+	);
+}
+
+/**
+ * Client-side meter updates must never regress within a conversation.
+ * Credits charged are also non-decreasing; balance may change independently.
+ */
+export function mergeSessionUsageSnapshots(
+	previous: SessionUsageSnapshot | null | undefined,
+	incoming: SessionUsageSnapshot,
+): SessionUsageSnapshot {
+	if (!previous) return incoming;
+	const totalTokens = Math.max(previous.totalTokens, incoming.totalTokens);
+	const creditsCharged = Math.max(
+		previous.creditsCharged,
+		incoming.creditsCharged,
+	);
+	return {
+		...incoming,
+		totalTokens,
+		messageCount: Math.max(previous.messageCount, incoming.messageCount),
+		creditsCharged,
+		nextCreditAt: tokensUntilNextCredit(totalTokens),
+		nextCreditThreshold: nextCreditThreshold(totalTokens),
+	};
+}
+
 export function evaluateSessionLimitWarning(input: {
 	totalTokens: number;
 	messageCount: number;

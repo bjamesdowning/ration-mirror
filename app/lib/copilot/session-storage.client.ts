@@ -1,4 +1,5 @@
 import type { CopilotModelPreset } from "./model-profiles";
+import type { SessionUsageSnapshot } from "./session-usage";
 
 export type CopilotStoredMessage = {
 	id: string;
@@ -11,10 +12,40 @@ export type CopilotSessionSnapshot = {
 	messages: CopilotStoredMessage[];
 	modelPreset: CopilotModelPreset;
 	lastActivityAt: number;
+	sessionUsage?: SessionUsageSnapshot | null;
 };
 
 function storageKey(organizationId: string): string {
 	return `ration:copilot:${organizationId}`;
+}
+
+function parseStoredSessionUsage(value: unknown): SessionUsageSnapshot | null {
+	if (!value || typeof value !== "object") return null;
+	const raw = value as Record<string, unknown>;
+	if (
+		typeof raw.totalTokens !== "number" ||
+		typeof raw.maxTokens !== "number" ||
+		typeof raw.messageCount !== "number" ||
+		typeof raw.maxMessages !== "number" ||
+		typeof raw.creditsCharged !== "number" ||
+		typeof raw.creditBalance !== "number"
+	) {
+		return null;
+	}
+	return {
+		totalTokens: Math.max(0, Math.ceil(raw.totalTokens)),
+		maxTokens: Math.max(1, Math.ceil(raw.maxTokens)),
+		messageCount: Math.max(0, Math.ceil(raw.messageCount)),
+		maxMessages: Math.max(1, Math.ceil(raw.maxMessages)),
+		creditsCharged: Math.max(0, Math.ceil(raw.creditsCharged)),
+		creditBalance: Math.max(0, Math.ceil(raw.creditBalance)),
+		nextCreditAt:
+			typeof raw.nextCreditAt === "number" ? raw.nextCreditAt : null,
+		nextCreditThreshold:
+			typeof raw.nextCreditThreshold === "number"
+				? raw.nextCreditThreshold
+				: null,
+	};
 }
 
 export function toStoredCopilotMessages(
@@ -51,6 +82,7 @@ export function loadCopilotSession(
 		return {
 			...parsed,
 			modelPreset: parsed.modelPreset === "deep" ? "deep" : "fast",
+			sessionUsage: parseStoredSessionUsage(parsed.sessionUsage),
 		};
 	} catch {
 		sessionStorage.removeItem(storageKey(organizationId));
@@ -82,7 +114,7 @@ export function touchCopilotSession(
 	organizationId: string,
 	partial: Pick<
 		CopilotSessionSnapshot,
-		"conversationId" | "messages" | "modelPreset"
+		"conversationId" | "messages" | "modelPreset" | "sessionUsage"
 	>,
 ): void {
 	saveCopilotSession(organizationId, {
@@ -97,6 +129,7 @@ export type CopilotOrgHydration =
 			conversationId: string;
 			messages: CopilotStoredMessage[];
 			modelPreset: CopilotModelPreset;
+			sessionUsage: SessionUsageSnapshot | null;
 	  }
 	| { kind: "fresh" };
 
@@ -109,6 +142,7 @@ export function resolveCopilotOrgHydration(
 			conversationId: snapshot.conversationId,
 			messages: snapshot.messages,
 			modelPreset: snapshot.modelPreset,
+			sessionUsage: snapshot.sessionUsage ?? null,
 		};
 	}
 	return { kind: "fresh" };

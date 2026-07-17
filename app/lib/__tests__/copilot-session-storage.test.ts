@@ -44,11 +44,22 @@ describe("copilot session storage", () => {
 			conversationId: "conv-1",
 			messages: [{ id: "m1", role: "user", content: "hello" }],
 			modelPreset: "deep",
+			sessionUsage: {
+				totalTokens: 12_000,
+				maxTokens: 128_000,
+				messageCount: 2,
+				maxMessages: 40,
+				creditsCharged: 1,
+				creditBalance: 9,
+				nextCreditAt: 8_001,
+				nextCreditThreshold: 20_001,
+			},
 		});
 		const loaded = loadCopilotSession(orgId, idleMs);
 		expect(loaded?.conversationId).toBe("conv-1");
 		expect(loaded?.messages).toHaveLength(1);
 		expect(loaded?.modelPreset).toBe("deep");
+		expect(loaded?.sessionUsage?.totalTokens).toBe(12_000);
 	});
 
 	it("clears expired snapshots", () => {
@@ -82,12 +93,23 @@ describe("copilot session storage", () => {
 			messages: [{ id: "m1", role: "user" as const, content: "hi" }],
 			modelPreset: "fast" as const,
 			lastActivityAt: Date.now(),
+			sessionUsage: {
+				totalTokens: 5_000,
+				maxTokens: 128_000,
+				messageCount: 1,
+				maxMessages: 40,
+				creditsCharged: 1,
+				creditBalance: 10,
+				nextCreditAt: 15_001,
+				nextCreditThreshold: 20_001,
+			},
 		};
 		expect(resolveCopilotOrgHydration(snapshot)).toEqual({
 			kind: "restore",
 			conversationId: "conv-restore",
 			messages: snapshot.messages,
 			modelPreset: "fast",
+			sessionUsage: snapshot.sessionUsage,
 		});
 	});
 });

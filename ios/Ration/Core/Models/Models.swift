@@ -113,6 +113,29 @@ struct CopilotSessionUsage: Codable, Sendable, Equatable {
     let creditBalance: Int
     let nextCreditAt: Int?
     let nextCreditThreshold: Int?
+
+    /// Client meter must never regress within a conversation.
+    static func mergeMonotonic(
+        previous: CopilotSessionUsage?,
+        incoming: CopilotSessionUsage
+    ) -> CopilotSessionUsage {
+        guard let previous else { return incoming }
+        let totalTokens = max(previous.totalTokens, incoming.totalTokens)
+        let creditsCharged = max(previous.creditsCharged, incoming.creditsCharged)
+        let preferIncoming = incoming.totalTokens >= previous.totalTokens
+        return CopilotSessionUsage(
+            totalTokens: totalTokens,
+            maxTokens: preferIncoming ? incoming.maxTokens : previous.maxTokens,
+            messageCount: max(previous.messageCount, incoming.messageCount),
+            maxMessages: preferIncoming ? incoming.maxMessages : previous.maxMessages,
+            creditsCharged: creditsCharged,
+            creditBalance: incoming.creditBalance,
+            nextCreditAt: preferIncoming ? incoming.nextCreditAt : previous.nextCreditAt,
+            nextCreditThreshold: preferIncoming
+                ? incoming.nextCreditThreshold
+                : previous.nextCreditThreshold
+        )
+    }
 }
 
 struct CopilotSessionLimitWarning: Codable, Sendable, Equatable {

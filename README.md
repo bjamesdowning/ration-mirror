@@ -2229,7 +2229,7 @@ Copilot exposes **all 39 MCP tools** through the shared tool runtime, plus Copil
 
 | Tool | Source | Purpose |
 |------|--------|---------|
-| `search_docs` | Copilot-only | Hybrid AI Search over `ration-docs` (`docs/fin` + `content/blog`) |
+| `search_docs` | Copilot-only | Hybrid AI Search over `ration-docs` (`docs/fin`, `content/blog`, `docs/dev`, `docs/legal`, root `README.md`) |
 | `get_billing_summary` | Shared MCP | Live tier, credits, renewal, store/management URLs |
 
 MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`. Tool calls inherit MCP rate categories (`mcp_list`, `mcp_search`, `mcp_write`, `mcp_supply_sync`) keyed on the synthetic credential `copilot:{userId}`.
@@ -2291,7 +2291,7 @@ WebSocket event types consumed by clients include streamed messages, `session_us
 
 ### 14.9 AI Search (docs grounding)
 
-Copilot grounds product answers through Cloudflare **AI Search** — not custom embeddings in app code. The `search_docs` tool queries instance `ration-docs` (R2-backed, shared `ration-copilot-docs` bucket for `docs/fin` + `content/blog`). Setup, sync jobs, and verification commands: [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md).
+Copilot grounds product answers through Cloudflare **AI Search** — not custom embeddings in app code. The `search_docs` tool queries instance `ration-docs` (R2-backed, shared `ration-copilot-docs` bucket for `docs/fin`, `content/blog`, `docs/dev`, `docs/legal`, and root `README.md`). Setup, sync jobs, and verification commands: [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md).
 
 ### 14.10 Telemetry, purge, and GDPR
 
@@ -2344,4 +2344,15 @@ See [§13 Local Development & Deployment](#13-local-development--deployment) for
 
 ## 15. Copilot knowledge hub (support)
 
-Customer-facing Markdown for **Ration Copilot** lives in [`docs/fin/`](docs/fin/) for continuity with the original support corpus. See [`docs/fin/README.md`](docs/fin/README.md), [`docs/fin/INDEX.md`](docs/fin/INDEX.md), and [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md). AI Search setup lives in [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md). Keep articles aligned with sections 3–14 of this README when user-visible behavior changes.
+**Product how-to SoT:** [`docs/fin/`](docs/fin/) — same Markdown for Ask Ration (`search_docs`) and human reading at **[`/help`](https://ration.mayutic.com/help)** ([`DIRECTORY.md`](docs/fin/DIRECTORY.md)). Settings (web + iOS) and this README link there.
+
+| Resource | Role |
+|----------|------|
+| [`docs/fin/DIRECTORY.md`](docs/fin/DIRECTORY.md) | Public TOC → `/help` |
+| [`docs/fin/README.md`](docs/fin/README.md) | Maintainer guide |
+| [`docs/fin/INDEX.md`](docs/fin/INDEX.md) | Golden-question table |
+| [`docs/fin/QA-CHECKLIST.md`](docs/fin/QA-CHECKLIST.md) | Release spot-checks |
+| [`docs/dev/copilot-ai-search.md`](docs/dev/copilot-ai-search.md) | AI Search sync (also indexes `docs/dev`, `docs/legal`, root README, blog) |
+| [`docs/legal/`](docs/legal/) | Terms / Privacy SoT → `/legal/*` |
+
+Keep `docs/fin` articles aligned with sections 3–14 of this README when user-visible behavior changes. After edits, sync AI Search.

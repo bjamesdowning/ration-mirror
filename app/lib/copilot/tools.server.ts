@@ -57,8 +57,9 @@ export const COPILOT_MCP_SCOPES = [
 ] as const;
 
 /**
- * AI Search instances the copilot queries. All copilot knowledge — support
- * docs (`docs/fin`) and blog posts (`content/blog`) — is uploaded to the single
+ * AI Search instances the copilot queries. All copilot knowledge — product
+ * docs (`docs/fin`), blog (`content/blog`), engineering (`docs/dev`, root
+ * `README.md`), and legal (`docs/legal`) — is uploaded to the single
  * `ration-copilot-docs` R2 bucket backing the `ration-docs` instance, so one
  * instance covers everything. Add more entries here to fan out.
  */
@@ -91,7 +92,7 @@ function createSearchDocsToolDef(env: Cloudflare.Env): SharedToolDefinition {
 	return defineSharedTool({
 		name: "search_docs",
 		description:
-			"Search official Ration support docs and blog content. Use before answering questions about how the app works. Do not use for live pantry, meals, or shopping state — use inventory/read tools instead.",
+			"Search official Ration docs: product how-tos (docs/fin), blog, engineering README/docs/dev, and legal. Use before answering questions about how the app works. Do not use for live pantry, meals, or shopping state — use inventory/read tools instead.",
 		inputSchema: z.object({
 			query: z.string().min(1),
 		}),

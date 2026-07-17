@@ -14,12 +14,12 @@ Use the **group switcher** in the hub (exact placement is in the app chrome) to 
 - Switching groups **does not merge** data; it only changes which workspace you are editing.
 - **Credits** belong to the active organization’s pool when you run AI features.
 
-## Invitations
+## Membership admin
 
-Joining a shared group usually happens via an **invitation link**. Accepting adds you as a member. **Inviting others** requires an eligible **Crew Member** plan and appropriate role—see *Subscription tiers*.
+Creating groups, invitations, roles, ownership transfer, credit transfer, planning horizon, and delete group are covered in *Groups and membership*. Inviting others requires an eligible **Crew Member** plan and an appropriate role — see *Free vs Crew Member*.
 
 ## Ownership note
 
-Some limits and subscription benefits depend on the **organization owner’s** plan, not only your personal account—see *Subscription tiers* for “owner’s tier” behavior.
+Some limits and subscription benefits depend on the **organization owner’s** plan, not only your personal account—see *Free vs Crew Member* for “owner’s tier” behavior.
 
 If the app shows different options than you expect, the **app is authoritative**—contact support.

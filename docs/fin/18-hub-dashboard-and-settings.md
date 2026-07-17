@@ -1,36 +1,55 @@
 # Hub dashboard and settings
 
-## Hub home (`/hub`)
+## Hub home
 
-The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, and manifest preview. You can change layout presets and widget options where the UI allows.
+The **hub dashboard** shows configurable **widgets**: inventory stats, cookable meals, partial matches, expiring cargo, supply preview, and manifest preview. You can change **layout presets** and per-widget visibility, size, and filters where the UI allows.
 
 ## Main areas
 
-| Area | Typical path | Purpose |
-|------|----------------|---------|
-| Dashboard | `/hub` | At-a-glance widgets |
-| Settings | `/hub/settings` | Profile, group, Developer (MCP & API keys), danger zone |
-| Pricing | `/hub/pricing` | Credits, subscription, checkout return |
-| Cargo | `/hub/cargo` | Pantry |
-| Galley | `/hub/galley` | Recipes and provisions |
-| Supply | `/hub/supply` | Shopping list |
-| Manifest | `/hub/manifest` | Meal plan calendar |
-| New group | `/hub/groups/new` | Create an organization |
+| Area | Purpose |
+|------|---------|
+| Dashboard | At-a-glance widgets |
+| Cargo | Pantry inventory |
+| Galley | Recipes and provisions |
+| Manifest | Meal plan calendar |
+| Supply | Shopping list |
+| Pricing | Credits, subscription, checkout return |
+| Settings | Account, group, preferences, developer, help, danger |
+| New group | Create an organization |
 
-Paths match the live app routing; if URLs change, follow navigation inside the product.
+Follow in-app navigation if labels move.
 
-## Settings highlights
+## Settings sections
 
-- **Developer** — sub-tabs for **Overview** (path chooser), **MCP** (OAuth connect + grant management), and **API Keys** (REST v1 and advanced MCP). Deep links: `#developer`, `#connected-agents` (MCP), `#api` (API Keys)
-- **Display name and avatar**
-- **Allergens and units** (where shown)
-- **API keys** (Developer → API Keys tab) for REST v1 and advanced MCP (including fine-grained **`mcp:*`** scopes)—see *API key safety*, *MCP overview*, and *REST API (v1) overview*
-- **Group management**: roles, invitations (when tier allows), ownership transfer, credit transfer (owner-only flows as labeled)
-- **Billing portal** link when available from pricing or settings actions
-- **Purge account** (irreversible)—read warnings carefully
+Open **Hub → Settings**:
+
+- **Account** — Display name, avatar, default group after sign-in.
+- **Group** — Active group name/avatar, members, invitations (when tier allows), roles, ownership transfer, credit transfer, org tags, supply planning horizon. See *Groups and membership*.
+- **Preferences** — Allergens, unit display mode, and other kitchen preferences shown in the UI.
+- **Developer** — Overview path chooser, **MCP** (OAuth connect + grant management), and **API Keys** (REST v1 and advanced MCP scopes). See *API key safety*, *MCP overview*, and *REST API (v1) overview*.
+- **Help & Feedback** — Links into the self-serve guide at `/help` (same docs used by Ask Ration). See *Ask Ration vs reading the guide*.
+- **Danger Zone** — Delete group (when allowed), and **purge account** (irreversible). Read all warnings. Account purge removes user data and handles owned groups per product rules (transfer or delete). See *Data, privacy, and deletion*.
+
+## Tags
+
+Under **Settings → Group → Tags**, owners and admins create, rename, recolor, categorize, **merge** duplicates, delete unused tags, or run unused cleanup. Tags attach to Cargo and meals for filtering.
+
+## Allergens and units
+
+Set **allergens** and **unit display mode** in Preferences. Allergen settings influence AI suggestions; units control how quantities appear across Cargo, Galley, and Supply.
 
 ## Checkout return
 
-After Stripe checkout you may land on a URL with **`transaction=success`** so the hub refreshes **tier and credits** without a manual reload.
+After Stripe checkout you may land with **`transaction=success`** so the hub refreshes **tier and credits** without a manual reload.
 
-If a control is missing, your **tier or role** may not allow it—see *Subscription tiers*.
+## Actions (summary)
+
+- Customize hub **widgets** and **presets**.
+- Update **Account** profile and **default group**.
+- Manage **Group** membership, tags, and owner/admin admin flows.
+- Edit **Preferences** (allergens, units).
+- Configure **Developer** MCP and API keys.
+- Open **Help** (`/help`) or give feedback.
+- Run **Danger Zone** purge or group delete only when you intend permanent loss.
+
+If a control is missing, your **tier or role** may not allow it—see *Free vs Crew Member*.

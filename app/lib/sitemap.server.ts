@@ -1,4 +1,5 @@
 import { getAllPosts } from "./blog.server";
+import { HELP_ARTICLES } from "./help/articles";
 
 export type SitemapEntry = {
 	path: string;
@@ -12,12 +13,13 @@ export type SitemapEntry = {
 const STATIC_PAGES: ReadonlyArray<SitemapEntry> = [
 	{ path: "/", lastmod: "2026-07-10" },
 	{ path: "/about", lastmod: "2026-04-25" },
+	{ path: "/help", lastmod: "2026-07-17" },
 	{ path: "/connect", lastmod: "2026-06-19" },
 	{ path: "/docs/api", lastmod: "2026-06-19" },
 	{ path: "/tools", lastmod: "2026-04-25" },
 	{ path: "/tools/unit-converter", lastmod: "2026-04-25" },
-	{ path: "/legal/terms", lastmod: "2026-04-25" },
-	{ path: "/legal/privacy", lastmod: "2026-04-25" },
+	{ path: "/legal/terms", lastmod: "2026-07-15" },
+	{ path: "/legal/privacy", lastmod: "2026-07-15" },
 	{ path: "/auth.md", lastmod: "2026-06-19" },
 	{ path: "/mcp.md", lastmod: "2026-06-19" },
 ];
@@ -31,6 +33,7 @@ function maxDate(dates: string[]): string {
 export function getSitemapEntries(): SitemapEntry[] {
 	const posts = getAllPosts();
 	const blogLastmod = maxDate(posts.map((post) => post.dateModified));
+	const helpLastmod = "2026-07-17";
 
 	const staticEntries: SitemapEntry[] = [
 		...STATIC_PAGES,
@@ -42,7 +45,12 @@ export function getSitemapEntries(): SitemapEntry[] {
 		lastmod: post.dateModified,
 	}));
 
-	return [...staticEntries, ...blogEntries];
+	const helpEntries: SitemapEntry[] = HELP_ARTICLES.map((article) => ({
+		path: `/help/${article.slug}`,
+		lastmod: helpLastmod,
+	}));
+
+	return [...staticEntries, ...blogEntries, ...helpEntries];
 }
 
 export function renderSitemapXml(

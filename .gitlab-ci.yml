@@ -1,7 +1,7 @@
 image: oven/bun:1
 
-# CI jobs temporarily commented out to conserve GitLab CI minutes.
-# Re-enable SAST, install, and verify jobs when minutes allow.
+# Most CI jobs are commented out to conserve GitLab CI minutes.
+# Re-enable SAST, install, lint, typecheck, and unit tests when minutes allow.
 # Deploy stage was already disabled; Workers Builds / manual deploy remain the path to production.
 #
 # include:
@@ -14,10 +14,8 @@ stages:
   #- deploy
 
 variables:
-  # Caching configuration
   BUN_INSTALL_CACHE_DIR: ".bun-install-cache"
 
-# Global Cache Definition
 cache:
   key:
     files:
@@ -85,28 +83,19 @@ cache:
 #     - bun run flag:check
 #   allow_failure: true
 
-# ai_search_sync:
-#   stage: verify
-#   needs:
-#     - install_dependencies
-#   rules:
-#     - changes:
-#         - docs/fin/**/*
-#         - content/blog/**/*
-#         - docs/dev/copilot-ai-search.md
-#       when: manual
-#     - when: never
-#   script:
-#     - |
-#       for file in $(find docs/fin content/blog -type f \( -name '*.md' -o -name '*.mdx' \)); do
-#         bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
-#       done
-#     - bunx wrangler ai-search jobs create ration-docs
-#   allow_failure: false
-
-# No-op so the pipeline stays green while jobs above are commented out.
-ci_paused:
+# Manual: upload docs corpus to R2 and reindex Copilot AI Search.
+# Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.
+# Requires CLOUDFLARE_API_TOKEN (and account) with R2 + AI Search write access.
+ai_search_sync:
   stage: verify
+  rules:
+    - when: manual
   script:
-    - echo "GitLab CI jobs paused to conserve minutes. Run lint/typecheck/test:unit locally."
+    - bun install --frozen-lockfile --ignore-scripts
+    - |
+      for file in $(find docs/fin content/blog docs/dev docs/legal -type f \( -name '*.md' -o -name '*.mdx' \)); do
+        bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
+      done
+      bunx wrangler r2 object put "ration-copilot-docs/README.md" --file "README.md" --remote
+    - bunx wrangler ai-search jobs create ration-docs
   allow_failure: false

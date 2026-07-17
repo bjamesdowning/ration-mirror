@@ -8,8 +8,8 @@ Capacity and certain features for a group depend on the **organization owner’s
 
 | Resource | Typical limit |
 |----------|-----------------|
-| Inventory items | 50 |
-| Meals | 20 |
+| Inventory items | 35 |
+| Meals | 15 |
 | Supply lists | 3 |
 | Owned groups | 1 |
 | Invite members | Not available |
@@ -20,7 +20,7 @@ Capacity and certain features for a group depend on the **organization owner’s
 | Benefit | Notes |
 |---------|--------|
 | Inventory, meals, supply lists | Effectively **unlimited** (fair use still applies) |
-| Owned groups | Higher cap (e.g. multiple households) |
+| Owned groups | Higher cap (for example multiple households) |
 | Invitations | Can invite others to the org |
 | Public share links | Supply list and meal plan sharing |
 | Included credits | **Annual** plans may include a **welcome / renewal** credit bundle—see Pricing |
@@ -31,11 +31,11 @@ If a **Crew Member** subscription **expires**, the group may fall back to **free
 
 ## Canceling Crew Member
 
-Users can cancel through **Stripe Customer Portal** (from **Hub → Settings** or **Pricing** when **Manage billing** is shown), or—when enabled—via **Fin** using the subscription cancel/resume data connectors (cancel **at end of billing period**, not instant removal). Until the period ends, the household keeps Crew limits.
+Cancel through the **Stripe Customer Portal** via **Manage billing** from **Hub → Settings** or **Pricing** when shown. Ask Ration can explain your plan and point you to that portal (or the App Store management URL when applicable); it does not cancel in chat. Cancellation is typically **at end of billing period**, not instant removal. Until the period ends, the household keeps Crew limits.
 
 ## Roles
 
-**Owner** and **admin** can perform some administrative actions (invitations, transfers—see Settings). **Member** access is more limited.
+**Owner** and **admin** can perform some administrative actions (invitations, transfers—see Settings and *Groups and membership*). **Member** access is more limited.
 
 ## Upgrade prompts
 

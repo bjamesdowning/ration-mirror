@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getAllPosts } from "~/lib/blog.server";
+import { HELP_ARTICLES } from "~/lib/help/articles";
 import { getSitemapEntries } from "~/lib/sitemap.server";
 
 describe("getSitemapEntries", () => {
@@ -23,6 +24,7 @@ describe("getSitemapEntries", () => {
 			expect.arrayContaining([
 				"/",
 				"/about",
+				"/help",
 				"/blog",
 				"/connect",
 				"/docs/api",
@@ -34,6 +36,13 @@ describe("getSitemapEntries", () => {
 				"/mcp.md",
 			]),
 		);
+	});
+
+	it("includes every help article under /help/:slug", () => {
+		const paths = getSitemapEntries().map((entry) => entry.path);
+		for (const article of HELP_ARTICLES) {
+			expect(paths).toContain(`/help/${article.slug}`);
+		}
 	});
 
 	it("sets /blog lastmod to the newest post dateModified", () => {

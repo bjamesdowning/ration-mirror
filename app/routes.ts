@@ -92,6 +92,10 @@ export default [
 	// About
 	route("about", "routes/about.tsx"),
 
+	// User guide (docs/fin SoT)
+	route("help", "routes/help.tsx"),
+	route("help/:slug", "routes/help.$slug.tsx"),
+
 	// Blog
 	route("blog", "routes/blog.tsx"),
 	route("blog/rss.xml", "routes/blog.rss.xml.ts"),

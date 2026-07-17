@@ -19,6 +19,7 @@ const groups: Array<{
 			{ to: "/", label: "Home" },
 			{ to: "/#pricing", label: "Pricing" },
 			{ to: "/#signup", label: "Sign In" },
+			{ to: "/help", label: "User guide" },
 			{ to: "/docs/api", label: "API docs" },
 		],
 	},

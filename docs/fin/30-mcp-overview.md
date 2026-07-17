@@ -7,7 +7,7 @@
 ## Host and authentication
 
 - **Endpoint:** `https://mcp.ration.mayutic.com/mcp` (production).
-- **Recommended auth:** **OAuth 2.1** delegated access — paste the MCP URL into your client, complete browser sign-in, **always select your household**, then approve scoped permissions. Better Auth holds flow state in the signed authorization query (~10 minute TTL); see [plans/oauth-flow-contract.md](../../plans/oauth-flow-contract.md). Manage or revoke grants in **Hub → Settings → Connected Agents**.
+- **Recommended auth:** **OAuth 2.1** delegated access — paste the MCP URL into your client, complete browser sign-in, **always select your household**, then approve scoped permissions. Better Auth holds flow state in the signed authorization query (~10 minute TTL). Manage or revoke grants in **Hub → Settings → Connected Agents**. Setup details: [Connecting to MCP](./31-mcp-connection-setup.md) and [/docs/api](/docs/api).
 - **Advanced auth:** Organization **API keys** with **`mcp:*`** scopes (manual Bearer header for CI, legacy clients, or `mcp-remote` bridges).
 - **Data scope:** OAuth grants and API keys operate on **one organization** — the household you select at consent (OAuth) or the org bound to the key (API key).
 

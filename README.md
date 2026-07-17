@@ -746,7 +746,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 
 | Widget | Data Source | Notes |
 |--------|-------------|-------|
-| `hub-stats` | D1 cargo/meal/list counts | Summary numbers |
+| `hub-stats` | D1 cargo/meal/list counts | Summary numbers (iOS: centered 2×2 segmented quad) |
 | `meals-ready` | Vectorize meal match (strict) | Meals cookable right now |
 | `meals-partial` | Vectorize meal match (delta) | Meals with most ingredients available |
 | `snacks-ready` | Vectorize provision match (strict) | Quick snacks available |

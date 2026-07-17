@@ -1,7 +1,11 @@
 image: oven/bun:1
 
-include:
-  - component: $CI_SERVER_FQDN/components/sast/sast@3.4.0
+# CI jobs temporarily commented out to conserve GitLab CI minutes.
+# Re-enable SAST, install, and verify jobs when minutes allow.
+# Deploy stage was already disabled; Workers Builds / manual deploy remain the path to production.
+#
+# include:
+#   - component: $CI_SERVER_FQDN/components/sast/sast@3.4.0
 
 stages:
   - test
@@ -21,81 +25,88 @@ cache:
   paths:
     - node_modules/
 
-# Install Dependencies
-install_dependencies:
-  stage: install
-  script:
-    # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
-    # This is safe because we target Cloudflare Workers and use D1 at runtime.
-    - bun install --frozen-lockfile --ignore-scripts
-    # Manually run cf-typegen since --ignore-scripts skips the postinstall hook.
-    # This ensures types for D1, R2, etc. are available for the 'verify' stage.
-    - bun run cf-typegen
-  artifacts:
-    paths:
-      - node_modules/
-      - worker-configuration.d.ts
-    expire_in: 1 hour
+# # Install Dependencies
+# install_dependencies:
+#   stage: install
+#   script:
+#     # Use --ignore-scripts to skip native module compilation (like better-sqlite3) which fails in minimal CI environments.
+#     # This is safe because we target Cloudflare Workers and use D1 at runtime.
+#     - bun install --frozen-lockfile --ignore-scripts
+#     # Manually run cf-typegen since --ignore-scripts skips the postinstall hook.
+#     # This ensures types for D1, R2, etc. are available for the 'verify' stage.
+#     - bun run cf-typegen
+#   artifacts:
+#     paths:
+#       - node_modules/
+#       - worker-configuration.d.ts
+#     expire_in: 1 hour
 
-test_unit:
-  stage: verify
-  needs:
-    - install_dependencies
-  script:
-    - bun run test:unit --coverage
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
-  artifacts:
-    when: always
-    reports:
-      junit: reports/junit.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage/cobertura-coverage.xml
-    paths:
-      - coverage/
-      - reports/
-    expire_in: 1 week
-  allow_failure: true
+# test_unit:
+#   stage: verify
+#   needs:
+#     - install_dependencies
+#   script:
+#     - bun run test:unit --coverage
+#   coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+#   artifacts:
+#     when: always
+#     reports:
+#       junit: reports/junit.xml
+#       coverage_report:
+#         coverage_format: cobertura
+#         path: coverage/cobertura-coverage.xml
+#     paths:
+#       - coverage/
+#       - reports/
+#     expire_in: 1 week
+#   allow_failure: true
 
-lint:
-  stage: verify
-  needs:
-    - install_dependencies
-  script:
-    - bun run lint
-  allow_failure: true
+# lint:
+#   stage: verify
+#   needs:
+#     - install_dependencies
+#   script:
+#     - bun run lint
+#   allow_failure: true
 
-typecheck:
-  stage: verify
-  needs:
-    - install_dependencies
-  script:
-    - bun run typecheck
-  allow_failure: true
+# typecheck:
+#   stage: verify
+#   needs:
+#     - install_dependencies
+#   script:
+#     - bun run typecheck
+#   allow_failure: true
 
-flag_check:
-  stage: verify
-  needs:
-    - install_dependencies
-  script:
-    - bun run flag:check
-  allow_failure: true
+# flag_check:
+#   stage: verify
+#   needs:
+#     - install_dependencies
+#   script:
+#     - bun run flag:check
+#   allow_failure: true
 
-ai_search_sync:
+# ai_search_sync:
+#   stage: verify
+#   needs:
+#     - install_dependencies
+#   rules:
+#     - changes:
+#         - docs/fin/**/*
+#         - content/blog/**/*
+#         - docs/dev/copilot-ai-search.md
+#       when: manual
+#     - when: never
+#   script:
+#     - |
+#       for file in $(find docs/fin content/blog -type f \( -name '*.md' -o -name '*.mdx' \)); do
+#         bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
+#       done
+#     - bunx wrangler ai-search jobs create ration-docs
+#   allow_failure: false
+
+# No-op so the pipeline stays green while jobs above are commented out.
+ci_paused:
   stage: verify
-  needs:
-    - install_dependencies
-  rules:
-    - changes:
-        - docs/fin/**/*
-        - content/blog/**/*
-        - docs/dev/copilot-ai-search.md
-      when: manual
-    - when: never
   script:
-    - |
-      for file in $(find docs/fin content/blog -type f \( -name '*.md' -o -name '*.mdx' \)); do
-        bunx wrangler r2 object put "ration-copilot-docs/${file}" --file "$file" --remote
-      done
-    - bunx wrangler ai-search jobs create ration-docs
+    - echo "GitLab CI jobs paused to conserve minutes. Run lint/typecheck/test:unit locally."
   allow_failure: false

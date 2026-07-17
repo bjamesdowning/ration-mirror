@@ -9,34 +9,75 @@ struct HubStatsWidget: View {
     var onOpenSupply: (() -> Void)?
 
     private var compact: Bool { size == "sm" }
+    /// Carbon at low opacity — `Theme.platinum` matches `Theme.surface` in dark mode.
+    private var hairline: Color { Theme.carbon.opacity(0.12) }
+    private var mealsReadyCount: Int { data.mealMatches.filter(\.canMake).count }
 
     var body: some View {
         GlassCard {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compact ? 8 : 12) {
-                statCell("Cargo", value: data.cargoStats.totalItems, icon: "shippingbox", action: onOpenCargo)
-                statCell("Expiring", value: data.cargoStats.expiringCount, icon: "clock.badge.exclamationmark", highlight: data.cargoStats.expiringCount > 0, action: onOpenExpiring)
-                statCell("Meals ready", value: data.mealMatches.filter(\.canMake).count, icon: "fork.knife", action: onOpenGalley)
-                statCell("Supply", value: data.latestSupplyList?.resolvedUncheckedCount ?? 0, icon: "cart", action: onOpenSupply)
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    statCell("Cargo", value: data.cargoStats.totalItems, icon: "shippingbox", action: onOpenCargo)
+                    verticalHairline
+                    statCell(
+                        "Expiring",
+                        value: data.cargoStats.expiringCount,
+                        icon: "clock.badge.exclamationmark",
+                        highlight: data.cargoStats.expiringCount > 0,
+                        action: onOpenExpiring
+                    )
+                }
+                horizontalHairline
+                HStack(spacing: 0) {
+                    statCell("Meals ready", value: mealsReadyCount, icon: "fork.knife", action: onOpenGalley)
+                    verticalHairline
+                    statCell(
+                        "Supply",
+                        value: data.latestSupplyList?.resolvedUncheckedCount ?? 0,
+                        icon: "cart",
+                        action: onOpenSupply
+                    )
+                }
             }
+            .padding(.horizontal, -4)
+            .padding(.vertical, -2)
         }
     }
 
-    private func statCell(_ label: String, value: Int, icon: String, highlight: Bool = false, action: (() -> Void)?) -> some View {
+    private var verticalHairline: some View {
+        Rectangle().fill(hairline).frame(width: 1)
+    }
+
+    private var horizontalHairline: some View {
+        Rectangle().fill(hairline).frame(height: 1)
+    }
+
+    private func statCell(
+        _ label: String,
+        value: Int,
+        icon: String,
+        highlight: Bool = false,
+        action: (() -> Void)?
+    ) -> some View {
         Button {
             action?()
         } label: {
-            VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+            VStack(alignment: .center, spacing: compact ? 2 : 4) {
                 Image(systemName: icon)
-                    .font(Typography.heroIcon(compact ? 14 : 16))
+                    .font(Typography.heroIcon(compact ? 13 : 15))
                     .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
                 Text("\(value)")
                     .font(compact ? Typography.headline() : Typography.display())
                     .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
+                    .monospacedDigit()
                 if !compact {
-                    Text(label).rationCaption()
+                    Text(label)
+                        .rationCaption()
+                        .multilineTextAlignment(.center)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+            .padding(.vertical, compact ? 8 : 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

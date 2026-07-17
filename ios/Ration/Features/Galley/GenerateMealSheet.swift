@@ -180,10 +180,10 @@ struct GenerateMealSheet: View {
             VStack(spacing: 16) {
                 AIFeatureInlineIntro(
                     title: "Generate meals",
-                    detail: "AI creates recipe ideas from your Cargo inventory.",
+                    detail: "Each generation returns 3 meal ideas from your Cargo—recipes you can make with what you have.",
                     creditCost: creditCost,
                     costLabel: "per generation",
-                    nextSteps: "Pick recipes you like, then save them to Galley."
+                    nextSteps: "Review all 3, pick the ones you like, then save them to Galley."
                 )
                 TextField("Optional customization (e.g. vegetarian)", text: $model.customization, axis: .vertical)
                     .textFieldStyle(.roundedBorder)

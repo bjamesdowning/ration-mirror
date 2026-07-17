@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.2.12**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.2.14**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -280,7 +280,9 @@ handler also opens the picker when access is lost remotely.
 | `/groups/ownership/transfer` | POST | Transfer group ownership |
 | `/groups/credits/transfer` | POST | Transfer credits between owned groups |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. Reorder widgets in Hub edit mode (toolbar slider) via swipe Up/Down; layout saves optimistically in the background. Edit mode also supports visibility toggles and S/M/L sizing. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. In Hub edit mode (toolbar slider), long-press and drag to reorder widgets (chevron Up/Down as accessibility fallback); layout, filters, visibility, and S/M/L size autosave in the background. Exit edit mode with **Done** or by re-tapping the Hub tab to return to the rendered custom hub. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
+
+**Hub edit long-press reorder (iOS 1.2.14):** Widget reorder lives only on Edit Hub (not home). Long-press drag uses the existing `HubWidgetReorder` session; Hub tab re-tap exits edit like Done.
 
 **Manifest date chrome (iOS 1.2.12):** Week navigator uses edge chevrons (≥44pt) with a
 display-only range label and day pills. **Today** lives in the Manifest navigation toolbar

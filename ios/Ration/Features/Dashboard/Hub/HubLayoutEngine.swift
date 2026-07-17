@@ -39,7 +39,12 @@ enum HubLayoutEngine {
         guard swapIdx >= 0, swapIdx < widgets.count else { return widgets }
         var next = widgets
         next.swapAt(idx, swapIdx)
-        return next.enumerated().map { index, widget in
+        return reindexOrder(next)
+    }
+
+    /// Assigns contiguous `order` values from array position (0…n-1).
+    static func reindexOrder(_ widgets: [HubWidgetLayout]) -> [HubWidgetLayout] {
+        widgets.enumerated().map { index, widget in
             var copy = widget
             copy.order = index
             return copy
@@ -75,7 +80,7 @@ enum HubLayoutEngine {
         return order.last(where: { $0.id != sourceId })?.id
     }
 
-    /// Moves `sourceId` to the index of `destinationId` within a visible-only display list.
+    /// Moves `sourceId` to the index of `destinationId` within a display list.
     static func reorderDisplayOrder(
         _ order: [HubWidgetLayout],
         moving sourceId: String,
@@ -90,52 +95,6 @@ enum HubLayoutEngine {
         let item = next.remove(at: fromIndex)
         next.insert(item, at: toIndex)
         return next
-    }
-
-    /// Merges a visible-only order into the full editable widget list.
-    static func applyVisibleOrder(
-        _ visibleOrder: [HubWidgetLayout],
-        to widgets: [HubWidgetLayout]
-    ) -> [HubWidgetLayout] {
-        let sorted = widgets.sorted { $0.order < $1.order }
-        let visibleIds = Set(visibleOrder.map(\.id))
-        let existingVisibleIds = Set(sorted.filter(\.visible).map(\.id))
-        guard visibleIds == existingVisibleIds else { return sorted }
-
-        var visibleIterator = visibleOrder.makeIterator()
-        return sorted.enumerated().map { index, widget in
-            var copy = widget
-            if widget.visible, let replacement = visibleIterator.next() {
-                copy = replacement
-                copy.visible = true
-            }
-            copy.order = index
-            return copy
-        }
-    }
-
-    /// Reorders visible widgets by moving `sourceId` to the position of `destinationId`.
-    static func reorderVisible(
-        _ widgets: [HubWidgetLayout],
-        moving sourceId: String,
-        to destinationId: String
-    ) -> [HubWidgetLayout] {
-        let sorted = widgets.sorted { $0.order < $1.order }
-        var visible = sorted.filter(\.visible)
-        guard let fromIndex = visible.firstIndex(where: { $0.id == sourceId }),
-              let toIndex = visible.firstIndex(where: { $0.id == destinationId }),
-              fromIndex != toIndex
-        else { return sorted }
-
-        let moved = visible.remove(at: fromIndex)
-        visible.insert(moved, at: toIndex)
-
-        var visibleIterator = visible.makeIterator()
-        return sorted.enumerated().map { index, widget in
-            var copy = widget.visible ? (visibleIterator.next() ?? widget) : widget
-            copy.order = index
-            return copy
-        }
     }
 
     /// Row display cap by widget size — mirrors web compact vs full layouts.

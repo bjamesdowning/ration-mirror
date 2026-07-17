@@ -65,20 +65,4 @@ final class HubWidgetReorderIndexTests: XCTestCase {
         let reordered = HubLayoutEngine.reorderDisplayOrder(widgets, moving: "b", to: "b")
         XCTAssertEqual(reordered.map(\.id), widgets.map(\.id))
     }
-
-    func testApplyVisibleOrderPreservesHiddenWidgets() {
-        let full = [
-            HubWidgetLayout(id: "a", order: 0, size: "md", visible: true),
-            HubWidgetLayout(id: "hidden", order: 1, size: "md", visible: false),
-            HubWidgetLayout(id: "c", order: 2, size: "md", visible: true),
-        ]
-        let visibleOrder = [
-            HubWidgetLayout(id: "c", order: 0, size: "lg", visible: true),
-            HubWidgetLayout(id: "a", order: 1, size: "md", visible: true),
-        ]
-        let merged = HubLayoutEngine.applyVisibleOrder(visibleOrder, to: full)
-        XCTAssertEqual(merged.filter(\.visible).map(\.id), ["c", "a"])
-        XCTAssertEqual(merged.first(where: { $0.id == "hidden" })?.visible, false)
-        XCTAssertEqual(merged.first(where: { $0.id == "c" })?.size, "lg")
-    }
 }

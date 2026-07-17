@@ -83,6 +83,7 @@ struct MainTabView: View {
     @State private var orgGeneration = 0
     @State private var selectedTab = 0
     @State private var activatedTabs: Set<Int> = [0]
+    @State private var hubTabReselectToken = 0
     @State private var manifestSuccessMessage: String?
     @State private var showingCopilotPaywall = false
 
@@ -101,6 +102,7 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             DashboardView(
                 isTabActive: activatedTabs.contains(0),
+                hubTabReselectToken: hubTabReselectToken,
                 onScan: { showingScan = true },
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
@@ -245,6 +247,13 @@ struct MainTabView: View {
             env.copilotScroll,
             hasTabAction: env.tabDock.hasAction(for: selectedTab)
         )
+        .background {
+            TabBarReselectObserver { index in
+                if index == 0 {
+                    hubTabReselectToken += 1
+                }
+            }
+        }
         .onChange(of: selectedTab) { _, tab in
             activatedTabs.insert(tab)
             env.copilotScroll.setActiveTab(tab)

@@ -4,6 +4,8 @@ import Observation
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     var isTabActive: Bool = true
+    /// Bumped when the Hub tab is re-tapped while already selected (exits edit mode).
+    var hubTabReselectToken: Int = 0
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenGroupSettings: () -> Void = {}
@@ -120,6 +122,11 @@ struct DashboardView: View {
                     organizationId: organizationId
                 )
             }
+        }
+        .onChange(of: hubTabReselectToken) { _, _ in
+            guard model.isEditMode else { return }
+            model.isEditMode = false
+            Task { await reload() }
         }
         .tabDockAction(tag: 0, isActive: !model.isEditMode) {
             IconFABButtonCore(

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// List-based hub layout editor — mirrors web `HubEditModeMobile`.
+/// Hub layout editor — long-press drag reorder, filters, size, visibility; autosaves like web `HubEditModeMobile`.
 struct HubEditView: View {
     let hubProfile: HubProfile?
     let hubLayout: HubLayoutPayload?
@@ -12,12 +12,17 @@ struct HubEditView: View {
     let onExit: () -> Void
 
     @State private var widgets: [HubWidgetLayout] = []
+    @State private var reorderSession = HubWidgetReorderSession()
     @State private var selectedProfile: HubProfile = "full"
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var filterWidget: HubWidgetLayout?
 
     private let profileOptions: [HubProfile] = ["full", "cook", "shop", "minimal", "custom"]
+
+    private var controlsDisabled: Bool {
+        reorderSession.isDragging || isSaving
+    }
 
     init(
         hubProfile: HubProfile?,
@@ -42,74 +47,37 @@ struct HubEditView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let errorMessage {
-                    ErrorBanner(message: errorMessage).listRowBackground(Color.clear)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let errorMessage {
+                        ErrorBanner(message: errorMessage)
+                    }
 
-                Section("Layout profile") {
-                    Picker("Profile", selection: $selectedProfile) {
-                        ForEach(profileOptions, id: \.self) { profile in
-                            Text(profileLabel(profile)).tag(profile)
+                    profileSection
+
+                    Text("Widgets")
+                        .rationCaption()
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 4)
+
+                    ForEach(Array(reorderSession.displayOrder.enumerated()), id: \.element.id) { index, widget in
+                        if let def = HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats] {
+                            widgetRow(widget: widget, def: def, index: index)
+                                .hubWidgetReorderRow(
+                                    id: widget.id,
+                                    session: reorderSession,
+                                    onOrderChanged: applyReorderFromSession
+                                )
                         }
                     }
-                    .pickerStyle(.menu)
-                    .onChange(of: selectedProfile) { _, newValue in
-                        guard newValue != "custom" else { return }
-                        applyPreset(newValue)
-                    }
                 }
-
-                ForEach(widgets) { widget in
-                    if let def = HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats] {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(def.title).rationBody()
-                                    Text(def.description).rationCaption()
-                                    if widget.filters != nil {
-                                        Text("Filters active").rationCaption().foregroundStyle(Theme.hyperGreen)
-                                    }
-                                }
-                                Spacer()
-                                if supportsFilters(widget.id) {
-                                    Button {
-                                        filterWidget = widget
-                                    } label: {
-                                        Image(systemName: "line.3.horizontal.decrease.circle")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Edit filters for \(def.title)")
-                                }
-                                Toggle("", isOn: binding(for: widget.id))
-                                    .labelsHidden()
-                                    .tint(Theme.hyperGreen)
-                                    .accessibilityLabel(widget.visible ? "Hide \(def.title)" : "Show \(def.title)")
-                            }
-
-                            Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: def.defaultSize)) {
-                                Text("S").tag("sm")
-                                Text("M").tag("md")
-                                Text("L").tag("lg")
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .swipeActions {
-                            Button {
-                                widgets = HubLayoutEngine.moveWidget(widgets, id: widget.id, direction: .up)
-                                persist()
-                            } label: { Label("Up", systemImage: "arrow.up") }
-                            Button {
-                                widgets = HubLayoutEngine.moveWidget(widgets, id: widget.id, direction: .down)
-                                persist()
-                            } label: { Label("Down", systemImage: "arrow.down") }
-                        }
-                        .listRowBackground(Theme.surface)
-                    }
-                }
+                .padding(16)
+                .copilotDockContentPadding()
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
+            .coordinateSpace(name: HubWidgetReorder.coordinateSpaceName)
+            .onPreferenceChange(HubWidgetFramePreferenceKey.self) { frames in
+                reorderSession.widgetFrames = frames
+            }
             .background(Theme.ceramic)
             .scrollDismissesKeyboard(.interactively)
             .copilotDockScrollMargins(hasTabAction: false)
@@ -143,7 +111,98 @@ struct HubEditView: View {
         .onAppear {
             widgets = HubLayoutEngine.initEditableWidgets(profile: hubProfile, layout: hubLayout)
             selectedProfile = hubProfile ?? "full"
+            reorderSession.syncDisplayOrder(from: widgets)
         }
+        .onChange(of: widgets) { _, newValue in
+            reorderSession.syncDisplayOrder(from: newValue)
+        }
+    }
+
+    private var profileSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Layout profile")
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+            Picker("Profile", selection: $selectedProfile) {
+                ForEach(profileOptions, id: \.self) { profile in
+                    Text(profileLabel(profile)).tag(profile)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(controlsDisabled)
+            .onChange(of: selectedProfile) { _, newValue in
+                guard newValue != "custom" else { return }
+                applyPreset(newValue)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func widgetRow(widget: HubWidgetLayout, def: HubWidgetDefinition, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 4) {
+                    Button {
+                        moveWidget(id: widget.id, direction: .up)
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .disabled(controlsDisabled || index <= 0)
+                    .accessibilityLabel("Move \(def.title) up")
+
+                    Button {
+                        moveWidget(id: widget.id, direction: .down)
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .disabled(controlsDisabled || index >= reorderSession.displayOrder.count - 1)
+                    .accessibilityLabel("Move \(def.title) down")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.muted)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(def.title).rationBody()
+                    Text(def.description).rationCaption()
+                    if widget.filters != nil {
+                        Text("Filters active").rationCaption().foregroundStyle(Theme.hyperGreen)
+                    }
+                }
+                Spacer(minLength: 8)
+                if supportsFilters(widget.id) {
+                    Button {
+                        filterWidget = widget
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(controlsDisabled)
+                    .accessibilityLabel("Edit filters for \(def.title)")
+                }
+                Toggle("", isOn: binding(for: widget.id))
+                    .labelsHidden()
+                    .tint(Theme.hyperGreen)
+                    .disabled(controlsDisabled)
+                    .accessibilityLabel(widget.visible ? "Hide \(def.title)" : "Show \(def.title)")
+            }
+
+            Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: def.defaultSize)) {
+                Text("S").tag("sm")
+                Text("M").tag("md")
+                Text("L").tag("lg")
+            }
+            .pickerStyle(.segmented)
+            .disabled(controlsDisabled)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .opacity(widget.visible ? 1 : 0.55)
     }
 
     private func profileLabel(_ profile: HubProfile) -> String {
@@ -172,6 +231,16 @@ struct HubEditView: View {
 
     private func supportsFilters(_ id: String) -> Bool {
         ["meals-ready", "meals-partial", "snacks-ready", "manifest-preview", "cargo-expiring", "supply-preview"].contains(id)
+    }
+
+    private func moveWidget(id: String, direction: HubLayoutEngine.MoveDirection) {
+        widgets = HubLayoutEngine.moveWidget(widgets, id: id, direction: direction)
+        persist()
+    }
+
+    private func applyReorderFromSession() {
+        widgets = HubLayoutEngine.reindexOrder(reorderSession.displayOrder)
+        persist()
     }
 
     private func binding(for id: String) -> Binding<Bool> {

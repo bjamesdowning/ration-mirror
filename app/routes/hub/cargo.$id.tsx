@@ -82,6 +82,15 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				await jettisonItem(context.cloudflare.env, groupId, id);
 				throw redirect("/hub/cargo");
 			}
+			if (request.method === "POST" && intent === "mark-empty") {
+				const updated = await updateItem(context.cloudflare.env, groupId, id, {
+					quantity: 0,
+				});
+				if (!updated) {
+					return { success: false, error: "Item not found or unauthorized" };
+				}
+				return { success: true };
+			}
 			if (request.method === "POST" && intent !== "update") {
 				return { success: false, error: "Invalid intent" };
 			}

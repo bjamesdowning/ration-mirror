@@ -137,14 +137,13 @@ struct CargoRowView: View {
 
 // MARK: - Meal row
 
-/// Galley list row — Telemetry Strip with detail navigation, inline Cook, and swipe parity with Cargo.
+/// Galley list row — Telemetry Strip with detail navigation; Cook is on trailing swipe.
 struct MealRowView: View {
     let meal: Meal
     var match: MealMatch?
     var showMatchRing: Bool = true
     var isSelectedForSupply = false
     var isInitiallySelectedForSupply = false
-    var onCook: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -163,17 +162,6 @@ struct MealRowView: View {
                 mealMetadata
             }
             .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
-
-            Button(action: onCook) {
-                Image(systemName: "flame.circle.fill")
-                    .font(Typography.mono(28))
-                    .foregroundStyle(Theme.hyperGreen)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cook meal")
         }
         .padding(.vertical, 6)
     }

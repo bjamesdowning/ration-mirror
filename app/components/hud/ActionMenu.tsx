@@ -11,6 +11,20 @@ export interface ActionMenuItem {
 	to?: string;
 	reloadDocument?: boolean;
 	destructive?: boolean;
+	/** Soft / non-destructive caution (e.g. Mark Empty) — amber warning tone */
+	warning?: boolean;
+}
+
+function actionItemClassName(action: ActionMenuItem): string {
+	if (action.destructive) return "text-danger hover:bg-danger/10";
+	if (action.warning) return "text-warning hover:bg-warning/10";
+	return "text-carbon hover:bg-platinum";
+}
+
+function actionIconClassName(action: ActionMenuItem): string {
+	if (action.destructive) return "text-danger";
+	if (action.warning) return "text-warning";
+	return "text-muted";
 }
 
 interface ActionMenuProps {
@@ -104,11 +118,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 								const Content = () => (
 									<>
 										{action.icon && (
-											<span
-												className={
-													action.destructive ? "text-danger" : "text-muted"
-												}
-											>
+											<span className={actionIconClassName(action)}>
 												{action.icon}
 											</span>
 										)}
@@ -123,11 +133,7 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 											to={action.to}
 											reloadDocument={action.reloadDocument}
 											onClick={handleClose}
-											className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
-												action.destructive
-													? "text-danger hover:bg-danger/10"
-													: "text-carbon hover:bg-platinum"
-											}`}
+											className={`block w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${actionItemClassName(action)}`}
 										>
 											<Content />
 										</Link>
@@ -136,18 +142,14 @@ export function ActionMenu({ actions }: ActionMenuProps) {
 
 								return (
 									<button
-										key={`${action.label}-${action.destructive ?? ""}`}
+										key={`${action.label}-${action.destructive ?? ""}-${action.warning ?? ""}`}
 										type="button"
 										onClick={(e) => {
 											e.preventDefault();
 											e.stopPropagation();
 											handleAction(action);
 										}}
-										className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${
-											action.destructive
-												? "text-danger hover:bg-danger/10"
-												: "text-carbon hover:bg-platinum"
-										}`}
+										className={`w-full px-4 py-2 rounded-lg text-left transition-colors flex items-center gap-3 ${actionItemClassName(action)}`}
 									>
 										<Content />
 									</button>

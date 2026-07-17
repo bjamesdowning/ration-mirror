@@ -315,6 +315,67 @@ final class CargoViewModel {
         await delete(id: item.id, api: api)
     }
 
+    func markEmpty(_ item: CargoItem, api: RationAPI) async {
+        await markEmpty(id: item.id, api: api)
+    }
+
+    func markEmpty(id: String, api: RationAPI) async {
+        let previousContent = listContent
+        let previousRawItems = rawItems
+
+        if let idx = rawItems.firstIndex(where: { $0.id == id }) {
+            rawItems[idx] = rawItems[idx].withZeroQuantity()
+        }
+        switch listContent {
+        case .inventory:
+            applyClientFilters()
+        case var .search(results):
+            if let idx = results.firstIndex(where: { $0.id == id }) {
+                let previous = results[idx]
+                results[idx] = SearchResult(
+                    id: previous.id,
+                    name: previous.name,
+                    quantity: 0,
+                    unit: previous.unit,
+                    baseQuantity: 0,
+                    baseUnit: previous.baseUnit,
+                    domain: previous.domain
+                )
+            }
+            listContent = .search(results)
+        }
+
+        do {
+            let response = try await api.updateCargo(id: id, UpdateCargoRequest(quantity: 0))
+            let updated = response.item
+            if let idx = rawItems.firstIndex(where: { $0.id == id }) {
+                rawItems[idx] = updated
+            }
+            switch listContent {
+            case .inventory:
+                applyClientFilters()
+            case var .search(results):
+                if let idx = results.firstIndex(where: { $0.id == id }) {
+                    results[idx] = SearchResult(
+                        id: updated.id,
+                        name: updated.name,
+                        quantity: updated.quantity,
+                        unit: updated.unit,
+                        baseQuantity: updated.baseQuantity,
+                        baseUnit: updated.baseUnit,
+                        domain: updated.domain
+                    )
+                }
+                listContent = .search(results)
+            }
+            Haptics.light()
+        } catch {
+            rawItems = previousRawItems
+            listContent = previousContent
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     func delete(id: String, api: RationAPI) async {
         let previousContent = listContent
         let previousRawItems = rawItems

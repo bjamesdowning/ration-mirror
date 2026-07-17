@@ -68,16 +68,40 @@ export function CargoDetail({
 	const [localRestockSelected, setLocalRestockSelected] =
 		useState(isRestockSelected);
 	const [showRestockModal, setShowRestockModal] = useState(false);
+	const [localQuantity, setLocalQuantity] = useState(item.quantity);
+	const [markEmptyError, setMarkEmptyError] = useState<string | null>(null);
+	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const { confirm } = useConfirm();
 	const tags = item.tags ?? [];
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
+	const isMarkingEmpty =
+		fetcher.state !== "idle" && currentIntent === "mark-empty";
 
 	useEffect(() => {
 		if (fetcher.state === "idle") {
 			setIsDeleting(false);
 		}
 	}, [fetcher.state]);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" && currentIntent) {
+			setLastIntent(currentIntent);
+		}
+	}, [fetcher.state, currentIntent]);
+
+	useEffect(() => {
+		setLocalQuantity(item.quantity);
+	}, [item.quantity]);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || lastIntent !== "mark-empty") return;
+		if (fetcher.data?.success === false) {
+			setMarkEmptyError(fetcher.data.error ?? "Could not mark item empty.");
+			setLocalQuantity(item.quantity);
+		}
+		setLastIntent(null);
+	}, [fetcher.state, fetcher.data, lastIntent, item.quantity]);
 
 	useEffect(() => {
 		setLocalRestockSelected(isRestockSelected);
@@ -132,8 +156,22 @@ export function CargoDetail({
 		fetcher.submit({ intent: "delete", itemId: item.id }, { method: "post" });
 	};
 
+	const handleMarkEmpty = () => {
+		setMarkEmptyError(null);
+		setLocalQuantity(0);
+		fetcher.submit(
+			{ intent: "mark-empty", itemId: item.id },
+			{ method: "post" },
+		);
+	};
+
 	return (
 		<div className="max-w-5xl mx-auto space-y-8">
+			{markEmptyError && (
+				<div className="rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
+					{markEmptyError}
+				</div>
+			)}
 			<div className="glass-panel rounded-xl p-6 border border-platinum/70">
 				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 					<div className="space-y-3">
@@ -160,7 +198,7 @@ export function CargoDetail({
 						<div className="text-right">
 							<div className="text-label text-muted text-xs">Available</div>
 							<div className="text-data text-2xl font-bold text-carbon">
-								{formatQuantity(item.quantity, item.unit)}
+								{formatQuantity(localQuantity, item.unit)}
 							</div>
 						</div>
 						<div className="w-full max-w-xs">
@@ -177,6 +215,16 @@ export function CargoDetail({
 							>
 								Edit
 							</button>
+							{localQuantity > 0 && (
+								<button
+									type="button"
+									onClick={handleMarkEmpty}
+									disabled={isMarkingEmpty || isDeleting}
+									className="px-3 py-1.5 text-sm rounded-lg border border-warning/40 text-warning hover:bg-warning/5 disabled:opacity-60"
+								>
+									{isMarkingEmpty ? "Clearing..." : "Mark Empty"}
+								</button>
+							)}
 							<button
 								type="button"
 								onClick={handleDelete}

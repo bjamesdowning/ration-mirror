@@ -122,7 +122,13 @@ struct CargoFormView: View {
         errorMessage = nil
         quantityError = nil
         let qty: Double
-        switch QuantityValidation.validate(quantity) {
+        let allowZero: Bool
+        if case .edit = mode {
+            allowZero = true
+        } else {
+            allowZero = false
+        }
+        switch QuantityValidation.validate(quantity, allowZero: allowZero) {
         case let .valid(value):
             qty = value
         case let .invalid(message):

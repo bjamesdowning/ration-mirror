@@ -319,8 +319,7 @@ struct GalleyView: View {
                         match: env.network.isOnline ? model.match(for: meal.id) : nil,
                         showMatchRing: env.network.isOnline,
                         isSelectedForSupply: model.isMealSelected(meal.id),
-                        isInitiallySelectedForSupply: model.isMealSelected(meal.id),
-                        onCook: { Task { await handleCook(mealId: meal.id) } }
+                        isInitiallySelectedForSupply: model.isMealSelected(meal.id)
                     )
                     .listRowBackground(Theme.surface)
                     .inventoryLeadingSwipeActions(
@@ -330,18 +329,21 @@ struct GalleyView: View {
                         },
                         onEdit: { editingMeal = meal }
                     )
-                    .inventoryDestructiveTrailingSwipe {
-                        Task {
-                            guard let organizationId else { return }
-                            await model.deleteMeal(
-                                meal.id,
-                                api: env.api,
-                                snapshots: env.snapshots,
-                                online: env.network.isOnline,
-                                organizationId: organizationId
-                            )
+                    .galleyTrailingSwipeActions(
+                        onCook: { Task { await handleCook(mealId: meal.id) } },
+                        onDelete: {
+                            Task {
+                                guard let organizationId else { return }
+                                await model.deleteMeal(
+                                    meal.id,
+                                    api: env.api,
+                                    snapshots: env.snapshots,
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
+                                )
+                            }
                         }
-                    }
+                    )
                 }
             }
         }
@@ -379,8 +381,7 @@ struct GalleyView: View {
                         meal: match.meal,
                         match: match,
                         isSelectedForSupply: model.isMealSelected(match.meal.id),
-                        isInitiallySelectedForSupply: model.isMealSelected(match.meal.id),
-                        onCook: { Task { await handleCook(mealId: match.meal.id) } }
+                        isInitiallySelectedForSupply: model.isMealSelected(match.meal.id)
                     )
                     .listRowBackground(Theme.surface)
                     .inventoryLeadingSwipeActions(
@@ -390,18 +391,21 @@ struct GalleyView: View {
                         },
                         onEdit: { editingMeal = match.meal }
                     )
-                    .inventoryDestructiveTrailingSwipe {
-                        Task {
-                            guard let organizationId else { return }
-                            await model.deleteMeal(
-                                match.meal.id,
-                                api: env.api,
-                                snapshots: env.snapshots,
-                                online: env.network.isOnline,
-                                organizationId: organizationId
-                            )
+                    .galleyTrailingSwipeActions(
+                        onCook: { Task { await handleCook(mealId: match.meal.id) } },
+                        onDelete: {
+                            Task {
+                                guard let organizationId else { return }
+                                await model.deleteMeal(
+                                    match.meal.id,
+                                    api: env.api,
+                                    snapshots: env.snapshots,
+                                    online: env.network.isOnline,
+                                    organizationId: organizationId
+                                )
+                            }
                         }
-                    }
+                    )
                 }
             }
         }

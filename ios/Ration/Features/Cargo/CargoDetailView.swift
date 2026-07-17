@@ -9,6 +9,7 @@ final class CargoDetailViewModel {
     private(set) var isLoading = false
     private(set) var isSelectedForRestock = false
     private(set) var isTogglingRestock = false
+    private(set) var isMarkingEmpty = false
     var errorMessage: String?
 
     func load(id: String, api: RationAPI) async {
@@ -60,6 +61,22 @@ final class CargoDetailViewModel {
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return false
+        }
+    }
+
+    func markEmpty(api: RationAPI) async {
+        guard let item, item.quantity > 0, !isMarkingEmpty else { return }
+        let previous = item
+        isMarkingEmpty = true
+        self.item = item.withZeroQuantity()
+        defer { isMarkingEmpty = false }
+        do {
+            let response = try await api.updateCargo(id: item.id, UpdateCargoRequest(quantity: 0))
+            self.item = response.item
+            Haptics.light()
+        } catch {
+            self.item = previous
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }
@@ -119,6 +136,17 @@ struct CargoDetailView: View {
                 Button { showingEdit = true } label: {
                     Label("Edit", systemImage: "pencil")
                 }
+                if let item = model.item, item.quantity > 0 {
+                    Button {
+                        Task {
+                            await model.markEmpty(api: env.api)
+                            env.notifyCargoDataChanged()
+                        }
+                    } label: {
+                        Label("Mark Empty", systemImage: "0.circle")
+                    }
+                    .disabled(model.isMarkingEmpty || !env.network.isOnline)
+                }
                 Button(role: .destructive) { showingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -129,6 +157,12 @@ struct CargoDetailView: View {
             env.tabDock.bumpContentEpoch()
         }
         .onChange(of: model.isTogglingRestock) { _, _ in
+            env.tabDock.bumpContentEpoch()
+        }
+        .onChange(of: model.isMarkingEmpty) { _, _ in
+            env.tabDock.bumpContentEpoch()
+        }
+        .onChange(of: model.item?.quantity) { _, _ in
             env.tabDock.bumpContentEpoch()
         }
         .task { await model.load(id: itemId, api: env.api) }

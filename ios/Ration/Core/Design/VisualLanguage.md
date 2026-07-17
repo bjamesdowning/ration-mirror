@@ -56,21 +56,28 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 
 ## List swipe conventions
 
-Inventory-style lists share one dual-edge pattern via `inventoryLeadingSwipeActions` and `inventoryDestructiveTrailingSwipe`:
+Inventory-style lists share leading Supply/Edit and a trailing soft+hard pattern via `ListSwipeActions`:
 
 | Gesture | Edge | Actions | Tint |
 |---------|------|---------|------|
-| Swipe right | Leading | Add/Remove Supply, Edit | Hyper-Green, Carbon |
-| Swipe left | Trailing | Delete | Destructive (system red) |
+| Swipe right | Leading | Add/Remove Supply, Edit | Hyper-Green |
+| Swipe left | Trailing | Soft action (full-swipe) + Delete | Soft = warning yellow (`Theme.warning`); Delete = danger red |
+
+**Trailing soft actions by list:**
+
+| List | Soft (yellow, full-swipe) | Hard (red) |
+|------|---------------------------|------------|
+| Cargo | Mark Empty (`0.circle`) — sets quantity to 0; hidden when already empty | Delete |
+| Galley | Cook (`flame`) — deducts ingredients; meal kept | Delete |
 
 **Where applied:** Cargo (inventory + search), Galley (meals + match mode).
 
-**Domain actions stay inline** (not swipes): Galley Cook (`flame.circle.fill` on row), Manifest Consume (`fork.knife.circle.fill`), Supply Check (leading swipe is the primary list action for shopping — see Supply below).
+**Domain actions stay inline** (not swipes): Manifest Consume (`fork.knife.circle.fill`), Supply Check (leading swipe is the primary list action for shopping — see Supply below). Galley Cook is **not** inline on list rows — use trailing swipe or meal detail FAB.
 
 **Other list deviations (documented, unchanged):**
 
 - **Supply** — Leading Check when unpurchased; trailing Snooze + Delete.
-- **Manifest / Plan week** — Trailing Delete only; consume is inline on the row.
+- **Manifest / Plan week** — Trailing Delete only (`allowsFullSwipe: false`); consume is inline on the row.
 - **Hub edit** — Trailing reorder (Up/Down), not inventory CRUD.
 
 **Add flows** — Tab dock `IconFABMenuCore` menus; not swipe gestures.

@@ -6,7 +6,11 @@ enum QuantityValidation {
         case invalid(String)
     }
 
-    static func validate(_ text: String, locale: Locale = .current) -> Result {
+    static func validate(
+        _ text: String,
+        locale: Locale = .current,
+        allowZero: Bool = false
+    ) -> Result {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return .invalid("Enter a quantity.")
@@ -20,8 +24,14 @@ enum QuantityValidation {
             return .invalid("Quantity must be a number.")
         }
         let value = number.doubleValue
-        guard value.isFinite, value > 0 else {
-            return .invalid("Quantity must be greater than zero.")
+        if allowZero {
+            guard value.isFinite, value >= 0 else {
+                return .invalid("Quantity cannot be negative.")
+            }
+        } else {
+            guard value.isFinite, value > 0 else {
+                return .invalid("Quantity must be greater than zero.")
+            }
         }
         return .valid(value)
     }

@@ -441,6 +441,55 @@ struct CargoItem: Codable, Sendable, Identifiable, Hashable {
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 
+    /// Optimistic Mark Empty — clears authored and base quantity, keeps the row.
+    func withZeroQuantity() -> CargoItem {
+        CargoItem(
+            id: id,
+            organizationId: organizationId,
+            name: name,
+            quantity: 0,
+            unit: unit,
+            baseQuantity: 0,
+            baseUnit: baseUnit,
+            tags: tags,
+            domain: domain,
+            status: status,
+            expiresAt: expiresAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    init(
+        id: String,
+        organizationId: String,
+        name: String,
+        quantity: Double,
+        unit: String,
+        baseQuantity: Double,
+        baseUnit: String,
+        tags: [Tag],
+        domain: String,
+        status: String,
+        expiresAt: Date?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.organizationId = organizationId
+        self.name = name
+        self.quantity = quantity
+        self.unit = unit
+        self.baseQuantity = baseQuantity
+        self.baseUnit = baseUnit
+        self.tags = tags
+        self.domain = domain
+        self.status = status
+        self.expiresAt = expiresAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
     var tagSlugs: [String] { tags.map(\.slug) }
 }
 

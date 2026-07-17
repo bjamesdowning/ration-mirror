@@ -245,12 +245,21 @@ struct CargoListView: View {
                             },
                             onEdit: { editingItem = item }
                         )
-                        .inventoryDestructiveTrailingSwipe {
-                            Task {
-                                await model.delete(item, api: env.api)
-                                env.notifyCargoDataChanged()
+                        .cargoTrailingSwipeActions(
+                            quantity: item.quantity,
+                            onMarkEmpty: {
+                                Task {
+                                    await model.markEmpty(item, api: env.api)
+                                    env.notifyCargoDataChanged()
+                                }
+                            },
+                            onDelete: {
+                                Task {
+                                    await model.delete(item, api: env.api)
+                                    env.notifyCargoDataChanged()
+                                }
                             }
-                        }
+                        )
                     }
                 case let .search(results):
                     ForEach(results) { result in
@@ -269,12 +278,21 @@ struct CargoListView: View {
                                 Task { await handleSearchEdit(result) }
                             }
                         )
-                        .inventoryDestructiveTrailingSwipe {
-                            Task {
-                                await model.delete(id: result.id, api: env.api)
-                                env.notifyCargoDataChanged()
+                        .cargoTrailingSwipeActions(
+                            quantity: result.quantity,
+                            onMarkEmpty: {
+                                Task {
+                                    await model.markEmpty(id: result.id, api: env.api)
+                                    env.notifyCargoDataChanged()
+                                }
+                            },
+                            onDelete: {
+                                Task {
+                                    await model.delete(id: result.id, api: env.api)
+                                    env.notifyCargoDataChanged()
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }

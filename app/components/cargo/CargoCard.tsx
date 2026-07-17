@@ -60,11 +60,25 @@ export function CargoCard({
 
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isDeleting = fetcher.state !== "idle" && currentIntent === "delete";
+	const isMarkingEmpty =
+		fetcher.state !== "idle" && currentIntent === "mark-empty";
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 	const isPromoting = fetcher.state !== "idle" && currentIntent === "promote";
 	const isTogglingRestock = restockFetcher.state !== "idle";
+	const [localQuantity, setLocalQuantity] = useState(item.quantity);
 
 	const tags = item.tags ?? [];
+
+	useEffect(() => {
+		setLocalQuantity(item.quantity);
+	}, [item.quantity]);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || lastIntent !== "mark-empty") return;
+		if (fetcher.data?.success === false) {
+			setLocalQuantity(item.quantity);
+		}
+	}, [fetcher.state, fetcher.data, lastIntent, item.quantity]);
 
 	// Track the intent while the request is in flight so we can read it on completion
 	useEffect(() => {
@@ -130,6 +144,14 @@ export function CargoCard({
 		fetcher.submit({ intent: "delete", itemId: item.id }, { method: "post" });
 	};
 
+	const handleMarkEmpty = () => {
+		setLocalQuantity(0);
+		fetcher.submit(
+			{ intent: "mark-empty", itemId: item.id },
+			{ method: "post" },
+		);
+	};
+
 	const handlePromote = () => {
 		if (isPromoted || isPromoting) return;
 		fetcher.submit({ intent: "promote", itemId: item.id }, { method: "post" });
@@ -173,6 +195,15 @@ export function CargoCard({
 					: "Add to Galley",
 			onClick: handlePromote,
 		},
+		...(localQuantity > 0 && !isMarkingEmpty
+			? [
+					{
+						label: "Mark Empty",
+						onClick: handleMarkEmpty,
+						warning: true as const,
+					},
+				]
+			: []),
 		{ label: "Delete", onClick: handleDelete, destructive: true },
 	];
 
@@ -261,10 +292,12 @@ export function CargoCard({
 						</div>
 						<div className="text-right">
 							<DisplayQuantity
-								quantity={item.quantity}
+								quantity={localQuantity}
 								unit={item.unit}
-								baseQuantity={item.baseQuantity}
-								baseUnit={item.baseUnit}
+								baseQuantity={
+									localQuantity === 0 ? 0 : (item.baseQuantity ?? undefined)
+								}
+								baseUnit={item.baseUnit ?? undefined}
 								ingredientName={item.name}
 								className="text-xl font-bold text-data text-carbon"
 							/>

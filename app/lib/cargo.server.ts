@@ -77,7 +77,7 @@ const CargoItemBaseSchema = z.object({
 		.string()
 		.min(1, "Name is required")
 		.transform((v) => v.toLowerCase()),
-	quantity: z.coerce.number().min(0, "Quantity must be positive"), // coerce handles string->number from forms
+	quantity: z.coerce.number().min(0, "Quantity cannot be negative"), // coerce handles string->number from forms
 	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: TagSlugsInputSchema,

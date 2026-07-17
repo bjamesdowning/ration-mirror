@@ -92,10 +92,24 @@ export function CargoListRow({
 
 	const currentIntent = fetcher.formData?.get("intent") as string | null;
 	const isDeleting = fetcher.state !== "idle" && currentIntent === "delete";
+	const isMarkingEmpty =
+		fetcher.state !== "idle" && currentIntent === "mark-empty";
 	const isUpdating = fetcher.state !== "idle" && currentIntent === "update";
 	const isPromoting = fetcher.state !== "idle" && currentIntent === "promote";
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [showRestockModal, setShowRestockModal] = useState(false);
+	const [localQuantity, setLocalQuantity] = useState(item.quantity);
+
+	useEffect(() => {
+		setLocalQuantity(item.quantity);
+	}, [item.quantity]);
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || lastIntent !== "mark-empty") return;
+		if (fetcher.data?.success === false) {
+			setLocalQuantity(item.quantity);
+		}
+	}, [fetcher.state, fetcher.data, lastIntent, item.quantity]);
 
 	useEffect(() => {
 		if (fetcher.state !== "idle" && currentIntent) {
@@ -152,6 +166,14 @@ export function CargoListRow({
 
 	const handleDelete = () => {
 		fetcher.submit({ intent: "delete", itemId: item.id }, { method: "post" });
+	};
+
+	const handleMarkEmpty = () => {
+		setLocalQuantity(0);
+		fetcher.submit(
+			{ intent: "mark-empty", itemId: item.id },
+			{ method: "post" },
+		);
 	};
 
 	const handlePromote = () => {
@@ -277,10 +299,12 @@ export function CargoListRow({
 				{/* Qty + Unit */}
 				<span className="relative z-10 text-sm font-bold text-carbon dark:text-white shrink-0 min-w-16 text-right">
 					<DisplayQuantity
-						quantity={item.quantity}
+						quantity={localQuantity}
 						unit={item.unit}
-						baseQuantity={item.baseQuantity}
-						baseUnit={item.baseUnit}
+						baseQuantity={
+							localQuantity === 0 ? 0 : (item.baseQuantity ?? undefined)
+						}
+						baseUnit={item.baseUnit ?? undefined}
 						ingredientName={item.name}
 					/>
 				</span>
@@ -319,6 +343,15 @@ export function CargoListRow({
 										: "Add to Galley",
 								onClick: handlePromote,
 							},
+							...(localQuantity > 0 && !isMarkingEmpty
+								? [
+										{
+											label: "Mark Empty",
+											onClick: handleMarkEmpty,
+											warning: true,
+										},
+									]
+								: []),
 							{
 								label: "Delete",
 								onClick: handleDelete,

@@ -8,7 +8,7 @@ import { UnitSchema } from "./units";
 export const ScanResultItemSchema = z.object({
 	id: z.string().uuid(), // Temporary UUID for UI state management
 	name: z.string().min(1, "Item name is required"),
-	quantity: z.number().min(0, "Quantity must be positive"),
+	quantity: z.number().min(0, "Quantity cannot be negative"),
 	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: z.array(z.string()).default([]),

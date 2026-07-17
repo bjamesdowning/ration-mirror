@@ -35,21 +35,68 @@ extension View {
         }
     }
 
-    /// Trailing swipe (swipe left): destructive delete with explicit danger tint.
-    func destructiveTrailingSwipe(
-        label: String = "Delete",
+    /// Trailing swipe (swipe left): yellow soft action (full-swipe) + red Delete.
+    /// Soft is declared first so it sits nearest the trailing edge and receives the full swipe.
+    func inventorySoftHardTrailingSwipe(
+        softLabel: String,
+        softSystemImage: String,
+        showSoft: Bool = true,
+        onSoft: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> some View {
-        swipeActions {
+        swipeActions(edge: .trailing, allowsFullSwipe: showSoft) {
+            if showSoft {
+                Button(action: onSoft) {
+                    Label(softLabel, systemImage: softSystemImage)
+                }
+                .tint(Theme.warning)
+            }
             Button(role: .destructive, action: onDelete) {
-                Label(label, systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
             .tint(Theme.danger)
         }
     }
 
-    /// Trailing swipe (swipe left): Delete only — inventory lists (Cargo, Galley).
-    func inventoryDestructiveTrailingSwipe(onDelete: @escaping () -> Void) -> some View {
-        destructiveTrailingSwipe(onDelete: onDelete)
+    /// Cargo: Mark Empty (yellow, full-swipe) + Delete (red). Hides Mark Empty when qty is already 0.
+    func cargoTrailingSwipeActions(
+        quantity: Double,
+        onMarkEmpty: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        inventorySoftHardTrailingSwipe(
+            softLabel: "Mark Empty",
+            softSystemImage: "0.circle",
+            showSoft: quantity > 0,
+            onSoft: onMarkEmpty,
+            onDelete: onDelete
+        )
+    }
+
+    /// Galley: Cook (yellow, full-swipe) + Delete (red).
+    func galleyTrailingSwipeActions(
+        onCook: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        inventorySoftHardTrailingSwipe(
+            softLabel: "Cook",
+            softSystemImage: "flame",
+            onSoft: onCook,
+            onDelete: onDelete
+        )
+    }
+
+    /// Trailing swipe (swipe left): destructive delete with explicit danger tint.
+    /// Used by Manifest / Plan Week (Delete only; full swipe disabled).
+    func destructiveTrailingSwipe(
+        label: String = "Delete",
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive, action: onDelete) {
+                Label(label, systemImage: "trash")
+            }
+            .tint(Theme.danger)
+        }
     }
 }

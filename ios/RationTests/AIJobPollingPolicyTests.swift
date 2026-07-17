@@ -150,6 +150,27 @@ final class QuantityValidationTests: XCTestCase {
         }
     }
 
+    func testAllowZeroAcceptsZeroAndRejectsNegative() {
+        if case let .valid(value) = QuantityValidation.validate(
+            "0",
+            locale: Locale(identifier: "en_US"),
+            allowZero: true
+        ) {
+            XCTAssertEqual(value, 0)
+        } else {
+            XCTFail("Expected valid zero when allowZero")
+        }
+        if case let .invalid(message) = QuantityValidation.validate(
+            "-1",
+            locale: Locale(identifier: "en_US"),
+            allowZero: true
+        ) {
+            XCTAssertEqual(message, "Quantity cannot be negative.")
+        } else {
+            XCTFail("Expected invalid negative when allowZero")
+        }
+    }
+
     func testAcceptsLocalizedDecimalSeparator() {
         if case let .valid(value) = QuantityValidation.validate(
             "1,5",

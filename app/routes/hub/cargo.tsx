@@ -292,6 +292,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return { success: true };
 	}
 
+	if (intent === "mark-empty") {
+		const itemId = formData.get("itemId") as string;
+		if (!itemId) return { success: false, error: "Missing Item ID" };
+
+		const updated = await updateItem(context.cloudflare.env, groupId, itemId, {
+			quantity: 0,
+		});
+		if (!updated) {
+			return { success: false, error: "Item not found or unauthorized" };
+		}
+		return { success: true };
+	}
+
 	if (intent === "update") {
 		const itemId = formData.get("itemId") as string;
 		if (!itemId) return { success: false, error: "Missing Item ID" };

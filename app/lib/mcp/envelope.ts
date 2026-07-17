@@ -184,6 +184,28 @@ export function mapErrorToEnvelope(
 					"Explain the shortfall to the user. Retry with confirmInsufficient:true only after they confirm a partial cook.",
 			});
 		}
+		if (error.message.startsWith("Cargo not found for ingredient")) {
+			return err(
+				tool,
+				"not_found",
+				"A linked Cargo item is missing. Re-link the ingredient or update the recipe, then try again.",
+				{
+					recoveryHint:
+						"Update the meal ingredient link or cargo row, then retry consume_meal.",
+				},
+			);
+		}
+		if (error.message.startsWith("Cannot convert")) {
+			return err(
+				tool,
+				"invalid_input",
+				"Ingredient units do not match Cargo. Update the recipe or cargo unit, then try again.",
+				{
+					recoveryHint:
+						"Align ingredient and cargo units, then retry consume_meal.",
+				},
+			);
+		}
 		if (error.message.startsWith("capacity_exceeded")) {
 			return err(
 				tool,

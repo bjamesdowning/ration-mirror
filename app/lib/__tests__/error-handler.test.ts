@@ -248,6 +248,55 @@ describe("handleApiError", () => {
 			upgradePath: "crew_member",
 		});
 	});
+
+	it("returns 422 for insufficient cargo", () => {
+		const result = handleApiError(
+			new Error("Insufficient Cargo for: butter"),
+		) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number };
+		};
+		expect(result.init.status).toBe(422);
+		expect(result.data).toMatchObject({
+			error: "Insufficient Cargo for: butter",
+			code: "insufficient_cargo",
+		});
+	});
+
+	it("returns 422 for missing linked cargo", () => {
+		const result = handleApiError(
+			new Error("Cargo not found for ingredient butter"),
+		) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number };
+		};
+		expect(result.init.status).toBe(422);
+		expect(result.data.code).toBe("cargo_not_found");
+		expect(result.data.error).toContain("linked Cargo");
+	});
+
+	it("returns 422 for unit conversion failure", () => {
+		const result = handleApiError(
+			new Error("Cannot convert tbsp to g for butter"),
+		) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number };
+		};
+		expect(result.init.status).toBe(422);
+		expect(result.data.code).toBe("unit_conversion_failed");
+		expect(result.data.error).toContain("units do not match");
+	});
+
+	it("returns 404 for meal not found", () => {
+		const result = handleApiError(
+			new Error("Meal not found or unauthorized for this organization."),
+		) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number };
+		};
+		expect(result.init.status).toBe(404);
+		expect(result.data.code).toBe("not_found");
+	});
 });
 
 // ---------------------------------------------------------------------------

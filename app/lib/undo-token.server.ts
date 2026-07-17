@@ -1,3 +1,4 @@
+import { log, redactId } from "./logging.server";
 import type { CargoDeduction } from "./meals.server";
 
 export const UNDO_TOKEN_TTL_SECONDS = 5;
@@ -26,6 +27,27 @@ export async function storeUndoToken(
 		expirationTtl: UNDO_TOKEN_TTL_SECONDS,
 	});
 	return token;
+}
+
+/**
+ * Stores an undo token after a committed mutation. KV failures are logged and
+ * swallowed so the client still receives success (cargo/plan already changed).
+ */
+export async function tryStoreUndoToken(
+	kv: KVNamespace,
+	record: UndoRecord,
+): Promise<string | undefined> {
+	try {
+		return await storeUndoToken(kv, record);
+	} catch (kvErr) {
+		log.warn("undo token store failed", {
+			kind: record.kind,
+			userId: redactId(record.userId),
+			organizationId: redactId(record.organizationId),
+			detail: kvErr instanceof Error ? kvErr.message : String(kvErr),
+		});
+		return undefined;
+	}
 }
 
 /** Loads and deletes a one-time undo token; returns null if missing, expired, or unauthorized. */

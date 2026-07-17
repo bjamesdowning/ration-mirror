@@ -84,6 +84,28 @@ describe("mapErrorToEnvelope", () => {
 		expect(envelope.error.recoveryHint).toBeTruthy();
 	});
 
+	it("maps missing linked cargo to not_found with safe message", () => {
+		const envelope = mapErrorToEnvelope(
+			"consume_meal",
+			new Error("Cargo not found for ingredient butter"),
+		);
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+		expect(envelope.error.code).toBe("not_found");
+		expect(envelope.error.message).toContain("linked Cargo");
+	});
+
+	it("maps unit conversion failure to invalid_input with safe message", () => {
+		const envelope = mapErrorToEnvelope(
+			"consume_meal",
+			new Error("Cannot convert tbsp to g for butter"),
+		);
+		expect(envelope.ok).toBe(false);
+		if (envelope.ok) return;
+		expect(envelope.error.code).toBe("invalid_input");
+		expect(envelope.error.message).toContain("units do not match");
+	});
+
 	it("adds claim recovery paths on capacity_exceeded when preClaim", () => {
 		const error = new CapacityExceededError({
 			resource: "cargo",

@@ -4,7 +4,7 @@ import { cookMealWithConfirmation } from "~/lib/cook-confirmation.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
-import { storeUndoToken } from "~/lib/undo-token.server";
+import { tryStoreUndoToken } from "~/lib/undo-token.server";
 import type { Route } from "./+types/v1.meals.$id.cook";
 
 const CookRequestSchema = z.object({
@@ -59,7 +59,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
 		let undoToken: string | undefined;
 		if (result.deductions.length > 0) {
-			undoToken = await storeUndoToken(context.cloudflare.env.RATION_KV, {
+			undoToken = await tryStoreUndoToken(context.cloudflare.env.RATION_KV, {
 				userId,
 				organizationId,
 				kind: "cook",

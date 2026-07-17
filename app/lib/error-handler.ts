@@ -219,6 +219,44 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
+	// Linked cargo row missing during cook deduction
+	if (
+		error instanceof Error &&
+		error.message.startsWith("Cargo not found for ingredient")
+	) {
+		return data(
+			{
+				error:
+					"A linked Cargo item is missing. Re-link the ingredient or update the recipe, then try again.",
+				code: "cargo_not_found" as const,
+			},
+			{ status: 422 },
+		);
+	}
+
+	// Unit mismatch between recipe ingredient and cargo stock
+	if (error instanceof Error && error.message.startsWith("Cannot convert")) {
+		return data(
+			{
+				error:
+					"Ingredient units do not match Cargo. Update the recipe or cargo unit, then try again.",
+				code: "unit_conversion_failed" as const,
+			},
+			{ status: 422 },
+		);
+	}
+
+	// Meal missing or not in the caller's organization
+	if (error instanceof Error && error.message.startsWith("Meal not found")) {
+		return data(
+			{
+				error: "Meal not found or you do not have access to it.",
+				code: "not_found" as const,
+			},
+			{ status: 404 },
+		);
+	}
+
 	// D1 contention / transient infrastructure error — return 503 with a
 	// user-friendly message and Retry-After hint instead of a generic 500.
 	if (isD1ContentionError(error)) {

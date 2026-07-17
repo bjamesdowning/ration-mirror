@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireMobileActiveGroup = vi.fn();
 const checkRateLimit = vi.fn();
-const ensureMealPlan = vi.fn();
-const consumeManifestEntries = vi.fn();
-const storeUndoToken = vi.fn();
+const cookMealWithConfirmation = vi.fn();
 const tryStoreUndoToken = vi.fn();
 
 vi.mock("~/lib/mobile/auth.server", () => ({
@@ -21,24 +19,21 @@ vi.mock("~/lib/rate-limiter.server", async (importOriginal) => {
 	};
 });
 
-vi.mock("~/lib/manifest.server", () => ({
-	ensureMealPlan: (...args: unknown[]) => ensureMealPlan(...args),
-	consumeManifestEntries: (...args: unknown[]) =>
-		consumeManifestEntries(...args),
+vi.mock("~/lib/cook-confirmation.server", () => ({
+	cookMealWithConfirmation: (...args: unknown[]) =>
+		cookMealWithConfirmation(...args),
 }));
 
 vi.mock("~/lib/undo-token.server", () => ({
-	storeUndoToken: (...args: unknown[]) => storeUndoToken(...args),
 	tryStoreUndoToken: (...args: unknown[]) => tryStoreUndoToken(...args),
 }));
 
+const mealId = "22222222-2222-4222-8222-222222222222";
 const ctx = { cloudflare: { env: { DB: {}, RATION_KV: {} } } } as never;
 
-const entryId = "11111111-1111-4111-8111-111111111111";
-
-function postRequest(body: { entryIds: string[] } = { entryIds: [entryId] }) {
+function postRequest(body: Record<string, unknown> = {}) {
 	return new Request(
-		"https://ration.mayutic.com/api/mobile/v1/manifest/consume",
+		`https://ration.mayutic.com/api/mobile/v1/meals/${mealId}/cook`,
 		{
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -47,14 +42,12 @@ function postRequest(body: { entryIds: string[] } = { entryIds: [entryId] }) {
 	);
 }
 
-describe("POST /api/mobile/v1/manifest/consume", () => {
+describe("POST /api/mobile/v1/meals/:id/cook", () => {
 	beforeEach(() => {
 		for (const m of [
 			requireMobileActiveGroup,
 			checkRateLimit,
-			ensureMealPlan,
-			consumeManifestEntries,
-			storeUndoToken,
+			cookMealWithConfirmation,
 			tryStoreUndoToken,
 		]) {
 			m.mockReset();
@@ -64,63 +57,69 @@ describe("POST /api/mobile/v1/manifest/consume", () => {
 			organizationId: "org_1",
 		});
 		checkRateLimit.mockResolvedValue({ allowed: true });
-		ensureMealPlan.mockResolvedValue({ id: "plan_1" });
-		consumeManifestEntries.mockResolvedValue({
-			consumed: 1,
+		cookMealWithConfirmation.mockResolvedValue({
+			cooked: true,
+			ingredientsDeducted: 1,
+			servings: 2,
 			deductions: [{ cargoId: "cargo_1", quantity: 1 }],
-			entryIds: [entryId],
-			planId: "plan_1",
 		});
-		tryStoreUndoToken.mockResolvedValue("undo_tok_1");
+		tryStoreUndoToken.mockResolvedValue("undo_tok_cook");
 	});
 
-	it("returns consumed count and undo token on success", async () => {
-		const { action } = await import("~/routes/api/mobile/v1.manifest.consume");
+	it("returns cooked result and undo token on success", async () => {
+		const { action } = await import("~/routes/api/mobile/v1.meals.$id.cook");
 		const result = (await action({
 			request: postRequest(),
 			context: ctx,
-			params: {},
-		} as never)) as { consumed: number; undoToken: string };
+			params: { id: mealId },
+		} as never)) as {
+			cooked: boolean;
+			undoToken: string;
+			ingredientsDeducted: number;
+		};
 
-		expect(result.consumed).toBe(1);
-		expect(result.undoToken).toBe("undo_tok_1");
+		expect(result.cooked).toBe(true);
+		expect(result.undoToken).toBe("undo_tok_cook");
+		expect(result.ingredientsDeducted).toBe(1);
+		expect(tryStoreUndoToken).toHaveBeenCalledTimes(1);
 	});
 
-	it("returns 200 with consumed > 0 when undo token storage fails", async () => {
+	it("returns 200 with cooked true when undo token storage fails", async () => {
 		tryStoreUndoToken.mockResolvedValue(undefined);
 
-		const { action } = await import("~/routes/api/mobile/v1.manifest.consume");
+		const { action } = await import("~/routes/api/mobile/v1.meals.$id.cook");
 		const result = (await action({
 			request: postRequest(),
 			context: ctx,
-			params: {},
-		} as never)) as { consumed: number; undoToken?: string };
+			params: { id: mealId },
+		} as never)) as { cooked: boolean; undoToken?: string };
 
-		expect(result.consumed).toBe(1);
+		expect(result.cooked).toBe(true);
 		expect(result.undoToken).toBeUndefined();
 	});
 
-	it("returns requiresConfirmation when cargo is insufficient", async () => {
-		consumeManifestEntries.mockResolvedValue({
-			consumed: 0,
+	it("does not store undo token when confirmation is required", async () => {
+		cookMealWithConfirmation.mockResolvedValue({
+			cooked: false,
+			deductions: [],
 			requiresConfirmation: true,
 			missingIngredients: [
-				{ name: "chicken", required: 2, available: 0, unit: "lb" },
+				{ name: "butter", required: 1, available: 0, unit: "tbsp" },
 			],
 		});
 
-		const { action } = await import("~/routes/api/mobile/v1.manifest.consume");
+		const { action } = await import("~/routes/api/mobile/v1.meals.$id.cook");
 		const result = (await action({
 			request: postRequest(),
 			context: ctx,
-			params: {},
+			params: { id: mealId },
 		} as never)) as {
-			consumed: number;
+			cooked: boolean;
 			requiresConfirmation?: boolean;
 			missingIngredients?: unknown[];
 		};
 
-		expect(result.consumed).toBe(0);
+		expect(result.cooked).toBe(false);
 		expect(result.requiresConfirmation).toBe(true);
 		expect(result.missingIngredients).toHaveLength(1);
 		expect(tryStoreUndoToken).not.toHaveBeenCalled();

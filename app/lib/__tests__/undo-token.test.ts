@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	consumeUndoToken,
 	storeUndoToken,
+	tryStoreUndoToken,
 	type UndoRecord,
 } from "../undo-token.server";
 
@@ -23,6 +24,22 @@ const sampleRecord: UndoRecord = {
 	kind: "cook",
 	deductions: [{ cargoId: "cargo-1", quantity: 2 }],
 };
+
+describe("tryStoreUndoToken", () => {
+	it("returns token on success", async () => {
+		const kv = mockKv();
+		const token = await tryStoreUndoToken(kv, sampleRecord);
+		expect(token).toEqual(expect.any(String));
+		expect(kv.put).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns undefined when KV put fails", async () => {
+		const kv = mockKv();
+		vi.mocked(kv.put).mockRejectedValue(new Error("KV unavailable"));
+		const token = await tryStoreUndoToken(kv, sampleRecord);
+		expect(token).toBeUndefined();
+	});
+});
 
 describe("consumeUndoToken", () => {
 	it("returns null when token is missing", async () => {

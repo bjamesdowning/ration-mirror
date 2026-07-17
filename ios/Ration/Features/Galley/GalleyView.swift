@@ -20,6 +20,8 @@ struct GalleyView: View {
     @State private var cookConfirmationMessage: String?
     @State private var showCookConfirmation = false
     @State private var cookSuccessMessage: String?
+    @State private var cookUndoToken: String?
+    @State private var showCookUndo = false
     @State private var editingMeal: Meal?
 
     private var organizationId: String? {
@@ -152,7 +154,24 @@ struct GalleyView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let message = generateSuccessMessage {
+            if showCookUndo, cookUndoToken != nil {
+                UndoToast(
+                    message: cookSuccessMessage ?? "Ingredients deducted from Cargo",
+                    onUndo: { Task { await undoCook() } },
+                    onDismiss: {
+                        showCookUndo = false
+                        cookUndoToken = nil
+                        cookSuccessMessage = nil
+                    }
+                )
+                .padding(
+                    .bottom,
+                    CopilotDockLayout.toastBottomOffset(
+                        isExpanded: scrollContext.isExpanded,
+                        keyboardInset: 0
+                    )
+                )
+            } else if let message = generateSuccessMessage {
                 TransientSuccessToast(message: message) {
                     generateSuccessMessage = nil
                 }
@@ -388,22 +407,42 @@ struct GalleyView: View {
             confirmInsufficient: confirmInsufficient,
             api: env.api
         ) {
-        case .success(_, let cookedServings, let ingredientsDeducted, let partialCook, let skipped):
+        case .success(let undoToken, let cookedServings, let ingredientsDeducted, let partialCook, let skipped):
             env.notifyCargoDataChanged()
-            if partialCook {
-                cookSuccessMessage = GalleyViewModel.cookSuccessMessage(
-                    servings: cookedServings,
-                    ingredientsDeducted: ingredientsDeducted,
-                    partialCook: partialCook,
-                    skippedIngredients: skipped
-                )
-            }
+            cookSuccessMessage = GalleyViewModel.cookSuccessMessage(
+                servings: cookedServings,
+                ingredientsDeducted: ingredientsDeducted,
+                partialCook: partialCook,
+                skippedIngredients: skipped
+            )
+            // Always replace prior undo state so a cook without a token cannot
+            // leave a stale UndoToast bound to an older deduction.
+            cookUndoToken = undoToken
+            showCookUndo = undoToken != nil
         case .needsConfirmation(let missing):
             pendingCookMealId = mealId
             cookConfirmationMessage = missingIngredientsMessage(missing)
             showCookConfirmation = true
         case .failed:
             break
+        }
+    }
+
+    private func undoCook() async {
+        guard let token = cookUndoToken else { return }
+        guard env.network.isOnline else {
+            model.errorMessage = "Undo requires a network connection."
+            return
+        }
+        do {
+            _ = try await env.api.undoAction(token: token)
+            showCookUndo = false
+            cookUndoToken = nil
+            Haptics.light()
+            cookSuccessMessage = "Cook undone — Cargo restored"
+            env.notifyCargoDataChanged()
+        } catch {
+            model.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
@@ -770,10 +809,10 @@ struct MealDetailView: View {
                 partialCook: result.partialCook ?? false,
                 skippedIngredients: result.skippedIngredients ?? []
             )
-            if let token = result.undoToken {
-                cookUndoToken = token
-                showCookUndo = true
-            }
+            // Always replace prior undo state so a cook without a token cannot
+            // leave a stale UndoToast bound to an older deduction.
+            cookUndoToken = result.undoToken
+            showCookUndo = result.undoToken != nil
             env.notifyCargoDataChanged()
             await loadAvailability()
         } catch {
@@ -802,15 +841,15 @@ struct MealDetailView: View {
 
     @MainActor
     private func undoCook() async {
-        guard let token = cookUndoToken, env.network.isOnline else {
-            showCookUndo = false
-            cookUndoToken = nil
+        guard let token = cookUndoToken else { return }
+        guard env.network.isOnline else {
+            errorMessage = "Undo requires a network connection."
             return
         }
-        showCookUndo = false
-        cookUndoToken = nil
         do {
             _ = try await env.api.undoAction(token: token)
+            showCookUndo = false
+            cookUndoToken = nil
             Haptics.light()
             cookMessage = "Cook undone — Cargo restored"
             await loadAvailability()

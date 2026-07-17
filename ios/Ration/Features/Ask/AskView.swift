@@ -335,7 +335,7 @@ private struct MessageBubble: View {
                         reasoningState: message.reasoningState
                     )
                     HStack(alignment: .bottom, spacing: 4) {
-                        SelectableMessageText(markdown: message.content.isEmpty ? " " : message.content)
+                        CopilotStructuredText(markdown: message.content)
                         if isStreaming {
                             CopilotStreamingCursor()
                         }
@@ -360,31 +360,6 @@ private struct CopilotStreamingCursor: View {
             .opacity(reduceMotion ? 1 : (visible ? 1 : 0.2))
             .animation(MotionPolicy.repeatingPulse(duration: 0.8), value: visible)
             .onAppear { if !reduceMotion { visible = false } }
-    }
-}
-
-/// Single `Text` surface so long-press uses native iOS selection handles + Select All / Copy.
-/// MarkdownUI is multi-view per block and cannot offer continuous selection.
-private struct SelectableMessageText: View {
-    let markdown: String
-
-    var body: some View {
-        Text(Self.attributed(markdown))
-            .font(Typography.body())
-            .foregroundStyle(Theme.carbon)
-            .tint(Theme.hyperGreen)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private static func attributed(_ raw: String) -> AttributedString {
-        do {
-            var options = AttributedString.MarkdownParsingOptions()
-            options.interpretedSyntax = .full
-            return try AttributedString(markdown: raw, options: options)
-        } catch {
-            return AttributedString(raw)
-        }
     }
 }
 

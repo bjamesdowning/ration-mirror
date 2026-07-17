@@ -2135,7 +2135,7 @@ bun run deploy:copilot    # Copilot worker
 
 A dedicated Cloudflare Worker (`ration-copilot`) powers the first-party **Ask Ration** assistant on web and iOS. It runs at `copilot.ration.mayutic.com`, shares D1/KV/R2/Vectorize with the main Worker, and uses a **Project Think** Durable Object (`ProjectThinkAgent`) for persistent multi-turn streaming. Copilot reuses the MCP tool runtime for kitchen mutations and adds Copilot-only tools for docs retrieval and billing.
 
-**Clients:** Web — hub header **Ask Ration** → [`AskPanel`](app/components/support/AskPanel.tsx). iOS — [`AskView`](ios/Ration/Features/Ask/AskView.swift) sheet with native growing composer, scroll, and dock layout. Assistant replies use a single selectable text surface (native selection handles / Select All / Copy). Both support explicit **Stop**, **Fast / Deep** model presets, collapsed-by-default **thinking** disclosure, and local session persistence keyed by organization.
+**Clients:** Web — hub header **Ask Ration** → [`AskPanel`](app/components/support/AskPanel.tsx). iOS 18+ — [`AskView`](ios/Ration/Features/Ask/AskView.swift) sheet with native growing composer, scroll, and dock layout. Assistant replies use [Textual](https://github.com/gonzalezreal/textual) `StructuredText` (structured markdown + native text selection). Both support explicit **Stop**, **Fast / Deep** model presets, collapsed-by-default **thinking** disclosure, and local session persistence keyed by organization.
 
 **Version:** Copilot worker identity uses `COPILOT_SERVER_VERSION` from [`app/lib/version.ts`](app/lib/version.ts), which tracks `package.json` — bump both together on every release.
 

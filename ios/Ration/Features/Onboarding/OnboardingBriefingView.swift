@@ -1,5 +1,4 @@
 import SwiftUI
-import MarkdownUI
 
 enum OnboardingBriefingPhase: Equatable {
     case connecting
@@ -518,17 +517,14 @@ private struct BriefingMessageBubble: View {
                 Text(message.content)
                     .font(Typography.body())
                     .foregroundStyle(Theme.carbon)
+                    .textSelection(.enabled)
                     .padding(12)
                     .background(Theme.hyperGreen)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         } else {
             HStack(alignment: .bottom, spacing: 4) {
-                Markdown(message.content.isEmpty ? " " : message.content)
-                    .markdownTextStyle {
-                        FontFamily(.system())
-                        ForegroundColor(Theme.carbon)
-                    }
+                CopilotStructuredText(markdown: message.content)
                 if isStreaming {
                     Circle()
                         .fill(Theme.hyperGreen)

@@ -6,7 +6,7 @@ server and purchases via the RevenueCat SDK.
 
 ## Requirements
 
-- Xcode 15+ (iOS 17 deployment target)
+- Xcode 16+ (iOS 18 deployment target)
 - [XcodeGen](https://github.com/yonyz/XcodeGen) to generate the `.xcodeproj` from `project.yml`:
   ```bash
   brew install xcodegen
@@ -286,6 +286,8 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 
 **Hub Quick Stats (iOS 1.2.15):** `hub-stats` uses a centered 2×2 segmented quad (Cargo / Expiring / Meals ready / Supply) with hairline cross dividers; counts stay tappable to the same destinations. Compact (`sm`) size omits labels.
 
+**Copilot Textual markdown (iOS 1.2.16):** Assistant replies (Ask + onboarding briefing) render with Textual `StructuredText` — structured lists/headings/code, Hyper-Green links, native text selection. Requires iOS 18. MarkdownUI removed.
+
 **Manifest date chrome (iOS 1.2.12):** Week navigator uses edge chevrons (≥44pt) with a
 display-only range label and day pills. **Today** lives in the Manifest navigation toolbar
 (only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
@@ -361,7 +363,7 @@ read-only list/detail chips are unchanged.
 - Send at least three consecutive Copilot turns: every assistant response appears below the matching user prompt.
 - On the dock (compact single-line): tap Return or the send arrow to submit. On the Ask sheet (growing): Return inserts a newline; use the send arrow to submit.
 - Type a long prompt: the Ask composer grows with soft wrap through ten lines, then scrolls internally.
-- Long-press assistant, user, or thinking text: native selection handles appear; drag to select a range or use Select All / Copy.
+- Long-press assistant text: native selection handles with Select All / Copy (Textual `StructuredText`). Lists, headings, and code render as structured blocks — not a flat wall of text.
 - With the keyboard open, swipe down over the composer and transcript: the keyboard follows the gesture and dismisses without moving the transcript to the top.
 - Ask sheet: header stays on one compact row; assistant responses use the full content width; user messages remain right-aligned.
 - Ask sheet: after send, sticky activity bar shows “Copilot is thinking” (or tool label) until assistant text streams in.

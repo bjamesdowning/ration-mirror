@@ -97,41 +97,11 @@ final class CopilotActivityDisplayTests: XCTestCase {
 }
 
 final class CopilotComposerHeightPolicyTests: XCTestCase {
-    func testSingleLineDefaultHeight() {
-        XCTAssertEqual(CopilotComposerHeightPolicy.clampedHeight(for: 20), 36)
-    }
-
-    func testClampsToMaxHeight() {
-        XCTAssertEqual(CopilotComposerHeightPolicy.clampedHeight(for: 400), 240)
+    func testMinHeightConstant() {
+        XCTAssertEqual(CopilotComposerHeightPolicy.minHeight, 36)
     }
 
     func testMaxLineCountIsTen() {
         XCTAssertEqual(CopilotComposerHeightPolicy.maxLineCount, 10)
-    }
-
-    func testSingleLineMeasurementIgnoresExtraPadding() {
-        let height = CopilotComposerHeightPolicy.measuredHeight(text: "", width: 240)
-        XCTAssertEqual(height, CopilotComposerHeightPolicy.singleLineHeight)
-    }
-
-    func testMultilineMeasurementUsesBoundingRect() {
-        let height = CopilotComposerHeightPolicy.measuredHeight(
-            text: "Line one\nLine two",
-            width: 240
-        )
-        XCTAssertGreaterThan(height, CopilotComposerHeightPolicy.singleLineHeight)
-    }
-
-    func testSoftWrappedTextGrowsWithoutHardNewlines() {
-        let height = CopilotComposerHeightPolicy.measuredHeight(
-            text: String(repeating: "prompt ", count: 40),
-            width: 200
-        )
-        XCTAssertGreaterThan(height, CopilotComposerHeightPolicy.singleLineHeight)
-    }
-
-    func testMeasuredHeightIncludesFieldPaddingForSingleWrappedLine() {
-        let height = CopilotComposerHeightPolicy.measuredHeight(text: "Eggs", width: 240)
-        XCTAssertEqual(height, CopilotComposerHeightPolicy.singleLineHeight)
     }
 }

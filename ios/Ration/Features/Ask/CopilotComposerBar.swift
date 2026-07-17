@@ -1,11 +1,5 @@
 import SwiftUI
 
-enum CopilotComposerInputPolicy {
-    static func shouldSubmit(replacementText: String, isPasting: Bool = false) -> Bool {
-        !isPasting && (replacementText == "\n" || replacementText == "\r")
-    }
-}
-
 struct CopilotComposerBar: View {
     enum Mode {
         case dock

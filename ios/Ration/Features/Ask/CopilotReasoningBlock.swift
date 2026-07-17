@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct CopilotReasoningBlock: View {
     let reasoning: String?
@@ -38,13 +37,6 @@ struct CopilotReasoningBlock: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxHeight: 160)
-                    .contextMenu {
-                        if let reasoning, !reasoning.isEmpty {
-                            Button("Copy") {
-                                UIPasteboard.general.string = reasoning
-                            }
-                        }
-                    }
                 }
             }
             .padding(.bottom, 8)

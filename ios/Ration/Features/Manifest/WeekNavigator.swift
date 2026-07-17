@@ -67,19 +67,20 @@ enum ManifestDateHelpers {
 
     /// Initial anchor when opening Manifest — mirrors web `manifest.tsx` loader.
     static func initialRangeStart(calendarSpan: Int, weekStartPref: String) -> String {
-        let today = todayISO()
-        if calendarSpan == 7 {
-            return weekStart(for: today, preference: weekStartPref)
-        }
-        return today
+        todayNavigationAnchor(calendarSpan: calendarSpan, weekStartPref: weekStartPref)
     }
 
-    static func dayShortName(_ isoDate: String) -> String {
-        guard let date = localDate(from: isoDate) else { return isoDate }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        formatter.timeZone = TimeZone.current
-        return formatter.string(from: date)
+    /// Anchor for jumping to “today’s” Manifest window (span 7 → week start; otherwise today).
+    static func todayNavigationAnchor(
+        calendarSpan: Int,
+        weekStartPref: String,
+        today: String? = nil
+    ) -> String {
+        let anchor = today ?? todayISO()
+        if calendarSpan == 7 {
+            return weekStart(for: anchor, preference: weekStartPref)
+        }
+        return anchor
     }
 
     static func dayNumber(_ isoDate: String) -> String {
@@ -154,15 +155,12 @@ enum ManifestDateHelpers {
 
 struct WeekNavigator: View {
     let calendarSpan: Int
-    @Binding var rangeStart: String
+    let rangeStart: String
     @Binding var selectedDay: String
     var weekStartPref: String = "sunday"
     var entryDates: Set<String> = []
     var isLoading: Bool = false
     var onNavigate: (String) -> Void
-
-    @State private var showingDatePicker = false
-    @State private var jumpDate = Date()
 
     private var canGoBack: Bool {
         let target = ManifestDateHelpers.normalizedNavigationStart(
@@ -194,86 +192,48 @@ struct WeekNavigator: View {
         )
     }
 
-    private var todayAnchor: String {
-        calendarSpan == 7
-            ? ManifestDateHelpers.weekStart(for: ManifestDateHelpers.todayISO(), preference: weekStartPref)
-            : ManifestDateHelpers.todayISO()
-    }
-
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
+            HStack(spacing: 0) {
                 Button {
-                    let raw = ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan)
-                    navigate(toRaw: raw)
+                    navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan))
                 } label: {
                     Image(systemName: "chevron.left")
                         .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(!canGoBack || isLoading)
                 .accessibilityLabel("Previous")
 
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
+                Spacer(minLength: 8)
 
-                ZStack {
+                HStack(spacing: 8) {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                     Text(ManifestDateHelpers.formatRange(start: rangeStart, end: rangeEnd))
                         .font(Typography.headline())
                         .foregroundStyle(Theme.carbon)
-                        .allowsHitTesting(false)
-
-                    HStack(spacing: 0) {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard canGoBack, !isLoading else { return }
-                                navigate(by: -calendarSpan)
-                            }
-                            .accessibilityLabel("Previous period")
-                            .accessibilityAddTraits(.isButton)
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard canGoForward, !isLoading else { return }
-                                navigate(by: calendarSpan)
-                            }
-                            .accessibilityLabel("Next period")
-                            .accessibilityAddTraits(.isButton)
-                    }
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
-                .frame(minWidth: 160)
+                .allowsHitTesting(false)
+
+                Spacer(minLength: 8)
 
                 Button {
-                    let raw = ManifestDateHelpers.addDays(rangeStart, days: calendarSpan)
-                    navigate(toRaw: raw)
+                    navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: calendarSpan))
                 } label: {
                     Image(systemName: "chevron.right")
                         .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(!canGoForward || isLoading)
                 .accessibilityLabel("Next")
-
-                if rangeStart != todayAnchor {
-                    Button("Today") {
-                        onNavigate(todayAnchor)
-                    }
-                    .font(Typography.caption())
-                    .foregroundStyle(Theme.carbon)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Theme.platinum)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-
-                Button {
-                    showingDatePicker = true
-                } label: {
-                    Image(systemName: "calendar")
-                        .foregroundStyle(Theme.muted)
-                }
-                .accessibilityLabel("Go to date")
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -284,44 +244,6 @@ struct WeekNavigator: View {
                 }
             }
         }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                VStack {
-                    DatePicker("Jump to date", selection: $jumpDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .padding()
-                    Spacer()
-                }
-                .navigationTitle("Go to date")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showingDatePicker = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Go") {
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            formatter.timeZone = TimeZone.current
-                            let iso = formatter.string(from: jumpDate)
-                            let target = ManifestDateHelpers.normalizedNavigationStart(
-                                iso,
-                                calendarSpan: calendarSpan,
-                                weekStartPref: weekStartPref
-                            )
-                            onNavigate(target)
-                            showingDatePicker = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-        }
-    }
-
-    private func navigate(by days: Int) {
-        let raw = ManifestDateHelpers.addDays(rangeStart, days: days)
-        navigate(toRaw: raw)
     }
 
     private func navigate(toRaw raw: String) {
@@ -349,7 +271,7 @@ struct WeekNavigator: View {
                     .fill(hasMeals ? Theme.hyperGreen : Color.clear)
                     .frame(width: 6, height: 6)
             }
-            .foregroundStyle(isSelected ? Theme.ceramic : Theme.carbon)
+            .foregroundStyle(isSelected || isToday ? Theme.onHyperGreen : Theme.carbon)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)

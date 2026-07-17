@@ -408,6 +408,30 @@ struct ManifestView: View {
         return manifest.entries.filter { $0.date >= model.rangeStart && $0.date <= end }.count
     }
 
+    private var todayNavigationAnchor: String {
+        ManifestDateHelpers.todayNavigationAnchor(
+            calendarSpan: model.calendarSpan,
+            weekStartPref: model.weekStartPref
+        )
+    }
+
+    private var showTodayToolbarButton: Bool {
+        model.rangeStart != todayNavigationAnchor
+    }
+
+    private func jumpToToday() {
+        guard let organizationId else { return }
+        Task {
+            await model.navigateWeek(
+                to: todayNavigationAnchor,
+                api: env.api,
+                snapshots: env.snapshots,
+                online: env.network.isOnline,
+                organizationId: organizationId
+            )
+        }
+    }
+
     var body: some View {
         manifestNavigationStack
             .tabDockAction(tag: 3) {
@@ -492,6 +516,15 @@ struct ManifestView: View {
             }
             .navigationTitle("Manifest")
             .toolbar {
+                if model.manifest != nil, showTodayToolbarButton {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Today") {
+                            jumpToToday()
+                        }
+                        .disabled(model.isLoading)
+                        .accessibilityLabel("Jump to today")
+                    }
+                }
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.manifest,
                     organizationId: organizationId,
@@ -602,7 +635,7 @@ struct ManifestView: View {
             }
             WeekNavigator(
                 calendarSpan: model.calendarSpan,
-                rangeStart: $model.rangeStart,
+                rangeStart: model.rangeStart,
                 selectedDay: $model.selectedDay,
                 weekStartPref: model.weekStartPref,
                 entryDates: entryDates,

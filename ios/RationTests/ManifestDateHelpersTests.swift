@@ -15,7 +15,6 @@ final class ManifestDateHelpersTests: XCTestCase {
     }
 
     func testMultiWeekNavigationNormalization() {
-        let today = ManifestDateHelpers.todayISO()
         let weekStart = ManifestDateHelpers.initialRangeStart(calendarSpan: 7, weekStartPref: "sunday")
         var current = weekStart
         for _ in 0..<4 {
@@ -36,6 +35,54 @@ final class ManifestDateHelpersTests: XCTestCase {
         let today = ManifestDateHelpers.todayISO()
         let anchor = ManifestDateHelpers.initialRangeStart(calendarSpan: 5, weekStartPref: "sunday")
         XCTAssertEqual(anchor, today)
+    }
+
+    func testTodayNavigationAnchorWeekSpanSunday() {
+        let today = "2026-07-16"
+        let anchor = ManifestDateHelpers.todayNavigationAnchor(
+            calendarSpan: 7,
+            weekStartPref: "sunday",
+            today: today
+        )
+        XCTAssertEqual(anchor, "2026-07-12")
+        XCTAssertEqual(
+            ManifestDateHelpers.weekStart(for: today, preference: "sunday"),
+            anchor
+        )
+    }
+
+    func testTodayNavigationAnchorWeekSpanMonday() {
+        let today = "2026-07-16"
+        let anchor = ManifestDateHelpers.todayNavigationAnchor(
+            calendarSpan: 7,
+            weekStartPref: "monday",
+            today: today
+        )
+        XCTAssertEqual(anchor, "2026-07-13")
+        XCTAssertEqual(
+            ManifestDateHelpers.weekStart(for: today, preference: "monday"),
+            anchor
+        )
+    }
+
+    func testTodayNavigationAnchorShortSpanEqualsToday() {
+        let today = "2026-07-16"
+        XCTAssertEqual(
+            ManifestDateHelpers.todayNavigationAnchor(
+                calendarSpan: 3,
+                weekStartPref: "sunday",
+                today: today
+            ),
+            today
+        )
+        XCTAssertEqual(
+            ManifestDateHelpers.todayNavigationAnchor(
+                calendarSpan: 5,
+                weekStartPref: "monday",
+                today: today
+            ),
+            today
+        )
     }
 
     func testSupplyManifestWindowForwardLooking() {

@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.2.10**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.2.12**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -179,7 +179,7 @@ Ration/
     ├── Supply/     # Shopping list with filters + dock FAB
     ├── Scan/       # Camera capture → resize → POST /scan
     ├── Galley/     # Meals CRUD, AI generate/import, match mode
-    ├── Manifest/   # Week navigation, plan-week AI, consume
+    ├── Manifest/   # Edge week rocker + toolbar Today, plan-week AI, consume
     ├── Settings/   # Account settings (profile, tier, appearance, privacy, sign out)
     │               # GroupSettingsView — org switch, members, invite, credits transfer
     │               # TagsSettingsView — edit name/category/color, merge, delete (with confirm)
@@ -282,7 +282,10 @@ handler also opens the picker when access is lost remotely.
 
 Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. Reorder widgets in Hub edit mode (toolbar slider) via swipe Up/Down; layout saves optimistically in the background. Edit mode also supports visibility toggles and S/M/L sizing. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
 
-**Post-buildout UX overhaul (v1.4.18):** Trailing `ListCountHeader` (`"{n} items"`) on Cargo, Galley, and Manifest; toolbar count pill removed. Space Mono typography shipped with Dynamic Type scaling. Unified Telemetry Strip rows (`CargoRowView` / `MealRowView`) with hyper-green tag chips. Rich connected-meals section on Cargo detail (connection badges, all ingredients, sort). Manifest incremental polish (consumed strikethrough, week navigator density). See [`VisualLanguage.md`](Ration/Core/Design/VisualLanguage.md).
+**Manifest date chrome (iOS 1.2.12):** Week navigator uses edge chevrons (≥44pt) with a
+display-only range label and day pills. **Today** lives in the Manifest navigation toolbar
+(only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
+misclicks next to Next.
 
 **Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows.
 

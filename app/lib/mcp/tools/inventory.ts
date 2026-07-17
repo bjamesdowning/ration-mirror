@@ -127,7 +127,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "update_cargo_item",
 			description:
-				"Set absolute fields on a pantry item (name, quantity, unit, expiry, domain, tags). Quantity may be 0 (out of stock; item remains as a restock reminder). Use remove_cargo_item only when the user wants the line deleted. For relative changes like 'ate 2', prefer adjust_cargo_item.",
+				"Set absolute fields on a pantry item (name, quantity, unit, expiry, domain, tags). Quantity may be 0 (out of stock; item remains as a restock reminder). Pass expiresAt as null (or empty string) to clear expiry; omit expiresAt to leave it unchanged. Use remove_cargo_item only when the user wants the line deleted. For relative changes like 'ate 2', prefer adjust_cargo_item.",
 			inputSchema: z.object({
 				itemId: z.string().uuid(),
 				name: z.string().min(1).optional(),
@@ -135,20 +135,26 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				unit: z.string().optional(),
 				domain: z.enum(["food", "household", "alcohol"]).optional(),
 				tags: z.array(z.string()).optional(),
-				expiresAt: z.string().optional(),
+				expiresAt: z.string().nullable().optional(),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			handler: async (ctx, a) => {
 				const unit = a.unit ? toSupportedUnit(a.unit) : undefined;
+				const expiresAt =
+					a.expiresAt === undefined
+						? undefined
+						: a.expiresAt === null || a.expiresAt === ""
+							? null
+							: new Date(a.expiresAt);
 				const updated = await updateItem(env, ctx.organizationId, a.itemId, {
 					name: a.name,
 					quantity: a.quantity,
 					unit,
 					domain: a.domain,
 					tags: a.tags,
-					expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
+					expiresAt,
 				});
 				if (!updated) {
 					return err(

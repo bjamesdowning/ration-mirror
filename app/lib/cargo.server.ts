@@ -81,7 +81,9 @@ const CargoItemBaseSchema = z.object({
 	unit: UnitSchema,
 	domain: z.enum(ITEM_DOMAINS).default("food"),
 	tags: TagSlugsInputSchema,
-	expiresAt: z.coerce.date().optional(),
+	// null = clear expiry; omit/undefined = leave unchanged on partial updates.
+	// null must come first — z.coerce.date() accepts null as epoch (1970-01-01).
+	expiresAt: z.union([z.null(), z.coerce.date()]).optional(),
 });
 
 export const CargoItemSchema = CargoItemBaseSchema.transform((data) => ({
@@ -459,7 +461,7 @@ export interface IngestItem {
 	unit: SupportedUnit;
 	domain: (typeof ITEM_DOMAINS)[number];
 	tags: string[];
-	expiresAt?: Date;
+	expiresAt?: Date | null;
 	mergeTargetId?: string;
 }
 

@@ -974,13 +974,42 @@ struct BatchCargoError: Codable, Sendable {
     let error: String
 }
 
+/// Three-state date for partial PATCH: omit (leave unchanged), clear (JSON null), or set.
+enum OptionalDateUpdate: Sendable {
+    case omit
+    case clear
+    case set(Date)
+}
+
 struct UpdateCargoRequest: Encodable, Sendable {
     var name: String?
     var quantity: Double?
     var unit: String?
     var domain: String?
     var tags: [String]?
-    var expiresAt: Date?
+    /// Defaults to `.omit` so quantity-only updates do not clear expiry.
+    var expiresAt: OptionalDateUpdate = .omit
+
+    enum CodingKeys: String, CodingKey {
+        case name, quantity, unit, domain, tags, expiresAt
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(quantity, forKey: .quantity)
+        try container.encodeIfPresent(unit, forKey: .unit)
+        try container.encodeIfPresent(domain, forKey: .domain)
+        try container.encodeIfPresent(tags, forKey: .tags)
+        switch expiresAt {
+        case .omit:
+            break
+        case .clear:
+            try container.encodeNil(forKey: .expiresAt)
+        case let .set(date):
+            try container.encode(date, forKey: .expiresAt)
+        }
+    }
 }
 
 struct CargoDetailResponse: Codable, Sendable {

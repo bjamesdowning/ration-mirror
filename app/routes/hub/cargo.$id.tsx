@@ -108,7 +108,10 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 				unit: formData.get("unit"),
 				domain: formData.get("domain") ?? undefined,
 				tags: rawTags,
-				expiresAt: expiresAtValue || undefined,
+				expiresAt:
+					expiresAtValue === "" || expiresAtValue == null
+						? null
+						: expiresAtValue,
 			};
 
 			const parsed = CargoItemSchema.safeParse(payload);

@@ -138,8 +138,6 @@ struct CargoFormView: View {
         isSaving = true
         defer { isSaving = false }
 
-        let expiry = hasExpiry ? expiresAt : nil
-
         do {
             switch mode {
             case .create:
@@ -149,7 +147,7 @@ struct CargoFormView: View {
                     unit: unit.isEmpty ? "unit" : unit,
                     domain: domain,
                     tags: tags,
-                    expiresAt: expiry
+                    expiresAt: hasExpiry ? expiresAt : nil
                 )
                 _ = try await env.api.createCargo(body)
             case let .edit(item):
@@ -161,7 +159,7 @@ struct CargoFormView: View {
                         unit: unit,
                         domain: domain,
                         tags: tags,
-                        expiresAt: expiry
+                        expiresAt: hasExpiry ? .set(expiresAt) : .clear
                     )
                 )
             }

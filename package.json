@@ -1,6 +1,6 @@
 {
 	"name": "ration",
-	"version": "1.6.25",
+	"version": "1.6.26",
 	"private": true,
 	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
@@ -88,7 +88,7 @@
 		"vite": "^7.3.2",
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "^4.1.5",
-		"wrangler": "^4.100.0"
+		"wrangler": "^4.112.0"
 	},
 	"overrides": {
 		"@hono/node-server": "1.19.14",

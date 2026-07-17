@@ -24,7 +24,7 @@ wrangler ai-search create ration-docs --type r2 --source ration-copilot-docs
 
 `search_docs` uses `Promise.allSettled` across `COPILOT_AI_SEARCH_INSTANCES`, so adding a second instance (e.g. a web-crawler) is a one-line change and a single failing instance never takes the tool down.
 
-After docs/blog/README/legal changes, run the manual GitLab **`ai_search_sync`** job (always available under Verify; requires Cloudflare credentials with R2 + AI Search write access). It uploads the corpus to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing.
+After docs/blog/README/legal changes, run the manual GitLab **`ai_search_sync`** job (always available under Verify; requires Cloudflare credentials with R2 + AI Search write access). It uploads the corpus to the `ration-copilot-docs` R2 source bucket and triggers managed reindexing via `wrangler ai-search jobs create` (**requires Wrangler ≥ 4.112.0**).
 
 To upload from a local machine (must use `--remote` or objects land in Miniflare only):
 

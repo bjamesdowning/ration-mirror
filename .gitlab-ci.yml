@@ -86,6 +86,7 @@ cache:
 # Manual: upload docs corpus to R2 and reindex Copilot AI Search.
 # Trigger after docs/fin, docs/dev, docs/legal, content/blog, or README changes.
 # Requires CLOUDFLARE_API_TOKEN (and account) with R2 + AI Search write access.
+# `ai-search jobs` needs Wrangler ≥ 4.112.0 (resolved from package.json / bun.lock).
 ai_search_sync:
   stage: verify
   rules:

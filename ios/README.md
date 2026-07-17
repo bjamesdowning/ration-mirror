@@ -164,7 +164,7 @@ Ration/
 ├── App/            # @main entry, DI container, auth-gated root, tab shell
 ├── Core/
 │   ├── Design/     # Theme, Typography (Space Mono), ListCountHeader, ListRowViews, VisualLanguage.md
-│   ├── Filters/    # PageFilterState, FilterOptionsSheet (Cargo/Galley/Supply)
+│   ├── Filters/    # PageFilterState, FilterOptionsSheet, TagMultiSelectPicker, ActiveFilterChipRail, DismissibleFilterChip (Cargo/Galley/Supply)
 │   ├── Session/    # SessionStore — global org context + credits + AI consent
 │   ├── Consent/    # AIConsentCoordinator — shared "proceed" gate for all 4 AI entry points
 │   ├── Persistence/# SnapshotStore — org-scoped offline cache
@@ -286,6 +286,13 @@ Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets
 display-only range label and day pills. **Today** lives in the Manifest navigation toolbar
 (only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
 misclicks next to Next.
+
+**Tag filter UX (iOS 1.2.13):** Large tag catalogs no longer render as a wrapping chip cloud.
+`FilterOptionsSheet` and Hub widget tag filters use `TagMultiSelectPicker` (search + alphabetized
+checklist with checkmarks; selected tags as a dismissible summary). Cargo, Galley, and Supply
+list pages show an `ActiveFilterChipRail` of active domain/tag filters only. Small fixed sets
+(Domain, Sort, Unit display) still use `FilterChip`. Form tagging (`TagChipEditor`) and
+read-only list/detail chips are unchanged.
 
 **Post-buildout polish (v1.4.4–1.4.5):** Conditional sync indicator in toolbar (offline/stale only); structured recipe directions with step UI; unified AI intro+form flows; hub widgets are tappable with detail sheets; manifest preview supports day-span filters and consume-from-hub; Supply uses thin progress bar + icon dock FAB. **v1.4.5** adds icon-only action menus on Cargo/Galley/Manifest/Hub, hub layout presets (Full/Cook/Shop/Minimal), per-widget S/M/L size editing, and slot glyphs on manifest rows.
 

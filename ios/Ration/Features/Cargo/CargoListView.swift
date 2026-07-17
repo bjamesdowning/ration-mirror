@@ -89,6 +89,21 @@ struct CargoListView: View {
                     onOpenSettings: onOpenSettings
                 )
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if model.filters.domain != nil || !model.filters.selectedTags.isEmpty {
+                    ActiveFilterChipRail(
+                        domain: model.filters.domain,
+                        selectedTags: model.filters.selectedTags,
+                        onClearDomain: { model.filters.domain = nil },
+                        onClearTag: { tag in
+                            model.filters.selectedTags.removeAll { $0 == tag }
+                        }
+                    )
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.ceramic)
+                }
+            }
             .dataSyncBanner(
                 domain: SnapshotDomain.cargo,
                 organizationId: organizationId,

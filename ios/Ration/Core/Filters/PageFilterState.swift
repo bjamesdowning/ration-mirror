@@ -60,12 +60,4 @@ final class PageFilterState {
         supplySort = .alpha
         hidePurchased = false
     }
-
-    func toggleTag(_ tag: String) {
-        if selectedTags.contains(tag) {
-            selectedTags.removeAll { $0 == tag }
-        } else {
-            selectedTags.append(tag)
-        }
-    }
 }

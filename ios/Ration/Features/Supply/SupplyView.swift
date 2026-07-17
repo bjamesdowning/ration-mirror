@@ -544,6 +544,17 @@ struct SupplyView: View {
                 )
             }
             .background(Theme.ceramic)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if model.filters.domain != nil {
+                    ActiveFilterChipRail(
+                        domain: model.filters.domain,
+                        onClearDomain: { model.filters.domain = nil }
+                    )
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.ceramic)
+                }
+            }
             .dataSyncBanner(
                 domain: SnapshotDomain.supply,
                 organizationId: organizationId,

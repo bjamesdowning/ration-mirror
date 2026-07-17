@@ -25,14 +25,19 @@ struct HubWidgetFilterSheet: View {
         NavigationStack {
             Form {
                 if supportsMealTags {
-                    Section("Meal tags") {
+                    Section {
                         if availableMealTags.isEmpty {
                             Text("No meal tags yet").rationCaption()
                         } else {
-                            ForEach(availableMealTags, id: \.self) { tag in
-                                Toggle(tag.capitalized, isOn: mealTagBinding(tag))
-                            }
+                            TagMultiSelectPicker(
+                                availableTags: availableMealTags,
+                                selectedTags: mealTagsBinding,
+                                maxSelection: Self.maxWidgetTagSelection,
+                                showsTitle: false
+                            )
                         }
+                    } header: {
+                        Text("Meal tags")
                     }
                 }
 
@@ -57,14 +62,19 @@ struct HubWidgetFilterSheet: View {
                 }
 
                 if widget.id == HubWidgetID.supplyPreview.rawValue {
-                    Section("Cargo tags") {
+                    Section {
                         if availableCargoTags.isEmpty {
                             Text("No cargo tags yet").rationCaption()
                         } else {
-                            ForEach(availableCargoTags, id: \.self) { tag in
-                                Toggle(tag.capitalized, isOn: supplyTagBinding(tag))
-                            }
+                            TagMultiSelectPicker(
+                                availableTags: availableCargoTags,
+                                selectedTags: supplyTagsBinding,
+                                maxSelection: Self.maxWidgetTagSelection,
+                                showsTitle: false
+                            )
                         }
+                    } header: {
+                        Text("Cargo tags")
                     }
                     Section("Item limit") {
                         Stepper("Show up to \(filters.limit ?? 6)", value: limitBinding, in: 1...20)
@@ -103,6 +113,8 @@ struct HubWidgetFilterSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    private static let maxWidgetTagSelection = 5
+
     private var supportsMealTags: Bool {
         ["meals-ready", "meals-partial", "snacks-ready", "manifest-preview"].contains(widget.id)
     }
@@ -120,32 +132,22 @@ struct HubWidgetFilterSheet: View {
         return hasAny ? copy : nil
     }
 
-    private func mealTagBinding(_ tag: String) -> Binding<Bool> {
+    private var mealTagsBinding: Binding<[String]> {
         Binding(
-            get: { filters.tags?.contains(tag) ?? false },
-            set: { isOn in
-                var tags = filters.tags ?? []
-                if isOn {
-                    if !tags.contains(tag), tags.count < 5 { tags.append(tag) }
-                } else {
-                    tags.removeAll { $0 == tag }
-                }
-                filters.tags = tags.isEmpty ? nil : tags
+            get: { filters.tags ?? [] },
+            set: { newValue in
+                let capped = Array(newValue.prefix(Self.maxWidgetTagSelection))
+                filters.tags = capped.isEmpty ? nil : capped
             }
         )
     }
 
-    private func supplyTagBinding(_ tag: String) -> Binding<Bool> {
+    private var supplyTagsBinding: Binding<[String]> {
         Binding(
-            get: { filters.supplyTags?.contains(tag) ?? false },
-            set: { isOn in
-                var tags = filters.supplyTags ?? []
-                if isOn {
-                    if !tags.contains(tag), tags.count < 5 { tags.append(tag) }
-                } else {
-                    tags.removeAll { $0 == tag }
-                }
-                filters.supplyTags = tags.isEmpty ? nil : tags
+            get: { filters.supplyTags ?? [] },
+            set: { newValue in
+                let capped = Array(newValue.prefix(Self.maxWidgetTagSelection))
+                filters.supplyTags = capped.isEmpty ? nil : capped
             }
         )
     }

@@ -75,13 +75,27 @@ struct GalleyView: View {
             }
             .background(Theme.ceramic)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let message = model.errorMessage,
-                   !model.meals.isEmpty || !model.matches.isEmpty {
-                    ErrorBanner(message: message)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        .background(Theme.ceramic)
+                VStack(spacing: 0) {
+                    if let message = model.errorMessage,
+                       !model.meals.isEmpty || !model.matches.isEmpty {
+                        ErrorBanner(message: message)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                    }
+                    if model.filters.domain != nil || !model.filters.selectedTags.isEmpty {
+                        ActiveFilterChipRail(
+                            domain: model.filters.domain,
+                            selectedTags: model.filters.selectedTags,
+                            onClearDomain: { model.filters.domain = nil },
+                            onClearTag: { tag in
+                                model.filters.selectedTags.removeAll { $0 == tag }
+                            }
+                        )
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+                .background(Theme.ceramic)
             }
             .dataSyncBanner(
                 domain: SnapshotDomain.galley,

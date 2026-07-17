@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 /// Resolves visible Hub widgets from profile + custom layout — mirrors web `resolveLayout`.
@@ -62,39 +61,6 @@ enum HubLayoutEngine {
 
     enum MoveDirection {
         case up, down
-    }
-
-    /// Returns the widget id whose slot `y` falls into (by midpoint), excluding the dragged widget.
-    static func destinationId(
-        forY y: CGFloat,
-        frames: [String: CGRect],
-        order: [HubWidgetLayout],
-        excluding sourceId: String
-    ) -> String? {
-        for widget in order where widget.id != sourceId {
-            guard let frame = frames[widget.id] else { continue }
-            if y < frame.midY {
-                return widget.id
-            }
-        }
-        return order.last(where: { $0.id != sourceId })?.id
-    }
-
-    /// Moves `sourceId` to the index of `destinationId` within a display list.
-    static func reorderDisplayOrder(
-        _ order: [HubWidgetLayout],
-        moving sourceId: String,
-        to destinationId: String
-    ) -> [HubWidgetLayout] {
-        guard let fromIndex = order.firstIndex(where: { $0.id == sourceId }),
-              let toIndex = order.firstIndex(where: { $0.id == destinationId }),
-              fromIndex != toIndex
-        else { return order }
-
-        var next = order
-        let item = next.remove(at: fromIndex)
-        next.insert(item, at: toIndex)
-        return next
     }
 
     /// Row display cap by widget size — mirrors web compact vs full layouts.

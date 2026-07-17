@@ -1,18 +1,15 @@
 import SwiftUI
 
-/// Hub layout editor — long-press drag reorder, filters, size, visibility; autosaves like web `HubEditModeMobile`.
+/// Hub layout editor — native List reorder (EditMode + onMove), filters, size, visibility; autosaves.
 struct HubEditView: View {
     let hubProfile: HubProfile?
     let hubLayout: HubLayoutPayload?
     let availableMealTags: [String]
     let availableCargoTags: [String]
-    var isTabActive: Bool = true
     let onSave: ([HubWidgetLayout]) async throws -> Void
     let onSaveProfile: (HubProfile) async throws -> Void
-    let onExit: () -> Void
 
     @State private var widgets: [HubWidgetLayout] = []
-    @State private var reorderSession = HubWidgetReorderSession()
     @State private var selectedProfile: HubProfile = "full"
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -20,155 +17,96 @@ struct HubEditView: View {
 
     private let profileOptions: [HubProfile] = ["full", "cook", "shop", "minimal", "custom"]
 
-    private var controlsDisabled: Bool {
-        reorderSession.isDragging || isSaving
-    }
-
     init(
         hubProfile: HubProfile?,
         hubLayout: HubLayoutPayload?,
         availableMealTags: [String],
         availableCargoTags: [String],
-        isTabActive: Bool = true,
         onSave: @escaping ([HubWidgetLayout]) async throws -> Void,
-        onSaveProfile: @escaping (HubProfile) async throws -> Void,
-        onExit: @escaping () -> Void
+        onSaveProfile: @escaping (HubProfile) async throws -> Void
     ) {
         self.hubProfile = hubProfile
         self.hubLayout = hubLayout
         self.availableMealTags = availableMealTags
         self.availableCargoTags = availableCargoTags
-        self.isTabActive = isTabActive
         self.onSave = onSave
         self.onSaveProfile = onSaveProfile
-        self.onExit = onExit
         _selectedProfile = State(initialValue: hubProfile ?? "full")
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let errorMessage {
-                        ErrorBanner(message: errorMessage)
-                    }
+        List {
+            if let errorMessage {
+                ErrorBanner(message: errorMessage)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
 
-                    profileSection
-
-                    Text("Widgets")
-                        .rationCaption()
-                        .foregroundStyle(Theme.muted)
-                        .padding(.horizontal, 4)
-
-                    ForEach(Array(reorderSession.displayOrder.enumerated()), id: \.element.id) { index, widget in
-                        if let def = HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats] {
-                            widgetRow(widget: widget, def: def, index: index)
-                                .hubWidgetReorderRow(
-                                    id: widget.id,
-                                    session: reorderSession,
-                                    onOrderChanged: applyReorderFromSession
-                                )
-                        }
+            Section("Layout profile") {
+                Picker("Profile", selection: $selectedProfile) {
+                    ForEach(profileOptions, id: \.self) { profile in
+                        Text(profileLabel(profile)).tag(profile)
                     }
                 }
-                .padding(16)
-                .copilotDockContentPadding()
-            }
-            .coordinateSpace(name: HubWidgetReorder.coordinateSpaceName)
-            .onPreferenceChange(HubWidgetFramePreferenceKey.self) { frames in
-                reorderSession.widgetFrames = frames
-            }
-            .background(Theme.ceramic)
-            .scrollDismissesKeyboard(.interactively)
-            .copilotDockScrollMargins(hasTabAction: false)
-            .copilotScrollTracked(tab: 0, isActive: isTabActive)
-            .navigationTitle("Edit Hub")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { onExit() }
+                .pickerStyle(.menu)
+                .disabled(isSaving)
+                .onChange(of: selectedProfile) { _, newValue in
+                    guard newValue != "custom" else { return }
+                    applyPreset(newValue)
                 }
             }
-            .overlay {
-                if isSaving { ProgressView().tint(Theme.hyperGreen) }
-            }
-            .sheet(item: $filterWidget) { widget in
-                HubWidgetFilterSheet(
-                    widget: widget,
-                    availableMealTags: availableMealTags,
-                    availableCargoTags: availableCargoTags
-                ) { filters in
-                    widgets = widgets.map { row in
-                        guard row.id == widget.id else { return row }
-                        var copy = row
-                        copy.filters = filters
-                        return copy
-                    }
-                    persist()
+
+            Section("Widgets") {
+                ForEach(widgets) { widget in
+                    widgetRow(for: widget)
+                        .moveDisabled(isSaving)
                 }
+                .onMove(perform: moveWidgets)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Theme.ceramic)
+        .environment(\.editMode, .constant(.active))
+        .scrollDismissesKeyboard(.interactively)
+        .overlay {
+            if isSaving { ProgressView().tint(Theme.hyperGreen) }
+        }
+        .sheet(item: $filterWidget) { widget in
+            HubWidgetFilterSheet(
+                widget: widget,
+                availableMealTags: availableMealTags,
+                availableCargoTags: availableCargoTags
+            ) { filters in
+                widgets = widgets.map { row in
+                    guard row.id == widget.id else { return row }
+                    var copy = row
+                    copy.filters = filters
+                    return copy
+                }
+                persist()
             }
         }
         .onAppear {
             widgets = HubLayoutEngine.initEditableWidgets(profile: hubProfile, layout: hubLayout)
             selectedProfile = hubProfile ?? "full"
-            reorderSession.syncDisplayOrder(from: widgets)
         }
-        .onChange(of: widgets) { _, newValue in
-            reorderSession.syncDisplayOrder(from: newValue)
-        }
-    }
-
-    private var profileSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Layout profile")
-                .rationCaption()
-                .foregroundStyle(Theme.muted)
-            Picker("Profile", selection: $selectedProfile) {
-                ForEach(profileOptions, id: \.self) { profile in
-                    Text(profileLabel(profile)).tag(profile)
-                }
-            }
-            .pickerStyle(.menu)
-            .disabled(controlsDisabled)
-            .onChange(of: selectedProfile) { _, newValue in
-                guard newValue != "custom" else { return }
-                applyPreset(newValue)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     @ViewBuilder
-    private func widgetRow(widget: HubWidgetLayout, def: HubWidgetDefinition, index: Int) -> some View {
+    private func widgetRow(for widget: HubWidgetLayout) -> some View {
+        let def = HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats]
+        let title = def?.title ?? widget.id
+        let description = def?.description ?? ""
+        let defaultSize = def?.defaultSize ?? "md"
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
-                VStack(spacing: 4) {
-                    Button {
-                        moveWidget(id: widget.id, direction: .up)
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .disabled(controlsDisabled || index <= 0)
-                    .accessibilityLabel("Move \(def.title) up")
-
-                    Button {
-                        moveWidget(id: widget.id, direction: .down)
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .disabled(controlsDisabled || index >= reorderSession.displayOrder.count - 1)
-                    .accessibilityLabel("Move \(def.title) down")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.muted)
-
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(def.title).rationBody()
-                    Text(def.description).rationCaption()
+                    Text(title).rationBody()
+                    if !description.isEmpty {
+                        Text(description).rationCaption()
+                    }
                     if widget.filters != nil {
                         Text("Filters active").rationCaption().foregroundStyle(Theme.hyperGreen)
                     }
@@ -181,27 +119,26 @@ struct HubEditView: View {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
                     .buttonStyle(.plain)
-                    .disabled(controlsDisabled)
-                    .accessibilityLabel("Edit filters for \(def.title)")
+                    .disabled(isSaving)
+                    .accessibilityLabel("Edit filters for \(title)")
                 }
                 Toggle("", isOn: binding(for: widget.id))
                     .labelsHidden()
                     .tint(Theme.hyperGreen)
-                    .disabled(controlsDisabled)
-                    .accessibilityLabel(widget.visible ? "Hide \(def.title)" : "Show \(def.title)")
+                    .disabled(isSaving)
+                    .accessibilityLabel(widget.visible ? "Hide \(title)" : "Show \(title)")
             }
 
-            Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: def.defaultSize)) {
+            Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: defaultSize)) {
                 Text("S").tag("sm")
                 Text("M").tag("md")
                 Text("L").tag("lg")
             }
             .pickerStyle(.segmented)
-            .disabled(controlsDisabled)
+            .disabled(isSaving)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.vertical, 4)
+        .listRowBackground(Theme.surface)
         .opacity(widget.visible ? 1 : 0.55)
     }
 
@@ -233,13 +170,9 @@ struct HubEditView: View {
         ["meals-ready", "meals-partial", "snacks-ready", "manifest-preview", "cargo-expiring", "supply-preview"].contains(id)
     }
 
-    private func moveWidget(id: String, direction: HubLayoutEngine.MoveDirection) {
-        widgets = HubLayoutEngine.moveWidget(widgets, id: id, direction: direction)
-        persist()
-    }
-
-    private func applyReorderFromSession() {
-        widgets = HubLayoutEngine.reindexOrder(reorderSession.displayOrder)
+    private func moveWidgets(from source: IndexSet, to destination: Int) {
+        widgets.move(fromOffsets: source, toOffset: destination)
+        widgets = HubLayoutEngine.reindexOrder(widgets)
         persist()
     }
 

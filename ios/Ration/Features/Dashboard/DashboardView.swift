@@ -6,6 +6,7 @@ struct DashboardView: View {
     var isTabActive: Bool = true
     /// Bumped when the Hub tab is re-tapped while already selected (exits edit mode).
     var hubTabReselectToken: Int = 0
+    @Binding var isHubEditMode: Bool
     var onScan: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenGroupSettings: () -> Void = {}
@@ -47,7 +48,6 @@ struct DashboardView: View {
                             hubLayout: data.hubLayout,
                             availableMealTags: data.availableMealTags,
                             availableCargoTags: data.availableCargoTags ?? [],
-                            isTabActive: isTabActive,
                             onSave: { widgets in
                                 try await model.saveLayout(widgets, api: env.api)
                                 await reload()
@@ -55,10 +55,6 @@ struct DashboardView: View {
                             onSaveProfile: { profile in
                                 try await model.saveProfile(profile, api: env.api)
                                 await reload()
-                            },
-                            onExit: {
-                                model.isEditMode = false
-                                Task { await reload() }
                             }
                         )
                     } else {
@@ -66,7 +62,7 @@ struct DashboardView: View {
                     }
                 }
             }
-            .navigationTitle("Hub")
+            .navigationTitle(model.isEditMode ? "Edit Hub" : "Hub")
             .toolbar {
                 GlobalPageToolbar(
                     syncDomain: SnapshotDomain.hub,
@@ -75,7 +71,14 @@ struct DashboardView: View {
                     onOpenGroupSettings: onOpenGroupSettings,
                     onOpenSettings: onOpenSettings
                 )
-                if case .loaded = model.state, !model.isEditMode {
+                if case .loaded = model.state, model.isEditMode {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            model.isEditMode = false
+                            Task { await reload() }
+                        }
+                    }
+                } else if case .loaded = model.state, !model.isEditMode {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             model.isEditMode = true
@@ -127,6 +130,12 @@ struct DashboardView: View {
             guard model.isEditMode else { return }
             model.isEditMode = false
             Task { await reload() }
+        }
+        .onChange(of: model.isEditMode) { _, editing in
+            isHubEditMode = editing
+        }
+        .onAppear {
+            isHubEditMode = model.isEditMode
         }
         .tabDockAction(tag: 0, isActive: !model.isEditMode) {
             IconFABButtonCore(

@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.2.15**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.2.18**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -280,9 +280,9 @@ handler also opens the picker when access is lost remotely.
 | `/groups/ownership/transfer` | POST | Transfer group ownership |
 | `/groups/credits/transfer` | POST | Transfer credits between owned groups |
 
-Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. In Hub edit mode (toolbar slider), long-press and drag to reorder widgets (chevron Up/Down as accessibility fallback); layout, filters, visibility, and S/M/L size autosave in the background. Exit edit mode with **Done** or by re-tapping the Hub tab to return to the rendered custom hub. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
+Settings PATCH accepts `hubProfile` and `hubLayout` for customizable Hub widgets. Per-widget filters include meal tags, manifest day span (1/3/7/14), supply cargo tags, slot/domain, and limits — synced with web `hubLayout`. In Hub edit mode (toolbar slider), reorder widgets with the system List grip (`EditMode` + `onMove`); layout, filters, visibility, and S/M/L size autosave in the background. Copilot dock is hidden while Hub edit is open (other tabs keep Copilot). Exit with **Done** or by re-tapping the Hub tab to return to the rendered custom hub. **Appearance** (Settings → Light/Dark segmented control) updates `user.settings.theme` and syncs with the web app; choice is cached in UserDefaults for instant cold start.
 
-**Hub edit long-press reorder (iOS 1.2.14):** Widget reorder lives only on Edit Hub (not home). Long-press drag uses the existing `HubWidgetReorder` session; Hub tab re-tap exits edit like Done.
+**Hub edit native list reorder (iOS 1.2.18):** Replaces custom long-press/ScrollView drag (which blocked scrolling). Edit Hub uses the same `List` + `onMove` pattern as Galley meal directions; Copilot is hidden only while the Hub edit screen is visible.
 
 **Hub Quick Stats (iOS 1.2.15):** `hub-stats` uses a centered 2×2 segmented quad (Cargo / Expiring / Meals ready / Supply) with hairline cross dividers; counts stay tappable to the same destinations. Compact (`sm`) size omits labels.
 
@@ -368,7 +368,7 @@ read-only list/detail chips are unchanged.
 - Ask sheet: header stays on one compact row; assistant responses use the full content width; user messages remain right-aligned.
 - Ask sheet: after send, sticky activity bar shows “Copilot is thinking” (or tool label) until assistant text streams in.
 - Repeat dock collapse/expand on Hub, Cargo, Galley, Manifest, and Supply: behavior must match (no stuck chip, no stuck expanded bar).
-- Empty Cargo/Galley/Manifest/Supply lists and Hub edit mode: scroll down still collapses the dock to the chat chip.
+- Empty Cargo/Galley/Manifest/Supply lists: scroll down still collapses the dock to the chat chip. Hub edit mode: Copilot dock and scan FAB are hidden for the session.
 - Ask sheet: with composer unfocused, swipe the transcript to dismiss keyboard; with composer focused, swipe-down on the capsule still dismisses.
 - Return to a previously scrolled tab: the first restored offset does not spuriously collapse the Copilot dock.
 - Trigger an expired/session-limit conversation: the stale transcript clears and the next turn starts a new conversation.

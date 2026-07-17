@@ -84,6 +84,7 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var activatedTabs: Set<Int> = [0]
     @State private var hubTabReselectToken = 0
+    @State private var isHubEditMode = false
     @State private var manifestSuccessMessage: String?
     @State private var showingCopilotPaywall = false
 
@@ -96,6 +97,8 @@ struct MainTabView: View {
             && !showingGroupSettings
             && !showingScan
             && !env.ask.isSheetPresented
+            // Only suppress on Hub while editing — other tabs keep Copilot.
+            && !(isHubEditMode && selectedTab == 0)
     }
 
     var body: some View {
@@ -103,6 +106,7 @@ struct MainTabView: View {
             DashboardView(
                 isTabActive: activatedTabs.contains(0),
                 hubTabReselectToken: hubTabReselectToken,
+                isHubEditMode: $isHubEditMode,
                 onScan: { showingScan = true },
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },

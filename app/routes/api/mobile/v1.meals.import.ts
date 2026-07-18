@@ -51,6 +51,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			userId,
 			organizationId,
 			url: parsedRequest.data.url,
+			pageHtml: parsedRequest.data.pageHtml,
 		});
 
 		if ("code" in result && result.code === "DUPLICATE_URL") {

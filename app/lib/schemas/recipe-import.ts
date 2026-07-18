@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { normalizeUnitAlias } from "../units";
 
+/** Max client-supplied HTML size (matches consumer MAX_HTML_BYTES). */
+export const RECIPE_IMPORT_PAGE_HTML_MAX = 1_000_000;
+export const RECIPE_IMPORT_PAGE_HTML_MIN = 200;
+
 /** Request body schema for recipe import API. HTTPS-only URLs. */
 export const RecipeImportRequestSchema = z.object({
 	url: z
@@ -8,6 +12,19 @@ export const RecipeImportRequestSchema = z.object({
 		.url("Must be a valid URL")
 		.max(2048)
 		.refine((u) => u.startsWith("https://"), "Only HTTPS URLs are allowed"),
+	/** Optional page HTML from client-assisted capture (iOS / web paste). */
+	pageHtml: z
+		.string()
+		.min(
+			RECIPE_IMPORT_PAGE_HTML_MIN,
+			"Page HTML is too short to extract a recipe",
+		)
+		.refine(
+			(s) =>
+				new TextEncoder().encode(s).byteLength <= RECIPE_IMPORT_PAGE_HTML_MAX,
+			"Page HTML is too large to process",
+		)
+		.optional(),
 });
 
 export type RecipeImportRequest = z.infer<typeof RecipeImportRequestSchema>;

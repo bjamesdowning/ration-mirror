@@ -23,4 +23,9 @@ describe("isBlockedImportUrl", () => {
 		const redirectedFinalUrl = "http://127.0.0.1/after-redirect";
 		expect(isBlockedImportUrl(redirectedFinalUrl)).toBe(true);
 	});
+
+	it("blocks localhost and link-local hosts", () => {
+		expect(isBlockedImportUrl("https://localhost/recipe")).toBe(true);
+		expect(isBlockedImportUrl("https://169.254.1.1/recipe")).toBe(true);
+	});
 });

@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Link2 } from "lucide-react";
+import { AlertCircle, Check, ExternalLink, Link2 } from "lucide-react";
 import {
 	forwardRef,
 	useEffect,
@@ -26,14 +26,31 @@ interface ImportRecipeButtonProps {
 	costPerImport?: number;
 }
 
+const SITE_BLOCKED_CODE = "SITE_BLOCKED";
+
+function isSiteBlockedFailure(code?: string, error?: string): boolean {
+	if (code === SITE_BLOCKED_CODE) return true;
+	if (!error) return false;
+	return /blocked automated import|access issue|paste the page HTML/i.test(
+		error,
+	);
+}
+
 export const ImportRecipeButton = forwardRef<
 	ImportRecipeButtonHandle,
 	ImportRecipeButtonProps
 >(({ className, credits, costPerImport = 1 }, ref) => {
 	const [showModal, setShowModal] = useState(false);
 	const [url, setUrl] = useState("");
+	const [pageHtml, setPageHtml] = useState("");
 	const [view, setView] = useState<
-		"intro" | "url" | "loading" | "verification" | "error" | "duplicate"
+		| "intro"
+		| "url"
+		| "loading"
+		| "verification"
+		| "error"
+		| "site_blocked"
+		| "duplicate"
 	>("intro");
 	const [showErrorToast, setShowErrorToast] = useState(false);
 	const [errorToastMessage, setErrorToastMessage] = useState("");
@@ -48,7 +65,9 @@ export const ImportRecipeButton = forwardRef<
 		mealName: string;
 		ingredientCount: number;
 	} | null>(null);
+	const [assistedFailed, setAssistedFailed] = useState(false);
 	const importInFlight = useRef(false);
+	const assistedSubmit = useRef(false);
 	const importFetcher = useFetcher<
 		| { status: "processing"; requestId: string }
 		| {
@@ -68,10 +87,13 @@ export const ImportRecipeButton = forwardRef<
 		open: () => {
 			setShowModal(true);
 			setUrl("");
+			setPageHtml("");
 			setView("intro");
 			setPollRequestId(null);
 			setDuplicateData(null);
 			setVerificationData(null);
+			setAssistedFailed(false);
+			assistedSubmit.current = false;
 		},
 	}));
 
@@ -97,6 +119,7 @@ export const ImportRecipeButton = forwardRef<
 			});
 			setView("duplicate");
 			importInFlight.current = false;
+			assistedSubmit.current = false;
 		} else if (typeof d.error === "string") {
 			setErrorToastMessage(
 				d.required != null && d.current != null
@@ -106,6 +129,7 @@ export const ImportRecipeButton = forwardRef<
 			setShowErrorToast(true);
 			setView("error");
 			importInFlight.current = false;
+			assistedSubmit.current = false;
 		}
 	}, [importFetcher.state, importFetcher.data]);
 
@@ -122,6 +146,7 @@ export const ImportRecipeButton = forwardRef<
 				setView("error");
 				setPollRequestId(null);
 				importInFlight.current = false;
+				assistedSubmit.current = false;
 				return;
 			}
 			try {
@@ -134,6 +159,7 @@ export const ImportRecipeButton = forwardRef<
 					setView("error");
 					setPollRequestId(null);
 					importInFlight.current = false;
+					assistedSubmit.current = false;
 					return;
 				}
 				const data = (await res.json()) as {
@@ -156,6 +182,8 @@ export const ImportRecipeButton = forwardRef<
 				) {
 					setPollRequestId(null);
 					importInFlight.current = false;
+					assistedSubmit.current = false;
+					setAssistedFailed(false);
 					setVerificationData({
 						requestId: pollRequestId,
 						mealName:
@@ -178,17 +206,36 @@ export const ImportRecipeButton = forwardRef<
 					setView("duplicate");
 					setPollRequestId(null);
 					importInFlight.current = false;
+					assistedSubmit.current = false;
 				} else if (
 					data.status === "failed" ||
 					(data.status === "completed" && !data.success)
 				) {
+					const blocked = isSiteBlockedFailure(data.code, data.error);
+					setPollRequestId(null);
+					importInFlight.current = false;
+
+					if (blocked && !assistedSubmit.current) {
+						setAssistedFailed(false);
+						setPageHtml("");
+						setView("site_blocked");
+						assistedSubmit.current = false;
+						return;
+					}
+
+					if (blocked && assistedSubmit.current) {
+						setAssistedFailed(true);
+						setView("site_blocked");
+						assistedSubmit.current = false;
+						return;
+					}
+
 					setErrorToastMessage(
 						data.error ?? "Import failed. Please try again.",
 					);
 					setShowErrorToast(true);
 					setView("error");
-					setPollRequestId(null);
-					importInFlight.current = false;
+					assistedSubmit.current = false;
 				}
 			} catch {
 				// Network error, keep polling
@@ -215,6 +262,7 @@ export const ImportRecipeButton = forwardRef<
 				setShowModal(false);
 				setView("intro");
 				setUrl("");
+				setPageHtml("");
 				setVerificationData(null);
 				setDuplicateData(null);
 				navigate(`/hub/galley/${meal.id}`);
@@ -247,15 +295,18 @@ export const ImportRecipeButton = forwardRef<
 		setShowModal(false);
 		setView("intro");
 		setUrl("");
+		setPageHtml("");
 		setVerificationData(null);
 		setDuplicateData(null);
 	};
 
 	const handleImport = () => {
 		const trimmed = url.trim();
-		if (!trimmed) return;
+		if (!trimmed || importInFlight.current) return;
 		setView("loading");
 		importInFlight.current = true;
+		assistedSubmit.current = false;
+		setAssistedFailed(false);
 		setDuplicateData(null);
 		importFetcher.submit(JSON.stringify({ url: trimmed }), {
 			method: "post",
@@ -264,19 +315,53 @@ export const ImportRecipeButton = forwardRef<
 		});
 	};
 
+	const handleExtractFromPaste = () => {
+		const trimmedUrl = url.trim();
+		const trimmedHtml = pageHtml.trim();
+		if (!trimmedUrl || trimmedHtml.length < 200 || importInFlight.current)
+			return;
+		const bytes = new TextEncoder().encode(trimmedHtml).byteLength;
+		if (bytes > 1_000_000) {
+			setErrorToastMessage(
+				"Paste is too large (over 1MB). Copy only the recipe section or View Source excerpt.",
+			);
+			setShowErrorToast(true);
+			return;
+		}
+		setView("loading");
+		importInFlight.current = true;
+		assistedSubmit.current = true;
+		setAssistedFailed(false);
+		setDuplicateData(null);
+		importFetcher.submit(
+			JSON.stringify({ url: trimmedUrl, pageHtml: trimmedHtml }),
+			{
+				method: "post",
+				action: "/api/meals/import",
+				encType: "application/json",
+			},
+		);
+	};
+
 	const resetState = () => {
 		setUrl("");
+		setPageHtml("");
 		setView("url");
 		setDuplicateData(null);
+		setAssistedFailed(false);
+		assistedSubmit.current = false;
 	};
 
 	const handleClose = () => {
 		setShowModal(false);
 		setView("intro");
 		setUrl("");
+		setPageHtml("");
 		setPollRequestId(null);
 		setDuplicateData(null);
 		setVerificationData(null);
+		setAssistedFailed(false);
+		assistedSubmit.current = false;
 	};
 
 	const showIntro = view === "intro";
@@ -284,6 +369,7 @@ export const ImportRecipeButton = forwardRef<
 	const showProcessing = view === "loading";
 	const showVerification = view === "verification" && verificationData;
 	const showError = view === "error";
+	const showSiteBlocked = view === "site_blocked";
 	const showDuplicate = view === "duplicate";
 
 	return (
@@ -332,7 +418,7 @@ export const ImportRecipeButton = forwardRef<
 				>
 					{showIntro ? (
 						<AIFeatureIntroView
-							description="Paste a recipe link. AI extracts ingredients and steps into your Galley so you have one place to cook from."
+							description="Paste a recipe link. AI extracts ingredients and steps into your Galley so you have one place to cook from. Some sites block automated bots — if that happens, you can paste the page HTML or add the meal manually."
 							cost={costPerImport}
 							costLabel="per import"
 							credits={typeof credits === "number" ? credits : 0}
@@ -365,7 +451,9 @@ export const ImportRecipeButton = forwardRef<
 										/>
 										<p id="import-url-hint" className="text-xs text-muted mt-1">
 											HTTPS only. Tested with allrecipes.com and most major
-											recipe sites. Some sites block imports.
+											recipe sites. Some sites block automated bots — if that
+											happens, you&apos;ll be asked to paste the page HTML (or
+											add the meal manually).
 										</p>
 									</div>
 									<button
@@ -431,18 +519,124 @@ export const ImportRecipeButton = forwardRef<
 								</div>
 							)}
 
+							{showSiteBlocked && (
+								<div className="max-w-md mx-auto space-y-5 py-6 text-left">
+									<div className="text-center space-y-2">
+										<AlertCircle className="w-10 h-10 mx-auto text-amber-600 dark:text-amber-400" />
+										<h4 className="text-lg font-bold text-carbon dark:text-white">
+											{assistedFailed
+												? "Paste didn't work"
+												: "This site blocked automated import"}
+										</h4>
+										<p className="text-sm text-muted">
+											{assistedFailed
+												? "The pasted content still looks like a block page or isn't a usable recipe. Open the recipe in your browser and add it manually, or try a different URL."
+												: "Common on allrecipes.com and similar publishers. Browsers can open the page, but our servers cannot fetch it automatically."}
+										</p>
+									</div>
+
+									{!assistedFailed && (
+										<>
+											<ol className="list-decimal list-inside space-y-2 text-sm text-carbon/90 dark:text-white/90">
+												<li>Open the recipe link in a new tab.</li>
+												<li>
+													Copy the page source or recipe content (View Page
+													Source, or Select All → Copy). Prefer the recipe
+													section if the full page is huge.
+												</li>
+												<li>Paste it below and extract (uses 1 credit).</li>
+											</ol>
+
+											{url.trim() && (
+												<a
+													href={url.trim()}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="inline-flex items-center gap-2 text-sm font-medium text-hyper-green hover:underline"
+												>
+													Open recipe
+													<ExternalLink className="w-3.5 h-3.5" />
+												</a>
+											)}
+
+											<div>
+												<label
+													htmlFor="import-page-html"
+													className="block text-sm font-medium text-carbon dark:text-white mb-1"
+												>
+													Page HTML
+												</label>
+												<textarea
+													id="import-page-html"
+													value={pageHtml}
+													onChange={(e) => setPageHtml(e.target.value)}
+													rows={8}
+													placeholder="Paste the page HTML or recipe text here…"
+													className="w-full px-3 py-2 rounded-lg border border-platinum dark:border-white/20 bg-white dark:bg-white/5 text-carbon dark:text-white placeholder:text-muted text-xs font-mono"
+												/>
+												<p className="text-xs text-muted mt-1">
+													Uses 1 credit. Keep under ~1MB (recipe excerpt is
+													fine).
+												</p>
+											</div>
+
+											<button
+												type="button"
+												onClick={handleExtractFromPaste}
+												disabled={pageHtml.trim().length < 200}
+												className="w-full px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+											>
+												Extract from paste
+											</button>
+										</>
+									)}
+
+									<div className="flex flex-col sm:flex-row gap-2 pt-1">
+										<button
+											type="button"
+											onClick={() => {
+												handleClose();
+												navigate("/hub/galley/new");
+											}}
+											className="flex-1 px-4 py-2.5 bg-platinum/30 text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/50 dark:hover:bg-white/20 text-sm font-medium"
+										>
+											Add meal manually
+										</button>
+										<button
+											type="button"
+											onClick={resetState}
+											className="flex-1 px-4 py-2.5 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 text-sm"
+										>
+											Try a different URL
+										</button>
+									</div>
+								</div>
+							)}
+
 							{showError && (
 								<div className="flex flex-col items-center justify-center py-12 text-center text-red-500">
 									<AlertCircle className="w-12 h-12 mb-4" />
 									<h4 className="text-lg font-bold">Import Failed</h4>
 									<p className="text-sm opacity-80 mb-6">{importError}</p>
-									<button
-										type="button"
-										onClick={resetState}
-										className="px-6 py-2 bg-platinum text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/80 dark:hover:bg-white/20"
-									>
-										Try Again
-									</button>
+									<div className="flex flex-col sm:flex-row gap-2">
+										<button
+											type="button"
+											onClick={resetState}
+											className="px-6 py-2 bg-platinum text-carbon dark:bg-white/10 dark:text-white rounded-lg hover:bg-platinum/80 dark:hover:bg-white/20"
+										>
+											Try Again
+										</button>
+										<button
+											type="button"
+											onClick={() => {
+												handleClose();
+												navigate("/hub/galley/new");
+											}}
+											className="px-6 py-2 bg-platinum/20 text-carbon dark:text-white rounded-lg hover:bg-platinum/40 text-sm"
+										>
+											Add meal manually
+										</button>
+									</div>
 								</div>
 							)}
 

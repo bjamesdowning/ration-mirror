@@ -8,11 +8,13 @@ final class ImportRecipeViewModel {
         case idle
         case submitting
         case processing(requestId: String)
+        case capturing
         case verification(ExtractedRecipePreview, requestId: String)
         case confirming
         case duplicate(existingMealId: String, existingMealName: String?)
         case completed(MealSummary)
         case failed(String)
+        case siteBlocked(message: String)
     }
 
     private(set) var state: State = .idle
@@ -20,6 +22,7 @@ final class ImportRecipeViewModel {
     var shouldShowPaywall = false
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
+    private var didAttemptDeviceCapture = false
 
     func cancelActiveWork() {
         submissionGeneration += 1
@@ -31,6 +34,7 @@ final class ImportRecipeViewModel {
         cancelActiveWork()
         let generation = submissionGeneration
         shouldShowPaywall = false
+        didAttemptDeviceCapture = false
         state = .submitting
         activeTask = Task {
             do {
@@ -43,7 +47,7 @@ final class ImportRecipeViewModel {
                 Haptics.light()
                 state = .processing(requestId: requestId)
                 Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
-                await poll(requestId: requestId, api: api, generation: generation)
+                await poll(requestId: requestId, api: api, generation: generation, session: session)
             } catch is CancellationError {
                 return
             } catch let error as APIError where error.statusCode == 409 && error.code == "DUPLICATE_URL" {
@@ -68,7 +72,12 @@ final class ImportRecipeViewModel {
         }
     }
 
-    func poll(requestId: String, api: RationAPI, generation: Int) async {
+    func poll(
+        requestId: String,
+        api: RationAPI,
+        generation: Int,
+        session: SessionStore
+    ) async {
         let maxAttempts = 80
         let delayNanoseconds: UInt64 = 1_500_000_000
         for attempt in 0..<maxAttempts {
@@ -97,6 +106,17 @@ final class ImportRecipeViewModel {
                     }
                     return
                 case "failed":
+                    if shouldAttemptDeviceCapture(result) {
+                        await captureAndRetry(api: api, generation: generation, session: session)
+                        return
+                    }
+                    if isSiteBlocked(result) {
+                        state = .siteBlocked(
+                            message: result.error
+                                ?? "This site blocked automated import. Try loading from your device again, or add the meal manually."
+                        )
+                        return
+                    }
                     state = .failed(result.error ?? "Import failed.")
                     return
                 default:
@@ -120,6 +140,61 @@ final class ImportRecipeViewModel {
         state = .failed("Import is still processing. Check Galley shortly.")
     }
 
+    private func shouldAttemptDeviceCapture(_ result: ImportRecipeStatusResponse) -> Bool {
+        !didAttemptDeviceCapture && isSiteBlocked(result)
+    }
+
+    private func isSiteBlocked(_ result: ImportRecipeStatusResponse) -> Bool {
+        if result.code == "SITE_BLOCKED" { return true }
+        let message = (result.error ?? "").lowercased()
+        return message.contains("blocked automated import")
+            || message.contains("access issue")
+            || message.contains("paste the page html")
+    }
+
+    private func captureAndRetry(
+        api: RationAPI,
+        generation: Int,
+        session: SessionStore
+    ) async {
+        didAttemptDeviceCapture = true
+        state = .capturing
+        do {
+            let html = try await RecipePageCapture.captureHtml(from: url)
+            guard isCurrent(generation) else { return }
+            // Assisted retry is a new 1-credit job (blocked attempt was refunded).
+            state = .submitting
+            let response = try await api.importRecipe(
+                ImportRecipeRequest(url: url, pageHtml: html)
+            )
+            guard isCurrent(generation) else { return }
+            guard let requestId = response.requestId else {
+                state = .failed("Import started but no request id was returned.")
+                return
+            }
+            Haptics.light()
+            state = .processing(requestId: requestId)
+            Task { await AIErrorHandling.refreshCredits(session: session, api: api) }
+            await poll(requestId: requestId, api: api, generation: generation, session: session)
+        } catch is CancellationError {
+            return
+        } catch let error as RecipePageCaptureError {
+            guard isCurrent(generation) else { return }
+            state = .siteBlocked(message: error.localizedDescription)
+        } catch {
+            guard isCurrent(generation) else { return }
+            if AIErrorHandling.mapSubmitError(error) == .paywall {
+                shouldShowPaywall = true
+                state = .idle
+            } else {
+                state = .siteBlocked(
+                    message: (error as? APIError)?.errorDescription
+                        ?? error.localizedDescription
+                )
+            }
+        }
+    }
+
     func confirm(requestId: String, api: RationAPI) async {
         state = .confirming
         do {
@@ -134,6 +209,7 @@ final class ImportRecipeViewModel {
         cancelActiveWork()
         state = .idle
         shouldShowPaywall = false
+        didAttemptDeviceCapture = false
     }
 
     private func isCurrent(_ generation: Int) -> Bool {
@@ -149,6 +225,7 @@ struct ImportRecipeSheet: View {
     @State private var showingPaywall = false
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
+    var onAddManually: () -> Void = {}
 
     private var creditCost: Int {
         env.session.session?.aiCosts?.importUrl ?? 1
@@ -162,6 +239,8 @@ struct ImportRecipeSheet: View {
                     idleContent
                 case .submitting, .processing:
                     AIProcessingView(feature: .importRecipe, creditCost: creditCost)
+                case .capturing:
+                    capturingContent
                 case let .verification(extracted, requestId):
                     verificationContent(extracted, requestId: requestId)
                 case .confirming:
@@ -175,7 +254,14 @@ struct ImportRecipeSheet: View {
                     VStack(spacing: 12) {
                         ErrorBanner(message: message)
                         Button("Try again") { model.reset() }.buttonStyle(SecondaryButtonStyle())
+                        Button("Add meal manually") {
+                            dismiss()
+                            onAddManually()
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
                     }
+                case let .siteBlocked(message):
+                    siteBlockedContent(message)
                 }
             }
             .padding(16)
@@ -208,7 +294,7 @@ struct ImportRecipeSheet: View {
             VStack(spacing: 16) {
                 AIFeatureInlineIntro(
                     title: "Import recipe",
-                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley.",
+                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley. HTTPS only. Tested with allrecipes.com and most major recipe sites. Some sites block automated imports — if so, Ration will try loading the page on your device; if that fails too, add the meal manually.",
                     creditCost: creditCost,
                     costLabel: "per import",
                     nextSteps: "Review the imported meal before adding to Galley."
@@ -217,6 +303,10 @@ struct ImportRecipeSheet: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .textFieldStyle(.roundedBorder)
+                Text("If a site blocks bots, you'll see a clear next step — device reload or manual entry.")
+                    .rationCaption()
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 AIFeaturePrimaryButton(
                     label: "Import",
                     creditCost: creditCost,
@@ -227,6 +317,47 @@ struct ImportRecipeSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    private var capturingContent: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .tint(Theme.hyperGreen)
+            Text("Loading page on your device…")
+                .rationHeadline()
+            Text("This site blocked our servers. Trying again with your connection (uses 1 credit if extraction starts).")
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
+    private func siteBlockedContent(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            ErrorBanner(message: message)
+            Text("Why this happened")
+                .rationHeadline()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("Publishers like allrecipes.com often block automated downloads. Your phone can sometimes open the page when our servers cannot. If that still fails, open the recipe in Safari and add it manually.")
+                .rationCaption()
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let safariURL = URL(string: model.url), safariURL.scheme == "https" {
+                Link(destination: safariURL) {
+                    Label("Open in Safari", systemImage: "safari")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+            Button("Try again") { model.reset() }
+                .buttonStyle(SecondaryButtonStyle())
+            Button("Add meal manually") {
+                dismiss()
+                onAddManually()
+            }
+            .buttonStyle(PrimaryButtonStyle())
         }
     }
 

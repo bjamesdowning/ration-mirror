@@ -25,6 +25,22 @@ describe("RecipeImportRequestSchema", () => {
 		});
 		expect(result.success).toBe(false);
 	});
+
+	it("accepts optional pageHtml within bounds", () => {
+		const result = RecipeImportRequestSchema.safeParse({
+			url: "https://example.com/recipe",
+			pageHtml: "x".repeat(200),
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects pageHtml that is too short", () => {
+		const result = RecipeImportRequestSchema.safeParse({
+			url: "https://example.com/recipe",
+			pageHtml: "short",
+		});
+		expect(result.success).toBe(false);
+	});
 });
 
 describe("ImportConfirmRequestSchema", () => {

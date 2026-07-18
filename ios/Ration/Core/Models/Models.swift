@@ -1385,6 +1385,20 @@ struct MealSummary: Codable, Sendable {
 
 struct ImportRecipeRequest: Encodable, Sendable {
     let url: String
+    var pageHtml: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case pageHtml
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(url, forKey: .url)
+        if let pageHtml, !pageHtml.isEmpty {
+            try container.encode(pageHtml, forKey: .pageHtml)
+        }
+    }
 }
 
 struct GenerateMealRequest: Encodable, Sendable {

@@ -9,6 +9,11 @@ import {
 } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { insertQueueJobPending } from "~/lib/queue-job.server";
+import {
+	importPageR2Key,
+	utf8ByteLength,
+} from "~/lib/recipe-import-block.server";
+import { RECIPE_IMPORT_PAGE_HTML_MAX } from "~/lib/schemas/recipe-import";
 
 /** Private IP ranges and known metadata endpoints to block (SSRF mitigation). */
 const BLOCKED_HOSTNAMES = new Set([
@@ -21,8 +26,28 @@ const BLOCKED_HOSTNAMES = new Set([
 export function isBlockedImportUrl(rawUrl: string): boolean {
 	try {
 		const { hostname } = new URL(rawUrl);
-		if (BLOCKED_HOSTNAMES.has(hostname)) return true;
-		const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		const host = hostname.toLowerCase().replace(/\.$/, "");
+		if (BLOCKED_HOSTNAMES.has(host)) return true;
+		if (host === "localhost" || host.endsWith(".localhost")) return true;
+		if (host === "0.0.0.0") return true;
+
+		// IPv6 loopback / ULA / link-local
+		if (host === "::1" || host === "[::1]") return true;
+		const bare =
+			host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+		if (bare.includes(":")) {
+			const h = bare.toLowerCase();
+			if (
+				h === "::1" ||
+				h.startsWith("fc") ||
+				h.startsWith("fd") ||
+				h.startsWith("fe80:")
+			) {
+				return true;
+			}
+		}
+
+		const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
 		if (ipv4) {
 			const a = Number(ipv4[1]);
 			const b = Number(ipv4[2]);
@@ -30,6 +55,8 @@ export function isBlockedImportUrl(rawUrl: string): boolean {
 			if (a === 172 && b >= 16 && b <= 31) return true;
 			if (a === 192 && b === 168) return true;
 			if (a === 127) return true;
+			if (a === 169 && b === 254) return true; // link-local
+			if (a === 0) return true;
 		}
 		return false;
 	} catch {
@@ -41,6 +68,8 @@ export interface SubmitRecipeImportInput {
 	userId: string;
 	organizationId: string;
 	url: string;
+	/** Client-assisted page HTML (stored in R2; not sent on the queue). */
+	pageHtml?: string;
 }
 
 export type SubmitRecipeImportResult =
@@ -57,10 +86,14 @@ export async function submitRecipeImport(
 	env: Cloudflare.Env,
 	input: SubmitRecipeImportInput,
 ): Promise<SubmitRecipeImportResult> {
-	const { userId, organizationId, url: validatedUrl } = input;
+	const { userId, organizationId, url: validatedUrl, pageHtml } = input;
 
 	if (isBlockedImportUrl(validatedUrl)) {
 		throw data({ error: "That URL is not accessible." }, { status: 422 });
+	}
+
+	if (pageHtml && utf8ByteLength(pageHtml) > RECIPE_IMPORT_PAGE_HTML_MAX) {
+		throw data({ error: "Page HTML is too large to process" }, { status: 400 });
 	}
 
 	try {
@@ -111,12 +144,22 @@ export async function submitRecipeImport(
 				"import_url",
 				organizationId,
 			);
+
+			const useClientHtml = Boolean(pageHtml?.trim());
+			if (useClientHtml && pageHtml) {
+				// R2 for strong read-after-write (KV is eventually consistent across colos).
+				await env.STORAGE.put(importPageR2Key(requestId), pageHtml, {
+					httpMetadata: { contentType: "text/html; charset=utf-8" },
+				});
+			}
+
 			await queue.send({
 				requestId,
 				organizationId,
 				userId,
 				url: validatedUrl,
 				cost: AI_COSTS.IMPORT_URL,
+				...(useClientHtml ? { contentSource: "client" as const } : {}),
 			});
 			return { status: "processing" as const, requestId };
 		},

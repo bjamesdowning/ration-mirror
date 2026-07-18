@@ -126,7 +126,11 @@ struct GalleyView: View {
             .sheet(isPresented: $showingImport) {
                 ImportRecipeSheet(
                     onComplete: { await reload() },
-                    onImportedMeal: { meal in navigateToMealId = meal.id }
+                    onImportedMeal: { meal in navigateToMealId = meal.id },
+                    onAddManually: {
+                        showingImport = false
+                        showingAddMeal = true
+                    }
                 )
             }
             .navigationDestination(item: $navigateToMealId) { mealId in

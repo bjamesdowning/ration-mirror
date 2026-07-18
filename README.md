@@ -616,9 +616,16 @@ User confirms the preview → bulk add via `POST /api/meal-plans/:id/entries/bul
 
 ---
 
-### 3.8 Import URL (Queue + AI Gateway + Browser Rendering)
+### 3.8 Import URL (Queue + AI Gateway + Browser Rendering + client assist)
 
-URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Gemini via AI Gateway, creates the meal in D1.
+URL import uses a queue to offload page fetch, AI extraction, and meal creation. Producer validates URL (SSRF, duplicate) before enqueue; consumer fetches (plain or Browser Rendering fallback), runs Gemini via AI Gateway, and stores an **extracted recipe** for user verification (meal is created only on confirm).
+
+Some publishers (notably allrecipes.com / Dotdash) **block automated fetches** (HTTP 402/403 and access-support pages). When that happens the job fails with code **`SITE_BLOCKED`** (credit refunded). Clients can retry with **assisted HTML**:
+
+- **iOS** — on `SITE_BLOCKED`, the app captures the page on-device (`URLSession`, then `WKWebView`) and re-submits `{ url, pageHtml }`.
+- **Web** — shows a paste-HTML recovery step (open the recipe → copy page source → paste → extract). Manual Galley entry remains available.
+
+Client HTML is stored briefly in **R2** (`import-page/{requestId}`) because queue payloads are too small and KV is eventually consistent across colos; the consumer reads R2 and skips remote fetch, then deletes the object after a terminal job result.
 
 ```mermaid
 sequenceDiagram
@@ -627,36 +634,37 @@ sequenceDiagram
     participant D1 as D1 Database
     participant Queue as IMPORT_URL_QUEUE
     participant Consumer as Queue Consumer
-    participant Fetch as Plain Fetch / BR
+    participant Fetch as Plain Fetch / BR / Client HTML
     participant AIGateway as AI Gateway
 
-    User->>Worker: POST /api/meals/import { url }
+    User->>Worker: POST /api/meals/import { url } or { url, pageHtml }
     Worker->>Worker: requireActiveGroup + SSRF check + duplicate check
     Worker->>Worker: withCreditGate(cost=1)
-    Worker->>Queue: send({ requestId, organizationId, userId, url, cost })
     Worker->>D1: insertQueueJobPending(requestId, "import_url", orgId)
+    opt pageHtml present
+        Worker->>Worker: R2 put import-page/requestId
+    end
+    Worker->>Queue: send({ requestId, organizationId, userId, url, cost, contentSource? })
     Worker-->>User: { status: "processing", requestId }
 
     loop Poll until done
         User->>Worker: GET /api/meals/import/status/:requestId
         Worker->>D1: getQueueJob(requestId)
-        D1-->>Worker: { status, meal? | error? }
-        Worker-->>User: { status, success?, meal? | error? }
+        D1-->>Worker: { status, extractedRecipe? | error? }
+        Worker-->>User: { status, success?, extractedRecipe? | error? }
     end
 
     rect rgb(232, 245, 233)
         Note over Consumer,AIGateway: Consumer (async)
-        Consumer->>Fetch: fetch(url) or fetchPageAsMarkdown (BR fallback)
-        Fetch-->>Consumer: page content
-        Consumer->>AIGateway: POST gemini-3.5-flash — JSON extraction
+        Consumer->>Fetch: remote fetch, BR, or R2 client HTML
+        Fetch-->>Consumer: page content or SITE_BLOCKED
+        Consumer->>AIGateway: POST gemini — JSON extraction
         AIGateway-->>Consumer: { title, ingredients, steps, ... }
-        Consumer->>Consumer: NOT_A_RECIPE? Retry with BR
-        Consumer->>D1: createMeal() — insert meal + ingredients
         Consumer->>D1: updateQueueJobResult(requestId, "completed" | "failed")
     end
 ```
 
-On success the client redirects to the new meal. Duplicate URLs return `DUPLICATE_URL` (sync or from poll). Browser Rendering is used when plain fetch yields 429/403, too little content, or `NOT_A_RECIPE`.
+On success the client shows verification, then confirms via `POST /api/meals/import/confirm`. Duplicate URLs return `DUPLICATE_URL` (sync or from poll). Browser Rendering is used when plain fetch yields 402/403/429, too little content, or non-access `NOT_A_RECIPE` — it cannot bypass sites that identify Cloudflare Browser Run as a bot.
 
 ---
 
@@ -696,7 +704,7 @@ The Galley holds two types: **Recipes** (full multi-ingredient meals) and **Prov
 **Key workflows:**
 - **Create** — Via `MealBuilder` form or AI generation. Ingredients can be linked to an existing cargo item (`cargoId`) or left as a free-text name. The link is optional — it enables quantity deduction on cook but is not required.
 - **AI generation** — `POST /api/meals/generate` (2 credits) sends pantry context to Gemini and returns 3 Vectorize-verified recipes.
-- **URL import** — `POST /api/meals/import` (1 credit) returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch or Browser Rendering fallback), runs Gemini 3.5 Flash via AI Gateway for extraction, creates the meal in D1. On success the client redirects to the meal. Duplicate URLs return `DUPLICATE_URL` synchronously (409) or from the poll. HTTPS-only URLs are enforced (SSRF guard). Browser Rendering is used when plain fetch yields 429/403, insufficient content, or AI returns `NOT_A_RECIPE`. Requires `CF_BROWSER_RENDERING_TOKEN` (optional); when absent, uses plain fetch only.
+- **URL import** — `POST /api/meals/import` (1 credit) accepts `{ url }` or `{ url, pageHtml }` and returns `{ status: "processing", requestId }`; client polls `GET /api/meals/import/status/:requestId`. Consumer fetches the page (plain fetch, Browser Rendering fallback, or client-supplied HTML from R2), runs Gemini via AI Gateway for extraction, then waits for verify → `POST /api/meals/import/confirm`. Bot-walled sites return `SITE_BLOCKED` (refunded); web offers paste-HTML recovery and iOS retries with on-device capture. Duplicate URLs return `DUPLICATE_URL` (409 or from poll). HTTPS-only + SSRF guard. Optional `CF_BROWSER_RENDERING_TOKEN` for JS-heavy (non-walled) sites.
 - **Cook** — `POST /api/meals/:id/cook` deducts all ingredients from cargo via the Vectorize-backed resolver. Accepts a `servings` override to scale quantities.
 - **Match mode** — `GET /api/meals/match` returns meals ranked by how much of their ingredient list is already in the pantry, in either `strict` (100% match only) or `delta` (partial match, sorted by %) mode.
 - **Tags** — Shared org-wide registry via `tag` + `meal_tag` junction (same tags as cargo). Used for filtering in Galley, Manifest, Supply, and MCP `list_meals`.

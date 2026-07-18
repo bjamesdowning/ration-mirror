@@ -1,8 +1,9 @@
 /**
  * Import-URL queue consumer logic.
- * Fetches page content (plain or Browser Rendering), runs Gemini via AI Gateway
- * for recipe extraction (LOW thinking), and stores the extracted recipe for user
- * verification. The meal is created only when the user confirms via POST /api/meals/import/confirm.
+ * Fetches page content (plain, Browser Rendering, or client-supplied HTML in KV),
+ * runs Gemini via AI Gateway for recipe extraction (LOW thinking), and stores the
+ * extracted recipe for user verification. The meal is created only when the user
+ * confirms via POST /api/meals/import/confirm.
  */
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -18,6 +19,15 @@ import {
 	runIdempotentAiJob,
 	updateQueueJobResult,
 } from "~/lib/queue-job.server";
+import {
+	importPageR2Key,
+	isAccessWallAiMessage,
+	isBlockedPageContent,
+	isSiteBlockHttpStatus,
+	SITE_BLOCKED_CODE,
+	SITE_BLOCKED_MESSAGE,
+	utf8ByteLength,
+} from "~/lib/recipe-import-block.server";
 import { isBlockedImportUrl } from "~/lib/recipe-import-submit.server";
 import type { MealInput } from "~/lib/schemas/meal";
 import { MealSchema } from "~/lib/schemas/meal";
@@ -69,6 +79,8 @@ export interface ImportUrlQueueMessage {
 	userId: string;
 	url: string;
 	cost: number;
+	/** When true, consumer reads HTML from R2 instead of fetching the URL. */
+	contentSource?: "client" | "remote";
 }
 
 export interface ImportUrlJobResult {
@@ -83,9 +95,10 @@ export interface ImportUrlJobResult {
 	existingMealName?: string;
 }
 
-type PageContentSource = "browser_rendering" | "plain_fetch";
+type PageContentSource = "browser_rendering" | "plain_fetch" | "client";
 
-function extractJsonLdRecipe(html: string): string | null {
+/** Exported for unit tests — extract schema.org Recipe JSON-LD from HTML. */
+export function extractJsonLdRecipe(html: string): string | null {
 	const scriptPattern =
 		/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 	const blocks = Array.from(html.matchAll(scriptPattern));
@@ -126,6 +139,123 @@ function sanitizeHtml(raw: string): string {
 		.slice(0, MAX_HTML_CHARS);
 }
 
+/**
+ * Build LLM page content from raw HTML. Returns SITE_BLOCKED when the body
+ * is an access/support wall.
+ */
+export function buildPageContentFromHtml(
+	raw: string,
+	source: PageContentSource,
+):
+	| { ok: true; content: string; source: PageContentSource }
+	| { ok: false; error: string; code: string } {
+	if (isBlockedPageContent(raw)) {
+		return {
+			ok: false,
+			error: SITE_BLOCKED_MESSAGE,
+			code: SITE_BLOCKED_CODE,
+		};
+	}
+
+	const jsonLdRecipe = extractJsonLdRecipe(raw);
+	if (jsonLdRecipe) {
+		return {
+			ok: true,
+			content: `<recipe_json_ld>\n${jsonLdRecipe}\n</recipe_json_ld>`,
+			source,
+		};
+	}
+
+	const sanitized = sanitizeHtml(raw);
+	if (isBlockedPageContent(sanitized)) {
+		return {
+			ok: false,
+			error: SITE_BLOCKED_MESSAGE,
+			code: SITE_BLOCKED_CODE,
+		};
+	}
+
+	if (sanitized.length >= MIN_CONTENT_LENGTH) {
+		return {
+			ok: true,
+			content: `<page_content>\n${sanitized}\n</page_content>`,
+			source,
+		};
+	}
+
+	return {
+		ok: false,
+		error: "Page has too little text to extract a recipe.",
+		code: "CONTENT_TOO_SHORT",
+	};
+}
+
+async function loadClientPageContent(
+	env: Env,
+	requestId: string,
+): Promise<
+	| { ok: true; content: string; source: PageContentSource }
+	| { ok: false; error: string; code?: string }
+> {
+	const key = importPageR2Key(requestId);
+	let raw: string | null = null;
+	try {
+		const obj = await env.STORAGE.get(key);
+		if (obj) {
+			raw = await obj.text();
+		}
+	} catch (err) {
+		log.warn("recipe_import_client_html_r2_read_failed", {
+			requestId,
+			error: err instanceof Error ? err.message : "unknown",
+		});
+	}
+
+	if (!raw || raw.trim().length === 0) {
+		return {
+			ok: false,
+			error:
+				"Client-supplied page content was missing or too short. Paste the page HTML and try again.",
+			code: "CONTENT_TOO_SHORT",
+		};
+	}
+
+	if (utf8ByteLength(raw) > MAX_HTML_BYTES) {
+		return { ok: false, error: "Page is too large to process." };
+	}
+
+	// Detect bot walls before the min-length gate (access pages can be short).
+	if (isBlockedPageContent(raw)) {
+		return {
+			ok: false,
+			error: SITE_BLOCKED_MESSAGE,
+			code: SITE_BLOCKED_CODE,
+		};
+	}
+
+	if (raw.trim().length < MIN_CONTENT_LENGTH) {
+		return {
+			ok: false,
+			error:
+				"Client-supplied page content was missing or too short. Paste the page HTML and try again.",
+			code: "CONTENT_TOO_SHORT",
+		};
+	}
+
+	return buildPageContentFromHtml(raw, "client");
+}
+
+async function cleanupClientPageHtml(
+	env: Env,
+	requestId: string,
+): Promise<void> {
+	try {
+		await env.STORAGE.delete(importPageR2Key(requestId));
+	} catch {
+		/* ignore */
+	}
+}
+
 async function fetchPageContentForImport(
 	url: string,
 	env: Env,
@@ -152,22 +282,30 @@ async function fetchPageContentForImport(
 		}
 
 		if (!response.ok) {
-			const retryWithBR =
-				(response.status === 429 || response.status === 403) &&
-				env.CF_BROWSER_RENDERING_TOKEN?.trim();
-			if (retryWithBR) {
-				try {
-					const markdown = await fetchPageAsMarkdown(url, env);
-					if (markdown.length >= MIN_CONTENT_LENGTH) {
-						return {
-							content: `<page_content>\n${markdown}\n</page_content>`,
-							source: "browser_rendering",
-							ok: true,
-						};
+			if (isSiteBlockHttpStatus(response.status)) {
+				const retryWithBR = Boolean(env.CF_BROWSER_RENDERING_TOKEN?.trim());
+				if (retryWithBR) {
+					try {
+						const markdown = await fetchPageAsMarkdown(url, env);
+						if (
+							markdown.length >= MIN_CONTENT_LENGTH &&
+							!isBlockedPageContent(markdown)
+						) {
+							return {
+								content: `<page_content>\n${markdown}\n</page_content>`,
+								source: "browser_rendering",
+								ok: true,
+							};
+						}
+					} catch {
+						/* fall through to SITE_BLOCKED */
 					}
-				} catch {
-					/* fall through */
 				}
+				return {
+					ok: false,
+					error: SITE_BLOCKED_MESSAGE,
+					code: SITE_BLOCKED_CODE,
+				};
 			}
 			return {
 				ok: false,
@@ -185,7 +323,10 @@ async function fetchPageContentForImport(
 			if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
 				try {
 					const markdown = await fetchPageAsMarkdown(url, env);
-					if (markdown.length >= MIN_CONTENT_LENGTH) {
+					if (
+						markdown.length >= MIN_CONTENT_LENGTH &&
+						!isBlockedPageContent(markdown)
+					) {
 						return {
 							content: `<page_content>\n${markdown}\n</page_content>`,
 							source: "browser_rendering",
@@ -204,7 +345,10 @@ async function fetchPageContentForImport(
 			if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
 				try {
 					const markdown = await fetchPageAsMarkdown(url, env);
-					if (markdown.length >= MIN_CONTENT_LENGTH) {
+					if (
+						markdown.length >= MIN_CONTENT_LENGTH &&
+						!isBlockedPageContent(markdown)
+					) {
 						return {
 							content: `<page_content>\n${markdown}\n</page_content>`,
 							source: "browser_rendering",
@@ -218,32 +362,33 @@ async function fetchPageContentForImport(
 			return { ok: false, error: "Page is too large to process." };
 		}
 
-		const jsonLdRecipe = extractJsonLdRecipe(raw);
-		if (jsonLdRecipe) {
-			return {
-				content: `<recipe_json_ld>\n${jsonLdRecipe}\n</recipe_json_ld>`,
-				source: "plain_fetch",
-				ok: true,
-			};
+		const built = buildPageContentFromHtml(raw, "plain_fetch");
+		if (built.ok) {
+			return built;
 		}
 
-		const sanitized = sanitizeHtml(raw);
-		if (sanitized.length >= MIN_CONTENT_LENGTH) {
-			return {
-				content: `<page_content>\n${sanitized}\n</page_content>`,
-				source: "plain_fetch",
-				ok: true,
-			};
+		if (built.code === SITE_BLOCKED_CODE) {
+			return built;
 		}
 
 		if (env.CF_BROWSER_RENDERING_TOKEN?.trim()) {
 			try {
 				const markdown = await fetchPageAsMarkdown(url, env);
-				if (markdown.length >= MIN_CONTENT_LENGTH) {
+				if (
+					markdown.length >= MIN_CONTENT_LENGTH &&
+					!isBlockedPageContent(markdown)
+				) {
 					return {
 						content: `<page_content>\n${markdown}\n</page_content>`,
 						source: "browser_rendering",
 						ok: true,
+					};
+				}
+				if (isBlockedPageContent(markdown)) {
+					return {
+						ok: false,
+						error: SITE_BLOCKED_MESSAGE,
+						code: SITE_BLOCKED_CODE,
 					};
 				}
 			} catch {
@@ -251,11 +396,7 @@ async function fetchPageContentForImport(
 			}
 		}
 
-		return {
-			ok: false,
-			error: "Page has too little text to extract a recipe.",
-			code: "CONTENT_TOO_SHORT",
-		};
+		return built;
 	} catch (err) {
 		clearTimeout(timeoutId);
 		if (err instanceof Error && err.name === "AbortError") {
@@ -334,6 +475,16 @@ async function runRecipeExtractionAIForImport(
 	return { ok: true, result: parsed.data };
 }
 
+function mapAiErrorToJobFailure(result: { code: string; message: string }): {
+	code: string;
+	error: string;
+} {
+	if (result.code === "NOT_A_RECIPE" && isAccessWallAiMessage(result.message)) {
+		return { code: SITE_BLOCKED_CODE, error: SITE_BLOCKED_MESSAGE };
+	}
+	return { code: result.code, error: result.message };
+}
+
 export async function runImportUrlConsumerJob(
 	env: Env,
 	message: ImportUrlQueueMessage,
@@ -348,7 +499,8 @@ async function executeImportUrlConsumerJob(
 	env: Env,
 	message: ImportUrlQueueMessage,
 ): Promise<void> {
-	const { requestId, organizationId, userId, url, cost } = message;
+	const { requestId, organizationId, userId, url, cost, contentSource } =
+		message;
 
 	const writeResult = async (result: ImportUrlJobResult) => {
 		return updateQueueJobResult(env.DB, requestId, result.status, result);
@@ -371,13 +523,20 @@ async function executeImportUrlConsumerJob(
 		});
 	};
 
+	let shouldCleanupClientHtml = false;
+
 	try {
-		const fetchResult = await fetchPageContentForImport(url, env);
+		const fetchResult =
+			contentSource === "client"
+				? await loadClientPageContent(env, requestId)
+				: await fetchPageContentForImport(url, env);
+
 		if (!fetchResult.ok) {
 			await failJob({
 				error: fetchResult.error,
 				code: fetchResult.code,
 			});
+			shouldCleanupClientHtml = true;
 			return;
 		}
 
@@ -395,24 +554,37 @@ async function executeImportUrlConsumerJob(
 			source === "plain_fetch" &&
 			env.CF_BROWSER_RENDERING_TOKEN?.trim()
 		) {
-			log.info("recipe_import_retry_with_br", {
-				url: new URL(url).hostname,
-			});
-			try {
-				const markdown = await fetchPageAsMarkdown(url, env);
-				if (markdown.length >= MIN_CONTENT_LENGTH) {
-					const brContent = `<page_content>\n${markdown}\n</page_content>`;
-					const brResult = await runRecipeExtractionAIForImport(
-						env,
-						brContent,
-						{ organizationId, userId },
-					);
-					if (brResult.ok && brResult.result.status === "ok") {
-						aiResult = brResult;
+			const accessWall = isAccessWallAiMessage(aiResult.result.message);
+			if (!accessWall) {
+				log.info("recipe_import_retry_with_br", {
+					url: new URL(url).hostname,
+				});
+				try {
+					const markdown = await fetchPageAsMarkdown(url, env);
+					if (
+						markdown.length >= MIN_CONTENT_LENGTH &&
+						!isBlockedPageContent(markdown)
+					) {
+						const brContent = `<page_content>\n${markdown}\n</page_content>`;
+						const brResult = await runRecipeExtractionAIForImport(
+							env,
+							brContent,
+							{ organizationId, userId },
+						);
+						if (brResult.ok && brResult.result.status === "ok") {
+							aiResult = brResult;
+						}
+					} else if (isBlockedPageContent(markdown)) {
+						await failJob({
+							code: SITE_BLOCKED_CODE,
+							error: SITE_BLOCKED_MESSAGE,
+						});
+						shouldCleanupClientHtml = true;
+						return;
 					}
+				} catch {
+					/* keep original aiResult */
 				}
-			} catch {
-				/* keep original aiResult */
 			}
 		}
 
@@ -421,15 +593,14 @@ async function executeImportUrlConsumerJob(
 				error: aiResult.error,
 				code: aiResult.code,
 			});
+			shouldCleanupClientHtml = true;
 			return;
 		}
 
 		const result = aiResult.result;
 		if (result.status === "error") {
-			await failJob({
-				code: result.code,
-				error: result.message,
-			});
+			await failJob(mapAiErrorToJobFailure(result));
+			shouldCleanupClientHtml = true;
 			return;
 		}
 
@@ -456,6 +627,7 @@ async function executeImportUrlConsumerJob(
 				existingMealName: dup.name,
 				error: `This URL has already been imported as "${dup.name}".`,
 			});
+			shouldCleanupClientHtml = true;
 			return;
 		}
 
@@ -496,10 +668,16 @@ async function executeImportUrlConsumerJob(
 			extractedRecipe,
 			sourceUrl: url,
 		});
+		shouldCleanupClientHtml = true;
 	} catch (err) {
 		log.error("Import URL consumer job failed", err);
 		await failJob({
 			error: err instanceof Error ? err.message : "Import failed",
 		});
+		shouldCleanupClientHtml = true;
+	} finally {
+		if (contentSource === "client" && shouldCleanupClientHtml) {
+			await cleanupClientPageHtml(env, requestId);
+		}
 	}
 }

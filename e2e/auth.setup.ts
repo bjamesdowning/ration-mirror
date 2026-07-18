@@ -61,12 +61,21 @@ async function ensureActiveGroup(page: Page) {
  * and saves storage state. Other tests reuse this state — no per-test login.
  */
 setup("authenticate", async ({ page }) => {
+	setup.setTimeout(90_000);
 	await page.goto("/");
 	await page
 		.getByRole("button", { name: "Dev Login" })
 		.waitFor({ state: "visible" });
 	await page.getByRole("button", { name: "Dev Login" }).click();
-	await page.waitForURL(/\/(hub|select-group)/, { timeout: 60000 });
+	const landed = await page
+		.waitForURL(/\/(hub|select-group)/, { timeout: 45_000 })
+		.then(() => true)
+		.catch(() => false);
+	// signUp.email may establish the session without a client-side navigation
+	// when the D1 user is created for the first time after a local reset.
+	if (!landed) {
+		await page.goto("/hub");
+	}
 
 	if (page.url().includes("select-group")) {
 		await ensureActiveGroup(page);

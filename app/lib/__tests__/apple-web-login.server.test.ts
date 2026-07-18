@@ -17,11 +17,12 @@ describe("hasAppleWebCredentials", () => {
 			hasAppleWebCredentials({
 				...createMockEnv(),
 				APPLE_SERVICES_ID: "com.mayutic.ration.web",
+				APPLE_APP_BUNDLE_IDENTIFIER: "com.mayutic.ration",
 			}),
 		).toBe(false);
 	});
 
-	it("returns true when all four web secrets are set", () => {
+	it("returns false when web secrets exist but bundle id is missing", () => {
 		expect(
 			hasAppleWebCredentials({
 				...createMockEnv(),
@@ -30,6 +31,20 @@ describe("hasAppleWebCredentials", () => {
 				APPLE_KEY_ID: "KEY123",
 				APPLE_PRIVATE_KEY:
 					"-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----",
+			}),
+		).toBe(false);
+	});
+
+	it("returns true when all four web secrets and bundle id are set", () => {
+		expect(
+			hasAppleWebCredentials({
+				...createMockEnv(),
+				APPLE_SERVICES_ID: "com.mayutic.ration.web",
+				APPLE_TEAM_ID: "TEAM123",
+				APPLE_KEY_ID: "KEY123",
+				APPLE_PRIVATE_KEY:
+					"-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----",
+				APPLE_APP_BUNDLE_IDENTIFIER: "com.mayutic.ration",
 			}),
 		).toBe(true);
 	});
@@ -116,6 +131,18 @@ describe("resolveAppleSocialProvider", () => {
 		expect(config.disableImplicitSignUp).toBe(true);
 		expect(config.clientSecret.split(".")).toHaveLength(3);
 	});
+
+	it("returns undefined when web secrets exist without bundle id (misconfig)", () => {
+		const provider = resolveAppleSocialProvider({
+			...createMockEnv(),
+			APPLE_SERVICES_ID: "com.mayutic.ration.web",
+			APPLE_TEAM_ID: "TEAM123",
+			APPLE_KEY_ID: "KEY123",
+			APPLE_PRIVATE_KEY:
+				"-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----",
+		});
+		expect(provider).toBeUndefined();
+	});
 });
 
 describe("isAppleWebLoginAvailable", () => {
@@ -126,6 +153,7 @@ describe("isAppleWebLoginAvailable", () => {
 		APPLE_KEY_ID: "KEY123",
 		APPLE_PRIVATE_KEY:
 			"-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----",
+		APPLE_APP_BUNDLE_IDENTIFIER: "com.mayutic.ration",
 		FEATURE_FLAG_OVERRIDES: JSON.stringify({ "apple-web-login": true }),
 	};
 
@@ -150,6 +178,7 @@ describe("assertAppleWebLoginAllowed", () => {
 		APPLE_KEY_ID: "KEY123",
 		APPLE_PRIVATE_KEY:
 			"-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----",
+		APPLE_APP_BUNDLE_IDENTIFIER: "com.mayutic.ration",
 		FEATURE_FLAG_OVERRIDES: JSON.stringify({ "apple-web-login": false }),
 	};
 

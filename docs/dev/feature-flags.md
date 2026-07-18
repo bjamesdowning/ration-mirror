@@ -101,9 +101,9 @@ Web Sign in with Apple is gated behind this flag. Registry entry in [`registry.t
 },
 ```
 
-**Operator:** Create matching boolean flag in Flagship dashboard (disabled). Set Apple web secrets (`APPLE_SERVICES_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`) before enabling. Mobile Apple auth is **not** gated by this flag.
+**Operator:** Create matching boolean flag in Flagship dashboard (disabled). Set Apple web secrets (`APPLE_SERVICES_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`) **and** `APPLE_APP_BUNDLE_IDENTIFIER` before enabling — web credentials without the bundle ID are treated as misconfig (button stays hidden; provider not registered). Config is in **Apple Developer** Identifiers/Keys, not App Store Connect. Mobile Apple auth is **not** gated by this flag.
 
-**Rollout:** Because this is a signed-out auth surface, `userId` targeting will not show the button before login. Test on a dev/staging Flagship app or with `FEATURE_FLAG_OVERRIDES` outside production, then use a small percentage rollout on production before App Store publish.
+**Rollout:** Because this is a signed-out auth surface, `userId` targeting will not show the button before login. Test on a dev/staging Flagship app or with `FEATURE_FLAG_OVERRIDES`, then set the production default variation to `on` (`wrangler flagship flags set <APP_ID> apple-web-login --variation on`). Full portal steps: README §7.1 Web Apple (operator setup).
 
 ## References
 

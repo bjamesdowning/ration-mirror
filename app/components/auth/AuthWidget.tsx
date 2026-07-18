@@ -472,8 +472,9 @@ export function AuthWidget({
 					{appleWebLogin && (
 						<>
 							<p className="text-xs text-muted text-center mb-3 leading-relaxed">
-								Signed up in the app? Use Sign in with Apple with the same Apple
-								ID.
+								Used Apple in the app (including Hide My Email)? Continue with
+								Apple and the same Apple ID — magic link or Google with another
+								email will not open that account.
 							</p>
 							<button
 								type="button"

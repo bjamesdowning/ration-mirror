@@ -58,12 +58,13 @@ export default defineConfig({
 	webServer: useExternalServer
 		? undefined
 		: {
-				command: "bun run dev:local",
+				command: "bun scripts/e2e-dev-server.ts",
 				url: baseURL,
-				// Default to a fresh dev:local server so E2E never reuses a stale/wrong process on 5173.
+				// Default to a fresh warmed server so E2E never reuses a stale/wrong process on 5173.
 				reuseExistingServer:
 					!process.env.CI && process.env.PLAYWRIGHT_REUSE_SERVER === "1",
-				timeout: 120000,
-				stdout: "Local:",
+				timeout: 180000,
+				stdout: "pipe",
+				stderr: "pipe",
 			},
 });

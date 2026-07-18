@@ -1180,7 +1180,30 @@ Authentication is handled by Better Auth with the `organization` and `magicLink`
 
 **Native iOS (v1.4.49+):** The SwiftUI app supports **Sign in with Apple** and **Google Sign-In** via native SDKs. The app sends provider ID tokens to `POST /api/mobile/v1/auth/social`; the server verifies them through Better Auth and returns the same mobile JWT + refresh token pair as magic-link auth. Required Worker secrets: `GOOGLE_IOS_CLIENT_ID` (GCP iOS OAuth client), `APPLE_APP_BUNDLE_IDENTIFIER` (`com.mayutic.ration`), plus existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for web and ID-token audience verification. App Store Guideline 4.8 requires Sign in with Apple whenever Google social login is offered on iOS.
 
-**Web Apple (operator setup):** Create an Apple **Services ID**, configure return URL `https://ration.mayutic.com/api/auth/callback/apple`, domain verification for `ration.mayutic.com`, and a Sign in with Apple `.p8` key. Set Worker secrets: `APPLE_SERVICES_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`. Create boolean flag `apple-web-login` in Cloudflare Flagship (disabled). Because web auth starts signed out, `userId` targeting cannot reveal the login button; test on staging/dev or with non-production `FEATURE_FLAG_OVERRIDES`, then use a small production percentage rollout. Apple does not support `localhost` return URLs — test on production/staging HTTPS.
+**Web Apple (operator setup):** All OAuth client config lives in **[Apple Developer](https://developer.apple.com/account)** (Certificates, Identifiers & Profiles) — **not** App Store Connect. App Store Connect Sandbox testers are only for Hide My Email QA accounts.
+
+1. **Membership** → copy **Team ID** (`M2KJH5GDGH`) → `APPLE_TEAM_ID`.
+2. **Identifiers → App IDs** → `com.mayutic.ration` → enable **Sign in with Apple** as a **primary** App ID → `APPLE_APP_BUNDLE_IDENTIFIER`.
+3. **Identifiers → + → Services IDs** → e.g. `com.mayutic.ration.web` → enable Sign in with Apple → **Configure**:
+   - Primary App ID: **`com.mayutic.ration`** (required for the same Apple `sub` on iOS + web / Hide My Email continuity)
+   - Domains: `ration.mayutic.com` (no `https://`)
+   - Return URL: `https://ration.mayutic.com/api/auth/callback/apple`
+   - Save → value is `APPLE_SERVICES_ID`.
+4. **Keys → +** → enable **Sign in with Apple** (primary App ID `com.mayutic.ration`) → download `.p8` once → `APPLE_KEY_ID` + `APPLE_PRIVATE_KEY` (PEM; `\n` escapes OK).
+5. Set Worker secrets (`wrangler secret put` on production; add `--env dev` for `ration-dev`):
+
+```bash
+wrangler secret put APPLE_APP_BUNDLE_IDENTIFIER   # com.mayutic.ration
+wrangler secret put APPLE_SERVICES_ID             # e.g. com.mayutic.ration.web
+wrangler secret put APPLE_TEAM_ID                 # M2KJH5GDGH
+wrangler secret put APPLE_KEY_ID
+wrangler secret put APPLE_PRIVATE_KEY
+```
+
+6. Cloudflare **Flagship** → boolean flag key **`apple-web-login`** (see [Feature flags](docs/dev/feature-flags.md)). Enable only after secrets exist. Auth is signed-out, so **`userId` targeting will not show the button** — use the `ration-dev` Flagship app, `FEATURE_FLAG_OVERRIDES` `{"apple-web-login":true}`, or set the production default variation to `on` (e.g. `wrangler flagship flags set <APP_ID> apple-web-login --variation on`). Emergency kill: Flagship disable, or override `{"apple-web-login":false}`.
+7. Apple does **not** support `localhost` return URLs — validate OAuth on production/staging HTTPS. Web UI shows Continue with Apple only when **secrets and** the flag are on. Do not register web Apple secrets without `APPLE_APP_BUNDLE_IDENTIFIER` (Worker treats that as misconfig: button stays hidden and the Apple provider is not registered).
+
+**Hide My Email QA:** App Store Connect → Users and Access → Sandbox → Testers → create a Sandbox Apple ID → iOS Sign in with Apple (Hide My Email) → web **Continue with Apple** with the same Apple ID (not magic link / Google with a real email).
 
 **Local development:** When `BETTER_AUTH_URL` contains `localhost`, the **Dev Login** button appears (credentials: `dev@ration.app` / `ration-dev`). This uses email/password auth enabled only in dev. Transactional emails (magic link, welcome, agent OTP, 30-day inactivity re-engagement) are skipped locally when the `EMAIL` send binding is unavailable.
 

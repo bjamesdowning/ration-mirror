@@ -20,12 +20,18 @@ function isNonEmptySecret(value: string | undefined): value is string {
 	return typeof value === "string" && value.trim() !== "";
 }
 
+/**
+ * Web Sign in with Apple is ready only when Services ID secrets exist **and**
+ * the native bundle ID is set. Web-only config would omit the app audience and
+ * break iOS ID-token verification / Hide My Email `sub` continuity.
+ */
 export function hasAppleWebCredentials(env: Cloudflare.Env): boolean {
 	return (
 		isNonEmptySecret(env.APPLE_SERVICES_ID) &&
 		isNonEmptySecret(env.APPLE_TEAM_ID) &&
 		isNonEmptySecret(env.APPLE_KEY_ID) &&
-		isNonEmptySecret(env.APPLE_PRIVATE_KEY)
+		isNonEmptySecret(env.APPLE_PRIVATE_KEY) &&
+		isNonEmptySecret(env.APPLE_APP_BUNDLE_IDENTIFIER)
 	);
 }
 
@@ -72,10 +78,9 @@ export function resolveAppleSocialProvider(
 	env: Cloudflare.Env,
 ): AppleSocialProvider | undefined {
 	const bundleId = env.APPLE_APP_BUNDLE_IDENTIFIER?.trim() ?? "";
-	if (!bundleId && !hasAppleWebCredentials(env)) {
-		return undefined;
-	}
 
+	// Web secrets without bundle: hasAppleWebCredentials is false and bundleId
+	// is empty → undefined (refuse Services-ID-only Apple).
 	if (!hasAppleWebCredentials(env)) {
 		if (!bundleId) return undefined;
 		return {
@@ -89,7 +94,6 @@ export function resolveAppleSocialProvider(
 	const teamId = env.APPLE_TEAM_ID?.trim() as string;
 	const keyId = env.APPLE_KEY_ID?.trim() as string;
 	const privateKey = env.APPLE_PRIVATE_KEY?.trim() as string;
-	const audiences = bundleId ? [servicesId, bundleId] : [servicesId];
 
 	return async () => ({
 		clientId: servicesId,
@@ -99,7 +103,7 @@ export function resolveAppleSocialProvider(
 			keyId,
 			privateKey,
 		),
-		audience: audiences,
+		audience: [servicesId, bundleId],
 		disableImplicitSignUp: true,
 	});
 }

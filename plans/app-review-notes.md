@@ -14,7 +14,7 @@ Use this document when submitting to App Review or TestFlight external testing.
 
 Do **not** rely on Sign in with Apple / Google alone for App Review. Use the Flagship-gated review login:
 
-1. **Seed** (idempotent): `bun scripts/seed-app-review-demo.ts --remote` then set Wrangler secrets `APP_REVIEW_DEMO_EMAIL` (`app-review@mayutic.com`), `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`.
+1. **Seed** (idempotent, local-only script under gitignored `scripts/seed-account/`): `bun scripts/seed-account/seed-app-review-demo.ts --remote` then set Wrangler secrets `APP_REVIEW_DEMO_EMAIL` (`app-review@mayutic.com`), `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`.
 2. **Flagship:** create boolean flag `app-review-login` (default off). **Enable before** submitting / replying to review; **disable after** approval or between review windows (no redeploy). Emergency: `FEATURE_FLAG_OVERRIDES` `{"app-review-login":false}`.
 3. **App Store Connect** → TestFlight → Test Information → Beta App Review Information → check **Sign-in required** → User Name `app-review@mayutic.com` / Password = secret.
 4. **Notes for Review** (paste):

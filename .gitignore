@@ -37,5 +37,5 @@ worker-configuration.d.ts
 /coverage/
 /reports/
 
-# Local-only account seed utility (not pushed to GitLab)
+# Local-only account seed utilities (not pushed to GitLab)
 /scripts/seed-account/

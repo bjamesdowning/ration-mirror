@@ -132,7 +132,7 @@ App Store / TestFlight review email+password login on iOS. Registry:
 },
 ```
 
-**Operator:** Create matching boolean flag in Flagship (disabled). Seed account with `bun scripts/seed-app-review-demo.ts --remote` and set `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Enable the flag only during review windows; disable afterward. Signed-out Sign In reads flags via `GET /api/mobile/v1/client-flags`. Server enforces on `POST /api/mobile/v1/auth/review-login`. Checklist: [`plans/app-review-notes.md`](../plans/app-review-notes.md).
+**Operator:** Create matching boolean flag in Flagship (disabled). Seed the review account with the local-only script `bun scripts/seed-account/seed-app-review-demo.ts --remote` (under gitignored `scripts/seed-account/`) and set `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Enable the flag only during review windows; disable afterward. Signed-out Sign In reads flags via `GET /api/mobile/v1/client-flags`. Server enforces on `POST /api/mobile/v1/auth/review-login`. Checklist: [`plans/app-review-notes.md`](../plans/app-review-notes.md).
 
 ## References
 

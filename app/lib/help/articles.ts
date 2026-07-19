@@ -40,7 +40,8 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	{
 		slug: "01-what-is-ration",
 		title: "What is Ration?",
-		summary: "Product overview: Cargo, Galley, Manifest, and Supply.",
+		summary:
+			"Product overview: kitchen loop, Ask Ration (Copilot), and MCP as kitchen memory for AI.",
 		section: "overview",
 	},
 	{

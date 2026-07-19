@@ -6,7 +6,7 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 
 ## Overview
 
-- [What is Ration?](./01-what-is-ration.md) — Product overview: Cargo, Galley, Manifest, and Supply.
+- [What is Ration?](./01-what-is-ration.md) — Product overview: kitchen loop, Ask Ration (Copilot), and MCP as kitchen memory for AI.
 - [Key concepts](./02-key-concepts.md) — Organizations, credits, and the four kitchen surfaces.
 - [Account and sign-in](./03-account-and-sign-in.md) — Magic link, Google sign-in, and profile basics.
 - [Switching groups](./04-switching-groups.md) — Choose the active organization and keep data isolated.

@@ -4,7 +4,7 @@ Use this table for Copilot AI Search source configuration and **golden-question*
 
 | File | Suggested title | Audience | Example questions |
 |------|-----------------|----------|-------------------|
-| [01-what-is-ration.md](./01-what-is-ration.md) | What is Ration? | Both | What does Ration do? Is Ration a meal kit? Can teams share a pantry? |
+| [01-what-is-ration.md](./01-what-is-ration.md) | What is Ration? | Both | What does Ration do? Is Ration a meal kit? Can teams share a pantry? What is Ask Ration / Copilot? What is MCP? Can AI control my kitchen? |
 | [02-key-concepts.md](./02-key-concepts.md) | Key concepts: Cargo, Galley, Manifest, Supply | Both | What is Cargo vs Galley? Where do credits live? What is an organization? |
 | [03-account-and-sign-in.md](./03-account-and-sign-in.md) | Account and sign-in | Support | How do I log in? Does Ration support Google? What is magic link email? |
 | [04-switching-groups.md](./04-switching-groups.md) | Switching groups (organizations) | Support | How do I change household? Is my data shared between groups? |

@@ -24,7 +24,15 @@ final class BillingManager {
         case loggedIn(userId: String)
     }
 
+    /// StoreKit/RevenueCat sheet result — independent of crew entitlement.
+    /// Credit packs complete successfully without activating `crew_member`.
+    enum PurchaseOutcome: Equatable {
+        case cancelled
+        case completed
+    }
+
     /// Must match the RevenueCat entitlement id in `app/lib/billing.constants.ts`.
+    /// Kept as the canonical client-side id for entitlement checks outside purchase.
     static let crewEntitlementID = "crew_member"
 
     private(set) var sdkState: SDKState = .notConfigured("RevenueCat SDK not initialized.")
@@ -162,9 +170,12 @@ final class BillingManager {
         #endif
     }
 
-    /// Purchases a package by identifier. Returns true when the crew entitlement
-    /// is active afterwards, false when the user cancelled.
-    func purchase(packageID: String) async throws -> Bool {
+    /// Purchases a package by identifier.
+    /// - Returns `.cancelled` when the user dismisses the payment sheet.
+    /// - Returns `.completed` when StoreKit reports a successful purchase
+    ///   (subscription or consumable credit pack). Server fulfillment still
+    ///   arrives asynchronously via the RevenueCat → Ration webhook.
+    func purchase(packageID: String) async throws -> PurchaseOutcome {
         configureIfPossible()
         try requireLoggedIn()
 
@@ -177,8 +188,8 @@ final class BillingManager {
             )
         }
         let result = try await Purchases.shared.purchase(package: pkg)
-        if result.userCancelled { return false }
-        return result.customerInfo.entitlements[Self.crewEntitlementID]?.isActive == true
+        if result.userCancelled { return .cancelled }
+        return .completed
         #else
         throw notConfiguredError()
         #endif

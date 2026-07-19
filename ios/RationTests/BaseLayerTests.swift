@@ -178,6 +178,15 @@ final class BaseLayerTests: XCTestCase {
         XCTAssertFalse("crew_monthly".hasPrefix(AppConfig.creditPackProductPrefix))
     }
 
+    func testPurchaseOutcomeDistinguishesCancelFromCompleted() {
+        // Credit packs complete without activating crew_member; callers must not
+        // treat a false "crew active" Bool as user-cancelled.
+        XCTAssertNotEqual(
+            BillingManager.PurchaseOutcome.cancelled,
+            BillingManager.PurchaseOutcome.completed
+        )
+    }
+
     func testAuthCodeParsesUniversalLink() {
         let url = URL(string: "https://ration.mayutic.com/auth/mobile-callback/open?code=abc-123")!
         XCTAssertEqual(RationApp.authCode(from: url), "abc-123")

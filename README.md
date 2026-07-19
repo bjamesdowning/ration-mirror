@@ -1180,6 +1180,8 @@ Authentication is handled by Better Auth with the `organization` and `magicLink`
 
 **Native iOS (v1.4.49+):** The SwiftUI app supports **Sign in with Apple** and **Google Sign-In** via native SDKs. The app sends provider ID tokens to `POST /api/mobile/v1/auth/social`; the server verifies them through Better Auth and returns the same mobile JWT + refresh token pair as magic-link auth. Required Worker secrets: `GOOGLE_IOS_CLIENT_ID` (GCP iOS OAuth client), `APPLE_APP_BUNDLE_IDENTIFIER` (`com.mayutic.ration`), plus existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for web and ID-token audience verification. App Store Guideline 4.8 requires Sign in with Apple whenever Google social login is offered on iOS.
 
+**App Review demo login:** For Guideline 2.1, Apple needs Username/Password in App Store Connect — not SSO alone. When Flagship `app-review-login` is enabled, typing `app-review@mayutic.com` on Sign In reveals a Password field; `POST /api/mobile/v1/auth/review-login` issues mobile JWTs for the pre-seeded account. See [`plans/app-review-notes.md`](plans/app-review-notes.md).
+
 **Web Apple (operator setup):** All OAuth client config lives in **[Apple Developer](https://developer.apple.com/account)** (Certificates, Identifiers & Profiles) — **not** App Store Connect. App Store Connect Sandbox testers are only for Hide My Email QA accounts.
 
 1. **Membership** → copy **Team ID** (`M2KJH5GDGH`) → `APPLE_TEAM_ID`.
@@ -2153,6 +2155,8 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 - **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, `wrangler.local.jsonc`, and `wrangler.copilot.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
 **AI ops kill switches** (permanent; registry default off / fail closed): `ai-import-url`, `ai-scan-receipt`, `ai-dock-from-receipt`, `ai-generate-meal`, `ai-plan-week`. Server asserts **403** `FEATURE_DISABLED` before credit debit. Web + iOS hide entry points via `clientFlags` (mobile: `GET /api/mobile/v1/session`). For already-live AI, create Flagship flags with default **ON** before deploy; emergency kill via dashboard or `FEATURE_FLAG_OVERRIDES`. See [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md) § AI ops kill switches.
+
+**App Review login** (`app-review-login` / `appReviewLogin`): Flagship-gated email+password for the pre-seeded `app-review@mayutic.com` account. Default **off**. Enable only during App Store / TestFlight review windows; disable afterward (no redeploy). iOS reveals Password only when the flag is on and that email is typed. Server: `POST /api/mobile/v1/auth/review-login`. Signed-out flag read: `GET /api/mobile/v1/client-flags`. Seed: `bun scripts/seed-app-review-demo.ts --remote`. Secrets: `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Full checklist: [`plans/app-review-notes.md`](plans/app-review-notes.md).
 
 **Manual deploy (local):**
 

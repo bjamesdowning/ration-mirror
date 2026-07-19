@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	MobileActivateOrgSchema,
 	MobileMagicLinkSchema,
+	MobileReviewLoginSchema,
 	MobileTokenRequestSchema,
 } from "~/lib/schemas/mobile/auth";
 
@@ -71,6 +72,34 @@ describe("MobileTokenRequestSchema", () => {
 describe("MobileActivateOrgSchema", () => {
 	it("requires organizationId", () => {
 		const result = MobileActivateOrgSchema.safeParse({});
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("MobileReviewLoginSchema", () => {
+	it("accepts email, password, and tosAccepted", () => {
+		const result = MobileReviewLoginSchema.safeParse({
+			email: "app-review@mayutic.com",
+			password: "ReviewPass!",
+			tosAccepted: true,
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects missing tosAccepted", () => {
+		const result = MobileReviewLoginSchema.safeParse({
+			email: "app-review@mayutic.com",
+			password: "ReviewPass!",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects empty password", () => {
+		const result = MobileReviewLoginSchema.safeParse({
+			email: "app-review@mayutic.com",
+			password: "",
+			tosAccepted: true,
+		});
 		expect(result.success).toBe(false);
 	});
 });

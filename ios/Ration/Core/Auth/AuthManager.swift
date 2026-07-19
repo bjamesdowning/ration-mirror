@@ -105,6 +105,37 @@ final class AuthManager {
         phase = .signedIn
     }
 
+    // MARK: App Review login
+
+    /// Flagship-gated email+password path for the pre-seeded App Review account.
+    func signInWithReviewCredentials(
+        email: String,
+        password: String,
+        tosAccepted: Bool
+    ) async throws {
+        clearAuthError()
+        var body: [String: Any] = [
+            "email": email,
+            "password": password,
+        ]
+        if tosAccepted {
+            body["tosAccepted"] = true
+        }
+        let pair = try await postTokenDictionary(body: body, endpoint: "auth/review-login")
+        apply(pair)
+        phase = .signedIn
+    }
+
+    /// Fetches unsigned client-visible flags for signed-out UI (e.g. review login reveal).
+    func fetchClientFlags() async throws -> ClientFlags {
+        var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "client-flags"))
+        req.httpMethod = "GET"
+        let (data, response) = try await session.data(for: req)
+        try Self.ensureOK(data: data, response: response)
+        let decoded = try JSON.decoder.decode(ClientFlagsResponse.self, from: data)
+        return decoded.clientFlags
+    }
+
     // MARK: Magic link + code exchange
 
     func requestMagicLink(email: String) async throws {

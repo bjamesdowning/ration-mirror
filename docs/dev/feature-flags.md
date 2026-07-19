@@ -119,6 +119,21 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 
 **Operator matrix:** `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
 
+## Example: `app-review-login` (shipped)
+
+App Store / TestFlight review email+password login on iOS. Registry:
+
+```typescript
+"app-review-login": {
+  defaultEnabled: false,
+  description: "App Store / TestFlight review email+password login on iOS",
+  clientVisible: true,
+  clientKey: "appReviewLogin",
+},
+```
+
+**Operator:** Create matching boolean flag in Flagship (disabled). Seed account with `bun scripts/seed-app-review-demo.ts --remote` and set `APP_REVIEW_DEMO_EMAIL`, `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`. Enable the flag only during review windows; disable afterward. Signed-out Sign In reads flags via `GET /api/mobile/v1/client-flags`. Server enforces on `POST /api/mobile/v1/auth/review-login`. Checklist: [`plans/app-review-notes.md`](../plans/app-review-notes.md).
+
 ## References
 
 - [Flagship overview](https://developers.cloudflare.com/flagship/)

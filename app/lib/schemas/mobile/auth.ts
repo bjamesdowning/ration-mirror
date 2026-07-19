@@ -58,6 +58,14 @@ export const MobileSocialAuthSchema = z.discriminatedUnion("provider", [
 
 export type MobileSocialAuthInput = z.infer<typeof MobileSocialAuthSchema>;
 
+export const MobileReviewLoginSchema = z.object({
+	email: z.string().email(),
+	password: z.string().min(1).max(256),
+	tosAccepted: z.literal(true),
+});
+
+export type MobileReviewLoginInput = z.infer<typeof MobileReviewLoginSchema>;
+
 export const MobileActivateOrgSchema = z.object({
 	organizationId: z.string().min(1),
 });

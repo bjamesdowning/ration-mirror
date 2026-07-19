@@ -108,6 +108,8 @@
 	 *   - BETTER_AUTH_SECRET: Better Auth encryption key
 	 *   - CF_BROWSER_RENDERING_TOKEN: Cloudflare Browser Rendering API token
 	 *     (optional; when absent, recipe import uses plain fetch only)
+	 *   - APP_REVIEW_DEMO_EMAIL / APP_REVIEW_DEMO_PASSWORD / APP_REVIEW_DEMO_USER_ID:
+	 *     App Store review login (gated by Flagship `app-review-login`)
 	 */
 	/*
 	 * Static Assets

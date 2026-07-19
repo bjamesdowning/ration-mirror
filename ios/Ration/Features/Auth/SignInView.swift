@@ -73,6 +73,8 @@ struct SignInView: View {
 
     @State private var mode: AuthFlowMode = .signIn
     @State private var email = ""
+    @State private var password = ""
+    @State private var appReviewLoginEnabled = false
     @State private var isSending = false
     @State private var linkSent = false
     @State private var errorMessage: String?
@@ -83,6 +85,14 @@ struct SignInView: View {
     private enum SocialProvider {
         case apple
         case google
+    }
+
+    private var showReviewPassword: Bool {
+        mode == .signIn &&
+            AppReviewLoginGate.shouldShowPassword(
+                flagEnabled: appReviewLoginEnabled,
+                email: email
+            )
     }
 
     var body: some View {
@@ -109,6 +119,17 @@ struct SignInView: View {
                 .padding(.bottom, 16)
             }
             .scrollDismissesKeyboard(.interactively)
+        }
+        .task {
+            await loadClientFlags()
+        }
+        .onChange(of: email) { _, newValue in
+            if !AppReviewLoginGate.shouldShowPassword(
+                flagEnabled: appReviewLoginEnabled,
+                email: newValue
+            ) {
+                password = ""
+            }
         }
     }
 
@@ -145,6 +166,7 @@ struct SignInView: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
+                    .textContentType(.username)
                     .padding(14)
                     .background(Theme.ceramic)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -152,6 +174,20 @@ struct SignInView: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Theme.platinum, lineWidth: 1)
                     )
+
+                if showReviewPassword {
+                    SecureField("Password", text: $password)
+                        .font(Typography.body())
+                        .textContentType(.password)
+                        .padding(14)
+                        .background(Theme.ceramic)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Theme.platinum, lineWidth: 1)
+                        )
+                        .accessibilityLabel("Password")
+                }
 
                 if let visibleError {
                     ErrorBanner(message: visibleError)
@@ -161,9 +197,21 @@ struct SignInView: View {
                     tosConsentRow
                 }
 
-                Button(mode.magicLinkButtonTitle) { Task { await sendLink() } }
+                Button(showReviewPassword ? "Sign in" : mode.magicLinkButtonTitle) {
+                    Task {
+                        if showReviewPassword {
+                            await signInWithReviewPassword()
+                        } else {
+                            await sendLink()
+                        }
+                    }
+                }
                     .buttonStyle(PrimaryButtonStyle(isLoading: isSending))
-                    .disabled(isSending || socialLoading != nil || !canSubmitMagicLink)
+                    .disabled(
+                        isSending
+                            || socialLoading != nil
+                            || (showReviewPassword ? !canSubmitReviewLogin : !canSubmitMagicLink)
+                    )
 
                 if mode == .signIn {
                     signInFooterHint
@@ -310,6 +358,10 @@ struct SignInView: View {
         )
     }
 
+    private var canSubmitReviewLogin: Bool {
+        isValidEmail && !password.isEmpty && canProceed
+    }
+
     private var visibleError: String? {
         errorMessage ?? env.auth.authErrorMessage
     }
@@ -319,6 +371,16 @@ struct SignInView: View {
         errorMessage = nil
         env.auth.clearAuthError()
         tosAccepted = false
+        password = ""
+    }
+
+    private func loadClientFlags() async {
+        do {
+            let flags = try await env.auth.fetchClientFlags()
+            appReviewLoginEnabled = flags.isAppReviewLoginEnabled
+        } catch {
+            appReviewLoginEnabled = false
+        }
     }
 
     private func sendLink() async {
@@ -330,6 +392,23 @@ struct SignInView: View {
         do {
             try await env.auth.requestMagicLink(email: email.trimmingCharacters(in: .whitespaces))
             linkSent = true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func signInWithReviewPassword() async {
+        guard canSubmitReviewLogin else { return }
+        errorMessage = nil
+        env.auth.clearAuthError()
+        isSending = true
+        defer { isSending = false }
+        do {
+            try await env.auth.signInWithReviewCredentials(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password,
+                tosAccepted: true
+            )
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

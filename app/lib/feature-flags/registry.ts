@@ -56,6 +56,12 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		clientVisible: true,
 		clientKey: "aiPlanWeek",
 	},
+	"app-review-login": {
+		defaultEnabled: false,
+		description: "App Store / TestFlight review email+password login on iOS",
+		clientVisible: true,
+		clientKey: "appReviewLogin",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

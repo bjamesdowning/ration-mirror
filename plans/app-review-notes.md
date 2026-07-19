@@ -9,7 +9,28 @@ Use this document when submitting to App Review or TestFlight external testing.
 - **Magic link:** Email links land on a scanner-safe interstitial (`/auth/magic-link/continue`); the user taps **Continue sign-in** before Better Auth verifies the token.
 - **Handoff (primary):** Universal Link `https://ration.mayutic.com/auth/mobile-callback/open?code=…` (Associated Domains `applinks:ration.mayutic.com`). After email verification, the user taps **Open Ration** on `/auth/mobile-callback`; iOS opens the app directly.
 - **Handoff (fallback):** Custom URL scheme `ration://auth/callback?code=…`, used only if Universal Links don't fire (app not installed, AASA not yet cached). The code is a single-use, PKCE-bound UUID with a 300s TTL.
-- **Demo account:** App Review can use **Sign in with Apple** or **Google** on a review device without provisioning a magic-link inbox. For magic-link testing, provision a real mailbox — e.g. `app-review@mayutic.com` — and note it in App Store Connect "Notes for Review". **Status: social sign-in available in v1.4.49+; dedicated magic-link inbox still not provisioned.**
+
+### Demo account (Guideline 2.1 — required for App Review)
+
+Do **not** rely on Sign in with Apple / Google alone for App Review. Use the Flagship-gated review login:
+
+1. **Seed** (idempotent): `bun scripts/seed-app-review-demo.ts --remote` then set Wrangler secrets `APP_REVIEW_DEMO_EMAIL` (`app-review@mayutic.com`), `APP_REVIEW_DEMO_PASSWORD`, `APP_REVIEW_DEMO_USER_ID`.
+2. **Flagship:** create boolean flag `app-review-login` (default off). **Enable before** submitting / replying to review; **disable after** approval or between review windows (no redeploy). Emergency: `FEATURE_FLAG_OVERRIDES` `{"app-review-login":false}`.
+3. **App Store Connect** → TestFlight → Test Information → Beta App Review Information → check **Sign-in required** → User Name `app-review@mayutic.com` / Password = secret.
+4. **Notes for Review** (paste):
+
+```text
+Sign-in: On Sign In, enter User Name (app-review@mayutic.com) in Email —
+a Password field then appears. Enter the Password from Review Information
+and tap Continue. Do not use Sign in with Apple / Google.
+No 2FA. Account is pre-seeded (Cargo, Galley, Manifest, Supply).
+AI features may show a one-time privacy consent gate.
+Backend: https://ration.mayutic.com — live, no VPN.
+```
+
+5. Reply in the Resolution Center that credentials are filled and the account is ready.
+
+**UX:** Password appears only when Flagship `appReviewLogin` is on **and** the email field equals `app-review@mayutic.com`. Endpoint: `POST /api/mobile/v1/auth/review-login`. Unsigned flags: `GET /api/mobile/v1/client-flags`.
 
 ### Universal Links operator checklist
 

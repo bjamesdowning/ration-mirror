@@ -14,6 +14,7 @@ describe("getClientSafeFlags", () => {
 			aiDockFromReceipt: false,
 			aiGenerateMeal: false,
 			aiPlanWeek: false,
+			appReviewLogin: false,
 		});
 	});
 });

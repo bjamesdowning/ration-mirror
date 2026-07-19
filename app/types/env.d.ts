@@ -61,6 +61,12 @@ declare namespace Cloudflare {
 		COPILOT_ANALYTICS?: AnalyticsEngineDataset;
 		/** Emergency kill switch JSON, e.g. {"some-flag":false}. */
 		FEATURE_FLAG_OVERRIDES?: string;
+		/** App Review demo login — email must match iOS reveal gate. */
+		APP_REVIEW_DEMO_EMAIL?: string;
+		/** App Review demo login password (Wrangler secret). */
+		APP_REVIEW_DEMO_PASSWORD?: string;
+		/** Pre-seeded App Review user id in D1. */
+		APP_REVIEW_DEMO_USER_ID?: string;
 	}
 }
 

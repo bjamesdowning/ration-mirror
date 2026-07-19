@@ -138,6 +138,73 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 				},
 			},
+			"/api/mobile/v1/auth/review-login": {
+				post: {
+					summary: "App Review demo email+password login",
+					description:
+						"Flagship-gated (`app-review-login`). Authenticates the single pre-seeded review account using Worker secrets. Returns the same TokenPair as social/magic-link.",
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										email: { type: "string", format: "email" },
+										password: { type: "string" },
+										tosAccepted: { type: "boolean", const: true },
+									},
+									required: ["email", "password", "tosAccepted"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Token pair",
+							content: {
+								"application/json": {
+									schema: { $ref: "#/components/schemas/TokenPair" },
+								},
+							},
+						},
+						"403": {
+							description: "Feature disabled",
+							content: {
+								"application/json": {
+									schema: { $ref: "#/components/schemas/ApiError" },
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/mobile/v1/client-flags": {
+				get: {
+					summary: "Client-visible feature flags (unsigned)",
+					description:
+						"Returns Flagship clientVisible flags for signed-out surfaces such as Sign In. Authenticated clients may use GET /session instead.",
+					responses: {
+						"200": {
+							description: "clientFlags map",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											clientFlags: {
+												type: "object",
+												additionalProperties: { type: "boolean" },
+											},
+										},
+										required: ["clientFlags"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			"/api/mobile/v1/auth/token": {
 				post: {
 					summary: "Exchange authorization code or refresh token",

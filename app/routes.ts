@@ -293,8 +293,13 @@ export default [
 		"routes/api/mobile/v1.auth.magic-link.ts",
 	),
 	route("api/mobile/v1/auth/social", "routes/api/mobile/v1.auth.social.ts"),
+	route(
+		"api/mobile/v1/auth/review-login",
+		"routes/api/mobile/v1.auth.review-login.ts",
+	),
 	route("api/mobile/v1/auth/token", "routes/api/mobile/v1.auth.token.ts"),
 	route("api/mobile/v1/auth/session", "routes/api/mobile/v1.auth.session.ts"),
+	route("api/mobile/v1/client-flags", "routes/api/mobile/v1.client-flags.ts"),
 	route("api/mobile/v1/session", "routes/api/mobile/v1.session.ts"),
 	route("api/mobile/v1/orgs", "routes/api/mobile/v1.orgs.ts"),
 	route(

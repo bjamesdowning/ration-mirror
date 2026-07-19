@@ -327,6 +327,17 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				aiCosts?: { SCAN: number };
 		  }
 		| undefined;
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					aiDockFromReceipt?: boolean;
+					aiScanReceipt?: boolean;
+				};
+		  }
+		| undefined;
+	const aiDockFromReceipt =
+		rootData?.clientFlags?.aiDockFromReceipt === true &&
+		rootData?.clientFlags?.aiScanReceipt === true;
 	const { confirm } = useConfirm();
 	const summaryToast = useToast({ duration: 5000 });
 	const dockToast = useToast({ duration: 4000 });
@@ -756,24 +767,27 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 				}}
 				isDocking={isDocking}
 				scanCost={dashboardData?.aiCosts?.SCAN}
+				showScanReceipt={aiDockFromReceipt}
 			/>
 
-			<ReplenishReceiptModal
-				open={showReplenishReceipt}
-				onClose={() => setShowReplenishReceipt(false)}
-				onPickCamera={() => {
-					setShowReplenishReceipt(false);
-					cameraRef.current?.openCamera();
-				}}
-				onPickFile={() => {
-					setShowReplenishReceipt(false);
-					cameraRef.current?.openPhotoLibrary();
-				}}
-				credits={dashboardData?.balance ?? 0}
-				costPerScan={dashboardData?.aiCosts?.SCAN ?? 2}
-			/>
+			{aiDockFromReceipt && (
+				<ReplenishReceiptModal
+					open={showReplenishReceipt}
+					onClose={() => setShowReplenishReceipt(false)}
+					onPickCamera={() => {
+						setShowReplenishReceipt(false);
+						cameraRef.current?.openCamera();
+					}}
+					onPickFile={() => {
+						setShowReplenishReceipt(false);
+						cameraRef.current?.openPhotoLibrary();
+					}}
+					credits={dashboardData?.balance ?? 0}
+					costPerScan={dashboardData?.aiCosts?.SCAN ?? 2}
+				/>
+			)}
 
-			{displayList && (
+			{aiDockFromReceipt && displayList && (
 				<CameraInput
 					ref={cameraRef}
 					origin="supply"

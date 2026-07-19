@@ -2,6 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import { meal } from "~/db/schema";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import type { FlagshipEvaluationContext } from "~/lib/feature-flags/flags.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -70,6 +72,7 @@ export interface SubmitRecipeImportInput {
 	url: string;
 	/** Client-assisted page HTML (stored in R2; not sent on the queue). */
 	pageHtml?: string;
+	flagContext: FlagshipEvaluationContext;
 }
 
 export type SubmitRecipeImportResult =
@@ -86,7 +89,15 @@ export async function submitRecipeImport(
 	env: Cloudflare.Env,
 	input: SubmitRecipeImportInput,
 ): Promise<SubmitRecipeImportResult> {
-	const { userId, organizationId, url: validatedUrl, pageHtml } = input;
+	const {
+		userId,
+		organizationId,
+		url: validatedUrl,
+		pageHtml,
+		flagContext,
+	} = input;
+
+	await assertFeatureEnabled(env, "ai-import-url", flagContext);
 
 	if (isBlockedImportUrl(validatedUrl)) {
 		throw data({ error: "That URL is not accessible." }, { status: 422 });

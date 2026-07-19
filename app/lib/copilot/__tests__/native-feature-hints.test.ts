@@ -23,4 +23,19 @@ describe("detectNativeFeatureSuggestion", () => {
 			detectNativeFeatureSuggestion("what is on my meal plan?"),
 		).toBeNull();
 	});
+
+	it("suppresses suggestions when the native AI flag is off", () => {
+		expect(
+			detectNativeFeatureSuggestion("generate a recipe with lentils", {
+				"ai-generate-meal": false,
+				"ai-plan-week": true,
+			}),
+		).toBeNull();
+		expect(
+			detectNativeFeatureSuggestion("plan my week", {
+				"ai-generate-meal": true,
+				"ai-plan-week": true,
+			})?.name,
+		).toBe("Manifest Plan Week");
+	});
 });

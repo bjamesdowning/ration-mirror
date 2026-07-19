@@ -1,5 +1,9 @@
 import { getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import {
+	buildFlagContext,
+	getClientSafeFlags,
+} from "~/lib/feature-flags/flags.server";
 import { AI_COSTS, checkBalance } from "~/lib/ledger.server";
 import {
 	getMobileUser,
@@ -16,14 +20,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			request,
 		);
 		const env = context.cloudflare.env;
+		const flagContext = buildFlagContext(request, env, {
+			user: { id: userId },
+		});
 
-		const [user, organization, credits, tierInfo, organizations] =
+		const [user, organization, credits, tierInfo, organizations, clientFlags] =
 			await Promise.all([
 				getMobileUser(env, userId),
 				getOrganizationRecord(env, organizationId),
 				checkBalance(env, organizationId),
 				getGroupTierLimits(env, organizationId),
 				listMobileOrganizations(env, userId, organizationId),
+				getClientSafeFlags(env, flagContext),
 			]);
 
 		if (!user) {
@@ -47,6 +55,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			isTierExpired: tierInfo.isExpired,
 			organizations,
 			aiCosts: AI_COSTS,
+			clientFlags,
 		};
 	} catch (e) {
 		return handleApiError(e);

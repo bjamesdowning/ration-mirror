@@ -1,6 +1,8 @@
 import { data } from "react-router";
 import { getUserSettings } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { log } from "~/lib/logging.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -23,9 +25,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		context,
 		request,
 	);
+	const env = context.cloudflare.env;
+
+	await assertFeatureEnabled(
+		env,
+		"ai-dock-from-receipt",
+		buildFlagContext(request, env, { user: { id: userId } }),
+	);
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"status_poll",
 		userId,
 	);
@@ -51,7 +60,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	try {
 		return await getSupplyScanMatch(
-			context.cloudflare.env,
+			env,
 			organizationId,
 			listId,
 			parsed.data.requestId,
@@ -76,9 +85,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context,
 			request,
 		);
+		const env = context.cloudflare.env;
+
+		await assertFeatureEnabled(
+			env,
+			"ai-dock-from-receipt",
+			buildFlagContext(request, env, { user: { id: userId } }),
+		);
 
 		const rateLimitResult = await checkRateLimit(
-			context.cloudflare.env.RATION_KV,
+			env.RATION_KV,
 			"inventory_batch",
 			userId,
 		);
@@ -110,25 +126,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		await validateSupplyOnlyIds(
-			context.cloudflare.env,
-			listId,
-			parsed.data.supplyOnlyIds,
-		);
+		await validateSupplyOnlyIds(env, listId, parsed.data.supplyOnlyIds);
 
-		const userSettings = await getUserSettings(
-			context.cloudflare.env.DB,
-			userId,
-		);
+		const userSettings = await getUserSettings(env.DB, userId);
 		const unitDisplayMode = resolveUnitDisplayMode(userSettings);
 
-		return await completeSupplyScan(
-			context.cloudflare.env,
-			organizationId,
-			listId,
-			parsed.data,
-			{ unitMode: unitDisplayMode, userId },
-		);
+		return await completeSupplyScan(env, organizationId, listId, parsed.data, {
+			unitMode: unitDisplayMode,
+			userId,
+		});
 	} catch (e) {
 		if (e instanceof SupplyScanError) {
 			const status =

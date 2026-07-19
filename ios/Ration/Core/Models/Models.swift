@@ -66,6 +66,29 @@ struct AICosts: Codable, Sendable {
     }
 }
 
+/// Boolean client-safe Flagship flags from `GET /api/mobile/v1/session`.
+/// Missing keys default off (fail closed for AI entry points).
+struct ClientFlags: Codable, Sendable, Equatable {
+    var appleWebLogin: Bool?
+    var rationCopilot: Bool?
+    var aiImportUrl: Bool?
+    var aiScanReceipt: Bool?
+    var aiDockFromReceipt: Bool?
+    var aiGenerateMeal: Bool?
+    var aiPlanWeek: Bool?
+
+    static let disabled = ClientFlags()
+
+    var isRationCopilotEnabled: Bool { rationCopilot == true }
+    var isAiImportUrlEnabled: Bool { aiImportUrl == true }
+    var isAiScanReceiptEnabled: Bool { aiScanReceipt == true }
+    var isAiDockFromReceiptEnabled: Bool {
+        aiDockFromReceipt == true && aiScanReceipt == true
+    }
+    var isAiGenerateMealEnabled: Bool { aiGenerateMeal == true }
+    var isAiPlanWeekEnabled: Bool { aiPlanWeek == true }
+}
+
 /// `GET /api/mobile/v1/session`
 struct SessionResponse: Codable, Sendable {
     let user: MobileUser
@@ -75,8 +98,11 @@ struct SessionResponse: Codable, Sendable {
     let isTierExpired: Bool
     let organizations: [OrgMembership]
     let aiCosts: AICosts?
+    let clientFlags: ClientFlags?
 
     var isCrewMember: Bool { tier == "crew_member" && !isTierExpired }
+
+    var flags: ClientFlags { clientFlags ?? .disabled }
 }
 
 // MARK: - Copilot

@@ -102,6 +102,15 @@ final class AIErrorHandlingTests: XCTestCase {
         XCTAssertEqual(AIErrorHandling.mapSubmitError(error), .paywall)
     }
 
+    func testMapsFeatureDisabled403() {
+        let error = APIError.server(
+            status: 403,
+            message: "This feature is temporarily unavailable.",
+            code: "FEATURE_DISABLED"
+        )
+        XCTAssertEqual(AIErrorHandling.mapSubmitError(error), .featureDisabled)
+    }
+
     func testIgnoresNon402Errors() {
         let error = APIError.server(status: 500, message: "Server error", code: nil)
         XCTAssertNil(AIErrorHandling.mapSubmitError(error))

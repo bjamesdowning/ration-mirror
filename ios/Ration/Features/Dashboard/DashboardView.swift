@@ -137,7 +137,10 @@ struct DashboardView: View {
         .onAppear {
             isHubEditMode = model.isEditMode
         }
-        .tabDockAction(tag: 0, isActive: !model.isEditMode) {
+        .tabDockAction(
+            tag: 0,
+            isActive: !model.isEditMode && env.session.clientFlags.isAiScanReceiptEnabled
+        ) {
             IconFABButtonCore(
                 systemImage: "camera.viewfinder",
                 accessibilityLabel: "Scan items",

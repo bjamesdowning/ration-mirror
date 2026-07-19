@@ -26,6 +26,36 @@ export const FLAG_REGISTRY: Record<string, FlagRegistryEntry> = {
 		description:
 			"One-time iOS Ask Ration welcome briefing (intro + starter kitchen seed) for new users",
 	},
+	"ai-import-url": {
+		defaultEnabled: false,
+		description: "AI recipe URL import (Browser Rendering + LLM)",
+		clientVisible: true,
+		clientKey: "aiImportUrl",
+	},
+	"ai-scan-receipt": {
+		defaultEnabled: false,
+		description: "AI receipt / pantry vision scan (Cargo + Dock spend)",
+		clientVisible: true,
+		clientKey: "aiScanReceipt",
+	},
+	"ai-dock-from-receipt": {
+		defaultEnabled: false,
+		description: "Supply dock-from-receipt entry (match/complete)",
+		clientVisible: true,
+		clientKey: "aiDockFromReceipt",
+	},
+	"ai-generate-meal": {
+		defaultEnabled: false,
+		description: "AI meal generation",
+		clientVisible: true,
+		clientKey: "aiGenerateMeal",
+	},
+	"ai-plan-week": {
+		defaultEnabled: false,
+		description: "AI weekly meal planner",
+		clientVisible: true,
+		clientKey: "aiPlanWeek",
+	},
 };
 
 /** Registry keys — narrows as entries are added to FLAG_REGISTRY. */

@@ -58,8 +58,17 @@ test.describe("scan", () => {
 
 		await gotoHubPage(page, "/hub/cargo");
 
+		const scanButton = page.getByRole("button", { name: /Scan/ }).first();
+		const scanVisible = await scanButton
+			.isVisible({ timeout: 5000 })
+			.catch(() => false);
+		test.skip(
+			!scanVisible,
+			"ai-scan-receipt flag is off — enable via Flagship or FEATURE_FLAG_OVERRIDES for this journey",
+		);
+
 		// Open scan: FAB or toolbar "Scan" button
-		await page.getByRole("button", { name: /Scan/ }).first().click();
+		await scanButton.click();
 
 		// ScanIntroModal opens
 		await expect(

@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import {
 	mapMealGenerateSubmitError,
 	submitMealGenerate,
@@ -14,9 +15,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		session: { user },
 		groupId,
 	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"generate_meal",
 		user.id,
 	);
@@ -60,10 +62,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		return await submitMealGenerate(context.cloudflare.env, {
+		return await submitMealGenerate(env, {
 			userId: user.id,
 			organizationId: groupId,
 			customization,
+			flagContext: buildFlagContext(request, env, { user }),
 		});
 	} catch (error) {
 		mapMealGenerateSubmitError(error);

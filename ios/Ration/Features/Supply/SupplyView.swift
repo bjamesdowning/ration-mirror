@@ -755,10 +755,12 @@ struct SupplyView: View {
                 disabled: model.isDocking || model.isScanning || !env.network.isOnline
             ) {
                 if model.totalCount > 0 {
-                    Button {
-                        showingReplenishReceipt = true
-                    } label: {
-                        Label("Dock from Receipt", systemImage: "camera.fill")
+                    if env.session.clientFlags.isAiDockFromReceiptEnabled {
+                        Button {
+                            showingReplenishReceipt = true
+                        } label: {
+                            Label("Dock from Receipt", systemImage: "camera.fill")
+                        }
                     }
                     Button {
                         Task {

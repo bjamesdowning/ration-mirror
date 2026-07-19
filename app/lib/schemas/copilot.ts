@@ -44,7 +44,8 @@ export const CopilotToolStatusSchema = z.object({
 export const CopilotBlockedFeatureSchema = z.object({
 	feature: z.enum(["scan", "import_url"]),
 	message: z.string().min(1),
-	deepLink: z.string().min(1),
+	/** Empty when the native AI surface is feature-flagged off. */
+	deepLink: z.string(),
 });
 export type CopilotBlockedFeature = z.infer<typeof CopilotBlockedFeatureSchema>;
 

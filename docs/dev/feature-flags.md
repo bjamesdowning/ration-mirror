@@ -105,6 +105,20 @@ Web Sign in with Apple is gated behind this flag. Registry entry in [`registry.t
 
 **Rollout:** Because this is a signed-out auth surface, `userId` targeting will not show the button before login. Test on a dev/staging Flagship app or with `FEATURE_FLAG_OVERRIDES`, then set the production default variation to `on` (`wrangler flagship flags set <APP_ID> apple-web-login --variation on`). Full portal steps: README §7.1 Web Apple (operator setup).
 
+## AI ops kill switches (shipped)
+
+Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnabled: false` (fail closed if Flagship is unavailable). Because these features are already live, create Flagship flags with default variation **ON** in production **before** or at deploy of gating code, then flip off only for incidents.
+
+| Flag key | Client key | Server choke point |
+|----------|------------|--------------------|
+| `ai-import-url` | `aiImportUrl` | `submitRecipeImport` |
+| `ai-scan-receipt` | `aiScanReceipt` | `submitVisualScan` |
+| `ai-dock-from-receipt` | `aiDockFromReceipt` | Supply scan-match / scan-complete |
+| `ai-generate-meal` | `aiGenerateMeal` | `submitMealGenerate` |
+| `ai-plan-week` | `aiPlanWeek` | `submitPlanWeek` |
+
+**Operator matrix:** `ai-scan-receipt` off kills Cargo and Dock AI spend; `ai-dock-from-receipt` off leaves Cargo scan available. Asserts throw **403** + `FEATURE_DISABLED` before credit debit. Mobile bootstrap: `GET /api/mobile/v1/session` returns `clientFlags`. Emergency bulk kill: `FEATURE_FLAG_OVERRIDES` JSON on the `ration` Worker, e.g. `{"ai-scan-receipt":false,"ai-import-url":false,...}`.
+
 ## References
 
 - [Flagship overview](https://developers.cloudflare.com/flagship/)

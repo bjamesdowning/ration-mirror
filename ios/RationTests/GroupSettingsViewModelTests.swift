@@ -258,7 +258,8 @@ private extension SessionResponse {
             tier: "free",
             isTierExpired: false,
             organizations: orgs,
-            aiCosts: nil
+            aiCosts: nil,
+            clientFlags: nil
         )
     }
 }

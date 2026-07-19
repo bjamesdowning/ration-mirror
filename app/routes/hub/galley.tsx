@@ -214,6 +214,16 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			meals?: { current: number; limit: number };
 		};
 	} | null;
+	const rootData = useRouteLoaderData("root") as
+		| {
+				clientFlags?: {
+					aiGenerateMeal?: boolean;
+					aiImportUrl?: boolean;
+				};
+		  }
+		| undefined;
+	const aiGenerateMeal = rootData?.clientFlags?.aiGenerateMeal === true;
+	const aiImportUrl = rootData?.clientFlags?.aiImportUrl === true;
 	type AddStep = null | "choice" | "recipe" | "provision";
 	const [addStep, setAddStep] = useState<AddStep>(null);
 	const [matchingEnabled, setMatchingEnabled] = useState(false);
@@ -311,22 +321,30 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				window.location.href = "/api/galley/export";
 			},
 		},
-		{
-			id: "import-url",
-			icon: <LinkIcon />,
-			label: "Import URL",
-			variant: "primary",
-			onClick: () => importRef.current?.open(),
-		},
-		{
-			id: "generate",
-			icon: <SparkleIcon />,
-			label: "Generate",
-			primary: true,
-			onClick: () => {
-				generateRef.current?.open();
-			},
-		},
+		...(aiImportUrl
+			? [
+					{
+						id: "import-url",
+						icon: <LinkIcon />,
+						label: "Import URL",
+						variant: "primary" as const,
+						onClick: () => importRef.current?.open(),
+					},
+				]
+			: []),
+		...(aiGenerateMeal
+			? [
+					{
+						id: "generate",
+						icon: <SparkleIcon />,
+						label: "Generate",
+						primary: true,
+						onClick: () => {
+							generateRef.current?.open();
+						},
+					},
+				]
+			: []),
 	];
 
 	// Filter content for mobile sheet
@@ -387,23 +405,27 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* Hidden instances for ref + modal (always in DOM, even on mobile) */}
-			<GenerateMealButton
-				ref={generateRef}
-				className="hidden"
-				credits={dashboardData?.balance}
-				costPerGenerate={dashboardData?.aiCosts?.MEAL_GENERATE}
-			/>
+			{aiGenerateMeal && (
+				<GenerateMealButton
+					ref={generateRef}
+					className="hidden"
+					credits={dashboardData?.balance}
+					costPerGenerate={dashboardData?.aiCosts?.MEAL_GENERATE}
+				/>
+			)}
 			<GalleyImportButton
 				ref={galleyImportRef}
 				onImportComplete={() => {}}
 				className="hidden"
 			/>
-			<ImportRecipeButton
-				ref={importRef}
-				className="hidden"
-				credits={dashboardData?.balance}
-				costPerImport={dashboardData?.aiCosts?.IMPORT_URL}
-			/>
+			{aiImportUrl && (
+				<ImportRecipeButton
+					ref={importRef}
+					className="hidden"
+					credits={dashboardData?.balance}
+					costPerImport={dashboardData?.aiCosts?.IMPORT_URL}
+				/>
+			)}
 
 			{/* Mobile Header */}
 			<PageHeader
@@ -456,14 +478,16 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 				<div className="hidden md:block">
 					<PanelToolbar
 						primaryAction={
-							<button
-								type="button"
-								onClick={() => generateRef.current?.open()}
-								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
-							>
-								<SparkleIcon className="w-4 h-4" />
-								Generate Meal
-							</button>
+							aiGenerateMeal ? (
+								<button
+									type="button"
+									onClick={() => generateRef.current?.open()}
+									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+								>
+									<SparkleIcon className="w-4 h-4" />
+									Generate Meal
+								</button>
+							) : undefined
 						}
 						secondaryAction={
 							<div className="flex items-center gap-2">
@@ -483,14 +507,16 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<ExportIcon className="w-4 h-4" />
 									Export JSON
 								</a>
-								<button
-									type="button"
-									onClick={() => importRef.current?.open()}
-									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
-								>
-									<LinkIcon className="w-4 h-4" />
-									Import URL
-								</button>
+								{aiImportUrl && (
+									<button
+										type="button"
+										onClick={() => importRef.current?.open()}
+										className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+									>
+										<LinkIcon className="w-4 h-4" />
+										Import URL
+									</button>
+								)}
 								<ApiHint variant="icon" />
 							</div>
 						}
@@ -577,20 +603,24 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 						description="Create your first meal or let AI generate suggestions based on your Cargo."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<button
-									type="button"
-									onClick={() => generateRef.current?.open()}
-									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
-								>
-									Generate Meal
-								</button>
-								<button
-									type="button"
-									onClick={() => importRef.current?.open()}
-									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
-								>
-									Import Meal
-								</button>
+								{aiGenerateMeal && (
+									<button
+										type="button"
+										onClick={() => generateRef.current?.open()}
+										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+									>
+										Generate Meal
+									</button>
+								)}
+								{aiImportUrl && (
+									<button
+										type="button"
+										onClick={() => importRef.current?.open()}
+										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+									>
+										Import Meal
+									</button>
+								)}
 								<button
 									type="button"
 									onClick={() => setAddStep("choice")}

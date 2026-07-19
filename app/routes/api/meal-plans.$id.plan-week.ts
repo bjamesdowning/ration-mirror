@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import {
 	mapPlanWeekSubmitError,
 	submitPlanWeek,
@@ -22,6 +23,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		session: { user },
 		groupId,
 	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
 
 	const planId = params.id;
 	if (!planId) {
@@ -29,7 +31,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"plan_week",
 		user.id,
 	);
@@ -56,11 +58,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 
 	try {
-		return await submitPlanWeek(context.cloudflare.env, {
+		return await submitPlanWeek(env, {
 			userId: user.id,
 			organizationId: groupId,
 			planId,
 			config: parseResult.data,
+			flagContext: buildFlagContext(request, env, { user }),
 		});
 	} catch (error) {
 		mapPlanWeekSubmitError(error);

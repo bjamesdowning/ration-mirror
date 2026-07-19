@@ -444,10 +444,12 @@ struct ManifestView: View {
                         Label("Add entry", systemImage: "plus")
                     }
                     .disabled(!env.network.isOnline)
-                    Button { showingPlanWeek = true } label: {
-                        Label("Plan week", systemImage: "sparkles")
+                    if env.session.clientFlags.isAiPlanWeekEnabled {
+                        Button { showingPlanWeek = true } label: {
+                            Label("Plan week", systemImage: "sparkles")
+                        }
+                        .disabled(!env.network.isOnline)
                     }
-                    .disabled(!env.network.isOnline)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -485,7 +487,9 @@ struct ManifestView: View {
             }
             .onChange(of: env.deepLinkRouter.manifestPlanWeekPending, initial: true) { _, pending in
                 if pending {
-                    showingPlanWeek = true
+                    if env.session.clientFlags.isAiPlanWeekEnabled {
+                        showingPlanWeek = true
+                    }
                     env.deepLinkRouter.acknowledgeManifestPlanWeek()
                 }
             }

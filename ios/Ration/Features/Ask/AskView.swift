@@ -395,12 +395,18 @@ private struct ConfirmCard: View {
 private struct BlockedFeatureCard: View {
     let blocked: CopilotBlockedFeature
 
+    private var deepLinkURL: URL? {
+        guard !blocked.deepLink.isEmpty else { return nil }
+        return URL(string: blocked.deepLink)
+    }
+
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Open the native flow").rationHeadline()
+                Text(deepLinkURL == nil ? "Temporarily unavailable" : "Open the native flow")
+                    .rationHeadline()
                 Text(blocked.message).rationCaption()
-                if let url = URL(string: blocked.deepLink) {
+                if let url = deepLinkURL {
                     Link("Continue", destination: url)
                         .buttonStyle(PrimaryButtonStyle())
                 }

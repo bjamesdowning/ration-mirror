@@ -30,6 +30,22 @@ final class OnboardingCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.phase, .askBriefing)
     }
 
+    func testPreferStaticBriefingWhileActive() {
+        let coordinator = OnboardingCoordinator()
+        coordinator.startIfNeeded(completedAt: nil)
+        XCTAssertFalse(coordinator.isStaticReplay)
+        coordinator.preferStaticBriefing()
+        XCTAssertTrue(coordinator.isStaticReplay)
+        XCTAssertTrue(coordinator.isActive)
+    }
+
+    func testPreferStaticBriefingNoopsWhenInactive() {
+        let coordinator = OnboardingCoordinator()
+        coordinator.preferStaticBriefing()
+        XCTAssertFalse(coordinator.isActive)
+        XCTAssertFalse(coordinator.isStaticReplay)
+    }
+
     func testCompleteFinishesLocally() async throws {
         let coordinator = OnboardingCoordinator()
         coordinator.startIfNeeded(completedAt: nil, settings: nil)

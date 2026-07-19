@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -52,6 +53,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			url: parsedRequest.data.url,
 			pageHtml: parsedRequest.data.pageHtml,
+			flagContext: buildFlagContext(request, env, { user: { id: userId } }),
 		});
 
 		if ("code" in result && result.code === "DUPLICATE_URL") {

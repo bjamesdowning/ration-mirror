@@ -2152,6 +2152,8 @@ Gradual rollouts use [Cloudflare Flagship](https://developers.cloudflare.com/fla
 - **Validate registry:** `bun run flag:check`
 - **Setup:** Flagship apps `ration` (production) and `ration-dev` (local/remote dev) are wired in `wrangler.jsonc`, `wrangler.dev.jsonc`, `wrangler.local.jsonc`, and `wrangler.copilot.jsonc`; run `bun run cf-typegen` after changing `app_id`
 
+**AI ops kill switches** (permanent; registry default off / fail closed): `ai-import-url`, `ai-scan-receipt`, `ai-dock-from-receipt`, `ai-generate-meal`, `ai-plan-week`. Server asserts **403** `FEATURE_DISABLED` before credit debit. Web + iOS hide entry points via `clientFlags` (mobile: `GET /api/mobile/v1/session`). For already-live AI, create Flagship flags with default **ON** before deploy; emergency kill via dashboard or `FEATURE_FLAG_OVERRIDES`. See [`docs/dev/feature-flags.md`](docs/dev/feature-flags.md) § AI ops kill switches.
+
 **Manual deploy (local):**
 
 ```bash
@@ -2345,7 +2347,7 @@ WebSocket traffic hits `ration-copilot` directly — not proxied through `ration
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `ration-copilot` | off | Master kill switch — server returns 404 when disabled; exposed to clients as `rationCopilot` |
+| `ration-copilot` | off | Master kill switch — server returns 404 when disabled; exposed to clients as `rationCopilot` (web root loader + iOS `GET /api/mobile/v1/session` `clientFlags`; iOS hides Ask dock/sheet when false) |
 | `copilot-onboarding-free` | off | One-time iOS welcome briefing (intro + starter kitchen seed, Fast preset, no credit charge) |
 
 Registry: [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts). Flagship binding on `ration-copilot`: see [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc).

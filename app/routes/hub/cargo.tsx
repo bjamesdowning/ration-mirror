@@ -419,6 +419,10 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			cargo?: { current: number; limit: number };
 		};
 	} | null;
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { aiScanReceipt?: boolean } }
+		| undefined;
+	const aiScanReceipt = rootData?.clientFlags?.aiScanReceipt === true;
 	const [showScanIntroModal, setShowScanIntroModal] = useState(false);
 	const cameraRef = useRef<CameraInputHandle>(null);
 	const importRef = useRef<CsvImportButtonHandle>(null);
@@ -503,13 +507,17 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 			variant: showQuickAdd ? "danger" : "default",
 			onClick: () => setShowQuickAdd(!showQuickAdd),
 		},
-		{
-			id: "scan",
-			icon: <CameraIcon />,
-			label: "Scan",
-			primary: true,
-			onClick: () => setShowScanIntroModal(true),
-		},
+		...(aiScanReceipt
+			? [
+					{
+						id: "scan",
+						icon: <CameraIcon />,
+						label: "Scan",
+						primary: true,
+						onClick: () => setShowScanIntroModal(true),
+					},
+				]
+			: []),
 		{
 			id: "import",
 			icon: <ImportIcon />,
@@ -643,14 +651,16 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 				<div className="hidden md:block">
 					<PanelToolbar
 						primaryAction={
-							<button
-								type="button"
-								onClick={() => setShowScanIntroModal(true)}
-								className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
-							>
-								<CameraIcon className="w-4 h-4" />
-								Scan Item
-							</button>
+							aiScanReceipt ? (
+								<button
+									type="button"
+									onClick={() => setShowScanIntroModal(true)}
+									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+								>
+									<CameraIcon className="w-4 h-4" />
+									Scan Item
+								</button>
+							) : undefined
 						}
 						secondaryAction={
 							<div className="flex items-center gap-2">
@@ -708,13 +718,15 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 						description="Scan receipts, labels, or pantry photos—or add items manually to start tracking your ingredients."
 						action={
 							<div className="flex flex-wrap justify-center gap-3">
-								<button
-									type="button"
-									onClick={() => setShowScanIntroModal(true)}
-									className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
-								>
-									Scan items
-								</button>
+								{aiScanReceipt && (
+									<button
+										type="button"
+										onClick={() => setShowScanIntroModal(true)}
+										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+									>
+										Scan items
+									</button>
+								)}
 								<button
 									type="button"
 									onClick={() => setShowQuickAdd(true)}

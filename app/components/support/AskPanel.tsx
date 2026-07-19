@@ -1368,14 +1368,20 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				)}
 				{blocked ? (
 					<div className="rounded-xl border border-platinum bg-white/80 p-3 text-sm">
-						<p className="font-semibold">Open native flow</p>
+						<p className="font-semibold">
+							{blocked.deepLink
+								? "Open native flow"
+								: "Temporarily unavailable"}
+						</p>
 						<p className="text-muted">{blocked.message}</p>
-						<a
-							className="text-hyper-green underline"
-							href={webBlockedHref(blocked)}
-						>
-							Continue
-						</a>
+						{blocked.deepLink ? (
+							<a
+								className="text-hyper-green underline"
+								href={webBlockedHref(blocked)}
+							>
+								Continue
+							</a>
+						) : null}
 					</div>
 				) : null}
 				{approval ? (

@@ -45,8 +45,10 @@ struct CargoListView: View {
                                     : "Scan receipts, labels, or pantry photos—or add staples manually to fill your pantry."
                             )
                             if !model.isSearchActive {
-                                Button("Scan items") { onScan() }
-                                    .buttonStyle(AIButtonStyle())
+                                if env.session.clientFlags.isAiScanReceiptEnabled {
+                                    Button("Scan items") { onScan() }
+                                        .buttonStyle(AIButtonStyle())
+                                }
                                 Button("Add manually") { showingAdd = true }
                                     .buttonStyle(SecondaryButtonStyle())
                             }
@@ -132,8 +134,10 @@ struct CargoListView: View {
         }
         .tabDockAction(tag: 1) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
-                Button(action: onScan) {
-                    Label("Scan items", systemImage: "camera.viewfinder")
+                if env.session.clientFlags.isAiScanReceiptEnabled {
+                    Button(action: onScan) {
+                        Label("Scan items", systemImage: "camera.viewfinder")
+                    }
                 }
                 Button { showingAdd = true } label: {
                     Label("Add item", systemImage: "plus")

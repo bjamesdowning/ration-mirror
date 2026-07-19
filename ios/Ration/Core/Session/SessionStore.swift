@@ -37,6 +37,8 @@ final class SessionStore {
     var tier: String { session?.tier ?? "free" }
     var isTierExpired: Bool { session?.isTierExpired ?? false }
     var isCrewMember: Bool { session?.isCrewMember ?? false }
+    /// Client-safe Flagship flags; defaults off until session loads.
+    var clientFlags: ClientFlags { session?.flags ?? .disabled }
     var userImageURL: URL? {
         AvatarURLResolver.resolve(session?.user.image)
     }

@@ -8,6 +8,8 @@ interface ReplenishModalProps {
 	onScanReceipt: () => void;
 	isDocking: boolean;
 	scanCost?: number;
+	/** When false, hide Dock from Receipt (feature flag off). Default true. */
+	showScanReceipt?: boolean;
 }
 
 export function ReplenishModal({
@@ -18,6 +20,7 @@ export function ReplenishModal({
 	onScanReceipt,
 	isDocking,
 	scanCost,
+	showScanReceipt = true,
 }: ReplenishModalProps) {
 	if (!open) return null;
 
@@ -37,27 +40,31 @@ export function ReplenishModal({
 				</div>
 				<div className="p-4 space-y-3">
 					<p className="text-sm text-muted">
-						After shopping, dock items from your list or scan a receipt to
-						reconcile and add to Cargo.
+						After shopping, dock items from your list
+						{showScanReceipt
+							? " or scan a receipt to reconcile and add to Cargo."
+							: " to add to Cargo."}
 					</p>
-					<button
-						type="button"
-						onClick={onScanReceipt}
-						className="w-full flex items-center gap-3 p-4 rounded-xl border border-platinum dark:border-white/10 hover:border-hyper-green/40 hover:bg-hyper-green/5 transition-colors text-left"
-					>
-						<span className="flex h-10 w-10 items-center justify-center rounded-lg bg-hyper-green/15 text-hyper-green">
-							<Camera className="w-5 h-5" />
-						</span>
-						<span>
-							<span className="block font-semibold">Dock from Receipt</span>
-							<span className="text-xs text-muted">
-								Scan or upload — match to your supply list
-								{typeof scanCost === "number"
-									? ` · ${scanCost} credit${scanCost === 1 ? "" : "s"}`
-									: ""}
+					{showScanReceipt && (
+						<button
+							type="button"
+							onClick={onScanReceipt}
+							className="w-full flex items-center gap-3 p-4 rounded-xl border border-platinum dark:border-white/10 hover:border-hyper-green/40 hover:bg-hyper-green/5 transition-colors text-left"
+						>
+							<span className="flex h-10 w-10 items-center justify-center rounded-lg bg-hyper-green/15 text-hyper-green">
+								<Camera className="w-5 h-5" />
 							</span>
-						</span>
-					</button>
+							<span>
+								<span className="block font-semibold">Dock from Receipt</span>
+								<span className="text-xs text-muted">
+									Scan or upload — match to your supply list
+									{typeof scanCost === "number"
+										? ` · ${scanCost} credit${scanCost === 1 ? "" : "s"}`
+										: ""}
+								</span>
+							</span>
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={() => {

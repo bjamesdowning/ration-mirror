@@ -6,6 +6,14 @@ describe("getClientSafeFlags", () => {
 	it("returns client-safe defaults when binding is absent", async () => {
 		const env = createMockEnv();
 		const result = await getClientSafeFlags(env, { country: "US" });
-		expect(result).toEqual({ appleWebLogin: false, rationCopilot: false });
+		expect(result).toEqual({
+			appleWebLogin: false,
+			rationCopilot: false,
+			aiImportUrl: false,
+			aiScanReceipt: false,
+			aiDockFromReceipt: false,
+			aiGenerateMeal: false,
+			aiPlanWeek: false,
+		});
 	});
 });

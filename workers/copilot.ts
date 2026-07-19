@@ -33,7 +33,10 @@ import {
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	resolveCopilotModelPreset,
 } from "../app/lib/copilot/model-profiles";
-import { detectNativeFeatureSuggestion } from "../app/lib/copilot/native-feature-hints.server";
+import {
+	detectNativeFeatureSuggestion,
+	type NativeFeatureEnabledMap,
+} from "../app/lib/copilot/native-feature-hints.server";
 import {
 	finalizeOnboardingBriefing,
 	getOnboardingBriefingSystemPromptAppend,
@@ -221,6 +224,30 @@ type CopilotAgentUsageConfig = {
 	chargeOpenedAt?: number;
 };
 
+async function resolveNativeFeatureFlags(
+	env: Cloudflare.Env,
+	userId: string,
+): Promise<NativeFeatureEnabledMap> {
+	const flagContext = buildFlagContext(
+		new Request("https://copilot.internal/"),
+		env,
+		{ user: { id: userId } },
+	);
+	const keys = [
+		"ai-scan-receipt",
+		"ai-import-url",
+		"ai-generate-meal",
+		"ai-plan-week",
+	] as const;
+	const entries = await Promise.all(
+		keys.map(
+			async (key) =>
+				[key, await isFeatureEnabled(env, key, flagContext)] as const,
+		),
+	);
+	return Object.fromEntries(entries);
+}
+
 export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	workspaceBash = false;
 	private totalUsageTokens = 0;
@@ -235,6 +262,13 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private onboardingActiveTurn: OnboardingBriefingTurn | null = null;
 	/** Count the free grant once per allowlisted user turn (not per agent step). */
 	private onboardingShouldCountTurn = false;
+	/** Native AI kill-switch map for hints / system prompt (refreshed each turn). */
+	private nativeFeatureFlags: NativeFeatureEnabledMap = {
+		"ai-scan-receipt": false,
+		"ai-import-url": false,
+		"ai-generate-meal": false,
+		"ai-plan-week": false,
+	};
 
 	private persistUsageConfig(): void {
 		this.configure<CopilotAgentUsageConfig>({
@@ -369,7 +403,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getSystemPrompt() {
-		return getCopilotSystemPrompt();
+		return getCopilotSystemPrompt(this.nativeFeatureFlags);
 	}
 
 	getTools(): ToolSet {
@@ -384,6 +418,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async beforeTurn(ctx: TurnContext) {
 		const identity = decodeAgentName(this.name);
+		this.nativeFeatureFlags = await resolveNativeFeatureFlags(
+			this.env,
+			identity.userId,
+		);
 		this.sessionMessageCount = ctx.messages.length;
 		const charge = await this.hydrateCumulativeUsage(identity);
 		if (charge?.mode === "onboarding_briefing") {
@@ -578,7 +616,10 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			ctx.messages.length,
 		);
 		const userText = lastUserText(ctx);
-		const blocked = detectBlockedCopilotIntent(userText);
+		const blocked = detectBlockedCopilotIntent(
+			userText,
+			this.nativeFeatureFlags,
+		);
 		if (blocked) {
 			writeCopilotMetric(
 				this.env,
@@ -587,19 +628,30 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				identity.conversationId,
 				{ blobs: [blocked.feature] },
 			);
+			const clientBlocked = {
+				feature: blocked.feature,
+				message: blocked.message,
+				deepLink: blocked.deepLink,
+			};
 			this.broadcast(
 				JSON.stringify({
 					type: "blocked_feature",
-					blocked,
+					blocked: clientBlocked,
 				}),
 			);
+			const deepLinkGuidance = blocked.deepLink
+				? ` Deep link: ${blocked.deepLink}`
+				: "";
 			return {
-				system: `${ctx.system}\n\nThe current user request is blocked from the copilot tool loop. Respond with this exact guidance in natural language: ${blocked.message} Deep link: ${blocked.deepLink}`,
+				system: `${ctx.system}\n\nThe current user request is blocked from the copilot tool loop. Respond with this exact guidance in natural language: ${blocked.message}${deepLinkGuidance}`,
 				activeTools: [],
 				maxSteps: 1,
 			};
 		}
-		const nativeSuggestion = detectNativeFeatureSuggestion(userText);
+		const nativeSuggestion = detectNativeFeatureSuggestion(
+			userText,
+			this.nativeFeatureFlags,
+		);
 		if (nativeSuggestion) {
 			return {
 				system: `${ctx.system}\n\nBefore taking action, briefly explain that ${nativeSuggestion.name} may be a better fit because ${nativeSuggestion.message.toLowerCase()} Offer this deep link: ${nativeSuggestion.deepLink}. Ask whether the user wants to use the native flow or continue in chat. Do not call tools this turn.`,

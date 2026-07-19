@@ -14,10 +14,37 @@ const ROOT = join(import.meta.dir, "..");
 const VITE_CACHE = join(ROOT, "node_modules/.vite");
 const WARM_MS = Number(process.env.E2E_VITE_WARM_MS ?? "35000");
 
+/** Enable already-live AI kill switches for local E2E (registry defaults are off). */
+const E2E_AI_FLAG_OVERRIDES = {
+	"ai-scan-receipt": true,
+	"ai-import-url": true,
+	"ai-dock-from-receipt": true,
+	"ai-generate-meal": true,
+	"ai-plan-week": true,
+} as const;
+
+function resolveFeatureFlagOverrides(): string {
+	const raw = process.env.FEATURE_FLAG_OVERRIDES?.trim();
+	if (!raw) return JSON.stringify(E2E_AI_FLAG_OVERRIDES);
+	try {
+		const parsed = JSON.parse(raw) as Record<string, unknown>;
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return JSON.stringify({ ...E2E_AI_FLAG_OVERRIDES, ...parsed });
+		}
+	} catch {
+		/* keep E2E defaults */
+	}
+	return JSON.stringify(E2E_AI_FLAG_OVERRIDES);
+}
+
 function runDev(logLabel: string): ReturnType<typeof spawn> {
 	const child = spawn("bun", ["run", "dev:local"], {
 		cwd: ROOT,
-		env: { ...process.env, RATION_DEV_MODE: "local" },
+		env: {
+			...process.env,
+			RATION_DEV_MODE: "local",
+			FEATURE_FLAG_OVERRIDES: resolveFeatureFlagOverrides(),
+		},
 		stdio: ["ignore", "inherit", "inherit"],
 	});
 	child.on("exit", (code, signal) => {

@@ -53,6 +53,12 @@ final class OnboardingCoordinator {
         errorMessage = nil
     }
 
+    /// Use when Ask Ration is feature-flagged off — still complete onboarding without live Copilot.
+    func preferStaticBriefing() {
+        guard isActive else { return }
+        isStaticReplay = true
+    }
+
     func complete(api: RationAPI) async -> UserSettings? {
         isSaving = true
         errorMessage = nil

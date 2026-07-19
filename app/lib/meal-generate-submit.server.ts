@@ -1,4 +1,6 @@
 import { data } from "react-router";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import type { FlagshipEvaluationContext } from "~/lib/feature-flags/flags.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -10,13 +12,16 @@ export interface SubmitMealGenerateInput {
 	userId: string;
 	organizationId: string;
 	customization?: string;
+	flagContext: FlagshipEvaluationContext;
 }
 
 export async function submitMealGenerate(
 	env: Cloudflare.Env,
 	input: SubmitMealGenerateInput,
 ) {
-	const { userId, organizationId, customization } = input;
+	const { userId, organizationId, customization, flagContext } = input;
+
+	await assertFeatureEnabled(env, "ai-generate-meal", flagContext);
 
 	return withCreditGate(
 		{

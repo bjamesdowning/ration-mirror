@@ -1,6 +1,8 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { SupplyScanMatchQuerySchema } from "~/lib/schemas/supply-scan";
 import { getSupplyScanMatch, SupplyScanError } from "~/lib/supply-scan.server";
@@ -15,11 +17,18 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		groupId,
 		session: { user },
 	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
 	const listId = params.id;
 	if (!listId) throw data({ error: "List ID required" }, { status: 400 });
 
+	await assertFeatureEnabled(
+		env,
+		"ai-dock-from-receipt",
+		buildFlagContext(request, env, { user }),
+	);
+
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"status_poll",
 		user.id,
 	);
@@ -43,7 +52,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 
 	try {
 		return await getSupplyScanMatch(
-			context.cloudflare.env,
+			env,
 			groupId,
 			listId,
 			parsed.data.requestId,

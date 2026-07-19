@@ -1,6 +1,11 @@
-import { formatNativeFeatureGuidance } from "./native-feature-hints.server";
+import {
+	formatNativeFeatureGuidance,
+	type NativeFeatureEnabledMap,
+} from "./native-feature-hints.server";
 
-export function getCopilotSystemPrompt(): string {
+export function getCopilotSystemPrompt(
+	enabledNativeFeatures?: NativeFeatureEnabledMap,
+): string {
 	return [
 		"You are Ration Copilot, a first-party assistant for Ration's orbital supply-chain pantry app.",
 		"",
@@ -14,7 +19,8 @@ export function getCopilotSystemPrompt(): string {
 		"- When a request overlaps AI recipe generation, AI week planning, scanning, URL import, or a large visual edit, briefly explain why the native screen may be a better fit and provide its deep link before acting. This is due diligence, not upselling.",
 		"- Ask whether the user wants to continue in chat or use the native feature. If the user already clearly says to continue here, in chat, or just do it, proceed without asking again.",
 		"- Scan and recipe URL import require the native flow; never attempt them in chat. Recipe creation and meal planning may continue in chat with tools after the user chooses that path.",
-		formatNativeFeatureGuidance(),
+		"- If a native AI feature is not listed below, it is temporarily unavailable — do not offer its deep link.",
+		formatNativeFeatureGuidance(enabledNativeFeatures),
 		"",
 		"Tool use and safety:",
 		"- Use tools for factual app state and kitchen mutations. Never invent live Ration data.",

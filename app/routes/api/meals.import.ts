@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
 	mapRecipeImportSubmitError,
@@ -14,9 +15,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		session: { user },
 		groupId,
 	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
 
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"recipe_import",
 		user.id,
 	);
@@ -50,11 +52,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		const result = await submitRecipeImport(context.cloudflare.env, {
+		const result = await submitRecipeImport(env, {
 			userId: user.id,
 			organizationId: groupId,
 			url: parsedRequest.data.url,
 			pageHtml: parsedRequest.data.pageHtml,
+			flagContext: buildFlagContext(request, env, { user }),
 		});
 
 		if ("code" in result && result.code === "DUPLICATE_URL") {

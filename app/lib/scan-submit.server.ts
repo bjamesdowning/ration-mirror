@@ -1,4 +1,6 @@
 import { data } from "react-router";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import type { FlagshipEvaluationContext } from "~/lib/feature-flags/flags.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -21,13 +23,16 @@ export interface SubmitVisualScanInput {
 	imageFile: File;
 	userId: string;
 	organizationId: string;
+	flagContext: FlagshipEvaluationContext;
 }
 
 export async function submitVisualScan(
 	env: Cloudflare.Env,
 	input: SubmitVisualScanInput,
 ) {
-	const { imageFile, userId, organizationId } = input;
+	const { imageFile, userId, organizationId, flagContext } = input;
+
+	await assertFeatureEnabled(env, "ai-scan-receipt", flagContext);
 
 	const mimeType = imageFile.type as AllowedMimeType;
 	if (!ALLOWED_MIME_TYPES.includes(mimeType)) {

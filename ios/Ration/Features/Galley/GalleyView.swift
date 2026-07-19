@@ -163,11 +163,15 @@ struct GalleyView: View {
                 Button { showingAddTypeChoice = true } label: {
                     Label("Add", systemImage: "plus")
                 }
-                Button { showingGenerate = true } label: {
-                    Label("Generate meal", systemImage: "sparkles")
+                if env.session.clientFlags.isAiGenerateMealEnabled {
+                    Button { showingGenerate = true } label: {
+                        Label("Generate meal", systemImage: "sparkles")
+                    }
                 }
-                Button { showingImport = true } label: {
-                    Label("Import recipe", systemImage: "link")
+                if env.session.clientFlags.isAiImportUrlEnabled {
+                    Button { showingImport = true } label: {
+                        Label("Import recipe", systemImage: "link")
+                    }
                 }
             }
         }
@@ -222,13 +226,17 @@ struct GalleyView: View {
         }
         .onChange(of: env.deepLinkRouter.galleyGeneratePending, initial: true) { _, pending in
             if pending {
-                showingGenerate = true
+                if env.session.clientFlags.isAiGenerateMealEnabled {
+                    showingGenerate = true
+                }
                 env.deepLinkRouter.acknowledgeGalleyGenerate()
             }
         }
         .onChange(of: env.deepLinkRouter.galleyImportPending, initial: true) { _, pending in
             if pending {
-                showingImport = true
+                if env.session.clientFlags.isAiImportUrlEnabled {
+                    showingImport = true
+                }
                 env.deepLinkRouter.acknowledgeGalleyImport()
             }
         }

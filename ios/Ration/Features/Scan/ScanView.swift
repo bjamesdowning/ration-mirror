@@ -66,6 +66,8 @@ final class ScanViewModel {
                 if AIErrorHandling.mapSubmitError(error) == .paywall {
                     shouldShowPaywall = true
                     state = .idle
+                } else if AIErrorHandling.mapSubmitError(error) == .featureDisabled {
+                    state = .failed(AIErrorHandling.featureDisabledMessage)
                 } else {
                     state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
                 }

@@ -3,6 +3,7 @@ import {
 	useFetcher,
 	useNavigate,
 	useRevalidator,
+	useRouteLoaderData,
 	useSearchParams,
 } from "react-router";
 import { PanelToolbar } from "~/components/hub/PanelToolbar";
@@ -378,6 +379,10 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	// Plan Week modal — controlled from FAB on mobile
 	const [showPlanWeekModal, setShowPlanWeekModal] = useState(false);
+	const rootData = useRouteLoaderData("root") as
+		| { clientFlags?: { aiPlanWeek?: boolean } }
+		| undefined;
+	const aiPlanWeek = rootData?.clientFlags?.aiPlanWeek === true;
 
 	// -------------------------------------------------------------------------
 	// Copy state
@@ -786,17 +791,19 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 										Consume {selectedDayLabel}
 									</button>
 								)}
-								<PlanWeekButton
-									planId={plan.id}
-									credits={credits}
-									cost={planWeekCost}
-									weekDates={weekDates}
-									planStartDate={planStartDate}
-									showSnackSlot={showSnackSlot}
-									meals={pickerMeals}
-									onScheduleConfirmed={handleScheduleConfirmed}
-									isSubmitting={bulkFetcher.state !== "idle"}
-								/>
+								{aiPlanWeek && (
+									<PlanWeekButton
+										planId={plan.id}
+										credits={credits}
+										cost={planWeekCost}
+										weekDates={weekDates}
+										planStartDate={planStartDate}
+										showSnackSlot={showSnackSlot}
+										meals={pickerMeals}
+										onScheduleConfirmed={handleScheduleConfirmed}
+										isSubmitting={bulkFetcher.state !== "idle"}
+									/>
+								)}
 								<button
 									type="button"
 									onClick={() => setShareOpen(true)}
@@ -927,35 +934,39 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 				/>
 			)}
 
-			{/* Mobile FAB: Plan Week (always) + Copy Day + Consume All (contextual) */}
+			{/* Mobile FAB: Plan Week (when enabled) + Copy Day + Consume All (contextual) */}
 			<FloatingActionBar
 				hidden={isFilterSheetOpen}
 				actions={[
-					{
-						id: "plan-week",
-						primary: true,
-						icon: (
-							<svg
-								className="w-5 h-5"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								aria-hidden="true"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M5 3l1.5 3.5L10 8l-3.5 1.5L5 13l-1.5-3.5L0 8l3.5-1.5L5 3zM19 12l1 2.5L22.5 16 20 17l-1 2.5-1-2.5L15.5 16l2.5-1L19 12zM12 1l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8L12 1z"
-								/>
-							</svg>
-						),
-						label: "Plan week",
-						onClick: () => {
-							setShowPlanWeekModal(true);
-						},
-						disabled: bulkFetcher.state !== "idle",
-					},
+					...(aiPlanWeek
+						? [
+								{
+									id: "plan-week",
+									primary: true,
+									icon: (
+										<svg
+											className="w-5 h-5"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M5 3l1.5 3.5L10 8l-3.5 1.5L5 13l-1.5-3.5L0 8l3.5-1.5L5 3zM19 12l1 2.5L22.5 16 20 17l-1 2.5-1-2.5L15.5 16l2.5-1L19 12zM12 1l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8L12 1z"
+											/>
+										</svg>
+									),
+									label: "Plan week",
+									onClick: () => {
+										setShowPlanWeekModal(true);
+									},
+									disabled: bulkFetcher.state !== "idle",
+								},
+							]
+						: []),
 					...(hasEntries && activeDayEntryCount > 0
 						? [
 								{
@@ -997,19 +1008,21 @@ export default function ManifestPage({ loaderData }: Route.ComponentProps) {
 			/>
 
 			{/* Controlled Plan Week modal — opened by FAB on mobile */}
-			<PlanWeekButton
-				planId={plan.id}
-				credits={credits}
-				cost={planWeekCost}
-				weekDates={weekDates}
-				planStartDate={planStartDate}
-				showSnackSlot={showSnackSlot}
-				meals={pickerMeals}
-				onScheduleConfirmed={handleScheduleConfirmed}
-				isSubmitting={bulkFetcher.state !== "idle"}
-				open={showPlanWeekModal}
-				onOpenChange={setShowPlanWeekModal}
-			/>
+			{aiPlanWeek && (
+				<PlanWeekButton
+					planId={plan.id}
+					credits={credits}
+					cost={planWeekCost}
+					weekDates={weekDates}
+					planStartDate={planStartDate}
+					showSnackSlot={showSnackSlot}
+					meals={pickerMeals}
+					onScheduleConfirmed={handleScheduleConfirmed}
+					isSubmitting={bulkFetcher.state !== "idle"}
+					open={showPlanWeekModal}
+					onOpenChange={setShowPlanWeekModal}
+				/>
+			)}
 
 			{consumeMarkOnlyToast.isOpen && (
 				<Toast

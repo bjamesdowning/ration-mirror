@@ -65,6 +65,9 @@ struct RootView: View {
                         completedAt: env.launch.userSettings?.onboardingCompletedAt,
                         settings: env.launch.userSettings
                     )
+                    if !env.session.clientFlags.isRationCopilotEnabled {
+                        env.onboarding.preferStaticBriefing()
+                    }
                 } else {
                     env.onboarding.reset()
                 }
@@ -93,12 +96,21 @@ struct MainTabView: View {
     }
 
     private var showCopilotBar: Bool {
-        !showingSettings
+        env.session.clientFlags.isRationCopilotEnabled
+            && !showingSettings
             && !showingGroupSettings
             && !showingScan
             && !env.ask.isSheetPresented
             // Only suppress on Hub while editing — other tabs keep Copilot.
             && !(isHubEditMode && selectedTab == 0)
+    }
+
+    private var canOpenScan: Bool {
+        env.session.clientFlags.isAiScanReceiptEnabled
+    }
+
+    private var canOpenAsk: Bool {
+        env.session.clientFlags.isRationCopilotEnabled
     }
 
     var body: some View {
@@ -107,7 +119,10 @@ struct MainTabView: View {
                 isTabActive: activatedTabs.contains(0),
                 hubTabReselectToken: hubTabReselectToken,
                 isHubEditMode: $isHubEditMode,
-                onScan: { showingScan = true },
+                onScan: {
+                    guard canOpenScan else { return }
+                    showingScan = true
+                },
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
                 onOpenSupply: { selectedTab = 4 },
@@ -121,7 +136,10 @@ struct MainTabView: View {
 
             CargoListView(
                 isTabActive: activatedTabs.contains(1),
-                onScan: { showingScan = true },
+                onScan: {
+                    guard canOpenScan else { return }
+                    showingScan = true
+                },
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true }
             )
@@ -226,9 +244,10 @@ struct MainTabView: View {
             }
         }
         .fullScreenCover(isPresented: Binding(
-            get: { env.ask.isSheetPresented },
+            get: { canOpenAsk && env.ask.isSheetPresented },
             set: { presented in
                 if presented {
+                    guard canOpenAsk else { return }
                     if let organizationId = env.session.activeOrganizationId {
                         Task {
                             await env.ask.prepareSheetPresentation(
@@ -301,17 +320,20 @@ struct MainTabView: View {
         .task(id: shellReadyKey) {
             guard let organizationId = env.session.activeOrganizationId else { return }
             await env.warmSnapshotMetadata(organizationId: organizationId)
-            await env.ask.load(
-                api: env.api,
-                auth: env.auth,
-                organizationId: organizationId,
-                snapshots: env.snapshots
-            )
-            env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            if canOpenAsk {
+                await env.ask.load(
+                    api: env.api,
+                    auth: env.auth,
+                    organizationId: organizationId,
+                    snapshots: env.snapshots
+                )
+                env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            }
             env.copilotScroll.setActiveTab(selectedTab)
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
                 openAskSheet: {
+                    guard canOpenAsk else { return }
                     guard let organizationId = env.session.activeOrganizationId else {
                         env.ask.openSheet()
                         return
@@ -324,7 +346,10 @@ struct MainTabView: View {
                         )
                     }
                 },
-                openScan: { showingScan = true }
+                openScan: {
+                    guard canOpenScan else { return }
+                    showingScan = true
+                }
             )
             activatedTabs.insert(selectedTab)
         }
@@ -335,6 +360,7 @@ struct MainTabView: View {
             env.deepLinkRouter.replayPending(
                 selectedTab: &selectedTab,
                 openAskSheet: {
+                    guard canOpenAsk else { return }
                     guard let organizationId = env.session.activeOrganizationId else {
                         env.ask.openSheet()
                         return
@@ -347,7 +373,10 @@ struct MainTabView: View {
                         )
                     }
                 },
-                openScan: { showingScan = true }
+                openScan: {
+                    guard canOpenScan else { return }
+                    showingScan = true
+                }
             )
             activatedTabs.insert(selectedTab)
         }
@@ -355,6 +384,7 @@ struct MainTabView: View {
             orgGeneration = newValue
             env.copilotScroll.resetForTabChange()
             Task {
+                guard canOpenAsk else { return }
                 guard let organizationId = env.session.activeOrganizationId else { return }
                 await env.ask.load(
                     api: env.api,

@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { ensureMealPlan } from "~/lib/manifest.server";
 import { requireMobileAIConsent } from "~/lib/mobile/ai-consent.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -46,6 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			planId: plan.id,
 			config,
+			flagContext: buildFlagContext(request, env, { user: { id: userId } }),
 		});
 	} catch (e) {
 		mapPlanWeekSubmitError(e);

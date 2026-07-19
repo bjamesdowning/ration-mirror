@@ -2,6 +2,8 @@ import { data } from "react-router";
 import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
 import { CapacityExceededError } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { log } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import {
@@ -25,6 +27,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		groupId,
 		session: { user },
 	} = await requireActiveGroup(context, request);
+	const env = context.cloudflare.env;
 	const listId = params.id;
 	if (!listId) throw data({ error: "List ID required" }, { status: 400 });
 
@@ -32,8 +35,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw data({ error: "Method not allowed" }, { status: 405 });
 	}
 
+	await assertFeatureEnabled(
+		env,
+		"ai-dock-from-receipt",
+		buildFlagContext(request, env, { user }),
+	);
+
 	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
+		env.RATION_KV,
 		"inventory_batch",
 		user.id,
 	);
@@ -60,25 +69,15 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			);
 		}
 
-		await validateSupplyOnlyIds(
-			context.cloudflare.env,
-			listId,
-			parsed.data.supplyOnlyIds,
-		);
+		await validateSupplyOnlyIds(env, listId, parsed.data.supplyOnlyIds);
 
-		const userSettings = await getUserSettings(
-			context.cloudflare.env.DB,
-			user.id,
-		);
+		const userSettings = await getUserSettings(env.DB, user.id);
 		const unitDisplayMode = resolveUnitDisplayMode(userSettings);
 
-		return await completeSupplyScan(
-			context.cloudflare.env,
-			groupId,
-			listId,
-			parsed.data,
-			{ unitMode: unitDisplayMode, userId: user.id },
-		);
+		return await completeSupplyScan(env, groupId, listId, parsed.data, {
+			unitMode: unitDisplayMode,
+			userId: user.id,
+		});
 	} catch (e) {
 		if (e instanceof SupplyScanError) {
 			const status =

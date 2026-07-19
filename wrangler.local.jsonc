@@ -27,7 +27,8 @@
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_usd": "price_1T6fvKFX10NMafIY69fY4MXY",
 		"STRIPE_PRICE_CREW_MEMBER_MONTHLY_eur": "price_1T6fBlFX10NMafIYHEbyNKwN",
 		"STRIPE_PROMO_WELCOME65": "promo_1T7CtfFX10NMafIYkyQyhzO6",
-		"RATION_ENV": "development"
+		"RATION_ENV": "development",
+		"FEATURE_FLAG_OVERRIDES": "{\"ai-scan-receipt\":true,\"ai-import-url\":true,\"ai-dock-from-receipt\":true,\"ai-generate-meal\":true,\"ai-plan-week\":true}"
 	},
 	"flagship": [
 		{

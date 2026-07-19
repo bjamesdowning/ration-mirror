@@ -2,6 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
+import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
+import type { FlagshipEvaluationContext } from "~/lib/feature-flags/flags.server";
 import {
 	AI_COSTS,
 	InsufficientCreditsError,
@@ -16,13 +18,16 @@ export interface SubmitPlanWeekInput {
 	organizationId: string;
 	planId: string;
 	config: WeekPlanRequest;
+	flagContext: FlagshipEvaluationContext;
 }
 
 export async function submitPlanWeek(
 	env: Cloudflare.Env,
 	input: SubmitPlanWeekInput,
 ) {
-	const { userId, organizationId, planId, config } = input;
+	const { userId, organizationId, planId, config, flagContext } = input;
+
+	await assertFeatureEnabled(env, "ai-plan-week", flagContext);
 
 	const db = drizzle(env.DB, { schema });
 

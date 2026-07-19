@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
+import { buildFlagContext } from "~/lib/feature-flags/flags.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { mapScanSubmitError, submitVisualScan } from "~/lib/scan-submit.server";
 import type { Route } from "./+types/scan";
@@ -11,12 +12,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 		session: { user },
 	} = await requireActiveGroup(context, request);
 	const userId = user.id;
+	const env = context.cloudflare.env;
 
-	const rateLimitResult = await checkRateLimit(
-		context.cloudflare.env.RATION_KV,
-		"scan",
-		userId,
-	);
+	const rateLimitResult = await checkRateLimit(env.RATION_KV, "scan", userId);
 
 	if (!rateLimitResult.allowed) {
 		throw rateLimitResponse(
@@ -34,10 +32,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		return await submitVisualScan(context.cloudflare.env, {
+		return await submitVisualScan(env, {
 			imageFile,
 			userId,
 			organizationId: groupId,
+			flagContext: buildFlagContext(request, env, { user }),
 		});
 	} catch (outerError: unknown) {
 		mapScanSubmitError(outerError);

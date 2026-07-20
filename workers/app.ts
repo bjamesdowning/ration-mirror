@@ -3,8 +3,10 @@ import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
 import { log } from "../app/lib/logging.server";
+import { runWithOpsEnv } from "../app/lib/ops-context.server";
 import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
 import { sendReengagementEmails } from "../app/lib/reengagement-cron.server";
+import { emitQueueConsumerError } from "../app/lib/telemetry.server";
 import { isRegisteredWellKnownPath } from "../app/lib/well-known-routes";
 
 // biome-ignore lint/suspicious/noExplicitAny: Build types are handled by framework
@@ -47,35 +49,37 @@ function applySecurityHeaders(response: Response): Response {
 
 export default {
 	async fetch(request, env, ctx) {
-		const url = new URL(request.url);
+		return runWithOpsEnv(env, async () => {
+			const url = new URL(request.url);
 
-		// Browser and tooling probes for unknown well-known paths (e.g. Chrome
-		// DevTools, iOS browser detection) are not routed through React Router to
-		// avoid "No route matches URL" errors surfacing as visible error pages.
-		if (
-			url.pathname.startsWith("/.well-known/") &&
-			!isRegisteredWellKnownPath(url.pathname)
-		) {
-			return new Response(null, { status: 404 });
-		}
+			// Browser and tooling probes for unknown well-known paths (e.g. Chrome
+			// DevTools, iOS browser detection) are not routed through React Router to
+			// avoid "No route matches URL" errors surfacing as visible error pages.
+			if (
+				url.pathname.startsWith("/.well-known/") &&
+				!isRegisteredWellKnownPath(url.pathname)
+			) {
+				return new Response(null, { status: 404 });
+			}
 
-		const context = {
-			request,
-			env,
-			waitUntil: ctx.waitUntil.bind(ctx),
-			passThroughOnException: ctx.passThroughOnException.bind(ctx),
-			functionPath: "",
-			params: {},
-			data: {},
-			next: () => Promise.resolve(new Response("Not found", { status: 404 })),
-			cloudflare: {
+			const context = {
+				request,
 				env,
-				ctx,
-				cf: request.cf,
-			},
-		};
-		const response = await handleRequest(context);
-		return applySecurityHeaders(response);
+				waitUntil: ctx.waitUntil.bind(ctx),
+				passThroughOnException: ctx.passThroughOnException.bind(ctx),
+				functionPath: "",
+				params: {},
+				data: {},
+				next: () => Promise.resolve(new Response("Not found", { status: 404 })),
+				cloudflare: {
+					env,
+					ctx,
+					cf: request.cf,
+				},
+			};
+			const response = await handleRequest(context);
+			return applySecurityHeaders(response);
+		});
 	},
 
 	/**
@@ -83,23 +87,26 @@ export default {
 	 * Unknown queues are logged and acked to avoid infinite retries.
 	 */
 	async queue(batch: MessageBatch, env: Env, _ctx: ExecutionContext) {
-		const queueName = batch.queue;
-		const handler = AI_QUEUE_HANDLERS[queueName];
+		return runWithOpsEnv(env, async () => {
+			const queueName = batch.queue;
+			const handler = AI_QUEUE_HANDLERS[queueName];
 
-		for (const msg of batch.messages) {
-			try {
-				if (handler) {
-					await handler(env, msg.body);
-					msg.ack();
-				} else {
-					log.warn("Unknown queue", { queue: queueName });
-					msg.ack(); // ack to avoid infinite retries
+			for (const msg of batch.messages) {
+				try {
+					if (handler) {
+						await handler(env, msg.body);
+						msg.ack();
+					} else {
+						log.warn("Unknown queue", { queue: queueName });
+						msg.ack(); // ack to avoid infinite retries
+					}
+				} catch (err) {
+					log.error("Queue consumer error", { queue: queueName, err });
+					emitQueueConsumerError(queueName);
+					msg.retry();
 				}
-			} catch (err) {
-				log.error("Queue consumer error", { queue: queueName, err });
-				msg.retry();
 			}
-		}
+		});
 	},
 
 	/**

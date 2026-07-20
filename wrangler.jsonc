@@ -131,6 +131,16 @@
 			"index_name": "ration-cargo"
 		}
 	],
+	/**
+	 * Ops counters for launch health (503/429/queue/Gemini/credits).
+	 * Dataset auto-creates on first writeDataPoint. No PII — see telemetry.server.ts.
+	 */
+	"analytics_engine_datasets": [
+		{
+			"binding": "RATION_ANALYTICS",
+			"dataset": "ration_ops"
+		}
+	],
 	"queues": {
 		"producers": [
 			{
@@ -277,7 +287,13 @@
 						"script_name": "ration-copilot-dev"
 					}
 				]
-			}
+			},
+			"analytics_engine_datasets": [
+				{
+					"binding": "RATION_ANALYTICS",
+					"dataset": "ration_ops_dev"
+				}
+			]
 		}
 	}
 }

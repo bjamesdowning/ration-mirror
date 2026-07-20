@@ -10,17 +10,30 @@ const failAiJobWithRefund = vi.fn(
 	},
 );
 
-vi.mock("~/lib/queue-job.server", () => ({
-	updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
-	runIdempotentAiJob: async (
-		_db: unknown,
-		_requestId: string,
-		work: () => Promise<void>,
-	) => {
-		await work();
-		return { ran: true, claimed: true };
-	},
-}));
+vi.mock("~/lib/queue-job.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../queue-job.server")>();
+	return {
+		...actual,
+		updateQueueJobResult: (...args: unknown[]) => updateQueueJobResult(...args),
+		runIdempotentAiJob: async (
+			_db: unknown,
+			_requestId: string,
+			work: () => Promise<void>,
+		) => {
+			await work();
+			return { ran: true, claimed: true };
+		},
+		// Avoid D1 artifact read/write in this test; pass through to Gateway.
+		callGeminiWithArtifact: async (
+			env: Cloudflare.Env,
+			_requestId: string,
+			options: Parameters<typeof actual.callGeminiWithArtifact>[2],
+		) => {
+			const { callGemini } = await import("../ai-gateway.server");
+			return callGemini(env, options);
+		},
+	};
+});
 
 vi.mock("~/lib/cargo-index.server", () => ({
 	fetchOrgCargoIndex: (...args: unknown[]) => fetchOrgCargoIndex(...args),

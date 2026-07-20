@@ -48,3 +48,26 @@ describe("findSimilarCargoBatch concurrency", () => {
 		expect(peak).toBeGreaterThan(1);
 	});
 });
+
+describe("deleteCargoVectors", () => {
+	it("rethrows Vectorize delete failures (GDPR fail-closed)", async () => {
+		const { deleteCargoVectors } = await import("../vector.server");
+		const vectorize = createMockVectorize();
+		vi.mocked(vectorize.deleteByIds).mockRejectedValue(
+			new Error("vectorize unavailable"),
+		);
+		const env = createMockEnv();
+		env.VECTORIZE = vectorize;
+
+		await expect(deleteCargoVectors(env, ["cargo-1"])).rejects.toThrow(
+			/vectorize unavailable/,
+		);
+	});
+
+	it("no-ops when VECTORIZE binding is absent", async () => {
+		const { deleteCargoVectors } = await import("../vector.server");
+		const env = createMockEnv();
+		env.VECTORIZE = undefined as unknown as VectorizeIndex;
+		await expect(deleteCargoVectors(env, ["cargo-1"])).resolves.toBeUndefined();
+	});
+});

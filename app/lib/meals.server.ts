@@ -1257,7 +1257,15 @@ export async function cookMeal(
 	env: Env,
 	organizationId: string,
 	mealId: string,
-	options?: { servings?: number; deductionMode?: CookMealDeductionMode },
+	options?: {
+		servings?: number;
+		deductionMode?: CookMealDeductionMode;
+		/**
+		 * When true, compute deductions but do not write cargo updates.
+		 * Caller must apply `deductions` (e.g. batched with consumedAt marks).
+		 */
+		skipApply?: boolean;
+	},
 ) {
 	const allowPartial = options?.deductionMode === "partial";
 	const d1 = drizzle(env.DB);
@@ -1576,7 +1584,7 @@ export async function cookMeal(
 		}
 	}
 
-	if (updates.length > 0) {
+	if (updates.length > 0 && !options?.skipApply) {
 		trackD1BatchSize("cookMeal", updates.length, {
 			organizationRef: organizationId,
 		});

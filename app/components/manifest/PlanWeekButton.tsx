@@ -13,7 +13,7 @@ import {
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
 import type { MealForPicker } from "~/lib/manifest.server";
-import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
+import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 import { SLOT_LABELS, SLOT_TYPES, type SlotType } from "~/lib/schemas/manifest";
 import {
 	VARIETY_DESCRIPTIONS,
@@ -547,9 +547,7 @@ export function PlanWeekButton({
 			}
 		};
 
-		const id = setInterval(poll, POLL_INTERVAL_MS);
-		poll();
-		return () => clearInterval(id);
+		return startBackoffPollLoop(poll);
 	}, [pollRequestId, planId]);
 
 	const errorMessage = (() => {

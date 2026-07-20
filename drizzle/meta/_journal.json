@@ -267,6 +267,13 @@
       "when": 1783451072198,
       "tag": "0037_cultured_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1784541446253,
+      "tag": "0038_cynical_wild_pack",
+      "breakpoints": true
     }
   ]
 }

@@ -4,11 +4,19 @@
  *
  * Idempotency: consumers call `runIdempotentAiJob` so queue retries after a
  * successful terminal write do not re-invoke Gemini (SR-001).
+ * Model artifact: raw Gemini text is stored on first success so processing
+ * re-entry skips a second Gateway call even when the terminal D1 write failed.
  */
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
+import {
+	type BuildGatewayRequestOptions,
+	callGemini,
+	type GatewayResult,
+} from "./ai-gateway.server";
 import { log } from "./logging.server";
+import { emitOpsMetric } from "./telemetry.server";
 
 const JOB_TTL_SECONDS = 3600; // 1 hour
 
@@ -49,6 +57,7 @@ export async function insertQueueJobPending(
 		organizationId,
 		status: "pending",
 		resultJson: null,
+		modelArtifact: null,
 		expiresAt: new Date((now + JOB_TTL_SECONDS) * 1000),
 	});
 }
@@ -68,6 +77,29 @@ export async function claimQueueJobForProcessing(
 		.bind(requestId)
 		.run();
 	return (result.meta.changes ?? 0) > 0;
+}
+
+/**
+ * Persist raw Gemini text once. Conditional so a late peer cannot overwrite
+ * an existing artifact or a terminal row.
+ * @returns true when the artifact was written
+ */
+export async function saveQueueJobModelArtifact(
+	db: D1Database,
+	requestId: string,
+	modelText: string,
+): Promise<boolean> {
+	const write = await db
+		.prepare(
+			`UPDATE queue_job
+			SET model_artifact = ?
+			WHERE request_id = ?
+				AND status IN ('pending', 'processing')
+				AND model_artifact IS NULL`,
+		)
+		.bind(modelText, requestId)
+		.run();
+	return (write.meta.changes ?? 0) > 0;
 }
 
 /**
@@ -99,6 +131,7 @@ export async function getQueueJob(
 	status: QueueJobStatus;
 	organizationId: string;
 	resultJson: string | null;
+	modelArtifact: string | null;
 	expiresAt: number;
 } | null> {
 	const d1 = drizzle(db);
@@ -107,6 +140,7 @@ export async function getQueueJob(
 			status: schema.queueJob.status,
 			organizationId: schema.queueJob.organizationId,
 			resultJson: schema.queueJob.resultJson,
+			modelArtifact: schema.queueJob.modelArtifact,
 			expiresAt: schema.queueJob.expiresAt,
 		})
 		.from(schema.queueJob)
@@ -124,8 +158,65 @@ export async function getQueueJob(
 		status: row.status as QueueJobStatus,
 		organizationId: row.organizationId,
 		resultJson: row.resultJson,
+		modelArtifact: row.modelArtifact ?? null,
 		expiresAt: Math.floor(expiresAtMs / 1000),
 	};
+}
+
+/**
+ * Call Gemini at most once per job: reuse a stored model artifact on retry,
+ * otherwise invoke Gateway and persist the raw text before parse/terminal write.
+ *
+ * Pass `forceRefresh: true` when the prompt payload changed (e.g. import-url
+ * Browser Rendering retry) so a prior artifact is not reused.
+ */
+export async function callGeminiWithArtifact(
+	env: Env,
+	requestId: string,
+	options: BuildGatewayRequestOptions,
+	deps: {
+		getQueueJob?: typeof getQueueJob;
+		saveQueueJobModelArtifact?: typeof saveQueueJobModelArtifact;
+		callGemini?: typeof callGemini;
+	} = {},
+	runOptions?: { forceRefresh?: boolean },
+): Promise<GatewayResult> {
+	const getJob = deps.getQueueJob ?? getQueueJob;
+	const saveArtifact =
+		deps.saveQueueJobModelArtifact ?? saveQueueJobModelArtifact;
+	const invoke = deps.callGemini ?? callGemini;
+
+	if (!runOptions?.forceRefresh) {
+		const existing = await getJob(env.DB, requestId);
+		if (existing?.modelArtifact) {
+			emitOpsMetric({
+				route: "gemini",
+				blobs: ["gemini_skip_artifact", options.feature],
+			});
+			log.info("AI queue job reusing model artifact; skipping Gemini", {
+				requestId,
+				feature: options.feature,
+			});
+			return { ok: true, text: existing.modelArtifact };
+		}
+	}
+
+	const result = await invoke(env, options);
+	if (result.ok) {
+		if (runOptions?.forceRefresh) {
+			await env.DB.prepare(
+				`UPDATE queue_job
+				SET model_artifact = ?
+				WHERE request_id = ?
+					AND status IN ('pending', 'processing')`,
+			)
+				.bind(result.text, requestId)
+				.run();
+		} else {
+			await saveArtifact(env.DB, requestId, result.text);
+		}
+	}
+	return result;
 }
 
 export type IdempotentAiJobOutcome =
@@ -146,7 +237,8 @@ export interface IdempotentAiJobDeps {
  *
  * Re-entry while `processing` (crash / unacked retry) still runs `work` so the
  * job cannot stick forever. Terminal writes use conditional UPDATE so a late
- * peer cannot clobber completed/failed.
+ * peer cannot clobber completed/failed. Prefer `callGeminiWithArtifact` inside
+ * `work` so model text survives a failed terminal write.
  */
 export async function runIdempotentAiJob(
 	db: D1Database,

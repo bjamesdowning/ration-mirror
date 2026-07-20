@@ -7,6 +7,7 @@ import {
 } from "./billing-tier.server";
 import { log, redactId } from "./logging.server";
 import { getStripe, isAnnualSubscriptionPrice } from "./stripe.server";
+import { emitCreditDeduct, emitRefund } from "./telemetry.server";
 
 // ---------------------------------------------------------------------------
 // Cost Registry
@@ -99,6 +100,8 @@ export async function deductCredits(
 	)
 		.bind(ledgerId, organizationId, userId, -cost, reason, now)
 		.run();
+
+	emitCreditDeduct(cost);
 }
 
 export async function addCredits(
@@ -341,6 +344,7 @@ export async function failAiJobWithRefund(
 		cost: options.cost,
 		reason: options.reason,
 	});
+	emitRefund();
 }
 
 export async function processCheckoutSession(

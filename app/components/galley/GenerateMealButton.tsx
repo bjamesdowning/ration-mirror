@@ -20,7 +20,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
-import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "~/lib/polling";
+import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 
 interface GeneratedRecipe {
 	id?: string;
@@ -333,9 +333,7 @@ export const GenerateMealButton = forwardRef<
 			}
 		};
 
-		const id = setInterval(poll, POLL_INTERVAL_MS);
-		poll();
-		return () => clearInterval(id);
+		return startBackoffPollLoop(poll);
 	}, [pollRequestId]);
 
 	const handleGenerate = () => {

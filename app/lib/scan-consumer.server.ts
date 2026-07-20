@@ -2,12 +2,13 @@
  * Scan queue consumer logic.
  * Runs AI vision on an image from R2, parses results, stores status in D1 for polling.
  */
-import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
+import { gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { fetchOrgCargoIndex } from "~/lib/cargo-index.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { parseModelJson } from "~/lib/parse-model-json";
 import {
+	callGeminiWithArtifact,
 	runIdempotentAiJob,
 	updateQueueJobResult,
 } from "~/lib/queue-job.server";
@@ -217,7 +218,7 @@ async function executeScanConsumerJob(
 			? buildReceiptPdfPrompt(todayIso)
 			: buildScanPrompt(todayIso);
 
-		const gatewayResult = await callGemini(env, {
+		const gatewayResult = await callGeminiWithArtifact(env, requestId, {
 			feature: "scan",
 			parts: [
 				{

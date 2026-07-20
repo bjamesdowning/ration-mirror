@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { z } from "zod";
 import { CapacityExceededError } from "./capacity.server";
 import { log } from "./logging.server";
+import { emitApiOutcome } from "./telemetry.server";
 
 /**
  * Returns true for permanent D1/SQL failures (schema drift, bad queries).
@@ -98,6 +99,7 @@ export function rethrowRouteLoaderError(error: unknown): never {
 		log.warn("[loader] D1 contention or timeout", {
 			errorMessage: error instanceof Error ? error.message : String(error),
 		});
+		emitApiOutcome("503", "server_busy");
 		throw data(
 			{
 				error:
@@ -113,6 +115,7 @@ export function rethrowRouteLoaderError(error: unknown): never {
 
 	if (isD1SchemaError(error)) {
 		log.critical("[loader] D1 schema or query error", error);
+		emitApiOutcome("5xx", "admin_schema_error");
 		throw data(
 			{
 				error: "Admin data is temporarily unavailable. Please try again later.",
@@ -263,6 +266,7 @@ export function handleApiError(error: unknown) {
 		log.warn("[API] D1 contention or timeout", {
 			errorMessage: error instanceof Error ? error.message : String(error),
 		});
+		emitApiOutcome("503", "server_busy");
 		return data(
 			{
 				error:
@@ -278,6 +282,7 @@ export function handleApiError(error: unknown) {
 
 	if (isD1SchemaError(error)) {
 		log.critical("[API] D1 schema or query error", error);
+		emitApiOutcome("5xx", "admin_schema_error");
 		return data(
 			{
 				error: "Admin data is temporarily unavailable. Please try again later.",
@@ -288,6 +293,7 @@ export function handleApiError(error: unknown) {
 	}
 
 	log.error("[API] Unhandled error", error);
+	emitApiOutcome("5xx", "unhandled");
 
 	// Never expose raw error details to clients — prevents information disclosure
 	return data(

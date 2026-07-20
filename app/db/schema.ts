@@ -803,6 +803,11 @@ export const queueJob = sqliteTable(
 			enum: ["pending", "processing", "completed", "failed"],
 		}).notNull(),
 		resultJson: text("result_json"),
+		/**
+		 * Raw Gemini response text persisted immediately after a successful model
+		 * call so queue retries can skip a second Gateway invoke (P0-A / SR-001).
+		 */
+		modelArtifact: text("model_artifact"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
 			.default(sql`(unixepoch())`),

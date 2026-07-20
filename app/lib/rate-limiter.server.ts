@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { log } from "./logging.server";
+import { emitRateLimitDenied } from "./telemetry.server";
 
 /**
  * Distributed Rate Limiting using Cloudflare KV + In-Memory Cache
@@ -180,6 +181,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute — heavy operation (D1 + Vectorize); decoupled from mcp_write
 		maxRequests: 8,
 		keyPrefix: "rate:mcp_supply_sync",
+		failClosed: true,
 	},
 	mcp_write_per_key: {
 		windowMs: 60_000, // 1 minute — per-API-key cap (defends against stolen keys)
@@ -195,6 +197,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 20,
 		keyPrefix: "rate:inventory_batch",
+		failClosed: true,
 	},
 	automation: {
 		windowMs: 60_000, // 1 minute
@@ -339,6 +342,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 60,
 		keyPrefix: "rate:hub_read",
+		failClosed: true,
 	},
 	/** Mobile `/supply` — read-only, same tier class as cargo_list (see H-4). */
 	supply_read: {
@@ -417,12 +421,33 @@ const KV_EDGE_CACHE_TTL = 60;
 /** Short retry hint when spend-sensitive buckets fail closed on KV errors. */
 const FAIL_CLOSED_RETRY_AFTER_SECONDS = 5;
 
-function failClosedResult(now: number): RateLimitResult {
+function failClosedResult(
+	now: number,
+	limitType: string,
+	options?: { emit?: boolean },
+): RateLimitResult {
+	if (options?.emit !== false) {
+		emitRateLimitDenied(limitType, "fail_closed");
+	}
 	return {
 		allowed: false,
 		remaining: 0,
 		resetAt: now + FAIL_CLOSED_RETRY_AFTER_SECONDS * 1000,
 		retryAfter: FAIL_CLOSED_RETRY_AFTER_SECONDS,
+	};
+}
+
+function limitDeniedResult(
+	limitType: string,
+	resetAt: number,
+	now: number,
+): RateLimitResult {
+	emitRateLimitDenied(limitType, "limit");
+	return {
+		allowed: false,
+		remaining: 0,
+		resetAt,
+		retryAfter: Math.ceil((resetAt - now) / 1000),
 	};
 }
 
@@ -476,12 +501,7 @@ export async function checkRateLimit(
 		// Window still active — check limit
 		if (cached.window.count >= config.maxRequests) {
 			const resetAt = cached.window.windowStart + config.windowMs;
-			return {
-				allowed: false,
-				remaining: 0,
-				resetAt,
-				retryAfter: Math.ceil((resetAt - now) / 1000),
-			};
+			return limitDeniedResult(limitType, resetAt, now);
 		}
 
 		// Increment in memory only — zero KV operations
@@ -513,7 +533,7 @@ export async function checkRateLimit(
 			},
 		);
 		if (failClosed) {
-			return failClosedResult(now);
+			return failClosedResult(now, limitType);
 		}
 	}
 
@@ -550,12 +570,7 @@ export async function checkRateLimit(
 	if (effectiveWindow.count >= config.maxRequests) {
 		LOCAL_CACHE.set(key, { window: effectiveWindow, cachedAt: now });
 		const resetAt = effectiveWindow.windowStart + config.windowMs;
-		return {
-			allowed: false,
-			remaining: 0,
-			resetAt,
-			retryAfter: Math.ceil((resetAt - now) / 1000),
-		};
+		return limitDeniedResult(limitType, resetAt, now);
 	}
 
 	// Increment
@@ -587,7 +602,7 @@ export async function checkRateLimit(
 			// under-count after we denied this request.
 			effectiveWindow.count = Math.max(0, effectiveWindow.count - 1);
 			LOCAL_CACHE.set(key, { window: effectiveWindow, cachedAt: now });
-			return failClosedResult(now);
+			return failClosedResult(now, limitType);
 		}
 	}
 
@@ -685,7 +700,7 @@ export async function getRateLimitStatus(
 			},
 		);
 		if (failClosed) {
-			return failClosedResult(now);
+			return failClosedResult(now, limitType, { emit: false });
 		}
 	}
 

@@ -21,6 +21,7 @@ let selectCall = 0;
 
 const updateWhere = vi.fn().mockResolvedValue(undefined);
 const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+const batch = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: vi.fn(() => ({
@@ -49,6 +50,7 @@ vi.mock("drizzle-orm/d1", () => ({
 		update: vi.fn(() => ({
 			set: updateSet,
 		})),
+		batch,
 	})),
 }));
 
@@ -61,6 +63,7 @@ describe("consumeManifestEntries", () => {
 		getMealMissingIngredients.mockReset();
 		updateSet.mockClear();
 		updateWhere.mockClear();
+		batch.mockClear();
 		vi.resetModules();
 	});
 
@@ -76,9 +79,10 @@ describe("consumeManifestEntries", () => {
 		expect(result.missingIngredients).toHaveLength(1);
 		expect(result.consumed).toBe(0);
 		expect(cookMeal).not.toHaveBeenCalled();
+		expect(batch).not.toHaveBeenCalled();
 	});
 
-	it("deducts cargo and marks consumed when ingredients are sufficient", async () => {
+	it("plans cook with skipApply then batches cargo + consumedAt", async () => {
 		getMealMissingIngredients.mockResolvedValue([]);
 		cookMeal.mockResolvedValue({
 			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
@@ -92,7 +96,9 @@ describe("consumeManifestEntries", () => {
 		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
 			servings: 2,
 			deductionMode: "strict",
+			skipApply: true,
 		});
+		expect(batch).toHaveBeenCalledTimes(1);
 		expect(updateSet).toHaveBeenCalled();
 	});
 
@@ -117,7 +123,8 @@ describe("consumeManifestEntries", () => {
 		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
 			servings: 2,
 			deductionMode: "partial",
+			skipApply: true,
 		});
-		expect(updateSet).toHaveBeenCalled();
+		expect(batch).toHaveBeenCalledTimes(1);
 	});
 });

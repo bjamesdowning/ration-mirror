@@ -1,6 +1,125 @@
 import { log, redactId } from "./logging.server";
+import { getOpsAnalytics } from "./ops-context.server";
 
 export const SUPPLY_SYNC_TELEMETRY_SCHEMA = "ration.supply_sync.v1";
+
+// ---------------------------------------------------------------------------
+// Analytics Engine ops counters (main + MCP Workers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Low-cardinality route classes for `indexes[0]` (AE sampling / filter key).
+ * Keep this set small — do not put raw pathnames, emails, or request IDs here.
+ */
+export type OpsRoute =
+	| "hub"
+	| "match"
+	| "scan"
+	| "cook"
+	| "supply_sync"
+	| "queue_consumer"
+	| "api"
+	| "rate_limit"
+	| "gemini"
+	| "refund"
+	| "credit";
+
+export type OpsOutcome = "2xx" | "429" | "503" | "5xx";
+
+export type OpsFeature =
+	| "gemini_invoke"
+	| "gemini_fail"
+	| "gemini_skip_artifact"
+	| "refund"
+	| "credit_deduct"
+	| "vectorize_query"
+	| "fail_closed"
+	| "server_busy"
+	| "queue_retry";
+
+export interface OpsDataPoint {
+	/** Sampling / filter index — route class only. */
+	route: OpsRoute | string;
+	/**
+	 * Dimension blobs (ordered, stable):
+	 *   blobs[0] = outcome or feature event
+	 *   blobs[1+] = optional low-cardinality detail (bucket name, queue, reason)
+	 * Never put PII, secrets, or raw UUIDs here.
+	 */
+	blobs: [string, ...string[]];
+	doubles?: number[];
+}
+
+/**
+ * Fire-and-forget Analytics Engine write. Safe no-op when binding is absent
+ * (local tests, misconfigured env). Never throws into request/queue paths.
+ */
+export function writeOpsDataPoint(
+	analytics: AnalyticsEngineDataset | undefined,
+	point: OpsDataPoint,
+): void {
+	if (!analytics) return;
+	try {
+		analytics.writeDataPoint({
+			indexes: [point.route],
+			blobs: point.blobs,
+			doubles: point.doubles ?? [1],
+		});
+	} catch (err) {
+		log.error("[Telemetry] ops metric write failed", err);
+	}
+}
+
+/** Emit using the ALS-bound Worker env (see `runWithOpsEnv`). */
+export function emitOpsMetric(point: OpsDataPoint): void {
+	writeOpsDataPoint(getOpsAnalytics(), point);
+}
+
+export function emitApiOutcome(outcome: OpsOutcome, detail?: string): void {
+	emitOpsMetric({
+		route: "api",
+		blobs: detail ? [outcome, detail] : [outcome],
+	});
+}
+
+export function emitRateLimitDenied(
+	bucket: string,
+	reason: "limit" | "fail_closed" = "limit",
+): void {
+	emitOpsMetric({
+		route: "rate_limit",
+		blobs: ["429", bucket, reason],
+	});
+}
+
+export function emitQueueConsumerError(queueName: string): void {
+	emitOpsMetric({
+		route: "queue_consumer",
+		blobs: ["5xx", "queue_retry", queueName],
+	});
+}
+
+export function emitGeminiInvoke(feature: string, ok: boolean): void {
+	emitOpsMetric({
+		route: "gemini",
+		blobs: [ok ? "gemini_invoke" : "gemini_fail", feature],
+	});
+}
+
+export function emitRefund(): void {
+	emitOpsMetric({
+		route: "refund",
+		blobs: ["refund"],
+	});
+}
+
+export function emitCreditDeduct(amount: number): void {
+	emitOpsMetric({
+		route: "credit",
+		blobs: ["credit_deduct"],
+		doubles: [amount],
+	});
+}
 
 export type SupplySyncTrigger =
 	| "dashboard_grocery_action_update_list"

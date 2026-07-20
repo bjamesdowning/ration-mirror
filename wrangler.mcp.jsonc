@@ -51,6 +51,12 @@
 			"index_name": "ration-cargo"
 		}
 	],
+	"analytics_engine_datasets": [
+		{
+			"binding": "RATION_ANALYTICS",
+			"dataset": "ration_ops"
+		}
+	],
 	"env": {
 		"dev": {
 			// All bindings use "remote: true" so local worker code calls the real
@@ -90,7 +96,13 @@
 			"ai": {
 				"binding": "AI",
 				"remote": true
-			}
+			},
+			"analytics_engine_datasets": [
+				{
+					"binding": "RATION_ANALYTICS",
+					"dataset": "ration_ops_dev"
+				}
+			]
 		}
 	}
 }

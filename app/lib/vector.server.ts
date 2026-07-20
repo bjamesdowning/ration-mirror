@@ -222,17 +222,13 @@ export async function upsertCargoVectors(
 	}
 }
 
-/** Delete cargo vectors by ID */
+/** Delete cargo vectors by ID. Throws on Vectorize failure (GDPR fail-closed). */
 export async function deleteCargoVectors(
 	env: Env,
 	itemIds: string[],
 ): Promise<void> {
 	if (!env.VECTORIZE || itemIds.length === 0) return;
-	try {
-		await env.VECTORIZE.deleteByIds(itemIds);
-	} catch (err) {
-		log.error("[Vector] deleteCargoVectors failed:", err);
-	}
+	await env.VECTORIZE.deleteByIds(itemIds);
 }
 
 export interface SimilarCargoMatch {

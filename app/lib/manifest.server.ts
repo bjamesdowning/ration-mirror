@@ -7,9 +7,11 @@ import {
 	isNull,
 	lte,
 	notInArray,
+	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
+	cargo,
 	meal,
 	mealIngredient,
 	mealPlan,
@@ -26,6 +28,7 @@ import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
 import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
+import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import type { ManifestPreviewData } from "./types";
 import { mergeDeductions } from "./undo-token.server";
 
@@ -356,11 +359,25 @@ export async function consumeManifestEntries(
 		[];
 	const seenSkipped = new Set<string>();
 	let partialCook = false;
+	const now = new Date();
+	const consumedEntryIds: string[] = [];
+
+	// Per unique meal: plan deductions without writing, then atomically apply
+	// cargo updates + consumedAt marks in one D1 batch. If a later meal fails,
+	// earlier meals stay marked consumed and will not be re-selected on retry.
+	const entriesByMeal = new Map<string, string[]>();
+	for (const entry of uniqueEntries) {
+		const ids = entriesByMeal.get(entry.mealId) ?? [];
+		ids.push(entry.id);
+		entriesByMeal.set(entry.mealId, ids);
+	}
 
 	for (const [mealId, totalServings] of servingsByMeal) {
+		const mealEntryIds = entriesByMeal.get(mealId) ?? [];
 		const cookResult = await cookMeal(env, organizationId, mealId, {
 			servings: totalServings,
 			deductionMode: options?.confirmInsufficient ? "partial" : "strict",
+			skipApply: true,
 		});
 		mergeDeductions(allDeductions, cookResult.deductions);
 		if (cookResult.partialCook && cookResult.skippedIngredients?.length) {
@@ -372,27 +389,50 @@ export async function consumeManifestEntries(
 				skippedIngredients.push(item);
 			}
 		}
-	}
 
-	// 4. Mark all as consumed
-	const now = new Date();
-	await d1
-		.update(mealPlanEntry)
-		.set({ consumedAt: now })
-		.where(
-			and(
-				eq(mealPlanEntry.planId, planId),
-				inArray(
-					mealPlanEntry.id,
-					uniqueEntries.map((e) => e.id),
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		const stmts: any[] = cookResult.deductions.map((d) =>
+			d1
+				.update(cargo)
+				.set({
+					quantity: sql`${cargo.quantity} - ${d.quantity}`,
+				})
+				.where(
+					and(
+						eq(cargo.id, d.cargoId),
+						eq(cargo.organizationId, organizationId),
+					),
 				),
-			),
+		);
+		stmts.push(
+			d1
+				.update(mealPlanEntry)
+				.set({ consumedAt: now })
+				.where(
+					and(
+						eq(mealPlanEntry.planId, planId),
+						inArray(mealPlanEntry.id, mealEntryIds),
+						isNull(mealPlanEntry.consumedAt),
+					),
+				),
 		);
 
+		trackD1BatchSize("consumeManifestEntries", stmts.length, {
+			organizationRef: organizationId,
+		});
+		await trackWriteOperation(
+			"consumeManifestEntries",
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			() => d1.batch(stmts as [any, ...any[]]),
+			{ organizationRef: organizationId },
+		);
+		consumedEntryIds.push(...mealEntryIds);
+	}
+
 	return {
-		consumed: uniqueEntries.length,
+		consumed: consumedEntryIds.length,
 		deductions: allDeductions,
-		entryIds: uniqueEntries.map((e) => e.id),
+		entryIds: consumedEntryIds,
 		planId,
 		partialCook: partialCook || undefined,
 		skippedIngredients:

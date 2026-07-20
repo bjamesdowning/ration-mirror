@@ -1,8 +1,9 @@
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
+import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
-import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "~/lib/matching.server";
+import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyItemStats,
@@ -17,7 +18,7 @@ import { getCargoTagIndex, getOrganizationTags } from "~/lib/tags.server";
 export const MOBILE_PRE_LIMIT = MEAL_MATCH_CANDIDATE_CAP;
 const MOBILE_MAX_WIDGET_LIMIT = 20;
 const MOBILE_MANIFEST_ENTRY_CAP = 50;
-const MOBILE_SUPPLY_ITEMS_SLICE = 20;
+export const MOBILE_SUPPLY_ITEMS_SLICE = 20;
 
 function clampWidgetLimit(value: number | undefined, fallback: number): number {
 	const base = value ?? fallback;
@@ -76,9 +77,7 @@ export async function getMobileHubData(
 		availableMealTags,
 		availableCargoTags,
 		cargoTagIndex,
-		mealMatches,
-		partialMealMatches,
-		snackMatches,
+		hubMatches,
 	] = await Promise.all([
 		getExpiringCargo(
 			db,
@@ -103,35 +102,23 @@ export async function getMobileHubData(
 		getDistinctMealTags(db, organizationId),
 		getOrganizationTags(db, organizationId),
 		getCargoTagIndex(db, organizationId),
-		matchMeals(env, organizationId, {
-			mode: "delta",
-			minMatch: 50,
-			limit: mealsReadyLimit,
-			preLimit: MOBILE_PRE_LIMIT,
-			type: "recipe",
-			domain: "food",
-			tags: mealsReadyConfig?.filters?.tags,
-		}),
-		matchMeals(env, organizationId, {
-			mode: "delta",
-			minMatch: 50,
-			limit: mealsPartialLimit,
-			preLimit: MOBILE_PRE_LIMIT,
-			type: "recipe",
-			domain: "food",
-			tags: mealsPartialConfig?.filters?.tags,
-		}),
-		matchMeals(env, organizationId, {
-			mode: "delta",
-			minMatch: 50,
-			limit: snacksReadyLimit,
-			preLimit: MOBILE_PRE_LIMIT,
-			type: "provision",
-			domain: "food",
-			tags: snacksReadyConfig?.filters?.tags,
+		getHubMealMatchWidgets(env, organizationId, {
+			mealsReady: {
+				limit: mealsReadyLimit,
+				tags: mealsReadyConfig?.filters?.tags,
+			},
+			mealsPartial: {
+				limit: mealsPartialLimit,
+				tags: mealsPartialConfig?.filters?.tags,
+			},
+			snacksReady: {
+				limit: snacksReadyLimit,
+				tags: snacksReadyConfig?.filters?.tags,
+			},
 		}),
 	]);
 
+	const { mealMatches, partialMealMatches, snackMatches } = hubMatches;
 	// Only queried when the widget isn't tag-filtered — see supplyTagFilterActive above.
 	const supplyStats =
 		latestSupplyListRaw && !supplyTagFilterActive

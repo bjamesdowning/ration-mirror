@@ -209,6 +209,7 @@ flowchart TB
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
 | `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
+| `RATION_ANALYTICS` | Analytics Engine | Main + MCP Workers — ops counters (`ration_ops` / `ration_ops_dev`): 503, 429, queue retries, Gemini invoke, credit deduct/refund |
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash` for scan, generate, plan, import |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
@@ -1544,6 +1545,7 @@ flowchart TB
 | **AI Gateway** | Managed proxy with queuing, retry, caching, guardrails, spend limits. | Upstream Google AI Studio rate limits. | Centralized `callGemini` client with per-feature `cf-aig-*` headers. Credit system + KV rate limits. Async consumer failures refund credits via `failAiJobWithRefund`. |
 | **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
 | **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
+| **Analytics Engine** | Account-scoped datasets; `writeDataPoint` is fire-and-forget. | Query quota / cardinality. | Main+MCP: `RATION_ANALYTICS` → `ration_ops` (503/429/queue/Gemini/credits). Copilot: `COPILOT_ANALYTICS` → `ration_copilot`. No PII in points. Launch SLOs in [`docs/fin/51`](docs/fin/51-reliability-and-async-jobs.md). |
 
 ---
 
@@ -1560,6 +1562,9 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `POST /api/meals/import` | userId | 60s | 10 | AI cost control (fail-closed) |
 | `POST /api/meal-plans/:id/plan-week` | userId | 60s | 5 | AI cost control (fail-closed) |
 | Meal match (`meal_match`) | userId | 60s | 20 | Match / Vectorize cost (fail-closed) |
+| Mobile hub (`hub_read`) | userId | 60s | 60 | Hub fan-out / match (fail-closed) |
+| MCP supply sync (`mcp_supply_sync`) | userId/key | 60s | 8 | Supply rebuild (fail-closed) |
+| Inventory batch (`inventory_batch`) | userId | 60s | 20 | Bulk cargo ingest (fail-closed) |
 | `GET /api/search` | userId | 10s | 30 | Prevent D1 abuse (fail-open) |
 | `POST /api/checkout` | userId | 60s | 10 | Payment spam prevention |
 | `POST /api/groups/create` | userId | 60s | 5 | Spam prevention |

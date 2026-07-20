@@ -149,9 +149,56 @@ final class RationAPI {
         try await client.get("cargo/tag-index")
     }
 
-    // Supply
+    // Supply — page until exhausted so Crew lists >200 items are complete (P1-C).
     func supply() async throws -> SupplyResponse {
-        try await client.get("supply")
+        let pageSize = 200
+        var offset = 0
+        var allItems: [SupplyItem] = []
+        var baseList: SupplyList?
+
+        while true {
+            let page: SupplyResponse = try await client.get(
+                "supply",
+                query: [
+                    URLQueryItem(name: "limit", value: String(pageSize)),
+                    URLQueryItem(name: "offset", value: String(offset)),
+                ]
+            )
+            guard let list = page.list else {
+                return SupplyResponse(list: baseList.map {
+                    SupplyList(
+                        id: $0.id,
+                        name: $0.name,
+                        items: allItems,
+                        itemCount: $0.itemCount,
+                        uncheckedCount: $0.uncheckedCount,
+                        purchasedCount: $0.purchasedCount
+                    )
+                })
+            }
+            if baseList == nil {
+                baseList = list
+            }
+            allItems.append(contentsOf: list.items)
+            if list.items.count < pageSize || offset >= 10_000 {
+                break
+            }
+            offset += pageSize
+        }
+
+        guard let base = baseList else {
+            return SupplyResponse(list: nil)
+        }
+        return SupplyResponse(
+            list: SupplyList(
+                id: base.id,
+                name: base.name,
+                items: allItems,
+                itemCount: base.itemCount ?? allItems.count,
+                uncheckedCount: base.uncheckedCount,
+                purchasedCount: base.purchasedCount
+            )
+        )
     }
 
     func toggleSupplyItem(_ id: String, isPurchased: Bool) async throws -> EmptyResponse {

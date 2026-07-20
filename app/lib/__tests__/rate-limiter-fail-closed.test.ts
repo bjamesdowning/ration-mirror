@@ -13,6 +13,9 @@ describe("RATE_LIMITS failClosed flags", () => {
 			"mcp_search",
 			"copilot",
 			"copilot_connect",
+			"hub_read",
+			"mcp_supply_sync",
+			"inventory_batch",
 		] as const;
 
 		for (const bucket of failClosedBuckets) {
@@ -22,7 +25,6 @@ describe("RATE_LIMITS failClosed flags", () => {
 
 	it("keeps read-light buckets fail-open", () => {
 		expect(RATE_LIMITS.inventory_mutation.failClosed).toBeUndefined();
-		expect(RATE_LIMITS.hub_read.failClosed).toBeUndefined();
 		expect(RATE_LIMITS.search.failClosed).toBeUndefined();
 		expect(RATE_LIMITS.status_poll.failClosed).toBeUndefined();
 	});

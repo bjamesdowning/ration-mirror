@@ -16,8 +16,9 @@ import {
 	getCargoTags,
 	getExpiringCargo,
 } from "~/lib/cargo.server";
+import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
-import { matchMeals } from "~/lib/matching.server";
+import { MOBILE_SUPPLY_ITEMS_SLICE } from "~/lib/mobile/hub.server";
 import {
 	filterSupplyItemsByCargoTags,
 	getSupplyList,
@@ -56,6 +57,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const manifestDaySpan = manifestPreviewConfig?.filters?.daySpan ?? 7;
 	const manifestTags = manifestPreviewConfig?.filters?.tags;
 	const supplyTags = supplyPreviewConfig?.filters?.supplyTags;
+	const supplyTagFilterActive = (supplyTags?.length ?? 0) > 0;
+	const supplyLimit = supplyPreviewConfig?.filters?.limit ?? 6;
 
 	// Fast data — awaited immediately; page shell renders right away
 	const [
@@ -69,7 +72,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	] = await Promise.all([
 		getExpiringCargo(db, groupId, expirationAlertDays, cargoLimit, cargoDomain),
 		getCargoStats(db, groupId),
-		getSupplyList(db, groupId),
+		getSupplyList(
+			db,
+			groupId,
+			supplyTagFilterActive ? undefined : { limit: MOBILE_SUPPLY_ITEMS_SLICE },
+		),
 		getManifestPreview(
 			db,
 			groupId,
@@ -89,38 +96,28 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					latestSupplyListRaw.items ?? [],
 					cargoTagIndex,
 					supplyTags,
-				),
+				).slice(0, Math.min(supplyLimit, MOBILE_SUPPLY_ITEMS_SLICE)),
 			}
 		: null;
 
-	// Deferred — raw promises; meal/snack widgets show skeletons until resolved.
-	// Score the shared 200-candidate pool; widget `limit` controls display rows only.
-	const mealMatches = matchMeals(context.cloudflare.env, groupId, {
-		mode: "delta",
-		minMatch: 50,
-		limit: mealsReadyConfig?.filters?.limit ?? 6,
-		type: "recipe",
-		domain: "food",
-		tags: mealsReadyConfig?.filters?.tags,
+	// Deferred — one scored pool (200 candidates), then widget subsets.
+	const hubMatches = getHubMealMatchWidgets(context.cloudflare.env, groupId, {
+		mealsReady: {
+			limit: mealsReadyConfig?.filters?.limit ?? 6,
+			tags: mealsReadyConfig?.filters?.tags,
+		},
+		mealsPartial: {
+			limit: mealsPartialConfig?.filters?.limit ?? 6,
+			tags: mealsPartialConfig?.filters?.tags,
+		},
+		snacksReady: {
+			limit: snacksReadyConfig?.filters?.limit ?? 6,
+			tags: snacksReadyConfig?.filters?.tags,
+		},
 	});
-	const snackMatches = matchMeals(context.cloudflare.env, groupId, {
-		mode: "delta",
-		minMatch: 50,
-		limit: snacksReadyConfig?.filters?.limit ?? 6,
-		type: "provision",
-		domain: "food",
-		tags: snacksReadyConfig?.filters?.tags,
-	});
-	// meals-partial shares the meal dataset but applies its own tag/limit filters
-	const partialMealMatches = matchMeals(context.cloudflare.env, groupId, {
-		mode: "delta",
-		minMatch: 50,
-		limit: mealsPartialConfig?.filters?.limit ?? 6,
-		type: "recipe",
-		domain: "food",
-		tags: mealsPartialConfig?.filters?.tags,
-	});
-
+	const mealMatches = hubMatches.then((r) => r.mealMatches);
+	const snackMatches = hubMatches.then((r) => r.snackMatches);
+	const partialMealMatches = hubMatches.then((r) => r.partialMealMatches);
 	return {
 		expiringItems,
 		cargoStats,

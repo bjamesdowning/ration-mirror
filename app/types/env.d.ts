@@ -59,6 +59,11 @@ declare namespace Cloudflare {
 		PROJECT_THINK?: DurableObjectNamespace;
 		/** Optional Analytics Engine dataset for copilot metrics. */
 		COPILOT_ANALYTICS?: AnalyticsEngineDataset;
+		/**
+		 * Main + MCP Workers Analytics Engine — ops counters (503/429/queue/Gemini).
+		 * Dataset: `ration_ops` (prod) / `ration_ops_dev` (dev).
+		 */
+		RATION_ANALYTICS?: AnalyticsEngineDataset;
 		/** Emergency kill switch JSON, e.g. {"some-flag":false}. */
 		FEATURE_FLAG_OVERRIDES?: string;
 		/** App Review demo login — email must match iOS reveal gate. */

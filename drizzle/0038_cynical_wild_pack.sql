@@ -1,0 +1,1 @@
+ALTER TABLE `queue_job` ADD `model_artifact` text;

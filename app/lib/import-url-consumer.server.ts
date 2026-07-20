@@ -8,7 +8,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { meal } from "~/db/schema";
-import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
+import { gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import {
 	fetchPageAsMarkdown,
 	MIN_CONTENT_LENGTH,
@@ -16,6 +16,7 @@ import {
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import {
+	callGeminiWithArtifact,
 	runIdempotentAiJob,
 	updateQueueJobResult,
 } from "~/lib/queue-job.server";
@@ -414,17 +415,25 @@ async function fetchPageContentForImport(
 
 async function runRecipeExtractionAIForImport(
 	env: Env,
+	requestId: string,
 	pageContent: string,
 	metadata: { organizationId: string; userId: string },
+	runOptions?: { forceRefresh?: boolean },
 ): Promise<
 	| { ok: true; result: RecipeImportAIResponse }
 	| { ok: false; error: string; code?: string }
 > {
-	const gatewayResult = await callGemini(env, {
-		feature: "import_url",
-		parts: [{ text: SYSTEM_PROMPT }, { text: pageContent }],
-		metadata,
-	});
+	const gatewayResult = await callGeminiWithArtifact(
+		env,
+		requestId,
+		{
+			feature: "import_url",
+			parts: [{ text: SYSTEM_PROMPT }, { text: pageContent }],
+			metadata,
+		},
+		{},
+		runOptions,
+	);
 
 	if (!gatewayResult.ok) {
 		return {
@@ -541,10 +550,15 @@ async function executeImportUrlConsumerJob(
 		}
 
 		const { content: pageContent, source } = fetchResult;
-		let aiResult = await runRecipeExtractionAIForImport(env, pageContent, {
-			organizationId,
-			userId,
-		});
+		let aiResult = await runRecipeExtractionAIForImport(
+			env,
+			requestId,
+			pageContent,
+			{
+				organizationId,
+				userId,
+			},
+		);
 
 		// NOT_A_RECIPE retry with Browser Rendering when plain fetch gave non-recipe
 		if (
@@ -568,8 +582,10 @@ async function executeImportUrlConsumerJob(
 						const brContent = `<page_content>\n${markdown}\n</page_content>`;
 						const brResult = await runRecipeExtractionAIForImport(
 							env,
+							requestId,
 							brContent,
 							{ organizationId, userId },
+							{ forceRefresh: true },
 						);
 						if (brResult.ok && brResult.result.status === "ok") {
 							aiResult = brResult;

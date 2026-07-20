@@ -6,12 +6,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
-import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
+import { gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { parseAllergens } from "~/lib/allergens";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { getMealsForPicker } from "~/lib/manifest.server";
 import {
+	callGeminiWithArtifact,
 	runIdempotentAiJob,
 	updateQueueJobResult,
 } from "~/lib/queue-job.server";
@@ -133,7 +134,14 @@ async function executePlanWeekConsumerJob(
 		const filteredMeals = config.tag
 			? allMeals.filter((m) => m.tags.includes(config.tag as string))
 			: allMeals;
-		const mealsForPrompt = filteredMeals.length > 0 ? filteredMeals : allMeals;
+		const mealsForPromptRaw =
+			filteredMeals.length > 0 ? filteredMeals : allMeals;
+		/** Bound Crew galley prompt size (P1-F). */
+		const AI_PLAN_WEEK_MEAL_PROMPT_CAP = 200;
+		const mealsForPrompt = mealsForPromptRaw.slice(
+			0,
+			AI_PLAN_WEEK_MEAL_PROMPT_CAP,
+		);
 
 		const weekDates: string[] = [];
 		const startMs = new Date(`${config.startDate}T00:00:00`).getTime();
@@ -154,7 +162,7 @@ async function executePlanWeekConsumerJob(
 			userAllergens,
 		});
 
-		const gatewayResult = await callGemini(env, {
+		const gatewayResult = await callGeminiWithArtifact(env, requestId, {
 			feature: "plan_week",
 			parts: [{ text: systemPrompt }, { text: userPrompt }],
 			metadata: { organizationId, userId },

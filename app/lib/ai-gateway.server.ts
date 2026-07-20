@@ -9,6 +9,7 @@ import {
 	type GatewayFeature,
 	getGenerationConfig,
 } from "~/lib/ai-config.server";
+import { emitGeminiInvoke } from "~/lib/telemetry.server";
 
 export type GatewayFailureReason =
 	| "config_missing"
@@ -145,6 +146,7 @@ export async function callGemini(
 ): Promise<GatewayResult> {
 	const request = buildGatewayRequest(env, options);
 	if (!request) {
+		emitGeminiInvoke(options.feature, false);
 		return { ok: false, reason: "config_missing" };
 	}
 
@@ -155,6 +157,7 @@ export async function callGemini(
 	});
 
 	if (!response.ok) {
+		emitGeminiInvoke(options.feature, false);
 		return {
 			ok: false,
 			reason: classifyGatewayResponse(response.status, response.headers),
@@ -165,8 +168,10 @@ export async function callGemini(
 	const payload = (await response.json()) as unknown;
 	const text = extractModelText(payload);
 	if (!text) {
+		emitGeminiInvoke(options.feature, false);
 		return { ok: false, reason: "empty_response" };
 	}
 
+	emitGeminiInvoke(options.feature, true);
 	return { ok: true, text };
 }

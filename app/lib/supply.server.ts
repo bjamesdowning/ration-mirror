@@ -26,7 +26,7 @@ import { retryOnD1Contention } from "./error-handler";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { resolveSupplyManifestWindow } from "./manifest-dates";
-import { normalizeForCargoDedup } from "./matching.server";
+import { buildCargoIndex, normalizeForCargoDedup } from "./matching.server";
 import { getOrganizationMetadata } from "./org-supply-settings.server";
 import {
 	chunkArray,
@@ -1375,12 +1375,15 @@ export async function addItemsFromMeal(
 		d1.select().from(supplyItem).where(eq(supplyItem.listId, listId)),
 	]);
 
-	// Pre-fetch all Vectorize results in one batch instead of one call per ingredient
-	const ingredientNames = ingredients.map((i) => i.ingredientName);
+	// Pre-fetch Vectorize only for exact-index misses (align with matchMeals).
+	const cargoIndex = buildCargoIndex(orgCargo);
+	const missNames = ingredients
+		.map((i) => i.ingredientName)
+		.filter((name) => !cargoIndex.has(normalizeForCargoDedup(name)));
 	const prefetchedVectors = await findSimilarCargoBatch(
 		env,
 		organizationId,
-		ingredientNames,
+		missNames,
 		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
 	);
 
@@ -1861,11 +1864,14 @@ async function buildMealContributions(
 
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 	const aggregatedIngredients = aggregateIngredients(allIngredients, unitMode);
-	const aggregatedNames = aggregatedIngredients.map((a) => a.name);
+	const cargoIndex = buildCargoIndex(orgCargo);
+	const missNames = aggregatedIngredients
+		.map((a) => a.name)
+		.filter((name) => !cargoIndex.has(normalizeForCargoDedup(name)));
 	const prefetchedVectors = await findSimilarCargoBatch(
 		env,
 		organizationId,
-		aggregatedNames,
+		missNames,
 		{ topK: 1, threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
 	);
 

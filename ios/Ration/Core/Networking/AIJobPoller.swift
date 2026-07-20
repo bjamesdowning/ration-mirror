@@ -13,26 +13,39 @@ struct AIJobPoller<Status: Sendable> {
 
     let maxAttempts: Int
     let delayNanoseconds: UInt64
+    let backoffAfterNanoseconds: UInt64
+    let backoffDelayNanoseconds: UInt64
     let fetchStatus: FetchStatus
     let interpretStatus: InterpretStatus
 
     init(
         maxAttempts: Int = 80,
         delayNanoseconds: UInt64 = 1_500_000_000,
+        backoffAfterNanoseconds: UInt64 = 10_000_000_000,
+        backoffDelayNanoseconds: UInt64 = 3_000_000_000,
         fetchStatus: @escaping FetchStatus,
         interpretStatus: @escaping InterpretStatus
     ) {
         self.maxAttempts = maxAttempts
         self.delayNanoseconds = delayNanoseconds
+        self.backoffAfterNanoseconds = backoffAfterNanoseconds
+        self.backoffDelayNanoseconds = backoffDelayNanoseconds
         self.fetchStatus = fetchStatus
         self.interpretStatus = interpretStatus
+    }
+
+    private func delay(beforeAttempt attempt: Int) -> UInt64 {
+        guard attempt > 0 else { return 0 }
+        let elapsed = UInt64(attempt - 1) * delayNanoseconds
+        return elapsed >= backoffAfterNanoseconds ? backoffDelayNanoseconds : delayNanoseconds
     }
 
     func poll(requestId: String) async throws -> Status {
         for attempt in 0..<maxAttempts {
             try Task.checkCancellation()
-            if attempt > 0 {
-                try await Task.sleep(nanoseconds: delayNanoseconds)
+            let sleepNs = delay(beforeAttempt: attempt)
+            if sleepNs > 0 {
+                try await Task.sleep(nanoseconds: sleepNs)
             }
             try Task.checkCancellation()
 

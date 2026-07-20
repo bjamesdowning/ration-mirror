@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	callGeminiWithArtifact,
 	isTerminalQueueJobStatus,
 	runIdempotentAiJob,
 	toClientQueueJobStatus,
@@ -27,12 +28,117 @@ describe("isTerminalQueueJobStatus", () => {
 	});
 });
 
+describe("callGeminiWithArtifact", () => {
+	it("skips Gemini when a model artifact already exists", async () => {
+		const callGemini = vi.fn();
+		const saveQueueJobModelArtifact = vi.fn();
+		const getJob = vi.fn().mockResolvedValue({
+			status: "processing",
+			organizationId: "org_1",
+			resultJson: null,
+			modelArtifact: '{"items":[]}',
+			expiresAt: Math.floor(Date.now() / 1000) + 3600,
+		});
+
+		const result = await callGeminiWithArtifact(
+			{ DB: {} } as Env,
+			"req_artifact",
+			{
+				feature: "scan",
+				parts: [{ text: "prompt" }],
+				metadata: { organizationId: "org_1", userId: "user_1" },
+			},
+			{
+				getQueueJob: getJob,
+				saveQueueJobModelArtifact,
+				callGemini,
+			},
+		);
+
+		expect(result).toEqual({ ok: true, text: '{"items":[]}' });
+		expect(callGemini).not.toHaveBeenCalled();
+		expect(saveQueueJobModelArtifact).not.toHaveBeenCalled();
+	});
+
+	it("invokes Gemini and persists artifact on first success", async () => {
+		const callGemini = vi.fn().mockResolvedValue({
+			ok: true,
+			text: "model-output",
+		});
+		const saveQueueJobModelArtifact = vi.fn().mockResolvedValue(true);
+		const getJob = vi.fn().mockResolvedValue({
+			status: "processing",
+			organizationId: "org_1",
+			resultJson: null,
+			modelArtifact: null,
+			expiresAt: Math.floor(Date.now() / 1000) + 3600,
+		});
+
+		const result = await callGeminiWithArtifact(
+			{ DB: {} } as Env,
+			"req_fresh",
+			{
+				feature: "scan",
+				parts: [{ text: "prompt" }],
+				metadata: { organizationId: "org_1", userId: "user_1" },
+			},
+			{
+				getQueueJob: getJob,
+				saveQueueJobModelArtifact,
+				callGemini,
+			},
+		);
+
+		expect(result).toEqual({ ok: true, text: "model-output" });
+		expect(callGemini).toHaveBeenCalledTimes(1);
+		expect(saveQueueJobModelArtifact).toHaveBeenCalledWith(
+			{},
+			"req_fresh",
+			"model-output",
+		);
+	});
+
+	it("forceRefresh bypasses an existing artifact", async () => {
+		const callGemini = vi.fn().mockResolvedValue({
+			ok: true,
+			text: "br-output",
+		});
+		const prepareRun = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+		const prepare = vi.fn().mockReturnValue({
+			bind: vi.fn().mockReturnValue({ run: prepareRun }),
+		});
+		const getJob = vi.fn();
+
+		const result = await callGeminiWithArtifact(
+			{ DB: { prepare } } as unknown as Env,
+			"req_force",
+			{
+				feature: "import_url",
+				parts: [{ text: "prompt" }],
+				metadata: { organizationId: "org_1", userId: "user_1" },
+			},
+			{
+				getQueueJob: getJob,
+				saveQueueJobModelArtifact: vi.fn(),
+				callGemini,
+			},
+			{ forceRefresh: true },
+		);
+
+		expect(result).toEqual({ ok: true, text: "br-output" });
+		expect(getJob).not.toHaveBeenCalled();
+		expect(callGemini).toHaveBeenCalledTimes(1);
+		expect(prepare).toHaveBeenCalled();
+	});
+});
+
 describe("runIdempotentAiJob", () => {
 	it("skips work when job is already completed", async () => {
 		getQueueJob.mockResolvedValueOnce({
 			status: "completed",
 			organizationId: "org_1",
 			resultJson: "{}",
+			modelArtifact: null,
 			expiresAt: Math.floor(Date.now() / 1000) + 3600,
 		});
 		const work = vi.fn();
@@ -54,6 +160,7 @@ describe("runIdempotentAiJob", () => {
 			status: "failed",
 			organizationId: "org_1",
 			resultJson: "{}",
+			modelArtifact: null,
 			expiresAt: Math.floor(Date.now() / 1000) + 3600,
 		});
 		const work = vi.fn();
@@ -84,6 +191,7 @@ describe("runIdempotentAiJob", () => {
 			status: "pending",
 			organizationId: "org_1",
 			resultJson: null,
+			modelArtifact: null,
 			expiresAt: Math.floor(Date.now() / 1000) + 3600,
 		});
 		claimQueueJobForProcessing.mockResolvedValueOnce(true);
@@ -107,12 +215,14 @@ describe("runIdempotentAiJob", () => {
 				status: "pending",
 				organizationId: "org_1",
 				resultJson: null,
+				modelArtifact: null,
 				expiresAt: Math.floor(Date.now() / 1000) + 3600,
 			})
 			.mockResolvedValueOnce({
 				status: "completed",
 				organizationId: "org_1",
 				resultJson: "{}",
+				modelArtifact: null,
 				expiresAt: Math.floor(Date.now() / 1000) + 3600,
 			});
 		claimQueueJobForProcessing.mockResolvedValueOnce(false);
@@ -135,12 +245,14 @@ describe("runIdempotentAiJob", () => {
 				status: "processing",
 				organizationId: "org_1",
 				resultJson: null,
+				modelArtifact: null,
 				expiresAt: Math.floor(Date.now() / 1000) + 3600,
 			})
 			.mockResolvedValueOnce({
 				status: "processing",
 				organizationId: "org_1",
 				resultJson: null,
+				modelArtifact: null,
 				expiresAt: Math.floor(Date.now() / 1000) + 3600,
 			});
 		claimQueueJobForProcessing.mockResolvedValueOnce(false);

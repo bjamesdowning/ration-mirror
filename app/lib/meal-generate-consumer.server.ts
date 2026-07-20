@@ -5,13 +5,14 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo } from "~/db/schema";
-import { callGemini, gatewayFailureMessage } from "~/lib/ai-gateway.server";
+import { gatewayFailureMessage } from "~/lib/ai-gateway.server";
 import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
 import { getUserSettings } from "~/lib/auth.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
 import { normalizeForCargoDedup } from "~/lib/matching.server";
 import {
+	callGeminiWithArtifact,
 	runIdempotentAiJob,
 	updateQueueJobResult,
 } from "~/lib/queue-job.server";
@@ -121,12 +122,16 @@ async function executeMealGenerateConsumerJob(
 				.trim()
 				.slice(0, 80);
 
-		const pantryPayload = pantryItems.map((item) => ({
-			name: sanitizeName(item.name),
-			quantity: item.quantity,
-			unit: item.unit,
-		}));
-		const pantryJson = JSON.stringify(pantryPayload);
+		/** Bound Crew pantry prompt size (P1-F). Prefer newest rows. */
+		const AI_GENERATE_CARGO_PROMPT_CAP = 200;
+		const pantryForPrompt = pantryItems
+			.slice(-AI_GENERATE_CARGO_PROMPT_CAP)
+			.map((item) => ({
+				name: sanitizeName(item.name),
+				quantity: item.quantity,
+				unit: item.unit,
+			}));
+		const pantryJson = JSON.stringify(pantryForPrompt);
 		const allergenBlock = buildAllergenPromptBlock(userAllergens);
 
 		const systemPrompt = `You are a professional recipe writer with deep knowledge of real-world home cooking. You generate complete, accurate recipes based ONLY on the provided pantry inventory.
@@ -171,7 +176,7 @@ ${customization}
 </preference>`;
 		}
 
-		const gatewayResult = await callGemini(env, {
+		const gatewayResult = await callGeminiWithArtifact(env, requestId, {
 			feature: "meal_generate",
 			parts: [{ text: systemPrompt }, { text: userPrompt }],
 			metadata: { organizationId, userId },

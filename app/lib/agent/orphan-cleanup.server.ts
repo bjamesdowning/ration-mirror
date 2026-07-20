@@ -2,6 +2,7 @@ import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../../db/schema";
 import { log, redactId } from "../logging.server";
+import { chunkArray } from "../query-utils.server";
 import { deleteR2Prefix } from "../r2-cleanup.server";
 import { deleteCargoVectors } from "../vector.server";
 import { AGENT_ORPHAN_INACTIVITY_MS } from "./claim.constants";
@@ -89,7 +90,9 @@ export async function purgeOrphanKitchen(
 		.where(eq(schema.cargo.organizationId, orgId));
 	const cargoIds = cargoRows.map((r) => r.id);
 	if (cargoIds.length > 0) {
-		await deleteCargoVectors(env, cargoIds);
+		for (const chunk of chunkArray(cargoIds, 500)) {
+			await deleteCargoVectors(env, chunk);
+		}
 	}
 
 	await db.batch([

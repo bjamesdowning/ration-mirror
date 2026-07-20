@@ -262,6 +262,9 @@ struct WeekNavigator: View {
                 .disabled(!canGoForward || isLoading)
                 .accessibilityLabel("Next")
             }
+            // List rows expand automatic-style Buttons to the full row and fire every
+            // Button in the row on a single tap — Prev then Next → always lands forward.
+            .buttonStyle(.borderless)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -269,6 +272,7 @@ struct WeekNavigator: View {
                         dayPill(day)
                     }
                 }
+                .buttonStyle(.borderless)
             }
         }
     }
@@ -304,7 +308,7 @@ struct WeekNavigator: View {
             .background(isSelected || isToday ? Theme.hyperGreen : Theme.platinum)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .accessibilityLabel(ManifestDateHelpers.smartLabel(isoDate: day))
         .accessibilityValue(hasMeals ? "Has meals" : "No meals")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])

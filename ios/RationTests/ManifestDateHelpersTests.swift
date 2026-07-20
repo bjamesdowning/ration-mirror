@@ -14,6 +14,24 @@ final class ManifestDateHelpersTests: XCTestCase {
         XCTAssertFalse(ManifestDateHelpers.canNavigate(from: farPast, byDays: -7))
     }
 
+    func testPreviousWeekTargetIsStrictlyBeforeCurrent() {
+        let weekStart = ManifestDateHelpers.initialRangeStart(calendarSpan: 7, weekStartPref: "sunday")
+        let previousRaw = ManifestDateHelpers.addDays(weekStart, days: -7)
+        let previous = ManifestDateHelpers.normalizedNavigationStart(
+            previousRaw,
+            calendarSpan: 7,
+            weekStartPref: "sunday"
+        )
+        let next = ManifestDateHelpers.normalizedNavigationStart(
+            ManifestDateHelpers.addDays(weekStart, days: 7),
+            calendarSpan: 7,
+            weekStartPref: "sunday"
+        )
+        XCTAssertLessThan(previous, weekStart)
+        XCTAssertGreaterThan(next, weekStart)
+        XCTAssertNotEqual(previous, next)
+    }
+
     func testMultiWeekNavigationNormalization() {
         let weekStart = ManifestDateHelpers.initialRangeStart(calendarSpan: 7, weekStartPref: "sunday")
         var current = weekStart

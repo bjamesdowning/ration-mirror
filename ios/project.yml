@@ -12,8 +12,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.2.33"
-    CURRENT_PROJECT_VERSION: "60"
+    MARKETING_VERSION: "1.2.34"
+    CURRENT_PROJECT_VERSION: "61"
     SWIFT_VERSION: "5.9"
     # Set your Apple Developer Team ID here (must match App Store Connect / AASA).
     DEVELOPMENT_TEAM: "M2KJH5GDGH"

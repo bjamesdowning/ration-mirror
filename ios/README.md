@@ -298,6 +298,11 @@ resets the viewed week to today (anchor reset is org-change only). Rocker taps a
 week optimistically, cancel superseded fetches, and ignore stale responses so Prev/Next cannot
 briefly land then jump.
 
+**Manifest week rocker List hit-testing (iOS 1.2.34):** `WeekNavigator` lives in a `List` row.
+Without an explicit non-automatic button style, SwiftUI fires every `Button` in the row on a
+single tap (Prev then Next), so the left chevron always landed on the next week after
+navigation serialization. Chevrons and day pills now use `.buttonStyle(.borderless)`.
+
 **Tag filter UX (iOS 1.2.13):** Large tag catalogs no longer render as a wrapping chip cloud.
 `FilterOptionsSheet` and Hub widget tag filters use `TagMultiSelectPicker` (search + alphabetized
 checklist with checkmarks; selected tags as a dismissible summary). Cargo, Galley, and Supply

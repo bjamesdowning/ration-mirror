@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getScaleFactor, scaleQuantity } from "~/lib/scale";
+import {
+	getScaleFactor,
+	roundShoppingCountQuantity,
+	scaleQuantity,
+	scaleQuantityExact,
+} from "~/lib/scale";
 
 describe("getScaleFactor", () => {
 	it("returns correct scale factor for halving", () => {
@@ -75,5 +80,27 @@ describe("scaleQuantity", () => {
 	it("is case-insensitive for unit matching", () => {
 		expect(scaleQuantity(3, 2, "PIECE")).toBe(6);
 		expect(scaleQuantity(3, 2, "Can")).toBe(6);
+	});
+});
+
+describe("scaleQuantityExact", () => {
+	it("preserves fractional count quantities for supply aggregation", () => {
+		expect(scaleQuantityExact(0.5, 1)).toBe(0.5);
+		expect(scaleQuantity(0.5, 1, "unit")).toBe(1);
+	});
+
+	it("rounds continuous noise to 2dp", () => {
+		expect(scaleQuantityExact(1, 1 / 3)).toBe(0.33);
+	});
+});
+
+describe("roundShoppingCountQuantity", () => {
+	it("rounds summed fractional counts once", () => {
+		expect(roundShoppingCountQuantity(0.5 + 0.5, "unit")).toBe(1);
+		expect(roundShoppingCountQuantity(0.4, "unit")).toBe(1);
+	});
+
+	it("leaves continuous units at 2dp", () => {
+		expect(roundShoppingCountQuantity(200.456, "g")).toBe(200.46);
 	});
 });

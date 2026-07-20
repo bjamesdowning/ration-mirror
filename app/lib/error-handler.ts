@@ -2,6 +2,7 @@ import { data } from "react-router";
 import { z } from "zod";
 import { CapacityExceededError } from "./capacity.server";
 import { log } from "./logging.server";
+import { SupplySyncBusyError } from "./supply-sync-lock.server";
 import { emitApiOutcome } from "./telemetry.server";
 
 /**
@@ -209,6 +210,24 @@ export function handleApiError(error: unknown) {
 				upgradePath: "crew_member",
 			},
 			{ status: 403 },
+		);
+	}
+
+	if (error instanceof SupplySyncBusyError) {
+		log.warn("[API] Supply sync lock contention", {
+			errorMessage: error.message,
+		});
+		emitApiOutcome("429", "supply_sync_busy");
+		return data(
+			{
+				error:
+					"Supply sync is already running. Please wait a moment and try again.",
+				code: "supply_sync_busy" as const,
+			},
+			{
+				status: 429,
+				headers: { "Retry-After": String(error.retryAfterSeconds) },
+			},
 		);
 	}
 

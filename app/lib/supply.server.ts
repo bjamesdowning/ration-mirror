@@ -36,7 +36,13 @@ import {
 	D1_SAFE_BOUND_PARAMS,
 	packByBindBudget,
 } from "./query-utils.server";
-import { getScaleFactor, scaleQuantity } from "./scale.server";
+import {
+	getScaleFactor,
+	isCountUnit,
+	roundShoppingCountQuantity,
+	scaleQuantity,
+	scaleQuantityExact,
+} from "./scale.server";
 import type { DockedSupplyItemForReconcile } from "./supply-dock-reconcile";
 import {
 	isManualOnlySupplyItem,
@@ -45,6 +51,7 @@ import {
 	type SupplyItemOrigin,
 	shouldClearUnpurchasedSupplyItemOnSync,
 } from "./supply-item-origins";
+import { withSupplySyncLock } from "./supply-sync-lock.server";
 import { type TagRecord, tagsToSlugs } from "./tags.server";
 import {
 	emitSupplySyncError,
@@ -425,13 +432,16 @@ export function aggregateIngredients(
 	}
 
 	return Array.from(aggregation.values()).map((entry) => {
-		const readable = chooseReadableUnit(entry.baseQuantity, entry.baseUnit);
+		const roundedBase = isCountUnit(entry.baseUnit)
+			? roundShoppingCountQuantity(entry.baseQuantity, entry.baseUnit)
+			: entry.baseQuantity;
+		const readable = chooseReadableUnit(roundedBase, entry.baseUnit);
 		return {
 			name: entry.name,
 			normalizedName: entry.normalizedName,
 			quantity: readable.quantity,
 			unit: readable.unit,
-			baseQuantity: entry.baseQuantity,
+			baseQuantity: roundedBase,
 			baseUnit: entry.baseUnit,
 			domain: entry.domain,
 			sourceMealIds: Array.from(entry.sourceMealIds),
@@ -1648,16 +1658,16 @@ async function buildIngredientRowsFromOccurrences(
 		const ingredients = ingredientsByMeal.get(occurrence.mealId) ?? [];
 		for (const ing of ingredients) {
 			if (ing.isOptional) continue;
+			// Exact scale preserves fractional counts across Manifest days;
+			// aggregateIngredients rounds count units once on the summed total.
+			const scaledQty = scaleQuantityExact(ing.quantity, scaleFactor);
+			const scaledBaseQty = scaleQuantityExact(ing.baseQuantity, scaleFactor);
 			result.push({
 				meal_ingredient: {
 					ingredientName: ing.ingredientName,
-					quantity: scaleQuantity(ing.quantity, scaleFactor, ing.unit),
+					quantity: scaledQty,
 					unit: ing.unit,
-					baseQuantity: scaleQuantity(
-						ing.baseQuantity,
-						scaleFactor,
-						ing.baseUnit,
-					),
+					baseQuantity: scaledBaseQty,
 					baseUnit: ing.baseUnit,
 					mealId: ing.mealId,
 				},
@@ -2124,10 +2134,9 @@ async function materializeSupplyFromSelections(
 		trackD1BatchSize("materializeSupplyFromSelections", 1, {
 			organizationRef: organizationId,
 		});
-		await retryOnD1Contention(async () => {
-			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-			await d1.batch([insertStmt] as [any, ...any[]]);
-		});
+		// Do not retry inserts: a timeout after commit would duplicate rows.
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		await d1.batch([insertStmt] as [any, ...any[]]);
 	}
 
 	if (idsToClear.length > 0 || itemsToInsert.length > 0) {
@@ -2200,104 +2209,107 @@ export async function createSupplyListFromSelectedMeals(
 	summary: GenerationSummary;
 }> {
 	const startedAtMs = Date.now();
-	const d1 = drizzle(env.DB);
 	const telemetry = telemetryContext
 		? { ...telemetryContext, organizationId }
 		: undefined;
 
 	try {
-		emitSupplySyncInfo(
-			"supply_sync.create_selected.start",
-			telemetry ?? {
-				trigger: "dashboard_grocery_action_update_list",
+		return await withSupplySyncLock(env.RATION_KV, organizationId, async () => {
+			const d1 = drizzle(env.DB);
+
+			emitSupplySyncInfo(
+				"supply_sync.create_selected.start",
+				telemetry ?? {
+					trigger: "dashboard_grocery_action_update_list",
+					organizationId,
+				},
+			);
+
+			const mealsQueryStartedAtMs = Date.now();
+
+			const orgMetadata = await getOrganizationMetadata(env.DB, organizationId);
+			const manifestWindow = resolveSupplyManifestWindow(orgMetadata);
+
+			// Step 1a: Get Manifest occurrences in the org supply planning window
+			const manifestOccurrences = await getManifestWeekMealsForSupply(
+				env.DB,
 				organizationId,
-			},
-		);
+				manifestWindow,
+			);
 
-		const mealsQueryStartedAtMs = Date.now();
+			// Step 1b: Get Galley selections
+			const galleyRows = await d1
+				.select({
+					mealId: activeMealSelection.mealId,
+					servingsOverride: activeMealSelection.servingsOverride,
+				})
+				.from(activeMealSelection)
+				.where(eq(activeMealSelection.organizationId, organizationId));
 
-		const orgMetadata = await getOrganizationMetadata(env.DB, organizationId);
-		const manifestWindow = resolveSupplyManifestWindow(orgMetadata);
+			// Step 1c: Dedupe — exclude Galley selections already in Manifest
+			const manifestMealIds = new Set(manifestOccurrences.map((m) => m.mealId));
+			const galleySelections = galleyRows.filter(
+				(g) => !manifestMealIds.has(g.mealId),
+			);
 
-		// Step 1a: Get Manifest occurrences in the org supply planning window
-		const manifestOccurrences = await getManifestWeekMealsForSupply(
-			env.DB,
-			organizationId,
-			manifestWindow,
-		);
+			// Step 1d: Unified list (manifest occurrences + deduped galley)
+			const unified: Array<{
+				mealId: string;
+				servingsOverride: number | null;
+				supplyOrigin: MealSupplyOrigin;
+			}> = [
+				...manifestOccurrences.map((m) => ({
+					mealId: m.mealId,
+					servingsOverride: m.servingsOverride,
+					supplyOrigin: "manifest" as const,
+				})),
+				...galleySelections.map((g) => ({
+					mealId: g.mealId,
+					servingsOverride: g.servingsOverride,
+					supplyOrigin: "galley" as const,
+				})),
+			];
 
-		// Step 1b: Get Galley selections
-		const galleyRows = await d1
-			.select({
-				mealId: activeMealSelection.mealId,
-				servingsOverride: activeMealSelection.servingsOverride,
-			})
-			.from(activeMealSelection)
-			.where(eq(activeMealSelection.organizationId, organizationId));
+			const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
 
-		// Step 1c: Dedupe — exclude Galley selections already in Manifest
-		const manifestMealIds = new Set(manifestOccurrences.map((m) => m.mealId));
-		const galleySelections = galleyRows.filter(
-			(g) => !manifestMealIds.has(g.mealId),
-		);
-
-		// Step 1d: Unified list (manifest occurrences + deduped galley)
-		const unified: Array<{
-			mealId: string;
-			servingsOverride: number | null;
-			supplyOrigin: MealSupplyOrigin;
-		}> = [
-			...manifestOccurrences.map((m) => ({
-				mealId: m.mealId,
-				servingsOverride: m.servingsOverride,
-				supplyOrigin: "manifest" as const,
-			})),
-			...galleySelections.map((g) => ({
-				mealId: g.mealId,
-				servingsOverride: g.servingsOverride,
-				supplyOrigin: "galley" as const,
-			})),
-		];
-
-		const mealsQueryDurationMs = Date.now() - mealsQueryStartedAtMs;
-
-		const ingredientQueryStartedAtMs = Date.now();
-		const allIngredients = await buildIngredientRowsFromOccurrences(
-			d1,
-			organizationId,
-			unified,
-		);
-		const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
-
-		const syncResult = await materializeSupplyFromSelections(
-			env,
-			organizationId,
-			allIngredients,
-			unified.length,
-			telemetry,
-			unitMode,
-		);
-
-		emitSupplySyncInfo(
-			"supply_sync.create_selected.success",
-			telemetry ?? {
-				trigger: "dashboard_grocery_action_update_list",
+			const ingredientQueryStartedAtMs = Date.now();
+			const allIngredients = await buildIngredientRowsFromOccurrences(
+				d1,
 				organizationId,
-			},
-			{
-				duration_ms: Date.now() - startedAtMs,
-				meals_selected_count: unified.length,
-				ingredient_rows_count: allIngredients.length,
-				meals_query_duration_ms: mealsQueryDurationMs,
-				ingredients_query_duration_ms: ingredientQueryDurationMs,
-				source: "manifest_and_selection",
-				manifest_occurrence_count: manifestOccurrences.length,
-				galley_selection_count: galleySelections.length,
-				added_items_count: syncResult.summary.addedItems,
-			},
-		);
+				unified,
+			);
+			const ingredientQueryDurationMs = Date.now() - ingredientQueryStartedAtMs;
 
-		return syncResult;
+			const syncResult = await materializeSupplyFromSelections(
+				env,
+				organizationId,
+				allIngredients,
+				unified.length,
+				telemetry,
+				unitMode,
+			);
+
+			emitSupplySyncInfo(
+				"supply_sync.create_selected.success",
+				telemetry ?? {
+					trigger: "dashboard_grocery_action_update_list",
+					organizationId,
+				},
+				{
+					duration_ms: Date.now() - startedAtMs,
+					meals_selected_count: unified.length,
+					ingredient_rows_count: allIngredients.length,
+					meals_query_duration_ms: mealsQueryDurationMs,
+					ingredients_query_duration_ms: ingredientQueryDurationMs,
+					source: "manifest_and_selection",
+					manifest_occurrence_count: manifestOccurrences.length,
+					galley_selection_count: galleySelections.length,
+					added_items_count: syncResult.summary.addedItems,
+				},
+			);
+
+			return syncResult;
+		});
 	} catch (error) {
 		emitSupplySyncError(
 			"supply_sync.create_selected.error",

@@ -5,6 +5,7 @@ import {
 	buildCargoIndex,
 	getAvailableQuantityWithMap,
 } from "../matching.server";
+import { getScaleFactor, scaleQuantity, scaleQuantityExact } from "../scale";
 import { aggregateIngredients } from "../supply.server";
 
 function ingredientRow(
@@ -110,6 +111,48 @@ describe("aggregateIngredients", () => {
 		];
 		const result = aggregateIngredients(rows, "metric");
 		expect(result).toHaveLength(2);
+	});
+
+	it("sums fractional count units across Manifest days then rounds once (0.5+0.5→1)", () => {
+		const scale = getScaleFactor(1, 1);
+		const rows = [0, 1].map(() => {
+			const exact = scaleQuantityExact(0.5, scale);
+			return ingredientRow({
+				mealId: "halloumi-burger",
+				ingredientName: "red cabbage",
+				quantity: exact,
+				unit: "unit",
+				baseQuantity: exact,
+				baseUnit: "unit",
+				supplyOrigin: "manifest",
+			});
+		});
+		const result = aggregateIngredients(rows, "metric");
+		expect(result).toHaveLength(1);
+		expect(result[0]?.quantity).toBe(1);
+		expect(result[0]?.baseQuantity).toBe(1);
+		// Premature scaleQuantity would have made each day 1 → total 2
+		expect(scaleQuantity(0.5, 1, "unit")).toBe(1);
+	});
+
+	it("sums whole count units across Manifest days (limes 2+2→4 once)", () => {
+		const scale = getScaleFactor(1, 1);
+		const rows = [0, 1].map(() => {
+			const exact = scaleQuantityExact(2, scale);
+			return ingredientRow({
+				mealId: "halloumi-burger",
+				ingredientName: "limes",
+				quantity: exact,
+				unit: "unit",
+				baseQuantity: exact,
+				baseUnit: "unit",
+				supplyOrigin: "manifest",
+			});
+		});
+		const result = aggregateIngredients(rows, "metric");
+		expect(result).toHaveLength(1);
+		expect(result[0]?.quantity).toBe(4);
+		expect(result[0]?.baseQuantity).toBe(4);
 	});
 });
 

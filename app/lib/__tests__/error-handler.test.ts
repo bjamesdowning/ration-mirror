@@ -308,6 +308,20 @@ describe("handleApiError", () => {
 		});
 	});
 
+	it("returns 429 for SupplySyncBusyError", async () => {
+		const { SupplySyncBusyError } = await import(
+			"~/lib/supply-sync-lock.server"
+		);
+		const result = handleApiError(new SupplySyncBusyError()) as unknown as {
+			data: { error: string; code: string };
+			init: { status: number; headers?: Headers | Record<string, string> };
+		};
+		expect(result.init.status).toBe(429);
+		expect(result.data).toMatchObject({
+			code: "supply_sync_busy",
+		});
+	});
+
 	it("returns 422 for insufficient cargo", () => {
 		const result = handleApiError(
 			new Error("Insufficient Cargo for: butter"),

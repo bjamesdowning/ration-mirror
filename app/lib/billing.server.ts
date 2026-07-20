@@ -2,10 +2,8 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import {
-	CREW_ANNUAL_CREDIT_BONUS,
 	RC_ENTITLEMENT_CREW_MEMBER,
 	RC_PRODUCT_CREDITS,
-	RC_PRODUCT_CREW_ANNUAL,
 } from "~/lib/billing.constants";
 import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import {
@@ -169,11 +167,6 @@ export async function getBillingStatusForUser(
 	};
 }
 
-function isAnnualCrewProduct(productId: string | undefined): boolean {
-	if (!productId) return false;
-	return productId === RC_PRODUCT_CREW_ANNUAL || productId.includes("annual");
-}
-
 export type RevenueCatWebhookResult = {
 	handled: boolean;
 	fulfilled: boolean;
@@ -271,17 +264,6 @@ export async function processRevenueCatWebhookEvent(
 				organizationId,
 				periodEnd,
 			});
-
-			if (isAnnualCrewProduct(productId)) {
-				await addCredits(
-					env,
-					organizationId,
-					userId,
-					CREW_ANNUAL_CREDIT_BONUS,
-					"RevenueCat Crew Annual Credits",
-					{ idempotencyKey: fulfillmentKey },
-				);
-			}
 
 			return { handled: true, fulfilled: true };
 		}

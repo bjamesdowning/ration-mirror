@@ -6,7 +6,7 @@ import {
 	revokeCrewMemberTier,
 } from "./billing-tier.server";
 import { log, redactId } from "./logging.server";
-import { getStripe, isAnnualSubscriptionPrice } from "./stripe.server";
+import { getStripe } from "./stripe.server";
 import { emitCreditDeduct, emitRefund } from "./telemetry.server";
 
 // ---------------------------------------------------------------------------
@@ -409,7 +409,7 @@ export async function processCheckoutSession(
 export async function processSubscriptionCheckoutSession(
 	env: Env,
 	sessionId: string,
-	options?: { fulfillmentKey?: string },
+	_options?: { fulfillmentKey?: string },
 ) {
 	const stripe = getStripe(env);
 	const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -455,26 +455,14 @@ export async function processSubscriptionCheckoutSession(
 		periodEnd: periodEnd.toISOString(),
 	});
 
-	// Only Annual plan gets credits; Monthly gets none
-	const firstItem = subscription.items?.data?.[0];
-	const priceId =
-		typeof firstItem?.price === "string"
-			? firstItem.price
-			: (firstItem?.price as { id?: string } | undefined)?.id;
-	if (priceId && isAnnualSubscriptionPrice(env, priceId)) {
-		await addCredits(env, organizationId, userId, 65, "Crew Member Credits", {
-			idempotencyKey: options?.fulfillmentKey ?? sessionId,
-		});
-	}
-
 	return { userId, organizationId, periodEnd };
 }
 
 export async function processSubscriptionInvoice(
 	env: Env,
 	subscriptionId: string,
-	invoiceId: string,
-	options?: { fulfillmentKey?: string },
+	_invoiceId: string,
+	_options?: { fulfillmentKey?: string },
 ) {
 	const stripe = getStripe(env);
 	const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -500,23 +488,6 @@ export async function processSubscriptionInvoice(
 		organizationId,
 		periodEnd,
 	});
-
-	// Only Annual plan gets credits on renewal; Monthly gets none
-	const firstItem = subscription.items?.data?.[0];
-	const priceId =
-		typeof firstItem?.price === "string"
-			? firstItem.price
-			: (firstItem?.price as { id?: string } | undefined)?.id;
-	if (priceId && isAnnualSubscriptionPrice(env, priceId)) {
-		await addCredits(
-			env,
-			organizationId,
-			userId,
-			65,
-			"Crew Member Renewal Credits",
-			{ idempotencyKey: options?.fulfillmentKey ?? invoiceId },
-		);
-	}
 
 	return { userId, organizationId, periodEnd };
 }

@@ -15,8 +15,11 @@ export const RC_PRODUCT_CREDITS: Record<string, number> = {
 	credits_xl: 550,
 };
 
-/** RC subscription product that includes annual Crew Member credit bonus. */
+/** RC subscription product id for Crew Member annual. */
 export const RC_PRODUCT_CREW_ANNUAL = "crew_annual";
 
-/** Credits granted on Crew Member annual purchase or renewal. */
-export const CREW_ANNUAL_CREDIT_BONUS = 65;
+/**
+ * Credits granted once to new human accounts (Better Auth signup).
+ * Not granted to anonymous agent stub kitchens.
+ */
+export const WELCOME_CREDITS = 12;

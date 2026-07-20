@@ -1,23 +1,15 @@
-# Welcome offer and promotions
+# Welcome credits and promotions
 
-## WELCOME65 (Supply Run)
+## Automatic welcome credits
 
-New users may be offered a promotion code **WELCOME65** that applies a **100% discount** to the **Supply Run** credit pack (typically **65 credits**). The code is usually restricted to that product—other packs may not be eligible.
+New **human** accounts (Google, magic link, or Apple sign-in) automatically receive **12 welcome credits** on their personal kitchen. No promo code is required.
 
-## One-time use
+Anonymous agent kitchens created via `POST /api/agent/auth` do **not** receive welcome credits. Claiming an agent kitchen later also does not grant the welcome pack.
 
-The welcome voucher is tracked on your account so the **same promotion is not shown repeatedly** after redemption.
+## Buying more credits
 
-## Eligibility
+Purchase credit packs (Taste Test, Supply Run, Mission Crate, Orbital Stockpile) or a Crew Member subscription from **Hub → Pricing** (web) or the in-app paywall (iOS). List prices are shown in EUR by default; USD matches App Store US list prices.
 
-Offers appear based on product rules in **Pricing** and your account state. If you do not see a voucher, you may already have redeemed it or the campaign may have ended.
+## Crew Member
 
-## Other promotions
-
-Stripe promotion codes can change. Always read the **checkout** description for the **final price** and **what is included** before paying.
-
-## Support
-
-If a code fails at checkout, copy the **exact error**, time, and email used—**do not** share full payment details in chat.
-
-Promotional details on **Hub → Pricing** override this article.
+Crew Member removes free-tier capacity limits. Subscriptions do **not** include recurring credit grants — buy packs as needed for AI features.

@@ -58,6 +58,8 @@ export interface UserSettings {
 	lastActiveAt?: string;
 	/** ISO timestamp when the 30-day inactivity re-engagement email was last sent. */
 	reengagementEmailSentAt?: string;
+	/** Hub welcome tips card dismissed (auto-granted credits messaging). */
+	welcomeTipsDismissed?: boolean;
 	/** Saved filter views for Cargo/Galley (schema stub — UI coming soon). */
 	savedViews?: SavedView[];
 	[key: string]: unknown; // Index signature for database compatibility

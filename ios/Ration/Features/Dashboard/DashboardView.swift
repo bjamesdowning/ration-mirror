@@ -171,11 +171,24 @@ struct DashboardView: View {
                         ErrorBanner(message: toggleError).frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    if let organizationId,
-                       let action = model.nextAction(for: data),
-                       !env.nextActionDismiss.isDismissed(actionKey: action.key, organizationId: organizationId)
-                    {
-                        nextActionCard(action, organizationId: organizationId)
+                    if let organizationId {
+                        let welcomeKey = "welcome12"
+                        let showWelcome =
+                            env.session.credits > 0
+                            && !env.nextActionDismiss.isDismissed(
+                                actionKey: welcomeKey,
+                                organizationId: organizationId
+                            )
+                        if showWelcome {
+                            welcomeCreditsCard(credits: env.session.credits, organizationId: organizationId)
+                        } else if let action = model.nextAction(for: data),
+                                  !env.nextActionDismiss.isDismissed(
+                                      actionKey: action.key,
+                                      organizationId: organizationId
+                                  )
+                        {
+                            nextActionCard(action, organizationId: organizationId)
+                        }
                     }
 
                     ForEach(model.resolvedLayout) { widget in
@@ -191,6 +204,31 @@ struct DashboardView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .copilotScrollTracked(tab: 0, isActive: isTabActive)
+        }
+    }
+
+    private func welcomeCreditsCard(credits: Int, organizationId: String) -> some View {
+        GlassCard {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.title2)
+                    .foregroundStyle(Theme.hyperGreen)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Welcome credits").rationCaption()
+                    Text("You have \(credits) credits").rationHeadline()
+                    Text("Try Scan or Ask to use credits on AI features.")
+                        .rationCaption()
+                }
+                Spacer()
+                Button {
+                    env.nextActionDismiss.dismiss(actionKey: "welcome12", organizationId: organizationId)
+                    Haptics.light()
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Dismiss")
+            }
         }
     }
 

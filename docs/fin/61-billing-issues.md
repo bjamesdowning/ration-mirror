@@ -31,6 +31,6 @@ Checkout shows **final currency and tax** as configured in Stripe. If something 
 
 ## Welcome code issues
 
-See *Welcome offer (WELCOME65)*. Codes can be **single-use** or **product-specific**.
+See *Welcome credits*. New human accounts receive **12 credits** automatically.
 
 If Pricing shows a different bundle than you remember, **Pricing is authoritative**.

@@ -72,11 +72,11 @@ describe("CREW_MEMBER_PRODUCT", () => {
 		expect(CREW_MEMBER_PRODUCT.slug).toBe("crew_member");
 	});
 
-	it("has non-zero credits on signup", () => {
-		expect(CREW_MEMBER_PRODUCT.creditsOnSignup).toBeGreaterThan(0);
+	it("has zero credits on signup (welcome grant is separate)", () => {
+		expect(CREW_MEMBER_PRODUCT.creditsOnSignup).toBe(0);
 	});
 
-	it("has non-zero credits on renewal", () => {
-		expect(CREW_MEMBER_PRODUCT.creditsOnRenewal).toBeGreaterThan(0);
+	it("has zero credits on renewal", () => {
+		expect(CREW_MEMBER_PRODUCT.creditsOnRenewal).toBe(0);
 	});
 });

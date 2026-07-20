@@ -16,7 +16,7 @@ Most kitchen apps make *you* maintain the spreadsheet. Ration closes the loop:
 
 Your MCP client operates the same data you see in the web app — not a shadow copy. Semantic matching links recipe ingredients to pantry items even when names differ (`"2% milk"` vs `"whole milk 2%"`). Expiry-aware tools help you cook what you have before it spoils.
 
-**Free to start:** 35 pantry items, 15 recipes, 3 supply lists, full MCP access. Upgrade to **Crew Member** ($2/month or $12/year) for unlimited capacity, household sharing, and invite links.
+**Free to start:** 35 pantry items, 15 recipes, 3 supply lists, full MCP access, and 12 welcome credits for new human accounts. Upgrade to **Crew Member** (€2/month or €12/year) for unlimited capacity, household sharing, and invite links.
 
 ---
 
@@ -177,7 +177,7 @@ Server card: [`.well-known/mcp/server-card.json`](https://ration.mayutic.com/.we
 |------|----------|
 | **Free** | 35 pantry items · 15 recipes · 3 supply lists · MCP + OAuth · agent self-registration |
 | **Crew Member** | Unlimited capacity · household invites · shared Manifest/Supply links · $2/mo or $12/yr |
-| **Credit packs** (optional) | AI receipt scan, recipe import, meal generation, weekly AI plan in the **web app** — from $1 |
+| **Credit packs** (optional) | AI receipt scan, recipe import, meal generation, weekly AI plan in the **web app** — from €1 |
 
 [MCP does not meter credits](https://ration.mayutic.com/blog/mcp-kitchen-assistant). Use the web app when you want hosted vision/AI features.
 

@@ -416,16 +416,18 @@ sequenceDiagram
 
 **Credit packs** (from [`app/lib/stripe.server.ts`](app/lib/stripe.server.ts)):
 
-| Pack | Credits | Price | Notes |
-|------|---------|-------|-------|
-| Taste Test | 12 | €1 | ~6 scans |
-| Supply Run | 65 | €5 | Most Popular — `WELCOME65` promo (Supply Run only) |
-| Mission Crate | 165 | €10 | ~82 scans |
-| Orbital Stockpile | 550 | €25 | Best Value |
-| Crew Member (Annual) | 65/year | €12/year | Subscription — unlimited capacity + 65 credits on start and renewal |
-| Crew Member (Monthly) | — | €2/month | Unlimited capacity, no included credits — use WELCOME65 with Supply Run only or buy packs |
+| Pack | Credits | Price (EUR) | Price (USD / App Store US) | Notes |
+|------|---------|-------------|----------------------------|-------|
+| Taste Test | 12 | €1 | $1 | ~6 scans |
+| Supply Run | 65 | €5 | $4 | Most Popular |
+| Mission Crate | 165 | €10 | $9 | ~82 scans |
+| Orbital Stockpile | 550 | €25 | $22 | Best Value |
+| Crew Member (Annual) | — | €12/year | $12/year | Unlimited capacity — no included credits |
+| Crew Member (Monthly) | — | €2/month | $2/month | Unlimited capacity — no included credits |
 
-**Welcome voucher** (`WELCOME65`): New users are offered a 100% discount on the Supply Run (65 credits) via a Stripe Promotion Code. The code applies to Supply Run only. The voucher is tracked on `user.welcomeVoucherRedeemed` to show it exactly once.
+**Welcome credits:** New human accounts automatically receive **12 credits** on signup. Anonymous agent kitchens do not. No promo code is required.
+
+EUR is the marketing primary currency. USD list prices match App Store Connect United States equalization (not a live FX conversion).
 
 ---
 
@@ -1933,7 +1935,7 @@ Create in RevenueCat dashboard — **not in Ration code**:
 | RevenueCat product ID | Type | Grants | Attach stores |
 |-----------------------|------|--------|---------------|
 | `crew_monthly` | Subscription | `crew_member` | Stripe Price + App Store sub |
-| `crew_annual` | Subscription | `crew_member` + 65 credits on purchase/renewal | Stripe Price + App Store sub |
+| `crew_annual` | Subscription | `crew_member` (no included credits) | Stripe Price + App Store sub |
 | `credits_s` | Consumable | 12 credits | Stripe + App Store |
 | `credits_m` | Consumable | 65 credits | Stripe + App Store |
 | `credits_l` | Consumable | 165 credits | Stripe + App Store |

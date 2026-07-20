@@ -90,8 +90,8 @@ export async function loader(_args: Route.LoaderArgs) {
 		maxInventoryItems: TIER_LIMITS.free.maxInventoryItems,
 		maxMeals: TIER_LIMITS.free.maxMeals,
 		maxGroceryLists: TIER_LIMITS.free.maxGroceryLists,
-		crewMonthlyPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_MONTHLY.priceUsd,
-		crewAnnualPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.priceUsd,
+		crewMonthlyPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_MONTHLY.priceEur,
+		crewAnnualPrice: SUBSCRIPTION_PRODUCTS.CREW_MEMBER_ANNUAL.priceEur,
 	});
 	const posts = getAllPosts();
 

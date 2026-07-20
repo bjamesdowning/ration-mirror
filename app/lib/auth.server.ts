@@ -41,6 +41,7 @@ import { isUserPurgePending } from "./purge-pending.server";
 import { CURRENT_TOS_VERSION } from "./tos.constants";
 import type { UserSettings } from "./types";
 import { touchUserLastActive } from "./user-activity.server";
+import { grantWelcomeCreditsIfEligible } from "./welcome-credits.server";
 
 const statement = {
 	...defaultStatements,
@@ -291,6 +292,12 @@ export function createAuth(env: Cloudflare.Env) {
 							log.info("[Auth] Created personal group", {
 								orgId: redactId(orgId),
 								userId: redactId(user.id),
+							});
+
+							await grantWelcomeCreditsIfEligible(env, {
+								userId: user.id,
+								organizationId: orgId,
+								email: user.email,
 							});
 
 							if (!shouldSkipEmailSend(env)) {

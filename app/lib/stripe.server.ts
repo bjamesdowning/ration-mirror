@@ -23,9 +23,9 @@ export function getStripe(env: Env): Stripe {
 }
 
 /**
- * Credit pack price IDs (map to Stripe Dashboard prices)
- * These should match the price IDs you created in your Stripe Dashboard
- * Option B with rounded numbers: 7% → 27% → 46% volume discount
+ * Credit pack display catalog.
+ * EUR is marketing primary. USD strings must match App Store Connect US list
+ * prices (not EUR×FX) so web and iOS stay aligned.
  */
 export const CREDIT_PACKS = {
 	TASTE_TEST: {
@@ -42,7 +42,7 @@ export const CREDIT_PACKS = {
 		displayName: "Supply Run",
 		description: "~32 scans or generations",
 		price: "€5",
-		priceUsd: "$5",
+		priceUsd: "$4",
 		priceEur: "€5",
 		badge: "Most Popular",
 	},
@@ -51,7 +51,7 @@ export const CREDIT_PACKS = {
 		displayName: "Mission Crate",
 		description: "~82 scans or generations",
 		price: "€10",
-		priceUsd: "$10",
+		priceUsd: "$9",
 		priceEur: "€10",
 		badge: null,
 	},
@@ -60,7 +60,7 @@ export const CREDIT_PACKS = {
 		displayName: "Orbital Stockpile",
 		description: "~275 scans or generations",
 		price: "€25",
-		priceUsd: "$25",
+		priceUsd: "$22",
 		priceEur: "€25",
 		badge: "Best Value",
 	},
@@ -73,8 +73,8 @@ export const SUBSCRIPTION_PRODUCTS = {
 		price: "€12/year",
 		priceUsd: "$12/year",
 		priceEur: "€12/year",
-		creditsOnStart: 65,
-		creditsOnRenewal: 65,
+		creditsOnStart: 0,
+		creditsOnRenewal: 0,
 		interval: "year" as const,
 	},
 	CREW_MEMBER_MONTHLY: {
@@ -86,13 +86,6 @@ export const SUBSCRIPTION_PRODUCTS = {
 		creditsOnStart: 0,
 		creditsOnRenewal: 0,
 		interval: "month" as const,
-	},
-} as const;
-
-export const PROMO_CODES = {
-	WELCOME65: {
-		code: "WELCOME65",
-		appliesToPack: "SUPPLY_RUN",
 	},
 } as const;
 
@@ -163,23 +156,6 @@ export function getSubscriptionPriceId(
 	return priceId;
 }
 
-export function getPromotionCodeId(
-	env: Env,
-	promoKey: keyof typeof PROMO_CODES,
-): string {
-	const map: Record<keyof typeof PROMO_CODES, string> = {
-		WELCOME65: env.STRIPE_PROMO_WELCOME65 ?? "",
-	};
-	const promoId = map[promoKey];
-	if (!promoId) {
-		throw new Error(`Missing Stripe promotion code ID for promo: ${promoKey}`);
-	}
-	return promoId;
-}
-
-/**
- * Reverse lookup: Price ID → Credit amount
- */
 export function getCreditsForPriceId(env: Env, priceId: string): number | null {
 	const packKeys = Object.keys(CREDIT_PACKS) as Array<
 		keyof typeof CREDIT_PACKS

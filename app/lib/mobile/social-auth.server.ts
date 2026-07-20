@@ -9,6 +9,7 @@ import {
 } from "~/lib/mobile/token.server";
 import type { MobileSocialAuthInput } from "~/lib/schemas/mobile/auth";
 import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
+import { grantWelcomeCreditsIfEligible } from "~/lib/welcome-credits.server";
 
 export class MobileSocialAuthError extends Error {
 	constructor(
@@ -77,6 +78,18 @@ async function ensureOrganizationForUser(
 		db.insert(schema.member).values(memberValues),
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	] as [any, ...any[]]);
+
+	const user = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { email: true },
+	});
+	if (user?.email) {
+		await grantWelcomeCreditsIfEligible(env, {
+			userId,
+			organizationId: orgId,
+			email: user.email,
+		});
+	}
 
 	return orgId;
 }

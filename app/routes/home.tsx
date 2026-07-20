@@ -129,9 +129,13 @@ function PricingSection({
 					centered
 					eyebrow="Pricing"
 					title="Start free. Add Crew when the kitchen becomes shared."
-					subtitle="AI features use credits on both tiers. Crew Member unlocks household groups, unlimited capacity, credit transfers, and included annual credits."
+					subtitle="AI features use credits on both tiers. New human accounts start with 12 free credits. Crew Member unlocks household groups, unlimited capacity, and credit transfers."
 				/>
 			</div>
+			<p className="text-center text-xs text-muted max-w-xl mx-auto">
+				EUR prices include VAT where applicable. US list prices match the App
+				Store; sales tax may be added at checkout.
+			</p>
 
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 				<div className="glass-panel rounded-2xl p-6 md:p-8 space-y-5">
@@ -145,6 +149,7 @@ function PricingSection({
 						<li>{loaderData.tierLimits.free.maxInventoryItems} Cargo items</li>
 						<li>{loaderData.tierLimits.free.maxMeals} meals in Galley</li>
 						<li>{loaderData.tierLimits.free.maxGroceryLists} Supply lists</li>
+						<li>12 welcome credits for new human accounts</li>
 						<li>AI credits available as one-time packs</li>
 						<li>AI agent access (autonomous MCP registration + OAuth)</li>
 					</ul>
@@ -173,13 +178,7 @@ function PricingSection({
 						</li>
 						<li>Member invites and shared household data</li>
 						<li>Manifest and Supply sharing links</li>
-						<li>
-							{
-								loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL
-									.creditsOnStart
-							}{" "}
-							yearly credits on annual
-						</li>
+						<li>Buy credit packs as needed for AI features</li>
 					</ul>
 					<a
 						href="#signup"
@@ -280,22 +279,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				{
 					name: "Free",
 					price: "0",
-					priceCurrency: "USD",
-					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists.`,
+					priceCurrency: "EUR",
+					description: `Up to ${loaderData.tierLimits.free.maxInventoryItems} pantry items, ${loaderData.tierLimits.free.maxMeals} recipes, ${loaderData.tierLimits.free.maxGroceryLists} supply lists. Includes 12 welcome credits for new human accounts.`,
 				},
 				{
 					name: "Crew Member (Monthly)",
 					price: "2",
-					priceCurrency: "USD",
+					priceCurrency: "EUR",
 					description:
 						"Unlimited inventory, recipes, supply lists; group sharing; autonomous MCP registration and OAuth access.",
 				},
 				{
 					name: "Crew Member (Annual)",
 					price: "12",
-					priceCurrency: "USD",
+					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; 65 yearly credits on renewal.",
+						"Unlimited inventory, recipes, supply lists; group sharing; capacity-only subscription (no included credits).",
 				},
 			],
 		}),

@@ -1,5 +1,3 @@
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { useEffect, useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { HubEditMode } from "~/components/hub/HubEditMode";
@@ -8,8 +6,11 @@ import { WelcomeBanner } from "~/components/hub/WelcomeBanner";
 import { LayoutEngine } from "~/components/hub/widgets/LayoutEngine";
 import { resolveLayout } from "~/components/hub/widgets/registry";
 import { HomeIcon } from "~/components/icons/PageIcons";
-import * as schema from "~/db/schema";
-import { getUserSettings, requireActiveGroup } from "~/lib/auth.server";
+import {
+	getUserSettings,
+	patchUserSettings,
+	requireActiveGroup,
+} from "~/lib/auth.server";
 import {
 	getCargoStats,
 	getCargoTagIndex,
@@ -32,12 +33,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		groupId,
 	} = await requireActiveGroup(context, request);
 	const db = context.cloudflare.env.DB;
-	const { WELCOME_VOUCHER } = await import("~/lib/tiers.server");
 
 	const settings = await getUserSettings(db, user.id);
 	const expirationAlertDays = settings.expirationAlertDays ?? 7;
 	const hubProfile = settings.hubProfile;
 	const hubLayout = settings.hubLayout;
+	const welcomeTipsDismissed = settings.welcomeTipsDismissed === true;
+	const welcomeCreditsGranted = user.welcomeVoucherRedeemed === true;
 
 	// Resolve layout so we can read per-widget filter configs
 	const resolvedWidgets = resolveLayout(hubProfile, hubLayout);
@@ -129,8 +131,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableMealTags,
 		availableCargoTags,
 		cargoTagIndex,
-		welcomeVoucherRedeemed: user.welcomeVoucherRedeemed ?? false,
-		welcomePromoCode: WELCOME_VOUCHER.promoCode,
+		welcomeTipsDismissed,
+		welcomeCreditsGranted,
 		mealMatches,
 		partialMealMatches,
 		snackMatches,
@@ -147,11 +149,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const intent = formData.get("intent");
 
 	if (intent === "dismiss-welcome-banner") {
-		const db = drizzle(context.cloudflare.env.DB, { schema });
-		await db
-			.update(schema.user)
-			.set({ welcomeVoucherRedeemed: true })
-			.where(eq(schema.user.id, user.id));
+		await patchUserSettings(context.cloudflare.env.DB, user.id, {
+			welcomeTipsDismissed: true,
+		});
 		return { success: true };
 	}
 
@@ -171,8 +171,8 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		partialMealMatches,
 		snackMatches,
 		manifestPreview,
-		welcomeVoucherRedeemed,
-		welcomePromoCode,
+		welcomeTipsDismissed,
+		welcomeCreditsGranted,
 		availableMealTags,
 		availableCargoTags,
 	} = loaderData;
@@ -185,7 +185,8 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 	const dismissFetcher = useFetcher();
 	// Optimistic: hide the banner as soon as the user dismisses, before the server confirms
 	const bannerVisible =
-		!welcomeVoucherRedeemed &&
+		welcomeCreditsGranted &&
+		!welcomeTipsDismissed &&
 		dismissFetcher.state === "idle" &&
 		!dismissFetcher.data;
 
@@ -242,7 +243,6 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 			<div className="space-y-8">
 				{bannerVisible && (
 					<WelcomeBanner
-						promoCode={welcomePromoCode}
 						onDismiss={() =>
 							dismissFetcher.submit(
 								{ intent: "dismiss-welcome-banner" },

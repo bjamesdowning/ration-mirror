@@ -12,9 +12,10 @@ import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { PageHeader } from "~/components/shell/PageHeader";
 import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
+import { WELCOME_CREDITS } from "~/lib/billing.constants";
 import type { DisplayCurrency } from "~/lib/currency";
 import { shouldSyncCheckoutFromFetcher } from "~/lib/pricing-checkout";
-import { TIER_LIMITS, WELCOME_VOUCHER } from "~/lib/tiers.server";
+import { TIER_LIMITS } from "~/lib/tiers.server";
 import type { Route } from "./+types/pricing";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -32,7 +33,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			where: eq(schema.user.id, user.id),
 			columns: {
 				tier: true,
-				welcomeVoucherRedeemed: true,
 				tierExpiresAt: true,
 				subscriptionCancelAtPeriodEnd: true,
 			},
@@ -61,8 +61,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		tierExpiresAt: userRow?.tierExpiresAt ?? null,
 		subscriptionCancelAtPeriodEnd:
 			userRow?.subscriptionCancelAtPeriodEnd ?? false,
-		welcomeVoucherRedeemed: userRow?.welcomeVoucherRedeemed ?? false,
-		welcomePromoCode: WELCOME_VOUCHER.promoCode,
 		counts: {
 			inventory: inventoryCount[0]?.count ?? 0,
 			meals: mealCount[0]?.count ?? 0,
@@ -196,20 +194,10 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 			</div>
 			<p className="text-sm text-muted">
 				Free plan for getting started. Crew Member unlocks unlimited capacity.
+				List prices match App Store by region; VAT may be included in EUR, and
+				US sales tax may appear at checkout. New human accounts receive{" "}
+				{WELCOME_CREDITS} welcome credits automatically.
 			</p>
-
-			{!loaderData.welcomeVoucherRedeemed && (
-				<div className="glass-panel rounded-xl p-4 border border-hyper-green/30">
-					<p className="text-sm text-carbon">
-						New accounts get a free Supply Run pack (65 credits) — use code{" "}
-						<span className="font-bold text-hyper-green">
-							{loaderData.welcomePromoCode}
-						</span>{" "}
-						with Supply Run only at checkout.
-					</p>
-				</div>
-			)}
-
 			{checkoutFetcher.data?.error && checkoutFetcher.state === "idle" && (
 				<div
 					className="glass-panel rounded-xl p-4 border border-danger/40 bg-danger/5"
@@ -271,22 +259,13 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 				<div className="glass-panel rounded-xl p-6 border border-hyper-green/40">
 					<h2 className="text-xl font-bold text-carbon mb-1">Crew Member</h2>
 					<p className="text-sm text-muted mb-4">
-						Unlimited capacity and groups. Annual includes 65 credits; Monthly
-						has no included credits — use WELCOME65 with Supply Run only or buy
-						packs.
+						Unlimited capacity and groups. AI features use credits on both Free
+						and Crew Member — buy packs below as needed.
 					</p>
 					<ul className="space-y-2 text-sm text-carbon">
 						<li>Unlimited Cargo items and meals</li>
 						<li>Shared supply lists and member invites</li>
-						<li>
-							Annual:{" "}
-							{
-								loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL
-									.creditsOnStart
-							}{" "}
-							credits on start and renewal
-						</li>
-						<li>Monthly: No included credits</li>
+						<li>No included subscription credits</li>
 					</ul>
 					{loaderData.userTier === "crew_member" ? (
 						<div className="mt-5 space-y-1">
@@ -492,9 +471,9 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							</tr>
 							<FeatureRow label="Purchase credit packs" free crew />
 							<FeatureRow
-								label="Yearly credits included"
-								free={false}
-								crew={`${loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL.creditsOnStart}`}
+								label={`${WELCOME_CREDITS} welcome credits (new human accounts)`}
+								free
+								crew
 							/>
 							<tr className="bg-carbon/[0.02]">
 								<td

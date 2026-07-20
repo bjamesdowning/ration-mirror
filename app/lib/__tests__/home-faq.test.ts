@@ -10,8 +10,8 @@ const tierLimits = {
 };
 
 const subscriptionProducts = {
-	CREW_MEMBER_MONTHLY: { priceUsd: "$2/mo" },
-	CREW_MEMBER_ANNUAL: { priceUsd: "$12/yr" },
+	CREW_MEMBER_MONTHLY: { priceEur: "€2/month", priceUsd: "$2/month" },
+	CREW_MEMBER_ANNUAL: { priceEur: "€12/year", priceUsd: "$12/year" },
 };
 
 describe("buildHomeFaqEntries", () => {
@@ -20,7 +20,8 @@ describe("buildHomeFaqEntries", () => {
 		expect(entries).toHaveLength(9);
 		expect(entries[0]?.question).toBe("What is Ration?");
 		expect(entries[3]?.answer).toContain("50 pantry items");
-		expect(entries[3]?.answer).toContain("$2/mo");
+		expect(entries[3]?.answer).toContain("€2/month");
+		expect(entries[3]?.answer).toContain("12 welcome credits");
 	});
 
 	it("includes MCP and export guidance in agent-related answers", () => {

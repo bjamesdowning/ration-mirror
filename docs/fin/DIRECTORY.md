@@ -31,7 +31,7 @@ Browse topics below, or open Ask Ration from the hub for the same answers with l
 - [AI credits explained](./20-credits-explained.md) — What spends credits and what does not.
 - [Buying credits and Stripe](./21-buying-credits-and-stripe.md) — Checkout, packs, and the billing portal.
 - [Free vs Crew Member](./22-subscription-tiers.md) — Capacity limits, invites, and owner-tier rules.
-- [Welcome offer and promotions](./23-welcome-offer-and-promotions.md) — WELCOME65 and Supply Run credit packs.
+- [Welcome offer and promotions](./23-welcome-offer-and-promotions.md) — automatic 12 welcome credits for new human accounts.
 
 ## Agents and API
 

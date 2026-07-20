@@ -1,12 +1,12 @@
 import { Link } from "react-router";
 import { CloseIcon } from "~/components/icons/PageIcons";
+import { WELCOME_CREDITS } from "~/lib/billing.constants";
 
 type WelcomeBannerProps = {
-	promoCode: string;
 	onDismiss: () => void;
 };
 
-export function WelcomeBanner({ promoCode, onDismiss }: WelcomeBannerProps) {
+export function WelcomeBanner({ onDismiss }: WelcomeBannerProps) {
 	return (
 		<div className="glass-panel rounded-xl p-4 border border-hyper-green/30 relative">
 			<button
@@ -19,23 +19,25 @@ export function WelcomeBanner({ promoCode, onDismiss }: WelcomeBannerProps) {
 			</button>
 
 			<p className="text-sm text-carbon dark:text-white pr-8">
-				Welcome to Ration. Claim your free credits with code{" "}
-				<span className="font-bold text-hyper-green">{promoCode}</span>.
+				Welcome to Ration. Your kitchen includes{" "}
+				<span className="font-bold text-hyper-green">
+					{WELCOME_CREDITS} free credits
+				</span>{" "}
+				for AI scans and generations.
 			</p>
 			<div className="mt-3 flex gap-3">
 				<Link
-					to="/hub/pricing"
+					to="/hub/cargo"
 					className="px-3 py-2 text-sm font-semibold rounded-lg bg-hyper-green text-carbon"
 				>
-					Claim Credits
+					Open Cargo
 				</Link>
-				<button
-					type="button"
-					onClick={() => navigator.clipboard.writeText(promoCode)}
+				<Link
+					to="/hub/pricing"
 					className="px-3 py-2 text-sm font-medium rounded-lg bg-platinum dark:bg-white/10 text-carbon dark:text-white"
 				>
-					Copy Code
-				</button>
+					View pricing
+				</Link>
 			</div>
 		</div>
 	);

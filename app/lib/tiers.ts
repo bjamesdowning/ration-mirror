@@ -37,18 +37,11 @@ export const CREW_MEMBER_PRODUCT = {
 	slug: "crew_member" as const,
 	name: "Crew Member",
 	price: "€12/year or €2/month",
-	creditsOnSignup: 65,
-	creditsOnRenewal: 65,
+	/** @deprecated Annual no longer includes credits; use WELCOME_CREDITS for signup grant. */
+	creditsOnSignup: 0,
+	creditsOnRenewal: 0,
 	description:
-		"Unlimited capacity + groups. Annual plan includes 65 credits on start and renewal; Monthly has no included credits.",
-};
-
-export const WELCOME_VOUCHER = {
-	promoCode: "WELCOME65",
-	appliesTo: "SUPPLY_RUN",
-	discountPercent: 100,
-	/** User-facing note: valid for Supply Run only */
-	description: "Supply Run only",
+		"Unlimited capacity + groups. AI features use credits on both Free and Crew Member.",
 };
 
 export function isTierSlug(value: string): value is TierSlug {

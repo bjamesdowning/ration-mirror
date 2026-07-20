@@ -86,7 +86,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			where: eq(schema.user.id, userId),
 			columns: {
 				stripeCustomerId: true,
-				welcomeVoucherRedeemed: true,
 				email: true,
 			},
 		});
@@ -137,7 +136,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 			}
 
 			if (!pack) throw new Error("Pack required"); // validated above
-			const welcomeVoucherRedeemed = userRow.welcomeVoucherRedeemed ?? false;
 			return stripe.checkout.sessions.create({
 				...buildEmbeddedCheckoutSessionBase(customerId),
 				mode: "payment",
@@ -151,7 +149,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 						quantity: 1,
 					},
 				],
-				allow_promotion_codes: !welcomeVoucherRedeemed,
+				allow_promotion_codes: true,
 				metadata: {
 					type: "credits",
 					userId,

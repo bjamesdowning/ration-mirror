@@ -1,3 +1,4 @@
+import { WELCOME_CREDITS } from "~/lib/billing.constants";
 import { CREW_MEMBER_PRODUCT, TIER_LIMITS } from "~/lib/tiers";
 
 export interface OnboardingTierCopy {
@@ -18,6 +19,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 				`${free.maxInventoryItems} cargo`,
 				`${free.maxMeals} meals`,
 				`${free.maxGroceryLists} ${listLabel}`,
+				`${WELCOME_CREDITS} welcome credits`,
 				"+ AI Features (credits)",
 			],
 			highlight: false,
@@ -28,7 +30,7 @@ export function getOnboardingTierCopy(): OnboardingTierCopy[] {
 				"Unlimited Cargo",
 				"Unlimited Meals",
 				"Unlimited lists",
-				`${CREW_MEMBER_PRODUCT.creditsOnSignup} credits for AI scans (Annual)`,
+				"Groups & invites",
 			],
 			highlight: true,
 		},

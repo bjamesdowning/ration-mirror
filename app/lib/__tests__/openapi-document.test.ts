@@ -54,8 +54,8 @@ describe("buildLlmsComparisonFacts", () => {
 		maxInventoryItems: 50,
 		maxMeals: 25,
 		maxGroceryLists: 3,
-		crewMonthlyPrice: "$2/mo",
-		crewAnnualPrice: "$12/yr",
+		crewMonthlyPrice: "€2/month",
+		crewAnnualPrice: "€12/year",
 	});
 
 	it("renders extractable Q&A markdown for llms.txt", () => {

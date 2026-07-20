@@ -155,7 +155,7 @@ export const HELP_ARTICLES: ReadonlyArray<HelpArticleMeta> = [
 	{
 		slug: "23-welcome-offer-and-promotions",
 		title: "Welcome offer and promotions",
-		summary: "WELCOME65 and Supply Run credit packs.",
+		summary: "Automatic 12 welcome credits for new human accounts.",
 		section: "billing",
 	},
 	{

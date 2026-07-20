@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WELCOME_CREDITS } from "../billing.constants";
 import { getOnboardingTierCopy } from "../onboarding-tier-copy";
 import { CREW_MEMBER_PRODUCT, TIER_LIMITS } from "../tiers";
 
@@ -13,14 +14,16 @@ describe("getOnboardingTierCopy", () => {
 		expect(free?.features).toContain(
 			`${TIER_LIMITS.free.maxGroceryLists} Supply lists`,
 		);
+		expect(free?.features).toContain(`${WELCOME_CREDITS} welcome credits`);
 	});
 
-	it("includes crew member credits from CREW_MEMBER_PRODUCT", () => {
+	it("highlights crew member without annual credit promise", () => {
 		const tiers = getOnboardingTierCopy();
 		const crew = tiers.find((t) => t.name === CREW_MEMBER_PRODUCT.name);
 		expect(crew?.highlight).toBe(true);
-		expect(crew?.features).toContain(
-			`${CREW_MEMBER_PRODUCT.creditsOnSignup} credits for AI scans (Annual)`,
+		expect(crew?.features).toContain("Groups & invites");
+		expect(crew?.features.some((f) => f.includes("credits for AI"))).toBe(
+			false,
 		);
 	});
 });

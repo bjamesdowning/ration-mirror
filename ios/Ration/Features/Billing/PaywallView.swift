@@ -114,7 +114,7 @@ struct PaywallView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 24) {
                     header
 
                     if model.isLoading && model.status == nil {
@@ -141,15 +141,16 @@ struct PaywallView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Image(systemName: "bolt.shield.fill")
-                .font(Typography.heroIcon(44))
+                .font(Typography.heroIcon(36))
                 .foregroundStyle(Theme.hyperGreen)
             Text("Unlock Crew Member").rationTitle()
             Text("Higher inventory limits, AI scans, and smart logistics.")
                 .rationCaption()
                 .multilineTextAlignment(.center)
         }
+        .padding(.bottom, 4)
     }
 
     private func statusCard(_ status: BillingStatus) -> some View {
@@ -188,7 +189,7 @@ struct PaywallView: View {
         } else if !status.canPurchaseSubscription {
             ErrorBanner(message: blockMessage(status.purchaseBlockReason))
         } else {
-            VStack(spacing: 12) {
+            VStack(spacing: 20) {
                 subscriptionSection
                 creditPackSection
 
@@ -215,7 +216,7 @@ struct PaywallView: View {
 
     private var subscriptionDisclosure: some View {
         VStack(spacing: 8) {
-            Text("Subscriptions renew automatically through your Apple ID until cancelled at least 24 hours before the end of the current period. Manage or cancel in App Store account settings after purchase.")
+            Text("Subscriptions renew automatically through your Apple ID until cancelled at least 24 hours before the end of the current period. Manage or cancel in App Store account settings after purchase. List prices match your App Store region; sales tax may apply at checkout.")
                 .rationCaption()
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
@@ -233,6 +234,7 @@ struct PaywallView: View {
             .font(Typography.caption())
             .foregroundStyle(Theme.hyperGreen)
         }
+        .padding(.top, 4)
     }
 
     private func activeSubscriberCard(_ status: BillingStatus) -> some View {
@@ -253,13 +255,13 @@ struct PaywallView: View {
     }
 
     private var subscriptionSection: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 10) {
             if env.billing.subscriptionPackages.isEmpty {
                 Text("Subscriptions load from RevenueCat offerings.").rationCaption()
             } else {
-                Text("Crew Member").rationHeadline()
-                ForEach(env.billing.subscriptionPackages) { pkg in
-                    purchaseButton(pkg)
+                sectionHeader("Crew Member", caption: nil)
+                ForEach(BillingProductCatalog.sorted(env.billing.subscriptionPackages)) { pkg in
+                    purchaseRow(pkg, style: .primary)
                 }
             }
         }
@@ -268,19 +270,40 @@ struct PaywallView: View {
     private var creditPackSection: some View {
         Group {
             if !env.billing.creditPackages.isEmpty {
-                Text("Credit packs").rationHeadline().frame(maxWidth: .infinity, alignment: .leading)
-                Text("Consumable credits for AI scans. Credits do not expire.")
-                    .rationCaption()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                ForEach(env.billing.creditPackages) { pkg in
-                    purchaseButton(pkg)
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionHeader(
+                        "Credit packs",
+                        caption: "Consumable credits for AI scans. Credits do not expire."
+                    )
+                    ForEach(BillingProductCatalog.sorted(env.billing.creditPackages)) { pkg in
+                        purchaseRow(pkg, style: .secondary)
+                    }
                 }
             }
         }
     }
 
-    private func purchaseButton(_ pkg: BillingPackage) -> some View {
-        Button {
+    private func sectionHeader(_ title: String, caption: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).rationHeadline()
+            if let caption {
+                Text(caption).rationCaption()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
+    private func purchaseRow(_ pkg: BillingPackage, style: PaywallProductRow.Style) -> some View {
+        let info = BillingProductCatalog.info(for: pkg.productIdentifier)
+        return PaywallProductRow(
+            title: info?.displayName ?? pkg.title,
+            subtitle: info?.subtitle,
+            price: pkg.priceString,
+            badge: info?.badge,
+            isPurchasing: model.purchasingPackageID == pkg.id,
+            style: style
+        ) {
             Task {
                 await model.purchase(
                     packageID: pkg.id,
@@ -289,14 +312,7 @@ struct PaywallView: View {
                     session: env.session
                 )
             }
-        } label: {
-            HStack {
-                Text(model.purchasingPackageID == pkg.id ? "Purchasing…" : pkg.title)
-                Spacer()
-                Text(pkg.priceString)
-            }
         }
-        .buttonStyle(PrimaryButtonStyle())
         .disabled(model.purchasingPackageID != nil)
     }
 

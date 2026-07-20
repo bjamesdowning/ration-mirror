@@ -9,8 +9,8 @@ export type HomeFaqTierLimits = {
 };
 
 export type HomeFaqSubscriptionProducts = {
-	CREW_MEMBER_MONTHLY: { priceUsd: string };
-	CREW_MEMBER_ANNUAL: { priceUsd: string };
+	CREW_MEMBER_MONTHLY: { priceEur: string; priceUsd: string };
+	CREW_MEMBER_ANNUAL: { priceEur: string; priceUsd: string };
 };
 
 /** Homepage FAQ entries shared by JSON-LD and visible HTML. */
@@ -39,7 +39,7 @@ export function buildHomeFaqEntries(opts: {
 		},
 		{
 			question: "Is Ration free?",
-			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, and ${free.maxGroceryLists} supply lists with no credit card required. Agents can autonomously self-register via MCP on the same tier. The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceUsd} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceUsd}) removes those limits and enables group sharing, member invitations, and full agent access.`,
+			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, and ${free.maxGroceryLists} supply lists with no credit card required. New human accounts receive 12 welcome credits automatically. Agents can autonomously self-register via MCP on the same tier (without welcome credits). The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceEur} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceEur}) removes capacity limits and enables group sharing, member invitations, and full agent access.`,
 		},
 		{
 			question: "What is Cargo, Galley, Manifest, and Supply?",

@@ -23,7 +23,7 @@ Use this table for Copilot AI Search source configuration and **golden-question*
 | [20-credits-explained.md](./20-credits-explained.md) | AI credits explained | Both | What uses credits? Do MCP calls use credits? Who shares the balance? |
 | [21-buying-credits-and-stripe.md](./21-buying-credits-and-stripe.md) | Buying credits and checkout | Support | Checkout failed; credits missing? Billing portal? How do I cancel? |
 | [22-subscription-tiers.md](./22-subscription-tiers.md) | Free vs Crew Member | Both | Why can’t I invite someone? Free tier limits? Who sets tier for a group? |
-| [23-welcome-offer-and-promotions.md](./23-welcome-offer-and-promotions.md) | Welcome offer (WELCOME65) | Sales, Support | What is the welcome code? Supply Run credits? |
+| [23-welcome-offer-and-promotions.md](./23-welcome-offer-and-promotions.md) | Welcome credits | Sales, Support | Do new accounts get free credits? |
 | [30-mcp-overview.md](./30-mcp-overview.md) | MCP overview | Support | What is Ration MCP? How do I connect my AI agent? Which scopes? |
 | [31-mcp-connection-setup.md](./31-mcp-connection-setup.md) | Connecting to MCP | Support | How do I connect Claude or Cursor? OAuth setup? |
 | [32-mcp-tools-reference.md](./32-mcp-tools-reference.md) | MCP tools reference | Support | List all MCP tools. Rate limits for MCP. |

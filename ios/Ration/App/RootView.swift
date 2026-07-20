@@ -194,7 +194,18 @@ struct MainTabView: View {
                     }
             }
         }
-        .sheet(isPresented: $showingCopilotPaywall) {
+        .sheet(isPresented: $showingCopilotPaywall, onDismiss: {
+            Task {
+                guard let organizationId = env.session.activeOrganizationId else { return }
+                _ = await env.ask.model.refreshStatusAfterCredits(
+                    api: env.api,
+                    auth: env.auth,
+                    organizationId: organizationId,
+                    snapshots: env.snapshots
+                )
+                env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
+            }
+        }) {
             PaywallView()
         }
         .sheet(isPresented: $showingScan) {

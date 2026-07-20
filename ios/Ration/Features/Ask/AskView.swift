@@ -309,7 +309,11 @@ struct AskView: View {
                 return accepted
             },
             onStop: { await model.stop() },
-            onExhaustedTap: {}
+            onExhaustedTap: {
+                if isCopilotExhausted {
+                    showingPaywall = true
+                }
+            }
         )
     }
 }

@@ -364,7 +364,7 @@ read-only list/detail chips are unchanged.
 - Galley meal → ingredient link → cargo detail (tab 2): `⋯` replaces Galley `+` on active tab.
 - Manifest entry → meal detail: `⋯` replaces Manifest tab FAB.
 - Tab switch resets bar to expanded when allowance allows auto-expand; keyboard must stay closed until the composer is tapped.
-- Collapsed chat chip: tap expands the bar and opens the keyboard; scroll-up expand alone must not open the keyboard.
+- Collapsed chat chip: tap expands the bar and opens the keyboard when allowance allows; when exhausted (no free chats and insufficient credits), tap opens the paywall. Scroll-up expand alone must not open the keyboard.
 - With keyboard open on any tab: composer stays directly above keyboard (not at top of screen).
 - Copilot field: tap chevron-down to dismiss keyboard; scroll list/transcript to dismiss interactively.
 - Tab dock send: prompt appears in Ask transcript with thinking/tool activity; keyboard dismisses on tab before Ask opens.

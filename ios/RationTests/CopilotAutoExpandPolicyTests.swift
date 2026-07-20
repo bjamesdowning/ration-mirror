@@ -74,7 +74,7 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
         XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
     }
 
-    func testIsNotCopilotExhaustedWhenCrewNeedsConsent() {
+    func testIsCopilotExhaustedWhenCrewNeedsConsentButHasNoCredits() {
         let status = CopilotStatusResponse(
             tier: "crew_member",
             freeConversationsRemaining: 0,
@@ -89,7 +89,27 @@ final class CopilotAutoExpandPolicyTests: XCTestCase {
             onboardingBriefingConsumed: nil
         )
 
+        XCTAssertTrue(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+        XCTAssertFalse(CopilotAutoExpandPolicy.canAutoExpand(status: status))
+    }
+
+    func testIsNotCopilotExhaustedWhenCrewHasCreditsButNeedsConsent() {
+        let status = CopilotStatusResponse(
+            tier: "crew_member",
+            freeConversationsRemaining: 0,
+            allowanceResetAt: Date(),
+            creditBalance: 5,
+            autoDeductConsent: false,
+            conversationFloorCost: 1,
+            sessionIdleMs: 1_200_000,
+            tokensPerCredit: 20_000,
+            sessionMaxTokens: 128_000,
+            onboardingBriefingEligible: nil,
+            onboardingBriefingConsumed: nil
+        )
+
         XCTAssertFalse(CopilotAutoExpandPolicy.isCopilotExhausted(status: status))
+        XCTAssertFalse(CopilotAutoExpandPolicy.canAutoExpand(status: status))
     }
 
     func testIsCopilotExhaustedWhenCrewHasConsentButNoCredits() {

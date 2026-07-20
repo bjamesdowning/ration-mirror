@@ -69,6 +69,19 @@ final class CopilotScrollContextTests: XCTestCase {
         XCTAssertFalse(context.isExpanded)
     }
 
+    func testExpandManuallyBypassesAutoExpandGate() {
+        let context = CopilotScrollContext()
+        context.setCanAutoExpand(false)
+        context.reportScroll(offset: 0)
+        context.reportScroll(offset: 40)
+        context.markScrollEnded()
+        XCTAssertFalse(context.isExpanded)
+
+        context.expandManually()
+
+        XCTAssertTrue(context.isExpanded)
+    }
+
     func testKeyboardInsetUpdates() {
         let context = CopilotScrollContext()
 

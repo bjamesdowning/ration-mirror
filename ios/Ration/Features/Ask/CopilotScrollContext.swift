@@ -108,7 +108,7 @@ final class CopilotScrollContext {
     func expandManually() {
         pendingExpand = false
         pendingCollapse = false
-        applyExpand()
+        applyExpand(force: true)
     }
 
     func expandFromScroll() {
@@ -117,7 +117,7 @@ final class CopilotScrollContext {
             pendingCollapse = false
             return
         }
-        applyExpand()
+        applyExpand(force: false)
     }
 
     func collapse() {
@@ -141,7 +141,7 @@ final class CopilotScrollContext {
             applyCollapse()
         } else if pendingExpand {
             pendingExpand = false
-            applyExpand()
+            applyExpand(force: false)
         }
     }
 
@@ -204,8 +204,9 @@ final class CopilotScrollContext {
         }
     }
 
-    private func applyExpand() {
-        guard !isExpanded, canAutoExpand else { return }
+    private func applyExpand(force: Bool) {
+        guard !isExpanded else { return }
+        guard force || canAutoExpand else { return }
         lastDockToggleAt = CFAbsoluteTimeGetCurrent()
         withAnimation(MotionPolicy.prefersReducedMotion ? nil : MotionPolicy.dockSpring) {
             isExpanded = true

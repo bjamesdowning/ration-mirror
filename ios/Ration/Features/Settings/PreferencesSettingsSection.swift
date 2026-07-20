@@ -1,28 +1,7 @@
 import SwiftUI
 
-private struct AllergenOption: Identifiable {
-    let id: String
-    let label: String
-}
-
-private let allergenOptions: [AllergenOption] = [
-    AllergenOption(id: "milk", label: "Milk / Dairy"),
-    AllergenOption(id: "eggs", label: "Eggs"),
-    AllergenOption(id: "fish", label: "Fish"),
-    AllergenOption(id: "shellfish", label: "Shellfish"),
-    AllergenOption(id: "tree-nuts", label: "Tree Nuts"),
-    AllergenOption(id: "peanuts", label: "Peanuts"),
-    AllergenOption(id: "wheat", label: "Wheat / Gluten"),
-    AllergenOption(id: "soybeans", label: "Soybeans"),
-    AllergenOption(id: "sesame", label: "Sesame"),
-    AllergenOption(id: "mustard", label: "Mustard"),
-    AllergenOption(id: "celery", label: "Celery"),
-    AllergenOption(id: "lupin", label: "Lupin"),
-    AllergenOption(id: "molluscs", label: "Molluscs"),
-    AllergenOption(id: "sulphites", label: "Sulphites"),
-]
-
 struct PreferencesSettingsSection: View {
+    @Environment(AppEnvironment.self) private var env
     let settings: UserSettings
     let api: RationAPI
 
@@ -33,16 +12,16 @@ struct PreferencesSettingsSection: View {
     init(settings: UserSettings, api: RationAPI) {
         self.settings = settings
         self.api = api
-        _selectedAllergens = State(initialValue: Set(settings.allergens ?? []))
+        _selectedAllergens = State(initialValue: Set(AllergenCatalog.parse(settings.allergens)))
         _expirationDays = State(initialValue: Double(settings.expirationAlertDays ?? 7))
     }
 
     var body: some View {
         Section("Dietary restrictions") {
-            Text("Meals containing selected allergens are flagged throughout the app.")
+            Text("Galley meals containing selected allergens are flagged on the list and meal detail.")
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
-            ForEach(allergenOptions) { option in
+            ForEach(AllergenCatalog.options) { option in
                 Toggle(option.label, isOn: Binding(
                     get: { selectedAllergens.contains(option.id) },
                     set: { enabled in
@@ -85,15 +64,27 @@ struct PreferencesSettingsSection: View {
         isSaving = true
         defer { isSaving = false }
         let sorted = selectedAllergens.sorted()
-        _ = try? await api.patchSettings(SettingsPatch(allergens: sorted))
+        do {
+            let response = try await api.patchSettings(SettingsPatch(allergens: sorted))
+            env.launch.updateUserSettings(response.settings)
+        } catch {
+            // Revert optimistic toggle to last known server settings.
+            selectedAllergens = Set(AllergenCatalog.parse(env.launch.userSettings?.allergens))
+        }
     }
 
     @MainActor
     private func saveExpirationDays() async {
         isSaving = true
         defer { isSaving = false }
-        _ = try? await api.patchSettings(
-            SettingsPatch(expirationAlertDays: Int(expirationDays))
-        )
+        do {
+            let response = try await api.patchSettings(
+                SettingsPatch(expirationAlertDays: Int(expirationDays))
+            )
+            env.launch.updateUserSettings(response.settings)
+        } catch {
+            // Revert optimistic slider to last known server settings.
+            expirationDays = Double(env.launch.userSettings?.expirationAlertDays ?? 7)
+        }
     }
 }

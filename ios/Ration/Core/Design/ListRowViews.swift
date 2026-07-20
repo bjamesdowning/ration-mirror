@@ -139,11 +139,19 @@ struct CargoRowView: View {
 
 /// Galley list row — Telemetry Strip with detail navigation; Cook is on trailing swipe.
 struct MealRowView: View {
+    @Environment(AppEnvironment.self) private var env
     let meal: Meal
     var match: MealMatch?
     var showMatchRing: Bool = true
     var isSelectedForSupply = false
     var isInitiallySelectedForSupply = false
+
+    private var triggeredAllergens: [String] {
+        AllergenDetector.detect(
+            ingredientNames: meal.ingredients.map(\.ingredientName),
+            userAllergens: env.launch.userSettings?.allergens ?? []
+        )
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -175,6 +183,7 @@ struct MealRowView: View {
                 if isSelectedForSupply {
                     SupplySelectionBadge(compact: true)
                 }
+                AllergenWarningBadge(triggered: triggeredAllergens, compact: true)
             }
 
             HStack(spacing: 6) {
@@ -224,6 +233,11 @@ struct MealRowView: View {
         }
         if let match {
             parts.append("\(Int(match.matchPercentage)) percent match")
+        }
+        let triggered = triggeredAllergens
+        if !triggered.isEmpty {
+            let labels = AllergenCatalog.labels(for: triggered).joined(separator: ", ")
+            parts.append("Contains allergens: \(labels)")
         }
         return parts.joined(separator: ", ")
     }

@@ -542,6 +542,12 @@ struct MealDetailView: View {
                         .foregroundStyle(Theme.hyperGreen)
                 }
                 let displayMeal = meal ?? initialMeal
+                AllergenWarningBadge(
+                    triggered: AllergenDetector.detect(
+                        ingredientNames: displayMeal.ingredients.map(\.ingredientName),
+                        userAllergens: env.launch.userSettings?.allergens ?? []
+                    )
+                )
                 header(displayMeal)
                 servingsStepper(baseServings: max(displayMeal.servings ?? 1, 1))
                 if !displayMeal.ingredients.isEmpty {

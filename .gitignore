@@ -42,3 +42,5 @@ worker-configuration.d.ts
 
 # Local Python venvs (e.g. App Store screenshot framing)
 **/.venv/
+**/__pycache__/
+*.py[cod]

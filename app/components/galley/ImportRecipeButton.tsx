@@ -416,7 +416,7 @@ export const ImportRecipeButton = forwardRef<
 				>
 					{showIntro ? (
 						<AIFeatureIntroView
-							description="Paste a recipe link. AI extracts ingredients and steps into your Galley so you have one place to cook from. Some sites block automated bots — if that happens, you can paste the page HTML or add the meal manually."
+							description="Paste a recipe webpage URL. AI extracts ingredients and steps into your Galley. Use an HTTPS link to a recipe page — not a video. Some sites block automated bots; if that happens, you can paste the page HTML or add the meal manually."
 							cost={costPerImport}
 							costLabel="per import"
 							credits={typeof credits === "number" ? credits : 0}
@@ -448,10 +448,10 @@ export const ImportRecipeButton = forwardRef<
 											aria-describedby="import-url-hint"
 										/>
 										<p id="import-url-hint" className="text-xs text-muted mt-1">
-											HTTPS only. Tested with allrecipes.com and most major
-											recipe sites. Some sites block automated bots — if that
-											happens, you&apos;ll be asked to paste the page HTML (or
-											add the meal manually).
+											HTTPS recipe pages only. Video links (YouTube, TikTok,
+											Reels) and non-recipe pages won&apos;t work. Some sites
+											block automated bots — you&apos;ll be asked to paste the
+											page HTML, or add the meal manually.
 										</p>
 									</div>
 									<button
@@ -529,7 +529,7 @@ export const ImportRecipeButton = forwardRef<
 										<p className="text-sm text-muted">
 											{assistedFailed
 												? "The pasted content still looks like a block page or isn't a usable recipe. Open the recipe in your browser and add it manually, or try a different URL."
-												: "Common on allrecipes.com and similar publishers. Browsers can open the page, but our servers cannot fetch it automatically."}
+												: "Many recipe publishers block automated downloads. Your browser can open the page, but our servers cannot fetch it automatically."}
 										</p>
 									</div>
 

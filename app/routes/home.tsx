@@ -3,9 +3,9 @@ import "../../load-context";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
-import { CheckIcon } from "~/components/icons/PageIcons";
 import { SplashExperience } from "~/components/marketing/SplashExperience";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
+import { PricingFeatureMatrix } from "~/components/pricing/PricingFeatureMatrix";
 import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
@@ -54,8 +54,6 @@ export function meta(_: Route.MetaArgs) {
 	];
 }
 
-type FeatureValue = boolean | string;
-
 function SectionHeader({
 	eyebrow,
 	title,
@@ -84,30 +82,6 @@ function SectionHeader({
 	);
 }
 
-function FeatureRow({
-	label,
-	free = false,
-	crew = false,
-}: {
-	label: string;
-	free?: FeatureValue;
-	crew?: FeatureValue;
-}) {
-	const renderCell = (value: FeatureValue) => {
-		if (value === true)
-			return <CheckIcon className="w-4 h-4 text-hyper-green mx-auto" />;
-		if (value === false) return <span className="text-carbon/20">—</span>;
-		return <span className="text-carbon">{value}</span>;
-	};
-	return (
-		<tr>
-			<td className="px-4 py-2.5 text-carbon">{label}</td>
-			<td className="px-4 py-2.5 text-center">{renderCell(free)}</td>
-			<td className="px-4 py-2.5 text-center">{renderCell(crew)}</td>
-		</tr>
-	);
-}
-
 function PricingSection({
 	loaderData,
 	currency,
@@ -129,7 +103,7 @@ function PricingSection({
 					centered
 					eyebrow="Pricing"
 					title="Start free. Add Crew when the kitchen becomes shared."
-					subtitle="AI features use credits on both tiers. New human accounts start with 12 free credits. Crew Member unlocks household groups, unlimited capacity, and credit transfers."
+					subtitle="AI features use credits on both tiers. New human accounts start with 12 free credits. Crew Member unlocks household groups, unlimited capacity, credit transfers, and 1 free Ask Ration conversation per group per day."
 				/>
 			</div>
 			<p className="text-center text-xs text-muted max-w-xl mx-auto">
@@ -178,6 +152,7 @@ function PricingSection({
 						</li>
 						<li>Member invites and shared household data</li>
 						<li>Manifest and Supply sharing links</li>
+						<li>1 free Ask Ration (Copilot) conversation per group per day</li>
 						<li>Buy credit packs as needed for AI features</li>
 					</ul>
 					<a
@@ -220,33 +195,10 @@ function PricingSection({
 					View feature comparison
 				</summary>
 				<div className="overflow-x-auto border-t border-carbon/10">
-					<table className="w-full min-w-[34rem] text-sm">
-						<thead>
-							<tr className="border-b border-carbon/10">
-								<th className="p-4 text-left text-muted">Feature</th>
-								<th className="p-4 text-center text-carbon">Free</th>
-								<th className="p-4 text-center text-hyper-green">Crew</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-carbon/5">
-							<FeatureRow
-								label="Manual Cargo and Supply management"
-								free
-								crew
-							/>
-							<FeatureRow label="Semantic search and Match Mode" free crew />
-							<FeatureRow label="AI weekly meal planning" free crew />
-							<FeatureRow
-								label="MCP Server (autonomous registration + OAuth)"
-								free
-								crew
-							/>
-							<FeatureRow label="REST API import/export" free crew />
-							<FeatureRow label="Member invites" crew />
-							<FeatureRow label="Shared Manifest/Supply links" crew />
-							<FeatureRow label="Credit transfer between groups" crew />
-						</tbody>
-					</table>
+					<PricingFeatureMatrix
+						tierLimits={loaderData.tierLimits}
+						className="w-full min-w-[34rem] text-sm"
+					/>
 				</div>
 			</details>
 		</section>
@@ -287,14 +239,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					price: "2",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; autonomous MCP registration and OAuth access.",
+						"Unlimited inventory, recipes, supply lists; group sharing; 1 free Ask Ration conversation per group per day; autonomous MCP registration and OAuth access.",
 				},
 				{
 					name: "Crew Member (Annual)",
 					price: "12",
 					priceCurrency: "EUR",
 					description:
-						"Unlimited inventory, recipes, supply lists; group sharing; capacity-only subscription (no included credits).",
+						"Unlimited inventory, recipes, supply lists; group sharing; 1 free Ask Ration conversation per group per day; capacity-only subscription (no included credits).",
 				},
 			],
 		}),

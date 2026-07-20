@@ -40,10 +40,14 @@ describe("buildHomeFaqEntries", () => {
 
 	it("explains Copilot, MCP, and iOS availability", () => {
 		const entries = buildHomeFaqEntries({ tierLimits, subscriptionProducts });
+		const copilotAnswer = entries.find(
+			(entry) => entry.question === "What is Ration Copilot?",
+		)?.answer;
+		expect(copilotAnswer).toContain("built-in AI kitchen assistant");
+		expect(copilotAnswer).toContain("1 free conversation per group per day");
 		expect(
-			entries.find((entry) => entry.question === "What is Ration Copilot?")
-				?.answer,
-		).toContain("built-in AI kitchen assistant");
+			entries.find((entry) => entry.question === "Is Ration free?")?.answer,
+		).toContain("1 free Ask Ration (Copilot) conversation per group per day");
 		expect(
 			entries.find((entry) => entry.question === "Is there a Ration iOS app?")
 				?.answer,

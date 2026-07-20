@@ -231,7 +231,7 @@ Apply the same rule to `ration-storage-dev` for dev/prod parity. Verify with `np
 
 **Ration Copilot:** Intercom/Fin has been replaced by the first-party **Ask Ration** experience. Web uses the hub header launcher and [`AskPanel`](app/components/support/AskPanel.tsx); iOS uses native [`AskView`](ios/Ration/Features/Ask/AskView.swift). Both stream over WebSocket to `ration-copilot` at `copilot.ration.mayutic.com`. See [§14 Ration Copilot](#14-ration-copilot) for architecture, auth, billing, tools, and deployment.
 
-**Public splash experience:** `/` presents Ration as a closed-loop AI pantry management system: Cargo → Galley → Manifest → Supply → Dock. A lightweight scroll-activated system diagram explains that loop, while paired Copilot and MCP panels distinguish the built-in assistant from external AI control. The page keeps `#pricing` and `#signup` deep links stable and includes an `#ios` section marked **coming soon** until the public App Store listing is available.
+**Public splash experience:** `/` presents Ration as a closed-loop AI pantry management system: Cargo → Galley → Manifest → Supply → Dock. A lightweight scroll-activated system diagram explains that loop, while paired Copilot and MCP panels distinguish the built-in assistant from external AI control. `#pricing` advertises Crew’s 1 free Ask Ration conversation per group per day and shares the full Free vs Crew feature matrix with `/hub/pricing` via [`PricingFeatureMatrix`](app/components/pricing/PricingFeatureMatrix.tsx). The page keeps `#pricing` and `#signup` deep links stable and includes an `#ios` section marked **coming soon** until the public App Store listing is available.
 
 **iOS App Store marketing (UK):** Paste-ready listing copy, screenshot storyboard, and framed 1320×2868 assets live under [`marketing/appstore/uk/`](marketing/appstore/uk/). Start with [`COPY.md`](marketing/appstore/uk/COPY.md) and [`UPLOAD.md`](marketing/appstore/uk/UPLOAD.md).
 
@@ -424,8 +424,8 @@ sequenceDiagram
 | Supply Run | 65 | €5 | $4 | Most Popular |
 | Mission Crate | 165 | €10 | $9 | ~82 scans |
 | Orbital Stockpile | 550 | €25 | $22 | Best Value |
-| Crew Member (Annual) | — | €12/year | $12/year | Unlimited capacity — no included credits |
-| Crew Member (Monthly) | — | €2/month | $2/month | Unlimited capacity — no included credits |
+| Crew Member (Annual) | — | €12/year | $12/year | Unlimited capacity — 1 free Copilot chat / group / day; no included credits |
+| Crew Member (Monthly) | — | €2/month | $2/month | Unlimited capacity — 1 free Copilot chat / group / day; no included credits |
 
 **Welcome credits:** New human accounts automatically receive **12 credits** on signup. Anonymous agent kitchens do not. No promo code is required.
 

@@ -39,7 +39,7 @@ export function buildHomeFaqEntries(opts: {
 		},
 		{
 			question: "Is Ration free?",
-			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, and ${free.maxGroceryLists} supply lists with no credit card required. New human accounts receive 12 welcome credits automatically. Agents can autonomously self-register via MCP on the same tier (without welcome credits). The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceEur} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceEur}) removes capacity limits and enables group sharing, member invitations, and full agent access.`,
+			answer: `Yes. The Free tier supports up to ${free.maxInventoryItems} pantry items, ${free.maxMeals} recipes, and ${free.maxGroceryLists} supply lists with no credit card required. New human accounts receive 12 welcome credits automatically. Agents can autonomously self-register via MCP on the same tier (without welcome credits). The Crew Member tier (${subscriptionProducts.CREW_MEMBER_MONTHLY.priceEur} or ${subscriptionProducts.CREW_MEMBER_ANNUAL.priceEur}) removes capacity limits, enables group sharing and member invitations, and includes 1 free Ask Ration (Copilot) conversation per group per day.`,
 		},
 		{
 			question: "What is Cargo, Galley, Manifest, and Supply?",
@@ -59,7 +59,7 @@ export function buildHomeFaqEntries(opts: {
 		{
 			question: "What is Ration Copilot?",
 			answer:
-				"Ration Copilot is the built-in AI kitchen assistant for web and iOS. It answers questions from your live household context and can help inspect pantry stock, find meals, build plans, and keep shopping aligned. It is the in-app option; MCP provides the same structured kitchen context to external AI clients.",
+				"Ration Copilot (Ask Ration) is the built-in AI kitchen assistant for web and iOS. It answers questions from your live household context and can help inspect pantry stock, find meals, build plans, and keep shopping aligned. Free-tier chats use credits. Crew Member households get 1 free conversation per group per day, then further chats use the shared credit pool. MCP provides the same structured kitchen context to external AI clients.",
 		},
 		{
 			question: "Is there a Ration iOS app?",

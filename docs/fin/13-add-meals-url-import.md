@@ -8,9 +8,11 @@
 
 URL import costs **1 AI credit** per job. Credits come from your **organization** balance. Failed automated fetches that return **site blocked** are refunded; a successful assisted retry (paste HTML / on-device capture) is a new 1-credit job.
 
-## HTTPS only
+## Requirements
 
-Only **https://** recipe URLs are accepted. This protects against unsafe internal network requests.
+- **HTTPS recipe webpage** — Only **https://** URLs that open a recipe page (ingredients and directions in HTML) are supported. This also protects against unsafe internal network requests.
+- **Not supported** — Video links (YouTube, TikTok, Instagram Reels, and similar) and non-recipe pages. Import needs readable recipe HTML, not a video player.
+- Manual Galley entry always remains available if a link cannot be imported.
 
 ## Processing and polling
 
@@ -22,11 +24,9 @@ If that recipe URL was already imported for your organization, Ration returns a 
 
 ## When sites block automated import
 
-Some publishers (including **allrecipes.com**) block server-side downloads with bot protection. Ration detects this as **site blocked** and guides you:
+Some publishers block server-side downloads with bot protection. Ration detects this as **site blocked** and guides you:
 
 - **Web** — Open the recipe, copy the page HTML (or recipe text; keep under ~1MB), paste it into the import dialog, and extract (1 credit). Or add the meal manually.
 - **iOS** — Ration tries loading the page on your device, then re-submits the HTML (1 credit if extraction starts). If that still fails, open in Safari and add the meal manually.
-
-Tested with allrecipes.com and most major recipe sites when they allow access. Manual Galley entry always remains available.
 
 If pricing shows a different credit cost, **trust the pricing page**.

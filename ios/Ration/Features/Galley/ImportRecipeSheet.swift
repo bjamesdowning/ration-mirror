@@ -298,7 +298,7 @@ struct ImportRecipeSheet: View {
             VStack(spacing: 16) {
                 AIFeatureInlineIntro(
                     title: "Import recipe",
-                    detail: "Paste a recipe URL and Ration extracts ingredients and directions into Galley. HTTPS only. Tested with allrecipes.com and most major recipe sites. Some sites block automated imports — if so, Ration will try loading the page on your device; if that fails too, add the meal manually.",
+                    detail: "Paste an HTTPS recipe webpage URL and Ration extracts ingredients and directions into Galley. Video links and non-recipe pages aren’t supported. Some sites block automated imports — if so, Ration will try loading the page on your device; if that fails too, add the meal manually.",
                     creditCost: creditCost,
                     costLabel: "per import",
                     nextSteps: "Review the imported meal before adding to Galley."
@@ -307,7 +307,7 @@ struct ImportRecipeSheet: View {
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .textFieldStyle(.roundedBorder)
-                Text("If a site blocks bots, you'll see a clear next step — device reload or manual entry.")
+                Text("Needs a recipe page with ingredients and steps — not a video link. If a site blocks bots, you’ll get a device reload or manual entry next step.")
                     .rationCaption()
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,7 +345,7 @@ struct ImportRecipeSheet: View {
             Text("Why this happened")
                 .rationHeadline()
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("Publishers like allrecipes.com often block automated downloads. Your phone can sometimes open the page when our servers cannot. If that still fails, open the recipe in Safari and add it manually.")
+            Text("Many recipe publishers block automated downloads. Your phone can sometimes open the page when our servers cannot. If that still fails, open the recipe in Safari and add it manually.")
                 .rationCaption()
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)

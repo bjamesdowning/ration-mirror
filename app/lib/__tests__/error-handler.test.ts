@@ -3,6 +3,7 @@ import { CapacityExceededError, getEffectiveTier } from "~/lib/capacity.server";
 import {
 	handleApiError,
 	isD1ContentionError,
+	isD1ParamLimitError,
 	isD1SchemaError,
 } from "~/lib/error-handler";
 
@@ -133,6 +134,54 @@ describe("retryOnD1Contention", () => {
 		const fn = vi.fn().mockRejectedValue(new Error("validation failed"));
 		await expect(retryOnD1Contention(fn)).rejects.toThrow("validation failed");
 		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not retry too many SQL variables (permanent query shape)", async () => {
+		const { retryOnD1Contention } = await import("~/lib/error-handler");
+		const fn = vi
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					"D1_ERROR: too many SQL variables at offset 643: SQLITE_ERROR",
+				),
+			);
+		await expect(retryOnD1Contention(fn, { delayMs: 0 })).rejects.toThrow(
+			/too many SQL variables/,
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not retry too many bound parameters", async () => {
+		const { retryOnD1Contention } = await import("~/lib/error-handler");
+		const fn = vi
+			.fn()
+			.mockRejectedValue(new Error("too many bound parameters: 168 > 100"));
+		await expect(retryOnD1Contention(fn, { delayMs: 0 })).rejects.toThrow(
+			/too many bound parameters/,
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("isD1ParamLimitError", () => {
+	it("detects D1 and SQLite param-ceiling wording", () => {
+		expect(
+			isD1ParamLimitError(
+				new Error(
+					"D1_ERROR: too many SQL variables at offset 643: SQLITE_ERROR",
+				),
+			),
+		).toBe(true);
+		expect(
+			isD1ParamLimitError(new Error("too many bound parameters: 168 > 100")),
+		).toBe(true);
+		expect(isD1ParamLimitError(new Error("SQLITE_RANGE"))).toBe(true);
+	});
+
+	it("returns false for transient busy errors", () => {
+		expect(
+			isD1ParamLimitError(new Error("SQLITE_BUSY: database is busy")),
+		).toBe(false);
 	});
 });
 

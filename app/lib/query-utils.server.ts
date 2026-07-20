@@ -46,14 +46,17 @@ export const D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT = Math.floor(
 );
 
 /**
- * Columns bound by supply sync inserts (`contributionsToSupplyRows`):
- * id, listId, name, quantity, unit, baseQuantity, baseUnit, domain,
- * sourceMealId, sourceMealIds, sourceOrigins, sourceCargoId = 12.
+ * Bound params per supply_item row in Drizzle multi-row INSERTs.
+ * Row objects from `contributionsToSupplyRows` expose 12 keys, but Drizzle
+ * also binds the `is_purchased` default (`?`). `created_at` uses
+ * `(unixepoch())` with no bind. Confirmed via `insert().values(...).toSQL()`.
+ * Do NOT use `Object.keys(row).length` — that undercounts and yields 8×13=104.
  */
-export const SUPPLY_ITEM_INSERT_COLUMNS = 12;
+export const SUPPLY_ITEM_INSERT_COLUMNS = 13;
 
 /**
  * Max supply_item rows per INSERT (uses safe 99 ceiling).
+ * 7 × 13 = 91 ≤ 99; 8 × 13 = 104 exceeds D1's 100-param limit.
  */
 export const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(
 	D1_SAFE_BOUND_PARAMS / SUPPLY_ITEM_INSERT_COLUMNS,

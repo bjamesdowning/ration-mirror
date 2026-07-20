@@ -34,9 +34,9 @@ describe("constants", () => {
 		expect(D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT).toBe(14);
 	});
 
-	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/12) = 8", () => {
-		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(12);
-		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(8);
+	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/13) = 7", () => {
+		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(13);
+		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
 	});
 });
 
@@ -44,15 +44,15 @@ describe("packByBindBudget", () => {
 	it("keeps statements that fit in one batch together", () => {
 		const batches = packByBindBudget([
 			{ bindCount: 3, value: "delete" },
-			{ bindCount: 96, value: "insert-a" },
+			{ bindCount: 91, value: "insert-a" },
 			{ bindCount: 2, value: "touch" },
 		]);
-		// 3+96=99, +2 would be 101 → touch starts a new batch
-		expect(batches).toEqual([["delete", "insert-a"], ["touch"]]);
+		// 3+91=94, +2 = 96 → all fit
+		expect(batches).toEqual([["delete", "insert-a", "touch"]]);
 	});
 
 	it("splits app-review-sized supply inserts across batches under 100 binds", () => {
-		// 13 gap rows × 12 cols = 156 insert binds; plus 3 deletes + list touch
+		// 13 gap rows × 13 binds = 169 insert binds; plus 3 deletes + list touch
 		const cols = SUPPLY_ITEM_INSERT_COLUMNS;
 		const rowsPerInsert = D1_MAX_SUPPLY_ROWS_PER_STATEMENT;
 		const insertRowCount = 13;
@@ -200,5 +200,56 @@ describe("chunkedQuery", () => {
 		await chunkedQuery(ids, queryFn);
 		// 50 ids fit in default chunk of 100 — single call
 		expect(queryFn).toHaveBeenCalledOnce();
+	});
+});
+
+describe("supply_item Drizzle insert bind counts", () => {
+	function sampleSupplyRows(count: number) {
+		return Array.from({ length: count }, (_, i) => ({
+			id: `id-${i}`,
+			listId: "list-1",
+			name: `Item ${i}`,
+			quantity: 1,
+			unit: "g",
+			baseQuantity: 1,
+			baseUnit: "g",
+			domain: "food" as const,
+			sourceMealId: null,
+			sourceMealIds: ["m1"],
+			sourceOrigins: ["manifest" as const],
+			sourceCargoId: null,
+		}));
+	}
+
+	it("8-row insert binds 104 params (exceeds D1 limit — why max is 7)", async () => {
+		const { drizzle } = await import("drizzle-orm/d1");
+		const { supplyItem } = await import("~/db/schema");
+		const fakeDb = {
+			prepare() {
+				return { bind: () => ({}) };
+			},
+		};
+		const d1 = drizzle(fakeDb as unknown as D1Database);
+		const built = d1.insert(supplyItem).values(sampleSupplyRows(8)).toSQL();
+		expect(built.params.length).toBe(104);
+		expect(built.params.length).toBeGreaterThan(D1_MAX_BOUND_PARAMS);
+	});
+
+	it("7-row insert stays within safe D1 bind budget", async () => {
+		const { drizzle } = await import("drizzle-orm/d1");
+		const { supplyItem } = await import("~/db/schema");
+		const fakeDb = {
+			prepare() {
+				return { bind: () => ({}) };
+			},
+		};
+		const d1 = drizzle(fakeDb as unknown as D1Database);
+		const built = d1
+			.insert(supplyItem)
+			.values(sampleSupplyRows(D1_MAX_SUPPLY_ROWS_PER_STATEMENT))
+			.toSQL();
+		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(7);
+		expect(built.params.length).toBe(7 * SUPPLY_ITEM_INSERT_COLUMNS);
+		expect(built.params.length).toBeLessThanOrEqual(D1_SAFE_BOUND_PARAMS);
 	});
 });

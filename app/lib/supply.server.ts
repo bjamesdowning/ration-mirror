@@ -35,7 +35,6 @@ import {
 	D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
 	D1_SAFE_BOUND_PARAMS,
 	packByBindBudget,
-	SUPPLY_ITEM_INSERT_COLUMNS,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import type { DockedSupplyItemForReconcile } from "./supply-dock-reconcile";
@@ -77,8 +76,6 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
-/** `UPDATE supply_list SET updated_at = ? WHERE id = ?` */
-const SUPPLY_LIST_TOUCH_BIND_COUNT = 2;
 
 async function getGroupSupplyListCapacity(
 	d1: ReturnType<typeof drizzle>,
@@ -2097,56 +2094,54 @@ async function materializeSupplyFromSelections(
 			: 0;
 	const skippedCount = Math.max(0, aggregatedCount - mealContributions.length);
 
-	const insertColumns =
-		itemsToInsert[0] != null
-			? Object.keys(itemsToInsert[0]).length
-			: SUPPLY_ITEM_INSERT_COLUMNS;
-	const rowsPerInsert = Math.max(
-		1,
-		Math.min(
-			D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-			Math.floor(D1_SAFE_BOUND_PARAMS / insertColumns),
-		),
-	);
+	const rowsPerInsert = D1_MAX_SUPPLY_ROWS_PER_STATEMENT;
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const plannedWrites: Array<{ bindCount: number; value: any }> = [];
+	const deleteWrites: Array<{ bindCount: number; value: any }> = [];
 
 	for (const idChunk of chunkArray(idsToClear, D1_SAFE_BOUND_PARAMS)) {
-		plannedWrites.push({
+		deleteWrites.push({
 			bindCount: idChunk.length,
 			value: d1.delete(supplyItem).where(inArray(supplyItem.id, idChunk)),
 		});
 	}
 
-	if (itemsToInsert.length > 0) {
-		for (const insertChunk of chunkArray(itemsToInsert, rowsPerInsert)) {
-			plannedWrites.push({
-				bindCount: insertChunk.length * insertColumns,
-				value: d1.insert(supplyItem).values(insertChunk),
-			});
-		}
+	for (const batch of packByBindBudget(deleteWrites)) {
+		trackD1BatchSize("materializeSupplyFromSelections", batch.length, {
+			organizationRef: organizationId,
+		});
+		await retryOnD1Contention(async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch(batch as [any, ...any[]]);
+		});
 	}
 
-	if (plannedWrites.length > 0) {
-		plannedWrites.push({
-			bindCount: SUPPLY_LIST_TOUCH_BIND_COUNT,
-			value: d1
-				.update(supplyList)
-				.set({ updatedAt: new Date() })
-				.where(eq(supplyList.id, supplyListData.id)),
+	// Each multi-row INSERT runs alone so batch-wide variable counting cannot
+	// combine dense inserts. Row budget uses SUPPLY_ITEM_INSERT_COLUMNS (13),
+	// not Object.keys — Drizzle also binds is_purchased.
+	for (const insertChunk of chunkArray(itemsToInsert, rowsPerInsert)) {
+		const insertStmt = d1.insert(supplyItem).values(insertChunk);
+		trackD1BatchSize("materializeSupplyFromSelections", 1, {
+			organizationRef: organizationId,
 		});
+		await retryOnD1Contention(async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch([insertStmt] as [any, ...any[]]);
+		});
+	}
 
-		const writeBatches = packByBindBudget(plannedWrites);
-		for (const batch of writeBatches) {
-			trackD1BatchSize("materializeSupplyFromSelections", batch.length, {
-				organizationRef: organizationId,
-			});
-			await retryOnD1Contention(async () => {
-				// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-				await d1.batch(batch as [any, ...any[]]);
-			});
-		}
+	if (idsToClear.length > 0 || itemsToInsert.length > 0) {
+		const touchStmt = d1
+			.update(supplyList)
+			.set({ updatedAt: new Date() })
+			.where(eq(supplyList.id, supplyListData.id));
+		trackD1BatchSize("materializeSupplyFromSelections", 1, {
+			organizationRef: organizationId,
+		});
+		await retryOnD1Contention(async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+			await d1.batch([touchStmt] as [any, ...any[]]);
+		});
 	}
 
 	const list = await getSupplyListById(

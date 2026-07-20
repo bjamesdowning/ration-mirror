@@ -21,6 +21,20 @@ export function isD1SchemaError(error: unknown): boolean {
 }
 
 /**
+ * Permanent query-shape failures from D1's 100 bound-parameter ceiling.
+ * Still mapped to 503 `server_busy` for clients, but must not be retried.
+ */
+export function isD1ParamLimitError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const msg = error.message.toLowerCase();
+	return (
+		msg.includes("too many bound parameters") ||
+		msg.includes("too many sql variables") ||
+		msg.includes("sqlite_range")
+	);
+}
+
+/**
  * Returns true for errors that indicate D1 write contention or transient
  * infrastructure failures. Detected via error message patterns from D1 and
  * Cloudflare Workers runtime.
@@ -31,10 +45,7 @@ export function isD1ContentionError(error: unknown): boolean {
 	const msg = error.message.toLowerCase();
 	return (
 		msg.includes("sqlite_busy") ||
-		msg.includes("sqlite_range") ||
-		msg.includes("too many bound parameters") ||
-		// D1/SQLite wording for the same 100-param ceiling (seen on supply sync batch)
-		msg.includes("too many sql variables") ||
+		isD1ParamLimitError(error) ||
 		msg.includes("database is locked") ||
 		msg.includes("too many connections") ||
 		msg.includes("timeout") ||
@@ -66,7 +77,12 @@ export async function retryOnD1Contention<T>(
 		try {
 			return await fn();
 		} catch (error) {
-			if (!isD1ContentionError(error) || attempt === maxAttempts) {
+			// Param-limit errors are permanent for this query shape — do not retry.
+			if (
+				isD1ParamLimitError(error) ||
+				!isD1ContentionError(error) ||
+				attempt === maxAttempts
+			) {
 				throw error;
 			}
 			await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));

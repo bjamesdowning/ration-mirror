@@ -1162,7 +1162,7 @@ erDiagram
 | `D1_MAX_TAG_ROWS_PER_STATEMENT` | 50 | 2 | `cargo_tag` / `meal_tag` |
 | `D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT` | 14 | 7 | `tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
-| `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 8 | 12 | `supply_item` (sync inserts; batches packed by bind budget) |
+| `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 7 | 13 | `supply_item` (Drizzle binds `is_purchased` default; inserts run one statement per batch) |
 
 **Why `db.batch()` for multi-statement writes?** D1 is accessed over HTTP (not a local socket). Each `await db.insert(...)` is a separate HTTP round-trip. `db.batch([stmt1, stmt2, ...])` is a single round-trip regardless of statement count, and executes the statements atomically server-side. Sequential `await` loops are explicitly forbidden in the codebase for independent writes.
 

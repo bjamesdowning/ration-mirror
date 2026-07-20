@@ -293,6 +293,11 @@ display-only range label and day pills. **Today** lives in the Manifest navigati
 (only when away from today’s window). The calendar “Go to date” sheet was removed to prevent
 misclicks next to Next.
 
+**Manifest week rocker races (iOS 1.2.33):** Quiet revalidate / foreground refresh no longer
+resets the viewed week to today (anchor reset is org-change only). Rocker taps apply the target
+week optimistically, cancel superseded fetches, and ignore stale responses so Prev/Next cannot
+briefly land then jump.
+
 **Tag filter UX (iOS 1.2.13):** Large tag catalogs no longer render as a wrapping chip cloud.
 `FilterOptionsSheet` and Hub widget tag filters use `TagMultiSelectPicker` (search + alphabetized
 checklist with checkmarks; selected tags as a dismissible summary). Cargo, Galley, and Supply

@@ -6,6 +6,7 @@ import Observation
 final class ManifestViewModel {
     private(set) var manifest: ManifestResponse?
     private(set) var isLoading = false
+    private(set) var isNavigatingWeek = false
     private(set) var isRefreshing = false
     private(set) var isSavingEntry = false
     private(set) var isTogglingSupplyDay = false
@@ -16,8 +17,18 @@ final class ManifestViewModel {
     var calendarSpan = 7
     var weekStartPref = "sunday"
     private(set) var hasInitializedAnchor = false
+    private(set) var lastOrganizationId: String?
     var supplyDayInclusion: [String: Bool] = [:]
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
+
+    /// When set, `navigateWeek` uses this instead of `api.manifest` (unit tests).
+    var fetchManifestForTesting: ((String, String) async throws -> ManifestResponse)?
+
+    private var navigationGeneration = 0
+    private var navigationTask: Task<Void, Never>?
+
+    /// Rocker / Today busy state — separate from cold `isLoading` so refresh cannot clear mid-nav.
+    var isWeekNavigationBusy: Bool { isNavigatingWeek || isLoading }
 
     enum ConsumeOutcome: Sendable {
         case success(undoToken: String?)
@@ -48,17 +59,47 @@ final class ManifestViewModel {
         applyInitialAnchorIfNeeded()
     }
 
+    /// Prepares anchors before a tab load. Resets the week only when the org changes —
+    /// quiet revalidate / foreground refresh must keep the user's current week.
+    func prepareForLoad(
+        organizationId: String,
+        calendarSpan: Int? = nil,
+        weekStartPref: String? = nil
+    ) {
+        let orgChanged = lastOrganizationId != nil && lastOrganizationId != organizationId
+        lastOrganizationId = organizationId
+        if orgChanged {
+            cancelWeekNavigation()
+            resetAnchorForOrganizationChange()
+        }
+        if let calendarSpan, let weekStartPref {
+            configureFromSettings(calendarSpan: calendarSpan, weekStartPref: weekStartPref)
+        } else if !hasInitializedAnchor {
+            applyInitialAnchorIfNeeded()
+        }
+    }
+
+    func cancelWeekNavigation() {
+        navigationGeneration += 1
+        navigationTask?.cancel()
+        navigationTask = nil
+        isNavigatingWeek = false
+    }
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         errorMessage = nil
         offlineBannerMessage = nil
 
-        let endDate = ManifestDateHelpers.addDays(rangeStart, days: max(calendarSpan - 1, 0))
+        let requestedStart = rangeStart
+        let endDate = ManifestDateHelpers.addDays(requestedStart, days: max(calendarSpan - 1, 0))
         let hadCache = await restoreSnapshot(
             snapshots,
             organizationId: organizationId,
-            requestedStart: rangeStart,
+            requestedStart: requestedStart,
             preserveRangeStart: online
         )
+        guard rangeStart == requestedStart else { return }
+
         isLoading = !hadCache
         defer { isLoading = false }
 
@@ -73,7 +114,8 @@ final class ManifestViewModel {
         defer { isRefreshing = false }
 
         do {
-            let data = try await api.manifest(startDate: rangeStart, endDate: endDate)
+            let data = try await api.manifest(startDate: requestedStart, endDate: endDate)
+            guard rangeStart == requestedStart else { return }
             manifest = data
             applySupplyDayInclusion(from: data)
             offlineBannerMessage = nil
@@ -86,6 +128,7 @@ final class ManifestViewModel {
                 )
             }
         } catch {
+            guard rangeStart == requestedStart else { return }
             if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
             if let refreshOutcomes {
                 SnapshotRefreshPolicy.recordRefreshFailure(
@@ -102,50 +145,134 @@ final class ManifestViewModel {
         }
     }
 
-    func navigateWeek(to start: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+    /// Owns the navigation Task so rapid rocker taps cancel superseded work.
+    func requestNavigateWeek(
+        to start: String,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) {
+        let nav = beginWeekNavigation(to: start)
+        navigationTask = Task {
+            await performNavigateWeek(
+                to: nav.target,
+                generation: nav.generation,
+                api: api,
+                snapshots: snapshots,
+                online: online,
+                organizationId: organizationId
+            )
+        }
+    }
+
+    /// Awaitable entry for tests; production UI should call `requestNavigateWeek`.
+    func navigateWeek(
+        to start: String,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        let nav = beginWeekNavigation(to: start)
+        await performNavigateWeek(
+            to: nav.target,
+            generation: nav.generation,
+            api: api,
+            snapshots: snapshots,
+            online: online,
+            organizationId: organizationId
+        )
+    }
+
+    func waitForNavigationForTesting() async {
+        await navigationTask?.value
+    }
+
+    private func beginWeekNavigation(to start: String) -> (target: String, generation: Int) {
+        navigationTask?.cancel()
+        navigationGeneration += 1
+        let generation = navigationGeneration
+        let target = applyOptimisticWeek(to: start)
+        isNavigatingWeek = true
+        return (target, generation)
+    }
+
+    @discardableResult
+    private func applyOptimisticWeek(to start: String) -> String {
         let normalizedStart = ManifestDateHelpers.normalizedNavigationStart(
             start,
             calendarSpan: calendarSpan,
             weekStartPref: weekStartPref
         )
-        let newSelectedDay = resolvedSelectedDay(forWeekStart: normalizedStart, previousSelected: selectedDay)
-        let endDate = ManifestDateHelpers.addDays(normalizedStart, days: max(calendarSpan - 1, 0))
-
-        isLoading = true
+        rangeStart = normalizedStart
+        selectedDay = resolvedSelectedDay(forWeekStart: normalizedStart, previousSelected: selectedDay)
         errorMessage = nil
         offlineBannerMessage = nil
-        defer { isLoading = false }
+        return normalizedStart
+    }
+
+    private func isCurrentNavigation(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == navigationGeneration
+    }
+
+    private func performNavigateWeek(
+        to normalizedStart: String,
+        generation: Int,
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String
+    ) async {
+        let endDate = ManifestDateHelpers.addDays(normalizedStart, days: max(calendarSpan - 1, 0))
+
+        defer {
+            if isCurrentNavigation(generation) {
+                isNavigatingWeek = false
+                navigationTask = nil
+            }
+        }
 
         if online {
             do {
-                let data = try await api.manifest(startDate: normalizedStart, endDate: endDate)
-                rangeStart = normalizedStart
-                selectedDay = newSelectedDay
+                let data: ManifestResponse
+                if let fetchManifestForTesting {
+                    data = try await fetchManifestForTesting(normalizedStart, endDate)
+                } else {
+                    data = try await api.manifest(startDate: normalizedStart, endDate: endDate)
+                }
+                guard isCurrentNavigation(generation) else { return }
                 manifest = data
                 applySupplyDayInclusion(from: data)
                 await snapshots.save(data, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                // A superseded in-flight save can finish after a newer week was cached —
+                // rewrite the live week so offline restore cannot land on the stale one.
+                if !isCurrentNavigation(generation),
+                   let live = manifest,
+                   live.startDate == rangeStart
+                {
+                    await snapshots.save(live, domain: SnapshotDomain.manifest, organizationId: organizationId)
+                }
+            } catch is CancellationError {
+                return
             } catch {
+                guard isCurrentNavigation(generation) else { return }
                 errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
-        } else if let cached = await snapshots.load(ManifestResponse.self, domain: SnapshotDomain.manifest, organizationId: organizationId) {
+        } else if let cached = await snapshots.load(
+            ManifestResponse.self,
+            domain: SnapshotDomain.manifest,
+            organizationId: organizationId
+        ) {
+            guard isCurrentNavigation(generation) else { return }
             if cached.payload.startDate == normalizedStart {
-                rangeStart = normalizedStart
-                selectedDay = newSelectedDay
                 manifest = cached.payload
+                applySupplyDayInclusion(from: cached.payload)
             } else {
-                let formatted = ManifestDateHelpers.formatRange(
-                    start: cached.payload.startDate,
-                    end: cached.payload.endDate
-                )
-                offlineBannerMessage = "Offline — showing cached week \(formatted)"
-                rangeStart = cached.payload.startDate
-                selectedDay = resolvedSelectedDay(
-                    forWeekStart: cached.payload.startDate,
-                    previousSelected: selectedDay
-                )
-                manifest = cached.payload
+                offlineBannerMessage = "Offline — no cached manifest data for this week"
             }
         } else {
+            guard isCurrentNavigation(generation) else { return }
             offlineBannerMessage = "Offline — no cached manifest data for this week"
         }
     }
@@ -421,15 +548,13 @@ struct ManifestView: View {
 
     private func jumpToToday() {
         guard let organizationId else { return }
-        Task {
-            await model.navigateWeek(
-                to: todayNavigationAnchor,
-                api: env.api,
-                snapshots: env.snapshots,
-                online: env.network.isOnline,
-                organizationId: organizationId
-            )
-        }
+        model.requestNavigateWeek(
+            to: todayNavigationAnchor,
+            api: env.api,
+            snapshots: env.snapshots,
+            online: env.network.isOnline,
+            organizationId: organizationId
+        )
     }
 
     var body: some View {
@@ -473,15 +598,12 @@ struct ManifestView: View {
             }
             .task(id: loadTaskKey) {
                 guard isTabActive, let organizationId else { return }
-                model.resetAnchorForOrganizationChange()
-                if let manifestSettings = env.launch.userSettings?.manifestSettings {
-                    model.configureFromSettings(
-                        calendarSpan: manifestSettings.calendarSpan ?? 7,
-                        weekStartPref: manifestSettings.weekStart ?? "sunday"
-                    )
-                } else {
-                    model.applyInitialAnchorIfNeeded()
-                }
+                let manifestSettings = env.launch.userSettings?.manifestSettings
+                model.prepareForLoad(
+                    organizationId: organizationId,
+                    calendarSpan: manifestSettings?.calendarSpan ?? 7,
+                    weekStartPref: manifestSettings?.weekStart ?? "sunday"
+                )
                 await reload(organizationId: organizationId)
                 await loadManifestShareStatus()
             }
@@ -525,7 +647,7 @@ struct ManifestView: View {
                         Button("Today") {
                             jumpToToday()
                         }
-                        .disabled(model.isLoading)
+                        .disabled(model.isWeekNavigationBusy)
                         .accessibilityLabel("Jump to today")
                     }
                 }
@@ -643,17 +765,15 @@ struct ManifestView: View {
                 selectedDay: $model.selectedDay,
                 weekStartPref: model.weekStartPref,
                 entryDates: entryDates,
-                isLoading: model.isLoading,
+                isLoading: model.isWeekNavigationBusy,
             ) { start in
-                Task {
-                    await model.navigateWeek(
-                        to: start,
-                        api: env.api,
-                        snapshots: env.snapshots,
-                        online: env.network.isOnline,
-                        organizationId: organizationId
-                    )
-                }
+                model.requestNavigateWeek(
+                    to: start,
+                    api: env.api,
+                    snapshots: env.snapshots,
+                    online: env.network.isOnline,
+                    organizationId: organizationId
+                )
             }
             .listRowBackground(Color.clear)
 

@@ -14,8 +14,10 @@ final class PlanWeekViewModel {
 
     private(set) var state: State = .idle
     var scheduleEntries: [PlanWeekScheduleEntry] = []
-    var rangeStart: String?
-    var rangeEnd: String?
+    /// Pre-selected to today so the native calendar shows a clear starting point.
+    var rangeStart: String? = ManifestDateHelpers.todayISO()
+    /// Defaults to today (1-day plan); expand by selecting an end day in the picker.
+    var rangeEnd: String? = ManifestDateHelpers.todayISO()
     var dietaryNote = ""
     var variety = "medium"
     var shouldShowPaywall = false
@@ -132,8 +134,9 @@ final class PlanWeekViewModel {
         cancelActiveWork()
         state = .idle
         scheduleEntries = []
-        rangeStart = nil
-        rangeEnd = nil
+        let today = ManifestDateHelpers.todayISO()
+        rangeStart = today
+        rangeEnd = today
         shouldShowPaywall = false
     }
 

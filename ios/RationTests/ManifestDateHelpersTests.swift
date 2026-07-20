@@ -101,4 +101,35 @@ final class ManifestDateHelpersTests: XCTestCase {
         let result = ManifestDateHelpers.addDays("2026-01-30", days: 5)
         XCTAssertEqual(result, "2026-02-04")
     }
+
+    func testPlanningWindowEndIsTodayPlusSix() {
+        XCTAssertEqual(
+            ManifestDateHelpers.planningWindowEnd(today: "2026-07-20"),
+            "2026-07-26"
+        )
+    }
+
+    func testIsSelectablePlanningDayWindow() {
+        let today = "2026-07-20"
+        XCTAssertTrue(ManifestDateHelpers.isSelectablePlanningDay("2026-07-20", today: today))
+        XCTAssertTrue(ManifestDateHelpers.isSelectablePlanningDay("2026-07-26", today: today))
+        XCTAssertFalse(ManifestDateHelpers.isSelectablePlanningDay("2026-07-19", today: today))
+        XCTAssertFalse(ManifestDateHelpers.isSelectablePlanningDay("2026-07-27", today: today))
+    }
+
+    func testPlanningWindowBoundsExcludesDayAfterWindow() {
+        let bounds = ManifestDateHelpers.planningWindowBounds(today: "2026-07-20")
+        let cal = Calendar.current
+        let lastInclusive = cal.date(from: DateComponents(year: 2026, month: 7, day: 26))!
+        let dayAfter = cal.date(from: DateComponents(year: 2026, month: 7, day: 27))!
+        XCTAssertTrue(bounds.contains(cal.startOfDay(for: lastInclusive)))
+        XCTAssertFalse(bounds.contains(cal.startOfDay(for: dayAfter)))
+    }
+
+    func testIsoDatesContiguousFill() {
+        XCTAssertEqual(
+            ManifestDateHelpers.isoDates(from: "2026-07-20", to: "2026-07-23"),
+            ["2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23"]
+        )
+    }
 }

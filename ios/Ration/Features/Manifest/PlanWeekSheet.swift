@@ -59,10 +59,10 @@ struct PlanWeekSheet: View {
             VStack(spacing: 16) {
                 AIFeatureInlineIntro(
                     title: "Plan your week",
-                    detail: "AI schedules meals from your Galley across breakfast, lunch, and dinner slots.",
+                    detail: "AI schedules meals from your Galley across breakfast, lunch, and dinner slots. You can plan today through the next 6 days only.",
                     creditCost: creditCost,
                     costLabel: "per plan",
-                    nextSteps: "Review the generated schedule, then confirm to add entries to Manifest."
+                    nextSteps: "Choose dates within today and the next 6 days (7 days total). Dates further out are not available. Review the generated schedule, then confirm to add entries to Manifest."
                 )
                 TextField("Dietary note (optional)", text: $model.dietaryNote, axis: .vertical)
                     .textFieldStyle(.roundedBorder)

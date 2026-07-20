@@ -137,19 +137,46 @@ enum ManifestDateHelpers {
         return (anchor, addDays(anchor, days: clamped - 1), clamped)
     }
 
-    static func monthGridDates(containing isoDate: String) -> [String] {
-        guard let anchor = localDate(from: isoDate) else { return [] }
-        let month = calendar.component(.month, from: anchor)
-        let year = calendar.component(.year, from: anchor)
-        guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
-              let range = calendar.range(of: .day, in: .month, for: monthStart)
-        else { return [] }
-        return range.compactMap { day -> String? in
-            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else {
-                return nil
-            }
-            return isoString(from: date)
+    /// Inclusive end of Plan week selectable window (today + 6 days).
+    static func planningWindowEnd(today: String? = nil) -> String {
+        addDays(today ?? todayISO(), days: 6)
+    }
+
+    /// Whether an ISO day falls in `[today, today+6]`.
+    static func isSelectablePlanningDay(_ iso: String, today: String? = nil) -> Bool {
+        let anchor = today ?? todayISO()
+        return iso >= anchor && iso <= planningWindowEnd(today: anchor)
+    }
+
+    /// Half-open local-day range for `MultiDatePicker(in:)` so today+6 is inclusive.
+    static func planningWindowBounds(
+        today: String? = nil,
+        calendar cal: Calendar = .current
+    ) -> Range<Date> {
+        let anchor = today ?? todayISO()
+        guard let start = localDate(from: anchor),
+              let endExclusive = localDate(from: addDays(anchor, days: 7))
+        else {
+            let now = cal.startOfDay(for: Date())
+            return now ..< now
         }
+        return cal.startOfDay(for: start) ..< cal.startOfDay(for: endExclusive)
+    }
+
+    /// Inclusive ISO dates from `start` through `end`.
+    static func isoDates(from start: String, to end: String) -> [String] {
+        guard let count = daysBetweenInclusive(start: start, end: end), count > 0 else { return [] }
+        return (0 ..< count).map { addDays(start, days: $0) }
+    }
+
+    static func isoString(fromComponents components: DateComponents, calendar cal: Calendar = .current) -> String? {
+        guard let date = cal.date(from: components) else { return nil }
+        return isoString(from: date)
+    }
+
+    static func dateComponents(fromISO iso: String, calendar cal: Calendar = .current) -> DateComponents? {
+        guard let date = localDate(from: iso) else { return nil }
+        return cal.dateComponents([.calendar, .era, .year, .month, .day], from: date)
     }
 }
 

@@ -532,7 +532,7 @@ sequenceDiagram
 
     Worker->>Worker: sumConvertedToTarget() via convertIngredientAmount() — canonical unit conversion
     Worker->>Worker: Compute delta: ingredient needed - cargo available
-    Worker->>D1: Upsert supply items for gaps, skip snoozed items
+    Worker->>D1: Upsert supply items for gaps (param-budgeted db.batch chunks), skip snoozed items
     Worker-->>User: Updated supply list
 ```
 
@@ -1152,7 +1152,7 @@ erDiagram
 | `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
 | `queue_job` | — | Scan and meal-generate job status for polling; D1-backed for strong consistency | `expires_at`, `(organization_id, status)` |
 
-**D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
+**D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Dense multi-row writes (especially Supply sync materialize) also budget binds **across** a `db.batch()` call via `packByBindBudget`, because D1 may reject the batch script with `too many SQL variables`. Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
 
 | Constant | Value | Columns | Table |
 |----------|-------|---------|-------|
@@ -1160,6 +1160,7 @@ erDiagram
 | `D1_MAX_TAG_ROWS_PER_STATEMENT` | 50 | 2 | `cargo_tag` / `meal_tag` |
 | `D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT` | 14 | 7 | `tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
+| `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 8 | 12 | `supply_item` (sync inserts; batches packed by bind budget) |
 
 **Why `db.batch()` for multi-statement writes?** D1 is accessed over HTTP (not a local socket). Each `await db.insert(...)` is a separate HTTP round-trip. `db.batch([stmt1, stmt2, ...])` is a single round-trip regardless of statement count, and executes the statements atomically server-side. Sequential `await` loops are explicitly forbidden in the codebase for independent writes.
 

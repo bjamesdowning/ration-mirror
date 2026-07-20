@@ -32,6 +32,10 @@ import {
 	chunkArray,
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
+	D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
+	D1_SAFE_BOUND_PARAMS,
+	packByBindBudget,
+	SUPPLY_ITEM_INSERT_COLUMNS,
 } from "./query-utils.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import type { DockedSupplyItemForReconcile } from "./supply-dock-reconcile";
@@ -47,6 +51,7 @@ import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
 	type SupplySyncTelemetryContext,
+	trackD1BatchSize,
 } from "./telemetry.server";
 import { TIER_LIMITS } from "./tiers.server";
 import type { UnitDisplayMode } from "./unit-display-mode";
@@ -72,8 +77,8 @@ import {
 const SHARE_TOKEN_EXPIRY_DAYS = 7;
 const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 const SUPPLY_LIST_NAME = "Supply";
-/** supply_item insert currently binds 12 columns per row. Keep chunks under D1's 100-param limit. */
-const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(D1_MAX_BOUND_PARAMS / 12);
+/** `UPDATE supply_list SET updated_at = ? WHERE id = ?` */
+const SUPPLY_LIST_TOUCH_BIND_COUNT = 2;
 
 async function getGroupSupplyListCapacity(
 	d1: ReturnType<typeof drizzle>,
@@ -2092,33 +2097,56 @@ async function materializeSupplyFromSelections(
 			: 0;
 	const skippedCount = Math.max(0, aggregatedCount - mealContributions.length);
 
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const writeStatements: any[] = [];
+	const insertColumns =
+		itemsToInsert[0] != null
+			? Object.keys(itemsToInsert[0]).length
+			: SUPPLY_ITEM_INSERT_COLUMNS;
+	const rowsPerInsert = Math.max(
+		1,
+		Math.min(
+			D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
+			Math.floor(D1_SAFE_BOUND_PARAMS / insertColumns),
+		),
+	);
 
-	for (const idChunk of chunkArray(idsToClear, D1_MAX_BOUND_PARAMS)) {
-		writeStatements.push(
-			d1.delete(supplyItem).where(inArray(supplyItem.id, idChunk)),
-		);
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const plannedWrites: Array<{ bindCount: number; value: any }> = [];
+
+	for (const idChunk of chunkArray(idsToClear, D1_SAFE_BOUND_PARAMS)) {
+		plannedWrites.push({
+			bindCount: idChunk.length,
+			value: d1.delete(supplyItem).where(inArray(supplyItem.id, idChunk)),
+		});
 	}
 
 	if (itemsToInsert.length > 0) {
-		for (const insertChunk of chunkArray(
-			itemsToInsert,
-			D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
-		)) {
-			writeStatements.push(d1.insert(supplyItem).values(insertChunk));
+		for (const insertChunk of chunkArray(itemsToInsert, rowsPerInsert)) {
+			plannedWrites.push({
+				bindCount: insertChunk.length * insertColumns,
+				value: d1.insert(supplyItem).values(insertChunk),
+			});
 		}
 	}
 
-	if (writeStatements.length > 0) {
-		writeStatements.push(
-			d1
+	if (plannedWrites.length > 0) {
+		plannedWrites.push({
+			bindCount: SUPPLY_LIST_TOUCH_BIND_COUNT,
+			value: d1
 				.update(supplyList)
 				.set({ updatedAt: new Date() })
 				.where(eq(supplyList.id, supplyListData.id)),
-		);
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(writeStatements as [any, ...any[]]);
+		});
+
+		const writeBatches = packByBindBudget(plannedWrites);
+		for (const batch of writeBatches) {
+			trackD1BatchSize("materializeSupplyFromSelections", batch.length, {
+				organizationRef: organizationId,
+			});
+			await retryOnD1Contention(async () => {
+				// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+				await d1.batch(batch as [any, ...any[]]);
+			});
+		}
 	}
 
 	const list = await getSupplyListById(

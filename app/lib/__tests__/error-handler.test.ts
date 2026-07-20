@@ -86,6 +86,16 @@ describe("isD1ContentionError", () => {
 		).toBe(true);
 	});
 
+	it("returns true for D1 'too many SQL variables' wording", () => {
+		expect(
+			isD1ContentionError(
+				new Error(
+					"D1_ERROR: too many SQL variables at offset 643: SQLITE_ERROR",
+				),
+			),
+		).toBe(true);
+	});
+
 	it("is case-insensitive", () => {
 		expect(isD1ContentionError(new Error("DATABASE IS LOCKED"))).toBe(true);
 		expect(isD1ContentionError(new Error("SQLITE_BUSY"))).toBe(true);

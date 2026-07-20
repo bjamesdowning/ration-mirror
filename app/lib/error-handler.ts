@@ -33,6 +33,8 @@ export function isD1ContentionError(error: unknown): boolean {
 		msg.includes("sqlite_busy") ||
 		msg.includes("sqlite_range") ||
 		msg.includes("too many bound parameters") ||
+		// D1/SQLite wording for the same 100-param ceiling (seen on supply sync batch)
+		msg.includes("too many sql variables") ||
 		msg.includes("database is locked") ||
 		msg.includes("too many connections") ||
 		msg.includes("timeout") ||

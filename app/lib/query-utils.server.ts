@@ -5,6 +5,12 @@
  */
 export const D1_MAX_BOUND_PARAMS = 100;
 
+/**
+ * Prefer 99 over 100 for `IN (...)` / multi-row inserts so we stay under D1's
+ * hard ceiling even when an extra bind appears (org id, update WHERE, etc.).
+ */
+export const D1_SAFE_BOUND_PARAMS = D1_MAX_BOUND_PARAMS - 1;
+
 const SQLITE_SAFE_VARIABLE_LIMIT = D1_MAX_BOUND_PARAMS;
 
 /**
@@ -38,6 +44,69 @@ export const D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT = Math.floor(
 export const D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT = Math.floor(
 	D1_MAX_BOUND_PARAMS / 8,
 );
+
+/**
+ * Columns bound by supply sync inserts (`contributionsToSupplyRows`):
+ * id, listId, name, quantity, unit, baseQuantity, baseUnit, domain,
+ * sourceMealId, sourceMealIds, sourceOrigins, sourceCargoId = 12.
+ */
+export const SUPPLY_ITEM_INSERT_COLUMNS = 12;
+
+/**
+ * Max supply_item rows per INSERT (uses safe 99 ceiling).
+ */
+export const D1_MAX_SUPPLY_ROWS_PER_STATEMENT = Math.floor(
+	D1_SAFE_BOUND_PARAMS / SUPPLY_ITEM_INSERT_COLUMNS,
+);
+
+export type BindBudgetStatement<T> = {
+	/** Approximate number of `?` placeholders this statement binds. */
+	bindCount: number;
+	value: T;
+};
+
+/**
+ * Packs statements into batches where the sum of `bindCount` per batch never
+ * exceeds `maxBinds`. D1 rejects with "too many SQL variables" when a batch
+ * script exceeds the 100-parameter ceiling — multi-row inserts are dense, so
+ * callers must budget binds (not just statement count).
+ */
+export function packByBindBudget<T>(
+	statements: Array<BindBudgetStatement<T>>,
+	maxBinds: number = D1_MAX_BOUND_PARAMS,
+): T[][] {
+	if (maxBinds <= 0) {
+		throw new Error("maxBinds must be greater than 0");
+	}
+
+	const batches: T[][] = [];
+	let current: T[] = [];
+	let used = 0;
+
+	for (const stmt of statements) {
+		if (stmt.bindCount < 0) {
+			throw new Error("bindCount must be >= 0");
+		}
+		if (stmt.bindCount > maxBinds) {
+			throw new Error(
+				`Statement bindCount ${stmt.bindCount} exceeds maxBinds ${maxBinds}`,
+			);
+		}
+		if (current.length > 0 && used + stmt.bindCount > maxBinds) {
+			batches.push(current);
+			current = [];
+			used = 0;
+		}
+		current.push(stmt.value);
+		used += stmt.bindCount;
+	}
+
+	if (current.length > 0) {
+		batches.push(current);
+	}
+
+	return batches;
+}
 
 export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
 	if (chunkSize <= 0) {

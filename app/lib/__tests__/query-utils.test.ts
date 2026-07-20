@@ -5,13 +5,21 @@ import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
+	D1_MAX_SUPPLY_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
+	D1_SAFE_BOUND_PARAMS,
+	packByBindBudget,
+	SUPPLY_ITEM_INSERT_COLUMNS,
 } from "~/lib/query-utils.server";
 
 describe("constants", () => {
 	it("D1_MAX_BOUND_PARAMS is 100", () => {
 		expect(D1_MAX_BOUND_PARAMS).toBe(100);
+	});
+
+	it("D1_SAFE_BOUND_PARAMS is 99", () => {
+		expect(D1_SAFE_BOUND_PARAMS).toBe(99);
 	});
 
 	it("D1_MAX_INGREDIENT_ROWS_PER_STATEMENT is floor(100/10) = 10", () => {
@@ -24,6 +32,69 @@ describe("constants", () => {
 
 	it("D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT is floor(100/7) = 14", () => {
 		expect(D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT).toBe(14);
+	});
+
+	it("D1_MAX_SUPPLY_ROWS_PER_STATEMENT is floor(99/12) = 8", () => {
+		expect(SUPPLY_ITEM_INSERT_COLUMNS).toBe(12);
+		expect(D1_MAX_SUPPLY_ROWS_PER_STATEMENT).toBe(8);
+	});
+});
+
+describe("packByBindBudget", () => {
+	it("keeps statements that fit in one batch together", () => {
+		const batches = packByBindBudget([
+			{ bindCount: 3, value: "delete" },
+			{ bindCount: 96, value: "insert-a" },
+			{ bindCount: 2, value: "touch" },
+		]);
+		// 3+96=99, +2 would be 101 → touch starts a new batch
+		expect(batches).toEqual([["delete", "insert-a"], ["touch"]]);
+	});
+
+	it("splits app-review-sized supply inserts across batches under 100 binds", () => {
+		// 13 gap rows × 12 cols = 156 insert binds; plus 3 deletes + list touch
+		const cols = SUPPLY_ITEM_INSERT_COLUMNS;
+		const rowsPerInsert = D1_MAX_SUPPLY_ROWS_PER_STATEMENT;
+		const insertRowCount = 13;
+		const deleteIds = 3;
+		const planned: Array<{ bindCount: number; value: string }> = [
+			{ bindCount: deleteIds, value: "delete" },
+		];
+		for (let offset = 0; offset < insertRowCount; offset += rowsPerInsert) {
+			const rows = Math.min(rowsPerInsert, insertRowCount - offset);
+			planned.push({
+				bindCount: rows * cols,
+				value: `insert-${offset}`,
+			});
+		}
+		planned.push({ bindCount: 2, value: "touch" });
+
+		const batches = packByBindBudget(planned);
+		for (const batch of batches) {
+			const binds = batch.reduce((sum, label) => {
+				const stmt = planned.find((p) => p.value === label);
+				return sum + (stmt?.bindCount ?? 0);
+			}, 0);
+			expect(binds).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
+		}
+		expect(batches.length).toBeGreaterThan(1);
+		expect(batches.flat()).toEqual(planned.map((p) => p.value));
+	});
+
+	it("returns empty array for empty input", () => {
+		expect(packByBindBudget([])).toEqual([]);
+	});
+
+	it("throws when a single statement exceeds maxBinds", () => {
+		expect(() =>
+			packByBindBudget([{ bindCount: 101, value: "fat" }], 100),
+		).toThrow(/exceeds maxBinds/);
+	});
+
+	it("throws when maxBinds is not positive", () => {
+		expect(() => packByBindBudget([], 0)).toThrow(
+			"maxBinds must be greater than 0",
+		);
 	});
 });
 

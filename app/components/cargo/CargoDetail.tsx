@@ -4,10 +4,10 @@ import { CargoEditModal } from "~/components/cargo/CargoEditModal";
 import { RestockQuantityModal } from "~/components/cargo/RestockQuantityModal";
 import { StatusGauge } from "~/components/cargo/StatusGauge";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { DisplayQuantity } from "~/components/shared/DisplayQuantity";
 import { TagChip } from "~/components/shared/TagChip";
 import type { cargo } from "~/db/schema";
 import { useConfirm } from "~/lib/confirm-context";
-import { formatQuantity } from "~/lib/format-quantity";
 import type { TagRecord } from "~/lib/tags";
 import { toSupportedUnit } from "~/lib/units";
 
@@ -198,7 +198,15 @@ export function CargoDetail({
 						<div className="text-right">
 							<div className="text-label text-muted text-xs">Available</div>
 							<div className="text-data text-2xl font-bold text-carbon">
-								{formatQuantity(localQuantity, item.unit)}
+								<DisplayQuantity
+									quantity={localQuantity}
+									unit={item.unit}
+									baseQuantity={
+										localQuantity === 0 ? 0 : (item.baseQuantity ?? undefined)
+									}
+									baseUnit={item.baseUnit ?? undefined}
+									ingredientName={item.name}
+								/>
 							</div>
 						</div>
 						<div className="w-full max-w-xs">
@@ -312,10 +320,11 @@ export function CargoDetail({
 											>
 												<div className="flex items-center justify-between gap-2">
 													<span className="text-carbon font-medium">
-														{formatQuantity(
-															connection.quantity,
-															connection.unit,
-														)}
+														<DisplayQuantity
+															quantity={connection.quantity}
+															unit={connection.unit}
+															ingredientName={connection.ingredientName}
+														/>
 													</span>
 													<span className="text-xs text-muted">
 														{getConnectionLabel(connection.connectionType)}

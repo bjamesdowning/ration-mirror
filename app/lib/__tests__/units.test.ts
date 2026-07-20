@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	areSameFamily,
 	chooseReadableUnit,
+	chooseReadableUnitForMode,
 	convertIngredientAmount,
 	convertQuantity,
 	convertQuantityWithDensity,
@@ -328,6 +329,30 @@ describe("chooseReadableUnit", () => {
 	it("promotes ml to gal at >= 3785.41 ml", () => {
 		const result = chooseReadableUnit(4000, "ml");
 		expect(result.unit).toBe("gal");
+	});
+});
+
+describe("chooseReadableUnitForMode", () => {
+	it("keeps metric volumes on l/ml", () => {
+		expect(chooseReadableUnitForMode(1000, "ml", "metric").unit).toBe("l");
+		expect(chooseReadableUnitForMode(500, "ml", "metric").unit).toBe("ml");
+	});
+
+	it("uses US volume ladder for imperial mode", () => {
+		expect(chooseReadableUnitForMode(1000, "ml", "imperial").unit).toBe("qt");
+		expect(chooseReadableUnitForMode(500, "ml", "imperial").unit).toBe("pt");
+	});
+
+	it("bridges grams to pounds in imperial mode", () => {
+		const result = chooseReadableUnitForMode(1000, "g", "imperial");
+		expect(result.unit).toBe("lb");
+		expect(result.quantity).toBeCloseTo(2.20462, 2);
+	});
+
+	it("bridges ounces to grams in metric mode", () => {
+		const result = chooseReadableUnitForMode(16, "oz", "metric");
+		expect(result.unit).toBe("g");
+		expect(result.quantity).toBeCloseTo(453.59, 0);
 	});
 });
 

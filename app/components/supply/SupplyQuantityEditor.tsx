@@ -29,9 +29,16 @@ export function SupplyQuantityEditor({
 	className = "",
 }: SupplyQuantityEditorProps) {
 	const normalizedUnit = toSupportedUnit(unit);
+	const unitMode = useUnitDisplayMode();
+	const presented = presentQuantity({
+		quantity,
+		unit: normalizedUnit,
+		ingredientName: ingredientName ?? unit,
+		mode: unitMode,
+	});
 	const [isEditing, setIsEditing] = useState(false);
-	const [draftQty, setDraftQty] = useState(String(quantity));
-	const [draftUnit, setDraftUnit] = useState<SupportedUnit>(normalizedUnit);
+	const [draftQty, setDraftQty] = useState(String(presented.quantity));
+	const [draftUnit, setDraftUnit] = useState<SupportedUnit>(presented.unit);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const containerRef = useRef<HTMLFieldSetElement>(null);
 	const qtyInputId = useId();
@@ -39,10 +46,10 @@ export function SupplyQuantityEditor({
 
 	useEffect(() => {
 		if (!isEditing) {
-			setDraftQty(String(quantity));
-			setDraftUnit(toSupportedUnit(unit));
+			setDraftQty(String(presented.quantity));
+			setDraftUnit(presented.unit);
 		}
-	}, [quantity, unit, isEditing]);
+	}, [presented.quantity, presented.unit, isEditing]);
 
 	useEffect(() => {
 		if (isEditing) {
@@ -54,14 +61,14 @@ export function SupplyQuantityEditor({
 	const commitDraft = useCallback(() => {
 		const qty = Number(draftQty);
 		if (!Number.isFinite(qty) || qty < 0) {
-			setDraftQty(String(quantity));
-			setDraftUnit(normalizedUnit);
+			setDraftQty(String(presented.quantity));
+			setDraftUnit(presented.unit);
 			setIsEditing(false);
 			return;
 		}
 		onChange(qty, draftUnit);
 		setIsEditing(false);
-	}, [draftQty, draftUnit, quantity, normalizedUnit, onChange]);
+	}, [draftQty, draftUnit, presented.quantity, presented.unit, onChange]);
 
 	useEffect(() => {
 		if (!isEditing) return;
@@ -74,8 +81,8 @@ export function SupplyQuantityEditor({
 
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key === "Escape") {
-				setDraftQty(String(quantity));
-				setDraftUnit(normalizedUnit);
+				setDraftQty(String(presented.quantity));
+				setDraftUnit(presented.unit);
 				setIsEditing(false);
 			}
 			if (e.key === "Enter") {
@@ -90,23 +97,17 @@ export function SupplyQuantityEditor({
 			document.removeEventListener("pointerdown", handlePointerDown);
 			document.removeEventListener("keydown", handleKeyDown);
 		};
-	}, [isEditing, commitDraft, quantity, normalizedUnit]);
+	}, [isEditing, commitDraft, presented.quantity, presented.unit]);
 
 	function startEditing(e: React.MouseEvent) {
 		e.stopPropagation();
 		if (disabled) return;
-		setDraftQty(String(quantity));
-		setDraftUnit(normalizedUnit);
+		setDraftQty(String(presented.quantity));
+		setDraftUnit(presented.unit);
 		setIsEditing(true);
 	}
 
-	const unitMode = useUnitDisplayMode();
-	const displayLabel = presentQuantity({
-		quantity,
-		unit: normalizedUnit,
-		ingredientName: ingredientName ?? unit,
-		mode: unitMode,
-	}).formatted;
+	const displayLabel = presented.formatted;
 
 	const pillClasses =
 		variant === "pill"

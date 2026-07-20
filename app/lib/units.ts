@@ -174,12 +174,42 @@ function isWeightUnit(unit: SupportedUnit): boolean {
 	return family === "weight_metric" || family === "weight_imperial";
 }
 
-function chooseMetricVolumeUnit(quantityMl: number): {
+/** Metric shopping volume: liters above 1 L, otherwise milliliters. */
+export function chooseReadableMetricVolume(quantityMl: number): {
 	quantity: number;
 	unit: SupportedUnit;
 } {
 	if (quantityMl >= 1000) {
 		return { quantity: quantityMl / 1000, unit: "l" };
+	}
+	return { quantity: quantityMl, unit: "ml" };
+}
+
+/** Imperial / cooking volume ladder (US customary + kitchen measures). */
+export function chooseReadableImperialVolume(quantityMl: number): {
+	quantity: number;
+	unit: SupportedUnit;
+} {
+	if (quantityMl >= 3785.41) {
+		return { quantity: quantityMl / 3785.41, unit: "gal" };
+	}
+	if (quantityMl >= 946.353) {
+		return { quantity: quantityMl / 946.353, unit: "qt" };
+	}
+	if (quantityMl >= 473.176) {
+		return { quantity: quantityMl / 473.176, unit: "pt" };
+	}
+	if (quantityMl >= 236.588) {
+		return { quantity: quantityMl / 236.588, unit: "cup" };
+	}
+	if (quantityMl >= 29.5735) {
+		return { quantity: quantityMl / 29.5735, unit: "fl oz" };
+	}
+	if (quantityMl >= 14.7868) {
+		return { quantity: quantityMl / 14.7868, unit: "tbsp" };
+	}
+	if (quantityMl >= 4.92892) {
+		return { quantity: quantityMl / 4.92892, unit: "tsp" };
 	}
 	return { quantity: quantityMl, unit: "ml" };
 }
@@ -357,6 +387,11 @@ export function convertFromBaseUnit(
 	return baseQuantity / getFactorToBase(targetUnit);
 }
 
+/**
+ * Same-family readable scaling. Volume uses the imperial/cooking ladder.
+ * Prefer {@link chooseReadableUnitForMode} when a display mode is known —
+ * that helper also bridges metric ↔ imperial weight families.
+ */
 export function chooseReadableUnit(
 	baseQuantity: number,
 	baseUnit: BaseUnit,
@@ -376,31 +411,48 @@ export function chooseReadableUnit(
 	}
 
 	if (baseUnit === "ml") {
-		if (baseQuantity >= 3785.41) {
-			return { quantity: baseQuantity / 3785.41, unit: "gal" };
+		return chooseReadableImperialVolume(baseQuantity);
+	}
+
+	return { quantity: baseQuantity, unit: baseUnit };
+}
+
+/**
+ * Picks a human-readable unit within the user's display system.
+ * Metric volumes stay on l/ml; imperial/cooking use the US volume ladder.
+ * Weight bases are converted into the mode's weight family when needed.
+ */
+export function chooseReadableUnitForMode(
+	baseQuantity: number,
+	baseUnit: BaseUnit,
+	mode: SupplyUnitMode | "original" = "metric",
+): { quantity: number; unit: SupportedUnit } {
+	if (baseUnit === "g") {
+		if (mode === "imperial") {
+			const oz = convertQuantity(baseQuantity, "g", "oz");
+			if (oz !== null) {
+				return chooseReadableUnit(oz, "oz");
+			}
 		}
-		if (baseQuantity >= 946.353) {
-			return { quantity: baseQuantity / 946.353, unit: "qt" };
+		return chooseReadableUnit(baseQuantity, "g");
+	}
+
+	if (baseUnit === "oz") {
+		if (mode === "metric") {
+			const grams = convertQuantity(baseQuantity, "oz", "g");
+			if (grams !== null) {
+				return chooseReadableUnit(grams, "g");
+			}
 		}
-		if (baseQuantity >= 473.176) {
-			return { quantity: baseQuantity / 473.176, unit: "pt" };
+		return chooseReadableUnit(baseQuantity, "oz");
+	}
+
+	if (baseUnit === "ml") {
+		if (mode === "metric") {
+			return chooseReadableMetricVolume(baseQuantity);
 		}
-		if (baseQuantity >= 236.588) {
-			return { quantity: baseQuantity / 236.588, unit: "cup" };
-		}
-		if (baseQuantity >= 29.5735) {
-			return { quantity: baseQuantity / 29.5735, unit: "fl oz" };
-		}
-		if (baseQuantity >= 14.7868) {
-			return { quantity: baseQuantity / 14.7868, unit: "tbsp" };
-		}
-		if (baseQuantity >= 4.92892) {
-			return { quantity: baseQuantity / 4.92892, unit: "tsp" };
-		}
-		if (baseQuantity >= 1000) {
-			return { quantity: baseQuantity / 1000, unit: "l" };
-		}
-		return { quantity: baseQuantity, unit: "ml" };
+		// imperial, cooking, original → US / kitchen volume ladder
+		return chooseReadableImperialVolume(baseQuantity);
 	}
 
 	return { quantity: baseQuantity, unit: baseUnit };
@@ -436,7 +488,7 @@ export function toShoppingUnit(
 
 	// Liquids are typically bought by volume. Keep them in metric/imperial volume.
 	if (isLikelyLiquidIngredient(ingredientName)) {
-		if (mode === "metric") return chooseMetricVolumeUnit(volumeInMl);
+		if (mode === "metric") return chooseReadableMetricVolume(volumeInMl);
 		return chooseReadableUnit(volumeInMl, "ml");
 	}
 
@@ -444,14 +496,14 @@ export function toShoppingUnit(
 	const density = lookupDensity(ingredientName);
 	if (!density) {
 		return mode === "metric"
-			? chooseMetricVolumeUnit(volumeInMl)
+			? chooseReadableMetricVolume(volumeInMl)
 			: chooseReadableUnit(volumeInMl, "ml");
 	}
 
 	const grams = convertQuantityWithDensity(quantity, unit, "g", density);
 	if (grams === null) {
 		return mode === "metric"
-			? chooseMetricVolumeUnit(volumeInMl)
+			? chooseReadableMetricVolume(volumeInMl)
 			: chooseReadableUnit(volumeInMl, "ml");
 	}
 

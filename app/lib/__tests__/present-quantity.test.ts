@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import goldenCases from "~/lib/__fixtures__/quantity-presentation.json";
 import {
 	decomposeSubUnits,
 	formatQuantity,
@@ -9,6 +10,7 @@ import {
 	convertForIngredient,
 	presentQuantity,
 } from "~/lib/present-quantity";
+import type { UnitDisplayMode } from "~/lib/unit-display-mode";
 import { resolveUnitDisplayMode } from "~/lib/unit-display-mode";
 
 describe("snapEpsilon", () => {
@@ -70,6 +72,86 @@ describe("presentQuantity", () => {
 		});
 		expect(result.unit).toBe("kg");
 		expect(result.quantity).toBe(1.5);
+	});
+
+	it("keeps metric liquids on l/ml (not US qt/pt)", () => {
+		const liter = presentQuantity({
+			quantity: 1000,
+			unit: "ml",
+			ingredientName: "milk",
+			mode: "metric",
+		});
+		expect(liter.unit).toBe("l");
+		expect(liter.quantity).toBe(1);
+
+		const halfLiter = presentQuantity({
+			quantity: 500,
+			unit: "ml",
+			ingredientName: "olive oil",
+			mode: "metric",
+		});
+		expect(halfLiter.unit).toBe("ml");
+		expect(halfLiter.quantity).toBe(500);
+	});
+
+	it("converts metric weights to imperial lb/oz in imperial mode", () => {
+		const flour = presentQuantity({
+			quantity: 1000,
+			unit: "g",
+			ingredientName: "flour",
+			mode: "imperial",
+		});
+		expect(flour.unit).toBe("lb");
+		expect(flour.quantity).toBeCloseTo(2.20462, 2);
+
+		const butter = presentQuantity({
+			quantity: 500,
+			unit: "g",
+			ingredientName: "butter",
+			mode: "imperial",
+		});
+		expect(butter.unit).toBe("lb");
+		expect(butter.quantity).toBeCloseTo(1.102, 2);
+	});
+
+	it("uses US volume ladder for liquids in imperial mode", () => {
+		const milk = presentQuantity({
+			quantity: 2000,
+			unit: "ml",
+			ingredientName: "milk",
+			mode: "imperial",
+		});
+		expect(milk.unit).toBe("qt");
+		expect(milk.quantity).toBeCloseTo(2.113, 2);
+	});
+
+	it("preserves authored units in original mode", () => {
+		const result = presentQuantity({
+			quantity: 1,
+			unit: "kg",
+			ingredientName: "flour",
+			mode: "original",
+		});
+		expect(result.unit).toBe("kg");
+		expect(result.quantity).toBe(1);
+	});
+
+	it("matches shared golden fixtures", () => {
+		for (const c of goldenCases) {
+			const result = presentQuantity({
+				quantity: c.quantity,
+				unit: c.unit,
+				ingredientName: c.ingredientName,
+				mode: c.mode as UnitDisplayMode,
+			});
+			expect(result.unit, c.id).toBe(c.expectedUnit);
+			if ("expectedQuantity" in c && c.expectedQuantity != null) {
+				expect(result.quantity, c.id).toBe(c.expectedQuantity);
+			}
+			if ("expectedQuantityApprox" in c && c.expectedQuantityApprox != null) {
+				expect(result.quantity, c.id).toBeCloseTo(c.expectedQuantityApprox, 2);
+			}
+		}
 	});
 });
 

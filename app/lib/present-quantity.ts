@@ -7,7 +7,7 @@ import {
 import { lookupDensity } from "./ingredient-density";
 import type { UnitDisplayMode } from "./unit-display-mode";
 import {
-	chooseReadableUnit,
+	chooseReadableUnitForMode,
 	convertIngredientAmount,
 	convertQuantity,
 	getUnitFamily,
@@ -56,22 +56,24 @@ function isCrossFamilyConversion(
 function applyReadableUnit(
 	quantity: number,
 	unit: SupportedUnit,
+	mode: UnitDisplayMode,
 ): { quantity: number; unit: SupportedUnit } {
+	const readableMode = mode === "original" ? "metric" : mode;
 	const family = getUnitFamily(unit);
 	if (family === "weight_metric") {
 		const grams = convertQuantity(quantity, unit, "g");
 		if (grams === null) return { quantity, unit };
-		return chooseReadableUnit(grams, "g");
+		return chooseReadableUnitForMode(grams, "g", readableMode);
 	}
 	if (family === "weight_imperial") {
 		const oz = convertQuantity(quantity, unit, "oz");
 		if (oz === null) return { quantity, unit };
-		return chooseReadableUnit(oz, "oz");
+		return chooseReadableUnitForMode(oz, "oz", readableMode);
 	}
 	if (family === "volume") {
 		const ml = convertQuantity(quantity, unit, "ml");
 		if (ml === null) return { quantity, unit };
-		return chooseReadableUnit(ml, "ml");
+		return chooseReadableUnitForMode(ml, "ml", readableMode);
 	}
 	return { quantity, unit };
 }
@@ -165,7 +167,7 @@ export function presentQuantity(
 	const readable =
 		mode === "original"
 			? { quantity: snapEpsilon(transformed.quantity), unit: transformed.unit }
-			: applyReadableUnit(transformed.quantity, transformed.unit);
+			: applyReadableUnit(transformed.quantity, transformed.unit, mode);
 
 	const finalQty = snapEpsilon(readable.quantity);
 	const finalUnit = readable.unit;

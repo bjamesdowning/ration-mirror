@@ -4,6 +4,7 @@ import { MealEditModal } from "~/components/galley/MealEditModal";
 import { ProvisionEditModal } from "~/components/galley/ProvisionEditModal";
 import { ActionMenu } from "~/components/hud/ActionMenu";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
 import type { TagRecord } from "~/lib/tags";
@@ -26,6 +27,8 @@ interface MealListRowProps {
 			ingredientName: string;
 			quantity: number;
 			unit: string;
+			baseQuantity?: number | null;
+			baseUnit?: string | null;
 			isOptional?: boolean | null;
 			orderIndex?: number | null;
 		}[];
@@ -51,6 +54,7 @@ export function MealListRow({
 }: MealListRowProps) {
 	const navigate = useNavigate();
 	const fetcher = useFetcher();
+	const formatQty = useQuantityFormatter();
 	const toggleFetcher = useFetcher<{
 		success: boolean;
 		mealId: string;
@@ -99,7 +103,13 @@ export function MealListRow({
 	// For provision type, derive quantity label
 	const singleIngredient = isProvision ? meal.ingredients?.[0] : null;
 	const quantityLabel = singleIngredient
-		? `${singleIngredient.quantity} ${singleIngredient.unit}`
+		? formatQty(
+				singleIngredient.quantity,
+				singleIngredient.unit,
+				singleIngredient.ingredientName,
+				singleIngredient.baseQuantity ?? undefined,
+				singleIngredient.baseUnit ?? undefined,
+			).formatted
 		: null;
 
 	const detailPath = detailHref ?? `/hub/galley/${meal.id}`;

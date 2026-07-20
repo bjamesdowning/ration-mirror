@@ -19,7 +19,10 @@ import { parseDirections } from "~/lib/schemas/directions";
 import type { MealIngredientInput, MealInput } from "~/lib/schemas/meal";
 import { DirectionsSteps } from "./DirectionsSteps";
 
-type MealDetailIngredient = CargoLinkedIngredient<MealIngredientInput>;
+type MealDetailIngredient = CargoLinkedIngredient<MealIngredientInput> & {
+	baseQuantity?: number | null;
+	baseUnit?: string | null;
+};
 
 interface MealDetailProps {
 	meal: Omit<MealInput, "ingredients"> & {
@@ -497,6 +500,10 @@ export function MealDetail({
 								scaleFactor,
 								ing.unit,
 							);
+							const displayBaseQty =
+								ing.baseQuantity != null
+									? ing.baseQuantity * scaleFactor
+									: undefined;
 
 							return (
 								<li
@@ -572,13 +579,23 @@ export function MealDetail({
 										<span
 											className="text-data font-bold text-carbon"
 											title={
-												formatQty(displayQty, ing.unit, ing.ingredientName)
-													.tooltip
+												formatQty(
+													displayQty,
+													ing.unit,
+													ing.ingredientName,
+													displayBaseQty,
+													ing.baseUnit ?? undefined,
+												).tooltip
 											}
 										>
 											{
-												formatQty(displayQty, ing.unit, ing.ingredientName)
-													.formatted
+												formatQty(
+													displayQty,
+													ing.unit,
+													ing.ingredientName,
+													displayBaseQty,
+													ing.baseUnit ?? undefined,
+												).formatted
 											}
 										</span>
 										{availability && !availability.available && (

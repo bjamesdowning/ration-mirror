@@ -1,6 +1,7 @@
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { MAX_MEALS_IMPORT } from "~/lib/constants";
 import type { GalleyManifest } from "~/lib/schemas/galley-manifest";
 
@@ -18,6 +19,7 @@ export function GalleyImportPreview({
 	onSuccess,
 }: GalleyImportPreviewProps) {
 	const fetcher = useFetcher();
+	const formatQty = useQuantityFormatter();
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(
 		() => new Set(manifest.meals.map((_, i) => i)),
 	);
@@ -152,7 +154,7 @@ export function GalleyImportPreview({
 									<p className="text-sm text-muted">
 										{meal.type === "recipe"
 											? `Recipe • ${meal.domain} • ${meal.ingredients?.length ?? 0} ingredients`
-											: `Provision • ${meal.domain} • ${meal.quantity} ${meal.unit}`}
+											: `Provision • ${meal.domain} • ${formatQty(meal.quantity, meal.unit, meal.name).formatted}`}
 									</p>
 								</div>
 							</div>

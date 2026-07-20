@@ -39,3 +39,6 @@ worker-configuration.d.ts
 
 # Local-only account seed utilities (not pushed to GitLab)
 /scripts/seed-account/
+
+# Local Python venvs (e.g. App Store screenshot framing)
+**/.venv/

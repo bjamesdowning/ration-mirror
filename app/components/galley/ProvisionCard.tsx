@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { StandardCard } from "~/components/common/StandardCard";
 import { CheckIcon, PlusIcon } from "~/components/icons/PageIcons";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { TagChip } from "~/components/shared/TagChip";
 import type { meal } from "~/db/schema";
 import { DOMAIN_ICONS, DOMAIN_LABELS } from "~/lib/domain";
@@ -16,6 +17,8 @@ interface ProvisionCardProps {
 			ingredientName: string;
 			quantity: number;
 			unit: string;
+			baseQuantity?: number | null;
+			baseUnit?: string | null;
 		}[];
 	};
 	isActive?: boolean;
@@ -34,6 +37,7 @@ export function ProvisionCard({
 	detailHref,
 }: ProvisionCardProps) {
 	const fetcher = useFetcher();
+	const formatQty = useQuantityFormatter();
 	const toggleFetcher = useFetcher<{
 		success: boolean;
 		mealId: string;
@@ -85,7 +89,13 @@ export function ProvisionCard({
 
 	const singleIngredient = meal.ingredients?.[0];
 	const quantityLabel = singleIngredient
-		? `${singleIngredient.quantity} ${singleIngredient.unit}`
+		? formatQty(
+				singleIngredient.quantity,
+				singleIngredient.unit,
+				singleIngredient.ingredientName,
+				singleIngredient.baseQuantity ?? undefined,
+				singleIngredient.baseUnit ?? undefined,
+			).formatted
 		: "—";
 	const DomainIcon = meal.domain
 		? DOMAIN_ICONS[meal.domain as keyof typeof DOMAIN_ICONS]

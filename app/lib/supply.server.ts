@@ -63,7 +63,7 @@ import { TIER_LIMITS } from "./tiers.server";
 import type { UnitDisplayMode } from "./unit-display-mode";
 import {
 	type BaseUnit,
-	chooseReadableUnit,
+	chooseReadableUnitForMode,
 	convertFromBaseUnit,
 	convertIngredientAmount,
 	convertQuantity,
@@ -350,7 +350,7 @@ function baseUnitToSupported(baseUnit: BaseUnit): SupportedUnit {
 
 export function aggregateIngredients(
 	rows: IngredientRow[],
-	_unitMode: UnitDisplayMode = "metric",
+	unitMode: UnitDisplayMode = "metric",
 ): AggregatedIngredient[] {
 	const aggregation = new Map<
 		string,
@@ -435,7 +435,11 @@ export function aggregateIngredients(
 		const roundedBase = isCountUnit(entry.baseUnit)
 			? roundShoppingCountQuantity(entry.baseQuantity, entry.baseUnit)
 			: entry.baseQuantity;
-		const readable = chooseReadableUnit(roundedBase, entry.baseUnit);
+		const readable = chooseReadableUnitForMode(
+			roundedBase,
+			entry.baseUnit,
+			unitMode === "original" ? "metric" : unitMode,
+		);
 		return {
 			name: entry.name,
 			normalizedName: entry.normalizedName,
@@ -1999,11 +2003,13 @@ async function buildCargoContributions(
 function contributionsToSupplyRows(
 	listId: string,
 	merged: SupplyContribution[],
+	unitMode: UnitDisplayMode = "metric",
 ): (typeof supplyItem.$inferInsert)[] {
 	return merged.map((contribution) => {
-		const readable = chooseReadableUnit(
+		const readable = chooseReadableUnitForMode(
 			contribution.baseQuantity,
 			contribution.baseUnit,
+			unitMode === "original" ? "metric" : unitMode,
 		);
 		return {
 			id: crypto.randomUUID(),
@@ -2095,7 +2101,11 @@ async function materializeSupplyFromSelections(
 		...mealContributions,
 		...cargoContributions,
 	]);
-	const itemsToInsert = contributionsToSupplyRows(supplyListData.id, merged);
+	const itemsToInsert = contributionsToSupplyRows(
+		supplyListData.id,
+		merged,
+		unitMode,
+	);
 
 	const addedCount = itemsToInsert.length;
 	const aggregatedCount =

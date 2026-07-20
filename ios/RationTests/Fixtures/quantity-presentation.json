@@ -1,0 +1,56 @@
+[
+	{
+		"id": "metric-milk-1l",
+		"quantity": 1000,
+		"unit": "ml",
+		"ingredientName": "milk",
+		"mode": "metric",
+		"expectedUnit": "l",
+		"expectedQuantity": 1
+	},
+	{
+		"id": "metric-oil-500ml",
+		"quantity": 500,
+		"unit": "ml",
+		"ingredientName": "olive oil",
+		"mode": "metric",
+		"expectedUnit": "ml",
+		"expectedQuantity": 500
+	},
+	{
+		"id": "metric-flour-1kg",
+		"quantity": 1000,
+		"unit": "g",
+		"ingredientName": "flour",
+		"mode": "metric",
+		"expectedUnit": "kg",
+		"expectedQuantity": 1
+	},
+	{
+		"id": "imperial-flour-1kg",
+		"quantity": 1000,
+		"unit": "g",
+		"ingredientName": "flour",
+		"mode": "imperial",
+		"expectedUnit": "lb",
+		"expectedQuantityApprox": 2.20462
+	},
+	{
+		"id": "imperial-milk-2l",
+		"quantity": 2000,
+		"unit": "ml",
+		"ingredientName": "milk",
+		"mode": "imperial",
+		"expectedUnit": "qt",
+		"expectedQuantityApprox": 2.113
+	},
+	{
+		"id": "original-kg",
+		"quantity": 1,
+		"unit": "kg",
+		"ingredientName": "flour",
+		"mode": "original",
+		"expectedUnit": "kg",
+		"expectedQuantity": 1
+	}
+]

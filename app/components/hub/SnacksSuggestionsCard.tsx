@@ -1,6 +1,7 @@
 import { Apple } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link, useFetcher } from "react-router";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { Toast } from "~/components/shell/Toast";
 import { useToast } from "~/hooks/useToast";
 import { useConfirm } from "~/lib/confirm-context";
@@ -45,6 +46,7 @@ export function SnacksSuggestionsCard({ meals }: SnacksSuggestionsCardProps) {
 	const hasItems = meals.length > 0;
 	const { confirm } = useConfirm();
 	const fetcher = useFetcher<CookFetcherData>();
+	const formatQty = useQuantityFormatter();
 	const successToast = useToast({ duration: 4000 });
 	const errorToast = useToast({ duration: 5000 });
 	const errorMessageRef = useRef<string>("");
@@ -91,8 +93,15 @@ export function SnacksSuggestionsCard({ meals }: SnacksSuggestionsCardProps) {
 			{hasItems ? (
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 					{meals.slice(0, 6).map((result) => {
-						const quantityLabel = result.meal.ingredients?.[0]
-							? `${result.meal.ingredients[0].quantity} ${result.meal.ingredients[0].unit}`
+						const ing = result.meal.ingredients?.[0];
+						const quantityLabel = ing
+							? formatQty(
+									ing.quantity,
+									ing.unit,
+									ing.ingredientName,
+									ing.baseQuantity,
+									ing.baseUnit,
+								).formatted
 							: "1 unit";
 						const isCookingThis =
 							fetcher.state !== "idle" && cookingMealId === result.meal.id;

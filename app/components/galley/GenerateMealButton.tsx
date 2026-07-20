@@ -20,6 +20,7 @@ import {
 	AIFeatureIntroView,
 	AIFeatureModal,
 } from "~/components/ai/AIFeatureModal";
+import { useQuantityFormatter } from "~/components/shared/DisplayQuantity";
 import { MAX_POLL_ATTEMPTS, startBackoffPollLoop } from "~/lib/polling";
 
 interface GeneratedRecipe {
@@ -66,6 +67,7 @@ function RecipeCard({
 	readOnly?: boolean;
 }) {
 	const [directionsOpen, setDirectionsOpen] = useState(false);
+	const formatQty = useQuantityFormatter();
 
 	return (
 		<div className="flex flex-col bg-white dark:bg-white/5 border border-carbon/5 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow group">
@@ -127,7 +129,10 @@ function RecipeCard({
 						>
 							<span>{ing.ingredientName}</span>
 							<span className="font-medium tabular-nums">
-								{ing.quantity} {ing.unit}
+								{
+									formatQty(ing.quantity, ing.unit, ing.ingredientName)
+										.formatted
+								}
 							</span>
 						</div>
 					))}

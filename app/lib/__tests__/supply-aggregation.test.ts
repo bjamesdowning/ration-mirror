@@ -76,6 +76,39 @@ describe("aggregateIngredients", () => {
 		);
 	});
 
+	it("shapes metric liquids as l/ml not US qt/pt", () => {
+		const result = aggregateIngredients(
+			[
+				ingredientRow({
+					ingredientName: "milk",
+					quantity: 1000,
+					unit: "ml",
+					baseQuantity: 1000,
+					baseUnit: "ml",
+				}),
+			],
+			"metric",
+		);
+		expect(result[0]?.unit).toBe("l");
+		expect(result[0]?.quantity).toBe(1);
+	});
+
+	it("shapes imperial liquids on the US volume ladder", () => {
+		const result = aggregateIngredients(
+			[
+				ingredientRow({
+					ingredientName: "milk",
+					quantity: 1000,
+					unit: "ml",
+					baseQuantity: 1000,
+					baseUnit: "ml",
+				}),
+			],
+			"imperial",
+		);
+		expect(result[0]?.unit).toBe("qt");
+	});
+
 	it("uses persisted base fields instead of authored units", () => {
 		const result = aggregateIngredients(
 			[

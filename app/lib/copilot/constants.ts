@@ -5,23 +5,12 @@ export const FREE_TIER_DAILY_CONVERSATIONS = 0;
 /** Turn 1 — auto-sent intro (search_docs then answer). */
 export const ONBOARDING_BRIEFING_BOOTSTRAP_PROMPT = "What is Ration?";
 
-/** Turn 2 — starter kitchen seed via add_cargo_item (selective expiry + tags). */
-export const ONBOARDING_BRIEFING_SEED_PROMPT = `Please add these common kitchen staples to my cargo with sensible quantities and units:
+/** Turn 2 — single-item kitchen seed via add_cargo_item (expiry + tag demo). */
+export const ONBOARDING_BRIEFING_SEED_PROMPT = `Please add 2 litres of milk to my cargo.
 
-- 500g butter
-- 12 eggs
-- 2 litres milk
-- 1kg flour
-- 500ml olive oil
+Set expiry to about 2 weeks from today, and tag it as dairy.
 
-For a few items, also set expiry and tags to show how that works — you don't need tags or expiry on everything:
-
-- Milk: expires in about 2 weeks, tag as dairy
-- Eggs: expires in about 3 weeks, tag as dairy
-- Butter: expires in about 4 weeks, tag as dairy
-- Flour: tag as staple
-
-Use today's date from context to calculate expiry dates. Add each item with add_cargo_item. When done, tell me how many items you added and which ones have expiry dates or tags.`;
+Use today's date from context to calculate the expiry date. Add the item with add_cargo_item. When done, briefly confirm what you added, including the expiry date and tag.`;
 
 /** Max user turns allowed during free onboarding briefing (intro + seed). */
 export const ONBOARDING_BRIEFING_MAX_TURNS = 2;

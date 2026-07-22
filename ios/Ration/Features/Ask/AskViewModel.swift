@@ -125,7 +125,7 @@ final class AskViewModel {
     init(
         socket: (any AskSocketClient)? = nil,
         stopTimeoutNanoseconds: UInt64 = 2_000_000_000,
-        briefingTurnTimeoutNanoseconds: UInt64 = 45_000_000_000
+        briefingTurnTimeoutNanoseconds: UInt64 = 60_000_000_000
     ) {
         self.socket = socket
         self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
@@ -923,7 +923,15 @@ final class AskViewModel {
             }
             self.socket?.disconnect()
             self.isConnected = false
-            self.completeTurn(state: .error(Self.briefingTurnTimeoutMessage))
+            // Tools may have already written Cargo — treat as success so the user
+            // is not shown a failure after a successful seed.
+            if self.seedTurnStarted, self.seedItemsAdded > 0 {
+                self.seedComplete = true
+                self.briefingComplete = true
+                self.completeTurn(state: .idle)
+            } else {
+                self.completeTurn(state: .error(Self.briefingTurnTimeoutMessage))
+            }
         }
     }
 

@@ -21,6 +21,10 @@ vi.mock("~/lib/mobile/token.server", () => ({
 	issueMobileTokenPair: (...args: unknown[]) => issueMobileTokenPair(...args),
 }));
 
+vi.mock("~/lib/welcome-credits.server", () => ({
+	grantWelcomeCreditsIfEligible: vi.fn().mockResolvedValue(false),
+}));
+
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: () => ({
 		query: {
@@ -28,6 +32,13 @@ vi.mock("drizzle-orm/d1", () => ({
 			member: { findFirst: findFirstMember },
 			organization: { findFirst: findFirstOrg },
 		},
+		select: vi.fn().mockReturnValue({
+			from: vi.fn().mockReturnValue({
+				where: vi.fn().mockReturnValue({
+					limit: vi.fn().mockResolvedValue([]),
+				}),
+			}),
+		}),
 		insert: vi.fn().mockReturnValue({ values: vi.fn() }),
 		batch: vi.fn().mockResolvedValue(undefined),
 		update: () => ({ set: () => ({ where: updateUser }) }),
@@ -43,6 +54,7 @@ describe("authenticateMobileSocial", () => {
 		findFirstUser.mockResolvedValue({
 			tosAcceptedAt: new Date("2026-01-01"),
 			name: "Existing User",
+			email: "user@example.com",
 		});
 		findFirstOrg.mockResolvedValue({ id: "org-1" });
 		issueMobileTokenPair.mockResolvedValue({

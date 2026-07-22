@@ -3,11 +3,17 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { buildPersonalOrgRecords } from "~/lib/agent/org-records.server";
 import { getAuth } from "~/lib/auth.server";
+import { log, redactId } from "~/lib/logging.server";
 import {
 	issueMobileTokenPair,
 	type MobileTokenPair,
 } from "~/lib/mobile/token.server";
 import type { MobileSocialAuthInput } from "~/lib/schemas/mobile/auth";
+import {
+	buildStarterMealStatements,
+	seedStarterMealIfNeeded,
+	shouldSeedStarterMeal,
+} from "~/lib/starter-meal.server";
 import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
 import { grantWelcomeCreditsIfEligible } from "~/lib/welcome-credits.server";
 
@@ -58,10 +64,19 @@ async function ensureOrganizationForUser(
 	userId: string,
 	userName: string,
 ): Promise<string> {
-	const existing = await resolveActiveOrganizationId(env, userId);
-	if (existing) return existing;
-
 	const db = drizzle(env.DB, { schema });
+	const user = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { email: true },
+	});
+	const email = user?.email ?? null;
+
+	const existing = await resolveActiveOrganizationId(env, userId);
+	if (existing) {
+		await trySeedStarterMeal(db, existing, email, userId);
+		return existing;
+	}
+
 	const { orgId, orgValues, memberValues } = buildPersonalOrgRecords(
 		userId,
 		userName,
@@ -71,27 +86,53 @@ async function ensureOrganizationForUser(
 	const personalGroup = await db.query.organization.findFirst({
 		where: like(schema.organization.slug, slug),
 	});
-	if (personalGroup) return personalGroup.id;
+	if (personalGroup) {
+		await trySeedStarterMeal(db, personalGroup.id, email, userId);
+		return personalGroup.id;
+	}
 
-	await db.batch([
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch mixes insert types
+	const batchStmts: any[] = [
 		db.insert(schema.organization).values(orgValues),
 		db.insert(schema.member).values(memberValues),
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	] as [any, ...any[]]);
+	];
+	if (shouldSeedStarterMeal(email)) {
+		const { mealInsert, ingredientInsert } = buildStarterMealStatements(
+			db,
+			orgId,
+		);
+		batchStmts.push(mealInsert, ingredientInsert);
+	}
 
-	const user = await db.query.user.findFirst({
-		where: eq(schema.user.id, userId),
-		columns: { email: true },
-	});
-	if (user?.email) {
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await db.batch(batchStmts as [any, ...any[]]);
+
+	if (email) {
 		await grantWelcomeCreditsIfEligible(env, {
 			userId,
 			organizationId: orgId,
-			email: user.email,
+			email,
 		});
 	}
 
 	return orgId;
+}
+
+/** Starter meal must never block mobile auth — mirror welcome-credits isolation. */
+async function trySeedStarterMeal(
+	db: Parameters<typeof seedStarterMealIfNeeded>[0],
+	organizationId: string,
+	email: string | null,
+	userId: string,
+): Promise<void> {
+	try {
+		await seedStarterMealIfNeeded(db, organizationId, email);
+	} catch (error) {
+		log.error("[Auth] Failed to seed starter meal", error, {
+			userId: redactId(userId),
+			orgId: redactId(organizationId),
+		});
+	}
 }
 
 async function enforceTosAcceptance(

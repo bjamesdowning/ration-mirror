@@ -65,8 +65,8 @@ struct StarterSeedCard: View {
         .buttonStyle(StarterSeedCardButtonStyle())
         .disabled(state != .idle)
         .opacity(state == .completed || state == .disabled ? 0.72 : 1)
-        .accessibilityLabel("Stock my kitchen with five pantry staples")
-        .accessibilityHint("Sends this suggested prompt to Copilot to add items to your cargo")
+        .accessibilityLabel("Stock my kitchen with milk")
+        .accessibilityHint("Sends this suggested prompt to Copilot to add milk to your cargo")
         .accessibilityValue(accessibilityValue)
     }
 

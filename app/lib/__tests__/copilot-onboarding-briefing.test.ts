@@ -163,6 +163,9 @@ describe("onboarding briefing", () => {
 		expect(getOnboardingBriefingSystemPromptAppend("seed")).toContain(
 			"add_cargo_item",
 		);
+		expect(getOnboardingBriefingSystemPromptAppend("seed")).toContain(
+			"exactly one",
+		);
 	});
 
 	it("defers grant counting while tool steps continue", () => {

@@ -6,30 +6,18 @@ enum OnboardingBriefingCopy {
 
     /// Must match `ONBOARDING_BRIEFING_SEED_PROMPT` in `app/lib/copilot/constants.ts` exactly (SHA-256 allowlist).
     static let seedPrompt = """
-Please add these common kitchen staples to my cargo with sensible quantities and units:
+Please add 2 litres of milk to my cargo.
 
-- 500g butter
-- 12 eggs
-- 2 litres milk
-- 1kg flour
-- 500ml olive oil
+Set expiry to about 2 weeks from today, and tag it as dairy.
 
-For a few items, also set expiry and tags to show how that works — you don't need tags or expiry on everything:
-
-- Milk: expires in about 2 weeks, tag as dairy
-- Eggs: expires in about 3 weeks, tag as dairy
-- Butter: expires in about 4 weeks, tag as dairy
-- Flour: tag as staple
-
-Use today's date from context to calculate expiry dates. Add each item with add_cargo_item. When done, tell me how many items you added and which ones have expiry dates or tags.
+Use today's date from context to calculate the expiry date. Add the item with add_cargo_item. When done, briefly confirm what you added, including the expiry date and tag.
 """
 
     static let seedCardTitle = "Stock my kitchen"
     static let seedCardSubtitle =
-        "Tap to send this prompt — watch Copilot add staples with expiry & tags"
+        "Tap to send — watch Copilot add milk with expiry & a dairy tag"
     static let seedCardDisabledSubtitle = "Requires Copilot briefing"
     static let seedSuggestedLabel = "Suggested"
-    static let seedSuccessToast = "5 items added to Cargo"
     static let seeInCargoTitle = "See in Cargo"
     static let getStartedTitle = "Get Started"
     static let enterRationTitle = "Get Started"

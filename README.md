@@ -775,7 +775,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 
 **FAB padding:** Cargo, Galley, Supply, and Manifest routes use `pb-36 md:pb-0` on the main content area to reserve space for the floating action bar on mobile.
 
-**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) on **web**. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. Settings includes **Restart Tutorial**. **iOS** replaces the tour with an interactive **Ask Ration welcome briefing** (Concept E — starter kitchen seed): when `copilot-onboarding-free` is on, new users get a live Fast intro (“What is Ration?” via `search_docs`) then an inline **Suggested** bubble showing the full “Stock my kitchen” seed prompt — tap sends it as a normal user message so Copilot can `add_cargo_item`. Briefing turns use a 45s client timeout with retry. **Get Started** remains available after intro. When the free briefing is unavailable, iOS shows static welcome copy plus **See in Cargo** / **Get Started** chips (never a dead-end). Settings → Tutorial replays static briefing only (no extra LLM grant). See `app/lib/copilot/onboarding-briefing.server.ts` and `ios/Ration/Features/Onboarding/`.
+**Onboarding:** New users trigger a 7-step guided tour (`OnboardingTour`, steps 0–6) on **web**. Progress is persisted to `user.settings.onboardingStep` / `onboardingCompletedAt`. Settings includes **Restart Tutorial**. **New human accounts** (web + iOS) receive a starter **Hot Chocolate** Galley recipe at personal-org creation (`app/lib/starter-meal.server.ts` — milk, cocoa powder, sugar + steps; idempotent `seedKey`; skipped for agent kitchens). **iOS** replaces the tour with an interactive **Ask Ration welcome briefing** (Concept E — single-item kitchen seed): when `copilot-onboarding-free` is on, new users get a live Fast intro (“What is Ration?” via `search_docs`) then an inline **Suggested** bubble — tap runs a single `add_cargo_item` for milk (expiry + dairy tag). Briefing turns use a **60s** client timeout with retry; if tools already succeeded when the watchdog fires, the seed is treated as success (soft-success). **Get Started** remains available after intro. When the free briefing is unavailable, iOS shows static welcome copy plus **See in Cargo** / **Get Started** chips (never a dead-end). Settings → Tutorial replays static briefing only (no extra LLM grant). See `app/lib/copilot/onboarding-briefing.server.ts` and `ios/Ration/Features/Onboarding/`.
 
 ---
 
@@ -2365,7 +2365,7 @@ WebSocket traffic hits `ration-copilot` directly — not proxied through `ration
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `ration-copilot` | off | Master kill switch — server returns 404 when disabled; exposed to clients as `rationCopilot` (web root loader + iOS `GET /api/mobile/v1/session` `clientFlags`; iOS hides Ask dock/sheet when false) |
-| `copilot-onboarding-free` | off | One-time iOS welcome briefing (intro + starter kitchen seed, Fast preset, no credit charge) |
+| `copilot-onboarding-free` | off | One-time iOS welcome briefing (intro + single-item milk seed, Fast preset, no credit charge) |
 
 Registry: [`app/lib/feature-flags/registry.ts`](app/lib/feature-flags/registry.ts). Flagship binding on `ration-copilot`: see [`wrangler.copilot.jsonc`](wrangler.copilot.jsonc).
 

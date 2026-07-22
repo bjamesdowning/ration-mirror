@@ -38,6 +38,10 @@ import {
 	shouldOAuthPostLoginRedirect,
 } from "./oauth.server";
 import { isUserPurgePending } from "./purge-pending.server";
+import {
+	buildStarterMealStatements,
+	shouldSeedStarterMeal,
+} from "./starter-meal.server";
 import { CURRENT_TOS_VERSION } from "./tos.constants";
 import type { UserSettings } from "./types";
 import { touchUserLastActive } from "./user-activity.server";
@@ -276,7 +280,8 @@ export function createAuth(env: Cloudflare.Env) {
 							const { orgId, orgValues, memberValues } =
 								buildPersonalOrgRecords(user.id, user.name);
 
-							await db.batch([
+							// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch mixes insert/update types
+							const batchStmts: any[] = [
 								db.insert(schema.organization).values(orgValues),
 								db.insert(schema.member).values(memberValues),
 								db
@@ -286,8 +291,16 @@ export function createAuth(env: Cloudflare.Env) {
 										tosVersion: CURRENT_TOS_VERSION,
 									})
 									.where(eq(schema.user.id, user.id)),
-								// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-							] as [any, ...any[]]);
+							];
+
+							if (shouldSeedStarterMeal(user.email)) {
+								const { mealInsert, ingredientInsert } =
+									buildStarterMealStatements(db, orgId);
+								batchStmts.push(mealInsert, ingredientInsert);
+							}
+
+							// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+							await db.batch(batchStmts as [any, ...any[]]);
 
 							log.info("[Auth] Created personal group", {
 								orgId: redactId(orgId),

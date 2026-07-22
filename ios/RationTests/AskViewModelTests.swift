@@ -358,6 +358,121 @@ final class AskViewModelTests: XCTestCase {
         }
     }
 
+    func testBriefingTurnTimeoutWithSuccessfulSeedToolsCompletesSuccess() async {
+        let socket = StreamingTestAskSocketClient()
+        let model = AskViewModel(
+            socket: socket,
+            stopTimeoutNanoseconds: 50_000_000,
+            briefingTurnTimeoutNanoseconds: 80_000_000
+        )
+        model.beginOnboardingBriefingSession()
+        model.apply(
+            CopilotStreamEvent(
+                type: "text_delta",
+                message: nil,
+                messageId: "intro",
+                text: "Ration connects Cargo to Galley.",
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_end",
+                message: nil,
+                messageId: "intro",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertTrue(model.introSucceeded)
+
+        model.markSeedTurnStarted()
+        model.apply(
+            CopilotStreamEvent(
+                type: "message_start",
+                message: CopilotMessage(id: "seed", role: "assistant", content: ""),
+                messageId: "seed",
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: nil,
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: nil,
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_start",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: CopilotToolStatus(toolCallId: "t1", toolName: "add_cargo_item", label: "Adding…"),
+                toolCallId: "t1",
+                ok: nil,
+                error: nil,
+                approvalId: nil,
+                toolName: "add_cargo_item",
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        model.apply(
+            CopilotStreamEvent(
+                type: "tool_end",
+                message: nil,
+                messageId: nil,
+                text: nil,
+                usageTokens: nil,
+                status: nil,
+                toolCallId: "t1",
+                ok: true,
+                error: nil,
+                approvalId: nil,
+                toolName: "add_cargo_item",
+                title: nil,
+                description: nil,
+                blocked: nil
+            )
+        )
+        XCTAssertEqual(model.seedItemsAdded, 1)
+        XCTAssertTrue(model.isTurnActive)
+
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertTrue(model.seedComplete)
+        XCTAssertTrue(model.briefingComplete)
+        if case .idle = model.state {
+            // Soft-success: tools already wrote Cargo.
+        } else {
+            XCTFail("Expected idle soft-success after seed tools, got \(model.state)")
+        }
+    }
+
     func testOnboardingInvalidPromptSurfacesError() {
         let model = AskViewModel()
         model.beginOnboardingBriefingSession()

@@ -266,12 +266,10 @@ export function getOnboardingBriefingSystemPromptAppend(
 		return [
 			"",
 			"Onboarding briefing mode (turn 2 — starter seed):",
-			"- Execute the user's pantry seed request using add_cargo_item for each item.",
-			'- Use temporal context to convert relative expiry ("2 weeks") to ISO expiresAt strings.',
-			"- Apply tags only where the user specified them.",
-			'- Use domain "food" for all items.',
-			"- If an item fails, continue with the rest and report partial success.",
-			"- Reply in under 200 words summarizing what was added, with expiry/tag highlights.",
+			"- Make exactly one add_cargo_item call for the requested milk.",
+			'- Use temporal context to convert relative expiry ("2 weeks") to an ISO expiresAt string.',
+			'- Apply the dairy tag. Use domain "food".',
+			"- After the tool succeeds, reply briefly confirming the item, quantity, expiry, and tag.",
 			"- Do not mention pricing or credits.",
 			"- Do not call search_docs or get_context on this turn.",
 		].join("\n");

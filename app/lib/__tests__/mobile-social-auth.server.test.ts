@@ -11,6 +11,7 @@ const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
 const updateUser = vi.fn().mockReturnValue({ where: vi.fn() });
 const kvPut = vi.fn().mockResolvedValue(undefined);
+const kvDelete = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("~/lib/auth.server", () => ({
 	getAuth: () => ({
@@ -56,7 +57,7 @@ function googleIdToken(email: string): string {
 
 const env = {
 	DB: {},
-	RATION_KV: { put: kvPut, get: vi.fn(), delete: vi.fn() },
+	RATION_KV: { put: kvPut, get: vi.fn(), delete: kvDelete },
 } as unknown as Cloudflare.Env;
 
 describe("authenticateMobileSocial", () => {
@@ -110,6 +111,7 @@ describe("authenticateMobileSocial", () => {
 		});
 
 		expect(kvPut).toHaveBeenCalled();
+		expect(kvDelete).toHaveBeenCalled();
 		expect(signInSocial).toHaveBeenCalledWith({
 			body: {
 				provider: "apple",
@@ -124,6 +126,45 @@ describe("authenticateMobileSocial", () => {
 			},
 		});
 		expect(updateUser).toHaveBeenCalled();
+	});
+
+	it("clears planted signup intent when Better Auth rejects a forged token", async () => {
+		signInSocial.mockRejectedValue(new Error("invalid token"));
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: googleIdToken("victim@example.com"),
+				intent: "signUp",
+				tosAccepted: true,
+			}),
+		).rejects.toMatchObject({
+			code: "authentication_failed",
+			status: 401,
+		});
+
+		expect(kvPut).toHaveBeenCalled();
+		expect(kvDelete).toHaveBeenCalled();
+	});
+
+	it("maps signup_disabled on Sign Up to signup_disabled", async () => {
+		signInSocial.mockRejectedValue({
+			code: "signup_disabled",
+			message: "Signup is disabled",
+		});
+
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: googleIdToken("new@example.com"),
+				intent: "signUp",
+				tosAccepted: true,
+			}),
+		).rejects.toMatchObject({
+			code: "signup_disabled",
+			status: 403,
+		});
+		expect(kvDelete).toHaveBeenCalled();
 	});
 
 	it("rejects Sign Up without ToS acceptance", async () => {

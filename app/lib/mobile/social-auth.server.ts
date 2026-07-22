@@ -16,6 +16,7 @@ import {
 } from "~/lib/starter-meal.server";
 import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
 import {
+	clearSignupIntentForEmail,
 	emailFromIdTokenPayload,
 	putSignupIntentForEmail,
 } from "~/lib/tos-signup-intent.server";
@@ -222,6 +223,7 @@ export async function authenticateMobileSocial(
 	const auth = getAuth(env);
 	const intent = input.intent ?? "signIn";
 	const isSignUp = intent === "signUp";
+	let signupEmail: string | null = null;
 
 	if (isSignUp) {
 		if (input.tosAccepted !== true) {
@@ -239,6 +241,9 @@ export async function authenticateMobileSocial(
 				"Could not read email from identity token. Try again or use another sign-up method.",
 			);
 		}
+		signupEmail = email;
+		// Intent must exist before Better Auth create.before; clear on any failure
+		// so a forged JWT cannot squat consent for an arbitrary address.
 		await putSignupIntentForEmail(env.RATION_KV, email);
 	}
 
@@ -273,11 +278,21 @@ export async function authenticateMobileSocial(
 			},
 		});
 	} catch (error) {
+		if (signupEmail) {
+			await clearSignupIntentForEmail(env.RATION_KV, signupEmail);
+		}
 		if (!isSignUp && isSignupDisabledError(error)) {
 			throw new MobileSocialAuthError(
 				"account_not_found",
 				404,
 				"No account found. Create an account instead.",
+			);
+		}
+		if (isSignUp && isSignupDisabledError(error)) {
+			throw new MobileSocialAuthError(
+				"signup_disabled",
+				403,
+				"Could not create account. Accept the Terms of Service and try Create Account again.",
 			);
 		}
 		throw new MobileSocialAuthError(
@@ -288,6 +303,9 @@ export async function authenticateMobileSocial(
 	}
 
 	if (signInResult.redirect || !("user" in signInResult)) {
+		if (signupEmail) {
+			await clearSignupIntentForEmail(env.RATION_KV, signupEmail);
+		}
 		throw new MobileSocialAuthError(
 			"authentication_failed",
 			401,
@@ -297,11 +315,19 @@ export async function authenticateMobileSocial(
 
 	const user = signInResult.user;
 	if (!user?.id) {
+		if (signupEmail) {
+			await clearSignupIntentForEmail(env.RATION_KV, signupEmail);
+		}
 		throw new MobileSocialAuthError(
 			"authentication_failed",
 			401,
 			"Authentication failed",
 		);
+	}
+
+	// Existing-user Sign Up skips create.before — drop leftover intent.
+	if (signupEmail) {
+		await clearSignupIntentForEmail(env.RATION_KV, signupEmail);
 	}
 
 	if (isSignUp) {

@@ -13,7 +13,7 @@ import {
 	importInventoryCsv,
 	previewInventoryImport,
 } from "../../inventory-import.server";
-import { toSupportedUnit } from "../../units";
+import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { err, ok, type ToolEnvelope } from "../envelope";
 import {
@@ -28,6 +28,10 @@ const CARGO_QTY_MIN0 = z
 		0,
 		"Quantity cannot be negative. 0 means out of stock; the item stays in Cargo as a restock reminder. Use remove_cargo_item to delete.",
 	);
+
+/** Shared unit field description for inventory write tools. */
+const UNIT_ARG_DESCRIPTION =
+	"Measurement unit. Prefer SI symbols (g, kg, ml, l). Aliases are accepted (litres, liters, quarts, grams, cups) and normalized server-side. Read ration://units for the full list.";
 
 /** Min score gap between #1 and #2 to auto-pick a name match without asking. */
 const ADJUST_NAME_SCORE_GAP = 0.1;
@@ -47,6 +51,7 @@ type AdjustCargoItemData = {
 	name?: string;
 	quantity?: number;
 	unit?: string;
+	unitNormalizedFrom?: string;
 	previousQuantity?: number;
 	deltaRequested?: number;
 	deltaApplied?: number;
@@ -63,7 +68,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				quantity: z
 					.number()
 					.positive("Quantity must be greater than 0 when adding stock."),
-				unit: z.string().min(1),
+				unit: z.string().min(1).describe(UNIT_ARG_DESCRIPTION),
 				domain: z
 					.enum(["food", "household", "alcohol"])
 					.optional()
@@ -75,7 +80,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			handler: async (ctx, a) => {
-				const unit = toSupportedUnit(a.unit);
+				const coerced = coerceToolUnit(a.unit);
 				const results = await ingestCargoItems(
 					env,
 					ctx.organizationId,
@@ -83,7 +88,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						{
 							name: a.name,
 							quantity: a.quantity,
-							unit,
+							unit: coerced.unit,
 							domain: a.domain ?? "food",
 							tags: a.tags ?? [],
 							expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
@@ -110,18 +115,26 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						},
 					);
 				}
-				return ok("add_cargo_item", {
-					status: result.status,
-					item: result.item
-						? {
-								id: result.item.id,
-								name: result.item.name,
-								quantity: result.item.quantity,
-								unit: result.item.unit,
-							}
-						: undefined,
-					mergedInto: result.mergedInto,
-				});
+				const warnings = coerced.warning ? [coerced.warning] : undefined;
+				return ok(
+					"add_cargo_item",
+					{
+						status: result.status,
+						item: result.item
+							? {
+									id: result.item.id,
+									name: result.item.name,
+									quantity: result.item.quantity,
+									unit: result.item.unit,
+								}
+							: undefined,
+						mergedInto: result.mergedInto,
+						...(coerced.normalizedFrom
+							? { unitNormalizedFrom: coerced.normalizedFrom }
+							: {}),
+					},
+					warnings ? { warnings } : undefined,
+				);
 			},
 		}),
 		defineSharedTool({
@@ -132,7 +145,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				itemId: z.string().uuid(),
 				name: z.string().min(1).optional(),
 				quantity: CARGO_QTY_MIN0.optional(),
-				unit: z.string().optional(),
+				unit: z.string().optional().describe(UNIT_ARG_DESCRIPTION),
 				domain: z.enum(["food", "household", "alcohol"]).optional(),
 				tags: z.array(z.string()).optional(),
 				expiresAt: z.string().nullable().optional(),
@@ -141,7 +154,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			rateLimitCategory: "mcp_write",
 			audit: true,
 			handler: async (ctx, a) => {
-				const unit = a.unit ? toSupportedUnit(a.unit) : undefined;
+				const coerced = a.unit ? coerceToolUnit(a.unit) : undefined;
 				const expiresAt =
 					a.expiresAt === undefined
 						? undefined
@@ -151,7 +164,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 				const updated = await updateItem(env, ctx.organizationId, a.itemId, {
 					name: a.name,
 					quantity: a.quantity,
-					unit,
+					unit: coerced?.unit,
 					domain: a.domain,
 					tags: a.tags,
 					expiresAt,
@@ -167,14 +180,22 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						},
 					);
 				}
-				return ok("update_cargo_item", {
-					id: updated.id,
-					name: updated.name,
-					quantity: updated.quantity,
-					unit: updated.unit,
-					domain: updated.domain,
-					expiresAt: updated.expiresAt,
-				});
+				const warnings = coerced?.warning ? [coerced.warning] : undefined;
+				return ok(
+					"update_cargo_item",
+					{
+						id: updated.id,
+						name: updated.name,
+						quantity: updated.quantity,
+						unit: updated.unit,
+						domain: updated.domain,
+						expiresAt: updated.expiresAt,
+						...(coerced?.normalizedFrom
+							? { unitNormalizedFrom: coerced.normalizedFrom }
+							: {}),
+					},
+					warnings ? { warnings } : undefined,
+				);
 			},
 		}),
 		defineSharedTool({
@@ -196,7 +217,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					.describe(
 						"Relative change; negative to consume, positive to add stock.",
 					),
-				unit: z.string().optional(),
+				unit: z.string().optional().describe(UNIT_ARG_DESCRIPTION),
 			}),
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
@@ -309,10 +330,11 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					nextQuantity = 0;
 				}
 
-				const unit = a.unit ? toSupportedUnit(a.unit) : undefined;
+				const coerced = a.unit ? coerceToolUnit(a.unit) : undefined;
+				if (coerced?.warning) warnings.push(coerced.warning);
 				const updated = await updateItem(env, ctx.organizationId, itemId, {
 					quantity: nextQuantity,
-					unit,
+					unit: coerced?.unit,
 				});
 				if (!updated) {
 					return err(
@@ -338,6 +360,9 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						previousQuantity,
 						deltaRequested: a.delta,
 						deltaApplied,
+						...(coerced?.normalizedFrom
+							? { unitNormalizedFrom: coerced.normalizedFrom }
+							: {}),
 					},
 					warnings.length > 0 ? { warnings } : undefined,
 				);

@@ -16,6 +16,13 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("Never ask for card numbers");
 	});
 
+	it("includes unit alias normalization guidance", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain("Prefer SI unit symbols");
+		expect(prompt).toContain("normalized server-side");
+		expect(prompt).toContain("unit warning");
+	});
+
 	it("requires action reporting for writes but not read-only tools", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Action reporting:");

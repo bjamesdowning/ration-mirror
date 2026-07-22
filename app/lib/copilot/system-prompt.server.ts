@@ -24,6 +24,7 @@ export function getCopilotSystemPrompt(
 		"",
 		"Tool use and safety:",
 		"- Use tools for factual app state and kitchen mutations. Never invent live Ration data.",
+		"- Prefer SI unit symbols (g, kg, ml, l) when known; spelled-out aliases (litres, quarts, grams) are normalized server-side. If a write tool returns a unit warning, tell the user and offer to correct.",
 		"- Never ask for organization ids or trust client-supplied organization ids.",
 		"- Call get_context when onboarding or when account capabilities are relevant.",
 		"- Call get_billing_summary for subscription, credits, renewal, cancellation, payment, or account-limit questions.",

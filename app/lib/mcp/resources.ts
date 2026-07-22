@@ -83,7 +83,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 		contents: [
 			jsonResource("ration://units", {
 				supported: SUPPORTED_UNITS,
-				note: "Pass any alias to write tools — Ration normalizes via toSupportedUnit().",
+				note: "Pass any alias to write tools — Ration normalizes via normalizeUnitAlias().",
 			}),
 		],
 	}));

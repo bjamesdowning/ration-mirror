@@ -107,6 +107,46 @@ export function normalizeUnitAlias(
 }
 
 /**
+ * Inputs that intentionally mean count `unit` (no unknown-unit warning).
+ * Other strings that coerce to `unit` are treated as unrecognized.
+ */
+const INTENTIONAL_COUNT_UNIT_INPUTS = new Set(["unit", "units"]);
+
+export type CoerceToolUnitResult = {
+	unit: SupportedUnit;
+	/** Present when the trimmed lowercase input differed from the canonical unit. */
+	normalizedFrom?: string;
+	/** Present when a non-empty unrecognized unit fell back to count `unit`. */
+	warning?: string;
+};
+
+/**
+ * Coerces tool/agent unit args via aliases, with optional feedback for agents.
+ * Prefer this over toSupportedUnit on MCP/Copilot write tool boundaries.
+ */
+export function coerceToolUnit(
+	raw: string | null | undefined,
+): CoerceToolUnitResult {
+	const trimmed = String(raw ?? "").trim();
+	const normalizedKey = trimmed.toLowerCase().replace(/\s+/g, " ");
+	const unit = normalizeUnitAlias(raw);
+	const result: CoerceToolUnitResult = { unit };
+
+	const isUnrecognizedCountFallback =
+		unit === "unit" &&
+		normalizedKey.length > 0 &&
+		!INTENTIONAL_COUNT_UNIT_INPUTS.has(normalizedKey);
+
+	if (isUnrecognizedCountFallback) {
+		result.warning = `Unrecognized unit "${trimmed}" was stored as "unit". Prefer SI symbols (g, kg, ml, l) or read ration://units for aliases.`;
+	} else if (normalizedKey && normalizedKey !== unit) {
+		result.normalizedFrom = normalizedKey;
+	}
+
+	return result;
+}
+
+/**
  * Coerces a raw unit string (e.g. from DB) to SupportedUnit. Unknown/empty values
  * return "unit" so callers never pass an invalid key into UNIT_FACTORS_TO_BASE.
  */

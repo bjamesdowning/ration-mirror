@@ -692,6 +692,65 @@ describe("MCP tools", () => {
 				expect.objectContaining({ skipVectorPhase: true }),
 			);
 		});
+
+		it("normalizes litres alias to l before ingest (onboarding case)", async () => {
+			vi.mocked(ingestCargoItems).mockResolvedValueOnce([
+				{
+					status: "created",
+					item: { id: "c-milk", name: "milk", quantity: 2, unit: "l" },
+					id: "c-milk",
+					name: "milk",
+				} as never,
+			]);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"add_cargo_item",
+			)({ name: "milk", quantity: 2, unit: "litres" });
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data.status).toBe("created");
+			expect(envelope.data.unitNormalizedFrom).toBe("litres");
+			expect(envelope.warnings).toBeUndefined();
+			expect(ingestCargoItems).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				[
+					expect.objectContaining({
+						name: "milk",
+						quantity: 2,
+						unit: "l",
+					}),
+				],
+				expect.objectContaining({ skipVectorPhase: true }),
+			);
+		});
+
+		it("warns when an unrecognized unit falls back to count unit", async () => {
+			vi.mocked(ingestCargoItems).mockResolvedValueOnce([
+				{
+					status: "created",
+					item: { id: "c1", name: "x", quantity: 1, unit: "unit" },
+					id: "c1",
+					name: "x",
+				} as never,
+			]);
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"add_cargo_item",
+			)({ name: "x", quantity: 1, unit: "stone" });
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data.unitNormalizedFrom).toBeUndefined();
+			expect(envelope.warnings?.[0]).toContain("Unrecognized unit");
+			expect(ingestCargoItems).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				[expect.objectContaining({ unit: "unit" })],
+				expect.objectContaining({ skipVectorPhase: true }),
+			);
+		});
 	});
 
 	describe("remove_cargo_item", () => {

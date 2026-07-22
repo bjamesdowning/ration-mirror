@@ -3,6 +3,7 @@ import {
 	areSameFamily,
 	chooseReadableUnit,
 	chooseReadableUnitForMode,
+	coerceToolUnit,
 	convertIngredientAmount,
 	convertQuantity,
 	convertQuantityWithDensity,
@@ -71,6 +72,50 @@ describe("normalizeUnitAlias", () => {
 	it("falls back to toSupportedUnit for unrecognised aliases", () => {
 		expect(normalizeUnitAlias("stone")).toBe("unit");
 		expect(normalizeUnitAlias(null)).toBe("unit");
+	});
+});
+
+describe("coerceToolUnit", () => {
+	it("resolves volume aliases used by Copilot/onboarding", () => {
+		expect(coerceToolUnit("litres")).toEqual({
+			unit: "l",
+			normalizedFrom: "litres",
+		});
+		expect(coerceToolUnit("liters")).toEqual({
+			unit: "l",
+			normalizedFrom: "liters",
+		});
+		expect(coerceToolUnit("quarts")).toEqual({
+			unit: "qt",
+			normalizedFrom: "quarts",
+		});
+	});
+
+	it("resolves weight aliases and SI symbols", () => {
+		expect(coerceToolUnit("grams")).toEqual({
+			unit: "g",
+			normalizedFrom: "grams",
+		});
+		expect(coerceToolUnit("L")).toEqual({ unit: "l" });
+		expect(coerceToolUnit("g")).toEqual({ unit: "g" });
+	});
+
+	it("warns when an unrecognized unit falls back to count unit", () => {
+		const result = coerceToolUnit("stone");
+		expect(result.unit).toBe("unit");
+		expect(result.normalizedFrom).toBeUndefined();
+		expect(result.warning).toContain("Unrecognized unit");
+		expect(result.warning).toContain("ration://units");
+	});
+
+	it("does not warn for intentional count unit inputs", () => {
+		expect(coerceToolUnit("unit")).toEqual({ unit: "unit" });
+		expect(coerceToolUnit("units")).toEqual({
+			unit: "unit",
+			normalizedFrom: "units",
+		});
+		expect(coerceToolUnit("")).toEqual({ unit: "unit" });
+		expect(coerceToolUnit(null)).toEqual({ unit: "unit" });
 	});
 });
 

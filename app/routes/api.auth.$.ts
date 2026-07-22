@@ -5,6 +5,10 @@ import { buildFlagContext } from "../lib/feature-flags/flags.server";
 import { withDefaultMcpResourceOnTokenExchange } from "../lib/oauth-auth-prepare.server";
 import { stripOAuthOrgSelectedFromCookieHeader } from "../lib/oauth-cookies.server";
 import { checkRateLimit } from "../lib/rate-limiter.server";
+import {
+	prepareWebSignupIntent,
+	withSignupIntentCookie,
+} from "../lib/social-web-signup.server";
 import type { Route } from "./+types/api.auth.$";
 
 function getClientIp(request: Request) {
@@ -87,5 +91,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const session = await auth.api.getSession({ headers: request.headers });
 	const flagContext = buildFlagContext(request, env, session);
 	await assertAppleWebLoginAllowed(env, request, flagContext);
-	return auth.handler(await prepareAuthHandlerRequest(request, env));
+	const { setCookie } = await prepareWebSignupIntent(env, request);
+	const response = await auth.handler(
+		await prepareAuthHandlerRequest(request, env),
+	);
+	return withSignupIntentCookie(response, setCookie);
 }

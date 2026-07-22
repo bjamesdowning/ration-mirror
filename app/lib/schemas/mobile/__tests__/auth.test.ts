@@ -16,6 +16,28 @@ describe("MobileMagicLinkSchema", () => {
 			codeChallenge: VALID_CHALLENGE,
 		});
 		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.intent).toBe("signIn");
+		}
+	});
+
+	it("requires tosAccepted for Sign Up intent", () => {
+		const result = MobileMagicLinkSchema.safeParse({
+			email: "crew@ration.app",
+			codeChallenge: VALID_CHALLENGE,
+			intent: "signUp",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("accepts Sign Up with tosAccepted", () => {
+		const result = MobileMagicLinkSchema.safeParse({
+			email: "crew@ration.app",
+			codeChallenge: VALID_CHALLENGE,
+			intent: "signUp",
+			tosAccepted: true,
+		});
+		expect(result.success).toBe(true);
 	});
 
 	it("rejects invalid email", () => {

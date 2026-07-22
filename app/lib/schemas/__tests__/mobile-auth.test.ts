@@ -6,37 +6,50 @@ import {
 } from "../mobile/auth";
 
 describe("MobileSocialAuthSchema", () => {
-	it("requires tosAccepted for all social sign-in payloads", () => {
+	it("allows Sign In without tosAccepted", () => {
 		const withoutTos = MobileSocialAuthSchema.safeParse({
 			provider: "google",
 			idToken: "token",
+			intent: "signIn",
+		});
+		expect(withoutTos.success).toBe(true);
+	});
+
+	it("requires tosAccepted for Sign Up", () => {
+		const withoutTos = MobileSocialAuthSchema.safeParse({
+			provider: "google",
+			idToken: "token",
+			intent: "signUp",
 		});
 		expect(withoutTos.success).toBe(false);
 	});
 
-	it("accepts Google idToken payloads with ToS", () => {
+	it("accepts Google Sign Up payloads with ToS", () => {
 		const parsed = MobileSocialAuthSchema.parse({
 			provider: "google",
 			idToken: "token",
+			intent: "signUp",
 			tosAccepted: true,
 		});
 		expect(parsed.provider).toBe("google");
+		expect(parsed.intent).toBe("signUp");
 	});
 
 	it("requires nonce for Apple sign-in", () => {
 		const result = MobileSocialAuthSchema.safeParse({
 			provider: "apple",
 			idToken: "token",
+			intent: "signIn",
 		});
 		expect(result.success).toBe(false);
 	});
 
-	it("accepts Apple idToken with nonce", () => {
+	it("accepts Apple idToken with nonce on Sign In", () => {
 		const parsed = MobileSocialAuthSchema.parse({
 			provider: "apple",
 			idToken: "token",
 			nonce: "raw-nonce",
-			tosAccepted: true,
+			intent: "signIn",
 		});
 		expect(parsed.provider).toBe("apple");
 	});

@@ -238,7 +238,7 @@ describe("assertAppleWebLoginAllowed", () => {
 		).resolves.toBeUndefined();
 	});
 
-	it("blocks explicit Apple sign-up without ToS confirmation", async () => {
+	it("allows explicit Apple sign-up when flag is on (ToS gated elsewhere)", async () => {
 		const enabledEnv = {
 			...webEnv,
 			FEATURE_FLAG_OVERRIDES: JSON.stringify({ "apple-web-login": true }),
@@ -253,13 +253,10 @@ describe("assertAppleWebLoginAllowed", () => {
 		);
 		await expect(
 			assertAppleWebLoginAllowed(enabledEnv, request, { userId: "u1" }),
-		).rejects.toMatchObject({
-			data: { error: "tos_required" },
-			init: { status: 403 },
-		});
+		).resolves.toBeUndefined();
 	});
 
-	it("allows explicit Apple sign-up with ToS confirmation", async () => {
+	it("allows explicit Apple sign-up with ToS confirmation when flag is on", async () => {
 		const enabledEnv = {
 			...webEnv,
 			FEATURE_FLAG_OVERRIDES: JSON.stringify({ "apple-web-login": true }),

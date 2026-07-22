@@ -77,14 +77,16 @@ final class AuthManager {
         accessToken: String? = nil,
         givenName: String? = nil,
         familyName: String? = nil,
+        intent: String,
         tosAccepted: Bool
     ) async throws {
         clearAuthError()
         var body: [String: Any] = [
             "provider": provider,
             "idToken": idToken,
+            "intent": intent,
         ]
-        if tosAccepted {
+        if intent == "signUp", tosAccepted {
             body["tosAccepted"] = true
         }
         if let nonce {
@@ -138,7 +140,7 @@ final class AuthManager {
 
     // MARK: Magic link + code exchange
 
-    func requestMagicLink(email: String) async throws {
+    func requestMagicLink(email: String, intent: String, tosAccepted: Bool) async throws {
         clearAuthError()
         // PKCE: persist the verifier so it survives backgrounding while the user
         // checks email, and send only the S256 challenge.
@@ -147,10 +149,15 @@ final class AuthManager {
         var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "auth/magic-link"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSON.encoder.encode([
+        var body: [String: Any] = [
             "email": email,
             "codeChallenge": PKCE.challenge(for: verifier),
-        ])
+            "intent": intent,
+        ]
+        if intent == "signUp", tosAccepted {
+            body["tosAccepted"] = true
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: req)
         try Self.ensureOK(data: data, response: response)
     }

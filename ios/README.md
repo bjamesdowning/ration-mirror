@@ -196,10 +196,11 @@ Ration/
 
 **Social sign-in (v1.4.49+):** Sign in with Apple (`AuthenticationServices`) and
 Google (`GoogleSignIn-iOS` SPM) obtain provider ID tokens natively. The app calls
-`POST /auth/social` with the token (and Apple nonce); the server verifies via Better
-Auth and returns the same JWT pair as magic-link auth. The auth screen offers **Sign In**
-and **Create Account** modes: returning users sign in without a ToS checkbox; new
-accounts must accept Terms of Service and Privacy Policy before any method. Configure:
+`POST /auth/social` with the token (and Apple nonce) plus `intent: signIn | signUp`;
+the server verifies via Better Auth and returns the same JWT pair as magic-link auth.
+**Sign In** never creates an account (`account_not_found` prompts switching to Create Account).
+**Create Account** requires ToS acceptance (`tosAccepted: true`) before provisioning.
+Configure:
 
 - **Apple:** Enable Sign in with Apple on App ID `com.mayutic.ration` in the Apple
   Developer portal (entitlement `com.apple.developer.applesignin` is in `project.yml`).
@@ -218,7 +219,7 @@ hijacks the `ration://` scheme cannot redeem an intercepted code without the
 verifier.
 
 1. App generates a PKCE `verifier` (saved in the Keychain) and
-   `POST /auth/magic-link { email, codeChallenge }` (S256 challenge) → user taps the email link.
+   `POST /auth/magic-link { email, codeChallenge, intent, tosAccepted? }` (S256 challenge) → user taps the email link.
 2. Link opens `/auth/mobile-callback?client=ios&code_challenge=…` → the challenge
    is bound to a one-time KV code (60s TTL) → redirects to `ration://auth/callback?code=…`.
 3. `RationApp.onOpenURL` extracts the code → `POST /auth/token { grantType: "authorization_code", code, codeVerifier }`.

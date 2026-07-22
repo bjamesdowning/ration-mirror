@@ -10,6 +10,7 @@ const findFirstUser = vi.fn();
 const findFirstMember = vi.fn();
 const findFirstOrg = vi.fn();
 const updateUser = vi.fn().mockReturnValue({ where: vi.fn() });
+const kvPut = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("~/lib/auth.server", () => ({
 	getAuth: () => ({
@@ -45,7 +46,18 @@ vi.mock("drizzle-orm/d1", () => ({
 	}),
 }));
 
-const env = { DB: {} } as Cloudflare.Env;
+function googleIdToken(email: string): string {
+	const payload = btoa(JSON.stringify({ email }))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	return `hdr.${payload}.sig`;
+}
+
+const env = {
+	DB: {},
+	RATION_KV: { put: kvPut, get: vi.fn(), delete: vi.fn() },
+} as unknown as Cloudflare.Env;
 
 describe("authenticateMobileSocial", () => {
 	beforeEach(() => {
@@ -64,41 +76,45 @@ describe("authenticateMobileSocial", () => {
 		});
 	});
 
-	it("exchanges a Google idToken for a mobile token pair", async () => {
+	it("exchanges a Google idToken for a mobile token pair on Sign In", async () => {
 		const result = await authenticateMobileSocial(env, {
 			provider: "google",
-			idToken: "google-id-token",
+			idToken: googleIdToken("user@example.com"),
 			accessToken: "google-access",
-			tosAccepted: true,
+			intent: "signIn",
 		});
 
 		expect(signInSocial).toHaveBeenCalledWith({
 			body: {
 				provider: "google",
 				idToken: {
-					token: "google-id-token",
+					token: expect.any(String),
 					accessToken: "google-access",
 				},
 			},
 		});
+		expect(kvPut).not.toHaveBeenCalled();
 		expect(issueMobileTokenPair).toHaveBeenCalledWith(env, "user-1", "org-1");
 		expect(result.accessToken).toBe("access");
 	});
 
-	it("exchanges an Apple idToken with nonce for a mobile token pair", async () => {
+	it("passes requestSignUp and stores ToS intent on Sign Up", async () => {
+		findFirstUser.mockResolvedValue({ tosAcceptedAt: null, name: "" });
 		await authenticateMobileSocial(env, {
 			provider: "apple",
-			idToken: "apple-id-token",
+			idToken: googleIdToken("ada@ration.app"),
 			nonce: "raw-nonce",
+			intent: "signUp",
 			tosAccepted: true,
 			fullName: { givenName: "Ada", familyName: "Lovelace" },
 		});
 
+		expect(kvPut).toHaveBeenCalled();
 		expect(signInSocial).toHaveBeenCalledWith({
 			body: {
 				provider: "apple",
 				idToken: {
-					token: "apple-id-token",
+					token: expect.any(String),
 					nonce: "raw-nonce",
 					user: {
 						name: { firstName: "Ada", lastName: "Lovelace" },
@@ -107,26 +123,15 @@ describe("authenticateMobileSocial", () => {
 				requestSignUp: true,
 			},
 		});
-		expect(issueMobileTokenPair).toHaveBeenCalledWith(env, "user-1", "org-1");
+		expect(updateUser).toHaveBeenCalled();
 	});
 
-	it("rejects requests without ToS acceptance", async () => {
+	it("rejects Sign Up without ToS acceptance", async () => {
 		await expect(
 			authenticateMobileSocial(env, {
 				provider: "google",
-				idToken: "google-id-token",
-				tosAccepted: true,
-			}),
-		).resolves.toBeDefined();
-
-		findFirstUser.mockResolvedValue({ tosAcceptedAt: null, name: "" });
-
-		await expect(
-			authenticateMobileSocial(env, {
-				provider: "google",
-				idToken: "google-id-token",
-				// @ts-expect-error — schema requires tosAccepted; test server-side guard
-				tosAccepted: false,
+				idToken: googleIdToken("user@example.com"),
+				intent: "signUp",
 			}),
 		).rejects.toMatchObject({
 			code: "tos_required",
@@ -134,16 +139,40 @@ describe("authenticateMobileSocial", () => {
 		});
 	});
 
-	it("stamps ToS when accepted for users without prior acceptance", async () => {
-		findFirstUser.mockResolvedValue({ tosAcceptedAt: null, name: "" });
+	it("rejects Sign Up when id token has no email claim", async () => {
+		const payload = btoa(JSON.stringify({ sub: "no-email" }))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: `hdr.${payload}.sig`,
+				intent: "signUp",
+				tosAccepted: true,
+			}),
+		).rejects.toMatchObject({
+			code: "email_required",
+			status: 400,
+		});
+	});
 
-		await authenticateMobileSocial(env, {
-			provider: "google",
-			idToken: "google-id-token",
-			tosAccepted: true,
+	it("maps signup_disabled on Sign In to account_not_found", async () => {
+		signInSocial.mockRejectedValue({
+			code: "signup_disabled",
+			message: "Signup is disabled",
 		});
 
-		expect(updateUser).toHaveBeenCalled();
+		await expect(
+			authenticateMobileSocial(env, {
+				provider: "google",
+				idToken: googleIdToken("new@example.com"),
+				intent: "signIn",
+			}),
+		).rejects.toMatchObject({
+			code: "account_not_found",
+			status: 404,
+		});
 	});
 
 	it("returns generic authentication failure when Better Auth rejects token", async () => {
@@ -153,7 +182,7 @@ describe("authenticateMobileSocial", () => {
 			authenticateMobileSocial(env, {
 				provider: "google",
 				idToken: "bad-token",
-				tosAccepted: true,
+				intent: "signIn",
 			}),
 		).rejects.toBeInstanceOf(MobileSocialAuthError);
 
@@ -161,7 +190,7 @@ describe("authenticateMobileSocial", () => {
 			authenticateMobileSocial(env, {
 				provider: "google",
 				idToken: "bad-token",
-				tosAccepted: true,
+				intent: "signIn",
 			}),
 		).rejects.toMatchObject({
 			code: "authentication_failed",
@@ -176,8 +205,8 @@ describe("authenticateMobileSocial", () => {
 		await expect(
 			authenticateMobileSocial(env, {
 				provider: "google",
-				idToken: "google-id-token",
-				tosAccepted: true,
+				idToken: googleIdToken("user@example.com"),
+				intent: "signIn",
 			}),
 		).resolves.toBeDefined();
 

@@ -383,6 +383,10 @@ struct SignInView: View {
         }
     }
 
+    private var authIntent: String {
+        mode == .signUp ? "signUp" : "signIn"
+    }
+
     private func sendLink() async {
         guard canSubmitMagicLink else { return }
         errorMessage = nil
@@ -390,7 +394,11 @@ struct SignInView: View {
         isSending = true
         defer { isSending = false }
         do {
-            try await env.auth.requestMagicLink(email: email.trimmingCharacters(in: .whitespaces))
+            try await env.auth.requestMagicLink(
+                email: email.trimmingCharacters(in: .whitespaces),
+                intent: authIntent,
+                tosAccepted: tosAccepted
+            )
             linkSent = true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -428,10 +436,14 @@ struct SignInView: View {
                 nonce: result.rawNonce,
                 givenName: result.givenName,
                 familyName: result.familyName,
-                tosAccepted: true
+                intent: authIntent,
+                tosAccepted: tosAccepted
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
+        } catch let error as APIError where error.code == "account_not_found" {
+            errorMessage = error.errorDescription
+            mode = .signUp
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -449,10 +461,14 @@ struct SignInView: View {
                 provider: "google",
                 idToken: result.idToken,
                 accessToken: result.accessToken,
-                tosAccepted: true
+                intent: authIntent,
+                tosAccepted: tosAccepted
             )
         } catch let error as APIError where error.code == "cancelled" {
             return
+        } catch let error as APIError where error.code == "account_not_found" {
+            errorMessage = error.errorDescription
+            mode = .signUp
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

@@ -91,11 +91,30 @@ export function AuthWidget({
 				callbackURL: resolvedCallbackURL,
 				newUserCallbackURL: resolvedCallbackURL,
 				errorCallbackURL: resolvedErrorCallbackURL,
+				...(mode === "signUp"
+					? {
+							metadata: {
+								requestSignUp: true,
+								tosAccepted: true,
+							},
+						}
+					: {}),
 			});
 
 			if (error) {
 				setFlowState("error");
-				setErrorMsg("Something went wrong. Please try again.");
+				const code =
+					typeof error === "object" &&
+					error &&
+					"code" in error &&
+					typeof (error as { code?: unknown }).code === "string"
+						? (error as { code: string }).code
+						: "";
+				setErrorMsg(
+					code === "signup_disabled" || code === "USER_NOT_FOUND"
+						? "No account found. Switch to Create Account."
+						: "Something went wrong. Please try again.",
+				);
 				return;
 			}
 
@@ -109,6 +128,14 @@ export function AuthWidget({
 		}
 	};
 
+	const socialSignUpOpts =
+		mode === "signUp"
+			? {
+					requestSignUp: true as const,
+					additionalData: { tosAccepted: true },
+				}
+			: {};
+
 	const handleGoogleAuth = async () => {
 		if (consentBlocked) return;
 		setSocialLoading("google");
@@ -117,9 +144,14 @@ export function AuthWidget({
 			await authClient.signIn.social({
 				provider: "google",
 				callbackURL: resolvedCallbackURL,
+				...socialSignUpOpts,
 			});
 		} catch {
-			setErrorMsg("Google sign-in failed. Please try again.");
+			setErrorMsg(
+				mode === "signIn"
+					? "Google sign-in failed. No account found? Switch to Create Account."
+					: "Google sign-in failed. Please try again.",
+			);
 			setSocialLoading(null);
 		}
 	};
@@ -132,15 +164,14 @@ export function AuthWidget({
 			await authClient.signIn.social({
 				provider: "apple",
 				callbackURL: resolvedCallbackURL,
-				...(mode === "signUp"
-					? {
-							requestSignUp: true,
-							additionalData: { tosAccepted: true },
-						}
-					: {}),
+				...socialSignUpOpts,
 			});
 		} catch {
-			setErrorMsg("Apple sign-in failed. Please try again.");
+			setErrorMsg(
+				mode === "signIn"
+					? "Apple sign-in failed. No account found? Switch to Create Account."
+					: "Apple sign-in failed. Please try again.",
+			);
 			setSocialLoading(null);
 		}
 	};

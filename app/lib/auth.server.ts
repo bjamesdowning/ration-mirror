@@ -1,6 +1,6 @@
 import { waitUntil } from "cloudflare:workers";
 import { oauthProvider } from "@better-auth/oauth-provider";
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, magicLink, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -43,6 +43,7 @@ import {
 	shouldSeedStarterMeal,
 } from "./starter-meal.server";
 import { CURRENT_TOS_VERSION } from "./tos.constants";
+import { consumeSignupIntent } from "./tos-signup-intent.server";
 import type { UserSettings } from "./types";
 import { touchUserLastActive } from "./user-activity.server";
 import { grantWelcomeCreditsIfEligible } from "./welcome-credits.server";
@@ -259,6 +260,7 @@ export function createAuth(env: Cloudflare.Env) {
 									: googleClientIds,
 							clientSecret: authEnv.GOOGLE_CLIENT_SECRET as string,
 							prompt: "select_account" as const,
+							disableImplicitSignUp: true,
 						},
 					}
 				: {}),
@@ -274,23 +276,48 @@ export function createAuth(env: Cloudflare.Env) {
 		databaseHooks: {
 			user: {
 				create: {
+					before: async (user, ctx) => {
+						const request = ctx?.request as Request | undefined;
+						const intent = await consumeSignupIntent(
+							env.RATION_KV,
+							typeof user.email === "string" ? user.email : null,
+							request,
+						);
+						if (intent) {
+							return {
+								data: {
+									...user,
+									tosAcceptedAt: new Date(),
+									tosVersion: intent.tosVersion,
+								},
+							};
+						}
+						// Local Dev Login only — never in production.
+						if (isDev) {
+							return {
+								data: {
+									...user,
+									tosAcceptedAt: new Date(),
+									tosVersion: CURRENT_TOS_VERSION,
+								},
+							};
+						}
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"No account found. Create an account and accept the Terms of Service first.",
+							code: "signup_disabled",
+						});
+					},
 					after: async (user) => {
 						try {
 							const db = drizzle(env.DB, { schema });
 							const { orgId, orgValues, memberValues } =
 								buildPersonalOrgRecords(user.id, user.name);
 
-							// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch mixes insert/update types
+							// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch mixes insert types
 							const batchStmts: any[] = [
 								db.insert(schema.organization).values(orgValues),
 								db.insert(schema.member).values(memberValues),
-								db
-									.update(schema.user)
-									.set({
-										tosAcceptedAt: new Date(),
-										tosVersion: CURRENT_TOS_VERSION,
-									})
-									.where(eq(schema.user.id, user.id)),
 							];
 
 							if (shouldSeedStarterMeal(user.email)) {

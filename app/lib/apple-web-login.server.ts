@@ -163,9 +163,7 @@ export async function assertAppleWebLoginAllowed(
 		return;
 	}
 	if (await isAppleWebLoginAvailable(env, context)) {
-		if (appleRequest.isSignUp && !appleRequest.tosAccepted) {
-			throw data({ error: "tos_required" }, { status: 403 });
-		}
+		// ToS for Apple Sign Up is enforced in prepareWebSignupIntent.
 		return;
 	}
 	throw data(null, { status: 404 });

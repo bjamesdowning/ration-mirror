@@ -117,6 +117,18 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 											description:
 												"PKCE S256 challenge (base64url, 43-128 chars). Proven via codeVerifier at token exchange.",
 										},
+										intent: {
+											type: "string",
+											enum: ["signIn", "signUp"],
+											default: "signIn",
+											description:
+												"signIn authenticates existing users only; signUp requires tosAccepted and may create an account.",
+										},
+										tosAccepted: {
+											type: "boolean",
+											const: true,
+											description: "Required when intent is signUp.",
+										},
 									},
 									required: ["email", "codeChallenge"],
 								},

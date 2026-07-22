@@ -15,11 +15,23 @@ const PkceCodeVerifier = z
 	.max(PKCE_MAX_LENGTH)
 	.regex(PKCE_CHALLENGE_REGEX);
 
-export const MobileMagicLinkSchema = z.object({
-	email: z.string().email(),
-	// S256 PKCE challenge; the app proves the matching verifier at token exchange.
-	codeChallenge: PkceCodeChallenge,
-});
+export const MobileMagicLinkSchema = z
+	.object({
+		email: z.string().email(),
+		// S256 PKCE challenge; the app proves the matching verifier at token exchange.
+		codeChallenge: PkceCodeChallenge,
+		intent: z.enum(["signIn", "signUp"]).default("signIn"),
+		tosAccepted: z.literal(true).optional(),
+	})
+	.superRefine((value, ctx) => {
+		if (value.intent === "signUp" && value.tosAccepted !== true) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Terms of Service acceptance required",
+				path: ["tosAccepted"],
+			});
+		}
+	});
 
 export const MobileTokenRequestSchema = z.discriminatedUnion("grantType", [
 	z.object({
@@ -38,23 +50,34 @@ const AppleFullNameSchema = z.object({
 	familyName: z.string().optional(),
 });
 
-const MobileSocialTosSchema = z.object({
-	tosAccepted: z.literal(true),
+const MobileSocialBaseSchema = z.object({
+	intent: z.enum(["signIn", "signUp"]).default("signIn"),
+	tosAccepted: z.literal(true).optional(),
 });
 
-export const MobileSocialAuthSchema = z.discriminatedUnion("provider", [
-	MobileSocialTosSchema.extend({
-		provider: z.literal("google"),
-		idToken: z.string().min(1),
-		accessToken: z.string().min(1).optional(),
-	}),
-	MobileSocialTosSchema.extend({
-		provider: z.literal("apple"),
-		idToken: z.string().min(1),
-		nonce: z.string().min(1),
-		fullName: AppleFullNameSchema.optional(),
-	}),
-]);
+export const MobileSocialAuthSchema = z
+	.discriminatedUnion("provider", [
+		MobileSocialBaseSchema.extend({
+			provider: z.literal("google"),
+			idToken: z.string().min(1),
+			accessToken: z.string().min(1).optional(),
+		}),
+		MobileSocialBaseSchema.extend({
+			provider: z.literal("apple"),
+			idToken: z.string().min(1),
+			nonce: z.string().min(1),
+			fullName: AppleFullNameSchema.optional(),
+		}),
+	])
+	.superRefine((value, ctx) => {
+		if (value.intent === "signUp" && value.tosAccepted !== true) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Terms of Service acceptance required",
+				path: ["tosAccepted"],
+			});
+		}
+	});
 
 export type MobileSocialAuthInput = z.infer<typeof MobileSocialAuthSchema>;
 

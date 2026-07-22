@@ -15,6 +15,10 @@ import {
 	shouldSeedStarterMeal,
 } from "~/lib/starter-meal.server";
 import { CURRENT_TOS_VERSION } from "~/lib/tos.constants";
+import {
+	emailFromIdTokenPayload,
+	putSignupIntentForEmail,
+} from "~/lib/tos-signup-intent.server";
 import { grantWelcomeCreditsIfEligible } from "~/lib/welcome-credits.server";
 
 export class MobileSocialAuthError extends Error {
@@ -135,19 +139,10 @@ async function trySeedStarterMeal(
 	}
 }
 
-async function enforceTosAcceptance(
+async function stampTosIfMissing(
 	env: Cloudflare.Env,
 	userId: string,
-	tosAccepted: boolean,
 ): Promise<void> {
-	if (tosAccepted !== true) {
-		throw new MobileSocialAuthError(
-			"tos_required",
-			403,
-			"Terms of Service acceptance required",
-		);
-	}
-
 	const db = drizzle(env.DB, { schema });
 	const user = await db.query.user.findFirst({
 		where: eq(schema.user.id, userId),
@@ -188,6 +183,34 @@ async function applyAppleDisplayName(
 		.where(eq(schema.user.id, userId));
 }
 
+function isSignupDisabledError(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	const record = error as { code?: unknown; message?: unknown; body?: unknown };
+	const code =
+		typeof record.code === "string"
+			? record.code
+			: typeof record.body === "object" &&
+					record.body &&
+					"code" in record.body &&
+					typeof (record.body as { code?: unknown }).code === "string"
+				? (record.body as { code: string }).code
+				: "";
+	const message =
+		typeof record.message === "string"
+			? record.message
+			: typeof record.body === "object" &&
+					record.body &&
+					"message" in record.body &&
+					typeof (record.body as { message?: unknown }).message === "string"
+				? (record.body as { message: string }).message
+				: "";
+	return (
+		code === "signup_disabled" ||
+		code === "USER_NOT_FOUND" ||
+		/signup.?disabled|no account found/i.test(message)
+	);
+}
+
 /**
  * Verifies a native Google or Apple ID token via Better Auth, ensures org context,
  * and mints the standard mobile JWT + refresh token pair.
@@ -197,6 +220,27 @@ export async function authenticateMobileSocial(
 	input: MobileSocialAuthInput,
 ): Promise<MobileTokenPair> {
 	const auth = getAuth(env);
+	const intent = input.intent ?? "signIn";
+	const isSignUp = intent === "signUp";
+
+	if (isSignUp) {
+		if (input.tosAccepted !== true) {
+			throw new MobileSocialAuthError(
+				"tos_required",
+				403,
+				"Terms of Service acceptance required",
+			);
+		}
+		const email = emailFromIdTokenPayload(input.idToken);
+		if (!email) {
+			throw new MobileSocialAuthError(
+				"email_required",
+				400,
+				"Could not read email from identity token. Try again or use another sign-up method.",
+			);
+		}
+		await putSignupIntentForEmail(env.RATION_KV, email);
+	}
 
 	const idTokenBody =
 		input.provider === "google"
@@ -225,10 +269,17 @@ export async function authenticateMobileSocial(
 			body: {
 				provider: input.provider,
 				idToken: idTokenBody,
-				...(input.provider === "apple" ? { requestSignUp: true } : {}),
+				...(isSignUp ? { requestSignUp: true } : {}),
 			},
 		});
-	} catch {
+	} catch (error) {
+		if (!isSignUp && isSignupDisabledError(error)) {
+			throw new MobileSocialAuthError(
+				"account_not_found",
+				404,
+				"No account found. Create an account instead.",
+			);
+		}
 		throw new MobileSocialAuthError(
 			"authentication_failed",
 			401,
@@ -253,7 +304,9 @@ export async function authenticateMobileSocial(
 		);
 	}
 
-	await enforceTosAcceptance(env, user.id, input.tosAccepted);
+	if (isSignUp) {
+		await stampTosIfMissing(env, user.id);
+	}
 
 	if (input.provider === "apple" && input.fullName) {
 		const parts = [input.fullName.givenName, input.fullName.familyName].filter(

@@ -4,6 +4,10 @@ import { handleApiError } from "~/lib/error-handler";
 import { storeMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { MobileMagicLinkSchema } from "~/lib/schemas/mobile/auth";
+import {
+	clearSignupIntentForEmail,
+	putSignupIntentForEmail,
+} from "~/lib/tos-signup-intent.server";
 import type { Route } from "./+types/v1.auth.magic-link";
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -30,11 +34,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		const body = await request.json();
-		const { email, codeChallenge } = MobileMagicLinkSchema.parse(body);
-		const auth = getAuth(context.cloudflare.env);
-		const baseUrl = context.cloudflare.env.BETTER_AUTH_URL.replace(/\/$/, "");
+		const parsed = MobileMagicLinkSchema.parse(body);
+		const { email, codeChallenge, intent } = parsed;
+		const env = context.cloudflare.env;
+
+		if (intent === "signUp") {
+			await putSignupIntentForEmail(env.RATION_KV, email);
+		} else {
+			await clearSignupIntentForEmail(env.RATION_KV, email);
+		}
+
+		const auth = getAuth(env);
+		const baseUrl = env.BETTER_AUTH_URL.replace(/\/$/, "");
 		const pendingId = await storeMobilePendingHandoff(
-			context.cloudflare.env.RATION_KV,
+			env.RATION_KV,
 			codeChallenge,
 		);
 		// Keep callbackURL short — PKCE challenge lives in KV until mobile-callback.
@@ -45,6 +58,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 				email,
 				callbackURL,
 				errorCallbackURL,
+				...(intent === "signUp"
+					? {
+							metadata: {
+								requestSignUp: true,
+								tosAccepted: true,
+							},
+						}
+					: {}),
 			},
 			headers: request.headers,
 		});

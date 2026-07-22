@@ -22,6 +22,7 @@ import {
 } from "../db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
+import { applyCargoDeductions } from "./cargo-deduction.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { ITEM_DOMAINS } from "./domain";
@@ -34,6 +35,7 @@ import {
 	D1_MAX_INGREDIENT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
 } from "./query-utils.server";
+import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import type {
 	MealInput,
@@ -1321,9 +1323,8 @@ export async function cookMeal(
 		(ing) => !ing.cargoId || typeof ing.cargoId !== "string",
 	);
 
-	// 4. Build deduction updates: linked (by cargoId) and unlinked (by name match)
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const updates: any[] = [];
+	// 4. Plan deductions: linked (by cargoId) and unlinked (by name match).
+	// Writes happen via applyCargoDeductions so quantity + baseQuantity stay in sync.
 	const deductions: CargoDeduction[] = [];
 	const skippedIngredients: MissingIngredientDetail[] = [];
 	let cargoById = new Map<string, typeof cargo.$inferSelect>();
@@ -1472,19 +1473,6 @@ export async function cookMeal(
 				ing.cargoId as string,
 				actualDeductionInCargoUnit,
 			);
-			updates.push(
-				d1
-					.update(cargo)
-					.set({
-						quantity: sql`${cargo.quantity} - ${actualDeductionInCargoUnit}`,
-					})
-					.where(
-						and(
-							eq(cargo.id, ing.cargoId as string),
-							eq(cargo.organizationId, organizationId),
-						),
-					),
-			);
 		}
 	}
 
@@ -1563,19 +1551,6 @@ export async function cookMeal(
 
 			for (const { cargoId, quantityToDeduct } of allocations) {
 				recordCargoDeduction(deductions, cargoId, quantityToDeduct);
-				updates.push(
-					d1
-						.update(cargo)
-						.set({
-							quantity: sql`${cargo.quantity} - ${quantityToDeduct}`,
-						})
-						.where(
-							and(
-								eq(cargo.id, cargoId),
-								eq(cargo.organizationId, organizationId),
-							),
-						),
-				);
 			}
 		}
 
@@ -1584,23 +1559,23 @@ export async function cookMeal(
 		}
 	}
 
-	if (updates.length > 0 && !options?.skipApply) {
-		trackD1BatchSize("cookMeal", updates.length, {
+	if (deductions.length > 0 && !options?.skipApply) {
+		trackD1BatchSize("cookMeal", deductions.length, {
 			organizationRef: organizationId,
 		});
 		await trackWriteOperation(
 			"cookMeal",
-			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-			() => d1.batch(updates as [any, ...any[]]),
+			() => applyCargoDeductions(env.DB, organizationId, deductions),
 			{
 				organizationRef: organizationId,
 			},
 		);
+		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 	}
 
 	return {
 		cooked: true,
-		ingredientsDeducted: updates.length,
+		ingredientsDeducted: deductions.length,
 		servings: effectiveServings,
 		deductions,
 		partialCook: skippedIngredients.length > 0,

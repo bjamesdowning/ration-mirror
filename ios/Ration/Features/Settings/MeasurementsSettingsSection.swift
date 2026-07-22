@@ -39,6 +39,13 @@ struct MeasurementsSettingsSection: View {
     private func save(_ mode: UnitDisplayMode) async {
         isSaving = true
         defer { isSaving = false }
-        _ = try? await env.api.patchSettings(env.unitDisplayMode.settingsPatch(for: mode))
+        do {
+            let response = try await env.api.patchSettings(
+                env.unitDisplayMode.settingsPatch(for: mode)
+            )
+            env.launch.updateUserSettings(response.settings)
+        } catch {
+            // Local preference already applied; keep UI responsive on network failure
+        }
     }
 }

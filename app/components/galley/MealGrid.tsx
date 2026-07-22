@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFetchers } from "react-router";
 import type { meal } from "~/db/schema";
 import type { AllergenSlug } from "~/lib/allergens";
 import { log } from "~/lib/logging.client";
@@ -44,6 +45,15 @@ interface MealGridProps {
 	getDetailHref?: (meal: { id: string }) => string;
 }
 
+function inventoryFingerprint(
+	inventory: { id: string; quantity: number }[],
+): string {
+	return inventory
+		.map((i) => `${i.id}:${i.quantity}`)
+		.sort()
+		.join("|");
+}
+
 export function MealGrid({
 	meals,
 	enableMatching = false,
@@ -65,10 +75,37 @@ export function MealGrid({
 	const [error, setError] = useState<string | null>(null);
 	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
+	const fetchers = useFetchers();
+	const inventoryKey = useMemo(
+		() => inventoryFingerprint(inventory),
+		[inventory],
+	);
+	const inventoryMutationSettling = fetchers.some((f) => {
+		const action = f.formAction ?? "";
+		return (
+			(action.includes("/hub/cargo") ||
+				action.includes("/api/meals/") ||
+				action.includes("/cook")) &&
+			f.state !== "idle"
+		);
+	});
+	const wasMutating = useRef(false);
+	const [matchRefreshToken, setMatchRefreshToken] = useState(0);
 
-	// Fetch match results when mode or minMatch changes (debounced, cancellable)
+	useEffect(() => {
+		if (wasMutating.current && !inventoryMutationSettling) {
+			setMatchRefreshToken((t) => t + 1);
+		}
+		wasMutating.current = inventoryMutationSettling;
+	}, [inventoryMutationSettling]);
+
+	// Fetch match results when mode, inventory, or related mutations change
 	useEffect(() => {
 		if (!enableMatching) return;
+		// Intentionally depend on inventoryKey / matchRefreshToken to refetch
+		// after cargo mutations even though they are not read in the body.
+		void inventoryKey;
+		void matchRefreshToken;
 
 		debounceRef.current = setTimeout(() => {
 			debounceRef.current = null;
@@ -117,7 +154,7 @@ export function MealGrid({
 			if (debounceRef.current) clearTimeout(debounceRef.current);
 			abortRef.current?.abort();
 		};
-	}, [matchMode, minMatch, enableMatching]);
+	}, [matchMode, minMatch, enableMatching, inventoryKey, matchRefreshToken]);
 
 	if (meals.length === 0) {
 		return (

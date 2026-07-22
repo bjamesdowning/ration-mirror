@@ -57,6 +57,7 @@ import { addDays, getCalendarDates } from "~/lib/manifest-dates";
 import { getExcludedManifestDates } from "~/lib/manifest-supply.server";
 import { checkMealReadiness } from "~/lib/matching.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
+import { getManifestReadyCacheVersion } from "~/lib/readiness-cache.server";
 import type { SlotType } from "~/lib/schemas/manifest";
 import { type TagRecord, toTagSlugs } from "~/lib/tags";
 import type { Route } from "./+types/manifest";
@@ -132,8 +133,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				.join(",")
 				.split("")
 				.reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0) >>> 0;
-		const kvKey = `manifest-ready:${groupId}:${currentRangeStart}:${idsHash}`;
 		const kv = context.cloudflare.env.RATION_KV;
+		const readyVer = await getManifestReadyCacheVersion(kv, groupId);
+		const kvKey = `manifest-ready:${groupId}:v${readyVer}:${currentRangeStart}:${idsHash}`;
 		const cached = await kv.get<Record<string, boolean>>(kvKey, "json");
 		if (cached) return cached;
 		const result = await checkMealReadiness(

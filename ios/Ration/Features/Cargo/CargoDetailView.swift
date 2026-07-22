@@ -183,7 +183,10 @@ struct CargoDetailView: View {
         .confirmationDialog("Delete this cargo item?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
-                    if await model.delete(api: env.api) { dismiss() }
+                    if await model.delete(api: env.api) {
+                        env.notifyCargoDataChanged()
+                        dismiss()
+                    }
                 }
             }
         }

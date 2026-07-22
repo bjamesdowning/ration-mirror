@@ -611,9 +611,14 @@ struct SupplyView: View {
                         Task {
                             let displayMode = UnitDisplayMode(rawValue: mode) ?? .metric
                             env.unitDisplayMode.apply(displayMode)
-                            _ = try? await env.api.patchSettings(
-                                env.unitDisplayMode.settingsPatch(for: displayMode)
-                            )
+                            do {
+                                let response = try await env.api.patchSettings(
+                                    env.unitDisplayMode.settingsPatch(for: displayMode)
+                                )
+                                env.launch.updateUserSettings(response.settings)
+                            } catch {
+                                // Preference already applied locally; server sync best-effort
+                            }
                         }
                     }
                 )
@@ -813,11 +818,7 @@ struct SupplyView: View {
                     organizationId: organizationId
                 )
             }
-            if let settings = env.launch.userSettings {
-                let mode = UnitDisplayMode.resolve(from: settings)
-                env.unitDisplayMode.apply(mode)
-                model.filters.supplyUnitMode = mode.rawValue
-            }
+            model.filters.supplyUnitMode = env.unitDisplayMode.mode.rawValue
             supplyShareURL = try? await env.api.supplyShareStatus().shareUrl
             supplyShareExpiresAt = try? await env.api.supplyShareStatus().shareExpiresAt
             if env.network.isOnline, !hasTriggeredAutoSync {

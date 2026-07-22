@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const cookMeal = vi.fn();
 const getMealMissingIngredients = vi.fn();
+const buildCargoDeductionStatements = vi.fn();
+const bumpReadinessCacheVersions = vi.fn();
 
 vi.mock("../meals.server", () => ({
 	cookMeal: (...args: unknown[]) => cookMeal(...args),
@@ -10,6 +12,16 @@ vi.mock("../meals.server", () => ({
 vi.mock("../matching.server", () => ({
 	getMealMissingIngredients: (...args: unknown[]) =>
 		getMealMissingIngredients(...args),
+}));
+
+vi.mock("../cargo-deduction.server", () => ({
+	buildCargoDeductionStatements: (...args: unknown[]) =>
+		buildCargoDeductionStatements(...args),
+}));
+
+vi.mock("../readiness-cache.server", () => ({
+	bumpReadinessCacheVersions: (...args: unknown[]) =>
+		bumpReadinessCacheVersions(...args),
 }));
 
 const planId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -22,6 +34,7 @@ let selectCall = 0;
 const updateWhere = vi.fn().mockResolvedValue(undefined);
 const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
 const batch = vi.fn().mockResolvedValue(undefined);
+const deductionStmt = { kind: "cargo-deduction" };
 
 vi.mock("drizzle-orm/d1", () => ({
 	drizzle: vi.fn(() => ({
@@ -54,13 +67,17 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
-const env = { DB: {} } as Env;
+const env = { DB: {}, RATION_KV: {} } as Env;
 
 describe("consumeManifestEntries", () => {
 	beforeEach(async () => {
 		selectCall = 0;
 		cookMeal.mockReset();
 		getMealMissingIngredients.mockReset();
+		buildCargoDeductionStatements.mockReset();
+		bumpReadinessCacheVersions.mockReset();
+		buildCargoDeductionStatements.mockResolvedValue([deductionStmt]);
+		bumpReadinessCacheVersions.mockResolvedValue(undefined);
 		updateSet.mockClear();
 		updateWhere.mockClear();
 		batch.mockClear();
@@ -98,8 +115,12 @@ describe("consumeManifestEntries", () => {
 			deductionMode: "strict",
 			skipApply: true,
 		});
+		expect(buildCargoDeductionStatements).toHaveBeenCalled();
 		expect(batch).toHaveBeenCalledTimes(1);
-		expect(updateSet).toHaveBeenCalled();
+		expect(bumpReadinessCacheVersions).toHaveBeenCalledWith(
+			env.RATION_KV,
+			orgId,
+		);
 	});
 
 	it("calls cookMeal with partial deduction when confirmInsufficient is true", async () => {

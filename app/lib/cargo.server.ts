@@ -69,6 +69,7 @@ import {
 	parseUtcDateISO,
 } from "./cargo-utils";
 import { normalizeCargoQuantity } from "./format-quantity";
+import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import { dedupeTagSlugs, type TagRecord, uniqueTagSlugs } from "./tags";
 import { getTagsForCargoIds, resolveTagIds, setCargoTags } from "./tags.server";
 
@@ -892,6 +893,13 @@ export async function ingestCargoItems(
 		}
 	}
 
+	const mutated = results.some(
+		(r) => r.status === "created" || r.status === "merged",
+	);
+	if (mutated) {
+		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
+	}
+
 	return results;
 }
 
@@ -1036,6 +1044,7 @@ export async function updateItem(
 	}
 
 	const tagMap = await getTagsForCargoIds(env.DB, [itemId]);
+	await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 	return { ...updatedItem, tags: tagMap.get(itemId) ?? [] };
 }
 
@@ -1057,6 +1066,7 @@ export async function jettisonItem(
 	deleteCargoVectors(env, [itemId]).catch((err) =>
 		log.error("[Vector] delete failed:", err),
 	);
+	await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 }
 
 /**

@@ -76,15 +76,10 @@ export function shouldRevalidate({
 	];
 	if (alwaysRevalidate.some((p) => formAction?.startsWith(p))) return true;
 
-	// Cargo, supply, galley, and manifest form actions cannot change shell-visible
-	// state (org logo, tier, credit balance, onboarding step). Suppress the hub
-	// loader re-run to avoid the redundant auth + KV round-trips on every CRUD action.
-	const suppressRoutes = [
-		"/hub/cargo",
-		"/hub/supply",
-		"/hub/galley",
-		"/hub/manifest",
-	];
+	// Cargo mutations change meal-readiness widgets on the hub index; allow
+	// hub shell revalidation so deferred matches refresh after delete/update.
+	// Supply/galley/manifest still suppress to avoid redundant auth+KV on CRUD.
+	const suppressRoutes = ["/hub/supply", "/hub/galley", "/hub/manifest"];
 	if (suppressRoutes.some((p) => formAction?.startsWith(p))) return false;
 
 	return defaultShouldRevalidate;

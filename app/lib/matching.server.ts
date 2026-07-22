@@ -8,6 +8,10 @@ import { isCargoUsableForMatching } from "./cargo-utils";
 import { log, redactId } from "./logging.server";
 import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
 import { chunkedQuery } from "./query-utils.server";
+import {
+	bumpReadinessCacheVersions,
+	getMatchCacheVersion,
+} from "./readiness-cache.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
 import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
 import {
@@ -21,7 +25,11 @@ import {
 	type SimilarCargoMatch,
 } from "./vector.server";
 
-export { normalizeForCargoDedup, normalizeForMatch };
+export {
+	bumpReadinessCacheVersions,
+	normalizeForCargoDedup,
+	normalizeForMatch,
+};
 
 /**
  * How many meals are scored (considered) before ranking — shared by web,
@@ -404,11 +412,19 @@ export async function matchMeals(
 	});
 
 	// 0. KV cache lookup (10s TTL; repeat Hub visits return immediately)
+	const matchCacheVersion = await getMatchCacheVersion(
+		env.RATION_KV,
+		organizationId,
+	);
 	if (env.RATION_KV) {
-		const cacheKey = getMatchCacheKey(organizationId, {
-			...query,
-			preLimit: effectivePreLimit,
-		});
+		const cacheKey = getMatchCacheKey(
+			organizationId,
+			{
+				...query,
+				preLimit: effectivePreLimit,
+			},
+			matchCacheVersion,
+		);
 		try {
 			const cached = await env.RATION_KV.get(cacheKey, "json");
 			if (Array.isArray(cached) && cached.length >= 0) {
@@ -576,10 +592,14 @@ export async function matchMeals(
 
 	// 10. Store in KV cache for repeat visits (10s TTL)
 	if (env.RATION_KV) {
-		const cacheKey = getMatchCacheKey(organizationId, {
-			...query,
-			preLimit: effectivePreLimit,
-		});
+		const cacheKey = getMatchCacheKey(
+			organizationId,
+			{
+				...query,
+				preLimit: effectivePreLimit,
+			},
+			matchCacheVersion,
+		);
 		try {
 			await env.RATION_KV.put(cacheKey, JSON.stringify(limited), {
 				expirationTtl: MATCH_CACHE_TTL,
@@ -842,11 +862,13 @@ const MATCH_CACHE_PREFIX = "match:";
 const MATCH_CACHE_TTL = 10; // seconds
 
 /**
- * Generates a cache key for meal matching results
+ * Generates a cache key for meal matching results.
+ * `version` is the org readiness-cache bump so cargo mutations invalidate immediately.
  */
 export function getMatchCacheKey(
 	organizationId: string,
 	query: MealMatchQuery,
+	version = "0",
 ): string {
 	const {
 		mode,
@@ -865,5 +887,5 @@ export function getMatchCacheKey(
 			? "all"
 			: (Array.isArray(tags) ? [...tags].sort() : [tags]).join("+") || "all";
 	const searchKey = searchQuery?.trim().toLowerCase() ?? "all";
-	return `${MATCH_CACHE_PREFIX}${organizationId}:${mode}:${minMatch}:${limit}:${preLimit ?? MEAL_MATCH_CANDIDATE_CAP}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
+	return `${MATCH_CACHE_PREFIX}${organizationId}:v${version}:${mode}:${minMatch}:${limit}:${preLimit ?? MEAL_MATCH_CANDIDATE_CAP}:${tagsKey}:${servings ?? "base"}:${type ?? "all"}:${domain ?? "all"}:${searchKey}`;
 }

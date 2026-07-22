@@ -126,6 +126,17 @@ struct DashboardView: View {
                 )
             }
         }
+        .onChange(of: env.cargoDataRevision) { _, _ in
+            Task {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard let organizationId else { return }
+                // Always drop stale hub snapshot so restore-first cannot flash
+                // outdated meal readiness after cargo delete/cook.
+                await env.snapshots.clear(domain: SnapshotDomain.hub, organizationId: organizationId)
+                guard isTabActive else { return }
+                await reload()
+            }
+        }
         .onChange(of: hubTabReselectToken) { _, _ in
             guard model.isEditMode else { return }
             model.isEditMode = false

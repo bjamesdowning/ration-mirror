@@ -7,11 +7,9 @@ import {
 	isNull,
 	lte,
 	notInArray,
-	sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
-	cargo,
 	meal,
 	mealIngredient,
 	mealPlan,
@@ -22,11 +20,13 @@ import {
 	user,
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
+import { buildCargoDeductionStatements } from "./cargo-deduction.server";
 import { log } from "./logging.server";
 import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
+import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import type { ManifestPreviewData } from "./types";
@@ -391,18 +391,10 @@ export async function consumeManifestEntries(
 		}
 
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		const stmts: any[] = cookResult.deductions.map((d) =>
-			d1
-				.update(cargo)
-				.set({
-					quantity: sql`${cargo.quantity} - ${d.quantity}`,
-				})
-				.where(
-					and(
-						eq(cargo.id, d.cargoId),
-						eq(cargo.organizationId, organizationId),
-					),
-				),
+		const stmts: any[] = await buildCargoDeductionStatements(
+			d1,
+			organizationId,
+			cookResult.deductions,
 		);
 		stmts.push(
 			d1
@@ -427,6 +419,10 @@ export async function consumeManifestEntries(
 			{ organizationRef: organizationId },
 		);
 		consumedEntryIds.push(...mealEntryIds);
+	}
+
+	if (allDeductions.length > 0) {
+		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 	}
 
 	return {

@@ -43,7 +43,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw data({ error: "Undo expired or unavailable" }, { status: 410 });
 		}
 
-		await applyUndoRecord(context.cloudflare.env.DB, organizationId, record);
+		await applyUndoRecord(context.cloudflare.env.DB, organizationId, record, {
+			kv: context.cloudflare.env.RATION_KV,
+		});
 
 		return { success: true, kind: record.kind };
 	} catch (e) {

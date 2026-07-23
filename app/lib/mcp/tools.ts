@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "./auth";
 import { registerResourcesAndPrompts } from "./resources";
 import type { McpToolsEnv } from "./tool-runtime";
+import { registerAiWorkflowTools } from "./tools/ai-workflows";
 import { registerBillingTools } from "./tools/billing";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
@@ -24,4 +25,5 @@ export function registerTools(
 	registerManifestTools(server, toolsEnv);
 	registerSupplyTools(server, toolsEnv);
 	registerPreferencesTools(server, toolsEnv);
+	registerAiWorkflowTools(server, toolsEnv);
 }

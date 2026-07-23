@@ -4,6 +4,7 @@ import { buildClaimRecoveryPaths } from "../agent/claim.constants";
 import { checkRateLimit } from "../rate-limiter.server";
 import { auditMcpWrite } from "./audit";
 import type { McpToolContext } from "./auth";
+import { MCP_TOOL_TIMEOUT_MS } from "./constants";
 import {
 	err,
 	mapErrorToEnvelope,
@@ -11,6 +12,7 @@ import {
 	type ToolEnvelope,
 	toolReply,
 } from "./envelope";
+import { recordMcpToolMetric } from "./metrics";
 import { McpScopeError, requireScope } from "./scopes";
 
 export type McpToolsEnv = Cloudflare.Env & { __mcp: McpToolContext };
@@ -49,6 +51,11 @@ export type MakeToolOptions<TArgs extends Record<string, unknown>, TData> = {
 	scopes: Parameters<typeof requireScope>[1];
 	rateLimitCategory: McpRateLimitCategory;
 	audit: boolean;
+	/**
+	 * Per-tool wall clock. `null` disables the race (credit/queue jobs).
+	 * Defaults to MCP_TOOL_TIMEOUT_MS.
+	 */
+	timeoutMs?: number | null;
 	handler: (ctx: McpToolContext, args: TArgs) => Promise<ToolEnvelope<TData>>;
 };
 
@@ -70,6 +77,8 @@ export type SharedToolDefinition = {
 	rateLimitCategory: McpRateLimitCategory;
 	audit: boolean;
 	needsApproval?: SharedToolApproval<Record<string, unknown>>;
+	/** Override default tool timeout; `null` disables (credit/queue jobs). */
+	timeoutMs?: number | null;
 	handler: (
 		ctx: McpToolContext,
 		args: Record<string, unknown>,
@@ -111,8 +120,7 @@ export function defineSharedTool<TInputSchema extends z.ZodObject, TData>(
  * Run a tool handler through the shared MCP/copilot middleware.
  *
  * This returns the transport-neutral envelope. MCP wraps the envelope with
- * `toolReply`, while the copilot's AI SDK adapter returns `data` directly to
- * the model.
+ * `toolReply`; Copilot returns the same envelope shape to the model.
  */
 export async function runTool<TArgs extends Record<string, unknown>, TData>(
 	env: McpToolsEnv,
@@ -186,7 +194,46 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 	}
 
 	try {
-		const envelope = await opts.handler(ctx, args);
+		const timeoutMs =
+			opts.timeoutMs === undefined ? MCP_TOOL_TIMEOUT_MS : opts.timeoutMs;
+		const handlerPromise = opts.handler(ctx, args);
+
+		let envelope: ToolEnvelope<TData>;
+		if (timeoutMs === null) {
+			envelope = await handlerPromise;
+		} else {
+			let timeoutId: ReturnType<typeof setTimeout> | undefined;
+			let timedOut = false;
+			envelope = await Promise.race([
+				handlerPromise,
+				new Promise<ToolEnvelope<TData>>((resolve) => {
+					timeoutId = setTimeout(() => {
+						timedOut = true;
+						resolve(
+							err(
+								opts.name,
+								"timeout",
+								`Tool ${opts.name} exceeded ${timeoutMs}ms and was aborted.`,
+								{
+									recoveryHint:
+										"Retry with a smaller payload, or try again shortly. If this persists, use the native Ration screen for this action.",
+								},
+							) as ToolEnvelope<TData>,
+						);
+					}, timeoutMs);
+				}),
+			]).finally(() => {
+				if (timeoutId !== undefined) clearTimeout(timeoutId);
+			});
+			// Keep the in-flight handler alive after timeout so writes/embeds can finish.
+			if (timedOut && ctx.waitUntil) {
+				ctx.waitUntil(
+					handlerPromise.catch(() => {
+						/* logged by handler / mapError paths if rethrown */
+					}),
+				);
+			}
+		}
 		if (envelope.ok && opts.audit && ctx.preClaim && env.BETTER_AUTH_URL) {
 			const origin = env.BETTER_AUTH_URL.replace(/\/$/, "");
 			const recovery = buildClaimRecoveryPaths(origin);
@@ -207,6 +254,22 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 				durationMs: Date.now() - startedAt,
 			});
 		}
+		const durationMs = Date.now() - startedAt;
+		if (!envelope.ok && envelope.error.code === "timeout") {
+			recordMcpToolMetric({
+				type: "tool_timeout",
+				tool: opts.name,
+				durationMs,
+			});
+		} else {
+			recordMcpToolMetric({
+				type: "tool_complete",
+				tool: opts.name,
+				ok: envelope.ok,
+				durationMs,
+				errorCode: envelope.ok ? undefined : envelope.error.code,
+			});
+		}
 		return envelope;
 	} catch (e) {
 		const origin = (env.BETTER_AUTH_URL ?? "").replace(/\/$/, "") || undefined;
@@ -222,6 +285,13 @@ export async function runTool<TArgs extends Record<string, unknown>, TData>(
 				durationMs: Date.now() - startedAt,
 			});
 		}
+		recordMcpToolMetric({
+			type: "tool_complete",
+			tool: opts.name,
+			ok: false,
+			durationMs: Date.now() - startedAt,
+			errorCode: envelope.ok ? undefined : envelope.error.code,
+		});
 		return envelope as ToolEnvelope<TData>;
 	}
 }
@@ -253,6 +323,7 @@ export function registerSharedMcpTool(
 		scopes: definition.scopes,
 		rateLimitCategory: definition.rateLimitCategory,
 		audit: definition.audit,
+		timeoutMs: definition.timeoutMs,
 		handler: definition.handler,
 	});
 	server.tool(

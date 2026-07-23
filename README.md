@@ -1673,7 +1673,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **MCP resources & prompts:** The server also publishes static resources (`ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`, `connection_guide`) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
 
-**No-credit boundary:** AI features that would charge credits (receipt scan, AI meal generation, AI plan week, URL recipe import) are **not** exposed as MCP tools. The agent's own LLM does any parsing locally, and the deterministic data path is the only thing that touches Ration. Cargo writes via MCP set `skipVectorPhase: true` (skips fuzzy Vectorize merge; exact-name merge still runs; new-row embeddings are still upserted), so adding pantry items costs zero Ration credits. The `get_credit_balance` tool was intentionally removed.
+**No-credit default:** Most MCP tools are credit-free (rate-limited). Cargo writes set `skipVectorPhase: true` and backfill embeddings asynchronously so tool returns are not blocked. **Credit-aware exceptions** (after host approval): `start_plan_week` and `start_generate_meal` use the same ledger as the native UI. Camera OCR scan and recipe URL extraction remain native deep-link flows (text receipt lists use preview/apply). The `get_credit_balance` tool was intentionally removed in favor of `get_billing_summary`.
 
 **Integration example (OAuth — recommended):**
 
@@ -2277,7 +2277,7 @@ Deep preset sets `workers-ai.reasoning_effort = high` and streams reasoning part
 
 ### 14.5 Tools
 
-Copilot exposes **all 39 MCP tools** through the shared tool runtime, plus Copilot-only `search_docs`:
+Copilot exposes **all shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`:
 
 | Tool | Source | Purpose |
 |------|--------|---------|
@@ -2286,7 +2286,7 @@ Copilot exposes **all 39 MCP tools** through the shared tool runtime, plus Copil
 
 MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`. Tool calls inherit MCP rate categories (`mcp_list`, `mcp_search`, `mcp_write`, `mcp_supply_sync`) keyed on the synthetic credential `copilot:{userId}`.
 
-**Not available in Copilot:** Receipt scan and recipe URL import (hard-blocked). Queue-backed AI pipelines (AI meal generation, AI plan week) are native-only; chat can still create recipes or schedule plans via deterministic MCP write tools after the user opts into chat. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
+**Not available as camera/URL tools in Copilot:** Receipt image scan and recipe URL import remain hard-blocked (use native Scan / Galley Import, or text → `preview_inventory_import`). Queue-backed AI Plan Week / Generate are available via `start_plan_week` / `start_generate_meal` after approval (and native deep-link disclosure). Credit-free scheduling uses `propose_manifest_plan` → `commit_manifest_plan`. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
 
 **Destructive tools:** AI SDK `needsApproval` mirrors MCP — e.g. `remove_cargo_item`, `delete_meal`, `complete_supply_list`, `clear_active_meals`, and insufficient-cargo overrides require explicit user approval in the client before execution.
 
@@ -2310,7 +2310,7 @@ flowchart TD
 ```
 
 - **Hard blocks** ([`intent-guard.server.ts`](app/lib/copilot/intent-guard.server.ts)): scan/OCR and recipe URL import — emits `blocked_feature` with `ration://` deep links. These cannot continue in chat.
-- **Soft hints** ([`native-feature-hints.server.ts`](app/lib/copilot/native-feature-hints.server.ts)): AI recipe generation and plan-week requests — first turn explains native Galley/Manifest options unless the user already said to continue in chat. If the user chooses chat, subsequent turns use **deterministic MCP tools** (`create_meal`, `bulk_add_meal_plan_entries`, etc.) — not the queue-backed AI generate/plan-week pipelines (those remain native-only).
+- **Soft hints** ([`native-feature-hints.server.ts`](app/lib/copilot/native-feature-hints.server.ts)): AI recipe generation and plan-week requests — Copilot briefly discloses the native Galley/Manifest options **and keeps tools available the same turn** (no artificial soft-block). Prefer purpose-built `propose_manifest_plan` / `commit_manifest_plan` or credit-aware `start_plan_week` / `start_generate_meal` after approval.
 
 ### 14.7 Billing and conversation gate
 

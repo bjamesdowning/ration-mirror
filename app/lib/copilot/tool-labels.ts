@@ -191,6 +191,36 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Logged meal and updated Cargo",
 		error: "Could not log meal",
 	},
+	set_active_meals: {
+		running: "Updating Galley selections…",
+		done: "Updated Galley selections",
+		error: "Could not update Galley selections",
+	},
+	propose_manifest_plan: {
+		running: "Proposing a meal plan…",
+		done: "Proposed a meal plan",
+		error: "Could not propose a meal plan",
+	},
+	commit_manifest_plan: {
+		running: "Saving meal plan…",
+		done: "Saved meal plan",
+		error: "Could not save meal plan",
+	},
+	mark_supply_purchased_bulk: {
+		running: "Updating Supply purchases…",
+		done: "Updated Supply purchases",
+		error: "Could not update Supply purchases",
+	},
+	start_plan_week: {
+		running: "Starting AI Plan Week…",
+		done: "AI Plan Week queued",
+		error: "Could not start AI Plan Week",
+	},
+	start_generate_meal: {
+		running: "Starting AI meal generation…",
+		done: "AI meal generation queued",
+		error: "Could not start AI meal generation",
+	},
 	get_context: {
 		running: "Loading Ration context…",
 		done: "Loaded context",

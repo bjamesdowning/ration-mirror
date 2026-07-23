@@ -103,8 +103,12 @@ describe("createCopilotToolDefs", () => {
 			"import_inventory_csv",
 			"delete_meal",
 			"clear_active_meals",
+			"set_active_meals",
 			"bulk_add_meal_plan_entries",
+			"commit_manifest_plan",
 			"complete_supply_list",
+			"start_plan_week",
+			"start_generate_meal",
 		];
 
 		for (const name of alwaysApproved) {

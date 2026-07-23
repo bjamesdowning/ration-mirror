@@ -25,7 +25,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "create_meal",
 			description:
-				"Create a structured recipe in the Galley after the user chooses to continue in chat. Ration's native Galley Generate flow remains the purpose-built AI generation option.",
+				"Create a structured recipe in the Galley (credit-free). For billed AI generation, disclose ration://galley/generate and use start_generate_meal after approval.",
 			inputSchema: z.object({
 				meal: McpCreateMealSchema,
 			}),
@@ -111,9 +111,65 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			},
 		}),
 		defineSharedTool({
+			name: "set_active_meals",
+			description:
+				"Purpose-built: set the Galley active meal selection to exactly these mealIds (clears others). Optionally sync supply afterward. Prefer over N× toggle_meal_active.",
+			inputSchema: z.object({
+				mealIds: z.array(z.string().uuid()).max(50),
+				syncSupply: z.boolean().optional().default(false),
+			}),
+			scopes: ["mcp:galley:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			needsApproval: true,
+			handler: async (ctx, a) => {
+				for (const mealId of a.mealIds) {
+					const owns = await validateMealOwnership(
+						env.DB,
+						ctx.organizationId,
+						mealId,
+					);
+					if (!owns) {
+						return err(
+							"set_active_meals",
+							"not_found",
+							`Meal ${mealId} not found.`,
+						);
+					}
+				}
+				await clearMealSelections(env.DB, ctx.organizationId);
+				for (const mealId of a.mealIds) {
+					await upsertMealSelection(env.DB, ctx.organizationId, mealId, null);
+				}
+				let supplySynced = false;
+				if (a.syncSupply) {
+					const { createSupplyListFromSelectedMeals } = await import(
+						"../../supply.server"
+					);
+					await createSupplyListFromSelectedMeals(
+						env,
+						ctx.organizationId,
+						undefined,
+						{
+							trigger: "mcp_sync_supply",
+							organizationId: ctx.organizationId,
+						},
+						"metric",
+						ctx.userId,
+					);
+					supplySynced = true;
+				}
+				return ok("set_active_meals", {
+					activeCount: a.mealIds.length,
+					mealIds: a.mealIds,
+					supplySynced,
+				});
+			},
+		}),
+		defineSharedTool({
 			name: "toggle_meal_active",
 			description:
-				"Toggle a meal's selection in the Galley active list. The active list drives sync_supply_from_selected_meals. Pass servingsOverride to set/clear the per-selection servings count.",
+				"Toggle a single meal in the Galley active list. For setting many at once, prefer set_active_meals. The active list drives sync_supply_from_selected_meals.",
 			inputSchema: z.object({
 				mealId: z.string().uuid(),
 				active: z.boolean(),

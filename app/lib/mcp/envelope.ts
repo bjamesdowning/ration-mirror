@@ -58,7 +58,8 @@ export type ToolErrorCode =
 	| "conflict"
 	| "idempotency_replay"
 	| "internal_error"
-	| "insufficient_cargo";
+	| "insufficient_cargo"
+	| "timeout";
 
 /** Wraps an envelope into the MCP `content` array shape that `server.tool` returns. */
 export function toolReply<T>(

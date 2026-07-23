@@ -66,6 +66,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context.cloudflare.env,
 			organizationId,
 			items,
+			{
+				waitUntil: context.cloudflare.ctx.waitUntil.bind(
+					context.cloudflare.ctx,
+				),
+			},
 		);
 
 		return {

@@ -111,6 +111,7 @@ final class AskViewModel {
     private var snapshotSaveTask: Task<Void, Never>?
     private var stopTimeoutTask: Task<Void, Never>?
     private var briefingTurnTimeoutTask: Task<Void, Never>?
+    private var turnWatchdogTask: Task<Void, Never>?
     private var isConnected = false
     private var isSubmitting = false
     private var organizationId: String?
@@ -118,9 +119,13 @@ final class AskViewModel {
     private var lastActivityAt = Date()
     private let stopTimeoutNanoseconds: UInt64
     private let briefingTurnTimeoutNanoseconds: UInt64
+    /// 90s with no stream activity while turn is active (matches web COPILOT_TURN_WATCHDOG_MS).
+    private let turnWatchdogNanoseconds: UInt64 = 90_000_000_000
 
     static let briefingTurnTimeoutMessage =
         "Copilot took too long. Tap retry to try again, or Get Started to continue."
+    static let turnWatchdogMessage =
+        "Copilot stopped responding. Please try again — the previous turn was ended to unblock chat."
 
     init(
         socket: (any AskSocketClient)? = nil,
@@ -900,6 +905,7 @@ final class AskViewModel {
         isStopping = false
         isAwaitingApproval = false
         scheduleBriefingTurnTimeoutIfNeeded()
+        scheduleTurnWatchdog()
     }
 
     private func beginTurnIfNeeded() {
@@ -940,10 +946,35 @@ final class AskViewModel {
         briefingTurnTimeoutTask = nil
     }
 
+    private func scheduleTurnWatchdog() {
+        turnWatchdogTask?.cancel()
+        turnWatchdogTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { return }
+                guard self.isTurnActive, !self.isAwaitingApproval else { continue }
+                let idleNs =
+                    UInt64(Date().timeIntervalSince(self.lastActivityAt) * 1_000_000_000)
+                if idleNs >= self.turnWatchdogNanoseconds {
+                    do {
+                        try await self.socket?.cancelActiveRequest()
+                    } catch {
+                        // Best-effort
+                    }
+                    self.completeTurn(state: .error(Self.turnWatchdogMessage))
+                    return
+                }
+            }
+        }
+    }
+
     private func completeTurn(state: State) {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
         cancelBriefingTurnTimeout()
+        turnWatchdogTask?.cancel()
+        turnWatchdogTask = nil
         toolLingerTask?.cancel()
         toolLingerTask = nil
         activeTool = nil

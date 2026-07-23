@@ -18,6 +18,7 @@ import { applyCargoImport } from "./cargo.server";
 import { sha256Hex } from "./crypto.server";
 import { type ParsedCsvItem, parseInventoryCsv } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
+import { INVENTORY_IMPORT_PREVIEW_SAMPLE_ROWS } from "./mcp/constants";
 import { SUPPORTED_UNITS } from "./units";
 
 export interface InventoryImportItem {
@@ -33,6 +34,8 @@ export interface InventoryImportItem {
 const PREVIEW_TTL_SECONDS = 15 * 60; // 15 minutes
 const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 const MAX_IMPORT_ROWS = 500;
+/** Summary-first: only return this many classified rows to the model. */
+const PREVIEW_SAMPLE_ROWS = INVENTORY_IMPORT_PREVIEW_SAMPLE_ROWS;
 
 function previewKey(orgId: string, token: string) {
 	return `mcp:inv:preview:${orgId}:${token}`;
@@ -80,7 +83,10 @@ export interface InventoryImportPreview {
 		mergeCandidate: number;
 		invalid: number;
 	};
+	/** Sample of classified rows (summary-first; full set is in the preview token). */
 	rows: InventoryImportPreviewRow[];
+	/** How many classified rows were omitted from `rows` for token efficiency. */
+	rowsOmitted: number;
 	warnings: string[];
 }
 
@@ -251,7 +257,8 @@ export async function previewInventoryImport(
 		previewToken: token,
 		expiresAt: new Date(Date.now() + PREVIEW_TTL_SECONDS * 1000).toISOString(),
 		totals,
-		rows,
+		rows: rows.slice(0, PREVIEW_SAMPLE_ROWS),
+		rowsOmitted: Math.max(0, rows.length - PREVIEW_SAMPLE_ROWS),
 		warnings,
 	};
 }
@@ -260,6 +267,7 @@ interface ApplyOptions {
 	previewToken: string;
 	idempotencyKey: string;
 	apiKeyId: string;
+	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 /**
@@ -301,7 +309,9 @@ export async function applyInventoryImport(
 		tags: i.tags,
 		expiresAt: i.expiresAt,
 	}));
-	const result = await applyCargoImport(env, organizationId, parsed);
+	const result = await applyCargoImport(env, organizationId, parsed, {
+		waitUntil: opts.waitUntil,
+	});
 	const outcome: InventoryImportApplyResult = {
 		imported: result.imported,
 		updated: result.updated,
@@ -319,6 +329,7 @@ interface CsvOptions {
 	csv: string;
 	idempotencyKey: string;
 	apiKeyId: string;
+	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 /**
@@ -347,7 +358,9 @@ export async function importInventoryCsv(
 		};
 		return outcome;
 	}
-	const result = await applyCargoImport(env, organizationId, items);
+	const result = await applyCargoImport(env, organizationId, items, {
+		waitUntil: opts.waitUntil,
+	});
 	const outcome: InventoryImportApplyResult = {
 		imported: result.imported,
 		updated: result.updated,

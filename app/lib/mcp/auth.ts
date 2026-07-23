@@ -43,6 +43,11 @@ export interface McpToolContext {
 	oauthClientId?: string;
 	/** Unclaimed agent kitchen — tighter write rate limits and claim nudges. */
 	preClaim: boolean;
+	/**
+	 * Optional Worker/DO waitUntil — keep background work (e.g. embeddings)
+	 * alive after the tool envelope returns.
+	 */
+	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 function isOAuthEnabled(env: Cloudflare.Env): boolean {
@@ -87,6 +92,7 @@ async function authenticateApiKey(
 		scopes,
 		authMethod: "api_key",
 		preClaim: await resolvePreClaimForOrg(env, record.organizationId),
+		waitUntil,
 	};
 }
 
@@ -107,6 +113,7 @@ async function authenticateOAuthToken(
 		authMethod: "oauth",
 		oauthClientId: verified.clientId,
 		preClaim: await resolvePreClaimForOrg(env, verified.organizationId),
+		waitUntil,
 	};
 }
 

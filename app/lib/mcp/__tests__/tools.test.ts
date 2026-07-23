@@ -1744,12 +1744,12 @@ describe("MCP tools", () => {
 		});
 	});
 
-	// ── No-Credit Boundary (regression) ──────────────────────────────────────
-	// MCP must NOT surface credit-consuming AI features. Receipt parsing
-	// happens in the agent's LLM; Ration only ingests pre-parsed structured
-	// items. Vector embeddings for cargo are skipped (skipVectorPhase: true).
-	describe("no-credit boundary", () => {
-		it("does not register get_credit_balance, scan, or generate tools", () => {
+	// ── Credit boundary ──────────────────────────────────────────────────────
+	// Most MCP tools are credit-free. Credit-aware AI workflows
+	// (start_plan_week, start_generate_meal) explicitly spend credits after
+	// approval. Camera OCR scan_receipt is still not registered.
+	describe("credit boundary", () => {
+		it("does not register get_credit_balance or camera scan tools", () => {
 			const server = makeServer();
 			const s = server as unknown as {
 				_registeredTools: Record<string, unknown>;
@@ -1763,6 +1763,10 @@ describe("MCP tools", () => {
 			for (const name of banned) {
 				expect(s._registeredTools[name]).toBeUndefined();
 			}
+			expect(s._registeredTools.start_plan_week).toBeDefined();
+			expect(s._registeredTools.start_generate_meal).toBeDefined();
+			expect(s._registeredTools.propose_manifest_plan).toBeDefined();
+			expect(s._registeredTools.commit_manifest_plan).toBeDefined();
 		});
 
 		it("checkBalance is never invoked from any registered tool path", async () => {

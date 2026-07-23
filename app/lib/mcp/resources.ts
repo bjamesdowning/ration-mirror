@@ -41,21 +41,21 @@ Goal:
 - Convert a free-text or image-derived receipt into a structured list of inventory items, then submit them to Ration via MCP without using any AI credits on Ration's side.
 
 Rules:
-1. Call \`inventory_import_schema\` first. Use the returned shape verbatim.
+1. Prefer the resource \`ration://schemas/inventory-import\` for the item shape (or call deprecated \`inventory_import_schema\` if needed).
 2. Build an array of items: \`{ name, quantity, unit, domain, tags?, expiresAt? }\`.
    - Prefer SI units (kg, g, l, ml). Pass any alias the user gave; Ration will normalize.
    - \`domain\` is one of "food" | "household" | "alcohol".
    - Skip non-pantry lines (taxes, totals, payment).
-3. Call \`preview_inventory_import\` with the items. Inspect totals and per-row classification.
+3. Call \`preview_inventory_import\` with the items. Inspect totals, the sample rows, and rowsOmitted.
 4. Surface to the user:
    - count of new items vs updates vs invalid rows
    - any warnings
 5. If the user confirms, generate a unique \`idempotencyKey\` (e.g. \`receipt-\${ISO date}-\${hash}\`)
-   and call \`apply_inventory_import\` with the previewToken from step 3 and that key.
+   and call \`apply_inventory_import\` with the previewToken from step 3 and that key (host approval may appear).
 6. Report back: imported, updated, errors. If the apply replays (\`meta.replayed: true\`), tell the user the original outcome was returned.
 
 Do NOT:
-- Call any AI scan tools (those use credits in the Ration UI; you're already an LLM).
+- Call camera/OCR scan for plain text lists (use preview/apply instead).
 - Submit duplicates without checking the previous outcome.
 - Guess units when ambiguous — ask the user.`;
 
@@ -120,10 +120,11 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 				},
 				toolGroups: MCP_TOOL_GROUPS,
 				notes: [
-					"Image scanning and recipe URL extraction stay in the Ration UI. Copilot can create recipes and meal plans with deterministic MCP tools after presenting the native AI option.",
-					"All MCP tools are credit-free; vector embeddings are backfilled async.",
-					"Use cursor pagination for list_inventory and list_meals.",
-					"Bulk receipt imports go through preview_inventory_import → apply_inventory_import.",
+					"Camera/image scan and recipe URL extraction still prefer native deep links; text receipt lists use preview_inventory_import → apply_inventory_import (credit-free).",
+					"Credit-aware tools start_plan_week and start_generate_meal spend the same credits as the native UI after approval.",
+					"Prefer propose_manifest_plan → commit_manifest_plan for credit-free week scheduling.",
+					"Most MCP tools are credit-free; vector embeddings are backfilled async and do not block tool returns.",
+					"Use cursor pagination for list_inventory and list_meals; preview_inventory_import is summary-first (sample rows + rowsOmitted).",
 				],
 			}),
 		],
@@ -169,13 +170,12 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 						content: {
 							type: "text",
 							text:
-								"You are an agent helping plan meals for the next 7 days. Steps:\n" +
-								"1. Call get_context or use injected temporal context for today's UTC date.\n" +
-								"2. Call get_expiring_items(days: 10) to find items at risk; get_expired_items for already expired lines.\n" +
-								"3. Call match_meals(mode: 'delta', minMatch: 60) to find meals that use those items.\n" +
-								"4. Propose a 7-day plan and confirm with the user.\n" +
-								"5. On confirm, call bulk_add_meal_plan_entries with the chosen entries.\n" +
-								"6. Optionally call sync_supply_from_selected_meals to build a shopping list.",
+								"You are an agent helping plan meals for the next 7 days. Prefer the purpose-built path:\n" +
+								"1. Call propose_manifest_plan (uses expiring items + match_meals internally).\n" +
+								"2. Present the compact proposal and confirm with the user.\n" +
+								"3. On confirm, call commit_manifest_plan with the entries (optionally syncSupply: true).\n" +
+								"4. For billed AI Plan Week instead, disclose ration://manifest/plan-week and call start_plan_week after approval.\n" +
+								"Fallback: get_expiring_items → match_meals → bulk_add_meal_plan_entries → sync_supply_from_selected_meals.",
 						},
 					},
 				],

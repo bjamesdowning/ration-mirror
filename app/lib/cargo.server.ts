@@ -885,10 +885,10 @@ export async function ingestCargoItems(
 			log.error("[Vector] batch upsert failed for ingest:", err);
 		});
 		if (options?.waitUntil) {
+			// Prefer background completion so MCP/Copilot tools return fast.
 			options.waitUntil(upsertPromise);
-		} else if (options?.skipVectorPhase) {
-			// Import/MCP paths skip fuzzy-merge AI but still need embeddings for
-			// later semantic search. No waitUntil on those callers — await here.
+		} else {
+			// No waitUntil (tests / miswired callers): await so embeddings are not dropped.
 			await upsertPromise;
 		}
 	}
@@ -1392,6 +1392,7 @@ export async function applyCargoImport(
 	env: Env,
 	organizationId: string,
 	parsedItems: ParsedCsvItem[],
+	options?: { waitUntil?: (promise: Promise<unknown>) => void },
 ): Promise<ApplyCargoImportResult> {
 	const result: ApplyCargoImportResult = {
 		imported: 0,
@@ -1478,6 +1479,7 @@ export async function applyCargoImport(
 				// Import/MCP/Copilot path is credit-free: skip Workers AI + Vectorize
 				// fuzzy merge so apply stays fast and matches preview classification.
 				skipVectorPhase: true,
+				waitUntil: options?.waitUntil,
 			},
 		);
 		for (let i = 0; i < ingestResults.length; i++) {

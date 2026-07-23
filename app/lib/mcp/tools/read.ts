@@ -65,7 +65,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_context",
 			description:
-				"Return the calling agent's organization id, API key id (prefix), authorized scopes, tool capabilities, kitchen tier/usage/credits, and suggested next actions. Always safe to call first.",
+				"Return organization id, API key identity, scopes, capabilities, onboarding, a slim kitchen tier/credits snapshot, and suggested next actions. For full pantry/manifest/supply status prefer get_kitchen_summary.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
@@ -85,12 +85,24 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					ctx.organizationId,
 					origin,
 				);
-				const kitchen = await getAgentKitchenSnapshot(env, ctx.organizationId);
+				const kitchenFull = await getAgentKitchenSnapshot(
+					env,
+					ctx.organizationId,
+				);
+				const kitchen = {
+					tier: kitchenFull.tier,
+					tierExpired: kitchenFull.tierExpired,
+					credits: kitchenFull.credits,
+					capacity: {
+						cargo: kitchenFull.capacity.cargo,
+						meals: kitchenFull.capacity.meals,
+					},
+				};
 				const capabilities = buildGetContextCapabilities(ctx.scopes);
 				const suggestedNextActions = buildSuggestedNextActions(
 					onboarding,
 					capabilities,
-					kitchen,
+					kitchenFull,
 				);
 				return ok("get_context", {
 					organizationId: ctx.organizationId,
@@ -105,6 +117,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					suggestedNextActions,
 					temporal: buildAgentTemporalContext(),
 					versions: { mcp: MCP_SERVER_VERSION },
+					note: "For detailed pantry/manifest/supply status call get_kitchen_summary.",
 				});
 			},
 		}),

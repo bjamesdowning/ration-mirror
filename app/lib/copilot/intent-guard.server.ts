@@ -25,8 +25,8 @@ const BLOCKED_FEATURES: Array<{
 		unavailableMessage:
 			"Receipt scanning is temporarily unavailable. You can add Cargo items manually instead.",
 		patterns: [
-			/\bscan\b.*\b(receipt|image|photo|picture|barcode)\b/i,
-			/\b(read|parse|process)\b.*\b(receipt|image|photo|picture)\b/i,
+			/\bscan\b.*\b(receipt|image|photo|picture|barcode|camera)\b/i,
+			/\b(image|photo|picture|camera)\b.*\b(receipt|scan|ocr)\b/i,
 			/\bocr\b/i,
 		],
 	},

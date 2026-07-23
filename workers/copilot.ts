@@ -413,6 +413,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			userId: identity.userId,
 			scopes: [...COPILOT_MCP_SCOPES],
 			preClaim: false,
+			waitUntil: (promise) => this.ctx.waitUntil(promise),
 		}) as ToolSet;
 	}
 
@@ -652,13 +653,11 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			userText,
 			this.nativeFeatureFlags,
 		);
-		if (nativeSuggestion) {
-			return {
-				system: `${ctx.system}\n\nBefore taking action, briefly explain that ${nativeSuggestion.name} may be a better fit because ${nativeSuggestion.message.toLowerCase()} Offer this deep link: ${nativeSuggestion.deepLink}. Ask whether the user wants to use the native flow or continue in chat. Do not call tools this turn.`,
-				activeTools: [],
-				maxSteps: 1,
-			};
-		}
+		// Advisory only: disclose native UX but keep tools available same turn
+		// (do not artificially refuse chat capability).
+		const nativeAdvisory = nativeSuggestion
+			? `\n\nBefore acting, briefly note that ${nativeSuggestion.name} may be a better fit because ${nativeSuggestion.message.toLowerCase()} Offer this deep link: ${nativeSuggestion.deepLink}. Then proceed in chat with tools unless the user clearly chooses the native screen only.`
+			: "";
 
 		const preset = resolveCopilotModelPreset(
 			ctx.body?.modelPreset,
@@ -681,7 +680,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		}
 
 		return {
-			system: `${ctx.system}${formatCopilotTemporalContextAppend()}`,
+			system: `${ctx.system}${nativeAdvisory}${formatCopilotTemporalContextAppend()}`,
 			activeTools: Object.keys(ctx.tools),
 			maxSteps: profile.maxSteps,
 			maxOutputTokens: profile.maxOutputTokens,

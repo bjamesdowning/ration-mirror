@@ -3,18 +3,23 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { mealPlanEntry } from "../../../db/schema";
+import { getExpiringCargo } from "../../cargo.server";
 import { manifestConsumeNote } from "../../cook-feedback";
 import {
 	addEntry,
 	consumeManifestEntries,
 	deleteEntry,
 	ensureMealPlan,
+	getTodayISO,
 	updateEntry,
 } from "../../manifest.server";
 import {
 	insertManifestBulkEntries,
 	ManifestBulkSubmissionError,
 } from "../../manifest-bulk-submit.server";
+import { addDays } from "../../manifest-dates";
+import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
+import { createSupplyListFromSelectedMeals } from "../../supply.server";
 import { err, ok } from "../envelope";
 import {
 	defineSharedTool,
@@ -22,12 +27,162 @@ import {
 	registerSharedMcpTool,
 } from "../tool-runtime";
 
+const planEntryInput = z.object({
+	mealId: z.string().uuid(),
+	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+	servingsOverride: z.number().int().positive().nullable().optional(),
+	notes: z.string().max(500).nullable().optional(),
+});
+
 export function createManifestToolDefs(env: McpToolsEnv) {
 	return [
 		defineSharedTool({
+			name: "propose_manifest_plan",
+			description:
+				"Purpose-built read: build a compact week schedule from expiring pantry items + match_meals (delta). Returns a summary proposal — no writes. Follow with commit_manifest_plan after user confirmation.",
+			inputSchema: z.object({
+				daysAhead: z.number().int().min(1).max(14).optional().default(7),
+				daysExpiring: z.number().int().min(1).max(14).optional().default(10),
+				minMatch: z.number().min(0).max(100).optional().default(60),
+				mealsPerDay: z.number().int().min(1).max(4).optional().default(1),
+				slotType: z
+					.enum(["breakfast", "lunch", "dinner", "snack"])
+					.optional()
+					.default("dinner"),
+			}),
+			scopes: ["mcp:read"],
+			rateLimitCategory: "mcp_search",
+			audit: false,
+			handler: async (ctx, a) => {
+				const daysAhead = a.daysAhead ?? 7;
+				const daysExpiring = a.daysExpiring ?? 10;
+				const minMatch = a.minMatch ?? 60;
+				const mealsPerDay = a.mealsPerDay ?? 1;
+				const slotType = a.slotType ?? "dinner";
+				const now = new Date();
+				const expiring = await getExpiringCargo(
+					env.DB,
+					ctx.organizationId,
+					daysExpiring,
+					50,
+					undefined,
+					now,
+				);
+				const matches = await matchMeals(env, ctx.organizationId, {
+					mode: "delta",
+					minMatch,
+					limit: Math.min(30, daysAhead * mealsPerDay + 5),
+					preLimit: MEAL_MATCH_CANDIDATE_CAP,
+				});
+				const today = getTodayISO();
+				const proposed: Array<{
+					date: string;
+					slotType: string;
+					mealId: string;
+					mealName: string;
+					matchPercent: number;
+					reason: string;
+				}> = [];
+				let mealIdx = 0;
+				for (let d = 0; d < daysAhead && mealIdx < matches.length; d++) {
+					const date = addDays(today, d);
+					for (
+						let s = 0;
+						s < mealsPerDay && mealIdx < matches.length && proposed.length < 21;
+						s++
+					) {
+						const m = matches[mealIdx++];
+						proposed.push({
+							date,
+							slotType,
+							mealId: m.meal.id,
+							mealName: m.meal.name,
+							matchPercent: Math.round(m.matchPercentage),
+							reason:
+								expiring.length > 0
+									? "Matches pantry; prioritizes cookability near expiry window"
+									: "Best cookability match from pantry",
+						});
+					}
+				}
+				return ok("propose_manifest_plan", {
+					expiringCount: expiring.length,
+					expiringSample: expiring.slice(0, 5).map((i) => ({
+						id: i.id,
+						name: i.name,
+						expiresAt: i.expiresAt,
+					})),
+					proposed,
+					notes:
+						proposed.length === 0
+							? "No matching meals found. Add recipes to Galley or lower minMatch."
+							: `Proposed ${proposed.length} entries. Confirm with the user, then call commit_manifest_plan.`,
+				});
+			},
+		}),
+		defineSharedTool({
+			name: "commit_manifest_plan",
+			description:
+				"Purpose-built write: commit a confirmed meal schedule (max 50) and optionally sync supply. Prefer this over bulk_add_meal_plan_entries for week fills. Requires approval.",
+			inputSchema: z.object({
+				entries: z.array(planEntryInput).min(1).max(50),
+				syncSupply: z.boolean().optional().default(false),
+			}),
+			scopes: ["mcp:manifest:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			needsApproval: true,
+			handler: async (ctx, a) => {
+				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+				try {
+					const result = await insertManifestBulkEntries(
+						env.DB,
+						ctx.organizationId,
+						plan.id,
+						{
+							entries: a.entries.map((entry) => ({
+								...entry,
+								orderIndex: 0,
+							})),
+						},
+					);
+					let supplySynced = false;
+					if (a.syncSupply) {
+						await createSupplyListFromSelectedMeals(
+							env,
+							ctx.organizationId,
+							undefined,
+							{
+								trigger: "mcp_sync_supply",
+								organizationId: ctx.organizationId,
+							},
+							"metric",
+							ctx.userId,
+						);
+						supplySynced = true;
+					}
+					return ok("commit_manifest_plan", {
+						created: result.entries,
+						errorCount: 0,
+						supplySynced,
+					});
+				} catch (error) {
+					if (error instanceof ManifestBulkSubmissionError) {
+						return err(
+							"commit_manifest_plan",
+							error.status === 404 ? "not_found" : "unauthorized",
+							error.message,
+						);
+					}
+					throw error;
+				}
+			},
+		}),
+		defineSharedTool({
 			name: "add_meal_plan_entry",
 			description:
-				"Add a meal to the weekly meal plan for a specific date and slot.",
+				"Add a meal to the weekly meal plan for a specific date and slot. For 2+ entries prefer commit_manifest_plan.",
 			inputSchema: z.object({
 				mealId: z.string().uuid(),
 				date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
@@ -59,25 +214,9 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "bulk_add_meal_plan_entries",
 			description:
-				"Add multiple meal plan entries in one call (max 50). All-or-nothing: validation runs first, then entries are batched.",
+				"Add multiple meal plan entries in one call (max 50). Prefer commit_manifest_plan when also syncing supply. All-or-nothing.",
 			inputSchema: z.object({
-				entries: z
-					.array(
-						z.object({
-							mealId: z.string().uuid(),
-							date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-							slotType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
-							servingsOverride: z
-								.number()
-								.int()
-								.positive()
-								.nullable()
-								.optional(),
-							notes: z.string().max(500).nullable().optional(),
-						}),
-					)
-					.min(1)
-					.max(50),
+				entries: z.array(planEntryInput).min(1).max(50),
 			}),
 			scopes: ["mcp:manifest:write"],
 			rateLimitCategory: "mcp_write",

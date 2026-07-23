@@ -9,6 +9,7 @@ import {
 	runTool,
 	type SharedToolDefinition,
 } from "../mcp/tool-runtime";
+import { createAiWorkflowToolDefs } from "../mcp/tools/ai-workflows";
 import { createBillingToolDefs } from "../mcp/tools/billing";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
 import { createInventoryToolDefs } from "../mcp/tools/inventory";
@@ -19,7 +20,7 @@ import { createSupplyToolDefs } from "../mcp/tools/supply";
 
 export type CopilotToolContext = Pick<
 	McpToolContext,
-	"organizationId" | "userId" | "scopes" | "preClaim"
+	"organizationId" | "userId" | "scopes" | "preClaim" | "waitUntil"
 >;
 
 export function buildCopilotMcpContext(
@@ -34,6 +35,7 @@ export function buildCopilotMcpContext(
 		apiKeyId: `copilot:${ctx.userId}`,
 		keyName: "Ration Copilot",
 		keyPrefix: "copilot_",
+		waitUntil: ctx.waitUntil,
 	};
 }
 
@@ -151,6 +153,7 @@ export function createCopilotToolDefs(
 		...createManifestToolDefs(env),
 		...createSupplyToolDefs(env),
 		...createPreferencesToolDefs(env),
+		...createAiWorkflowToolDefs(env),
 	];
 }
 
@@ -167,15 +170,22 @@ export function toAiSdkTools(env: Cloudflare.Env, ctx: CopilotToolContext) {
 				needsApproval: def.needsApproval,
 				execute: async (args) => {
 					const envelope = await runTool(toolEnv, def, args);
+					// Return full MCP envelope so the model sees ok/warnings/meta
+					// (including meta.replayed) consistently with external MCP clients.
 					if (!envelope.ok) {
-						// Return structured failure so the model continues the turn
-						// (throwing often ends the turn with only reasoning).
 						return {
 							ok: false as const,
+							tool: envelope.tool,
 							error: envelope.error,
 						};
 					}
-					return envelope.data;
+					return {
+						ok: true as const,
+						tool: envelope.tool,
+						data: envelope.data,
+						...(envelope.warnings ? { warnings: envelope.warnings } : {}),
+						...(envelope.meta ? { meta: envelope.meta } : {}),
+					};
 				},
 			}),
 		]),

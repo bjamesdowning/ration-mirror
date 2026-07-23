@@ -134,8 +134,52 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 			},
 		}),
 		defineSharedTool({
+			name: "mark_supply_purchased_bulk",
+			description:
+				"Purpose-built: mark many supply list items purchased/unpurchased in one call (max 50). Prefer over N× mark_supply_purchased.",
+			inputSchema: z.object({
+				itemIds: z.array(z.string().uuid()).min(1).max(50),
+				purchased: z.boolean().optional().default(true),
+			}),
+			scopes: ["mcp:supply:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			handler: async (ctx, a) => {
+				const list = await ensureSupplyList(env.DB, ctx.organizationId);
+				if (!list) {
+					return err(
+						"mark_supply_purchased_bulk",
+						"internal_error",
+						"Could not locate or create supply list.",
+					);
+				}
+				const purchased = a.purchased ?? true;
+				const results = await Promise.all(
+					a.itemIds.map(async (itemId) => {
+						const item = await updateSupplyItem(
+							env.DB,
+							ctx.organizationId,
+							list.id,
+							itemId,
+							{ isPurchased: purchased },
+						);
+						return { itemId, ok: !!item };
+					}),
+				);
+				const updatedIds = results.filter((r) => r.ok).map((r) => r.itemId);
+				const missing = results.filter((r) => !r.ok).map((r) => r.itemId);
+				return ok("mark_supply_purchased_bulk", {
+					updated: updatedIds.length,
+					itemIds: updatedIds,
+					missing: missing.length > 0 ? missing : undefined,
+					isPurchased: purchased,
+				});
+			},
+		}),
+		defineSharedTool({
 			name: "mark_supply_purchased",
-			description: "Mark a supply list item as purchased or unpurchased.",
+			description:
+				"Mark a supply list item as purchased or unpurchased. For many items prefer mark_supply_purchased_bulk.",
 			inputSchema: z.object({
 				itemId: z.string().uuid(),
 				purchased: z.boolean(),

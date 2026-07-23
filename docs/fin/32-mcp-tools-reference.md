@@ -1,6 +1,6 @@
 # MCP tools reference
 
-All tools are scoped to the **authorized household** (OAuth grant or API key organization). **MCP calls do not consume AI credits**; they use **rate limits** instead. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, meta? }` or `{ ok: false, tool, error }`) so agents can parse responses deterministically. Failures include `error.code`, a human `error.message` (field rules when validation fails), optional `error.details`, and often `error.recoveryHint` for the next tool or user-facing step. Copilot returns the same failure object to the model instead of hard-throwing, so the assistant can explain the issue immediately.
+All tools are scoped to the **authorized household** (OAuth grant or API key organization). **Most MCP tools do not consume AI credits**; they use **rate limits** instead. Credit-aware exceptions: `start_plan_week` and `start_generate_meal` (same ledger as the native UI, after host approval). Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, warnings?, meta? }` or `{ ok: false, tool, error }`). Failures include `error.code` (including `timeout`), `error.message`, optional `error.details`, and often `error.recoveryHint`. Copilot returns the **same envelope shape** to the model. Tool handlers are capped (~20s) so hung Workers AI/D1 calls cannot stall the agent forever.
 
 ## Rate limit categories
 
@@ -21,79 +21,79 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `list_inventory` | `mcp:read` | Cursor-paginated cargo list (default 100, max 200). Optional `domain`, `expiresBefore` / `expiresAfter` (UTC YYYY-MM-DD), and `sortBy: expiresAt`. |
 | `get_cargo_item` | `mcp:read` | Fetch one item by id with all fields (tags, expiresAt, customFields). |
 | `search_ingredients` | `mcp:read` | Semantic search in pantry by meaning. |
-| `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. Returns `expiresOn`, `daysUntilExpiry`, and `status` (`today` / `soon`). |
-| `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). Optional `daysBack` (default 30, max 90). Same response shape as `get_expiring_items`. |
-| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot: temporal context, tier/credits/capacity, cargo stats + expiring/expired previews, meal plan entries, supply preview. Optional `manifestDays` (1–7, default 1). |
-| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item (quantity > 0). Skips embedding generation (zero credit cost). For 2+ items, use the import tools. |
-| `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0** (out of stock; item remains as a restock reminder). |
-| `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`, e.g. `-2` when the user ate 2). Floors at 0; keeps the row. Prefer for “used/ate N”. Name lookup returns `requiresDisambiguation` + candidates when matches are close. |
-| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** Prefer quantity 0 when the user still wants a restock reminder. |
+| `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. |
+| `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). |
+| `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. |
+| `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
+| `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0**. |
+| `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`). Prefer for “used/ate N”. |
+| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
 
 ### Receipt → pantry workflow (no credits)
 
+Prefer resource `ration://schemas/inventory-import` for the item shape.
+
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `inventory_import_schema` | `mcp:read` | Returns the exact JSON shape `preview_inventory_import` and `apply_inventory_import` expect. |
-| `preview_inventory_import` | `mcp:read` | Validates and classifies items as `match`/`new`/`skip`. Returns a `previewToken` valid for 15 minutes. |
-| `apply_inventory_import` | `mcp:inventory:write` | Applies a preview. Idempotent via `idempotencyKey` (replays return the original result). |
-| `import_inventory_csv` | `mcp:inventory:write` | Convenience: parse a CSV string and apply directly. |
-
-The intended pattern is: agent's LLM parses a receipt → calls `preview_inventory_import` to confirm → user approves → agent calls `apply_inventory_import` with the `previewToken`. Ration never sees the receipt image and never spends credits.
+| `inventory_import_schema` | `mcp:read` | **Deprecated.** Prefer `ration://schemas/inventory-import`. |
+| `preview_inventory_import` | `mcp:read` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commits a preview (approval on Copilot). Idempotent. Embeddings do not block return. |
+| `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. |
 
 ## Galley (Meals)
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `list_meals` | `mcp:read` | Cursor-paginated recipe list. Pass `includeIngredients: false` to skip ingredient fan-out. |
-| `match_meals` | `mcp:read` | Meals you can cook (`strict`) or partial matches (`delta`) with gaps. Includes `allergenFlags` / `allergenSafe` when user allergens are set; `allergenPolicy: exclude` omits unsafe meals. |
-| `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
-| `update_meal` | `mcp:galley:write` | Update a recipe; pass full meal payload from `list_meals` with edits. |
+| `list_meals` | `mcp:read` | Cursor-paginated recipe list. |
+| `match_meals` | `mcp:read` | Cookability match (`strict` / `delta`). |
+| `create_meal` | `mcp:galley:write` | Create structured recipe (credit-free). |
+| `update_meal` | `mcp:galley:write` | Update a recipe. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
-| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook a meal and deduct ingredients from cargo. |
-| `toggle_meal_active` | `mcp:galley:write` | Mark a meal active/inactive in the current selection. |
-| `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
+| `set_active_meals` | `mcp:galley:write` | Set active selection to exactly `mealIds`. Optional `syncSupply`. |
+| `toggle_meal_active` | `mcp:galley:write` | Toggle one meal in the active list. |
+| `clear_active_meals` | `mcp:galley:write` | Clear all active selections. **Requires `confirm: true`.** |
+| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook by mealId and deduct cargo. |
+| `start_generate_meal` | `mcp:galley:write` | **Credits.** Queues AI meal generation after approval. Deep link: `ration://galley/generate`. |
 
 ## Manifest (Meal plan)
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (default ~7 days). |
-| `add_meal_plan_entry` | `mcp:manifest:write` | Schedule a meal on a date and slot (breakfast/lunch/dinner/snack). |
-| `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Add multiple entries in one call (idempotency-key supported). |
-| `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings override, notes, or order. Cannot edit consumed entries. |
-| `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry by id. |
+| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range. |
+| `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
+| `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
+| `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
+| `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Batch add (max 50). |
+| `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. |
+| `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
+| `start_plan_week` | `mcp:manifest:write` | **Credits.** Queues AI Plan Week after approval. Deep link: `ration://manifest/plan-week`. |
 
 ## Supply (Shopping)
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_supply_list` | `mcp:read` | Active shopping list with items and related meal names. |
-| `add_supply_item` | `mcp:supply:write` | Add a line to the supply list. |
-| `update_supply_item` | `mcp:supply:write` | Change name, quantity, or unit on a supply line. |
-| `remove_supply_item` | `mcp:supply:write` | Remove a supply line. |
-| `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased flag. |
-| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from manifest + Galley selections. |
-| `complete_supply_list` | `mcp:supply:write` | Archive the current list and start a fresh one. |
+| `get_supply_list` | `mcp:read` | Active shopping list. |
+| `add_supply_item` | `mcp:supply:write` | Add a line. |
+| `update_supply_item` | `mcp:supply:write` | Patch a line. |
+| `remove_supply_item` | `mcp:supply:write` | Remove a line. |
+| `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased on one line. |
+| `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark many lines purchased (max 50). |
+| `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. |
+| `complete_supply_list` | `mcp:supply:write` | Dock purchased → cargo. |
 
 ## Account & preferences
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_context` | `mcp:read` | Returns org/key context, kitchen snapshot, suggested actions, and `temporal` (`todayUtc`, `serverTimeIso`, `expirySemantics: utc_calendar_day`). |
-| `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, default unit mode. |
-| `update_user_preferences` | `mcp:preferences:write` | Patch one or more preference fields. |
+| `get_context` | `mcp:read` | Org/key context, slim kitchen tier/credits, capabilities. Prefer `get_kitchen_summary` for full status. |
+| `get_billing_summary` | `mcp:read` | Tier, credits, renewal, billing links. |
+| `get_user_preferences` | `mcp:read` | Allergens, alert days, theme, units. |
+| `update_user_preferences` | `mcp:preferences:write` | Patch preferences. |
 
-## What MCP intentionally does **not** expose
+## Not exposed
 
-These features remain web-app-only because they spend credits or are inherently UI-driven:
+- Camera/OCR receipt scan as a tool (text → preview/apply, or native Scan)
+- Recipe URL extraction without native import (`ration://galley/import`)
 
-- `get_credit_balance` — UI surface, not relevant to agent flows.
-- AI receipt scanning, AI meal generation, semantic vector ingestion of cargo via MCP writes.
-
-If you need any of these, use the web app or the REST API with the appropriate non-MCP scopes.
-
-## Bulk Galley import
-
-Large JSON imports continue to use the **REST API** with **`galley`** scope—not MCP.
-
-If a tool is missing in your client, update the MCP bridge and confirm the API key has the right scope (legacy `mcp` or the new fine-grained `mcp:*` scopes).
+Large Galley JSON imports use the REST API with `galley` scope—not MCP.

@@ -42,6 +42,7 @@ import {
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
 } from "~/lib/copilot/turn-lifecycle.client";
+import { COPILOT_TURN_WATCHDOG_MS } from "~/lib/mcp/constants";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 
 type CopilotStatus = {
@@ -394,6 +395,23 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		},
 		[clearToolLinger],
 	);
+
+	// Bound hung turns: if no stream activity while active, end with a recoverable error.
+	useEffect(() => {
+		if (!isTurnActive || isAwaitingApproval) return;
+		const id = setInterval(() => {
+			if (turnStateRef.current.status === "awaiting_approval") return;
+			if (!isCopilotTurnActive(turnStateRef.current)) return;
+			if (Date.now() - lastActivityAtRef.current < COPILOT_TURN_WATCHDOG_MS) {
+				return;
+			}
+			setError(
+				"Copilot stopped responding. Please try again — the previous turn was ended to unblock the chat.",
+			);
+			endTurn({ persist: true, focus: true });
+		}, 5_000);
+		return () => clearInterval(id);
+	}, [endTurn, isAwaitingApproval, isTurnActive]);
 
 	useEffect(() => {
 		if (!isOpen) return;

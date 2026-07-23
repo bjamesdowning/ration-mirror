@@ -94,7 +94,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							expiresAt: a.expiresAt ? new Date(a.expiresAt) : undefined,
 						},
 					],
-					{ skipVectorPhase: true },
+					{ skipVectorPhase: true, waitUntil: ctx.waitUntil },
 				);
 				const result = results[0];
 				if (!result || result.status === "error") {
@@ -415,7 +415,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "inventory_import_schema",
 			description:
-				"Return the JSON schema (item shape, allowed units, max rows) for preview_inventory_import / apply_inventory_import. Call before constructing items so the LLM can match field names exactly. Prefer this path for bulk adds (2+ items).",
+				"DEPRECATED: Prefer the MCP resource ration://schemas/inventory-import. Returns the JSON schema for preview_inventory_import / apply_inventory_import. Still works for agents that cannot read resources.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",
@@ -426,7 +426,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "preview_inventory_import",
 			description:
-				"Dry-run a bulk inventory import (e.g. from a parsed receipt or multi-item list). Returns a previewToken plus per-row create/merge/error classification. No DB writes. Pass the previewToken to apply_inventory_import within 15 minutes. For a single item, prefer add_cargo_item.",
+				"Dry-run a bulk inventory import (e.g. from a parsed receipt or multi-item list). Returns previewToken, totals, a sample of classified rows (rowsOmitted counts the rest), and warnings. No DB writes. Pass previewToken to apply_inventory_import within 15 minutes. For a single item, prefer add_cargo_item.",
 			inputSchema: z.object({
 				items: z
 					.array(
@@ -485,6 +485,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						previewToken: a.previewToken,
 						idempotencyKey: a.idempotencyKey,
 						apiKeyId: ctx.apiKeyId,
+						waitUntil: ctx.waitUntil,
 					});
 					return ok("apply_inventory_import", result, {
 						meta: result.replayed ? { replayed: true } : undefined,
@@ -526,6 +527,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					csv: a.csv,
 					idempotencyKey: a.idempotencyKey,
 					apiKeyId: ctx.apiKeyId,
+					waitUntil: ctx.waitUntil,
 				});
 				return ok("import_inventory_csv", result, {
 					meta: result.replayed ? { replayed: true } : undefined,

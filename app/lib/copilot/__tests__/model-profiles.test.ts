@@ -7,6 +7,7 @@ import {
 	parseCopilotModelPreset,
 	resolveCopilotModelId,
 	resolveCopilotModelPreset,
+	workersAiProviderOptions,
 } from "../model-profiles";
 
 describe("parseCopilotModelPreset", () => {
@@ -36,12 +37,26 @@ describe("resolveCopilotModelPreset", () => {
 });
 
 describe("COPILOT_MODEL_PRESETS", () => {
-	it("uses Cloudflare Workers AI minimax/m3 by default", () => {
-		expect(COPILOT_DEFAULT_MODEL_ID).toBe("minimax/m3");
-		expect(resolveCopilotModelId({})).toBe("minimax/m3");
-		expect(
-			resolveCopilotModelId({ COPILOT_MODEL_ID: " @cf/openai/gpt-oss-120b " }),
-		).toBe("@cf/openai/gpt-oss-120b");
+	it("defaults to gpt-oss-120b on Workers AI", () => {
+		expect(COPILOT_DEFAULT_MODEL_ID).toBe("@cf/openai/gpt-oss-120b");
+		expect(resolveCopilotModelId({})).toBe("@cf/openai/gpt-oss-120b");
+		expect(resolveCopilotModelId({ COPILOT_MODEL_ID: " minimax/m3 " })).toBe(
+			"minimax/m3",
+		);
+	});
+
+	it("fast omits reasoning_effort", () => {
+		expect(COPILOT_MODEL_PRESETS.fast.reasoningEffort).toBeNull();
+		expect(workersAiProviderOptions(COPILOT_MODEL_PRESETS.fast)).toEqual({
+			"workers-ai": {},
+		});
+	});
+
+	it("deep sets high reasoning_effort for gpt-oss", () => {
+		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
+		expect(workersAiProviderOptions(COPILOT_MODEL_PRESETS.deep)).toEqual({
+			"workers-ai": { reasoning_effort: "high" },
+		});
 	});
 
 	it("deep allows longer multi-step tool runs", () => {

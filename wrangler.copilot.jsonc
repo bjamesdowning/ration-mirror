@@ -26,7 +26,7 @@
 	 *   - COPILOT_PURGE_SECRET (dedicated internal purge token; falls back to BETTER_AUTH_SECRET if absent)
 	 *   - REVENUECAT_API_KEY (live get_billing_summary store/management URLs)
 	 * Optional vars:
-	 *   - COPILOT_MODEL_ID (default minimax/m3 via Workers AI binding; rollback e.g. @cf/openai/gpt-oss-120b)
+	 *   - COPILOT_MODEL_ID (default @cf/openai/gpt-oss-120b via Workers AI binding)
 	 */
 	"durable_objects": {
 		"bindings": [{ "name": "PROJECT_THINK", "class_name": "ProjectThinkAgent" }]

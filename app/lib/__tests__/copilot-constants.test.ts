@@ -18,7 +18,7 @@ describe("creditsForCopilotTokens", () => {
 		[60_000, 3],
 		[61_000, 4],
 		[128_000, 7],
-		[500_000, 25],
+		[200_000, 10],
 	])("maps %i tokens to %i credits", (tokens, credits) => {
 		expect(creditsForCopilotTokens(tokens)).toBe(credits);
 	});
@@ -51,11 +51,11 @@ describe("linear billing constants", () => {
 		expect(COPILOT_TOKENS_PER_CREDIT).toBe(20_000);
 	});
 
-	it("caps sessions at 500k tokens and 120 messages", () => {
-		expect(COPILOT_SESSION_MAX_TOKENS).toBe(500_000);
+	it("caps sessions at gpt-oss 128k tokens and 120 messages", () => {
+		expect(COPILOT_SESSION_MAX_TOKENS).toBe(128_000);
 		expect(COPILOT_SESSION_MAX_MESSAGES).toBe(120);
 		expect(
 			Math.ceil(COPILOT_SESSION_MAX_TOKENS / COPILOT_TOKENS_PER_CREDIT),
-		).toBe(25);
+		).toBe(7);
 	});
 });

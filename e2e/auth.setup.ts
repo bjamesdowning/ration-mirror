@@ -123,9 +123,9 @@ setup("authenticate", async ({ page }) => {
 				cookie.name.includes("better-auth") ||
 				cookie.name.startsWith("__Secure-"),
 		),
-		`Expected session cookies after Dev Login; got: ${cookies
-			.map((c) => c.name)
-			.join(", ") || "(none)"}`,
+		`Expected session cookies after Dev Login; got: ${
+			cookies.map((c) => c.name).join(", ") || "(none)"
+		}`,
 	).toBe(true);
 
 	await page.context().storageState({ path: authFile });

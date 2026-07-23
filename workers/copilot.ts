@@ -34,6 +34,7 @@ import {
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	resolveCopilotModelId,
 	resolveCopilotModelPreset,
+	workersAiProviderOptions,
 } from "../app/lib/copilot/model-profiles";
 import {
 	detectNativeFeatureSuggestion,
@@ -401,7 +402,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		// Cloudflare Workers AI binding — billed on the CF account (no MiniMax key).
+		// Cloudflare Workers AI — @cf/openai/gpt-oss-120b (Workers AI billing).
 		return resolveCopilotModelId(this.env);
 	}
 
@@ -568,6 +569,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				temperature: profile.temperature,
 				topP: profile.topP,
 				sendReasoning: false,
+				providerOptions: workersAiProviderOptions(profile),
 			};
 		}
 		if (this.billingBlocked) {
@@ -707,6 +709,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			temperature: profile.temperature,
 			topP: profile.topP,
 			sendReasoning: true,
+			providerOptions: workersAiProviderOptions(profile),
 			stopWhen: () => this.billingBlocked,
 		};
 	}

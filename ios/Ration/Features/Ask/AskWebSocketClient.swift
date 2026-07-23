@@ -35,6 +35,7 @@ final class AskWebSocketClient: AskSocketClient {
     private let eventsContinuation: AsyncStream<CopilotStreamEvent>.Continuation
     private var task: URLSessionWebSocketTask?
     private var activeRequestId: String?
+    private var ignoresReceiveErrors = false
     private(set) var conversationId: String
 
     init(auth: AuthManager, conversationId: String = UUID().uuidString) {
@@ -56,6 +57,7 @@ final class AskWebSocketClient: AskSocketClient {
 
     func connect() async throws {
         disconnect()
+        ignoresReceiveErrors = false
         let token = try await auth.validAccessToken()
         var url = AppConfig.copilotBaseURL.appending(path: conversationId)
         if url.scheme == "http" { url = URL(string: url.absoluteString.replacingOccurrences(of: "http://", with: "ws://")) ?? url }
@@ -141,6 +143,7 @@ final class AskWebSocketClient: AskSocketClient {
     }
 
     func disconnect() {
+        ignoresReceiveErrors = true
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         activeRequestId = nil
@@ -161,6 +164,9 @@ final class AskWebSocketClient: AskSocketClient {
             guard self.task === task else { return }
             activeRequestId = nil
             self.task = nil
+            // Intentional disconnect (background / new chat) must not buffer a
+            // socket_closed error into the AsyncStream for a later observe().
+            guard !ignoresReceiveErrors else { return }
             eventsContinuation.yield(
                 CopilotStreamEvent(
                     type: "error",

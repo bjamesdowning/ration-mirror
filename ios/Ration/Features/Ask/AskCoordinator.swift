@@ -43,8 +43,14 @@ final class AskCoordinator {
     }
 
     func closeSheet() {
-        model.backgroundSession()
         isSheetPresented = false
+        Task { await model.backgroundSession() }
+    }
+
+    /// Awaitable close used when the Ask sheet needs teardown before dismiss.
+    func closeSheetAndBackground() async {
+        isSheetPresented = false
+        await model.backgroundSession()
     }
 
     func sendFromBar(

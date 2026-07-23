@@ -922,9 +922,98 @@ final class AskViewModelTests: XCTestCase {
         await model.newChat(auth: AuthManager(), organizationId: "org-1", snapshots: SnapshotStore())
 
         XCTAssertTrue(socket.didDisconnect)
+        XCTAssertEqual(socket.cancelCount, 1)
+        XCTAssertEqual(socket.callOrder, ["cancel", "disconnect"])
         XCTAssertFalse(model.isTurnActive)
         XCTAssertFalse(model.isStopping)
         XCTAssertEqual(model.messages.count, 0)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertNotEqual(model.conversationId, "test-conversation")
+    }
+
+    func testBackgroundSessionCancelsBeforeDisconnectWhenTurnActive() async {
+        let socket = TestAskSocketClient()
+        socket.conversationId = "conv-background"
+        let model = AskViewModel(socket: socket)
+        model.apply(Self.event(type: "text_delta", text: "Partial"))
+
+        await model.backgroundSession()
+
+        XCTAssertEqual(socket.cancelCount, 1)
+        XCTAssertTrue(socket.didDisconnect)
+        XCTAssertEqual(socket.callOrder, ["cancel", "disconnect"])
+        XCTAssertEqual(model.conversationId, "conv-background")
+        XCTAssertEqual(model.messages.last?.content, "Partial")
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertEqual(model.activityDisplay, .hidden)
+    }
+
+    func testBackgroundSessionSkipsCancelWhenIdle() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+
+        await model.backgroundSession()
+
+        XCTAssertEqual(socket.cancelCount, 0)
+        XCTAssertTrue(socket.didDisconnect)
+        XCTAssertEqual(socket.callOrder, ["disconnect"])
+    }
+
+    func testResumeAfterBackgroundUsesFreshSocketAndIgnoresPoisonedStream() async {
+        let poisoned = StreamingTestAskSocketClient()
+        poisoned.conversationId = "conv-resume"
+        var created: [StreamingTestAskSocketClient] = []
+        let model = AskViewModel(
+            socket: poisoned,
+            socketFactory: { _, conversationId in
+                let next = StreamingTestAskSocketClient()
+                next.conversationId = conversationId
+                created.append(next)
+                return next
+            }
+        )
+        model.apply(Self.event(type: "text_delta", messageId: "a0", text: "Prior"))
+        model.apply(Self.event(type: "message_end"))
+
+        // Simulate the old client's close error sitting in its AsyncStream.
+        poisoned.emit(
+            Self.event(
+                type: "error",
+                error: CopilotToolError(code: "socket_closed", message: "Closed")
+            )
+        )
+
+        await model.backgroundSession()
+        XCTAssertEqual(model.conversationId, "conv-resume")
+        XCTAssertEqual(model.messages.last?.content, "Prior")
+
+        let auth = AuthManager()
+        let api = RationAPI(client: APIClient(auth: auth))
+        let snapshots = SnapshotStore()
+        let accepted = await model.send(
+            "Follow up",
+            api: api,
+            auth: auth,
+            organizationId: "org-1",
+            snapshots: snapshots
+        )
+
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(created.count, 1)
+        XCTAssertEqual(created[0].conversationId, "conv-resume")
+        XCTAssertEqual(created[0].connectCount, 1)
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertEqual(model.turnPhase, .thinking)
+        XCTAssertEqual(model.activityDisplay, .thinking)
+
+        created[0].emit(Self.event(type: "text_delta", messageId: "a1", text: "Resumed answer"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        created[0].emit(Self.event(type: "message_end", messageId: "a1"))
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.messages.last?.content, "Resumed answer")
         XCTAssertEqual(model.state, .idle)
     }
 
@@ -1063,6 +1152,7 @@ private final class TestAskSocketClient: AskSocketClient {
     var approvalResponses: [(id: String, approved: Bool)] = []
     var cancelCount = 0
     var didDisconnect = false
+    private(set) var callOrder: [String] = []
 
     func events() -> AsyncStream<CopilotStreamEvent> {
         AsyncStream { _ in }
@@ -1077,6 +1167,7 @@ private final class TestAskSocketClient: AskSocketClient {
 
     func cancelActiveRequest() async throws {
         cancelCount += 1
+        callOrder.append("cancel")
     }
 
     func newConversation() {
@@ -1086,5 +1177,6 @@ private final class TestAskSocketClient: AskSocketClient {
 
     func disconnect() {
         didDisconnect = true
+        callOrder.append("disconnect")
     }
 }

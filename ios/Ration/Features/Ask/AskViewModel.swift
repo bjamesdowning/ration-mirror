@@ -108,6 +108,8 @@ final class AskViewModel {
     private(set) var seedItemsAdded = 0
     var tracksBriefingSession = false
     private(set) var modelPreset: String = "fast"
+    /// Retained across background so resume reconnects to the same Think DO.
+    private(set) var conversationId: String
 
     private var socket: (any AskSocketClient)?
     private var streamTask: Task<Void, Never>?
@@ -121,6 +123,10 @@ final class AskViewModel {
     private var organizationId: String?
     private var snapshots: SnapshotStore?
     private var lastActivityAt = Date()
+    /// Bumped when the live socket is discarded so late events from an old
+    /// observe loop cannot poison a later turn.
+    private var connectionGeneration = 0
+    private let makeSocket: @MainActor (AuthManager, String) -> any AskSocketClient
     private let stopTimeoutNanoseconds: UInt64
     private let briefingTurnTimeoutNanoseconds: UInt64
     /// 90s with no stream activity while turn is active (matches web COPILOT_TURN_WATCHDOG_MS).
@@ -134,9 +140,18 @@ final class AskViewModel {
     init(
         socket: (any AskSocketClient)? = nil,
         stopTimeoutNanoseconds: UInt64 = 2_000_000_000,
-        briefingTurnTimeoutNanoseconds: UInt64 = 60_000_000_000
+        briefingTurnTimeoutNanoseconds: UInt64 = 60_000_000_000,
+        socketFactory: (@MainActor (AuthManager, String) -> any AskSocketClient)? = nil
     ) {
-        self.socket = socket
+        self.makeSocket = socketFactory ?? { auth, conversationId in
+            AskWebSocketClient(auth: auth, conversationId: conversationId)
+        }
+        if let socket {
+            self.socket = socket
+            self.conversationId = socket.conversationId
+        } else {
+            self.conversationId = UUID().uuidString
+        }
         self.stopTimeoutNanoseconds = stopTimeoutNanoseconds
         self.briefingTurnTimeoutNanoseconds = briefingTurnTimeoutNanoseconds
     }
@@ -199,8 +214,9 @@ final class AskViewModel {
     func load(api: RationAPI, auth: AuthManager, organizationId: String, snapshots: SnapshotStore) async {
         let orgChanged = self.organizationId != organizationId
         if orgChanged {
-            disconnect()
+            await tearDownSocket(cancelActive: false)
             messages = []
+            conversationId = UUID().uuidString
             modelPreset = "fast"
             activeTool = nil
             completedTool = nil
@@ -216,7 +232,8 @@ final class AskViewModel {
         self.organizationId = organizationId
         self.snapshots = snapshots
 
-        if !orgChanged, socket != nil {
+        // Live or backgrounded-in-memory session: refresh status only.
+        if !orgChanged, socket != nil || !messages.isEmpty {
             do {
                 status = try await api.copilotStatus()
                 await expireIdleConversationIfNeeded(auth: auth, organizationId: organizationId, snapshots: snapshots)
@@ -232,15 +249,21 @@ final class AskViewModel {
             messages = cached.payload.messages
             modelPreset = cached.payload.modelPreset
             sessionUsage = cached.payload.sessionUsage
+            conversationId = cached.payload.conversationId
             if let activityMs = cached.payload.lastActivityAtMs {
                 lastActivityAt = Date(timeIntervalSince1970: activityMs / 1000)
             } else if let syncedAt = snapshots.syncedAt(domain: SnapshotDomain.ask, organizationId: organizationId) {
                 lastActivityAt = syncedAt
             }
-            socket = AskWebSocketClient(auth: auth, conversationId: cached.payload.conversationId)
+            // Socket is created lazily on send so background/resume never reuses a
+            // poisoned AsyncStream from a prior WebSocket client.
+            socket = nil
+            isConnected = false
             lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
         } else {
-            socket = AskWebSocketClient(auth: auth)
+            conversationId = UUID().uuidString
+            socket = nil
+            isConnected = false
             lastActivityAt = Date()
         }
 
@@ -333,8 +356,7 @@ final class AskViewModel {
     /// Tear down a stuck briefing turn so Get Started can always proceed.
     func forceEndBriefingTurn() {
         cancelBriefingTurnTimeout()
-        socket?.disconnect()
-        isConnected = false
+        dropLiveSocket()
         completeTurn(state: .idle)
     }
 
@@ -404,10 +426,7 @@ final class AskViewModel {
             turnPhase = .idle
             return false
         }
-        if socket == nil {
-            socket = AskWebSocketClient(auth: auth)
-        }
-        guard let socket else { return false }
+        let socket = ensureSocket(auth: auth)
 
         do {
             turnPhase = .connecting
@@ -419,6 +438,9 @@ final class AskViewModel {
                 isConnected = true
                 clearTransientError()
             }
+            // Re-check after connect: a buffered close error from a reused client
+            // must not leave us "thinking" with isTurnActive == false.
+            guard isTurnActive else { return false }
             clearTransientError()
             let userMessage = CopilotMessage(role: "user", content: trimmed)
             messages.append(userMessage)
@@ -509,8 +531,7 @@ final class AskViewModel {
             guard let self else { return }
             try? await Task.sleep(nanoseconds: self.stopTimeoutNanoseconds)
             guard !Task.isCancelled, self.isStopping else { return }
-            self.socket?.disconnect()
-            self.isConnected = false
+            self.dropLiveSocket()
             self.completeTurn(state: .idle)
             self.scheduleImmediateSnapshotSave()
         }
@@ -521,18 +542,13 @@ final class AskViewModel {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
         cancelBriefingTurnTimeout()
-        streamTask?.cancel()
-        streamTask = nil
         toolLingerTask?.cancel()
         toolLingerTask = nil
 
-        let previousSocket = socket
-        if isTurnActive || isStopping || isAwaitingApproval {
-            Task { try? await previousSocket?.cancelActiveRequest() }
-        }
-        previousSocket?.newConversation()
+        await tearDownSocket(cancelActive: isTurnActive || isStopping || isAwaitingApproval)
 
-        socket = AskWebSocketClient(auth: auth)
+        conversationId = UUID().uuidString
+        socket = makeSocket(auth, conversationId)
         isConnected = false
         messages = []
         modelPreset = "fast"
@@ -553,33 +569,23 @@ final class AskViewModel {
     }
 
     func disconnect() {
-        streamTask?.cancel()
-        streamTask = nil
-        toolLingerTask?.cancel()
-        toolLingerTask = nil
         snapshotSaveTask?.cancel()
         snapshotSaveTask = nil
-        socket?.disconnect()
-        isConnected = false
+        toolLingerTask?.cancel()
+        toolLingerTask = nil
+        dropLiveSocket()
         completeTurn(state: .idle)
     }
 
-    /// Close/X backgrounds the chat: cancel in-flight work, drop the socket,
-    /// keep transcript + conversationId for short-term resume.
-    func backgroundSession() {
+    /// Close/X backgrounds the chat: cancel in-flight work, drop the socket client
+    /// (fresh AsyncStream on resume), keep transcript + conversationId.
+    func backgroundSession() async {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
         cancelBriefingTurnTimeout()
-        streamTask?.cancel()
-        streamTask = nil
         toolLingerTask?.cancel()
         toolLingerTask = nil
-        let previousSocket = socket
-        if isTurnActive || isStopping || isAwaitingApproval {
-            Task { try? await previousSocket?.cancelActiveRequest() }
-        }
-        previousSocket?.disconnect()
-        isConnected = false
+        await tearDownSocket(cancelActive: isTurnActive || isStopping || isAwaitingApproval)
         isSubmitting = false
         activeTool = nil
         completedTool = nil
@@ -587,11 +593,48 @@ final class AskViewModel {
         clearTransientError()
     }
 
+    private func ensureSocket(auth: AuthManager) -> any AskSocketClient {
+        if let socket {
+            return socket
+        }
+        let created = makeSocket(auth, conversationId)
+        socket = created
+        return created
+    }
+
+    /// Cancel (optional), disconnect, nil the client, and bump generation so a
+    /// later observe loop ignores events from this connection.
+    private func tearDownSocket(cancelActive: Bool) async {
+        let previousSocket = socket
+        // Drop the retained client immediately so a concurrent resume/send cannot
+        // re-observe a poisoned AsyncStream while cancel is in flight.
+        socket = nil
+        isConnected = false
+        connectionGeneration += 1
+        streamTask?.cancel()
+        streamTask = nil
+        if cancelActive {
+            try? await previousSocket?.cancelActiveRequest()
+        }
+        previousSocket?.disconnect()
+    }
+
+    private func dropLiveSocket() {
+        streamTask?.cancel()
+        streamTask = nil
+        socket?.disconnect()
+        socket = nil
+        isConnected = false
+        connectionGeneration += 1
+    }
+
     private func observe(_ socket: any AskSocketClient) {
+        let generation = connectionGeneration
         streamTask?.cancel()
         streamTask = Task { [weak self] in
             for await event in socket.events() {
-                guard let self, self.shouldAcceptObservedEvent(event) else { continue }
+                guard let self, self.connectionGeneration == generation else { continue }
+                guard self.shouldAcceptObservedEvent(event) else { continue }
                 self.apply(event)
             }
         }
@@ -829,14 +872,14 @@ final class AskViewModel {
             isConnected = false
             if event.error?.code == "session_limit_reached" {
                 // Preserve transcript and let the user start a new chat explicitly.
-                socket?.disconnect()
+                dropLiveSocket()
                 completeTurn(state: .sessionLimitReached(event.error?.message ?? "This Copilot chat is full. Start a new chat to continue."))
                 scheduleImmediateSnapshotSave()
                 return
             }
             if event.error?.code == "insufficient_credits" {
                 // Preserve transcript; user needs to add credits before continuing.
-                socket?.disconnect()
+                dropLiveSocket()
                 completeTurn(state: .insufficientCredits(event.error?.message ?? "Copilot needs more credits."))
                 scheduleImmediateSnapshotSave()
                 return
@@ -932,7 +975,7 @@ final class AskViewModel {
         if touchActivity {
             lastActivityAt = Date()
         }
-        let conversationId = socket?.conversationId ?? UUID().uuidString
+        let conversationId = self.conversationId
         await snapshots.save(
             Snapshot(
                 conversationId: conversationId,
@@ -982,8 +1025,7 @@ final class AskViewModel {
             } catch {
                 // Best-effort cancel; still force-complete the turn below.
             }
-            self.socket?.disconnect()
-            self.isConnected = false
+            self.dropLiveSocket()
             // Tools may have already written Cargo — treat as success so the user
             // is not shown a failure after a successful seed.
             if self.seedTurnStarted, self.seedItemsAdded > 0 {

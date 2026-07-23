@@ -161,8 +161,10 @@ struct AskView: View {
 
     private func closeSheet() {
         isComposerFocused = false
-        ask.closeSheet()
-        dismiss()
+        Task {
+            await ask.closeSheetAndBackground()
+            dismiss()
+        }
     }
 
     private func startNewChat() {

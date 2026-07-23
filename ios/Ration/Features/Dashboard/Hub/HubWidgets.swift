@@ -88,19 +88,17 @@ struct HubStatsWidget: View {
 struct SupplyPreviewWidget: View {
     let list: SupplyList?
     var cargoLinkRows: [CargoLinkResolver.Row] = []
-    var size: String = "md"
+    var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onToggleItem: ((SupplyItem, Bool) async -> Void)?
     var onOpenSupply: (() -> Void)?
     var onSelectCargo: ((String) -> Void)?
 
     @State private var checkedAnimationIDs: Set<String> = []
 
-    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
-
     private var displayItems: [SupplyItem] {
         guard let list else { return [] }
         let unchecked = list.items.filter { !$0.isPurchased || checkedAnimationIDs.contains($0.id) }
-        return Array(unchecked.prefix(rowLimit))
+        return Array(unchecked.prefix(itemLimit))
     }
 
     var body: some View {
@@ -191,17 +189,20 @@ struct SupplyPreviewWidget: View {
 struct MealsReadyWidget: View {
     let title: String
     let matches: [MealMatch]
-    var size: String = "md"
+    var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectMeal: ((Meal) -> Void)?
 
-    init(title: String = "Meals ready", matches: [MealMatch], size: String = "md", onSelectMeal: ((Meal) -> Void)? = nil) {
+    init(
+        title: String = "Meals ready",
+        matches: [MealMatch],
+        itemLimit: Int = HubLayoutEngine.defaultDisplayLimit,
+        onSelectMeal: ((Meal) -> Void)? = nil
+    ) {
         self.title = title
         self.matches = matches
-        self.size = size
+        self.itemLimit = itemLimit
         self.onSelectMeal = onSelectMeal
     }
-
-    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
@@ -215,7 +216,7 @@ struct MealsReadyWidget: View {
                 if ready.isEmpty {
                     Text("No meals ready with current Cargo").rationCaption()
                 } else {
-                    ForEach(ready.prefix(rowLimit)) { match in
+                    ForEach(ready.prefix(itemLimit)) { match in
                         Button {
                             onSelectMeal?(match.meal)
                         } label: {
@@ -243,10 +244,8 @@ struct MealsReadyWidget: View {
 
 struct MealsPartialWidget: View {
     let matches: [MealMatch]
-    var size: String = "md"
+    var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectMeal: ((Meal) -> Void)?
-
-    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
@@ -256,7 +255,7 @@ struct MealsPartialWidget: View {
                 if partial.isEmpty {
                     Text("No partial matches").rationCaption()
                 } else {
-                    ForEach(partial.prefix(rowLimit)) { match in
+                    ForEach(partial.prefix(itemLimit)) { match in
                         Button {
                             onSelectMeal?(match.meal)
                         } label: {
@@ -282,10 +281,8 @@ struct MealsPartialWidget: View {
 struct CargoExpiringWidget: View {
     let items: [CargoItem]
     let alertDays: Int
-    var size: String = "md"
+    var itemLimit: Int = HubLayoutEngine.defaultDisplayLimit
     var onSelectItem: ((CargoItem) -> Void)?
-
-    private var rowLimit: Int { HubLayoutEngine.rowLimit(for: size) }
 
     var body: some View {
         GlassCard {
@@ -298,7 +295,7 @@ struct CargoExpiringWidget: View {
                 if items.isEmpty {
                     Text("Nothing expiring soon").rationCaption()
                 } else {
-                    ForEach(items.prefix(rowLimit)) { item in
+                    ForEach(items.prefix(itemLimit)) { item in
                         Button {
                             onSelectItem?(item)
                         } label: {
@@ -327,19 +324,16 @@ struct CargoExpiringWidget: View {
 struct ManifestPreviewWidget: View {
     let preview: ManifestPreviewData?
     var daySpan: Int = 3
-    var size: String = "md"
     var onSelectEntry: ((ManifestPreviewEntry) -> Void)?
     var onOpenManifest: (() -> Void)?
 
-    private var effectiveDaySpan: Int {
-        let spanCap = size == "sm" ? 1 : size == "lg" ? 7 : 3
-        return min(max(daySpan, 1), spanCap)
-    }
+    /// Entries shown per day column when spanning multiple days.
+    private static let entriesPerDayColumn = 4
 
     private var previewDates: [String] {
         guard let entries = preview?.entries else { return [] }
         let unique = Array(Set(entries.map(\.date))).sorted()
-        return Array(unique.prefix(effectiveDaySpan))
+        return Array(unique.prefix(max(daySpan, 1)))
     }
 
     var body: some View {
@@ -348,13 +342,13 @@ struct ManifestPreviewWidget: View {
                 Button {
                     onOpenManifest?()
                 } label: {
-                    HubWidgetHeader(title: effectiveDaySpan == 1 ? "Today" : "Upcoming plan", systemImage: "calendar")
+                    HubWidgetHeader(title: daySpan == 1 ? "Today" : "Upcoming plan", systemImage: "calendar")
                 }
                 .buttonStyle(.plain)
 
                 if previewDates.isEmpty {
                     Text("No meals planned this week").rationCaption()
-                } else if effectiveDaySpan == 1, let today = previewDates.first {
+                } else if daySpan == 1, let today = previewDates.first {
                     todayHero(date: today, entries: preview?.entries ?? [])
                 } else {
                     HStack(alignment: .top, spacing: 8) {
@@ -410,14 +404,14 @@ struct ManifestPreviewWidget: View {
                 .frame(maxWidth: .infinity)
                 .background(isToday ? Theme.hyperGreen : Theme.platinum)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            ForEach(dayEntries.prefix(effectiveDaySpan == 1 ? 10 : HubLayoutEngine.rowLimit(for: size))) { entry in
+            ForEach(dayEntries.prefix(daySpan == 1 ? 10 : Self.entriesPerDayColumn)) { entry in
                 Button {
                     onSelectEntry?(entry)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.mealName.capitalized)
                             .font(Typography.caption())
-                            .lineLimit(effectiveDaySpan == 1 ? nil : 2)
+                            .lineLimit(daySpan == 1 ? nil : 2)
                             .multilineTextAlignment(.leading)
                         HubSlotBadge(slotType: entry.slotType)
                     }

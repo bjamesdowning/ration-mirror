@@ -103,15 +103,11 @@ struct DashboardView: View {
                 organizationId: organizationId,
                 isRefreshing: model.isRefreshing
             )
-            .sheet(item: $selectedCargoRoute) { route in
-                NavigationStack {
-                    CargoDetailView(itemId: route.id)
-                }
+            .navigationDestination(item: $selectedCargoRoute) { route in
+                CargoDetailView(itemId: route.id)
             }
-            .sheet(item: $selectedMealRoute) { route in
-                NavigationStack {
-                    MealDetailView(mealId: route.meal.id, initialMeal: route.meal)
-                }
+            .navigationDestination(item: $selectedMealRoute) { route in
+                MealDetailView(mealId: route.meal.id, initialMeal: route.meal)
             }
         }
         .task(id: loadTaskKey) {
@@ -248,30 +244,35 @@ struct DashboardView: View {
         let widgetID = HubWidgetID(rawValue: widget.id) ?? .hubStats
         let def = HubWidgetRegistry.definitions[widgetID]
         let size = HubLayoutEngine.resolvedSize(widget.size, defaultSize: def?.defaultSize ?? "md")
+        let itemLimit = HubLayoutEngine.displayLimit(filters: widget.filters, size: widget.size)
         switch widgetID {
         case .hubStats:
             HubStatsWidget(data: data, size: size, onOpenCargo: onOpenCargo, onOpenExpiring: onOpenCargo, onOpenGalley: onOpenGalley, onOpenSupply: onOpenSupply)
         case .mealsReady:
-            MealsReadyWidget(matches: data.mealMatches, size: size) { meal in
+            MealsReadyWidget(matches: data.mealMatches, itemLimit: itemLimit) { meal in
                 selectedMealRoute = HubMealRoute(meal: meal)
             }
         case .mealsPartial:
-            MealsPartialWidget(matches: data.partialMealMatches, size: size) { meal in
+            MealsPartialWidget(matches: data.partialMealMatches, itemLimit: itemLimit) { meal in
                 selectedMealRoute = HubMealRoute(meal: meal)
             }
         case .snacksReady:
-            MealsReadyWidget(title: "Snacks ready", matches: data.snackMatches, size: size) { meal in
+            MealsReadyWidget(title: "Snacks ready", matches: data.snackMatches, itemLimit: itemLimit) { meal in
                 selectedMealRoute = HubMealRoute(meal: meal)
             }
         case .cargoExpiring:
-            CargoExpiringWidget(items: data.expiringItems, alertDays: data.expirationAlertDays, size: size) { item in
+            CargoExpiringWidget(
+                items: data.expiringItems,
+                alertDays: data.expirationAlertDays,
+                itemLimit: itemLimit
+            ) { item in
                 selectedCargoRoute = HubCargoRoute(id: item.id)
             }
         case .supplyPreview:
             SupplyPreviewWidget(
                 list: data.latestSupplyList,
                 cargoLinkRows: (data.cargoTagIndex ?? []).map { CargoLinkResolver.Row(id: $0.id, name: $0.name) },
-                size: size,
+                itemLimit: itemLimit,
                 onToggleItem: { item, purchased in
                     guard let organizationId = env.session.activeOrganizationId else { return }
                     await model.toggleSupplyItem(
@@ -291,8 +292,7 @@ struct DashboardView: View {
         case .manifestPreview:
             ManifestPreviewWidget(
                 preview: data.manifestPreview,
-                daySpan: widget.filters?.daySpan ?? 3,
-                size: size,
+                daySpan: HubLayoutEngine.resolvedDaySpan(filters: widget.filters),
                 onSelectEntry: { entry in
                     selectedMealRoute = HubMealRoute(meal: entry.stubMeal())
                 },
@@ -329,13 +329,21 @@ struct DashboardView: View {
     }
 }
 
-private struct HubCargoRoute: Identifiable {
+private struct HubCargoRoute: Identifiable, Hashable {
     let id: String
 }
 
-private struct HubMealRoute: Identifiable {
+private struct HubMealRoute: Identifiable, Hashable {
     let meal: Meal
     var id: String { meal.id }
+
+    static func == (lhs: HubMealRoute, rhs: HubMealRoute) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
 private extension ManifestPreviewEntry {

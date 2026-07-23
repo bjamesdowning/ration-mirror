@@ -63,17 +63,107 @@ enum HubLayoutEngine {
         case up, down
     }
 
-    /// Row display cap by widget size — mirrors web compact vs full layouts.
-    static func rowLimit(for size: String?) -> Int {
-        switch size ?? "md" {
-        case "sm": return 2
-        case "lg": return 6
-        default: return 4
+    /// Allowed item-count range for list widgets (Supply, meals, expiring).
+    static let displayLimitRange = 2...12
+    static let defaultDisplayLimit = 6
+
+    /// How many rows a list widget shows.
+    /// Prefers `filters.limit`; when unset, derives from legacy `size` (sm/md/lg → 2/4/6).
+    static func displayLimit(
+        filters: HubWidgetFilters?,
+        size: String? = nil,
+        defaultLimit: Int = defaultDisplayLimit
+    ) -> Int {
+        if let limit = filters?.limit {
+            return min(max(limit, displayLimitRange.lowerBound), displayLimitRange.upperBound)
         }
+        if let size {
+            switch resolvedSize(size, defaultSize: "md") {
+            case "sm": return 2
+            case "lg": return 6
+            default: return 4
+            }
+        }
+        return min(max(defaultLimit, displayLimitRange.lowerBound), displayLimitRange.upperBound)
+    }
+
+    /// Maps item count → size for web grid parity (`≤2→sm`, `≤4→md`, else `lg`).
+    static func sizeForLimit(_ limit: Int) -> String {
+        if limit <= 2 { return "sm" }
+        if limit <= 4 { return "md" }
+        return "lg"
+    }
+
+    /// Maps Manifest day span → size for web grid parity.
+    static func sizeForDaySpan(_ daySpan: Int) -> String {
+        switch daySpan {
+        case 1: return "sm"
+        case 3: return "md"
+        default: return "lg"
+        }
+    }
+
+    /// Normalized day span from filters (allowed: 1, 3, 7, 14).
+    static func resolvedDaySpan(filters: HubWidgetFilters?, defaultSpan: Int = 3) -> Int {
+        let raw = filters?.daySpan ?? defaultSpan
+        return HubWidgetFilters.allowedDaySpans.contains(raw) ? raw : defaultSpan
     }
 
     static func resolvedSize(_ size: String?, defaultSize: String) -> String {
         let raw = size ?? defaultSize
         return ["sm", "md", "lg"].contains(raw) ? raw : defaultSize
+    }
+
+    /// Human-readable density summary for Edit Hub rows.
+    static func densitySummary(for widget: HubWidgetLayout) -> String {
+        let id = HubWidgetID(rawValue: widget.id)
+        switch id {
+        case .hubStats:
+            switch resolvedSize(widget.size, defaultSize: "lg") {
+            case "sm": return "Compact layout"
+            case "lg": return "Expanded layout"
+            default: return "Standard layout"
+            }
+        case .manifestPreview:
+            let span = resolvedDaySpan(filters: widget.filters)
+            var parts: [String] = []
+            switch span {
+            case 1: parts.append("Today")
+            case 3: parts.append("3 days")
+            case 7: parts.append("7 days")
+            case 14: parts.append("14 days")
+            default: parts.append("\(span) days")
+            }
+            if let slot = widget.filters?.slotType, !slot.isEmpty {
+                parts.append(slot.capitalized)
+            }
+            if let tags = widget.filters?.tags, !tags.isEmpty {
+                parts.append("Tags")
+            }
+            return parts.joined(separator: " · ")
+        case .supplyPreview, .mealsReady, .mealsPartial, .snacksReady, .cargoExpiring:
+            let limit = displayLimit(filters: widget.filters, size: widget.size)
+            var parts = ["Show \(limit)"]
+            if id == .cargoExpiring, let domain = widget.filters?.domain, !domain.isEmpty {
+                parts.append(domain.capitalized)
+            } else if hasTagFilters(widget) {
+                parts.append("Tags")
+            }
+            return parts.joined(separator: " · ")
+        case .none:
+            return ""
+        }
+    }
+
+    private static func hasTagFilters(_ widget: HubWidgetLayout) -> Bool {
+        let f = widget.filters
+        switch HubWidgetID(rawValue: widget.id) {
+        case .supplyPreview:
+            return !(f?.supplyTags ?? []).isEmpty
+        case .mealsReady, .mealsPartial, .snacksReady, .manifestPreview:
+            return !(f?.tags ?? []).isEmpty
+        default:
+            return false
+        }
     }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Hub layout editor — native List reorder (EditMode + onMove), filters, size, visibility; autosaves.
+/// Hub layout editor — reorder, visibility, and per-widget Configure sheet; autosaves.
 struct HubEditView: View {
     let hubProfile: HubProfile?
     let hubLayout: HubLayoutPayload?
@@ -13,7 +13,7 @@ struct HubEditView: View {
     @State private var selectedProfile: HubProfile = "full"
     @State private var isSaving = false
     @State private var errorMessage: String?
-    @State private var filterWidget: HubWidgetLayout?
+    @State private var configureWidget: HubWidgetLayout?
 
     private let profileOptions: [HubProfile] = ["full", "cook", "shop", "minimal", "custom"]
 
@@ -72,17 +72,14 @@ struct HubEditView: View {
         .overlay {
             if isSaving { ProgressView().tint(Theme.hyperGreen) }
         }
-        .sheet(item: $filterWidget) { widget in
-            HubWidgetFilterSheet(
+        .sheet(item: $configureWidget) { widget in
+            HubWidgetConfigureSheet(
                 widget: widget,
                 availableMealTags: availableMealTags,
                 availableCargoTags: availableCargoTags
-            ) { filters in
+            ) { updated in
                 widgets = widgets.map { row in
-                    guard row.id == widget.id else { return row }
-                    var copy = row
-                    copy.filters = filters
-                    return copy
+                    row.id == updated.id ? updated : row
                 }
                 persist()
             }
@@ -98,44 +95,42 @@ struct HubEditView: View {
         let def = HubWidgetRegistry.definitions[HubWidgetID(rawValue: widget.id) ?? .hubStats]
         let title = def?.title ?? widget.id
         let description = def?.description ?? ""
-        let defaultSize = def?.defaultSize ?? "md"
+        let summary = HubLayoutEngine.densitySummary(for: widget)
 
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).rationBody()
-                    if !description.isEmpty {
-                        Text(description).rationCaption()
+        HStack(alignment: .top, spacing: 8) {
+            Button {
+                configureWidget = widget
+            } label: {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title).rationBody().foregroundStyle(Theme.carbon)
+                        if !description.isEmpty {
+                            Text(description).rationCaption()
+                        }
+                        if !summary.isEmpty {
+                            Text(summary)
+                                .rationCaption()
+                                .foregroundStyle(Theme.hyperGreen)
+                        }
                     }
-                    if widget.filters != nil {
-                        Text("Filters active").rationCaption().foregroundStyle(Theme.hyperGreen)
-                    }
-                }
-                Spacer(minLength: 8)
-                if supportsFilters(widget.id) {
-                    Button {
-                        filterWidget = widget
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isSaving)
-                    .accessibilityLabel("Edit filters for \(title)")
-                }
-                Toggle("", isOn: binding(for: widget.id))
-                    .labelsHidden()
-                    .tint(Theme.hyperGreen)
-                    .disabled(isSaving)
-                    .accessibilityLabel(widget.visible ? "Hide \(title)" : "Show \(title)")
-            }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Picker("Size", selection: sizeBinding(for: widget.id, defaultSize: defaultSize)) {
-                Text("S").tag("sm")
-                Text("M").tag("md")
-                Text("L").tag("lg")
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                        .padding(.top, 4)
+                }
+                .contentShape(Rectangle())
             }
-            .pickerStyle(.segmented)
+            .buttonStyle(.plain)
             .disabled(isSaving)
+            .accessibilityLabel("Configure \(title)")
+
+            Toggle("", isOn: binding(for: widget.id))
+                .labelsHidden()
+                .tint(Theme.hyperGreen)
+                .disabled(isSaving)
+                .accessibilityLabel(widget.visible ? "Hide \(title)" : "Show \(title)")
         }
         .padding(.vertical, 4)
         .listRowBackground(Theme.surface)
@@ -166,10 +161,6 @@ struct HubEditView: View {
         }
     }
 
-    private func supportsFilters(_ id: String) -> Bool {
-        ["meals-ready", "meals-partial", "snacks-ready", "manifest-preview", "cargo-expiring", "supply-preview"].contains(id)
-    }
-
     private func moveWidgets(from source: IndexSet, to destination: Int) {
         widgets.move(fromOffsets: source, toOffset: destination)
         widgets = HubLayoutEngine.reindexOrder(widgets)
@@ -184,26 +175,6 @@ struct HubEditView: View {
                     guard widget.id == id else { return widget }
                     var copy = widget
                     copy.visible = newValue
-                    return copy
-                }
-                persist()
-            }
-        )
-    }
-
-    private func sizeBinding(for id: String, defaultSize: String) -> Binding<String> {
-        Binding(
-            get: {
-                HubLayoutEngine.resolvedSize(
-                    widgets.first(where: { $0.id == id })?.size,
-                    defaultSize: defaultSize
-                )
-            },
-            set: { newValue in
-                widgets = widgets.map { widget in
-                    guard widget.id == id else { return widget }
-                    var copy = widget
-                    copy.size = newValue
                     return copy
                 }
                 persist()

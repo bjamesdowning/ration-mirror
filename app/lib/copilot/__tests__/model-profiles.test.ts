@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+	COPILOT_DEFAULT_MODEL_ID,
 	COPILOT_DEFAULT_MODEL_PRESET,
 	COPILOT_MODEL_PRESETS,
-	minimaxProviderOptions,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	parseCopilotModelPreset,
+	resolveCopilotModelId,
 	resolveCopilotModelPreset,
 } from "../model-profiles";
 
@@ -35,20 +36,12 @@ describe("resolveCopilotModelPreset", () => {
 });
 
 describe("COPILOT_MODEL_PRESETS", () => {
-	it("fast disables MiniMax thinking", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.thinking).toBe("disabled");
-		expect(minimaxProviderOptions(COPILOT_MODEL_PRESETS.fast)).toEqual({
-			thinking: { type: "disabled" },
-			reasoning_split: true,
-		});
-	});
-
-	it("deep uses adaptive MiniMax thinking", () => {
-		expect(COPILOT_MODEL_PRESETS.deep.thinking).toBe("adaptive");
-		expect(minimaxProviderOptions(COPILOT_MODEL_PRESETS.deep)).toEqual({
-			thinking: { type: "adaptive" },
-			reasoning_split: true,
-		});
+	it("uses Cloudflare Workers AI minimax/m3 by default", () => {
+		expect(COPILOT_DEFAULT_MODEL_ID).toBe("minimax/m3");
+		expect(resolveCopilotModelId({})).toBe("minimax/m3");
+		expect(
+			resolveCopilotModelId({ COPILOT_MODEL_ID: " @cf/openai/gpt-oss-120b " }),
+		).toBe("@cf/openai/gpt-oss-120b");
 	});
 
 	it("deep allows longer multi-step tool runs", () => {

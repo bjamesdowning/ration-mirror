@@ -29,14 +29,10 @@ import {
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
 import {
-	createCopilotLanguageModel,
-	type MiniMaxRequestExtras,
-} from "../app/lib/copilot/model.server";
-import {
 	COPILOT_MODEL_PRESETS,
 	type CopilotModelPreset,
-	minimaxProviderOptions,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
+	resolveCopilotModelId,
 	resolveCopilotModelPreset,
 } from "../app/lib/copilot/model-profiles";
 import {
@@ -261,9 +257,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
-	private minimaxExtras: MiniMaxRequestExtras = minimaxProviderOptions(
-		COPILOT_MODEL_PRESETS.fast,
-	);
 	private boundChargeOpenedAt: number | null = null;
 	/** Soft-deny onboarding turns must not burn the free grant. */
 	private onboardingTurnDenied = false;
@@ -408,7 +401,8 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		return createCopilotLanguageModel(this.env, () => this.minimaxExtras);
+		// Cloudflare Workers AI binding — billed on the CF account (no MiniMax key).
+		return resolveCopilotModelId(this.env);
 	}
 
 	getSystemPrompt() {
@@ -561,7 +555,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				);
 			}
 			const profile = COPILOT_MODEL_PRESETS[preset];
-			this.minimaxExtras = minimaxProviderOptions(profile);
 			const maxOutputTokens =
 				briefingTurn === "bootstrap"
 					? ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS
@@ -700,7 +693,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		}
 
 		const profile = COPILOT_MODEL_PRESETS[preset];
-		this.minimaxExtras = minimaxProviderOptions(profile);
 
 		const scopedTools = resolveCopilotActiveTools(
 			Object.keys(ctx.tools),

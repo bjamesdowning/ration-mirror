@@ -109,5 +109,24 @@ setup("authenticate", async ({ page }) => {
 	});
 	await expect(onboardingDialog).toBeHidden({ timeout: 10_000 });
 
+	// Marketing homepage also has a sticky header, so waitForHubStyles alone is
+	// not proof of auth. Fail loudly if Dev Login did not establish a session.
+	await expect(page).toHaveURL(/\/hub(\/|$)/, { timeout: 10_000 });
+	await expect(page.locator('aside a[href="/hub/cargo"]')).toBeVisible({
+		timeout: 15_000,
+	});
+	const cookies = await page.context().cookies();
+	expect(
+		cookies.some(
+			(cookie) =>
+				cookie.name.includes("session") ||
+				cookie.name.includes("better-auth") ||
+				cookie.name.startsWith("__Secure-"),
+		),
+		`Expected session cookies after Dev Login; got: ${cookies
+			.map((c) => c.name)
+			.join(", ") || "(none)"}`,
+	).toBe(true);
+
 	await page.context().storageState({ path: authFile });
 });

@@ -59,12 +59,8 @@ declare namespace Cloudflare {
 		PROJECT_THINK?: DurableObjectNamespace;
 		/** Optional Analytics Engine dataset for copilot metrics. */
 		COPILOT_ANALYTICS?: AnalyticsEngineDataset;
-		/** MiniMax API key for Copilot OpenAI-compatible transport (wrangler secret). */
-		MINIMAX_API_KEY?: string;
-		/** Optional Copilot model id (default MiniMax-M3). */
+		/** Optional Copilot Workers AI model id (default minimax/m3). */
 		COPILOT_MODEL_ID?: string;
-		/** Optional Copilot OpenAI-compatible base URL (default https://api.minimax.io/v1). */
-		COPILOT_BASE_URL?: string;
 		/**
 		 * Main + MCP Workers Analytics Engine — ops counters (503/429/queue/Gemini).
 		 * Dataset: `ration_ops` (prod) / `ration_ops_dev` (dev).

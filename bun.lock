@@ -5,7 +5,6 @@
     "": {
       "name": "ration",
       "dependencies": {
-        "@ai-sdk/openai": "^3",
         "@ai-sdk/react": "^3",
         "@better-auth/oauth-provider": "1.6.23",
         "@cloudflare/ai-chat": "^0.9.3",

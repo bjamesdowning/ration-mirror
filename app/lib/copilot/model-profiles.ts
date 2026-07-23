@@ -2,31 +2,29 @@ import { z } from "zod";
 
 export type CopilotModelPreset = "fast" | "deep";
 
-/** MiniMax M3 thinking control (OpenAI-compatible `thinking.type`). */
-export type CopilotThinkingType = "disabled" | "adaptive";
-
 export type CopilotModelProfile = {
 	label: string;
 	description: string;
-	/** MiniMax thinking mode — omit reasoning_effort (not a MiniMax field). */
-	thinking: CopilotThinkingType;
-	/** Keep reasoning_content shaped for Show thinking UI when thinking is on. */
-	reasoningSplit: boolean;
 	maxOutputTokens: number;
 	maxSteps: number;
 	temperature: number;
 	topP: number;
 };
 
+/**
+ * Fast / Deep are Ration presets on the same Cloudflare Workers AI model
+ * (`minimax/m3`). Cloudflare's published Chat Completions schema does not
+ * document MiniMax `thinking` — differentiate via steps, output budget, and
+ * sampling only. `sendReasoning: true` still surfaces any `reasoning_content`
+ * Cloudflare returns.
+ */
 export const COPILOT_MODEL_PRESETS: Record<
 	CopilotModelPreset,
 	CopilotModelProfile
 > = {
 	fast: {
 		label: "Fast",
-		description: "Quick answers, thinking off, lower token use",
-		thinking: "disabled",
-		reasoningSplit: true,
+		description: "Quick answers, lower token use",
 		maxOutputTokens: 2048,
 		maxSteps: 12,
 		temperature: 0.3,
@@ -34,9 +32,7 @@ export const COPILOT_MODEL_PRESETS: Record<
 	},
 	deep: {
 		label: "Deep",
-		description: "Adaptive thinking, better multi-step planning",
-		thinking: "adaptive",
-		reasoningSplit: true,
+		description: "Better multi-step planning, uses more tokens",
 		maxOutputTokens: 16384,
 		maxSteps: 25,
 		temperature: 0.5,
@@ -49,11 +45,12 @@ export const COPILOT_DEFAULT_MODEL_PRESET: CopilotModelPreset = "fast";
 /** Forced model preset for iOS onboarding briefing turns. */
 export const ONBOARDING_BRIEFING_MODEL_PRESET: CopilotModelPreset = "fast";
 
-/** Default MiniMax model id (OpenAI-compatible API). Override with COPILOT_MODEL_ID. */
-export const COPILOT_DEFAULT_MODEL_ID = "MiniMax-M3";
-
-/** Direct MiniMax OpenAI-compatible base URL. Override with COPILOT_BASE_URL (e.g. AI Gateway). */
-export const COPILOT_DEFAULT_BASE_URL = "https://api.minimax.io/v1";
+/**
+ * Workers AI / AI REST model id for Copilot (Cloudflare-billed).
+ * Override with `COPILOT_MODEL_ID` (e.g. rollback to `@cf/openai/gpt-oss-120b`).
+ * @see https://developers.cloudflare.com/ai/models/minimax/m3/
+ */
+export const COPILOT_DEFAULT_MODEL_ID = "minimax/m3";
 
 export const CopilotModelPresetSchema = z.enum(["fast", "deep"]);
 
@@ -75,13 +72,8 @@ export function resolveCopilotModelPreset(
 	);
 }
 
-/** Provider extras for MiniMax OpenAI-compatible chat completions. */
-export function minimaxProviderOptions(profile: CopilotModelProfile): {
-	thinking: { type: CopilotThinkingType };
-	reasoning_split: boolean;
-} {
-	return {
-		thinking: { type: profile.thinking },
-		reasoning_split: profile.reasoningSplit,
-	};
+export function resolveCopilotModelId(env: {
+	COPILOT_MODEL_ID?: string;
+}): string {
+	return env.COPILOT_MODEL_ID?.trim() || COPILOT_DEFAULT_MODEL_ID;
 }

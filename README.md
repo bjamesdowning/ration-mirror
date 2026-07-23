@@ -167,7 +167,7 @@ flowchart TB
     end
 
     subgraph AI["Cloudflare AI"]
-        AIBinding["Workers AI — Embeddings; Copilot via MiniMax M3"]
+        AIBinding["Workers AI — Embeddings + Copilot minimax/m3"]
         Vectorize[("Vectorize — ration-cargo")]
         AIGateway["AI Gateway → Google AI Studio"]
         AISearch["AI Search — ration-docs"]
@@ -204,7 +204,7 @@ flowchart TB
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
-| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via MiniMax M3 (OpenAI-compatible) on `ration-copilot` |
+| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via `minimax/m3` on `ration-copilot` |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
@@ -2264,15 +2264,15 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 
 ### 14.4 Model, presets, and inference
 
-- **Model:** MiniMax M3 via OpenAI-compatible transport (`createCopilotLanguageModel` → `https://api.minimax.io/v1`, model `MiniMax-M3`). Requires `MINIMAX_API_KEY` (optional `COPILOT_BASE_URL` / `COPILOT_MODEL_ID` for AI Gateway or rollback).
+- **Model:** MiniMax M3 via **Cloudflare Workers AI** (`minimax/m3` on the Copilot worker’s `AI` binding — billed on your Cloudflare account). Optional `COPILOT_MODEL_ID` to override (e.g. rollback to `@cf/openai/gpt-oss-120b`).
 - **Presets** ([`model-profiles.ts`](app/lib/copilot/model-profiles.ts)):
 
-| Preset | Thinking | maxSteps | maxOutputTokens | Use case |
-|--------|----------|----------|-----------------|----------|
-| **Fast** (default) | `thinking: disabled` | 12 | 2048 | Quick answers, lower token use |
-| **Deep** | `thinking: adaptive` | 25 | 16384 | Multi-step planning |
+| Preset | maxSteps | maxOutputTokens | Use case |
+|--------|----------|-----------------|----------|
+| **Fast** (default) | 12 | 2048 | Quick answers, lower token use |
+| **Deep** | 25 | 16384 | Multi-step planning |
 
-Fast/Deep both use the same MiniMax model. Thinking is injected via request extras (`thinking` + `reasoning_split: true`); **do not** send OpenAI `reasoning_effort`. Deep streams reasoning parts (`sendReasoning: true`). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
+Fast/Deep use the same Workers AI model. Cloudflare’s published `minimax/m3` Chat Completions schema does **not** document MiniMax `thinking` / `reasoning_effort`, so presets differ by steps, output budget, and sampling. `sendReasoning: true` still surfaces any `reasoning_content` Cloudflare returns (Show thinking UI). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
 
 **System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, native-feature due diligence, bulk import/remove rules (≥2 items), and post-mutation action reporting.
 

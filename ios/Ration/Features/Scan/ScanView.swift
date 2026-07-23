@@ -19,6 +19,7 @@ final class ScanViewModel {
     var reviewItems: [EditableScanResultItem] = []
     var editingItemId: String?
     var shouldShowPaywall = false
+    var paywallContext: PaywallContext?
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
 
@@ -64,6 +65,7 @@ final class ScanViewModel {
             } catch {
                 guard isCurrent(generation) else { return }
                 if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    paywallContext = .credits()
                     shouldShowPaywall = true
                     state = .idle
                 } else if AIErrorHandling.mapSubmitError(error) == .featureDisabled {
@@ -159,10 +161,29 @@ final class ScanViewModel {
         let batchItems = chosen.map { $0.toBatchCargoItem() }
         do {
             let result = try await api.batchAddCargo(BatchCargoRequest(items: batchItems))
+            if let ctx = CapacityUpgrade.context(fromBatchErrors: result.errors) {
+                paywallContext = ctx
+                shouldShowPaywall = true
+                if result.added + result.updated > 0 {
+                    Haptics.success()
+                    state = .confirmed(added: result.added, updated: result.updated)
+                } else {
+                    state = .failed(ctx.reasonTitle ?? "Cargo capacity reached")
+                }
+                return
+            }
             Haptics.success()
             state = .confirmed(added: result.added, updated: result.updated)
+        } catch let error as APIError {
+            if let ctx = CapacityUpgrade.context(from: error) {
+                paywallContext = ctx
+                shouldShowPaywall = true
+                state = .failed(ctx.reasonTitle ?? "Capacity limit reached")
+            } else {
+                state = .failed(error.errorDescription ?? error.localizedDescription)
+            }
         } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            state = .failed(error.localizedDescription)
         }
     }
 
@@ -172,6 +193,7 @@ final class ScanViewModel {
         reviewItems = []
         editingItemId = nil
         shouldShowPaywall = false
+        paywallContext = nil
     }
 
     private func isCurrent(_ generation: Int) -> Bool {
@@ -185,7 +207,7 @@ struct ScanView: View {
     @State private var model = ScanViewModel()
     @State private var showingCamera = false
     @State private var consent = AIConsentCoordinator()
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     @State private var editingItem: EditableScanResultItem?
 
     private var scanCreditCost: Int {
@@ -231,8 +253,11 @@ struct ScanView: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingPaywall) {
-                PaywallView()
+            .sheet(item: $paywallContext, onDismiss: {
+                model.shouldShowPaywall = false
+                model.paywallContext = nil
+            }) { ctx in
+                PaywallView(context: ctx)
             }
             .sheet(item: $editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
@@ -248,8 +273,16 @@ struct ScanView: View {
                 }
                 .ignoresSafeArea()
             }
+            .onChange(of: model.paywallContext?.id) { _, _ in
+                if let ctx = model.paywallContext {
+                    paywallContext = ctx
+                }
+            }
             .onChange(of: model.shouldShowPaywall) { _, show in
-                if show { showingPaywall = true }
+                // Credits path still flips the Bool before setting context.
+                if show, paywallContext == nil {
+                    paywallContext = model.paywallContext ?? .credits()
+                }
             }
             .onDisappear { model.cancelActiveWork() }
         }

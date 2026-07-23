@@ -176,6 +176,9 @@ final class APIClient {
                 code: errBody?.code,
                 errorCode: errBody?.error,
                 limit: errBody?.limit,
+                resource: errBody?.resource,
+                current: errBody?.current,
+                tier: errBody?.tier,
                 existingMealId: errBody?.existingMealId,
                 existingMealName: errBody?.existingMealName
             )

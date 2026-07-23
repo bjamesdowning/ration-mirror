@@ -5,7 +5,7 @@ struct GroupSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var model = GroupSettingsViewModel()
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     @State private var showingDeleteConfirm = false
     @State private var deleteConfirmText = ""
     @State private var showingTransferConfirm = false
@@ -60,7 +60,9 @@ struct GroupSettingsView: View {
         .task { await model.load(api: env.api) }
         .task { await loadSupplySettings() }
         .refreshable { await model.load(api: env.api) }
-        .sheet(isPresented: $showingPaywall) { PaywallView() }
+        .sheet(item: $paywallContext) { ctx in
+            PaywallView(context: ctx)
+        }
         .alert("Delete this group permanently?", isPresented: $showingDeleteConfirm) {
             TextField("Type delete to confirm", text: $deleteConfirmText)
                 .textInputAutocapitalization(.never)
@@ -330,7 +332,8 @@ struct GroupSettingsView: View {
                     case .success, .failure, .crewGroupLimitReached:
                         break
                     case .showPaywall:
-                        showingPaywall = true
+                        paywallContext = model.lastCreateGroupPaywallContext
+                            ?? PaywallContext(trigger: .capacity, resource: "owned_groups")
                     }
                 }
             }
@@ -353,7 +356,7 @@ struct GroupSettingsView: View {
                     Task {
                         let needsPaywall = !(await model.inviteMember(api: env.api))
                         if needsPaywall, model.errorMessage == nil {
-                            showingPaywall = true
+                            paywallContext = PaywallContext(trigger: .featureGate, resource: "invites")
                         }
                     }
                 }

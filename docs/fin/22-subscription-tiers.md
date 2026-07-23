@@ -41,4 +41,7 @@ Cancel through the **Stripe Customer Portal** via **Manage billing** from **Hub 
 
 When you hit a cap, the app should show an **upgrade** path with the resource name and current counts.
 
+- **Web:** `UpgradePrompt` → Hub Pricing, plus soft `CapacityIndicator` meters near ~80% usage.
+- **iOS:** Contextual `PaywallView` (RevenueCat) opens on `capacity_exceeded` / feature gates for cargo, meals, scan/supply dock, groups, and share. Soft `CapacityMeter` cues appear on Cargo and Galley list headers for Free tier. Paywall copy explains Crew benefits (unlimited capacity, groups & invites, share links) vs credit packs (AI features on both tiers).
+
 Exact numbers and SKUs live on **Hub → Pricing**; if they differ from this table, **Pricing wins**.

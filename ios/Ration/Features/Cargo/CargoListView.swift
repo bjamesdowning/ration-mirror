@@ -11,6 +11,7 @@ struct CargoListView: View {
     @State private var showingFilters = false
     @State private var editingItem: CargoItem?
     @State private var restockItem: CargoItem?
+    @State private var paywallContext: PaywallContext?
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -117,6 +118,9 @@ struct CargoListView: View {
                     env.notifyCargoDataChanged()
                 }
             }
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
             .sheet(isPresented: $showingFilters) {
                 FilterOptionsSheet(filters: model.filters, availableTags: model.availableTags)
             }
@@ -220,6 +224,20 @@ struct CargoListView: View {
             }
             if !model.isLoading {
                 ListCountHeader(count: model.total, isLoading: model.isSearching)
+                if !env.session.isCrewMember {
+                    CapacityMeter(
+                        label: "cargo",
+                        current: model.inventoryTotal,
+                        limit: TierLimits.freeMaxInventoryItems
+                    ) {
+                        paywallContext = PaywallContext(
+                            trigger: .capacity,
+                            resource: "cargo",
+                            current: model.inventoryTotal,
+                            limit: TierLimits.freeMaxInventoryItems
+                        )
+                    }
+                }
             }
             if let errorMessage = model.errorMessage {
                 ErrorBanner(message: errorMessage).listRowBackground(Color.clear)

@@ -76,6 +76,7 @@ final class SupplyScanReviewViewModel {
     private(set) var rows: [SupplyScanReviewRow]
     private(set) var isSubmitting = false
     var errorMessage: String?
+    var paywallContext: PaywallContext?
     var editingItem: EditableScanResultItem?
 
     init(match: SupplyScanMatchResponse) {
@@ -149,7 +150,8 @@ final class SupplyScanReviewViewModel {
     func complete(
         listId: String,
         requestId: String,
-        api: RationAPI
+        api: RationAPI,
+        isCrewMember: Bool = false
     ) async -> SupplyScanCompleteResponse? {
         let selected = rows.filter(\.selected)
         guard !selected.isEmpty else {
@@ -188,8 +190,19 @@ final class SupplyScanReviewViewModel {
             )
             Haptics.success()
             return result
+        } catch let error as APIError {
+            if let ctx = CapacityUpgrade.context(
+                from: error,
+                isCrewMember: isCrewMember
+            ) {
+                paywallContext = ctx
+                errorMessage = nil
+            } else {
+                errorMessage = error.errorDescription
+            }
+            return nil
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = error.localizedDescription
             return nil
         }
     }
@@ -281,6 +294,9 @@ struct SupplyScanReviewView: View {
                     model.saveEdit(updated)
                 }
             }
+            .sheet(item: $model.paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
         }
     }
 
@@ -365,7 +381,8 @@ struct SupplyScanReviewView: View {
         guard let result = await model.complete(
             listId: context.listId,
             requestId: context.requestId,
-            api: env.api
+            api: env.api,
+            isCrewMember: env.session.isCrewMember
         ) else { return }
         env.notifyCargoDataChanged()
         onSuccess()

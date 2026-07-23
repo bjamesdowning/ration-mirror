@@ -20,6 +20,7 @@ final class ImportRecipeViewModel {
     private(set) var state: State = .idle
     var url = ""
     var shouldShowPaywall = false
+    var paywallContext: PaywallContext?
     private var activeTask: Task<Void, Never>?
     private var submissionGeneration = 0
     private var didAttemptDeviceCapture = false
@@ -63,6 +64,7 @@ final class ImportRecipeViewModel {
             } catch {
                 guard isCurrent(generation) else { return }
                 if AIErrorHandling.mapSubmitError(error) == .paywall {
+                    paywallContext = .credits()
                     shouldShowPaywall = true
                     state = .idle
                 } else if AIErrorHandling.mapSubmitError(error) == .featureDisabled {
@@ -186,6 +188,7 @@ final class ImportRecipeViewModel {
         } catch {
             guard isCurrent(generation) else { return }
             if AIErrorHandling.mapSubmitError(error) == .paywall {
+                paywallContext = .credits()
                 shouldShowPaywall = true
                 state = .idle
             } else if AIErrorHandling.mapSubmitError(error) == .featureDisabled {
@@ -199,13 +202,21 @@ final class ImportRecipeViewModel {
         }
     }
 
-    func confirm(requestId: String, api: RationAPI) async {
+    func confirm(requestId: String, api: RationAPI, isCrewMember: Bool = false) async {
         state = .confirming
         do {
             let response = try await api.importRecipeConfirm(requestId: requestId)
             state = .completed(response.meal)
+        } catch let error as APIError {
+            if let ctx = CapacityUpgrade.context(from: error, isCrewMember: isCrewMember) {
+                paywallContext = ctx
+                shouldShowPaywall = true
+                state = .failed(ctx.reasonTitle ?? "Meal capacity reached")
+            } else {
+                state = .failed(error.errorDescription ?? error.localizedDescription)
+            }
         } catch {
-            state = .failed((error as? APIError)?.errorDescription ?? error.localizedDescription)
+            state = .failed(error.localizedDescription)
         }
     }
 
@@ -213,6 +224,7 @@ final class ImportRecipeViewModel {
         cancelActiveWork()
         state = .idle
         shouldShowPaywall = false
+        paywallContext = nil
         didAttemptDeviceCapture = false
     }
 
@@ -226,7 +238,7 @@ struct ImportRecipeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = ImportRecipeViewModel()
     @State private var consent = AIConsentCoordinator()
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     var onComplete: () async -> Void = {}
     var onImportedMeal: (MealSummary) -> Void = { _ in }
     var onAddManually: () -> Void = {}
@@ -285,9 +297,21 @@ struct ImportRecipeSheet: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(item: $paywallContext, onDismiss: {
+                model.shouldShowPaywall = false
+                model.paywallContext = nil
+            }) { ctx in
+                PaywallView(context: ctx)
+            }
+            .onChange(of: model.paywallContext?.id) { _, _ in
+                if let ctx = model.paywallContext {
+                    paywallContext = ctx
+                }
+            }
             .onChange(of: model.shouldShowPaywall) { _, show in
-                if show { showingPaywall = true }
+                if show, paywallContext == nil {
+                    paywallContext = model.paywallContext ?? .credits()
+                }
             }
             .onDisappear { model.cancelActiveWork() }
         }
@@ -378,7 +402,13 @@ struct ImportRecipeSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             Button("Add to Galley") {
-                Task { await model.confirm(requestId: requestId, api: env.api) }
+                Task {
+                    await model.confirm(
+                        requestId: requestId,
+                        api: env.api,
+                        isCrewMember: env.session.isCrewMember
+                    )
+                }
             }
             .buttonStyle(PrimaryButtonStyle())
         }

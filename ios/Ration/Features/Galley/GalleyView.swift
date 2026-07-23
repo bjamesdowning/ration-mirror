@@ -23,6 +23,7 @@ struct GalleyView: View {
     @State private var cookUndoToken: String?
     @State private var showCookUndo = false
     @State private var editingMeal: Meal?
+    @State private var paywallContext: PaywallContext?
 
     private var organizationId: String? {
         env.session.activeOrganizationId
@@ -113,6 +114,9 @@ struct GalleyView: View {
             }
             .sheet(isPresented: $showingAddMeal) {
                 MealFormView(mode: .create) { await reload() }
+            }
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
             }
             .sheet(isPresented: $showingAddProvision) {
                 ProvisionFormView { await reload() }
@@ -323,6 +327,20 @@ struct GalleyView: View {
             }
             if !model.isLoading {
                 ListCountHeader(count: galleyCount, isLoading: model.isSearching)
+                if !env.session.isCrewMember {
+                    CapacityMeter(
+                        label: "meals",
+                        current: model.mealTotal,
+                        limit: TierLimits.freeMaxMeals
+                    ) {
+                        paywallContext = PaywallContext(
+                            trigger: .capacity,
+                            resource: "meals",
+                            current: model.mealTotal,
+                            limit: TierLimits.freeMaxMeals
+                        )
+                    }
+                }
             }
             Section {
                 ForEach(model.displayedMeals) { meal in
@@ -386,6 +404,20 @@ struct GalleyView: View {
             }
             if !model.isLoading {
                 ListCountHeader(count: galleyCount, isLoading: model.isSearching)
+                if !env.session.isCrewMember {
+                    CapacityMeter(
+                        label: "meals",
+                        current: model.mealTotal,
+                        limit: TierLimits.freeMaxMeals
+                    ) {
+                        paywallContext = PaywallContext(
+                            trigger: .capacity,
+                            resource: "meals",
+                            current: model.mealTotal,
+                            limit: TierLimits.freeMaxMeals
+                        )
+                    }
+                }
             }
             Section {
                 ForEach(model.displayedMatches) { match in

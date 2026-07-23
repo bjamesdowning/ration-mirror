@@ -97,7 +97,7 @@ struct ReplenishReceiptSheet: View {
                 }
             }
             .sheet(isPresented: $showingPaywall) {
-                PaywallView()
+                PaywallView(context: .credits())
             }
         }
         .presentationDetents([.large])

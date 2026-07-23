@@ -206,7 +206,7 @@ struct MainTabView: View {
                 env.ask.updateAutoExpandPolicy(scrollContext: env.copilotScroll)
             }
         }) {
-            PaywallView()
+            PaywallView(context: .credits())
         }
         .sheet(isPresented: $showingScan) {
             ScanView()

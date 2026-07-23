@@ -83,7 +83,7 @@ struct AskView: View {
                 }
             }
         }) {
-            PaywallView()
+            PaywallView(context: .credits())
         }
     }
 

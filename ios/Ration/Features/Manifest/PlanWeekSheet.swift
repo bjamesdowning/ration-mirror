@@ -5,7 +5,7 @@ struct PlanWeekSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = PlanWeekViewModel()
     @State private var consent = AIConsentCoordinator()
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
@@ -46,9 +46,16 @@ struct PlanWeekSheet: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(item: $paywallContext, onDismiss: {
+                model.shouldShowPaywall = false
+            }) { ctx in
+                PaywallView(context: ctx)
+            }
             .onChange(of: model.shouldShowPaywall) { _, show in
-                if show { showingPaywall = true }
+                if show {
+                    paywallContext = .credits()
+                    model.shouldShowPaywall = false
+                }
             }
             .onDisappear { model.cancelActiveWork() }
         }

@@ -123,11 +123,44 @@ final class GroupSettingsViewModelTests: XCTestCase {
             message: "capacity_exceeded",
             code: nil,
             errorCode: "capacity_exceeded",
-            limit: 5
+            limit: 5,
+            resource: "owned_groups",
+            tier: "crew_member"
+        )
+        XCTAssertEqual(
+            GroupSettingsSupport.createGroupOutcome(from: error, isCrewMember: false),
+            .crewGroupLimitReached(limit: 5)
+        )
+        // Limit alone (no tier) at Crew max still maps to hard-cap message.
+        let limitOnly = APIError.server(
+            status: 403,
+            message: "capacity_exceeded",
+            code: nil,
+            errorCode: "capacity_exceeded",
+            limit: 5,
+            resource: "owned_groups"
+        )
+        XCTAssertEqual(
+            GroupSettingsSupport.createGroupOutcome(from: limitOnly, isCrewMember: true),
+            .crewGroupLimitReached(limit: 5)
+        )
+    }
+
+    func testCreateGroupOutcomeFreeUserInCrewHouseholdGetsPaywall() {
+        // Group session may report Crew (owner), but owned-group capacity is user-tier.
+        let error = APIError.server(
+            status: 403,
+            message: "capacity_exceeded",
+            code: nil,
+            errorCode: "capacity_exceeded",
+            limit: 1,
+            resource: "owned_groups",
+            current: 1,
+            tier: "free"
         )
         XCTAssertEqual(
             GroupSettingsSupport.createGroupOutcome(from: error, isCrewMember: true),
-            .crewGroupLimitReached(limit: 5)
+            .showPaywall
         )
     }
 

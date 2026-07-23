@@ -26,6 +26,7 @@ struct MealFormView: View {
     @State private var cargoItems: [CargoItem] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var paywallContext: PaywallContext?
     @State private var editMode: EditMode = .active
 
     init(mode: Mode, onSaved: @escaping () async -> Void = {}) {
@@ -113,6 +114,9 @@ struct MealFormView: View {
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
             .rationFormKeyboardToolbar()
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
             .task {
                 async let tagsTask = env.api.mealTags()
                 async let cargoTask = env.api.cargo(limit: 100)
@@ -171,8 +175,18 @@ struct MealFormView: View {
             Haptics.success()
             await onSaved()
             dismiss()
+        } catch let error as APIError {
+            if case .create = mode,
+               let ctx = CapacityUpgrade.context(
+                   from: error,
+                   isCrewMember: env.session.isCrewMember
+               ) {
+                paywallContext = ctx
+            } else {
+                errorMessage = error.errorDescription
+            }
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = error.localizedDescription
         }
     }
 }

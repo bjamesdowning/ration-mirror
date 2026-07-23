@@ -55,7 +55,7 @@ enum GroupSettingsSupport {
     }
 
     static func maxOwnedGroups(isCrewMember: Bool) -> Int {
-        isCrewMember ? 5 : 1
+        TierLimits.maxOwnedGroups(isCrewMember: isCrewMember)
     }
 
     static func canCreateGroup(organizations: [OrgMembership], isCrewMember: Bool) -> Bool {
@@ -101,13 +101,20 @@ enum GroupSettingsSupport {
     }
 
     /// Maps create-group API errors to UI outcomes (paywall vs Crew limit message).
+    /// Owned-group capacity is **user-tier** — use API `tier` / limit, not session group Crew.
     static func createGroupOutcome(from error: APIError, isCrewMember: Bool) -> CreateGroupResult? {
-        guard case .server(403, _, _, _, let limit, _, _) = error else { return nil }
-        let code = error.serverErrorCode
-        if code == "feature_gated" { return .showPaywall }
-        if code == "capacity_exceeded" {
-            let resolvedLimit = limit ?? maxOwnedGroups(isCrewMember: isCrewMember)
-            return isCrewMember ? .crewGroupLimitReached(limit: resolvedLimit) : .showPaywall
+        guard error.statusCode == 403 else { return nil }
+        if error.isFeatureGated { return .showPaywall }
+        if error.isCapacityExceeded {
+            // Prefer server fields; do not infer Crew from session group tier.
+            if CapacityUpgrade.isUserAtCrewOwnedGroupCap(
+                tier: error.serverTier,
+                limit: error.serverLimit
+            ) {
+                let resolvedLimit = error.serverLimit ?? maxOwnedGroups(isCrewMember: true)
+                return .crewGroupLimitReached(limit: resolvedLimit)
+            }
+            return .showPaywall
         }
         return nil
     }

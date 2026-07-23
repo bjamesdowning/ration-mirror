@@ -693,7 +693,9 @@ struct ManifestView: View {
                 )
                 .task { await loadManifestShareStatus() }
             }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView(context: PaywallContext(trigger: .featureGate, resource: "share_manifest"))
+            }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
                 AddManifestEntrySheet(defaultDate: model.manifest?.startDate) { mealId, date, slot in

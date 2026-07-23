@@ -24,6 +24,7 @@ final class GroupSettingsViewModel {
     private(set) var updatingMemberId: String?
     var errorMessage: String?
     var createGroupError: String?
+    var lastCreateGroupPaywallContext: PaywallContext?
     var transferError: String?
     var successMessage: String?
     var inviteLink: String?
@@ -72,6 +73,7 @@ final class GroupSettingsViewModel {
         isCreatingGroup = true
         errorMessage = nil
         createGroupError = nil
+        lastCreateGroupPaywallContext = nil
         successMessage = nil
         defer { isCreatingGroup = false }
         do {
@@ -92,6 +94,10 @@ final class GroupSettingsViewModel {
                 isCrewMember: session?.isCrewMember ?? env.session.isCrewMember
             ) {
                 createGroupError = GroupSettingsSupport.createGroupErrorMessage(from: outcome)
+                if case .showPaywall = outcome {
+                    lastCreateGroupPaywallContext = CapacityUpgrade.context(from: error)
+                        ?? PaywallContext(trigger: .capacity, resource: "owned_groups")
+                }
                 return outcome
             }
             let message = error.errorDescription ?? "Something went wrong."

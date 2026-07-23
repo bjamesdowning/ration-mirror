@@ -39,7 +39,7 @@ final class CargoViewModel {
 
     private var nextCursor: String?
     private var inventoryNextCursor: String?
-    private var inventoryTotal = 0
+    private(set) var inventoryTotal = 0
     private var rawItems: [CargoItem] = []
     private var searchTask: Task<Void, Never>?
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000

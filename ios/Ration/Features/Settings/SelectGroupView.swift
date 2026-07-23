@@ -5,6 +5,7 @@ struct SelectGroupView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var paywallContext: PaywallContext?
 
     private var organizations: [OrgMembership] {
         env.session.orgSelectionOrganizations ?? []
@@ -41,6 +42,9 @@ struct SelectGroupView: View {
             .background(Theme.ceramic)
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled()
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
             .overlay {
                 if isWorking || env.session.isSwitchingOrg {
                     ProgressView("Switching…")
@@ -140,7 +144,12 @@ struct SelectGroupView: View {
                 from: error,
                 isCrewMember: env.session.isCrewMember
             ) {
-                if let message = GroupSettingsSupport.createGroupErrorMessage(from: outcome) {
+                if case .showPaywall = outcome {
+                    paywallContext = CapacityUpgrade.context(
+                        from: error,
+                        isCrewMember: env.session.isCrewMember
+                    ) ?? PaywallContext(trigger: .capacity, resource: "owned_groups")
+                } else if let message = GroupSettingsSupport.createGroupErrorMessage(from: outcome) {
                     errorMessage = message
                 } else {
                     errorMessage = "Upgrade to Crew to create more groups."

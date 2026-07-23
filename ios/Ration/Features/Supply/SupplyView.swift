@@ -16,6 +16,7 @@ final class SupplyViewModel {
     private(set) var cargoLinkRows: [CargoLinkResolver.Row] = []
     var errorMessage: String?
     var dockMessage: String?
+    var paywallContext: PaywallContext?
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
     private var lastHapticMilestone = 0
     private let maxPollAttempts = 80
@@ -275,7 +276,13 @@ final class SupplyViewModel {
         }
     }
 
-    func dock(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
+    func dock(
+        api: RationAPI,
+        snapshots: SnapshotStore,
+        online: Bool,
+        organizationId: String,
+        isCrewMember: Bool
+    ) async {
         guard let list else { return }
         guard online else {
             errorMessage = "Docking requires a network connection."
@@ -287,11 +294,19 @@ final class SupplyViewModel {
             let result = try await api.completeSupply(listId: list.id)
             Haptics.success()
             errorMessage = nil
+            paywallContext = nil
             dockMessage = "Docked \(result.docked) items into Cargo"
             lastHapticMilestone = 0
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        } catch let error as APIError {
+            if let ctx = CapacityUpgrade.context(from: error, isCrewMember: isCrewMember) {
+                paywallContext = ctx
+                errorMessage = nil
+            } else {
+                errorMessage = error.errorDescription
+            }
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -466,7 +481,7 @@ struct SupplyView: View {
     @State private var isLoadingShare = false
     @State private var supplyWindow: SupplyPlanningWindow?
     @State private var snoozeItem: SupplyItem?
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     @State private var showingAddItem = false
     @State private var hasTriggeredAutoSync = false
     @State private var showingReplenishReceipt = false
@@ -580,7 +595,7 @@ struct SupplyView: View {
                     },
                     onShare: { await createSupplyShare() },
                     onRevokeShare: { await revokeSupplyShare() },
-                    onUpgradeRequired: { showingPaywall = true },
+                    onUpgradeRequired: { paywallContext = PaywallContext(trigger: .featureGate, resource: "share") },
                     onOpenFilters: {
                         showingOptions = false
                         showingFilters = true
@@ -650,7 +665,12 @@ struct SupplyView: View {
                     )
                 }
             }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
+            .onChange(of: model.paywallContext) { _, ctx in
+                if let ctx { paywallContext = ctx }
+            }
             .sheet(isPresented: $showingAddItem) {
                 SupplyAddItemSheet(
                     defaultDomain: model.filters.domain?.rawValue ?? "food",
@@ -774,7 +794,8 @@ struct SupplyView: View {
                                 api: env.api,
                                 snapshots: env.snapshots,
                                 online: env.network.isOnline,
-                                organizationId: organizationId
+                                organizationId: organizationId,
+                                isCrewMember: env.session.isCrewMember
                             )
                             env.notifyCargoDataChanged()
                         }
@@ -963,8 +984,10 @@ struct SupplyView: View {
             supplyShareExpiresAt = response.shareExpiresAt
             Haptics.success()
         } catch let error as APIError {
-            if error.statusCode == 403 {
-                showingPaywall = true
+            if let ctx = CapacityUpgrade.context(from: error, defaultResource: "share") {
+                paywallContext = ctx
+            } else if error.statusCode == 403 {
+                paywallContext = PaywallContext(trigger: .featureGate, resource: "share")
             }
         } catch {}
     }

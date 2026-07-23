@@ -51,7 +51,9 @@ struct SettingsView: View {
                 }
             }
             .background(Theme.ceramic)
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView(context: .settings())
+            }
             .sheet(isPresented: $showingPrivacy) { PrivacySettingsView() }
         }
         .task { await model.load(api: env.api) }

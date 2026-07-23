@@ -70,7 +70,7 @@ struct AIFeaturePrimaryButton: View {
         .buttonStyle(AIButtonStyle())
         .disabled(isDisabled)
         .sheet(isPresented: $showingPaywall) {
-            PaywallView()
+            PaywallView(context: .credits())
         }
     }
 }
@@ -128,7 +128,7 @@ struct AIFeatureIntroView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showingPaywall) {
-            PaywallView()
+            PaywallView(context: .credits())
         }
     }
 }

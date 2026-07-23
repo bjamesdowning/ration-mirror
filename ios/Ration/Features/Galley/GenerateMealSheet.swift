@@ -125,7 +125,7 @@ struct GenerateMealSheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var consent = AIConsentCoordinator()
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     var onComplete: (Int) async -> Void = { _ in }
 
     private var creditCost: Int {
@@ -169,9 +169,16 @@ struct GenerateMealSheet: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(item: $paywallContext, onDismiss: {
+                model.shouldShowPaywall = false
+            }) { ctx in
+                PaywallView(context: ctx)
+            }
             .onChange(of: model.shouldShowPaywall) { _, show in
-                if show { showingPaywall = true }
+                if show {
+                    paywallContext = .credits()
+                    model.shouldShowPaywall = false
+                }
             }
             .onDisappear { model.cancelActiveWork() }
         }
@@ -269,8 +276,17 @@ struct GenerateMealSheet: View {
             Haptics.success()
             await onComplete(selected.count)
             dismiss()
+        } catch let error as APIError {
+            if let ctx = CapacityUpgrade.context(
+                from: error,
+                isCrewMember: env.session.isCrewMember
+            ) {
+                paywallContext = ctx
+            } else {
+                saveError = error.errorDescription
+            }
         } catch {
-            saveError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            saveError = error.localizedDescription
         }
     }
 }

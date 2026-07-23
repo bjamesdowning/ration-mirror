@@ -111,11 +111,22 @@ struct PaywallView: View {
     @Environment(\.openURL) private var openURL
     @State private var model = BillingViewModel()
 
+    var context: PaywallContext = .settings()
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     header
+
+                    if let reasonTitle = context.reasonTitle {
+                        contextualReason(title: reasonTitle, detail: context.reasonDetail)
+                    }
+
+                    if !env.session.isCrewMember || context.trigger == .credits {
+                        crewBenefits
+                        freeVsCrewComparison
+                    }
 
                     if model.isLoading && model.status == nil {
                         ProgressView().tint(Theme.hyperGreen).padding()
@@ -142,15 +153,113 @@ struct PaywallView: View {
 
     private var header: some View {
         VStack(spacing: 10) {
-            Image(systemName: "bolt.shield.fill")
+            Image(systemName: context.trigger == .credits ? "bolt.fill" : "bolt.shield.fill")
                 .font(Typography.heroIcon(36))
                 .foregroundStyle(Theme.hyperGreen)
-            Text("Unlock Crew Member").rationTitle()
-            Text("Higher inventory limits, AI scans, and smart logistics.")
+            Text(context.headline).rationTitle()
+            Text(headerSubtitle)
                 .rationCaption()
                 .multilineTextAlignment(.center)
         }
         .padding(.bottom, 4)
+    }
+
+    private var headerSubtitle: String {
+        switch context.trigger {
+        case .credits:
+            return "Buy credit packs anytime. Crew Member unlocks unlimited capacity and household features."
+        case .capacity, .featureGate, .settings:
+            return "Unlimited capacity, groups & invites. AI features use credits on Free and Crew."
+        }
+    }
+
+    private func contextualReason(title: String, detail: String?) -> some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(Typography.headline())
+                    .foregroundStyle(Theme.carbon)
+                if let detail {
+                    Text(detail)
+                        .rationCaption()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var crewBenefits: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("What Crew Member provides")
+                .rationHeadline()
+            VStack(alignment: .leading, spacing: 8) {
+                benefitRow("Unlimited Cargo, Meals, and Supply lists")
+                benefitRow("Up to \(TierLimits.crewMaxOwnedGroups) owned groups + member invites")
+                benefitRow("Share Manifest & Supply via public links")
+                benefitRow("1 free Ask Ration chat per group per day")
+                benefitRow("AI scans still use credits (same packs on both tiers)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func benefitRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Theme.hyperGreen)
+                .font(.system(size: 14))
+                .padding(.top, 2)
+            Text(text)
+                .rationBody()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var freeVsCrewComparison: some View {
+        GlassCard {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Feature")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Free")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                        .frame(width: 56, alignment: .center)
+                    Text("Crew")
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.hyperGreen)
+                        .frame(width: 72, alignment: .center)
+                }
+                .padding(.bottom, 8)
+
+                comparisonRow("Cargo items", free: "\(TierLimits.freeMaxInventoryItems)", crew: "Unlimited")
+                comparisonRow("Meals", free: "\(TierLimits.freeMaxMeals)", crew: "Unlimited")
+                comparisonRow("Supply lists", free: "\(TierLimits.freeMaxGroceryLists)", crew: "Unlimited")
+                comparisonRow("Owned groups", free: "\(TierLimits.freeMaxOwnedGroups)", crew: "\(TierLimits.crewMaxOwnedGroups)")
+                comparisonRow("Invites & share links", free: "—", crew: "Yes")
+            }
+        }
+    }
+
+    private func comparisonRow(_ label: String, free: String, crew: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .rationBody()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(free)
+                .font(Typography.caption())
+                .foregroundStyle(Theme.muted)
+                .frame(width: 56, alignment: .center)
+            Text(crew)
+                .font(Typography.caption())
+                .fontWeight(.semibold)
+                .foregroundStyle(Theme.carbon)
+                .frame(width: 72, alignment: .center)
+        }
+        .padding(.vertical, 6)
     }
 
     private func statusCard(_ status: BillingStatus) -> some View {
@@ -188,29 +297,42 @@ struct PaywallView: View {
             ErrorBanner(message: "Billing is temporarily unavailable. Please try again shortly.")
         } else if !status.canPurchaseSubscription {
             ErrorBanner(message: blockMessage(status.purchaseBlockReason))
-        } else {
+            creditPackSection
+            restoreAndDisclosure
+        } else if context.prefersCrewFirst {
             VStack(spacing: 20) {
                 subscriptionSection
                 creditPackSection
-
-                Button(model.isRestoring ? "Restoring…" : "Restore purchases") {
-                    Task {
-                        await model.restore(
-                            api: env.api,
-                            billing: env.billing,
-                            session: env.session
-                        )
-                    }
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .disabled(model.isRestoring || model.purchasingPackageID != nil)
-
-                Text(revenueCatStatusText)
-                    .rationCaption()
-                    .multilineTextAlignment(.center)
-
-                subscriptionDisclosure
+                restoreAndDisclosure
             }
+        } else {
+            VStack(spacing: 20) {
+                creditPackSection
+                subscriptionSection
+                restoreAndDisclosure
+            }
+        }
+    }
+
+    private var restoreAndDisclosure: some View {
+        VStack(spacing: 12) {
+            Button(model.isRestoring ? "Restoring…" : "Restore purchases") {
+                Task {
+                    await model.restore(
+                        api: env.api,
+                        billing: env.billing,
+                        session: env.session
+                    )
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(model.isRestoring || model.purchasingPackageID != nil)
+
+            Text(revenueCatStatusText)
+                .rationCaption()
+                .multilineTextAlignment(.center)
+
+            subscriptionDisclosure
         }
     }
 
@@ -259,7 +381,10 @@ struct PaywallView: View {
             if env.billing.subscriptionPackages.isEmpty {
                 Text("Subscriptions load from RevenueCat offerings.").rationCaption()
             } else {
-                sectionHeader("Crew Member", caption: nil)
+                sectionHeader(
+                    "Crew Member",
+                    caption: "Unlimited capacity and household features. Billed through the App Store."
+                )
                 ForEach(BillingProductCatalog.sorted(env.billing.subscriptionPackages)) { pkg in
                     purchaseRow(pkg, style: .primary)
                 }
@@ -273,7 +398,7 @@ struct PaywallView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     sectionHeader(
                         "Credit packs",
-                        caption: "Consumable credits for AI scans. Credits do not expire."
+                        caption: "Credits power AI features. Crew unlocks capacity & household features. Credits do not expire."
                     )
                     ForEach(BillingProductCatalog.sorted(env.billing.creditPackages)) { pkg in
                         purchaseRow(pkg, style: .secondary)

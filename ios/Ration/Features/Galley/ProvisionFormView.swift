@@ -15,7 +15,7 @@ struct ProvisionFormView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var quantityError: String?
-    @State private var showingPaywall = false
+    @State private var paywallContext: PaywallContext?
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -65,7 +65,9 @@ struct ProvisionFormView: View {
             }
             .overlay { if isSaving { ProgressView().tint(Theme.hyperGreen) } }
             .rationFormKeyboardToolbar { focusedField = nil }
-            .sheet(isPresented: $showingPaywall) { PaywallView() }
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
             .task {
                 if let response = try? await env.api.cargoTags() {
                     tagSuggestions = response.tags
@@ -96,19 +98,20 @@ struct ProvisionFormView: View {
                 Haptics.success()
                 await onSaved()
                 dismiss()
-            } catch let error as APIError where isCapacityExceeded(error) {
-                showingPaywall = true
+            } catch let error as APIError {
+                if let ctx = CapacityUpgrade.context(
+                    from: error,
+                    isCrewMember: env.session.isCrewMember
+                ) {
+                    paywallContext = ctx
+                } else {
+                    errorMessage = error.errorDescription
+                }
             } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                errorMessage = error.localizedDescription
             }
         case let .invalid(message):
             quantityError = message
         }
-    }
-
-    private func isCapacityExceeded(_ error: APIError) -> Bool {
-        guard let status = error.statusCode, status == 403 else { return false }
-        let code = error.serverErrorCode ?? error.code
-        return code == "capacity_exceeded"
     }
 }

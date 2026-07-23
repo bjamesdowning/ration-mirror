@@ -23,6 +23,7 @@ struct CargoFormView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var quantityError: String?
+    @State private var paywallContext: PaywallContext?
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -114,6 +115,9 @@ struct CargoFormView: View {
                 }
             }
             .rationFormKeyboardToolbar { focusedField = nil }
+            .sheet(item: $paywallContext) { ctx in
+                PaywallView(context: ctx)
+            }
         }
     }
 
@@ -167,9 +171,17 @@ struct CargoFormView: View {
             await onSaved()
             dismiss()
         } catch let error as APIError {
-            errorMessage = error.code == "invalid_merge_target"
-                ? "Could not merge with an existing item."
-                : error.errorDescription
+            if case .create = mode,
+               let ctx = CapacityUpgrade.context(
+                   from: error,
+                   isCrewMember: env.session.isCrewMember
+               ) {
+                paywallContext = ctx
+            } else if error.code == "invalid_merge_target" {
+                errorMessage = "Could not merge with an existing item."
+            } else {
+                errorMessage = error.errorDescription
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

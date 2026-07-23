@@ -338,7 +338,33 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 	}, []);
 
 	const endTurn = useCallback(
-		(options: { persist?: boolean; focus?: boolean } = {}) => {
+		(
+			options: {
+				persist?: boolean;
+				focus?: boolean;
+				/** Force-clear even when parked on an approval card (stop / deny / error). */
+				clearApproval?: boolean;
+			} = {},
+		) => {
+			const awaitingApproval =
+				turnStateRef.current.status === "awaiting_approval";
+			// AI SDK finishes the stream after `tool-approval-request`; do not wipe
+			// the Approve/Deny card when that terminal frame arrives.
+			if (awaitingApproval && options.clearApproval !== true) {
+				clearToolLinger();
+				clearStopFallback();
+				setActiveToolName(null);
+				setCompletedToolName(null);
+				setToolSucceeded(null);
+				setTurnPhase("idle");
+				if (options.persist !== false) {
+					setMessages((current) => {
+						persistSession(current);
+						return current;
+					});
+				}
+				return;
+			}
 			clearToolLinger();
 			clearStopFallback();
 			setActiveToolName(null);
@@ -603,7 +629,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						setTurnPhase("idle");
 						if (!action.toolCallId) {
 							setError("Copilot sent an invalid approval request.");
-							endTurn();
+							endTurn({ clearApproval: true });
 							break;
 						}
 						if (
@@ -612,7 +638,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						) {
 							setApproval({
 								toolCallId: action.toolCallId,
-								toolName: action.toolName,
+								toolName:
+									toolNameByCallIdRef.current.get(action.toolCallId) ??
+									action.toolName,
 							});
 						}
 						break;
@@ -715,7 +743,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					setTurnPhase("idle");
 					if (!event.approvalId) {
 						setError("Copilot sent an invalid approval request.");
-						endTurn();
+						endTurn({ clearApproval: true });
 						break;
 					}
 					if (
@@ -724,7 +752,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					) {
 						setApproval({
 							toolCallId: event.approvalId,
-							toolName: event.title ?? event.toolName ?? "Copilot action",
+							toolName:
+								toolNameByCallIdRef.current.get(event.approvalId) ??
+								event.toolName ??
+								event.title ??
+								"Copilot action",
 						});
 					}
 					break;
@@ -819,13 +851,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					handleEventRef.current(parsed);
 				} catch {
 					setError("Copilot sent an unsupported message.");
-					endTurn();
+					endTurn({ clearApproval: true });
 				}
 			};
 			socket.onerror = () => {
 				if (socketRef.current === socket) socketRef.current = null;
 				setError("Copilot connection failed.");
-				endTurn();
+				endTurn({ clearApproval: true });
 				socket.close();
 			};
 			socket.onclose = () => {
@@ -833,11 +865,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				const status = turnStateRef.current.status;
 				if (status === "idle") return;
 				if (status === "stopping") {
-					endTurn();
+					endTurn({ clearApproval: true });
 					return;
 				}
 				setError("Copilot disconnected. You can send your message again.");
-				endTurn();
+				endTurn({ clearApproval: true });
 			};
 			return socket;
 		})().finally(() => {
@@ -1046,7 +1078,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 
 	function stopTurn() {
 		const { activeRequestId, status: currentStatus } = turnStateRef.current;
-		if (!activeRequestId || currentStatus !== "active") return;
+		if (
+			!activeRequestId ||
+			(currentStatus !== "active" && currentStatus !== "awaiting_approval")
+		) {
+			return;
+		}
 
 		const socket = socketRef.current;
 		if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -1054,20 +1091,21 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			connectPromiseRef.current = null;
 			setIsConnecting(false);
 			socket?.close();
-			endTurn();
+			endTurn({ clearApproval: true });
 			return;
 		}
 
 		if (cancelCopilotRequest(socket, activeRequestId)) {
+			setApproval(null);
 			transitionTurn({ type: "stop_requested" });
 			clearStopFallback();
 			stopFallbackRef.current = setTimeout(() => {
-				endTurn();
+				endTurn({ clearApproval: true });
 			}, 2_000);
 		} else {
 			setError("Unable to stop Copilot. The connection was closed.");
 			socket.close();
-			endTurn();
+			endTurn({ clearApproval: true });
 		}
 	}
 
@@ -1149,12 +1187,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			if (approved) {
 				setTurnPhase("thinking");
 			} else {
-				endTurn();
+				endTurn({ clearApproval: true });
 			}
 		} catch {
 			setApproval(null);
 			setError("Unable to send the approval response.");
-			endTurn();
+			endTurn({ clearApproval: true });
 		}
 	}
 

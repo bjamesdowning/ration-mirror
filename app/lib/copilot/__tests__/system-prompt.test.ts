@@ -32,7 +32,8 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("adjust_cargo_item");
 		expect(prompt).toContain("restock reminder");
 		expect(prompt).toContain("propose_manifest_plan");
-		expect(prompt).toContain("Approve/Deny");
+		expect(prompt).toContain("call apply_inventory_import");
+		expect(prompt).toContain("Do not ask again");
 	});
 
 	it("includes readable output formatting guidance", () => {

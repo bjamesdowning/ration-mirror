@@ -56,6 +56,30 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.state, .awaitingApproval(id: "approval-1", title: "Remove item?", description: "Remove milk from Cargo."))
     }
 
+    func testMessageEndDoesNotClearPendingApproval() {
+        let model = AskViewModel()
+        model.apply(
+            Self.event(
+                type: "approval_request",
+                approvalId: "approval-1",
+                title: "Remove item?",
+                description: "Remove milk from Cargo."
+            )
+        )
+
+        model.apply(Self.event(type: "message_end"))
+
+        XCTAssertTrue(model.isAwaitingApproval)
+        XCTAssertEqual(
+            model.state,
+            .awaitingApproval(
+                id: "approval-1",
+                title: "Remove item?",
+                description: "Remove milk from Cargo."
+            )
+        )
+    }
+
     func testBlockedFeatureMovesToBlocked() {
         let model = AskViewModel()
         let blocked = CopilotBlockedFeature(

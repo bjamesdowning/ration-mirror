@@ -32,9 +32,14 @@ export function reduceCopilotTurnState(
 				? { ...state, status: "active" }
 				: INITIAL_COPILOT_TURN_STATE;
 		case "stop_requested":
-			if (state.status !== "active") return state;
+			if (state.status !== "active" && state.status !== "awaiting_approval") {
+				return state;
+			}
 			return { ...state, status: "stopping" };
 		case "ended":
+			// Always clear. Stream finish while parked on approval must not call
+			// this event (AskPanel/iOS skip terminal endTurn / completeTurn).
+			// Forced clear (disconnect, deny, stop) must reach idle.
 			return INITIAL_COPILOT_TURN_STATE;
 	}
 }

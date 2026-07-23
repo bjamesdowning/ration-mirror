@@ -135,6 +135,59 @@ describe("decodeAgentResponseFrame", () => {
 		).toEqual({ kind: "reasoning_end" });
 	});
 
+	it("maps AI SDK tool-approval-request chunks", () => {
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({
+						type: "tool-approval-request",
+						approvalId: "apr-1",
+						toolCallId: "call-9",
+					}),
+				),
+			),
+		).toEqual({
+			kind: "approval_requested",
+			toolName: "Copilot action",
+			toolCallId: "call-9",
+		});
+	});
+
+	it("rejects tool-approval-request without toolCallId", () => {
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({
+						type: "tool-approval-request",
+						approvalId: "apr-1",
+					}),
+				),
+			),
+		).toEqual({
+			kind: "approval_requested",
+			toolName: "Copilot action",
+			toolCallId: undefined,
+		});
+	});
+
+	it("maps legacy approval-requested alias chunks", () => {
+		expect(
+			decodeAgentResponseFrame(
+				responseFrame(
+					JSON.stringify({
+						type: "approval-requested",
+						toolName: "remove_cargo_item",
+						toolCallId: "call-8",
+					}),
+				),
+			),
+		).toEqual({
+			kind: "approval_requested",
+			toolName: "remove_cargo_item",
+			toolCallId: "call-8",
+		});
+	});
+
 	it("maps agent errors with their message", () => {
 		expect(
 			decodeAgentResponseFrame(

@@ -99,7 +99,6 @@ describe("createCopilotToolDefs", () => {
 		);
 		const alwaysApproved = [
 			"remove_cargo_item",
-			"apply_inventory_import",
 			"import_inventory_csv",
 			"delete_meal",
 			"clear_active_meals",
@@ -114,6 +113,10 @@ describe("createCopilotToolDefs", () => {
 		for (const name of alwaysApproved) {
 			expect(definitions.get(name)?.needsApproval).toBe(true);
 		}
+		expect(
+			definitions.get("apply_inventory_import")?.needsApproval,
+		).toBeUndefined();
+		expect(definitions.get("add_cargo_item")?.needsApproval).toBeUndefined();
 		const consumeApproval = definitions.get("consume_meal")?.needsApproval;
 		expect(typeof consumeApproval).toBe("function");
 		if (typeof consumeApproval === "function") {

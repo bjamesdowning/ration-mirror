@@ -472,9 +472,12 @@ final class AskViewModel {
     }
 
     func stop() async {
-        guard isTurnActive, !isStopping else { return }
+        guard (isTurnActive || isAwaitingApproval), !isStopping else { return }
         isStopping = true
         isAwaitingApproval = false
+        if case .awaitingApproval = state {
+            state = .streaming
+        }
 
         guard let socket else {
             completeTurn(state: .idle)
@@ -625,6 +628,14 @@ final class AskViewModel {
         case "reasoning_end":
             appendReasoningDelta("", mode: .end, messageId: event.messageId)
         case "message_end":
+            // Stream finish/done still arrives while parked on host approval —
+            // keep the Confirm card (do not complete the turn).
+            if isAwaitingApproval {
+                return
+            }
+            if case .awaitingApproval = state {
+                return
+            }
             // Late frames after a briefing turn already ended in `.error` must not wipe
             // the retry affordance unless usable content arrived and we can recover.
             if tracksBriefingSession, !isTurnActive, case .error = state {
@@ -706,11 +717,17 @@ final class AskViewModel {
                 completeTurn(state: .error("Copilot sent an invalid approval request."))
                 return
             }
+            let toolName = event.toolName
+                ?? activeTool?.toolName
+                ?? "Copilot action"
+            let title = event.title ?? "Confirm action"
+            let description = event.description
+                ?? "Copilot wants to run \(toolName)."
             isAwaitingApproval = true
             state = .awaitingApproval(
                 id: approvalId,
-                title: event.title ?? "Confirm action",
-                description: event.description ?? "Ration Copilot needs your confirmation."
+                title: title,
+                description: description
             )
         case "blocked_feature":
             if let blocked = event.blocked {

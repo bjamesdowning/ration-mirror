@@ -51,7 +51,7 @@ Rules:
    - count of new items vs updates vs invalid rows
    - any warnings
 5. If the user confirms, generate a unique \`idempotencyKey\` (e.g. \`receipt-\${ISO date}-\${hash}\`)
-   and call \`apply_inventory_import\` with the previewToken from step 3 and that key (host approval may appear).
+   and call \`apply_inventory_import\` with the previewToken from step 3 and that key (no second host approval — chat confirm is enough).
 6. Report back: imported, updated, errors. If the apply replays (\`meta.replayed: true\`), tell the user the original outcome was returned.
 
 Do NOT:

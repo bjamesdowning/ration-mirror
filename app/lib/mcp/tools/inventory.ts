@@ -463,7 +463,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "apply_inventory_import",
 			description:
-				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent: replaying the same idempotencyKey within 24h returns the original outcome with meta.replayed:true. If the token expired, call preview_inventory_import again. Skips fuzzy Vectorize merge (exact-name merge only) so bulk apply stays fast and credit-free.",
+				"Commit a previously-previewed inventory import. Pass the previewToken from preview_inventory_import. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat — no second host approval step.",
 			inputSchema: z.object({
 				previewToken: z
 					.string()
@@ -478,7 +478,6 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:inventory:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
-			needsApproval: true,
 			handler: async (ctx, a) => {
 				try {
 					const result = await applyInventoryImport(env, ctx.organizationId, {

@@ -87,4 +87,32 @@ describe("Copilot turn lifecycle", () => {
 			INITIAL_COPILOT_TURN_STATE,
 		);
 	});
+
+	it("clears awaiting approval on ended so forced clear can unlock chat", () => {
+		const awaiting = reduceCopilotTurnState(
+			reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+				type: "started",
+				requestId: "request-1",
+			}),
+			{ type: "approval_requested" },
+		);
+
+		expect(reduceCopilotTurnState(awaiting, { type: "ended" })).toEqual(
+			INITIAL_COPILOT_TURN_STATE,
+		);
+	});
+
+	it("allows stop while approval is pending", () => {
+		const awaiting = reduceCopilotTurnState(
+			reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+				type: "started",
+				requestId: "request-1",
+			}),
+			{ type: "approval_requested" },
+		);
+
+		expect(
+			reduceCopilotTurnState(awaiting, { type: "stop_requested" }).status,
+		).toBe("stopping");
+	});
 });

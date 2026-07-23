@@ -210,9 +210,40 @@ enum CopilotWebSocketDecoder {
                 description: nil,
                 blocked: nil
             )
-        case "approval-requested":
-            let resolvedToolCallId = toolCallId ?? chunkId ?? UUID().uuidString
-            let resolvedToolName = toolName ?? "Copilot action"
+        case "tool-approval-request", "approval-requested":
+            // AI SDK UI stream emits `tool-approval-request` with approvalId +
+            // toolCallId. `approval-requested` is the tool part *state* (legacy
+            // alias). Approve via cf_agent_tool_approval using toolCallId.
+            let resolvedToolCallId: String?
+            if let toolCallId, !toolCallId.isEmpty {
+                resolvedToolCallId = toolCallId
+            } else if type == "approval-requested" {
+                resolvedToolCallId = chunkId
+            } else {
+                resolvedToolCallId = nil
+            }
+            guard let approvalToolCallId = resolvedToolCallId, !approvalToolCallId.isEmpty else {
+                return CopilotStreamEvent(
+                    type: "error",
+                    message: nil,
+                    messageId: frameId,
+                    text: nil,
+                    usageTokens: nil,
+                    status: nil,
+                    toolCallId: nil,
+                    ok: nil,
+                    error: CopilotToolError(
+                        code: "invalid_approval",
+                        message: "Copilot sent an approval request without a toolCallId."
+                    ),
+                    approvalId: nil,
+                    toolName: nil,
+                    title: nil,
+                    description: nil,
+                    blocked: nil
+                )
+            }
+            let resolvedToolName = toolName
             return CopilotStreamEvent(
                 type: "approval_request",
                 message: nil,
@@ -223,10 +254,10 @@ enum CopilotWebSocketDecoder {
                 toolCallId: nil,
                 ok: nil,
                 error: nil,
-                approvalId: resolvedToolCallId,
+                approvalId: approvalToolCallId,
                 toolName: resolvedToolName,
                 title: "Confirm action",
-                description: "Copilot wants to run \(resolvedToolName).",
+                description: resolvedToolName.map { "Copilot wants to run \($0)." },
                 blocked: nil
             )
         case "tool-output-available":

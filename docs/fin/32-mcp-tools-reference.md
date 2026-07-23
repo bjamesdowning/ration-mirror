@@ -37,7 +37,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 |------|-------|---------|
 | `inventory_import_schema` | `mcp:read` | **Deprecated.** Prefer `ration://schemas/inventory-import`. |
 | `preview_inventory_import` | `mcp:read` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
-| `apply_inventory_import` | `mcp:inventory:write` | Commits a preview (approval on Copilot). Idempotent. Embeddings do not block return. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commits a preview after chat confirmation (no second host approval card). Idempotent. Embeddings do not block return. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. |
 
 ## Galley (Meals)

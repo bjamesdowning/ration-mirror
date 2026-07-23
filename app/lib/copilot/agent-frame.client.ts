@@ -32,6 +32,8 @@ type AgentChunk = {
 	text?: string;
 	toolName?: string;
 	toolCallId?: string;
+	/** AI SDK `tool-approval-request` id (distinct from toolCallId). */
+	approvalId?: string;
 	output?: unknown;
 };
 
@@ -101,6 +103,16 @@ export function decodeAgentResponseFrame(
 				toolName: chunk.toolName ?? "tool",
 				toolCallId: chunk.toolCallId ?? chunk.id,
 				succeeded: false,
+			};
+		// AI SDK UI stream emits `tool-approval-request` (approvalId + toolCallId).
+		// `approval-requested` is the tool *part state*, not the stream chunk type —
+		// keep mapping it as a legacy alias in case a host rewrites chunks.
+		case "tool-approval-request":
+			return {
+				kind: "approval_requested",
+				toolName: chunk.toolName ?? "Copilot action",
+				// Agents apply approvals by toolCallId; never substitute approvalId.
+				toolCallId: chunk.toolCallId,
 			};
 		case "approval-requested":
 			return {

@@ -1643,7 +1643,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
 | `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |
-| `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a preview; idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
+| `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a chat-confirmed preview (no second host approval card); idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
 | `update_cargo_item` | Write | `mcp:inventory:write` | Set absolute fields; quantity may be 0 (restock reminder; item kept) | mcp_write (15/min) |
@@ -2288,7 +2288,7 @@ MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:wr
 
 **Not available as camera/URL tools in Copilot:** Receipt image scan and recipe URL import remain hard-blocked (use native Scan / Galley Import, or text → `preview_inventory_import`). Queue-backed AI Plan Week / Generate are available via `start_plan_week` / `start_generate_meal` after approval (and native deep-link disclosure). Credit-free scheduling uses `propose_manifest_plan` → `commit_manifest_plan`. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
 
-**Destructive tools:** AI SDK `needsApproval` mirrors MCP — e.g. `remove_cargo_item`, `delete_meal`, `complete_supply_list`, `clear_active_meals`, and insufficient-cargo overrides require explicit user approval in the client before execution.
+**Destructive / high-impact tools:** AI SDK `needsApproval` mirrors MCP for deletes, one-shot CSV import, clearing selections, completing Supply, credit-spending AI jobs, and insufficient-cargo overrides. When approval is required, the stream emits `tool-approval-request` and web/iOS show an Approve/Confirm card; chat “Yes” is not a substitute. Preview→`apply_inventory_import` does **not** use a second host approval card — chat confirmation of the preview is the consent step.
 
 ### 14.6 Intent guards and native feature hints
 

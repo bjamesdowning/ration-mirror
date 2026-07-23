@@ -87,6 +87,28 @@ final class AskWebSocketClientDecodingTests: XCTestCase {
         XCTAssertNil(event.error)
     }
 
+    func testToolApprovalRequestMapsToApprovalRequestUsingToolCallId() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"resp-approval","body":"{\\"type\\":\\"tool-approval-request\\",\\"approvalId\\":\\"apr-1\\",\\"toolCallId\\":\\"call-9\\"}"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "approval_request")
+        XCTAssertEqual(event.approvalId, "call-9")
+        XCTAssertEqual(event.title, "Confirm action")
+        XCTAssertNil(event.error)
+    }
+
+    func testToolApprovalRequestWithoutToolCallIdReturnsError() {
+        let json = """
+        {"type":"cf_agent_use_chat_response","id":"resp-approval-bad","body":"{\\"type\\":\\"tool-approval-request\\",\\"approvalId\\":\\"apr-1\\"}"}
+        """
+        let event = CopilotWebSocketDecoder.decode(data: Data(json.utf8))
+
+        XCTAssertEqual(event.type, "error")
+        XCTAssertEqual(event.error?.code, "invalid_approval")
+    }
+
     func testFinishChunkReturnsMessageEnd() {
         let json = """
         {"type":"cf_agent_use_chat_response","id":"resp-7","body":"{\\"type\\":\\"finish\\"}"}

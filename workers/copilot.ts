@@ -13,6 +13,7 @@ import {
 } from "agents";
 import type { ToolSet } from "ai";
 import { formatCopilotTemporalContextAppend } from "../app/lib/agent/temporal-context.server";
+import { resolveCopilotActiveTools } from "../app/lib/copilot/active-tools.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
 import {
 	COPILOT_SESSION_MAX_MESSAGES,
@@ -28,8 +29,13 @@ import {
 } from "../app/lib/copilot/gate.server";
 import { detectBlockedCopilotIntent } from "../app/lib/copilot/intent-guard.server";
 import {
+	createCopilotLanguageModel,
+	type MiniMaxRequestExtras,
+} from "../app/lib/copilot/model.server";
+import {
 	COPILOT_MODEL_PRESETS,
 	type CopilotModelPreset,
+	minimaxProviderOptions,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	resolveCopilotModelPreset,
 } from "../app/lib/copilot/model-profiles";
@@ -255,6 +261,9 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	private sessionMessageCount = 0;
 	private sessionWarningsEmitted = new Set<SessionLimitWarningSeverity>();
 	private conversationModelPreset: CopilotModelPreset = "fast";
+	private minimaxExtras: MiniMaxRequestExtras = minimaxProviderOptions(
+		COPILOT_MODEL_PRESETS.fast,
+	);
 	private boundChargeOpenedAt: number | null = null;
 	/** Soft-deny onboarding turns must not burn the free grant. */
 	private onboardingTurnDenied = false;
@@ -399,7 +408,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 	}
 
 	getModel() {
-		return "@cf/openai/gpt-oss-120b";
+		return createCopilotLanguageModel(this.env, () => this.minimaxExtras);
 	}
 
 	getSystemPrompt() {
@@ -408,13 +417,36 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	getTools(): ToolSet {
 		const identity = decodeAgentName(this.name);
-		return toAiSdkTools(this.env, {
-			organizationId: identity.organizationId,
-			userId: identity.userId,
-			scopes: [...COPILOT_MCP_SCOPES],
-			preClaim: false,
-			waitUntil: (promise) => this.ctx.waitUntil(promise),
-		}) as ToolSet;
+		return toAiSdkTools(
+			this.env,
+			{
+				organizationId: identity.organizationId,
+				userId: identity.userId,
+				scopes: [...COPILOT_MCP_SCOPES],
+				preClaim: false,
+				waitUntil: (promise) => this.ctx.waitUntil(promise),
+			},
+			{
+				onApprovalRequested: (toolName) => {
+					writeCopilotMetric(
+						this.env,
+						"approval_requested",
+						{ ...identity, source: "agent" },
+						identity.conversationId,
+						{ blobs: [toolName] },
+					);
+				},
+				onApprovalResolved: (toolName) => {
+					writeCopilotMetric(
+						this.env,
+						"approval_resolved",
+						{ ...identity, source: "agent" },
+						identity.conversationId,
+						{ blobs: [toolName, "approved"] },
+					);
+				},
+			},
+		) as ToolSet;
 	}
 
 	async beforeTurn(ctx: TurnContext) {
@@ -529,10 +561,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				);
 			}
 			const profile = COPILOT_MODEL_PRESETS[preset];
-			const workersAiOptions: Record<string, unknown> = {};
-			if (profile.reasoningEffort !== null) {
-				workersAiOptions.reasoning_effort = profile.reasoningEffort;
-			}
+			this.minimaxExtras = minimaxProviderOptions(profile);
 			const maxOutputTokens =
 				briefingTurn === "bootstrap"
 					? ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS
@@ -546,9 +575,6 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 				temperature: profile.temperature,
 				topP: profile.topP,
 				sendReasoning: false,
-				providerOptions: {
-					"workers-ai": workersAiOptions,
-				},
 			};
 		}
 		if (this.billingBlocked) {
@@ -674,22 +700,21 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		}
 
 		const profile = COPILOT_MODEL_PRESETS[preset];
-		const workersAiOptions: Record<string, unknown> = {};
-		if (profile.reasoningEffort !== null) {
-			workersAiOptions.reasoning_effort = profile.reasoningEffort;
-		}
+		this.minimaxExtras = minimaxProviderOptions(profile);
+
+		const scopedTools = resolveCopilotActiveTools(
+			Object.keys(ctx.tools),
+			userText,
+		);
 
 		return {
 			system: `${ctx.system}${nativeAdvisory}${formatCopilotTemporalContextAppend()}`,
-			activeTools: Object.keys(ctx.tools),
+			activeTools: scopedTools,
 			maxSteps: profile.maxSteps,
 			maxOutputTokens: profile.maxOutputTokens,
 			temperature: profile.temperature,
 			topP: profile.topP,
 			sendReasoning: true,
-			providerOptions: {
-				"workers-ai": workersAiOptions,
-			},
 			stopWhen: () => this.billingBlocked,
 		};
 	}

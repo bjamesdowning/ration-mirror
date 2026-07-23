@@ -34,6 +34,9 @@ describe("getCopilotSystemPrompt", () => {
 		expect(prompt).toContain("propose_manifest_plan");
 		expect(prompt).toContain("call apply_inventory_import");
 		expect(prompt).toContain("Do not ask again");
+		expect(prompt).toContain("preview_inventory_remove");
+		expect(prompt).toContain("Never loop add_cargo_item");
+		expect(prompt).toContain("Never loop remove_cargo_item");
 	});
 
 	it("includes readable output formatting guidance", () => {

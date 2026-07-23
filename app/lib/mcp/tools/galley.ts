@@ -1,13 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { activeMealSelection } from "../../../db/schema";
 import { cookMealWithConfirmation } from "../../cook-confirmation.server";
 import { cookDeductionNote } from "../../cook-feedback";
 import {
 	clearMealSelections,
-	getActiveMealSelections,
 	upsertMealSelection,
 	validateMealOwnership,
 } from "../../meal-selection.server";
@@ -113,7 +109,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "set_active_meals",
 			description:
-				"Purpose-built: set the Galley active meal selection to exactly these mealIds (clears others). Optionally sync supply afterward. Prefer over N× toggle_meal_active.",
+				"Purpose-built: set the Galley active meal selection to exactly these mealIds (clears others). Optionally sync supply afterward.",
 			inputSchema: z.object({
 				mealIds: z.array(z.string().uuid()).max(50),
 				syncSupply: z.boolean().optional().default(false),
@@ -121,7 +117,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			scopes: ["mcp:galley:write"],
 			rateLimitCategory: "mcp_write",
 			audit: true,
-			needsApproval: true,
+			needsApproval: (args) => args.syncSupply === true,
 			handler: async (ctx, a) => {
 				for (const mealId of a.mealIds) {
 					const owns = await validateMealOwnership(
@@ -163,66 +159,6 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					activeCount: a.mealIds.length,
 					mealIds: a.mealIds,
 					supplySynced,
-				});
-			},
-		}),
-		defineSharedTool({
-			name: "toggle_meal_active",
-			description:
-				"Toggle a single meal in the Galley active list. For setting many at once, prefer set_active_meals. The active list drives sync_supply_from_selected_meals.",
-			inputSchema: z.object({
-				mealId: z.string().uuid(),
-				active: z.boolean(),
-				servingsOverride: z.number().int().positive().nullable().optional(),
-			}),
-			scopes: ["mcp:galley:write"],
-			rateLimitCategory: "mcp_write",
-			audit: true,
-			handler: async (ctx, a) => {
-				const owns = await validateMealOwnership(
-					env.DB,
-					ctx.organizationId,
-					a.mealId,
-				);
-				if (!owns) {
-					return err(
-						"toggle_meal_active",
-						"not_found",
-						`Meal ${a.mealId} not found.`,
-					);
-				}
-				if (a.active) {
-					const result = await upsertMealSelection(
-						env.DB,
-						ctx.organizationId,
-						a.mealId,
-						a.servingsOverride ?? null,
-					);
-					return ok("toggle_meal_active", {
-						mealId: a.mealId,
-						isActive: result.isActive,
-						servingsOverride: result.servingsOverride,
-					});
-				}
-				// Clear by toggling: read current, delete if exists.
-				const selections = await getActiveMealSelections(
-					env.DB,
-					ctx.organizationId,
-				);
-				const existing = selections.find((s) => s.mealId === a.mealId);
-				if (!existing) {
-					return ok("toggle_meal_active", {
-						mealId: a.mealId,
-						isActive: false,
-					});
-				}
-				const d1 = drizzle(env.DB);
-				await d1
-					.delete(activeMealSelection)
-					.where(eq(activeMealSelection.id, existing.id));
-				return ok("toggle_meal_active", {
-					mealId: a.mealId,
-					isActive: false,
 				});
 			},
 		}),

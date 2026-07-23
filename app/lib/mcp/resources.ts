@@ -41,7 +41,7 @@ Goal:
 - Convert a free-text or image-derived receipt into a structured list of inventory items, then submit them to Ration via MCP without using any AI credits on Ration's side.
 
 Rules:
-1. Prefer the resource \`ration://schemas/inventory-import\` for the item shape (or call deprecated \`inventory_import_schema\` if needed).
+1. Prefer the resource \`ration://schemas/inventory-import\` for the item shape.
 2. Build an array of items: \`{ name, quantity, unit, domain, tags?, expiresAt? }\`.
    - Prefer SI units (kg, g, l, ml). Pass any alias the user gave; Ration will normalize.
    - \`domain\` is one of "food" | "household" | "alcohol".
@@ -175,7 +175,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 								"2. Present the compact proposal and confirm with the user.\n" +
 								"3. On confirm, call commit_manifest_plan with the entries (optionally syncSupply: true).\n" +
 								"4. For billed AI Plan Week instead, disclose ration://manifest/plan-week and call start_plan_week after approval.\n" +
-								"Fallback: get_expiring_items → match_meals → bulk_add_meal_plan_entries → sync_supply_from_selected_meals.",
+								"Fallback: get_expiring_items → match_meals → commit_manifest_plan → sync_supply_from_selected_meals.",
 						},
 					},
 				],

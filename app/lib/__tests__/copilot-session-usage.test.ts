@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	COPILOT_SESSION_MAX_MESSAGES,
+	COPILOT_SESSION_MAX_TOKENS,
+} from "../copilot/constants";
+import {
 	buildSessionUsageSnapshot,
 	evaluateSessionLimitWarning,
 	formatCopilotTokenCount,
@@ -11,6 +15,7 @@ describe("formatCopilotTokenCount", () => {
 	it("formats large counts in kilo units", () => {
 		expect(formatCopilotTokenCount(42_500)).toBe("43k");
 		expect(formatCopilotTokenCount(128_000)).toBe("128k");
+		expect(formatCopilotTokenCount(500_000)).toBe("500k");
 	});
 
 	it("formats small counts literally", () => {
@@ -29,9 +34,9 @@ describe("buildSessionUsageSnapshot", () => {
 			}),
 		).toEqual({
 			totalTokens: 12_346,
-			maxTokens: 128_000,
+			maxTokens: COPILOT_SESSION_MAX_TOKENS,
 			messageCount: 8,
-			maxMessages: 40,
+			maxMessages: COPILOT_SESSION_MAX_MESSAGES,
 			creditsCharged: 1,
 			creditBalance: 11,
 			nextCreditAt: 7_655,
@@ -87,7 +92,7 @@ describe("mergeSessionUsageSnapshots", () => {
 describe("evaluateSessionLimitWarning", () => {
 	it("returns soft warning at 50% tokens", () => {
 		const warning = evaluateSessionLimitWarning({
-			totalTokens: 64_000,
+			totalTokens: Math.ceil(COPILOT_SESSION_MAX_TOKENS * 0.5),
 			messageCount: 10,
 			emittedSoft: false,
 			emittedUrgent: false,
@@ -97,7 +102,7 @@ describe("evaluateSessionLimitWarning", () => {
 
 	it("returns urgent warning at 85% tokens", () => {
 		const warning = evaluateSessionLimitWarning({
-			totalTokens: 109_000,
+			totalTokens: Math.ceil(COPILOT_SESSION_MAX_TOKENS * 0.85),
 			messageCount: 10,
 			emittedSoft: false,
 			emittedUrgent: false,
@@ -107,8 +112,8 @@ describe("evaluateSessionLimitWarning", () => {
 
 	it("prefers urgent over soft when both thresholds are crossed", () => {
 		const warning = evaluateSessionLimitWarning({
-			totalTokens: 109_000,
-			messageCount: 36,
+			totalTokens: Math.ceil(COPILOT_SESSION_MAX_TOKENS * 0.85),
+			messageCount: Math.ceil(COPILOT_SESSION_MAX_MESSAGES * 0.9),
 			emittedSoft: false,
 			emittedUrgent: false,
 		});
@@ -118,8 +123,8 @@ describe("evaluateSessionLimitWarning", () => {
 	it("does not repeat warnings once emitted", () => {
 		expect(
 			evaluateSessionLimitWarning({
-				totalTokens: 109_000,
-				messageCount: 36,
+				totalTokens: Math.ceil(COPILOT_SESSION_MAX_TOKENS * 0.85),
+				messageCount: Math.ceil(COPILOT_SESSION_MAX_MESSAGES * 0.9),
 				emittedSoft: true,
 				emittedUrgent: true,
 			}),

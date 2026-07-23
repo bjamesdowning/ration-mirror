@@ -25,6 +25,10 @@
 	 *   - BETTER_AUTH_SECRET
 	 *   - COPILOT_PURGE_SECRET (dedicated internal purge token; falls back to BETTER_AUTH_SECRET if absent)
 	 *   - REVENUECAT_API_KEY (live get_billing_summary store/management URLs)
+	 *   - MINIMAX_API_KEY (Copilot MiniMax OpenAI-compatible transport)
+	 * Optional vars (wrangler secret or vars):
+	 *   - COPILOT_MODEL_ID (default MiniMax-M3)
+	 *   - COPILOT_BASE_URL (default https://api.minimax.io/v1; AI Gateway compat URL supported)
 	 */
 	"durable_objects": {
 		"bindings": [{ "name": "PROJECT_THINK", "class_name": "ProjectThinkAgent" }]

@@ -28,7 +28,7 @@ REST v1 and MCP use the **same** key format; scopes are checked per surface.
 | `mcp` | **Legacy / full access** — all MCP tools (same as enabling every row below) |
 | `mcp:read` | Read-only MCP tools (inventory, meals, plan, supply list, preferences, import preview) |
 | `mcp:inventory:write` | Pantry writes + receipt-style import apply (`apply_inventory_import`, `import_inventory_csv`, cargo CRUD) |
-| `mcp:galley:write` | Recipe and meal-selection writes (`create_meal`, `update_meal`, `delete_meal`, `consume_meal`, `toggle_meal_active`, `clear_active_meals`) |
+| `mcp:galley:write` | Recipe and meal-selection writes (`create_meal`, `update_meal`, `delete_meal`, `consume_meal`, `set_active_meals`, `clear_active_meals`) |
 | `mcp:manifest:write` | Meal plan entry writes (add / bulk add / update / remove) |
 | `mcp:supply:write` | Shopping list writes + sync + `complete_supply_list` |
 | `mcp:preferences:write` | `update_user_preferences` only |

@@ -16,7 +16,7 @@ Deductions are applied safely at the database layer so you cannot go **negative*
 | AI meal generation | 2 |
 | Import recipe from URL | 1 |
 | AI plan week | 3 |
-| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 128,000 tokens per chat |
+| Ask Ration (Copilot) | 1 credit per 20,000 tokens per conversation (minimum 1); capped at 500,000 tokens per chat (max 25 credits) |
 
 **Note:** Internal roadmaps may reserve costs for future features—always check **Pricing** in the app for the live matrix.
 

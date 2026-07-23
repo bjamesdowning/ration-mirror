@@ -102,8 +102,6 @@ describe("createCopilotToolDefs", () => {
 			"import_inventory_csv",
 			"delete_meal",
 			"clear_active_meals",
-			"set_active_meals",
-			"bulk_add_meal_plan_entries",
 			"commit_manifest_plan",
 			"complete_supply_list",
 			"start_plan_week",
@@ -116,7 +114,21 @@ describe("createCopilotToolDefs", () => {
 		expect(
 			definitions.get("apply_inventory_import")?.needsApproval,
 		).toBeUndefined();
+		expect(
+			definitions.get("apply_inventory_remove")?.needsApproval,
+		).toBeUndefined();
 		expect(definitions.get("add_cargo_item")?.needsApproval).toBeUndefined();
+		const setActiveApproval =
+			definitions.get("set_active_meals")?.needsApproval;
+		expect(typeof setActiveApproval).toBe("function");
+		if (typeof setActiveApproval === "function") {
+			expect(await setActiveApproval({ mealIds: [], syncSupply: false })).toBe(
+				false,
+			);
+			expect(await setActiveApproval({ mealIds: [], syncSupply: true })).toBe(
+				true,
+			);
+		}
 		const consumeApproval = definitions.get("consume_meal")?.needsApproval;
 		expect(typeof consumeApproval).toBe("function");
 		if (typeof consumeApproval === "function") {
@@ -141,8 +153,41 @@ describe("createCopilotToolDefs", () => {
 			preClaim: false,
 		});
 
-		expect(tools.remove_cargo_item?.needsApproval).toBe(true);
-		expect(tools.add_cargo_item?.needsApproval).toBeUndefined();
+		expect(typeof tools.remove_cargo_item?.needsApproval).toBe("function");
+		expect(typeof tools.add_cargo_item?.needsApproval).toBe("function");
+		const addApproval = tools.add_cargo_item?.needsApproval;
+		if (typeof addApproval === "function") {
+			expect(addApproval({} as never, {} as never)).toBe(false);
+		}
+	});
+
+	it("binds confirm:true after host approval for Copilot consent tools", async () => {
+		const { getCargoItem, jettisonItem } = await import("~/lib/cargo.server");
+		const itemId = "11111111-1111-4111-8111-111111111111";
+		vi.mocked(getCargoItem).mockResolvedValueOnce({
+			id: itemId,
+			name: "Milk",
+		} as never);
+		vi.mocked(jettisonItem).mockResolvedValueOnce(undefined as never);
+
+		const env = createMockEnv() as Cloudflare.Env;
+		const tools = toAiSdkTools(env, {
+			organizationId: "org-test-123",
+			userId: "user-test-123",
+			scopes: [...COPILOT_MCP_SCOPES],
+			preClaim: false,
+		});
+		const execute = tools.remove_cargo_item?.execute;
+		expect(execute).toBeTypeOf("function");
+		const result = await execute?.(
+			{ itemId, confirm: false },
+			{ toolCallId: "test", messages: [], abortSignal: undefined as never },
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			data: { removed: true, itemId },
+		});
+		expect(jettisonItem).toHaveBeenCalled();
 	});
 
 	it("returns structured ok:false tool results instead of throwing", async () => {

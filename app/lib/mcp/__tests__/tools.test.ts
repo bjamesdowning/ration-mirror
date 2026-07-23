@@ -34,6 +34,11 @@ vi.mock("~/lib/inventory-import.server", () => ({
 	getInventoryImportSchema: vi.fn(() => ({ maxRows: 500, fields: {} })),
 }));
 
+vi.mock("~/lib/inventory-remove.server", () => ({
+	previewInventoryRemove: vi.fn(),
+	applyInventoryRemove: vi.fn(),
+}));
+
 vi.mock("~/lib/meal-selection.server", () => ({
 	clearMealSelections: vi.fn(),
 	getActiveMealSelections: vi.fn().mockResolvedValue([]),
@@ -623,22 +628,22 @@ describe("MCP tools", () => {
 		});
 	});
 
-	describe("mark_supply_purchased", () => {
+	describe("mark_supply_purchased_bulk", () => {
 		it("blocks when rate limited", async () => {
 			vi.mocked(checkRateLimit).mockResolvedValueOnce(RATE_BLOCKED);
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
-				"mark_supply_purchased",
+				"mark_supply_purchased_bulk",
 			)({
-				itemId: "00000000-0000-0000-0000-000000000001",
+				itemIds: ["00000000-0000-0000-0000-000000000001"],
 				purchased: true,
 			});
 			expect(result.content[0]?.text).toContain("Rate limit exceeded");
 			expect(updateSupplyItem).not.toHaveBeenCalled();
 		});
 
-		it("marks item as purchased", async () => {
+		it("marks items as purchased", async () => {
 			const mockList = { id: "list-1" };
 			const mockItem = { id: "item-1", name: "eggs", isPurchased: true };
 			vi.mocked(ensureSupplyList).mockResolvedValueOnce(mockList as never);
@@ -646,12 +651,13 @@ describe("MCP tools", () => {
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
-				"mark_supply_purchased",
+				"mark_supply_purchased_bulk",
 			)({
-				itemId: "00000000-0000-0000-0000-000000000001",
+				itemIds: ["00000000-0000-0000-0000-000000000001"],
 				purchased: true,
 			});
 			const data = parseOk(result);
+			expect(data.updated).toBe(1);
 			expect(data.isPurchased).toBe(true);
 		});
 	});

@@ -736,6 +736,58 @@ final class AskViewModelTests: XCTestCase {
         XCTAssertEqual(model.turnPhase, .thinking)
     }
 
+    func testPostApproveIgnoresPauseTerminalUntilContinuationText() async {
+        let socket = TestAskSocketClient()
+        let model = AskViewModel(socket: socket)
+        model.apply(
+            Self.event(
+                type: "approval_request",
+                messageId: "pause-1",
+                approvalId: "approval-1",
+                toolName: "remove_cargo_item"
+            )
+        )
+        await model.approve("approval-1", approved: true)
+
+        // Late pause-stream finish must not idle the turn.
+        model.apply(Self.event(type: "message_end", messageId: "pause-1"))
+        XCTAssertTrue(model.isTurnActive)
+        XCTAssertEqual(model.state, .streaming)
+
+        model.apply(
+            Self.event(
+                type: "tool_end",
+                toolCallId: "call-1",
+                ok: true
+            )
+        )
+        model.apply(
+            Self.event(
+                type: "text_delta",
+                messageId: "assistant-2",
+                text: "Removed milk from Cargo."
+            )
+        )
+        model.apply(Self.event(type: "message_end", messageId: "continuation-2"))
+
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertEqual(model.messages.last?.content, "Removed milk from Cargo.")
+    }
+
+    func testLateApprovalRequestAcceptedWhenIdle() {
+        let model = AskViewModel()
+        XCTAssertFalse(model.isTurnActive)
+        XCTAssertTrue(model.shouldAcceptObservedEvent(Self.event(type: "approval_request", approvalId: "a1")))
+        model.apply(Self.event(type: "approval_request", approvalId: "a1", toolName: "remove_cargo_item"))
+        XCTAssertTrue(model.isAwaitingApproval)
+        if case let .awaitingApproval(_, title, _) = model.state {
+            XCTAssertTrue(title.contains("remove_cargo_item"))
+        } else {
+            XCTFail("Expected awaitingApproval")
+        }
+    }
+
     func testDisconnectRecoversActiveTurnToReady() {
         let socket = TestAskSocketClient()
         let model = AskViewModel(socket: socket)
@@ -939,6 +991,7 @@ final class AskViewModelTests: XCTestCase {
         ok: Bool? = nil,
         error: CopilotToolError? = nil,
         approvalId: String? = nil,
+        toolName: String? = nil,
         title: String? = nil,
         description: String? = nil
     ) -> CopilotStreamEvent {
@@ -953,7 +1006,7 @@ final class AskViewModelTests: XCTestCase {
             ok: ok,
             error: error,
             approvalId: approvalId,
-            toolName: nil,
+            toolName: toolName,
             title: title,
             description: description,
             blocked: nil

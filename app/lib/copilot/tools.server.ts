@@ -157,37 +157,73 @@ export function createCopilotToolDefs(
 	];
 }
 
-export function toAiSdkTools(env: Cloudflare.Env, ctx: CopilotToolContext) {
+export function toAiSdkTools(
+	env: Cloudflare.Env,
+	ctx: CopilotToolContext,
+	hooks?: {
+		onApprovalRequested?: (toolName: string) => void;
+		onApprovalResolved?: (toolName: string) => void;
+	},
+) {
 	const toolEnv = envWithCopilotContext(env, ctx);
 	const defs = createCopilotToolDefs(toolEnv);
 
 	return Object.fromEntries(
-		defs.map((def) => [
-			def.name,
-			tool({
-				description: def.description,
-				inputSchema: def.inputSchema,
-				needsApproval: def.needsApproval,
-				execute: async (args) => {
-					const envelope = await runTool(toolEnv, def, args);
-					// Return full MCP envelope so the model sees ok/warnings/meta
-					// (including meta.replayed) consistently with external MCP clients.
-					if (!envelope.ok) {
+		defs.map((def) => {
+			const resolveNeedsApproval = (args: Record<string, unknown>): boolean => {
+				const approval = def.needsApproval;
+				if (approval == null) return false;
+				if (typeof approval === "function") {
+					return Boolean(
+						(approval as (a: Record<string, unknown>) => unknown)(args),
+					);
+				}
+				return Boolean(approval);
+			};
+
+			return [
+				def.name,
+				tool({
+					description: def.description,
+					inputSchema: def.inputSchema,
+					needsApproval: (args: Record<string, unknown>) => {
+						const needed = resolveNeedsApproval(args);
+						if (needed) hooks?.onApprovalRequested?.(def.name);
+						return needed;
+					},
+					execute: async (args) => {
+						// Host Approve card is consent for Copilot — bind confirm on
+						// tools that still require confirm:true in the shared handler.
+						const patchedArgs =
+							def.name === "remove_cargo_item" ||
+							def.name === "delete_meal" ||
+							def.name === "clear_active_meals" ||
+							def.name === "complete_supply_list"
+								? { ...args, confirm: true }
+								: args;
+						if (resolveNeedsApproval(args as Record<string, unknown>)) {
+							hooks?.onApprovalResolved?.(def.name);
+						}
+						const envelope = await runTool(toolEnv, def, patchedArgs);
+						// Return full MCP envelope so the model sees ok/warnings/meta
+						// (including meta.replayed) consistently with external MCP clients.
+						if (!envelope.ok) {
+							return {
+								ok: false as const,
+								tool: envelope.tool,
+								error: envelope.error,
+							};
+						}
 						return {
-							ok: false as const,
+							ok: true as const,
 							tool: envelope.tool,
-							error: envelope.error,
+							data: envelope.data,
+							...(envelope.warnings ? { warnings: envelope.warnings } : {}),
+							...(envelope.meta ? { meta: envelope.meta } : {}),
 						};
-					}
-					return {
-						ok: true as const,
-						tool: envelope.tool,
-						data: envelope.data,
-						...(envelope.warnings ? { warnings: envelope.warnings } : {}),
-						...(envelope.meta ? { meta: envelope.meta } : {}),
-					};
-				},
-			}),
-		]),
+					},
+				}),
+			];
+		}),
 	);
 }

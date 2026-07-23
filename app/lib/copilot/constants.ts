@@ -24,9 +24,9 @@ export const ONBOARDING_BRIEFING_INTRO_MAX_STEPS = 3;
 export const ONBOARDING_BRIEFING_SEED_MAX_STEPS = 8;
 
 export const COPILOT_SESSION_IDLE_MS = 20 * 60 * 1000;
-export const COPILOT_SESSION_MAX_MESSAGES = 40;
-/** gpt-oss-120b context window — linear billing caps sessions here. */
-export const COPILOT_SESSION_MAX_TOKENS = 128_000;
+export const COPILOT_SESSION_MAX_MESSAGES = 120;
+/** MiniMax M3 context budget — linear billing caps sessions here (1 cr / 20k → max 25 cr/chat). */
+export const COPILOT_SESSION_MAX_TOKENS = 500_000;
 export const COPILOT_TOKENS_PER_CREDIT = 20_000;
 
 export function creditsForCopilotTokens(totalTokens: number): number {

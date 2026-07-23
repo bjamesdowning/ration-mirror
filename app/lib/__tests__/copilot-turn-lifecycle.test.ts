@@ -3,6 +3,7 @@ import {
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
+	shouldIgnoreCopilotTurnEnd,
 } from "../copilot/turn-lifecycle.client";
 
 describe("Copilot turn lifecycle", () => {
@@ -19,6 +20,7 @@ describe("Copilot turn lifecycle", () => {
 
 		expect(isCopilotTurnActive(ended)).toBe(false);
 		expect(secondTurn).toEqual({
+			...INITIAL_COPILOT_TURN_STATE,
 			status: "active",
 			activeRequestId: "request-2",
 		});
@@ -54,6 +56,15 @@ describe("Copilot turn lifecycle", () => {
 				requestId: "request-2",
 			}),
 		).toEqual(awaiting);
+	});
+
+	it("accepts late approval requests when idle", () => {
+		const late = reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+			type: "approval_requested",
+			requestId: "pause-1",
+		});
+		expect(late.status).toBe("awaiting_approval");
+		expect(late.pauseRequestId).toBe("pause-1");
 	});
 
 	it("ignores approval requests while stopping", () => {
@@ -114,5 +125,32 @@ describe("Copilot turn lifecycle", () => {
 		expect(
 			reduceCopilotTurnState(awaiting, { type: "stop_requested" }).status,
 		).toBe("stopping");
+	});
+
+	it("ignores pause-stream terminals after approve until continuation activity", () => {
+		const awaiting = reduceCopilotTurnState(
+			reduceCopilotTurnState(INITIAL_COPILOT_TURN_STATE, {
+				type: "started",
+				requestId: "request-1",
+			}),
+			{ type: "approval_requested", requestId: "pause-1" },
+		);
+		const approved = reduceCopilotTurnState(awaiting, {
+			type: "approval_resolved",
+			approved: true,
+		});
+
+		expect(approved.expectingApprovalContinuation).toBe(true);
+		expect(isCopilotTurnActive(approved)).toBe(true);
+		expect(shouldIgnoreCopilotTurnEnd(approved, "pause-1")).toBe(true);
+		expect(shouldIgnoreCopilotTurnEnd(approved, null)).toBe(true);
+
+		const withActivity = reduceCopilotTurnState(approved, {
+			type: "post_approval_activity",
+		});
+		expect(shouldIgnoreCopilotTurnEnd(withActivity, "pause-1")).toBe(true);
+		expect(shouldIgnoreCopilotTurnEnd(withActivity, "continuation-2")).toBe(
+			false,
+		);
 	});
 });

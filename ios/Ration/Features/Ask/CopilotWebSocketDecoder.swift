@@ -256,8 +256,8 @@ enum CopilotWebSocketDecoder {
                 error: nil,
                 approvalId: approvalToolCallId,
                 toolName: resolvedToolName,
-                title: "Confirm action",
-                description: resolvedToolName.map { "Copilot wants to run \($0)." },
+                title: "Confirm \(resolvedToolName ?? "action")",
+                description: resolvedToolName.map { "Copilot wants to run \($0)." } ?? "Copilot wants to run a tool action.",
                 blocked: nil
             )
         case "tool-output-available":

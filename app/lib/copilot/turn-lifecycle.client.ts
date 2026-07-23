@@ -1,18 +1,31 @@
 export type CopilotTurnState = {
 	status: "idle" | "active" | "awaiting_approval" | "stopping";
 	activeRequestId: string | null;
+	/** Frame/request id of the stream that paused for approval (pause terminals). */
+	pauseRequestId: string | null;
+	/**
+	 * After Approve, ignore pause-stream finish/done until the autoContinue
+	 * stream delivers tool/text activity (or a terminal with a new request id).
+	 */
+	expectingApprovalContinuation: boolean;
+	/** True once post-approve tool_end / text / reasoning arrived. */
+	seenPostApprovalActivity: boolean;
 };
 
 export type CopilotTurnEvent =
 	| { type: "started"; requestId: string }
-	| { type: "approval_requested" }
+	| { type: "approval_requested"; requestId?: string | null }
 	| { type: "approval_resolved"; approved: boolean }
+	| { type: "post_approval_activity" }
 	| { type: "stop_requested" }
 	| { type: "ended" };
 
 export const INITIAL_COPILOT_TURN_STATE: CopilotTurnState = {
 	status: "idle",
 	activeRequestId: null,
+	pauseRequestId: null,
+	expectingApprovalContinuation: false,
+	seenPostApprovalActivity: false,
 };
 
 export function reduceCopilotTurnState(
@@ -22,28 +35,76 @@ export function reduceCopilotTurnState(
 	switch (event.type) {
 		case "started":
 			if (state.status !== "idle") return state;
-			return { status: "active", activeRequestId: event.requestId };
+			return {
+				...INITIAL_COPILOT_TURN_STATE,
+				status: "active",
+				activeRequestId: event.requestId,
+			};
 		case "approval_requested":
-			if (state.status !== "active") return state;
-			return { ...state, status: "awaiting_approval" };
+			// Accept while active, or late when idle (missed earlier frame).
+			if (state.status !== "active" && state.status !== "idle") return state;
+			return {
+				...state,
+				status: "awaiting_approval",
+				activeRequestId: state.activeRequestId ?? event.requestId ?? null,
+				pauseRequestId: event.requestId ?? state.activeRequestId,
+				expectingApprovalContinuation: false,
+				seenPostApprovalActivity: false,
+			};
 		case "approval_resolved":
 			if (state.status !== "awaiting_approval") return state;
-			return event.approved
-				? { ...state, status: "active" }
-				: INITIAL_COPILOT_TURN_STATE;
+			if (!event.approved) return INITIAL_COPILOT_TURN_STATE;
+			return {
+				...state,
+				status: "active",
+				expectingApprovalContinuation: true,
+				seenPostApprovalActivity: false,
+			};
+		case "post_approval_activity":
+			if (!state.expectingApprovalContinuation) return state;
+			return { ...state, seenPostApprovalActivity: true };
 		case "stop_requested":
 			if (state.status !== "active" && state.status !== "awaiting_approval") {
 				return state;
 			}
-			return { ...state, status: "stopping" };
+			return {
+				...state,
+				status: "stopping",
+				expectingApprovalContinuation: false,
+				seenPostApprovalActivity: false,
+			};
 		case "ended":
-			// Always clear. Stream finish while parked on approval must not call
-			// this event (AskPanel/iOS skip terminal endTurn / completeTurn).
-			// Forced clear (disconnect, deny, stop) must reach idle.
+			// Always clear. Callers must soft-ignore terminals via
+			// shouldIgnoreCopilotTurnEnd before dispatching ended.
 			return INITIAL_COPILOT_TURN_STATE;
 	}
 }
 
+/**
+ * Whether a stream terminal (finish/done / turn_end / message_end) should be
+ * ignored so the Approve→autoContinue continuation can still deliver text.
+ */
+export function shouldIgnoreCopilotTurnEnd(
+	state: CopilotTurnState,
+	requestId?: string | null,
+): boolean {
+	if (state.status === "awaiting_approval") return true;
+	if (!state.expectingApprovalContinuation) return false;
+	if (!state.seenPostApprovalActivity) return true;
+	if (
+		requestId != null &&
+		state.pauseRequestId != null &&
+		requestId === state.pauseRequestId
+	) {
+		return true;
+	}
+	return false;
+}
+
 export function isCopilotTurnActive(state: CopilotTurnState): boolean {
-	return state.status === "active" || state.status === "stopping";
+	return (
+		state.status === "active" ||
+		state.status === "stopping" ||
+		state.expectingApprovalContinuation
+	);
 }

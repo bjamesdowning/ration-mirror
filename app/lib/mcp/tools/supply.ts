@@ -115,7 +115,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "remove_supply_item",
 			description:
-				"Remove an item from the supply list. If the user bought it, prefer mark_supply_purchased then complete_supply_list.",
+				"Remove an item from the supply list. If the user bought it, prefer mark_supply_purchased_bulk then complete_supply_list.",
 			inputSchema: z.object({ itemId: z.string().uuid() }),
 			scopes: ["mcp:supply:write"],
 			rateLimitCategory: "mcp_write",
@@ -136,7 +136,7 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "mark_supply_purchased_bulk",
 			description:
-				"Purpose-built: mark many supply list items purchased/unpurchased in one call (max 50). Prefer over N× mark_supply_purchased.",
+				"Purpose-built: mark many supply list items purchased/unpurchased in one call (max 50). Use for one or many items.",
 			inputSchema: z.object({
 				itemIds: z.array(z.string().uuid()).min(1).max(50),
 				purchased: z.boolean().optional().default(true),
@@ -173,47 +173,6 @@ export function createSupplyToolDefs(env: McpToolsEnv) {
 					itemIds: updatedIds,
 					missing: missing.length > 0 ? missing : undefined,
 					isPurchased: purchased,
-				});
-			},
-		}),
-		defineSharedTool({
-			name: "mark_supply_purchased",
-			description:
-				"Mark a supply list item as purchased or unpurchased. For many items prefer mark_supply_purchased_bulk.",
-			inputSchema: z.object({
-				itemId: z.string().uuid(),
-				purchased: z.boolean(),
-			}),
-			scopes: ["mcp:supply:write"],
-			rateLimitCategory: "mcp_write",
-			audit: true,
-			handler: async (ctx, a) => {
-				const list = await ensureSupplyList(env.DB, ctx.organizationId);
-				if (!list) {
-					return err(
-						"mark_supply_purchased",
-						"internal_error",
-						"Could not locate or create supply list.",
-					);
-				}
-				const item = await updateSupplyItem(
-					env.DB,
-					ctx.organizationId,
-					list.id,
-					a.itemId,
-					{ isPurchased: a.purchased },
-				);
-				if (!item) {
-					return err(
-						"mark_supply_purchased",
-						"not_found",
-						`Item ${a.itemId} not found on supply list.`,
-					);
-				}
-				return ok("mark_supply_purchased", {
-					itemId: item.id,
-					name: item.name,
-					isPurchased: item.isPurchased,
 				});
 			},
 		}),

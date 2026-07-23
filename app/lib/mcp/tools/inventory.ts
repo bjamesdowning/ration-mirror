@@ -9,10 +9,13 @@ import {
 } from "../../cargo.server";
 import {
 	applyInventoryImport,
-	getInventoryImportSchema,
 	importInventoryCsv,
 	previewInventoryImport,
 } from "../../inventory-import.server";
+import {
+	applyInventoryRemove,
+	previewInventoryRemove,
+} from "../../inventory-remove.server";
 import { coerceToolUnit } from "../../units";
 import { findSimilarCargoBatch } from "../../vector.server";
 import { err, ok, type ToolEnvelope } from "../envelope";
@@ -62,7 +65,7 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "add_cargo_item",
 			description:
-				"Add a single pantry item. Skips fuzzy Vectorize merge (no Ration credits). Exact-name merge still applies. For 2+ items or a receipt/list, use inventory_import_schema → preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0.",
+				"Add a single pantry item. Skips fuzzy Vectorize merge (no Ration credits). Exact-name merge still applies. For 2+ items or a receipt/list, use preview_inventory_import → apply_inventory_import instead. Quantity must be greater than 0.",
 			inputSchema: z.object({
 				name: z.string().min(1),
 				quantity: z
@@ -413,20 +416,72 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 			},
 		}),
 		defineSharedTool({
-			name: "inventory_import_schema",
+			name: "preview_inventory_remove",
 			description:
-				"DEPRECATED: Prefer the MCP resource ration://schemas/inventory-import. Returns the JSON schema for preview_inventory_import / apply_inventory_import. Still works for agents that cannot read resources.",
-			inputSchema: z.object({}),
-			scopes: ["mcp:read"],
-			rateLimitCategory: "mcp_list",
-			audit: false,
-			handler: async () =>
-				ok("inventory_import_schema", getInventoryImportSchema()),
+				"Dry-run bulk permanent Cargo deletes (2+ items). Returns previewToken, totals, a sample of rows, and warnings. No DB writes. Pass previewToken to apply_inventory_remove within 15 minutes after the user confirms in chat. For a single delete, prefer remove_cargo_item.",
+			inputSchema: z.object({
+				itemIds: z.array(z.string().uuid()).min(1).max(100),
+			}),
+			scopes: ["mcp:inventory:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			handler: async (ctx, a) => {
+				const result = await previewInventoryRemove(
+					env,
+					ctx.organizationId,
+					a.itemIds,
+				);
+				return ok("preview_inventory_remove", result);
+			},
+		}),
+		defineSharedTool({
+			name: "apply_inventory_remove",
+			description:
+				"Commit a previously-previewed bulk Cargo delete. Pass the previewToken from preview_inventory_remove. Idempotent via idempotencyKey. Call immediately after the user confirms the preview in chat — no second host approval step.",
+			inputSchema: z.object({
+				previewToken: z
+					.string()
+					.min(8)
+					.describe("Token from preview_inventory_remove."),
+				idempotencyKey: z
+					.string()
+					.min(8)
+					.max(128)
+					.describe("Stable client key (e.g. UUID) for safe retries."),
+			}),
+			scopes: ["mcp:inventory:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			handler: async (ctx, a) => {
+				try {
+					const result = await applyInventoryRemove(env, ctx.organizationId, {
+						previewToken: a.previewToken,
+						idempotencyKey: a.idempotencyKey,
+					});
+					return ok("apply_inventory_remove", result, {
+						meta: result.replayed ? { replayed: true } : undefined,
+					});
+				} catch (e) {
+					const message = e instanceof Error ? e.message : String(e);
+					if (/preview|token|expired|not found/i.test(message)) {
+						return err(
+							"apply_inventory_remove",
+							"invalid_input",
+							"Preview token is missing or expired. Call preview_inventory_remove again, then retry apply within 15 minutes.",
+							{
+								recoveryHint:
+									"Call preview_inventory_remove to get a fresh previewToken, then apply_inventory_remove with a new or unused idempotencyKey.",
+							},
+						);
+					}
+					throw e;
+				}
+			},
 		}),
 		defineSharedTool({
 			name: "preview_inventory_import",
 			description:
-				"Dry-run a bulk inventory import (e.g. from a parsed receipt or multi-item list). Returns previewToken, totals, a sample of classified rows (rowsOmitted counts the rest), and warnings. No DB writes. Pass previewToken to apply_inventory_import within 15 minutes. For a single item, prefer add_cargo_item.",
+				"Dry-run a bulk inventory import (e.g. from a parsed receipt or multi-item list). Returns previewToken, totals, a sample of classified rows (rowsOmitted counts the rest), and warnings. No DB writes. Pass previewToken to apply_inventory_import within 15 minutes. For a single item, prefer add_cargo_item. Item shape: see ration://schemas/inventory-import.",
 			inputSchema: z.object({
 				items: z
 					.array(

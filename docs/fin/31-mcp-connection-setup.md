@@ -130,7 +130,7 @@ DNS-AID (optional bootstrap): `_mcp._agents.ration.mayutic.com` HTTPS record poi
 
 MCP **resources**:
 
-- `ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`
+- `ration://units`, `ration://domains`, `ration://schemas/inventory-import`, `ration://capabilities`
 - `ration://guides/connect` — connection guide (OAuth-first)
 
 MCP **prompts**: `parse_receipt`, `plan_week`

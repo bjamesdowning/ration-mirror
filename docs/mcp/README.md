@@ -44,10 +44,10 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 | "List my pantry and what's expiring this week." | `list_inventory` + `get_expiring_items` |
 | "What already expired in my pantry?" | `get_expired_items` |
 | "What meals can I make with what we have?" | `match_meals` (strict or partial matches) |
-| "Plan dinners through Friday and add anything missing to the list." | `get_meal_plan` → `bulk_add_meal_plan_entries` → `sync_supply_from_selected_meals` |
+| "Plan dinners through Friday and add anything missing to the list." | `propose_manifest_plan` → `commit_manifest_plan` → `sync_supply_from_selected_meals` |
 | "We cooked lentil soup for four — update inventory." | `consume_meal` deducts ingredients via semantic matching |
 | "Add eggs and butter to the shopping list." | `add_supply_item` |
-| "I bought everything on the list — mark it purchased." | `mark_supply_purchased` |
+| "I bought everything on the list — mark it purchased." | `mark_supply_purchased_bulk` |
 | "Parse this receipt and add new items to Cargo." | Agent parses text → `preview_inventory_import` → `apply_inventory_import` (no Ration AI credits) |
 | "I ate two cans of tuna." | `adjust_cargo_item` with `delta: -2` (floors at 0; line stays for restock) |
 
@@ -130,9 +130,10 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `update_cargo_item` | `mcp:inventory:write` | Set absolute fields. Quantity may be **0** (kept as a restock reminder). |
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative `delta` change (e.g. `-2` when the user ate 2). Floors at 0; keeps the row. |
 | `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
-| `inventory_import_schema` | `mcp:read` | JSON schema for bulk import fields, units, and row limits. |
-| `preview_inventory_import` | `mcp:read` | Dry-run receipt/bulk import — returns `previewToken` and per-row match/create/skip. |
-| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import. Idempotent via `idempotencyKey`. |
+| `preview_inventory_import` | `mcp:inventory:write` | Dry-run receipt/bulk import — returns `previewToken` and sample rows. Prefer `ration://schemas/inventory-import` for shape. |
+| `apply_inventory_import` | `mcp:inventory:write` | Commit a previewed import after chat confirmation. Idempotent via `idempotencyKey`. |
+| `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk Cargo deletes (prefer for 2+ items). |
+| `apply_inventory_remove` | `mcp:inventory:write` | Commit a remove preview after chat confirmation. Idempotent. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse and apply a CSV string in one call (convenience wrapper). |
 
 ### Galley (recipes)
@@ -142,7 +143,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
 | `update_meal` | `mcp:galley:write` | Update a recipe — round-trip via `list_meals` → edit → pass full object. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
-| `toggle_meal_active` | `mcp:galley:write` | Toggle a meal in the Galley active selection (drives supply sync). |
+| `set_active_meals` | `mcp:galley:write` | Set Galley active selection to exactly these mealIds. Optional `syncSupply`. |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
 | `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Mark cooked and deduct ingredients from pantry via semantic matching. Requires **both** scopes. |
 
@@ -151,7 +152,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule a meal on a date and slot. |
-| `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Add up to 50 plan entries in one atomic batch. |
+| `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
 | `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark manifest entries consumed and deduct ingredients from pantry. Requires **both** scopes. |
@@ -163,7 +164,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `add_supply_item` | `mcp:supply:write` | Add a line to the active shopping list. |
 | `update_supply_item` | `mcp:supply:write` | Update name, quantity, or unit on a supply line. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a supply list line. |
-| `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased / unpurchased on a supply line. |
+| `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many supply lines purchased / unpurchased. |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild list from meal plan + Galley selections (buy only the delta). |
 | `complete_supply_list` | `mcp:supply:write` + `mcp:inventory:write` | Dock purchased items into pantry and archive the list. Requires **both** scopes. **Requires `confirm: true`.** |
 

@@ -99,8 +99,8 @@ export interface InventoryImportApplyResult {
 }
 
 /**
- * Public schema descriptor for the import shape. Returned by the MCP
- * `inventory_import_schema` tool so agents can introspect allowed unit
+ * Public schema descriptor for the import shape. Exposed via the MCP
+ * resource `ration://schemas/inventory-import` so agents can introspect allowed unit
  * strings and field names without guessing.
  */
 export function getInventoryImportSchema() {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	COPILOT_DEFAULT_MODEL_PRESET,
 	COPILOT_MODEL_PRESETS,
+	minimaxProviderOptions,
 	ONBOARDING_BRIEFING_MODEL_PRESET,
 	parseCopilotModelPreset,
 	resolveCopilotModelPreset,
@@ -34,12 +35,20 @@ describe("resolveCopilotModelPreset", () => {
 });
 
 describe("COPILOT_MODEL_PRESETS", () => {
-	it("fast disables reasoning effort", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.reasoningEffort).toBeNull();
+	it("fast disables MiniMax thinking", () => {
+		expect(COPILOT_MODEL_PRESETS.fast.thinking).toBe("disabled");
+		expect(minimaxProviderOptions(COPILOT_MODEL_PRESETS.fast)).toEqual({
+			thinking: { type: "disabled" },
+			reasoning_split: true,
+		});
 	});
 
-	it("deep uses high reasoning effort", () => {
-		expect(COPILOT_MODEL_PRESETS.deep.reasoningEffort).toBe("high");
+	it("deep uses adaptive MiniMax thinking", () => {
+		expect(COPILOT_MODEL_PRESETS.deep.thinking).toBe("adaptive");
+		expect(minimaxProviderOptions(COPILOT_MODEL_PRESETS.deep)).toEqual({
+			thinking: { type: "adaptive" },
+			reasoning_split: true,
+		});
 	});
 
 	it("deep allows longer multi-step tool runs", () => {
@@ -48,7 +57,7 @@ describe("COPILOT_MODEL_PRESETS", () => {
 	});
 
 	it("fast keeps a lower step and output budget", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(8);
+		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(12);
 		expect(COPILOT_MODEL_PRESETS.fast.maxOutputTokens).toBe(2048);
 	});
 

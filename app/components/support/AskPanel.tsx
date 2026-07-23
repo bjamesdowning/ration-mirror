@@ -41,6 +41,7 @@ import {
 	INITIAL_COPILOT_TURN_STATE,
 	isCopilotTurnActive,
 	reduceCopilotTurnState,
+	shouldIgnoreCopilotTurnEnd,
 } from "~/lib/copilot/turn-lifecycle.client";
 import { COPILOT_TURN_WATCHDOG_MS } from "~/lib/mcp/constants";
 import { AssistantMarkdown } from "./AssistantMarkdown";
@@ -344,10 +345,12 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				focus?: boolean;
 				/** Force-clear even when parked on an approval card (stop / deny / error). */
 				clearApproval?: boolean;
+				/** Stream/frame id for pause vs continuation terminals. */
+				requestId?: string | null;
 			} = {},
 		) => {
-			const awaitingApproval =
-				turnStateRef.current.status === "awaiting_approval";
+			const turn = turnStateRef.current;
+			const awaitingApproval = turn.status === "awaiting_approval";
 			// AI SDK finishes the stream after `tool-approval-request`; do not wipe
 			// the Approve/Deny card when that terminal frame arrives.
 			if (awaitingApproval && options.clearApproval !== true) {
@@ -363,6 +366,20 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						return current;
 					});
 				}
+				return;
+			}
+			// After Approve, ignore late pause-stream finish/done until continuation
+			// tool/text activity arrives (otherwise the UI goes idle and drops the summary).
+			if (
+				options.clearApproval !== true &&
+				shouldIgnoreCopilotTurnEnd(turn, options.requestId)
+			) {
+				clearToolLinger();
+				clearStopFallback();
+				setActiveToolName(null);
+				setCompletedToolName(null);
+				setToolSucceeded(null);
+				setTurnPhase("thinking");
 				return;
 			}
 			clearToolLinger();
@@ -434,7 +451,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			setError(
 				"Copilot stopped responding. Please try again — the previous turn was ended to unblock the chat.",
 			);
-			endTurn({ persist: true, focus: true });
+			endTurn({ persist: true, focus: true, clearApproval: true });
 		}, 5_000);
 		return () => clearInterval(id);
 	}, [endTurn, isAwaitingApproval, isTurnActive]);
@@ -589,41 +606,77 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		[],
 	);
 
+	const markPostApprovalActivity = useCallback(() => {
+		if (turnStateRef.current.expectingApprovalContinuation) {
+			transitionTurn({ type: "post_approval_activity" });
+			lastActivityAtRef.current = Date.now();
+		}
+	}, [transitionTurn]);
+
 	const handleEvent = useCallback(
 		(event: CopilotEvent) => {
 			if (event.type === "cf_agent_use_chat_response") {
 				const action = decodeAgentResponseFrame(event as AgentResponseFrame);
+				const turnStatus = turnStateRef.current.status;
+				const expectingContinuation =
+					turnStateRef.current.expectingApprovalContinuation;
 				if (
-					turnStateRef.current.status === "idle" &&
-					action.kind !== "turn_end"
+					turnStatus === "idle" &&
+					action.kind !== "turn_end" &&
+					action.kind !== "approval_requested" &&
+					!(
+						expectingContinuation &&
+						(action.kind === "text_delta" ||
+							action.kind === "tool_start" ||
+							action.kind === "tool_end" ||
+							action.kind === "reasoning_start" ||
+							action.kind === "reasoning_delta" ||
+							action.kind === "reasoning_end")
+					)
 				) {
 					return;
 				}
 				switch (action.kind) {
 					case "text_delta":
+						markPostApprovalActivity();
 						appendAssistant(action.text);
 						break;
 					case "reasoning_start":
+						markPostApprovalActivity();
 						appendReasoning("", "start");
 						break;
 					case "reasoning_delta":
+						markPostApprovalActivity();
 						appendReasoning(action.text, "delta");
 						break;
 					case "reasoning_end":
 						appendReasoning("", "end");
 						break;
 					case "tool_start":
+						markPostApprovalActivity();
 						clearToolLinger();
 						setCompletedToolName(null);
 						setToolSucceeded(null);
 						setActiveToolName(action.toolName);
+						if (action.toolCallId) {
+							toolNameByCallIdRef.current.set(
+								action.toolCallId,
+								action.toolName,
+							);
+						}
 						setTurnPhase("tool_running");
 						break;
 					case "tool_end":
+						markPostApprovalActivity();
 						scheduleToolDoneLinger(action.toolName, action.succeeded);
 						break;
 					case "turn_end":
-						endTurn();
+						endTurn({
+							requestId:
+								typeof event.id === "string"
+									? event.id
+									: turnStateRef.current.activeRequestId,
+						});
 						break;
 					case "approval_requested":
 						setTurnPhase("idle");
@@ -633,8 +686,13 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							break;
 						}
 						if (
-							transitionTurn({ type: "approval_requested" }).status ===
-							"awaiting_approval"
+							transitionTurn({
+								type: "approval_requested",
+								requestId:
+									typeof event.id === "string"
+										? event.id
+										: turnStateRef.current.activeRequestId,
+							}).status === "awaiting_approval"
 						) {
 							setApproval({
 								toolCallId: action.toolCallId,
@@ -646,7 +704,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						break;
 					case "error":
 						setError(action.message);
-						endTurn();
+						endTurn({ clearApproval: true });
 						break;
 					case "noop":
 						break;
@@ -682,12 +740,16 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					setTurnPhase("thinking");
 					break;
 				case "text_delta":
+					markPostApprovalActivity();
 					appendAssistant(event.text ?? "");
 					break;
 				case "message_end":
-					endTurn();
+					endTurn({
+						requestId: event.messageId ?? turnStateRef.current.activeRequestId,
+					});
 					break;
 				case "tool_start":
+					markPostApprovalActivity();
 					clearToolLinger();
 					setCompletedToolName(null);
 					setToolSucceeded(null);
@@ -703,6 +765,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					setTurnPhase("tool_running");
 					break;
 				case "tool_end": {
+					markPostApprovalActivity();
 					const result = resolveCopilotToolEnd(
 						event,
 						toolNameByCallIdRef.current,
@@ -712,7 +775,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				}
 				case "blocked_feature":
 					setBlocked(event.blocked ?? null);
-					endTurn();
+					endTurn({ clearApproval: true });
 					break;
 				case "session_usage_update":
 					if (event.usage) {
@@ -747,8 +810,11 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						break;
 					}
 					if (
-						transitionTurn({ type: "approval_requested" }).status ===
-						"awaiting_approval"
+						transitionTurn({
+							type: "approval_requested",
+							requestId:
+								event.messageId ?? turnStateRef.current.activeRequestId,
+						}).status === "awaiting_approval"
 					) {
 						setApproval({
 							toolCallId: event.approvalId,
@@ -773,7 +839,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						setLimitReached(event.error.message);
 						setError(null);
 						setNeedsCredits(null);
-						endTurn({ persist: true, focus: false });
+						endTurn({ persist: true, focus: false, clearApproval: true });
 						return;
 					}
 					if (
@@ -782,7 +848,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 					) {
 						setNeedsCredits(event.error.message);
 						setError(null);
-						endTurn({ persist: true, focus: false });
+						endTurn({ persist: true, focus: false, clearApproval: true });
 						return;
 					}
 					setError(
@@ -790,7 +856,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							? event.error.message
 							: (event.text ?? "Copilot hit an error."),
 					);
-					endTurn();
+					endTurn({ clearApproval: true });
 					break;
 			}
 		},
@@ -799,6 +865,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 			appendReasoning,
 			clearToolLinger,
 			endTurn,
+			markPostApprovalActivity,
 			persistSession,
 			persistSessionUsageOnly,
 			scheduleToolDoneLinger,
@@ -1170,7 +1237,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 		if (!socket || socket.readyState !== WebSocket.OPEN) {
 			setApproval(null);
 			setError("Copilot disconnected before the approval was sent.");
-			endTurn();
+			endTurn({ clearApproval: true });
 			return;
 		}
 		try {
@@ -1183,6 +1250,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				}),
 			);
 			setApproval(null);
+			lastActivityAtRef.current = Date.now();
 			transitionTurn({ type: "approval_resolved", approved });
 			if (approved) {
 				setTurnPhase("thinking");
@@ -1442,9 +1510,9 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 				) : null}
 				{approval ? (
 					<div className="rounded-xl border border-hyper-green/30 bg-hyper-green/10 p-3 text-sm">
-						<p className="font-semibold">Confirm action</p>
+						<p className="font-semibold">Confirm `{approval.toolName}`</p>
 						<p className="text-muted">
-							Copilot wants to run `{approval.toolName}`.
+							Copilot wants to run `{approval.toolName}`. Approve to continue.
 						</p>
 						<div className="mt-2 flex gap-2">
 							<button

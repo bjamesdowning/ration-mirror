@@ -78,7 +78,7 @@ export function buildKitchenAwareSuggestedActions(
 		actions.push({
 			action: "get_meal_plan",
 			description:
-				"Inspect Manifest with get_meal_plan or bulk_add_meal_plan_entries after matching meals.",
+				"Inspect Manifest with get_meal_plan or commit_manifest_plan after matching meals.",
 		});
 	}
 

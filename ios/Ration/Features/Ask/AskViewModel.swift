@@ -93,6 +93,10 @@ final class AskViewModel {
     private(set) var isTurnActive = false
     private(set) var isStopping = false
     private(set) var isAwaitingApproval = false
+    /// After Approve, ignore pause-stream message_end until continuation activity.
+    private var expectingApprovalContinuation = false
+    private var seenPostApprovalActivity = false
+    private var pauseApprovalRequestId: String?
     private(set) var briefingComplete = false
     private(set) var introComplete = false
     /// True when the intro assistant reply had usable content (not empty / failed soft end).
@@ -459,14 +463,23 @@ final class AskViewModel {
             try await socket.approve(approvalId, approved: approved)
             if approved {
                 guard !isStopping else { return }
+                lastActivityAt = Date()
+                expectingApprovalContinuation = true
+                seenPostApprovalActivity = false
                 isTurnActive = true
                 state = .streaming
                 turnPhase = .thinking
             } else {
+                expectingApprovalContinuation = false
+                seenPostApprovalActivity = false
+                pauseApprovalRequestId = nil
                 completeTurn(state: .idle)
                 scheduleImmediateSnapshotSave()
             }
         } catch {
+            expectingApprovalContinuation = false
+            seenPostApprovalActivity = false
+            pauseApprovalRequestId = nil
             completeTurn(state: .error(error.localizedDescription))
         }
     }
@@ -586,8 +599,11 @@ final class AskViewModel {
 
     func shouldAcceptObservedEvent(_ event: CopilotStreamEvent) -> Bool {
         isTurnActive
+            || isAwaitingApproval
+            || expectingApprovalContinuation
             || event.type == "message_end"
             || event.type == "error"
+            || event.type == "approval_request"
             || event.type == "session_usage_update"
             || event.type == "session_limit_warning"
     }
@@ -612,6 +628,7 @@ final class AskViewModel {
             turnPhase = .thinking
         case "text_delta":
             beginTurnIfNeeded()
+            markPostApprovalActivity()
             appendAssistantDelta(event.text ?? "", messageId: event.messageId)
             clearTransientError()
             state = .streaming
@@ -619,10 +636,12 @@ final class AskViewModel {
             persistSnapshotDebounced()
         case "reasoning_start":
             beginTurnIfNeeded()
+            markPostApprovalActivity()
             appendReasoningDelta("", mode: .start, messageId: event.messageId)
             turnPhase = .thinking
         case "reasoning_delta":
             beginTurnIfNeeded()
+            markPostApprovalActivity()
             appendReasoningDelta(event.text ?? "", mode: .delta, messageId: event.messageId)
             turnPhase = .thinking
         case "reasoning_end":
@@ -636,6 +655,20 @@ final class AskViewModel {
             if case .awaitingApproval = state {
                 return
             }
+            // After Approve, ignore late pause-stream terminals until continuation
+            // delivers tool/text (otherwise empty final / dropped summary).
+            if expectingApprovalContinuation && !seenPostApprovalActivity {
+                return
+            }
+            if expectingApprovalContinuation,
+               let pauseId = pauseApprovalRequestId,
+               let endedId = event.messageId,
+               pauseId == endedId {
+                return
+            }
+            expectingApprovalContinuation = false
+            seenPostApprovalActivity = false
+            pauseApprovalRequestId = nil
             // Late frames after a briefing turn already ended in `.error` must not wipe
             // the retry affordance unless usable content arrived and we can recover.
             if tracksBriefingSession, !isTurnActive, case .error = state {
@@ -672,6 +705,7 @@ final class AskViewModel {
             scheduleImmediateSnapshotSave()
         case "tool_start":
             beginTurnIfNeeded()
+            markPostApprovalActivity()
             if let status = event.status {
                 activeTool = CopilotToolStatus(
                     toolCallId: status.toolCallId,
@@ -684,6 +718,7 @@ final class AskViewModel {
             state = .streaming
             turnPhase = .toolRunning
         case "tool_end":
+            markPostApprovalActivity()
             let toolName = activeTool?.toolName ?? "tool"
             let succeeded = event.ok == true
             if tracksBriefingSession, toolName == "add_cargo_item", succeeded {
@@ -720,10 +755,13 @@ final class AskViewModel {
             let toolName = event.toolName
                 ?? activeTool?.toolName
                 ?? "Copilot action"
-            let title = event.title ?? "Confirm action"
+            let title = event.title ?? "Confirm \(toolName)"
             let description = event.description
                 ?? "Copilot wants to run \(toolName)."
             isAwaitingApproval = true
+            expectingApprovalContinuation = false
+            seenPostApprovalActivity = false
+            pauseApprovalRequestId = event.messageId
             state = .awaitingApproval(
                 id: approvalId,
                 title: title,
@@ -963,6 +1001,12 @@ final class AskViewModel {
         briefingTurnTimeoutTask = nil
     }
 
+    private func markPostApprovalActivity() {
+        guard expectingApprovalContinuation else { return }
+        seenPostApprovalActivity = true
+        lastActivityAt = Date()
+    }
+
     private func scheduleTurnWatchdog() {
         turnWatchdogTask?.cancel()
         turnWatchdogTask = Task { [weak self] in
@@ -970,7 +1014,8 @@ final class AskViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 guard !Task.isCancelled else { return }
-                guard self.isTurnActive, !self.isAwaitingApproval else { continue }
+                guard self.isTurnActive || self.expectingApprovalContinuation,
+                      !self.isAwaitingApproval else { continue }
                 let idleNs =
                     UInt64(Date().timeIntervalSince(self.lastActivityAt) * 1_000_000_000)
                 if idleNs >= self.turnWatchdogNanoseconds {
@@ -999,6 +1044,9 @@ final class AskViewModel {
         isTurnActive = false
         isStopping = false
         isAwaitingApproval = false
+        expectingApprovalContinuation = false
+        seenPostApprovalActivity = false
+        pauseApprovalRequestId = nil
         turnPhase = .idle
         self.state = state
     }

@@ -27,7 +27,7 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
 | `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0**. |
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`). Prefer for “used/ate N”. |
-| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`.** |
+| `remove_cargo_item` | `mcp:inventory:write` | Permanently delete a pantry line. **Requires `confirm: true`** (Copilot host Approve binds confirm). |
 
 ### Receipt → pantry workflow (no credits)
 
@@ -35,10 +35,16 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `inventory_import_schema` | `mcp:read` | **Deprecated.** Prefer `ration://schemas/inventory-import`. |
-| `preview_inventory_import` | `mcp:read` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
+| `preview_inventory_import` | `mcp:inventory:write` | Dry-run import. Returns `previewToken`, `totals`, sample rows + `rowsOmitted`, warnings. |
 | `apply_inventory_import` | `mcp:inventory:write` | Commits a preview after chat confirmation (no second host approval card). Idempotent. Embeddings do not block return. |
 | `import_inventory_csv` | `mcp:inventory:write` | Parse a CSV string and apply directly. |
+
+### Bulk Cargo remove (no credits)
+
+| Tool | Scope | Purpose |
+|------|-------|---------|
+| `preview_inventory_remove` | `mcp:inventory:write` | Dry-run bulk deletes (prefer for **2+** items). |
+| `apply_inventory_remove` | `mcp:inventory:write` | Commits a remove preview after chat confirmation (no second host card). Idempotent. |
 
 ## Galley (Meals)
 
@@ -49,8 +55,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `create_meal` | `mcp:galley:write` | Create structured recipe (credit-free). |
 | `update_meal` | `mcp:galley:write` | Update a recipe. |
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
-| `set_active_meals` | `mcp:galley:write` | Set active selection to exactly `mealIds`. Optional `syncSupply`. |
-| `toggle_meal_active` | `mcp:galley:write` | Toggle one meal in the active list. |
+| `set_active_meals` | `mcp:galley:write` | Set active selection to exactly `mealIds`. Optional `syncSupply` (host approval only when syncing). |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active selections. **Requires `confirm: true`.** |
 | `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook by mealId and deduct cargo. |
 | `start_generate_meal` | `mcp:galley:write` | **Credits.** Queues AI meal generation after approval. Deep link: `ration://galley/generate`. |
@@ -63,7 +68,6 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
-| `bulk_add_meal_plan_entries` | `mcp:manifest:write` | Batch add (max 50). |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
 | `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
@@ -77,8 +81,7 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `add_supply_item` | `mcp:supply:write` | Add a line. |
 | `update_supply_item` | `mcp:supply:write` | Patch a line. |
 | `remove_supply_item` | `mcp:supply:write` | Remove a line. |
-| `mark_supply_purchased` | `mcp:supply:write` | Toggle purchased on one line. |
-| `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark many lines purchased (max 50). |
+| `mark_supply_purchased_bulk` | `mcp:supply:write` | Mark one or many lines purchased (max 50). |
 | `sync_supply_from_selected_meals` | `mcp:supply:write` | Rebuild supply from plan + selections. |
 | `complete_supply_list` | `mcp:supply:write` | Dock purchased → cargo. |
 

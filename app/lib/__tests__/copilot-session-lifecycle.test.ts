@@ -10,6 +10,7 @@ import { INITIAL_COPILOT_TURN_STATE } from "../copilot/turn-lifecycle.client";
 describe("backgroundCopilotSession", () => {
 	it("forces idle and requests cancel when a turn is active", () => {
 		const result = backgroundCopilotSession({
+			...INITIAL_COPILOT_TURN_STATE,
 			status: "active",
 			activeRequestId: "req-1",
 		});
@@ -40,7 +41,11 @@ describe("canResumeCopilotSession", () => {
 describe("prepareCopilotSendAfterResume", () => {
 	it("forces idle when the socket is dead and the turn is stuck", () => {
 		const result = prepareCopilotSendAfterResume({
-			turnState: { status: "active", activeRequestId: "req-1" },
+			turnState: {
+				...INITIAL_COPILOT_TURN_STATE,
+				status: "active",
+				activeRequestId: "req-1",
+			},
 			socketOpen: false,
 		});
 		expect(result.shouldForceIdle).toBe(true);
@@ -48,7 +53,11 @@ describe("prepareCopilotSendAfterResume", () => {
 	});
 
 	it("leaves an open socket alone", () => {
-		const turnState = { status: "active" as const, activeRequestId: "req-1" };
+		const turnState = {
+			...INITIAL_COPILOT_TURN_STATE,
+			status: "active" as const,
+			activeRequestId: "req-1",
+		};
 		const result = prepareCopilotSendAfterResume({
 			turnState,
 			socketOpen: true,

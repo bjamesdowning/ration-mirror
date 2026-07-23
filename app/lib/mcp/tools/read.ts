@@ -307,7 +307,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_supply_list",
 			description:
-				"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased, and remove_supply_item.",
+				"Retrieve the user's active supply list. Each item includes its `id` so it can be referenced by update_supply_item, mark_supply_purchased_bulk, and remove_supply_item.",
 			inputSchema: z.object({}),
 			scopes: ["mcp:read"],
 			rateLimitCategory: "mcp_list",

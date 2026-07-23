@@ -86,10 +86,15 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Removed from Cargo",
 		error: "Could not remove from Cargo",
 	},
-	inventory_import_schema: {
-		running: "Loading Cargo import format…",
-		done: "Loaded Cargo import format",
-		error: "Could not load import format",
+	preview_inventory_remove: {
+		running: "Previewing Cargo removals…",
+		done: "Previewed Cargo removals",
+		error: "Could not preview Cargo removals",
+	},
+	apply_inventory_remove: {
+		running: "Removing Cargo items…",
+		done: "Removed Cargo items",
+		error: "Could not remove Cargo items",
 	},
 	preview_inventory_import: {
 		running: "Previewing Cargo import…",
@@ -121,11 +126,6 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Removed from Supply",
 		error: "Could not remove from Supply",
 	},
-	mark_supply_purchased: {
-		running: "Updating Supply…",
-		done: "Updated Supply",
-		error: "Could not update Supply",
-	},
 	sync_supply_from_selected_meals: {
 		running: "Syncing Supply from meals…",
 		done: "Synced Supply from meals",
@@ -140,11 +140,6 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		running: "Adding to Manifest…",
 		done: "Added to Manifest",
 		error: "Could not update Manifest",
-	},
-	bulk_add_meal_plan_entries: {
-		running: "Building your Manifest…",
-		done: "Built your Manifest",
-		error: "Could not build Manifest",
 	},
 	update_meal_plan_entry: {
 		running: "Updating Manifest…",
@@ -175,11 +170,6 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		running: "Deleting meal…",
 		done: "Deleted meal",
 		error: "Could not delete meal",
-	},
-	toggle_meal_active: {
-		running: "Updating Galley selection…",
-		done: "Updated Galley selection",
-		error: "Could not update Galley selection",
 	},
 	clear_active_meals: {
 		running: "Clearing Galley selections…",

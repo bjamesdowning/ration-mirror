@@ -167,7 +167,7 @@ flowchart TB
     end
 
     subgraph AI["Cloudflare AI"]
-        AIBinding["Workers AI — Embedding + gpt-oss-120b"]
+        AIBinding["Workers AI — Embeddings; Copilot via MiniMax M3"]
         Vectorize[("Vectorize — ration-cargo")]
         AIGateway["AI Gateway → Google AI Studio"]
         AISearch["AI Search — ration-docs"]
@@ -204,7 +204,7 @@ flowchart TB
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
-| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via `@cf/openai/gpt-oss-120b` on `ration-copilot` |
+| `AI` | Workers AI | Embedding generation (`@cf/google/embeddinggemma-300m`, 768-dim) on `ration` / `ration-mcp`; Copilot inference via MiniMax M3 (OpenAI-compatible) on `ration-copilot` |
 | `VECTORIZE` | Vectorize Index | Semantic ingredient search (`ration-cargo`, cosine similarity) |
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
@@ -1594,7 +1594,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `GET /api/mobile/v1/hub` | userId | 60s | 60 | `hub_read` — 10-way parallel fan-out per call; same tier class as `cargo_list`/`meal_list` |
 | `GET /api/mobile/v1/supply` | userId | 60s | 60 | `supply_read` — read-only, same tier class as `cargo_list` |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost `mcp_search` (fail-closed) |
-| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, inventory_import_schema, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
+| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
@@ -1641,28 +1641,29 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
-| `inventory_import_schema` | Read | `mcp:read` | Returns the JSON shape `apply_inventory_import` expects | mcp_list (30/min) |
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |
 | `apply_inventory_import` | Write | `mcp:inventory:write` | Applies a chat-confirmed preview (no second host approval card); idempotent via `idempotencyKey` (24h KV TTL) | mcp_write (15/min) |
+| `preview_inventory_remove` | Write | `mcp:inventory:write` | Dry-run bulk Cargo deletes (2+); returns `previewToken` | mcp_write (15/min) |
+| `apply_inventory_remove` | Write | `mcp:inventory:write` | Applies a chat-confirmed remove preview (no second host card); idempotent | mcp_write (15/min) |
 | `import_inventory_csv` | Write | `mcp:inventory:write` | Parse a CSV string and apply directly | mcp_write (15/min) |
 | `add_cargo_item` | Write | `mcp:inventory:write` | Add a single pantry item, qty > 0 (skips embedding, no credit cost). Prefer import for bulk. | mcp_write (15/min) |
 | `update_cargo_item` | Write | `mcp:inventory:write` | Set absolute fields; quantity may be 0 (restock reminder; item kept) | mcp_write (15/min) |
 | `adjust_cargo_item` | Write | `mcp:inventory:write` | Relative `delta` (e.g. -2); floors at 0; keeps the row | mcp_write (15/min) |
-| `remove_cargo_item` | Write | `mcp:inventory:write` | Permanently delete a pantry line (requires `confirm: true`) | mcp_write (15/min) |
+| `remove_cargo_item` | Write | `mcp:inventory:write` | Permanently delete a pantry line (requires `confirm: true`; Copilot host Approve binds confirm) | mcp_write (15/min) |
 | `create_meal` | Write | `mcp:galley:write` | Create a new Galley recipe (structured data) | mcp_write (15/min) |
 | `update_meal` | Write | `mcp:galley:write` | Update any aspect of a Galley recipe | mcp_write (15/min) |
 | `delete_meal` | Write | `mcp:galley:write` | Delete a recipe (requires `confirm: true`) | mcp_write (15/min) |
 | `consume_meal` | Write | `mcp:galley:write` + `mcp:inventory:write` | Cook a meal and deduct ingredients | mcp_write (15/min) |
-| `toggle_meal_active` | Write | `mcp:galley:write` | Mark a meal active/inactive in the current selection | mcp_write (15/min) |
+| `set_active_meals` | Write | `mcp:galley:write` | Set Galley active selection; host approval only when `syncSupply: true` | mcp_write (15/min) |
 | `clear_active_meals` | Write | `mcp:galley:write` | Clear all active meal selections (requires `confirm: true`) | mcp_write (15/min) |
 | `add_meal_plan_entry` | Write | `mcp:manifest:write` | Schedule a meal on a date/slot | mcp_write (15/min) |
-| `bulk_add_meal_plan_entries` | Write | `mcp:manifest:write` | Add multiple meal plan entries in one call (idempotent) | mcp_write (15/min) |
+| `commit_manifest_plan` | Write | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply) | mcp_write (15/min) |
 | `update_meal_plan_entry` | Write | `mcp:manifest:write` | Patch date/slot/servings/notes/order; cannot edit consumed | mcp_write (15/min) |
 | `remove_meal_plan_entry` | Write | `mcp:manifest:write` | Remove a meal plan entry by id | mcp_write (15/min) |
 | `add_supply_item` | Write | `mcp:supply:write` | Add item to the active supply/shopping list | mcp_write (15/min) |
 | `update_supply_item` | Write | `mcp:supply:write` | Update a supply list item; quantity may be 0 (buy reminder) | mcp_write (15/min) |
 | `remove_supply_item` | Write | `mcp:supply:write` | Remove item from the supply list | mcp_write (15/min) |
-| `mark_supply_purchased` | Write | `mcp:supply:write` | Mark a supply item as purchased or unpurchased | mcp_write (15/min) |
+| `mark_supply_purchased_bulk` | Write | `mcp:supply:write` | Mark one or many supply items purchased/unpurchased | mcp_write (15/min) |
 | `sync_supply_from_selected_meals` | Write | `mcp:supply:write` | Rebuild supply from manifest + Galley selections | mcp_supply_sync (8/min) |
 | `complete_supply_list` | Write | `mcp:supply:write` | Archive the current list and start a fresh one | mcp_write (15/min) |
 | `update_user_preferences` | Write | `mcp:preferences:write` | Patch allergens, expiration alert days, theme | mcp_write (15/min) |
@@ -1671,7 +1672,7 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 
 **Tests:** MCP security and behavior are covered by unit tests under `app/lib/mcp/__tests__/` (worker fetch, transport, scopes, auth, OAuth RS, delegation, tools). Run `bun run test:unit`.
 
-**MCP resources & prompts:** The server also publishes static resources (`ration://resources/units`, `domains`, `inventory_import_schema`, `capabilities`, `connection_guide`) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
+**MCP resources & prompts:** The server also publishes static resources (`ration://units`, `ration://domains`, `ration://schemas/inventory-import`, `ration://capabilities`, connection guide) and prompts (`parse_receipt`, `plan_week`) so agents can fetch canonical reference data and instruction templates without scraping documentation.
 
 **No-credit default:** Most MCP tools are credit-free (rate-limited). Cargo writes set `skipVectorPhase: true` and backfill embeddings asynchronously so tool returns are not blocked. **Credit-aware exceptions** (after host approval): `start_plan_week` and `start_generate_meal` use the same ledger as the native UI. Camera OCR scan and recipe URL extraction remain native deep-link flows (text receipt lists use preview/apply). The `get_credit_balance` tool was intentionally removed in favor of `get_billing_summary`.
 
@@ -2263,21 +2264,21 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 
 ### 14.4 Model, presets, and inference
 
-- **Model:** `@cf/openai/gpt-oss-120b` via Workers AI (`getModel()` on `ProjectThinkAgent`).
+- **Model:** MiniMax M3 via OpenAI-compatible transport (`createCopilotLanguageModel` → `https://api.minimax.io/v1`, model `MiniMax-M3`). Requires `MINIMAX_API_KEY` (optional `COPILOT_BASE_URL` / `COPILOT_MODEL_ID` for AI Gateway or rollback).
 - **Presets** ([`model-profiles.ts`](app/lib/copilot/model-profiles.ts)):
 
-| Preset | Reasoning | maxSteps | maxOutputTokens | Use case |
-|--------|-----------|----------|-----------------|----------|
-| **Fast** (default) | off | 8 | 2048 | Quick answers, lower token use |
-| **Deep** | high | 25 | 16384 | Multi-step planning |
+| Preset | Thinking | maxSteps | maxOutputTokens | Use case |
+|--------|----------|----------|-----------------|----------|
+| **Fast** (default) | `thinking: disabled` | 12 | 2048 | Quick answers, lower token use |
+| **Deep** | `thinking: adaptive` | 25 | 16384 | Multi-step planning |
 
-Deep preset sets `workers-ai.reasoning_effort = high` and streams reasoning parts (`sendReasoning: true`). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
+Fast/Deep both use the same MiniMax model. Thinking is injected via request extras (`thinking` + `reasoning_split: true`); **do not** send OpenAI `reasoning_effort`. Deep streams reasoning parts (`sendReasoning: true`). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
 
-**System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, native-feature due diligence, and post-mutation action reporting.
+**System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, native-feature due diligence, bulk import/remove rules (≥2 items), and post-mutation action reporting.
 
 ### 14.5 Tools
 
-Copilot exposes **all shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`:
+Copilot exposes **shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk` / `preview_inventory_remove` / `apply_inventory_remove`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`. Each turn uses **intent-scoped `activeTools`** ([`active-tools.server.ts`](app/lib/copilot/active-tools.server.ts)) so only relevant write domains are enabled.
 
 | Tool | Source | Purpose |
 |------|--------|---------|
@@ -2288,7 +2289,7 @@ MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:wr
 
 **Not available as camera/URL tools in Copilot:** Receipt image scan and recipe URL import remain hard-blocked (use native Scan / Galley Import, or text → `preview_inventory_import`). Queue-backed AI Plan Week / Generate are available via `start_plan_week` / `start_generate_meal` after approval (and native deep-link disclosure). Credit-free scheduling uses `propose_manifest_plan` → `commit_manifest_plan`. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
 
-**Destructive / high-impact tools:** AI SDK `needsApproval` mirrors MCP for deletes, one-shot CSV import, clearing selections, completing Supply, credit-spending AI jobs, and insufficient-cargo overrides. When approval is required, the stream emits `tool-approval-request` and web/iOS show an Approve/Confirm card; chat “Yes” is not a substitute. Preview→`apply_inventory_import` does **not** use a second host approval card — chat confirmation of the preview is the consent step.
+**Destructive / high-impact tools:** AI SDK `needsApproval` mirrors MCP for single deletes, one-shot CSV import, clearing selections, completing Supply, credit-spending AI jobs, and insufficient-cargo overrides. When approval is required, the stream emits `tool-approval-request` and web/iOS show an Approve/Confirm card (tool name on the card); chat “Yes” is not a substitute for that host card. After Approve, clients keep the turn open until the autoContinue summary arrives (ignore pause-stream finish/done). Preview→`apply_inventory_import` / `apply_inventory_remove` do **not** use a second host approval card — chat confirmation of the preview is the consent step. `set_active_meals` only requires host approval when `syncSupply: true`.
 
 ### 14.6 Intent guards and native feature hints
 
@@ -2322,8 +2323,8 @@ Billing is **per conversation**, not per message. Constants live in [`constants.
 | Free tier allowance | **0** — first conversation charges credits |
 | Floor cost | **1** credit (`AI_COSTS.COPILOT_TURN`) preauthorized at open |
 | Token reconciliation | **1 credit per 20,000 tokens** (linear, minimum 1 per chat) |
-| Session token cap | **128,000** tokens — hard stop, start new chat |
-| Session message cap | **40** messages |
+| Session token cap | **500,000** tokens — hard stop, start new chat (max **25** credits/chat at 1/20k) |
+| Session message cap | **120** messages |
 | Session idle TTL | **20 minutes** on KV conversation charge records and client session snapshots |
 | Cumulative token meter | Persisted on KV charge + Think config; restored on DO wake / client reconnect |
 | Crew after allowance | Requires **auto-deduct consent** (`POST /api/copilot/consent`) or returns **402** `copilot_consent_required` |

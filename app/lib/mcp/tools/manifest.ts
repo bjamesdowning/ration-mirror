@@ -124,7 +124,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "commit_manifest_plan",
 			description:
-				"Purpose-built write: commit a confirmed meal schedule (max 50) and optionally sync supply. Prefer this over bulk_add_meal_plan_entries for week fills. Requires approval.",
+				"Purpose-built write: commit a confirmed meal schedule (max 50) and optionally sync supply. Prefer this for week fills. Requires approval.",
 			inputSchema: z.object({
 				entries: z.array(planEntryInput).min(1).max(50),
 				syncSupply: z.boolean().optional().default(false),
@@ -209,47 +209,6 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					slotType: entry.slotType,
 					servings: entry.servingsOverride ?? entry.mealServings,
 				});
-			},
-		}),
-		defineSharedTool({
-			name: "bulk_add_meal_plan_entries",
-			description:
-				"Add multiple meal plan entries in one call (max 50). Prefer commit_manifest_plan when also syncing supply. All-or-nothing.",
-			inputSchema: z.object({
-				entries: z.array(planEntryInput).min(1).max(50),
-			}),
-			scopes: ["mcp:manifest:write"],
-			rateLimitCategory: "mcp_write",
-			audit: true,
-			needsApproval: true,
-			handler: async (ctx, a) => {
-				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
-				try {
-					const result = await insertManifestBulkEntries(
-						env.DB,
-						ctx.organizationId,
-						plan.id,
-						{
-							entries: a.entries.map((entry) => ({
-								...entry,
-								orderIndex: 0,
-							})),
-						},
-					);
-					return ok("bulk_add_meal_plan_entries", {
-						created: result.entries,
-						errorCount: 0,
-					});
-				} catch (error) {
-					if (error instanceof ManifestBulkSubmissionError) {
-						return err(
-							"bulk_add_meal_plan_entries",
-							error.status === 404 ? "not_found" : "unauthorized",
-							error.message,
-						);
-					}
-					throw error;
-				}
 			},
 		}),
 		defineSharedTool({

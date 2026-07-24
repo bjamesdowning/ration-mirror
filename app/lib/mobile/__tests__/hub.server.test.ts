@@ -73,6 +73,8 @@ describe("getMobileHubData supply counts", () => {
 		getOrganizationTagSlugs.mockResolvedValue([]);
 		getCargoTagIndex.mockReset();
 		getCargoTagIndex.mockResolvedValue([]);
+		resolveLayout.mockReset();
+		resolveLayout.mockReturnValue([]);
 	});
 
 	it("untagged (common) case: fetches a bounded slice and gets counts from getSupplyItemStats", async () => {
@@ -159,5 +161,30 @@ describe("getMobileHubData supply counts", () => {
 			expiringCount: 0,
 			expiredCount: 0,
 		});
+	});
+
+	it("rethrows when cargoTagIndex fails and supply tag filters are active", async () => {
+		resolveLayout.mockReturnValue([
+			{
+				id: "supply-preview",
+				filters: { supplyTags: ["costco"], limit: 6 },
+			},
+		]);
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 7,
+			hubProfile: "default",
+			hubLayout: null,
+		});
+		getSupplyList.mockResolvedValue({
+			id: "list_1",
+			name: "Supply",
+			items: [{ id: "i1", name: "Milk", isPurchased: false }],
+		});
+		getCargoTagIndex.mockRejectedValue(new Error("cargo tag index failed"));
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		await expect(
+			getMobileHubData({ DB: {} } as never, "org_1", "user_1"),
+		).rejects.toThrow("cargo tag index failed");
 	});
 });

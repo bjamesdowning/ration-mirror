@@ -124,7 +124,8 @@ export async function getMobileHubData(
 		}),
 	]);
 
-	// Tag enrichment is best-effort — empty filters beat a full Hub 500.
+	// Tag pickers are best-effort. cargoTagIndex is critical when the supply
+	// widget filters by cargo tags — an empty index would wipe the filtered list.
 	const [mealTagsResult, cargoSlugsResult, cargoTagIndexResult] =
 		await Promise.allSettled([
 			getDistinctMealTags(db, organizationId),
@@ -142,11 +143,20 @@ export async function getMobileHubData(
 		[] as string[],
 		"availableCargoTags",
 	).sort();
-	const cargoTagIndex = settledOrEmpty(
-		cargoTagIndexResult,
-		[] as Awaited<ReturnType<typeof getCargoTagIndex>>,
-		"cargoTagIndex",
-	);
+
+	let cargoTagIndex: Awaited<ReturnType<typeof getCargoTagIndex>>;
+	if (supplyTagFilterActive) {
+		if (cargoTagIndexResult.status === "rejected") {
+			throw cargoTagIndexResult.reason;
+		}
+		cargoTagIndex = cargoTagIndexResult.value;
+	} else {
+		cargoTagIndex = settledOrEmpty(
+			cargoTagIndexResult,
+			[] as Awaited<ReturnType<typeof getCargoTagIndex>>,
+			"cargoTagIndex",
+		);
+	}
 
 	const { mealMatches, partialMealMatches, snackMatches } = hubMatches;
 	// Only queried when the widget isn't tag-filtered — see supplyTagFilterActive above.

@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { assertExistingUserForSignIn } from "~/lib/auth-sign-in-guard.server";
 import {
 	buildSignupIntentCookie,
 	clearSignupIntentForEmail,
@@ -88,6 +89,7 @@ export async function prepareWebSignupIntent(
 	if (!authRequest.isSignUp) {
 		// Sign In must not inherit a previously planted Sign Up intent for this email.
 		if (authRequest.kind === "magicLink" && authRequest.email.includes("@")) {
+			await assertExistingUserForSignIn(env.DB, authRequest.email);
 			await clearSignupIntentForEmail(env.RATION_KV, authRequest.email);
 		}
 		return { setCookie: null };

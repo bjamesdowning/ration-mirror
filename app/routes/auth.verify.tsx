@@ -55,7 +55,19 @@ const ERROR_MESSAGES: Record<string, string> = {
 	ATTEMPTS_EXCEEDED: "Too many attempts. Please request a new sign-in link.",
 	invalid_request:
 		"This mobile sign-in handoff expired or was opened on the wrong device. Request a new link from the app on the same device, then tap Continue.",
+	signup_disabled:
+		"No account found for this email. Create an account and accept the Terms of Service first, then request a new sign-in link.",
+	account_not_found:
+		"No account found for this email. Create an account and accept the Terms of Service first, then request a new sign-in link.",
+	new_user_signup_disabled:
+		"No account found for this email. Create an account and accept the Terms of Service first, then request a new sign-in link.",
 };
+
+const ACCOUNT_MISSING_ERRORS = new Set([
+	"signup_disabled",
+	"account_not_found",
+	"new_user_signup_disabled",
+]);
 
 export default function AuthVerify() {
 	const [searchParams] = useSearchParams();
@@ -113,7 +125,9 @@ export default function AuthVerify() {
 								</svg>
 							</div>
 							<h1 className="text-display text-xl text-carbon mb-3">
-								Link Invalid
+								{error && ACCOUNT_MISSING_ERRORS.has(error)
+									? "No account found"
+									: "Link Invalid"}
 							</h1>
 							<p className="text-sm text-muted mb-6 leading-relaxed">
 								{errorMessage}
@@ -122,7 +136,9 @@ export default function AuthVerify() {
 								to="/"
 								className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
 							>
-								Request a new link
+								{error && ACCOUNT_MISSING_ERRORS.has(error)
+									? "Create an account"
+									: "Request a new link"}
 							</Link>
 						</>
 					) : (

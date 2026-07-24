@@ -160,8 +160,14 @@ final class AuthManager {
             body["tosAccepted"] = true
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: req)
-        try Self.ensureOK(data: data, response: response)
+        do {
+            let (data, response) = try await session.data(for: req)
+            try Self.ensureOK(data: data, response: response)
+        } catch {
+            // Drop unused verifier so a failed Sign In (e.g. account_not_found) does not leave PKCE state.
+            Keychain.delete(Self.pkceVerifierKey)
+            throw error
+        }
     }
 
     /// Exchange the `ration://auth/callback?code=...` code for tokens, proving

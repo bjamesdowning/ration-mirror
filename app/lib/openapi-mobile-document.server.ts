@@ -147,6 +147,25 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 								},
 							},
 						},
+						"404": {
+							description:
+								"Sign In only: no account for this email (create an account first). No email is sent.",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: { type: "string" },
+											code: {
+												type: "string",
+												enum: ["account_not_found"],
+											},
+										},
+										required: ["error", "code"],
+									},
+								},
+							},
+						},
 					},
 				},
 			},

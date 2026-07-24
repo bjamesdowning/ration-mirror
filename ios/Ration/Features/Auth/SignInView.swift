@@ -41,11 +41,15 @@ private struct AppleSignInButton: UIViewRepresentable {
 
 private struct AuthModePicker: View {
     @Binding var mode: AuthFlowMode
+    /// Called only when the user taps a different mode (not programmatic switches).
+    var onUserSelect: ((AuthFlowMode) -> Void)?
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(AuthFlowMode.allCases) { option in
                 Button {
+                    guard mode != option else { return }
+                    onUserSelect?(option)
                     mode = option
                 } label: {
                     Text(option.pickerLabel)
@@ -107,10 +111,9 @@ struct SignInView: View {
                     if linkSent {
                         sentState
                     } else {
-                        AuthModePicker(mode: $mode)
-                            .onChange(of: mode) { _, _ in
-                                resetFormForModeChange()
-                            }
+                        AuthModePicker(mode: $mode) { _ in
+                            resetFormForModeChange()
+                        }
 
                         formState
                     }
@@ -400,6 +403,9 @@ struct SignInView: View {
                 tosAccepted: tosAccepted
             )
             linkSent = true
+        } catch let error as APIError where error.code == "account_not_found" {
+            errorMessage = error.errorDescription
+            mode = .signUp
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

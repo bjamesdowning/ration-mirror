@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.2.49**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.3.0**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -198,7 +198,7 @@ Ration/
 Google (`GoogleSignIn-iOS` SPM) obtain provider ID tokens natively. The app calls
 `POST /auth/social` with the token (and Apple nonce) plus `intent: signIn | signUp`;
 the server verifies via Better Auth and returns the same JWT pair as magic-link auth.
-**Sign In** never creates an account (`account_not_found` prompts switching to Create Account).
+**Sign In** never creates an account (`account_not_found` prompts switching to Create Account for magic link and social — before any email is sent on magic-link Sign In).
 **Create Account** requires ToS acceptance (`tosAccepted: true`) before provisioning.
 Configure:
 
@@ -320,6 +320,8 @@ read-only list/detail chips are unchanged.
 **Phase 2 scalability & polish (iOS 1.2.48):** API DTOs carved from `Models.swift` into domain files under `Core/Models/`; AskViewModel split into `+Socket`/`+Stream`/`+Briefing`/`+Snapshot` extensions; remaining embedded VMs extracted (Settings/Billing/CargoDetail/Scan); typed `MainTab` + DeepLinkRouter; `NextActionDismissStore.clearAll` on logout; recipe WK `about:blank` allow; ShareLink create/revoke cancellation; broader 401 no-replay tests; Hub/Billing/multipart/cook policy seams; Supply/Manifest VoiceOver combine + `@ScaledMetric` on key 44pt controls; branded `UILaunchScreen` (`LaunchBackground` + `RationMark`); `Localizable.xcstrings` chrome tranche (tabs/Settings/Paywall).
 
 **Best-in-class follow-on (iOS 1.2.49):** Owned concurrency on Galley/Supply/Cargo (`.task(id:)` filter reloads + VM `mutationTask`/`cancelAll`); `MealDetailView` extracted; `MutationRetry` for post-401 mutation replay; `CopilotTurnReducer` pure stream gates; `RationAPI` domain extensions; sheet VMs extracted; String Catalog + Hub/Paywall a11y; PrivacyInfo Name/Purchase History; multipart filename sanitize + AuthImage in-flight cancel on logout.
+
+**Magic-link Sign In UX (iOS 1.3.0):** Unknown emails on Sign In get immediate `account_not_found` (no email sent) and the app switches to Create Account — matching social Sign In.
 
 **Copilot stacked dock (v1.5.22):** `CopilotBottomDock` unifies Copilot input and tab action FABs in a single glass overlay above the tab bar. When expanded, the input bar spans full width and the tab FAB sits above it (trailing); scroll down to collapse the bar to a chat chip and the FAB lowers to the bottom-right row. Tab actions register via `.tabDockAction(tag:)` (`TabDockContext`) instead of per-tab `safeAreaInset` FABs — eliminating the blank dead zone from stacked insets. `List` surfaces use `.copilotDockScrollMargins` (`contentMargins` + `CopilotDockLayout`); plain `ScrollView` content (Hub widgets) uses `.copilotDockContentPadding` (bottom padding on scroll content) so scrolling stays responsive. Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel`.
 

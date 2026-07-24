@@ -8,6 +8,24 @@ type FlowState = "idle" | "sending" | "sent" | "error";
 type AuthMode = "signUp" | "signIn";
 type SocialProvider = "google" | "apple";
 
+/** Pull Better Auth / better-fetch error codes from returned or thrown shapes. */
+function magicLinkErrorCode(error: unknown): string {
+	if (!error || typeof error !== "object") return "";
+	const record = error as {
+		code?: unknown;
+		error?: { code?: unknown } | string;
+	};
+	if (typeof record.code === "string") return record.code;
+	if (
+		record.error &&
+		typeof record.error === "object" &&
+		typeof record.error.code === "string"
+	) {
+		return record.error.code;
+	}
+	return "";
+}
+
 interface AuthWidgetProps {
 	/** Default mode to display. Defaults to signUp for homepage. */
 	defaultMode?: AuthMode;
@@ -103,25 +121,34 @@ export function AuthWidget({
 
 			if (error) {
 				setFlowState("error");
-				const code =
-					typeof error === "object" &&
-					error &&
-					"code" in error &&
-					typeof (error as { code?: unknown }).code === "string"
-						? (error as { code: string }).code
-						: "";
-				setErrorMsg(
-					code === "signup_disabled" || code === "USER_NOT_FOUND"
-						? "No account found. Switch to Create Account."
-						: "Something went wrong. Please try again.",
-				);
+				const code = magicLinkErrorCode(error);
+				const noAccount =
+					code === "signup_disabled" ||
+					code === "USER_NOT_FOUND" ||
+					code === "account_not_found";
+				if (noAccount) {
+					setErrorMsg("No account found. Switch to Create Account.");
+					setMode("signUp");
+				} else {
+					setErrorMsg("Something went wrong. Please try again.");
+				}
 				return;
 			}
 
 			setFlowState("sent");
 		} catch (err) {
 			setFlowState("error");
-			setErrorMsg("Something went wrong. Please try again.");
+			const code = magicLinkErrorCode(err);
+			if (
+				code === "account_not_found" ||
+				code === "signup_disabled" ||
+				code === "USER_NOT_FOUND"
+			) {
+				setErrorMsg("No account found. Switch to Create Account.");
+				setMode("signUp");
+			} else {
+				setErrorMsg("Something went wrong. Please try again.");
+			}
 			log.error("Magic link request failed", {
 				message: err instanceof Error ? err.message : "Unknown error",
 			});

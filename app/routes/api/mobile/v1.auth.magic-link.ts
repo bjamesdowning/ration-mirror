@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import { getAuth } from "~/lib/auth.server";
+import { assertExistingUserForSignIn } from "~/lib/auth-sign-in-guard.server";
 import { handleApiError } from "~/lib/error-handler";
 import { storeMobilePendingHandoff } from "~/lib/mobile/pending-handoff.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -38,10 +39,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const { email, codeChallenge, intent } = parsed;
 		const env = context.cloudflare.env;
 
-		if (intent === "signUp") {
-			await putSignupIntentForEmail(env.RATION_KV, email);
-		} else {
+		if (intent === "signIn") {
+			// Refuse unknown emails before handoff / email send (matches social Sign In).
+			await assertExistingUserForSignIn(env.DB, email);
 			await clearSignupIntentForEmail(env.RATION_KV, email);
+		} else {
+			await putSignupIntentForEmail(env.RATION_KV, email);
 		}
 
 		const auth = getAuth(env);

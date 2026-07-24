@@ -15,7 +15,6 @@ import {
 	MobileCargoListQuerySchema,
 	MobileCreateCargoSchema,
 } from "~/lib/schemas/mobile/cargo";
-import { tagsToSlugs } from "~/lib/tags.server";
 import type { Route } from "./+types/v1.cargo";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -69,14 +68,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 					})
 				: null;
 
-		const itemsWithTags = await attachTagsToCargo(
+		const items = await attachTagsToCargo(
 			context.cloudflare.env.DB,
 			page.items,
 		);
-		const items = itemsWithTags.map((item) => ({
-			...item,
-			tags: tagsToSlugs(item.tags),
-		}));
 
 		return {
 			...paginatedResponse(items, nextCursor),
@@ -144,7 +139,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			result.item,
 		]);
 		return {
-			item: { ...withTags, tags: tagsToSlugs(withTags.tags) },
+			item: withTags,
 		};
 	} catch (e) {
 		return handleApiError(e);

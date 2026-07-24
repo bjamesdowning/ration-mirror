@@ -185,12 +185,7 @@ struct CargoDetailView: View {
                 Text("Tags").rationHeadline()
                 FlowLayout(spacing: 8) {
                     ForEach(tags) { tag in
-                        Text(tag.name)
-                            .rationCaption()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Theme.platinum)
-                            .clipShape(Capsule())
+                        TelemetryTagChip(tag: tag)
                     }
                 }
             }
@@ -298,12 +293,7 @@ struct CargoDetailView: View {
             if !meal.tags.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(meal.tags) { tag in
-                        Text(tag.name)
-                            .rationCaption()
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Theme.platinum)
-                            .clipShape(Capsule())
+                        TelemetryTagChip(tag: tag)
                     }
                 }
             }

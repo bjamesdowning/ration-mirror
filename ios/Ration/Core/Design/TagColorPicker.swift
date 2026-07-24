@@ -12,11 +12,27 @@ enum TagPalette {
         "#64748B",
     ]
 
+    /// Background opacity matching web `TagChip` (`${hex}20` ≈ 12.5%).
+    static let chipBackgroundOpacity: Double = 0.125
+
     static func swiftUIColor(from hex: String?) -> Color {
         guard let hex, let value = parseHexColor(hex) else {
             return Theme.hyperGreen
         }
         return Color(hex: value)
+    }
+
+    /// Foreground for list/detail tag chips; nil/invalid → Hyper-Green.
+    static func chipForeground(from hex: String?) -> Color {
+        swiftUIColor(from: hex)
+    }
+
+    /// Tinted chip background; nil/invalid → theme default Hyper-Green wash.
+    static func chipBackground(from hex: String?) -> Color {
+        guard let hex, parseHexColor(hex) != nil else {
+            return Theme.tagChipBackground
+        }
+        return swiftUIColor(from: hex).opacity(chipBackgroundOpacity)
     }
 
     static func parseHexColor(_ hex: String) -> UInt32? {

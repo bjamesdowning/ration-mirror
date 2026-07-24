@@ -698,7 +698,7 @@ Tags are **organization-wide** labels stored in the `tag` registry (`drizzle/003
 - **Create on use** — Assigning a tag on any cargo or meal form auto-creates the registry entry (`resolveTagIds` in `app/lib/tags.server.ts`).
 - **Filter** — Cargo and Galley support multi-tag filters (OR by default; AND mode available for hub widgets via `tagFilterMode`).
 - **Manage** — **Settings → Group → Tags** lists all org tags with usage counts. Owners/admins can rename, recolor, categorize, merge duplicates, delete unused tags, or run bulk unused cleanup.
-- **API** — Web: `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/tags/:id/merge`. Mobile: `GET/POST /api/mobile/v1/tags` plus matching `:id` routes.
+- **API** — Web: `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/tags/:id/merge`. Mobile: `GET/POST /api/mobile/v1/tags` plus matching `:id` routes. Cargo and meal list/detail payloads include full tag records (`id`, `slug`, `name`, `color`, `category`) so clients can render chip colors.
 
 ---
 

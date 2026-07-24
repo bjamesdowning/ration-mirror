@@ -23,8 +23,7 @@ enum Theme {
     /// Surface — frosted panels.
     static let surface = adaptive(light: 0xFFFFFF, dark: 0x1A1A1A)
 
-    /// Hyper-green list tag chips (Telemetry Strip).
-    static let tagChipForeground = hyperGreen
+    /// Hyper-green list tag chips (Telemetry Strip fallback when tag has no color).
     static let tagChipBackground = adaptiveTagChipBackground(light: 0.1, dark: 0.15)
 
     private static func uiColor(hex: UInt32, alpha: CGFloat = 1.0) -> UIColor {

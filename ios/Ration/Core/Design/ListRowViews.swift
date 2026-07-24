@@ -3,15 +3,26 @@ import SwiftUI
 // MARK: - Shared telemetry strip primitives
 
 struct TelemetryTagChip: View {
-    let tag: String
+    let name: String
+    let color: String?
+
+    init(tag: Tag) {
+        name = tag.name
+        color = tag.color
+    }
+
+    init(name: String, color: String? = nil) {
+        self.name = name
+        self.color = color
+    }
 
     var body: some View {
-        Text(tag)
+        Text(name)
             .font(Typography.caption())
-            .foregroundStyle(Theme.tagChipForeground)
+            .foregroundStyle(TagPalette.chipForeground(from: color))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Theme.tagChipBackground)
+            .background(TagPalette.chipBackground(from: color))
             .clipShape(Capsule())
     }
 }
@@ -72,7 +83,7 @@ struct CargoRowView: View {
                 if !item.tags.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(item.tags.prefix(2)) { tag in
-                            TelemetryTagChip(tag: tag.name)
+                            TelemetryTagChip(tag: tag)
                         }
                         if item.tags.count > 2 {
                             Text("+\(item.tags.count - 2)")
@@ -205,7 +216,7 @@ struct MealRowView: View {
             if !meal.tags.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(meal.tags.prefix(2)) { tag in
-                        TelemetryTagChip(tag: tag.name)
+                        TelemetryTagChip(tag: tag)
                     }
                     if meal.tags.count > 2 {
                         Text("+\(meal.tags.count - 2)")

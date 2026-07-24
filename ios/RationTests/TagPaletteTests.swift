@@ -28,4 +28,16 @@ final class TagPaletteTests: XCTestCase {
     func testSanitizedColorNilForNilInput() {
         XCTAssertNil(TagPalette.sanitizedColor(nil))
     }
+
+    func testChipBackgroundOpacityMatchesWebAlpha() {
+        XCTAssertEqual(TagPalette.chipBackgroundOpacity, 0.125, accuracy: 0.0001)
+    }
+
+    func testParseHexColorAcceptsPinkPaletteSwatch() {
+        XCTAssertEqual(TagPalette.parseHexColor("#EC4899"), 0xEC4899)
+    }
+
+    func testParseHexColorRejectsEmptyStringForChipFallback() {
+        XCTAssertNil(TagPalette.parseHexColor(""))
+    }
 }

@@ -1,5 +1,10 @@
 import { data } from "react-router";
-import { getCargoItem, jettisonItem, updateItem } from "~/lib/cargo.server";
+import {
+	attachTagsToCargo,
+	getCargoItem,
+	jettisonItem,
+	updateItem,
+} from "~/lib/cargo.server";
 import { handleApiError } from "~/lib/error-handler";
 import { getMealsForCargo } from "~/lib/meals.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
@@ -20,14 +25,17 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		);
 		if (!item) throw data({ error: "Not Found" }, { status: 404 });
 
-		const connectedMeals = await getMealsForCargo(
-			context.cloudflare.env.DB,
-			organizationId,
-			id,
-			item.name,
-		);
+		const [[itemWithTags], connectedMeals] = await Promise.all([
+			attachTagsToCargo(context.cloudflare.env.DB, [item]),
+			getMealsForCargo(
+				context.cloudflare.env.DB,
+				organizationId,
+				id,
+				item.name,
+			),
+		]);
 
-		return { item, connectedMeals };
+		return { item: itemWithTags, connectedMeals };
 	} catch (e) {
 		return handleApiError(e);
 	}
@@ -76,7 +84,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				input,
 			);
 			if (!updated) throw data({ error: "Not Found" }, { status: 404 });
-			return { item: updated };
+			const [withTags] = await attachTagsToCargo(context.cloudflare.env.DB, [
+				updated,
+			]);
+			return { item: withTags };
 		}
 
 		throw data({ error: "Method not allowed" }, { status: 405 });

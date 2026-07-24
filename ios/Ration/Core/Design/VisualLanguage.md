@@ -21,7 +21,7 @@ Symbol-first UI patterns for Ration native. Piloted on Supply (v1.4.4), rolled o
 | `SyncIndicatorIcon` | `SyncIndicator.swift` | Offline/stale toolbar affordance |
 | `StaleDataBanner` | `SyncIndicator.swift` | Muted last-updated caption after a failed background refresh (suppressed during grace/refresh) |
 | `ListCountHeader` | `ListCountHeader.swift` | Trailing inventory total on Cargo, Galley, Manifest |
-| `TelemetryTagChip` | `ListRowViews.swift` | Hyper-green tag chips (`Theme.tagChipForeground` / `Theme.tagChipBackground`) |
+| `TelemetryTagChip` | `ListRowViews.swift` | Color-aware tag chips via `TagPalette` (hex text + ~12.5% tint; Hyper-Green fallback) |
 | `CargoRowView` / `MealRowView` | `ListRowViews.swift` | Unified Telemetry Strip list rows |
 | `ListSwipeActions` | `ListSwipeActions.swift` | Shared inventory swipe modifiers (Cargo, Galley) |
 | `ManifestEntryRow` | `ListRowViews.swift` | Manifest day entries (slot glyph + consume) |

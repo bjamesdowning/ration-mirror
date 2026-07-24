@@ -151,6 +151,8 @@ struct SupplyPreviewWidget: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(isChecked)
+                            .accessibilityLabel(isChecked ? "Purchased \(item.name)" : "Mark \(item.name) purchased")
+                            .accessibilityAddTraits(isChecked ? [.isSelected] : [])
 
                             if let cargoId, !isChecked, let onSelectCargo {
                                 Button {

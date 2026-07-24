@@ -448,7 +448,7 @@ struct SupplyView: View {
                         cargoLinkRows: model.cargoLinkRows,
                         onCheckOff: {
                             if item.isPurchased {
-                                Task {
+                                model.runMutation {
                                     await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                                 }
                             } else {
@@ -456,13 +456,13 @@ struct SupplyView: View {
                             }
                         },
                         onCheck: {
-                            Task {
+                            model.runMutation {
                                 await model.toggle(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                             }
                         },
                         onSnooze: { snoozeItem = item },
                         onDelete: {
-                            Task {
+                            model.runMutation {
                                 await model.deleteItem(item, api: env.api, snapshots: env.snapshots, online: env.network.isOnline, organizationId: organizationId)
                             }
                         }

@@ -18,7 +18,14 @@ struct CargoListView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .cargo))"
+        let tags = model.filters.selectedTags.sorted().joined(separator: ",")
+        return [
+            organizationId ?? "nil",
+            isTabActive ? "1" : "0",
+            "\(env.lifecycle.refreshToken(forTab: .cargo))",
+            model.filters.domain?.rawValue ?? "",
+            tags,
+        ].joined(separator: "|")
     }
 
     var body: some View {
@@ -73,12 +80,6 @@ struct CargoListView: View {
                     online: env.network.isOnline,
                     organizationId: organizationId
                 )
-            }
-            .onChange(of: model.filters.domain) { _, _ in
-                Task { await reload(forceRemoteSearch: false, organizationId: organizationId) }
-            }
-            .onChange(of: model.filters.selectedTags) { _, _ in
-                Task { await reload(forceRemoteSearch: false, organizationId: organizationId) }
             }
             .background(Theme.ceramic)
             .toolbar {
@@ -150,8 +151,9 @@ struct CargoListView: View {
         }
         .task(id: loadTaskKey) {
             guard isTabActive, let organizationId else { return }
-            if isEmpty { await reload(forceRemoteSearch: false, organizationId: organizationId) }
+            await reload(forceRemoteSearch: false, organizationId: organizationId)
         }
+        .onDisappear { model.cancelLoads() }
     }
 
     private func reload(forceRemoteSearch: Bool = false, organizationId: String? = nil) async {
@@ -216,7 +218,7 @@ struct CargoListView: View {
                         contextLabel: "for Supply restock",
                         isClearing: model.isClearingSelections
                     ) {
-                        Task { await model.clearSelections(api: env.api) }
+                        model.runMutation { await model.clearSelections(api: env.api) }
                     }
                 }
                 .listRowInsets(EdgeInsets())
@@ -260,7 +262,7 @@ struct CargoListView: View {
                             isSelectedForSupply: model.isCargoSelected(item.id),
                             onSupplyToggle: {
                                 if model.isCargoSelected(item.id) {
-                                    Task { await model.toggleRestock(item, api: env.api) }
+                                    model.runMutation { await model.toggleRestock(item, api: env.api) }
                                 } else {
                                     restockItem = item
                                 }
@@ -270,13 +272,13 @@ struct CargoListView: View {
                         .cargoTrailingSwipeActions(
                             quantity: item.quantity,
                             onMarkEmpty: {
-                                Task {
+                                model.runMutation {
                                     await model.markEmpty(item, api: env.api)
                                     env.notifyCargoDataChanged()
                                 }
                             },
                             onDelete: {
-                                Task {
+                                model.runMutation {
                                     await model.delete(item, api: env.api)
                                     env.notifyCargoDataChanged()
                                 }
@@ -294,7 +296,7 @@ struct CargoListView: View {
                         .inventoryLeadingSwipeActions(
                             isSelectedForSupply: model.isCargoSelected(result.id),
                             onSupplyToggle: {
-                                Task { await handleSearchSupplyToggle(result) }
+                                model.runMutation { await handleSearchSupplyToggle(result) }
                             },
                             onEdit: {
                                 Task { await handleSearchEdit(result) }
@@ -303,13 +305,13 @@ struct CargoListView: View {
                         .cargoTrailingSwipeActions(
                             quantity: result.quantity,
                             onMarkEmpty: {
-                                Task {
+                                model.runMutation {
                                     await model.markEmpty(id: result.id, api: env.api)
                                     env.notifyCargoDataChanged()
                                 }
                             },
                             onDelete: {
-                                Task {
+                                model.runMutation {
                                     await model.delete(id: result.id, api: env.api)
                                     env.notifyCargoDataChanged()
                                 }

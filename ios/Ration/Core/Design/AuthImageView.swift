@@ -37,7 +37,11 @@ final class AuthImageLoader {
         }
         inFlight[url] = task
         let result = await task.value
-        inFlight[url] = nil
+        if inFlight[url] == task {
+            inFlight[url] = nil
+        }
+        // Check the fetch task itself — caller Task.isCancelled is unrelated (logout race).
+        guard !task.isCancelled else { return nil }
         if let result {
             memoryCache.setObject(result, forKey: url as NSURL, cost: result.authImageCost)
         }
@@ -52,6 +56,10 @@ final class AuthImageLoader {
     /// so another user signing in on the same device can't see a stale
     /// cached org logo/avatar rendered from the previous account's session.
     func clearAll() {
+        for (_, task) in inFlight {
+            task.cancel()
+        }
+        inFlight.removeAll()
         memoryCache.removeAllObjects()
     }
 

@@ -24,12 +24,22 @@ final class SupplyViewModel {
     private let pollDelayNanoseconds: UInt64 = 1_500_000_000
     /// Bumped on cancel / new work so superseded scans cannot clear a newer spinner.
     private var workGeneration = 0
+    private var mutationTask: Task<Void, Never>?
 
     func cancelActiveWork() {
         workGeneration += 1
+        mutationTask?.cancel()
+        mutationTask = nil
         share.cancel()
         isScanning = false
         scanStatusMessage = nil
+    }
+
+    func runMutation(_ work: @escaping @MainActor () async -> Void) {
+        mutationTask?.cancel()
+        mutationTask = Task {
+            await work()
+        }
     }
 
     #if DEBUG
@@ -171,8 +181,11 @@ final class SupplyViewModel {
             list = SupplyList(id: current.id, name: current.name, items: updatedItems)
             guard online else { return }
             do {
-                _ = try await api.updateSupplyItem(item.id, quantity: nil, unit: nil, isPurchased: false)
+                _ = try await MutationRetry.once {
+                    try await api.updateSupplyItem(item.id, quantity: nil, unit: nil, isPurchased: false)
+                }
             } catch {
+                guard !Task.isCancelled else { return }
                 await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             }
         } else {
@@ -208,8 +221,11 @@ final class SupplyViewModel {
         checkProgressHaptic()
         guard online else { return }
         do {
-            _ = try await api.updateSupplyItem(item.id, quantity: quantity, unit: unit, isPurchased: true)
+            _ = try await MutationRetry.once {
+                try await api.updateSupplyItem(item.id, quantity: quantity, unit: unit, isPurchased: true)
+            }
         } catch {
+            guard !Task.isCancelled else { return }
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -419,10 +435,14 @@ final class SupplyViewModel {
     func deleteItem(_ item: SupplyItem, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         guard online else { return }
         do {
-            try await api.deleteSupplyItem(item.id)
+            try await MutationRetry.once {
+                try await api.deleteSupplyItem(item.id)
+            }
+            guard !Task.isCancelled else { return }
             Haptics.light()
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }

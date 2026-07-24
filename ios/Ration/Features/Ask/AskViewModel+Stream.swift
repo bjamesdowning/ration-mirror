@@ -4,14 +4,12 @@ extension AskViewModel {
     // MARK: - Stream / tool results
 
     func shouldAcceptObservedEvent(_ event: CopilotStreamEvent) -> Bool {
-        isTurnActive
-            || isAwaitingApproval
-            || expectingApprovalContinuation
-            || event.type == "message_end"
-            || event.type == "error"
-            || event.type == "approval_request"
-            || event.type == "session_usage_update"
-            || event.type == "session_limit_warning"
+        CopilotTurnReducer.shouldAcceptObservedEvent(
+            isTurnActive: isTurnActive,
+            isAwaitingApproval: isAwaitingApproval,
+            expectingApprovalContinuation: expectingApprovalContinuation,
+            eventType: event.type
+        )
     }
 
     func apply(_ event: CopilotStreamEvent) {
@@ -53,23 +51,17 @@ extension AskViewModel {
         case "reasoning_end":
             appendReasoningDelta("", mode: .end, messageId: event.messageId)
         case "message_end":
-            // Stream finish/done still arrives while parked on host approval —
-            // keep the Confirm card (do not complete the turn).
-            if isAwaitingApproval {
-                return
-            }
-            if case .awaitingApproval = state {
-                return
-            }
-            // After Approve, ignore late pause-stream terminals until continuation
-            // delivers tool/text (otherwise empty final / dropped summary).
-            if expectingApprovalContinuation && !seenPostApprovalActivity {
-                return
-            }
-            if expectingApprovalContinuation,
-               let pauseId = pauseApprovalRequestId,
-               let endedId = event.messageId,
-               pauseId == endedId {
+            if CopilotTurnReducer.shouldIgnoreMessageEnd(
+                isAwaitingApproval: isAwaitingApproval,
+                stateIsAwaitingApproval: {
+                    if case .awaitingApproval = state { return true }
+                    return false
+                }(),
+                expectingApprovalContinuation: expectingApprovalContinuation,
+                seenPostApprovalActivity: seenPostApprovalActivity,
+                pauseApprovalRequestId: pauseApprovalRequestId,
+                endedMessageId: event.messageId
+            ) {
                 return
             }
             expectingApprovalContinuation = false

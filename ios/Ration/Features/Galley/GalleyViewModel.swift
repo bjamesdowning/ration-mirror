@@ -71,7 +71,63 @@ final class GalleyViewModel {
     }
 
     private var searchTask: Task<Void, Never>?
+    private var mutationTask: Task<Void, Never>?
+    private var cookTask: Task<CookOutcome, Never>?
+    private var availabilityTask: Task<Void, Never>?
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000
+    private static let availabilityDebounceNanoseconds: UInt64 = 1_000_000_000
+
+    func cancelLoads() {
+        searchTask?.cancel()
+        availabilityTask?.cancel()
+        searchTask = nil
+        availabilityTask = nil
+    }
+
+    func cancelAll() {
+        cancelLoads()
+        mutationTask?.cancel()
+        cookTask?.cancel()
+        mutationTask = nil
+        cookTask = nil
+    }
+
+    func scheduleAvailabilityRefresh(api: RationAPI, online: Bool) {
+        availabilityTask?.cancel()
+        availabilityTask = Task {
+            try? await Task.sleep(nanoseconds: Self.availabilityDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await refreshAvailabilityMatches(api: api, online: online)
+        }
+    }
+
+    func runMutation(_ work: @escaping @MainActor () async -> Void) {
+        mutationTask?.cancel()
+        cookTask?.cancel()
+        mutationTask = Task {
+            await work()
+        }
+    }
+
+    func runCook(
+        _ mealId: String,
+        servings: Int? = nil,
+        confirmInsufficient: Bool = false,
+        api: RationAPI
+    ) async -> CookOutcome {
+        mutationTask?.cancel()
+        cookTask?.cancel()
+        let task = Task { @MainActor in
+            await cook(
+                mealId,
+                servings: servings,
+                confirmInsufficient: confirmInsufficient,
+                api: api
+            )
+        }
+        cookTask = task
+        return await task.value
+    }
 
     var listHeaderCount: Int {
         if isMatchMode {
@@ -310,11 +366,14 @@ final class GalleyViewModel {
         api: RationAPI
     ) async -> CookOutcome {
         do {
-            let result = try await api.cookMeal(
-                id: mealId,
-                servings: servings,
-                confirmInsufficient: confirmInsufficient ? true : nil
-            )
+            let result = try await MutationRetry.once {
+                try await api.cookMeal(
+                    id: mealId,
+                    servings: servings,
+                    confirmInsufficient: confirmInsufficient ? true : nil
+                )
+            }
+            guard !Task.isCancelled else { return .failed }
             if result.requiresConfirmation == true,
                let missing = result.missingIngredients,
                !missing.isEmpty,
@@ -330,7 +389,10 @@ final class GalleyViewModel {
                 partialCook: result.partialCook ?? false,
                 skippedIngredients: result.skippedIngredients ?? []
             )
+        } catch is CancellationError {
+            return .failed
         } catch {
+            guard !Task.isCancelled else { return .failed }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return .failed
         }
@@ -344,14 +406,20 @@ final class GalleyViewModel {
             activeMealIds.remove(mealId)
         }
         do {
-            let response = try await api.toggleMealActive(id: mealId)
+            let response = try await MutationRetry.once {
+                try await api.toggleMealActive(id: mealId)
+            }
+            guard !Task.isCancelled else { return }
             if response.isActive {
                 activeMealIds.insert(mealId)
             } else {
                 activeMealIds.remove(mealId)
             }
             Haptics.light()
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             if activating {
                 activeMealIds.remove(mealId)
             } else {
@@ -368,9 +436,21 @@ final class GalleyViewModel {
         let previous = activeMealIds
         activeMealIds = []
         do {
-            _ = try await api.clearMealSelections()
+            _ = try await MutationRetry.once {
+                try await api.clearMealSelections()
+            }
+            guard !Task.isCancelled else {
+                activeMealIds = previous
+                return
+            }
             Haptics.light()
+        } catch is CancellationError {
+            activeMealIds = previous
         } catch {
+            guard !Task.isCancelled else {
+                activeMealIds = previous
+                return
+            }
             activeMealIds = previous
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -378,11 +458,17 @@ final class GalleyViewModel {
 
     func deleteMeal(_ mealId: String, api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         do {
-            try await api.deleteMeal(mealId)
+            try await MutationRetry.once {
+                try await api.deleteMeal(mealId)
+            }
+            guard !Task.isCancelled else { return }
             activeMealIds.remove(mealId)
             Haptics.light()
             await load(api: api, snapshots: snapshots, online: online, organizationId: organizationId)
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }

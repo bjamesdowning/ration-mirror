@@ -42,12 +42,30 @@ final class CargoViewModel {
     private(set) var inventoryTotal = 0
     private var rawItems: [CargoItem] = []
     private var searchTask: Task<Void, Never>?
+    private var mutationTask: Task<Void, Never>?
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000
     #if DEBUG
     static var searchDebounceNanosecondsForTesting: UInt64?
     #endif
     private static let remoteSearchMinLength = 2
 
+    func cancelLoads() {
+        searchTask?.cancel()
+        searchTask = nil
+    }
+
+    func cancelAll() {
+        cancelLoads()
+        mutationTask?.cancel()
+        mutationTask = nil
+    }
+
+    func runMutation(_ work: @escaping @MainActor () async -> Void) {
+        mutationTask?.cancel()
+        mutationTask = Task {
+            await work()
+        }
+    }
     private static var effectiveSearchDebounceNanoseconds: UInt64 {
         #if DEBUG
         searchDebounceNanosecondsForTesting ?? searchDebounceNanoseconds
@@ -274,14 +292,20 @@ final class CargoViewModel {
             activeCargoIds.remove(item.id)
         }
         do {
-            let response = try await api.toggleCargoRestock(id: item.id, quantity: quantity)
+            let response = try await MutationRetry.once {
+                try await api.toggleCargoRestock(id: item.id, quantity: quantity)
+            }
+            guard !Task.isCancelled else { return }
             if response.isActive {
                 activeCargoIds.insert(item.id)
             } else {
                 activeCargoIds.remove(item.id)
             }
             Haptics.light()
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             if activating {
                 activeCargoIds.remove(item.id)
             } else {
@@ -298,9 +322,21 @@ final class CargoViewModel {
         let previous = activeCargoIds
         activeCargoIds = []
         do {
-            _ = try await api.clearCargoSelections()
+            _ = try await MutationRetry.once {
+                try await api.clearCargoSelections()
+            }
+            guard !Task.isCancelled else {
+                activeCargoIds = previous
+                return
+            }
             Haptics.light()
+        } catch is CancellationError {
+            activeCargoIds = previous
         } catch {
+            guard !Task.isCancelled else {
+                activeCargoIds = previous
+                return
+            }
             activeCargoIds = previous
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -341,7 +377,14 @@ final class CargoViewModel {
         }
 
         do {
-            let response = try await api.updateCargo(id: id, UpdateCargoRequest(quantity: 0))
+            let response = try await MutationRetry.once {
+                try await api.updateCargo(id: id, UpdateCargoRequest(quantity: 0))
+            }
+            guard !Task.isCancelled else {
+                rawItems = previousRawItems
+                listContent = previousContent
+                return
+            }
             let updated = response.item
             if let idx = rawItems.firstIndex(where: { $0.id == id }) {
                 rawItems[idx] = updated
@@ -394,9 +437,25 @@ final class CargoViewModel {
         }
 
         do {
-            try await api.deleteCargo(id)
+            try await MutationRetry.once {
+                try await api.deleteCargo(id)
+            }
+            guard !Task.isCancelled else {
+                rawItems = previousRawItems
+                listContent = previousContent
+                total = previousTotal
+                inventoryTotal = previousInventoryTotal
+                return
+            }
             Haptics.light()
         } catch {
+            guard !Task.isCancelled else {
+                rawItems = previousRawItems
+                listContent = previousContent
+                total = previousTotal
+                inventoryTotal = previousInventoryTotal
+                return
+            }
             rawItems = previousRawItems
             listContent = previousContent
             total = previousTotal

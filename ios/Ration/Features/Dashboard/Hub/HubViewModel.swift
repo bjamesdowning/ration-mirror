@@ -17,6 +17,12 @@ final class HubViewModel {
     var toggleErrorMessage: String?
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
+    #if DEBUG
+    func setLoadedForTesting(_ data: HubResponse) {
+        state = .loaded(data)
+    }
+    #endif
+
     func load(api: RationAPI, snapshots: SnapshotStore, online: Bool, organizationId: String) async {
         refreshErrorMessage = nil
         let hadCache = await SnapshotRefreshPolicy.restoreIfAvailable(

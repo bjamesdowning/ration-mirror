@@ -38,19 +38,25 @@ final class MultipartFormBodyBuilderTests: XCTestCase {
         XCTAssertEqual(built.contentType, MultipartFormBodyBuilder.contentType(boundary: boundary))
     }
 
-    func testFieldNameImageVariant() {
-        let boundary = "Boundary-IMAGE"
+    func testSanitizesCRLFAndQuotesInFilename() {
+        let boundary = "Boundary-SAFE"
         let built = MultipartFormBodyBuilder.build(
-            fieldName: "image",
-            fileData: Data("pdf-bytes".utf8),
-            filename: "receipt.pdf",
-            mimeType: "application/pdf",
+            fieldName: "image\r\nX-Injected: 1",
+            fileData: Data("x".utf8),
+            filename: "evil\".jpg\r\nContent-Type: text/plain",
+            mimeType: "image/jpeg",
             boundary: boundary
         )
         let body = String(decoding: built.body, as: UTF8.self)
-        XCTAssertTrue(body.contains("name=\"image\""))
-        XCTAssertTrue(body.contains("filename=\"receipt.pdf\""))
-        XCTAssertTrue(body.contains("Content-Type: application/pdf\r\n\r\n"))
-        XCTAssertFalse(body.contains("name=\"avatar\""))
+        // Header injection vectors must not survive as control characters / quotes.
+        XCTAssertFalse(body.contains("\r\nX-Injected"))
+        XCTAssertFalse(body.contains("filename=\"evil\""))
+        XCTAssertFalse(body.contains("\r\nContent-Type: text/plain"))
+        XCTAssertTrue(body.contains("name=\"imageX-Injected: 1\""))
+        XCTAssertTrue(body.contains("filename=\"evil.jpgContent-Type: text/plain\""))
+        XCTAssertEqual(
+            MultipartFormBodyBuilder.sanitizeHeaderToken("", fallback: "upload.bin"),
+            "upload.bin"
+        )
     }
 }

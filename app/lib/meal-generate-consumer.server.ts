@@ -10,7 +10,12 @@ import { buildAllergenPromptBlock, parseAllergens } from "~/lib/allergens";
 import { getUserSettings } from "~/lib/auth.server";
 import { failAiJobWithRefund } from "~/lib/ledger.server";
 import { log } from "~/lib/logging.server";
-import { normalizeForCargoDedup } from "~/lib/matching.server";
+import {
+	buildCargoIndex,
+	buildCargoTokenIndexes,
+	ingredientNeedsVectorFallback,
+	resolveCargoBucketsForIngredient,
+} from "~/lib/matching.server";
 import {
 	callGeminiWithArtifact,
 	runIdempotentAiJob,
@@ -229,12 +234,25 @@ ${customization}
 			),
 		];
 
-		const similarityBatch = await findSimilarCargoBatch(
-			env,
-			organizationId,
-			allIngNames,
-			{ threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH },
+		const cargoIndex = buildCargoIndex(
+			pantryItems.map((p) => ({
+				id: p.id,
+				name: p.name,
+				domain: "food",
+				quantity: p.quantity,
+				unit: p.unit,
+			})),
 		);
+		const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
+		const vectorMissNames = allIngNames.filter((name) =>
+			ingredientNeedsVectorFallback(name, cargoIndex, tokenIndexes),
+		);
+		const similarityBatch =
+			vectorMissNames.length > 0
+				? await findSimilarCargoBatch(env, organizationId, vectorMissNames, {
+						threshold: SIMILARITY_THRESHOLDS.INGREDIENT_MATCH,
+					})
+				: new Map();
 
 		const verifiedRecipes = recipes
 			.map((recipe) => {
@@ -247,32 +265,28 @@ ${customization}
 					if (!ingName) continue;
 					if (isBasic(ingName)) continue;
 
-					const exactMatch = pantryItems.some(
-						(p) =>
-							normalizeForCargoDedup(p.name) ===
-							normalizeForCargoDedup(ingInventoryName),
+					const { matchType } = resolveCargoBucketsForIngredient(
+						ingInventoryName,
+						cargoIndex,
+						tokenIndexes,
+						similarityBatch,
 					);
-					const semanticMatches = similarityBatch.get(ingInventoryName) ?? [];
-					const exists = exactMatch || semanticMatches.length > 0;
-					if (!exists) {
+					if (matchType === "none") {
 						missingIngredients.push(ingName);
 					}
 				}
 
 				const mappedIngredients = ingredients.map((ing) => {
 					const ingInventoryName = ing.inventoryName ?? ing.name ?? "";
-					const exactMatch = pantryItems.find(
-						(p) =>
-							normalizeForCargoDedup(p.name) ===
-							normalizeForCargoDedup(ingInventoryName),
+					const { buckets } = resolveCargoBucketsForIngredient(
+						ingInventoryName,
+						cargoIndex,
+						tokenIndexes,
+						similarityBatch,
 					);
-					const semanticMatches = similarityBatch.get(ingInventoryName) ?? [];
-					const firstSemantic = semanticMatches[0];
-					const pantryMatch =
-						exactMatch ??
-						(firstSemantic
-							? pantryItems.find((p) => p.id === firstSemantic.itemId)
-							: undefined);
+					const pantryMatch = buckets[0]?.original
+						? pantryItems.find((p) => p.id === buckets[0].original.id)
+						: undefined;
 					return {
 						ingredientName: ing.name ?? "unknown",
 						quantity: ing.quantity ?? 1,

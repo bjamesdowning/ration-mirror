@@ -92,4 +92,46 @@ describe("findCargoForDeduction", () => {
 		expect(result.allocations).toEqual([]);
 		expect(result.shortfallInTargetUnit).toBe(4);
 	});
+
+	it("allocates across token-matched oils for generic oil", () => {
+		const orgCargo = [
+			cargoRow({ id: "o1", name: "Olive Oil", quantity: 50, unit: "ml" }),
+			cargoRow({ id: "o2", name: "Sunflower Oil", quantity: 80, unit: "ml" }),
+		];
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"oil",
+			100,
+			"ml",
+			new Map(),
+			false,
+		);
+
+		expect(result.shortfallInTargetUnit).toBe(0);
+		expect(result.allocations).toHaveLength(2);
+		const totalDeducted = result.allocations.reduce(
+			(sum, a) => sum + a.quantityToDeduct,
+			0,
+		);
+		expect(totalDeducted).toBe(100);
+	});
+
+	it("does not deduct peanut butter for butter", () => {
+		const orgCargo = [
+			cargoRow({ id: "pb", name: "Peanut Butter", quantity: 500, unit: "g" }),
+		];
+
+		const result = findCargoForDeduction(
+			orgCargo,
+			"butter",
+			100,
+			"g",
+			new Map(),
+			true,
+		);
+
+		expect(result.allocations).toEqual([]);
+		expect(result.shortfallInTargetUnit).toBe(100);
+	});
 });

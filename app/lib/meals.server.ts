@@ -27,7 +27,17 @@ import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { ITEM_DOMAINS } from "./domain";
 import { normalizeForCargoDedup } from "./matching";
-import type { MissingIngredientDetail } from "./matching.server";
+import type {
+	CargoIndexEntry,
+	CargoTokenIndexes,
+	MissingIngredientDetail,
+} from "./matching.server";
+import {
+	buildCargoIndex,
+	buildCargoTokenIndexes,
+	ingredientNeedsVectorFallback,
+	resolveCargoBucketsForIngredient,
+} from "./matching.server";
 import {
 	chunkArray,
 	chunkedQuery,
@@ -1116,9 +1126,11 @@ export async function deleteMeal(
 
 /**
  * Finds cargo rows to deduct from when ingredient has no cargoId.
- * Uses exact normalizeForCargoDedup match first, then the pre-fetched
- * vector similarity map as fallback. Callers must pre-fetch
- * `prefetchedVectors` via findSimilarCargoBatch before the deduction loop.
+ * Uses shared resolveCargoBucketsForIngredient: exact → token → vector.
+ * Callers should pre-fetch `prefetchedVectors` only for names that still need
+ * Vectorize after exact+token (see ingredientNeedsVectorFallback).
+ * Pass prebuilt `cargoIndex` + `tokenIndexes` from the cook loop to avoid
+ * rebuilding indexes per ingredient.
  * Returns allocations in cargo's native unit for SQL update.
  */
 export function findCargoForDeduction(
@@ -1128,8 +1140,18 @@ export function findCargoForDeduction(
 	targetUnit: SupportedUnit,
 	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
 	allowPartial = false,
+	tokenIndexes?: CargoTokenIndexes,
+	cargoIndex?: Map<string, CargoIndexEntry[]>,
 ): CargoDeductionPlan {
-	const normalizedName = normalizeForCargoDedup(ingredientName);
+	const index = cargoIndex ?? buildCargoIndex(orgCargo);
+	const indexes = tokenIndexes ?? buildCargoTokenIndexes(index.keys());
+	const { buckets, matchType } = resolveCargoBucketsForIngredient(
+		ingredientName,
+		index,
+		indexes,
+		prefetchedVectors,
+	);
+
 	type Candidate = {
 		cargo: CargoIndexRow;
 		qtyInTargetUnit: number;
@@ -1137,12 +1159,10 @@ export function findCargoForDeduction(
 		score: number;
 	};
 	const candidates: Candidate[] = [];
+	const similar = prefetchedVectors.get(ingredientName) ?? [];
 
-	// Exact name match candidates — use canonical conversion so cross-family
-	// (e.g. cargo in grams, recipe in cups) is resolved via ingredient density.
-	for (const item of orgCargo) {
-		const normalizedItem = normalizeForCargoDedup(item.name);
-		if (normalizedItem !== normalizedName) continue;
+	for (const entry of buckets) {
+		const item = entry.original;
 		if (!isCargoUsableForMatching(item.expiresAt)) continue;
 
 		const base = effectiveBaseFields(
@@ -1160,42 +1180,23 @@ export function findCargoForDeduction(
 		);
 		if (qtyInTargetUnit === null) continue;
 
+		let score = 1;
+		if (matchType === "token") score = 0.95;
+		else if (matchType === "vector") {
+			const hit = similar.find(
+				(s) =>
+					s.itemId === item.id ||
+					normalizeForCargoDedup(s.itemName) === entry.normalizedName,
+			);
+			score = hit?.score ?? 0.8;
+		}
+
 		candidates.push({
 			cargo: item,
 			qtyInTargetUnit,
-			isExact: true,
-			score: 1,
+			isExact: matchType === "exact",
+			score,
 		});
-	}
-
-	// Semantic fallback candidates when no exact match found.
-	if (candidates.length === 0) {
-		const similar = prefetchedVectors.get(ingredientName) ?? [];
-		for (const match of similar) {
-			const item = orgCargo.find((c) => c.id === match.itemId);
-			if (!item) continue;
-			if (!isCargoUsableForMatching(item.expiresAt)) continue;
-			const base = effectiveBaseFields(
-				item.quantity,
-				item.unit,
-				item.baseQuantity ?? item.quantity,
-				item.baseUnit ?? item.unit,
-				ingredientName,
-			);
-			const qtyInTargetUnit = convertIngredientAmount(
-				base.baseQuantity,
-				toSupportedUnit(base.baseUnit),
-				targetUnit,
-				ingredientName,
-			);
-			if (qtyInTargetUnit === null) continue;
-			candidates.push({
-				cargo: item,
-				qtyInTargetUnit,
-				isExact: false,
-				score: match.score,
-			});
-		}
 	}
 
 	candidates.sort((a, b) => {
@@ -1498,15 +1499,33 @@ export async function cookMeal(
 			}));
 		}
 
-		// Pre-fetch vector similarity for all unlinked ingredient names in a single
-		// batched embedding request instead of N sequential Vectorize calls.
-		const unlinkedNames = unlinkedIngredients.map((i) => i.ingredientName);
-		const prefetchedVectors = await findSimilarCargoBatch(
-			env,
-			organizationId,
-			unlinkedNames,
-			{ topK: 3, threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION },
+		// Pre-fetch vector similarity only for names that miss exact + token phases.
+		const deductionCargoIndex = buildCargoIndex(orgCargo);
+		const deductionTokenIndexes = buildCargoTokenIndexes(
+			deductionCargoIndex.keys(),
 		);
+		const unlinkedNamesNeedingVector = [
+			...new Set(
+				unlinkedIngredients
+					.map((i) => i.ingredientName)
+					.filter((name) =>
+						ingredientNeedsVectorFallback(
+							name,
+							deductionCargoIndex,
+							deductionTokenIndexes,
+						),
+					),
+			),
+		];
+		const prefetchedVectors =
+			unlinkedNamesNeedingVector.length > 0
+				? await findSimilarCargoBatch(
+						env,
+						organizationId,
+						unlinkedNamesNeedingVector,
+						{ topK: 3, threshold: SIMILARITY_THRESHOLDS.CARGO_DEDUCTION },
+					)
+				: new Map();
 
 		const insufficient: string[] = [];
 
@@ -1522,6 +1541,8 @@ export async function cookMeal(
 				targetUnit,
 				prefetchedVectors,
 				allowPartial,
+				deductionTokenIndexes,
+				deductionCargoIndex,
 			);
 
 			if (allocations.length === 0) {

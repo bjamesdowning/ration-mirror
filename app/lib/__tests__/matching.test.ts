@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	buildCargoTokenIndexes,
+	cargoKeysMatchingIngredient,
+	headNoun,
+	isBidirectionalHeadNounSubset,
+	isTokenPhaseMatch,
 	normalizeForCargoDedup,
 	normalizeForMatch,
+	passesCompoundGuard,
 	tokenize,
 	tokenMatchScore,
 } from "~/lib/matching";
@@ -129,5 +135,121 @@ describe("tokenMatchScore", () => {
 		const ab = tokenMatchScore("olive oil", "extra virgin olive oil");
 		const ba = tokenMatchScore("extra virgin olive oil", "olive oil");
 		expect(ab).toBe(ba);
+	});
+});
+
+describe("headNoun", () => {
+	it("returns the last content token", () => {
+		expect(headNoun("olive oil")).toBe("oil");
+		expect(headNoun("basmati rice")).toBe("rice");
+		expect(headNoun("salt")).toBe("salt");
+	});
+});
+
+describe("isBidirectionalHeadNounSubset", () => {
+	it("matches oil specializations", () => {
+		expect(isBidirectionalHeadNounSubset("oil", "olive oil")).toBe(true);
+		expect(isBidirectionalHeadNounSubset("oil", "sunflower oil")).toBe(true);
+		expect(isBidirectionalHeadNounSubset("oil", "vegetable oil")).toBe(true);
+	});
+
+	it("matches EVOO ↔ olive oil", () => {
+		expect(
+			isBidirectionalHeadNounSubset("extra virgin olive oil", "olive oil"),
+		).toBe(true);
+	});
+
+	it("rejects different oil types", () => {
+		expect(isBidirectionalHeadNounSubset("olive oil", "sunflower oil")).toBe(
+			false,
+		);
+	});
+
+	it("rejects rice vinegar for rice (different head noun)", () => {
+		expect(isBidirectionalHeadNounSubset("rice", "rice vinegar")).toBe(false);
+	});
+});
+
+describe("passesCompoundGuard / isTokenPhaseMatch", () => {
+	it("allows oil → olive/sunflower/vegetable oil", () => {
+		expect(isTokenPhaseMatch("oil", "olive oil")).toBe(true);
+		expect(isTokenPhaseMatch("oil", "sunflower oil")).toBe(true);
+		expect(isTokenPhaseMatch("oil", "vegetable oil")).toBe(true);
+	});
+
+	it("allows chicken → chicken breast via leading token", () => {
+		expect(isTokenPhaseMatch("chicken", "chicken breast")).toBe(true);
+	});
+
+	it("rejects rice → rice vinegar", () => {
+		expect(isTokenPhaseMatch("rice", "rice vinegar")).toBe(false);
+	});
+
+	it("rejects butter → peanut butter and milk → plant milks", () => {
+		expect(isTokenPhaseMatch("butter", "peanut butter")).toBe(false);
+		expect(isTokenPhaseMatch("milk", "coconut milk")).toBe(false);
+		expect(isTokenPhaseMatch("milk", "almond milk")).toBe(false);
+	});
+
+	it("rejects bare pepper → bell pepper", () => {
+		expect(isTokenPhaseMatch("pepper", "bell pepper")).toBe(false);
+		expect(isTokenPhaseMatch("pepper", "black pepper")).toBe(true);
+	});
+
+	it("does not expand ultra-generic sauce", () => {
+		expect(isTokenPhaseMatch("sauce", "tomato sauce")).toBe(false);
+		expect(isTokenPhaseMatch("sauce", "soy sauce")).toBe(false);
+	});
+
+	it("allows salt → rock salt and rice → basmati rice", () => {
+		expect(isTokenPhaseMatch("salt", "rock salt")).toBe(true);
+		expect(isTokenPhaseMatch("rice", "basmati rice")).toBe(true);
+	});
+
+	it("passesCompoundGuard blocks fragile dairy compounds", () => {
+		expect(passesCompoundGuard("butter", "peanut butter")).toBe(false);
+		expect(passesCompoundGuard("oil", "olive oil")).toBe(true);
+	});
+});
+
+describe("cargoKeysMatchingIngredient", () => {
+	const indexes = buildCargoTokenIndexes([
+		"olive oil",
+		"sunflower oil",
+		"vegetable oil",
+		"peanut butter",
+		"butter",
+		"coconut milk",
+		"milk",
+		"chicken breast",
+		"rice vinegar",
+		"basmati rice",
+		"black pepper",
+		"bell pepper",
+		"tomato sauce",
+		"rock salt",
+	]);
+
+	it("returns all cooking oils for oil", () => {
+		const keys = cargoKeysMatchingIngredient("oil", indexes);
+		expect(keys.sort()).toEqual(
+			["olive oil", "sunflower oil", "vegetable oil"].sort(),
+		);
+	});
+
+	it("matches chicken breast and basmati rice; rejects vinegar and compounds", () => {
+		expect(cargoKeysMatchingIngredient("chicken", indexes)).toEqual([
+			"chicken breast",
+		]);
+		expect(cargoKeysMatchingIngredient("rice", indexes)).toEqual([
+			"basmati rice",
+		]);
+		expect(cargoKeysMatchingIngredient("butter", indexes)).toEqual([]);
+		expect(cargoKeysMatchingIngredient("milk", indexes)).toEqual([]);
+		expect(cargoKeysMatchingIngredient("sauce", indexes)).toEqual([]);
+		expect(cargoKeysMatchingIngredient("pepper", indexes)).toEqual([
+			"black pepper",
+		]);
+		expect(cargoKeysMatchingIngredient("salt", indexes)).toEqual(["rock salt"]);
 	});
 });

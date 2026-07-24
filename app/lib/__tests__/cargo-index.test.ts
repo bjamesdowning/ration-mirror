@@ -200,20 +200,33 @@ describe("getAvailableQuantityWithMap", () => {
 	});
 });
 
-describe("getAvailableQuantityWithMap — expired cargo", () => {
-	const expired = new Date("2025-06-10T12:00:00Z");
-
-	it("returns 0 when only expired stock matches", () => {
+describe("getAvailableQuantityWithMap — token phase", () => {
+	it("sums all cooking oils when recipe asks for oil", () => {
 		const items = [
-			createCargoIndexRow({
-				name: "salmon",
-				quantity: 500,
-				unit: "g",
-				expiresAt: expired,
-			}),
+			createCargoIndexRow({ name: "olive oil", quantity: 100, unit: "ml" }),
+			createCargoIndexRow({ name: "sunflower oil", quantity: 50, unit: "ml" }),
+			createCargoIndexRow({ name: "vegetable oil", quantity: 25, unit: "ml" }),
 		];
 		const index = buildCargoIndex(items);
-		const qty = getAvailableQuantityWithMap("salmon", "g", index, new Map());
+		const qty = getAvailableQuantityWithMap("oil", "ml", index, new Map());
+		expect(qty).toBe(175);
+	});
+
+	it("does not match butter to peanut butter", () => {
+		const items = [
+			createCargoIndexRow({ name: "peanut butter", quantity: 500, unit: "g" }),
+		];
+		const index = buildCargoIndex(items);
+		const qty = getAvailableQuantityWithMap("butter", "g", index, new Map());
 		expect(qty).toBe(0);
+	});
+
+	it("matches chicken to chicken breast without vector", () => {
+		const items = [
+			createCargoIndexRow({ name: "chicken breast", quantity: 400, unit: "g" }),
+		];
+		const index = buildCargoIndex(items);
+		const qty = getAvailableQuantityWithMap("chicken", "g", index, new Map());
+		expect(qty).toBe(400);
 	});
 });

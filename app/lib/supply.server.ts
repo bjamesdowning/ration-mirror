@@ -19,14 +19,21 @@ import {
 	fulfillCargoSelectionsFromDockedSupplyItems,
 	getActiveCargoSelections,
 } from "./cargo-selection.server";
-import { isCargoUsableForMatching } from "./cargo-utils";
 import { parseDockExpiresAt, toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { resolveSupplyManifestWindow } from "./manifest-dates";
-import { buildCargoIndex, normalizeForCargoDedup } from "./matching.server";
+import type { CargoTokenIndexes } from "./matching.server";
+import {
+	buildCargoIndex,
+	buildCargoTokenIndexes,
+	ingredientNeedsVectorFallback,
+	normalizeForCargoDedup,
+	resolveCargoBucketsForIngredient,
+	sumConvertedToTarget,
+} from "./matching.server";
 import { getOrganizationMetadata } from "./org-supply-settings.server";
 import {
 	chunkArray,
@@ -169,68 +176,24 @@ type AggregatedIngredient = {
 /**
  * Returns available quantity of `name` in `targetUnit` from `orgCargo`.
  *
- * Phase 1: exact normalizeForCargoDedup key match (handles regional synonyms
- * and prep words, e.g. "tinned tomatoes" === "canned tomatoes").
- * Phase 2: uses the pre-fetched `prefetchedVectors` batch result for semantic
- * fallback — callers must pre-fetch with findSimilarCargoBatch before the loop.
+ * Uses shared resolveCargoBucketsForIngredient: exact → token → vector.
+ * Callers must pre-fetch vectors only for names that miss exact+token.
  */
 function getAvailableCargoQuantity(
 	name: string,
 	targetUnit: SupportedUnit,
 	orgCargo: CargoIndexRow[],
 	prefetchedVectors: Map<string, SimilarCargoMatch[]>,
+	cargoIndex = buildCargoIndex(orgCargo),
+	tokenIndexes: CargoTokenIndexes = buildCargoTokenIndexes(cargoIndex.keys()),
 ): number {
-	const normalizedName = normalizeForCargoDedup(name);
-	let exactTotal = 0;
-
-	for (const item of orgCargo) {
-		const normalizedItem = normalizeForCargoDedup(item.name);
-		if (normalizedItem !== normalizedName) continue;
-		if (!isCargoUsableForMatching(item.expiresAt)) continue;
-
-		const base = effectiveBaseFields(
-			item.quantity,
-			item.unit,
-			item.baseQuantity ?? item.quantity,
-			item.baseUnit ?? item.unit,
-			name,
-		);
-		const itemUnit = toSupportedUnit(base.baseUnit);
-		const converted = convertIngredientAmount(
-			base.baseQuantity,
-			itemUnit,
-			targetUnit,
-			name,
-		);
-		if (converted !== null) exactTotal += converted;
-	}
-
-	if (exactTotal > 0) return exactTotal;
-
-	const similar = prefetchedVectors.get(name) ?? [];
-	if (similar.length === 0) return 0;
-
-	const matchedName = normalizeForCargoDedup(similar[0].itemName);
-	for (const item of orgCargo) {
-		if (normalizeForCargoDedup(item.name) !== matchedName) continue;
-		if (!isCargoUsableForMatching(item.expiresAt)) continue;
-		const base = effectiveBaseFields(
-			item.quantity,
-			item.unit,
-			item.baseQuantity ?? item.quantity,
-			item.baseUnit ?? item.unit,
-			name,
-		);
-		const itemUnit = toSupportedUnit(base.baseUnit);
-		const converted = convertIngredientAmount(
-			base.baseQuantity,
-			itemUnit,
-			targetUnit,
-			name,
-		);
-		if (converted !== null) return converted;
-	}
-	return 0;
+	const { buckets } = resolveCargoBucketsForIngredient(
+		name,
+		cargoIndex,
+		tokenIndexes,
+		prefetchedVectors,
+	);
+	return sumConvertedToTarget(buckets, targetUnit, name);
 }
 
 /** Quantities already on the list that should reduce meal gap math after a sync clear. */
@@ -1391,11 +1354,14 @@ export async function addItemsFromMeal(
 		d1.select().from(supplyItem).where(eq(supplyItem.listId, listId)),
 	]);
 
-	// Pre-fetch Vectorize only for exact-index misses (align with matchMeals).
+	// Pre-fetch Vectorize only for exact+token misses (align with matchMeals).
 	const cargoIndex = buildCargoIndex(orgCargo);
+	const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
 	const missNames = ingredients
 		.map((i) => i.ingredientName)
-		.filter((name) => !cargoIndex.has(normalizeForCargoDedup(name)));
+		.filter((name) =>
+			ingredientNeedsVectorFallback(name, cargoIndex, tokenIndexes),
+		);
 	const prefetchedVectors = await findSimilarCargoBatch(
 		env,
 		organizationId,
@@ -1420,6 +1386,8 @@ export async function addItemsFromMeal(
 			targetUnit,
 			orgCargo,
 			prefetchedVectors,
+			cargoIndex,
+			tokenIndexes,
 		);
 
 		if (availableInCargo >= scaledRequired) {
@@ -1881,9 +1849,12 @@ async function buildMealContributions(
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 	const aggregatedIngredients = aggregateIngredients(allIngredients, unitMode);
 	const cargoIndex = buildCargoIndex(orgCargo);
+	const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
 	const missNames = aggregatedIngredients
 		.map((a) => a.name)
-		.filter((name) => !cargoIndex.has(normalizeForCargoDedup(name)));
+		.filter((name) =>
+			ingredientNeedsVectorFallback(name, cargoIndex, tokenIndexes),
+		);
 	const prefetchedVectors = await findSimilarCargoBatch(
 		env,
 		organizationId,
@@ -1903,6 +1874,8 @@ async function buildMealContributions(
 			targetUnit,
 			orgCargo,
 			prefetchedVectors,
+			cargoIndex,
+			tokenIndexes,
 		);
 		const missingAfterCargo = Math.max(
 			0,

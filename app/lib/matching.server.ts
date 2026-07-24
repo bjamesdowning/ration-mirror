@@ -6,7 +6,13 @@ import type { CargoIndexRow } from "./cargo-index.server";
 import { fetchOrgCargoIndex } from "./cargo-index.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { log, redactId } from "./logging.server";
-import { normalizeForCargoDedup, normalizeForMatch } from "./matching";
+import {
+	buildCargoTokenIndexes,
+	type CargoTokenIndexes,
+	cargoKeysMatchingIngredient,
+	normalizeForCargoDedup,
+	normalizeForMatch,
+} from "./matching";
 import { chunkedQuery } from "./query-utils.server";
 import {
 	bumpReadinessCacheVersions,
@@ -25,11 +31,76 @@ import {
 	type SimilarCargoMatch,
 } from "./vector.server";
 
+export type { CargoTokenIndexes };
 export {
+	buildCargoTokenIndexes,
 	bumpReadinessCacheVersions,
 	normalizeForCargoDedup,
 	normalizeForMatch,
 };
+
+/** One cargo index row group entry (same shape as buildCargoIndex values). */
+export type CargoIndexEntry = {
+	original: CargoIndexRow;
+	totalQuantity: number;
+	normalizedName: string;
+};
+
+export type CargoBucketMatchType = "exact" | "token" | "vector" | "none";
+
+/**
+ * Shared sync resolver for ingredient → cargo stock.
+ * Phase order: exact key → head-noun/leading-token → Vectorize similarity map.
+ */
+export function resolveCargoBucketsForIngredient(
+	ingredientName: string,
+	cargoIndex: Map<string, CargoIndexEntry[]>,
+	tokenIndexes: CargoTokenIndexes,
+	similarityMap: Map<string, SimilarCargoMatch[]>,
+): { buckets: CargoIndexEntry[]; matchType: CargoBucketMatchType } {
+	const normalized = normalizeForCargoDedup(ingredientName);
+	const exact = cargoIndex.get(normalized);
+	if (exact && exact.length > 0) {
+		return { buckets: exact, matchType: "exact" };
+	}
+
+	const tokenKeys = cargoKeysMatchingIngredient(ingredientName, tokenIndexes);
+	if (tokenKeys.length > 0) {
+		const buckets: CargoIndexEntry[] = [];
+		for (const key of tokenKeys) {
+			const bucket = cargoIndex.get(key);
+			if (bucket?.length) buckets.push(...bucket);
+		}
+		if (buckets.length > 0) {
+			return { buckets, matchType: "token" };
+		}
+	}
+
+	const similar = similarityMap.get(ingredientName) ?? [];
+	for (const match of similar) {
+		const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
+		if (bucket?.length) {
+			return { buckets: bucket, matchType: "vector" };
+		}
+	}
+
+	return { buckets: [], matchType: "none" };
+}
+
+/** True when exact + token phases miss — name should go to Vectorize batch. */
+export function ingredientNeedsVectorFallback(
+	ingredientName: string,
+	cargoIndex: Map<string, CargoIndexEntry[]>,
+	tokenIndexes: CargoTokenIndexes,
+): boolean {
+	const { matchType } = resolveCargoBucketsForIngredient(
+		ingredientName,
+		cargoIndex,
+		tokenIndexes,
+		new Map(),
+	);
+	return matchType === "none";
+}
 
 /**
  * How many meals are scored (considered) before ranking — shared by web,
@@ -179,30 +250,24 @@ export function sumConvertedToTarget(
 
 /**
  * Calculates available quantity using a pre-computed similarity map (sync).
- * Used after findSimilarCargoBatch for batch fallback lookups.
+ * Uses exact → token → vector via resolveCargoBucketsForIngredient.
+ * When tokenIndexes is omitted, builds indexes from cargoIndex keys (tests / one-offs).
  */
 export function getAvailableQuantityWithMap(
 	ingredientName: string,
 	targetUnit: SupportedUnit,
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	similarityMap: Map<string, SimilarCargoMatch[]>,
+	tokenIndexes?: CargoTokenIndexes,
 ): number {
-	const normalized = normalizeForCargoDedup(ingredientName);
-	const matches = cargoIndex.get(normalized);
-
-	if (!matches || matches.length === 0) {
-		const similar = similarityMap.get(ingredientName) ?? [];
-		if (similar.length === 0) return 0;
-		for (const match of similar) {
-			const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
-			if (bucket?.length) {
-				return sumConvertedToTarget(bucket, targetUnit, ingredientName);
-			}
-		}
-		return 0;
-	}
-
-	return sumConvertedToTarget(matches, targetUnit, ingredientName);
+	const indexes = tokenIndexes ?? buildCargoTokenIndexes(cargoIndex.keys());
+	const { buckets } = resolveCargoBucketsForIngredient(
+		ingredientName,
+		cargoIndex,
+		indexes,
+		similarityMap,
+	);
+	return sumConvertedToTarget(buckets, targetUnit, ingredientName);
 }
 
 /** Similarity map from findSimilarCargoBatch: ingredientName -> cargo matches */
@@ -222,8 +287,10 @@ export function strictMatch(
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
 	similarityMap: SimilarityMap,
 	scaleFactor = 1,
+	tokenIndexes?: CargoTokenIndexes,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
+	const indexes = tokenIndexes ?? buildCargoTokenIndexes(cargoIndex.keys());
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
 		const availableIngredients: IngredientMatch[] = [];
@@ -236,6 +303,7 @@ export function strictMatch(
 				targetUnit,
 				cargoIndex,
 				similarityMap,
+				indexes,
 			);
 			const required = scaleQuantity(
 				ingredient.quantity,
@@ -293,8 +361,10 @@ function deltaMatch(
 	similarityMap: SimilarityMap,
 	minMatch = 50,
 	scaleFactor = 1,
+	tokenIndexes?: CargoTokenIndexes,
 ): MealMatchResult[] {
 	const results: MealMatchResult[] = [];
+	const indexes = tokenIndexes ?? buildCargoTokenIndexes(cargoIndex.keys());
 
 	for (const { meal: mealData, ingredients, tags } of meals) {
 		if (ingredients.length === 0) {
@@ -321,6 +391,7 @@ function deltaMatch(
 				targetUnit,
 				cargoIndex,
 				similarityMap,
+				indexes,
 			);
 			const required = scaleQuantity(
 				ingredient.quantity,
@@ -520,8 +591,9 @@ export async function matchMeals(
 	// 3. Fetch lightweight cargo projection for matching
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 
-	// 4. Build cargo index for efficient lookups
+	// 4. Build cargo index + token indexes for efficient lookups
 	const cargoIndex = buildCargoIndex(orgCargo);
+	const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
 
 	// 5. Combine meal data with ingredients and tags
 	const enrichedMeals = meals.map((m) => ({
@@ -530,12 +602,17 @@ export async function matchMeals(
 		tags: tagsToSlugs(tagsByMealId.get(m.id) ?? []),
 	}));
 
-	// 6. Batch vector lookup: collect ingredient names that need fallback, call findSimilarCargoBatch once
+	// 6. Batch vector lookup: only names that miss exact + token phases
 	const missNames = new Set<string>();
 	for (const { ingredients } of enrichedMeals) {
 		for (const ing of ingredients) {
-			const normalized = normalizeForCargoDedup(ing.ingredientName);
-			if (!cargoIndex.has(normalized)) {
+			if (
+				ingredientNeedsVectorFallback(
+					ing.ingredientName,
+					cargoIndex,
+					tokenIndexes,
+				)
+			) {
 				missNames.add(ing.ingredientName);
 			}
 		}
@@ -567,24 +644,50 @@ export async function matchMeals(
 			for (const enriched of enrichedMeals) {
 				const sf = getScaleForMeal(enriched.meal);
 				allResults.push(
-					...strictMatch([enriched], cargoIndex, similarityMap, sf),
+					...strictMatch(
+						[enriched],
+						cargoIndex,
+						similarityMap,
+						sf,
+						tokenIndexes,
+					),
 				);
 			}
 			results = allResults;
 		} else {
-			results = strictMatch(enrichedMeals, cargoIndex, similarityMap);
+			results = strictMatch(
+				enrichedMeals,
+				cargoIndex,
+				similarityMap,
+				1,
+				tokenIndexes,
+			);
 		}
 	} else if (servings) {
 		const allResults: MealMatchResult[] = [];
 		for (const enriched of enrichedMeals) {
 			const sf = getScaleForMeal(enriched.meal);
 			allResults.push(
-				...deltaMatch([enriched], cargoIndex, similarityMap, minMatch, sf),
+				...deltaMatch(
+					[enriched],
+					cargoIndex,
+					similarityMap,
+					minMatch,
+					sf,
+					tokenIndexes,
+				),
 			);
 		}
 		results = allResults.sort((a, b) => b.matchPercentage - a.matchPercentage);
 	} else {
-		results = deltaMatch(enrichedMeals, cargoIndex, similarityMap, minMatch);
+		results = deltaMatch(
+			enrichedMeals,
+			cargoIndex,
+			similarityMap,
+			minMatch,
+			1,
+			tokenIndexes,
+		);
 	}
 
 	// 9. Apply limit
@@ -616,8 +719,9 @@ export async function matchMeals(
  * Canonical ingredient-to-cargo resolver used by all features (supply sync, cook
  * deduction, AI generation verification).
  *
- * Phase 1: normalizeForCargoDedup exact key lookup against the provided cargoIndex.
- * Phase 2: findSimilarCargoBatch for any misses (single batched embedding round-trip).
+ * Phase 1: normalizeForCargoDedup exact key lookup.
+ * Phase 2: head-noun / leading-token specialization.
+ * Phase 3: findSimilarCargoBatch for remaining misses (single batched embedding round-trip).
  *
  * Returns a Map keyed by the original ingredientName; value is the array of cargo
  * index entries that matched (empty array = no match found).
@@ -627,35 +731,25 @@ export async function resolveIngredientsToCargo(
 	organizationId: string,
 	ingredientNames: string[],
 	cargoIndex: ReturnType<typeof buildCargoIndex>,
-	options?: { threshold?: number },
-): Promise<
-	Map<
-		string,
-		{
-			original: CargoIndexRow;
-			totalQuantity: number;
-			normalizedName: string;
-		}[]
-	>
-> {
+	options?: { threshold?: number; tokenIndexes?: CargoTokenIndexes },
+): Promise<Map<string, CargoIndexEntry[]>> {
 	const threshold =
 		options?.threshold ?? SIMILARITY_THRESHOLDS.INGREDIENT_MATCH;
-	const result = new Map<
-		string,
-		{
-			original: CargoIndexRow;
-			totalQuantity: number;
-			normalizedName: string;
-		}[]
-	>();
+	const tokenIndexes =
+		options?.tokenIndexes ?? buildCargoTokenIndexes(cargoIndex.keys());
+	const result = new Map<string, CargoIndexEntry[]>();
 
 	const vectorMissNames: string[] = [];
 
 	for (const name of ingredientNames) {
-		const normalized = normalizeForCargoDedup(name);
-		const matches = cargoIndex.get(normalized);
-		if (matches && matches.length > 0) {
-			result.set(name, matches);
+		const { buckets, matchType } = resolveCargoBucketsForIngredient(
+			name,
+			cargoIndex,
+			tokenIndexes,
+			new Map(),
+		);
+		if (matchType === "exact" || matchType === "token") {
+			result.set(name, buckets);
 		} else {
 			result.set(name, []);
 			vectorMissNames.push(name);
@@ -671,14 +765,13 @@ export async function resolveIngredientsToCargo(
 		);
 
 		for (const name of vectorMissNames) {
-			const similar = similarityMap.get(name) ?? [];
-			for (const match of similar) {
-				const bucket = cargoIndex.get(normalizeForCargoDedup(match.itemName));
-				if (bucket && bucket.length > 0) {
-					result.set(name, bucket);
-					break;
-				}
-			}
+			const { buckets } = resolveCargoBucketsForIngredient(
+				name,
+				cargoIndex,
+				tokenIndexes,
+				similarityMap,
+			);
+			result.set(name, buckets);
 		}
 	}
 
@@ -720,11 +813,17 @@ export async function checkMealReadiness(
 
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 	const cargoIndex = buildCargoIndex(orgCargo);
+	const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
 
 	const missNames = new Set<string>();
 	for (const ingredient of ingredientsData) {
-		const normalized = normalizeForCargoDedup(ingredient.ingredientName);
-		if (!cargoIndex.has(normalized)) {
+		if (
+			ingredientNeedsVectorFallback(
+				ingredient.ingredientName,
+				cargoIndex,
+				tokenIndexes,
+			)
+		) {
 			missNames.add(ingredient.ingredientName);
 		}
 	}
@@ -759,6 +858,7 @@ export async function checkMealReadiness(
 				targetUnit,
 				cargoIndex,
 				similarityMap,
+				tokenIndexes,
 			);
 			if (available < ingredient.quantity) {
 				hasAllRequired = false;
@@ -807,12 +907,18 @@ export async function getMealMissingIngredients(
 	const scaleFactor = getScaleFactor(mealRow.servings ?? 1, effectiveServings);
 	const orgCargo = await fetchOrgCargoIndex(env.DB, organizationId);
 	const cargoIndex = buildCargoIndex(orgCargo);
+	const tokenIndexes = buildCargoTokenIndexes(cargoIndex.keys());
 
 	const missNames = new Set<string>();
 	for (const ingredient of ingredients) {
 		if (ingredient.isOptional) continue;
-		const normalized = normalizeForCargoDedup(ingredient.ingredientName);
-		if (!cargoIndex.has(normalized)) {
+		if (
+			ingredientNeedsVectorFallback(
+				ingredient.ingredientName,
+				cargoIndex,
+				tokenIndexes,
+			)
+		) {
 			missNames.add(ingredient.ingredientName);
 		}
 	}
@@ -844,6 +950,7 @@ export async function getMealMissingIngredients(
 			targetUnit,
 			cargoIndex,
 			similarityMap,
+			tokenIndexes,
 		);
 		if (available < required) {
 			missing.push({

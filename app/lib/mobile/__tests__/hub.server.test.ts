@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ResolvedWidgetLayout } from "~/components/hub/widgets/registry";
 
 const getSupplyList = vi.fn();
 const getSupplyItemStats = vi.fn();
 const getUserSettings = vi.fn();
-const resolveLayout = vi.fn(() => []);
+const resolveLayout = vi.fn((): ResolvedWidgetLayout[] => []);
 const getExpiringCargo = vi.fn(async () => []);
 const getCargoStats = vi.fn(async () => ({
 	totalItems: 0,
@@ -167,6 +168,8 @@ describe("getMobileHubData supply counts", () => {
 		resolveLayout.mockReturnValue([
 			{
 				id: "supply-preview",
+				order: 0,
+				visible: true,
 				filters: { supplyTags: ["costco"], limit: 6 },
 			},
 		]);

@@ -503,7 +503,7 @@ sequenceDiagram
     end
 ```
 
-**Why verify against Vectorize after generation?** LLMs hallucinate. Without post-generation validation, the model might suggest "saffron" or "truffle oil" when the pantry contains only rice and chicken. The Vectorize check is a semantic guard — it catches both exact misses and conceptual mismatches above the similarity threshold (0.78).
+**Why verify against Vectorize after generation?** LLMs hallucinate. Without post-generation validation, the model might suggest "saffron" or "truffle oil" when the pantry contains only rice and chicken. Verification uses the same three-phase resolver (exact → head-noun token → Vectorize at 0.78) so generated recipes stay consistent with meal match and cook deduction.
 
 **Prompt injection defence** (in [`app/lib/schemas/meal.ts`](app/lib/schemas/meal.ts)): All user-supplied text fields passed to the LLM (preferences, meal names) are checked against `INJECTION_PATTERNS` — a set of regexes targeting common prompt injection vectors — before being included in the AI prompt.
 
@@ -529,7 +529,11 @@ sequenceDiagram
         Worker->>Worker: normalizeForCargoDedup(ingredientName) → cargo index key lookup
     end
 
-    loop Phase 2: Semantic match for unresolved names
+    loop Phase 2: Head-noun / leading-token match for unresolved names
+        Worker->>Worker: resolveCargoBucketsForIngredient token phase (oil→olive oil, chicken→chicken breast)
+    end
+
+    loop Phase 3: Semantic match for remaining unresolved names
         Worker->>Vectorize: findSimilarCargoBatch(unresolved names, threshold=0.78)
         Vectorize-->>Worker: Map<name, SimilarCargoMatch[]>
     end
@@ -540,7 +544,7 @@ sequenceDiagram
     Worker-->>User: Updated supply list
 ```
 
-**Why a two-phase exact + semantic match?** Exact matching is free and handles well-structured data (e.g. cargo named identically to the recipe ingredient). Vectorize is only called for the unresolved remainder, minimising AI token cost and latency. The same `resolveIngredientsToCargo()` function is reused by supply sync, cook deduction, and AI generation verification — ensuring consistent resolution logic across all features.
+**Why a three-phase exact → token → semantic match?** Exact matching is free and handles well-structured data (e.g. cargo named identically to the recipe ingredient). The head-noun / leading-token phase deterministically covers culinary specializations (`oil` → `olive oil`, `salt` → `rock salt`, `chicken` → `chicken breast`) with compound-food guards (`butter` ↛ `peanut butter`). Vectorize is only called for the unresolved remainder, minimising AI token cost and latency. The shared `resolveCargoBucketsForIngredient()` core (wrapped by `resolveIngredientsToCargo()` for async batching) is used by meal match, supply sync, cook deduction, readiness, and AI generation verification — ensuring consistent resolution across all ingredient→cargo decisions.
 
 **Supply snooze:** If a user has previously snoozed an ingredient (e.g. "soy sauce" — already have it somewhere), a `supply_snooze` row suppresses it from appearing in newly synced supply lists until the snooze expires.
 
@@ -577,7 +581,7 @@ sequenceDiagram
     Worker-->>User: { success: true, deducted: [...] }
 ```
 
-**Why a higher deduction threshold (0.80) vs. general matching (0.78)?** Subtracting from cargo is irreversible in normal flow. A false positive at 0.79 similarity might deduct "chicken thighs" from a cargo item named "chicken wings". The tighter threshold accepts a few missed deductions in exchange for correctness of the ones it does make.
+**Why aligned deduction and match thresholds (0.78)?** Subtracting from cargo is irreversible in normal flow. `CARGO_DEDUCTION` stays aligned with `INGREDIENT_MATCH` so any ingredient meal matching treats as available is also eligible for cook deduction — preventing "shows available, fails to cook" false positives. False positives are controlled by the conservative threshold plus the deterministic token-phase guards, not by a higher cook-only cutoff.
 
 ---
 
@@ -842,9 +846,9 @@ flowchart LR
 
 | Context | Threshold | Reasoning |
 |---------|-----------|-----------|
-| `INGREDIENT_MATCH` | 0.78 | Universal threshold for supply sync and AI generation verification. Balanced for breadth. |
+| `INGREDIENT_MATCH` | 0.78 | Universal threshold for supply sync, meal match, and AI generation verification. Balanced for breadth. |
 | `CARGO_MERGE` | 0.78 | Dedup on ingest — same threshold for consistency with matching. |
-| `CARGO_DEDUCTION` | 0.80 | Cook deduction is irreversible — a tighter threshold prevents false positive subtractions. |
+| `CARGO_DEDUCTION` | 0.78 | Aligned with `INGREDIENT_MATCH` so cook deduction matches preparedness checks. |
 | MCP search | 0.60 | Agents benefit from wider recall when exploring the pantry. |
 
 ---

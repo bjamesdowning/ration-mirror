@@ -48,7 +48,17 @@ actor SnapshotDiskWorker {
         let data = try encoder.encode(envelope)
         let dir = orgDirectory(for: organizationId)
         try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        try data.write(to: fileURL(domain: domain, organizationId: organizationId), options: .atomic)
+        // Soft-fail directory protection — file write still applies
+        // `.completeFileProtectionUntilFirstUserAuthentication` atomically.
+        try? fileManager.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: dir.path
+        )
+        let url = fileURL(domain: domain, organizationId: organizationId)
+        try data.write(
+            to: url,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        )
         return true
     }
 

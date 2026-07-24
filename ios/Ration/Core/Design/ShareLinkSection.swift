@@ -118,26 +118,3 @@ struct ShareLinkSection: View {
         return "Expires \(formatter.localizedString(for: date, relativeTo: Date()))."
     }
 }
-
-struct ShareLinkSheetContent: View {
-    let shareURL: String?
-    let shareExpiresAt: String?
-    let capabilities: [String]
-    var isLoading: Bool = false
-    var onGenerate: () async -> Void
-    var onRevoke: () async -> Void
-    var onUpgradeRequired: () -> Void = {}
-
-    var body: some View {
-        List {
-            ShareLinkSection(
-                shareURL: shareURL,
-                shareExpiresAt: shareExpiresAt,
-                capabilities: capabilities,
-                isLoading: isLoading,
-                onGenerate: onGenerate,
-                onRevoke: onRevoke
-            )
-        }
-    }
-}

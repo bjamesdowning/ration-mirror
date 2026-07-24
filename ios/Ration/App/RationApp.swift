@@ -38,29 +38,8 @@ struct RationApp: App {
 
     @MainActor
     private func handleAppDeepLink(_ url: URL) -> Bool {
-        guard url.scheme == AppConfig.authCallbackScheme else { return false }
-        switch url.host {
-        case "ask":
-            env.openDeepLink(.ask)
-        case "scan":
-            env.openDeepLink(.scan)
-        case "galley":
-            if url.path == "/generate" {
-                env.openDeepLink(.galleyGenerate)
-            } else if url.path == "/import" {
-                env.openDeepLink(.galleyImport)
-            } else {
-                return false
-            }
-        case "manifest":
-            if url.path == "/plan-week" {
-                env.openDeepLink(.manifestPlanWeek)
-            } else {
-                return false
-            }
-        default:
-            return false
-        }
+        guard let destination = AppDeepLink.parse(url) else { return false }
+        env.openDeepLink(destination)
         return true
     }
 

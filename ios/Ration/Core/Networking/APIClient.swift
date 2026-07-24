@@ -1,8 +1,9 @@
 import Foundation
 
 /// Bearer-authenticated client for `/api/mobile/v1/*`.
-/// Automatically attaches the access token and retries once after a 401 by
-/// rotating the refresh token via `AuthManager`.
+/// Attaches the access token; on 401, refreshes once via `AuthManager` and
+/// auto-replays only idempotent GET/HEAD. Mutating verbs surface
+/// `APIError.retryableUnauthorized` for the caller to decide.
 @MainActor
 final class APIClient {
     private let auth: AuthManager
@@ -10,12 +11,16 @@ final class APIClient {
     /// Called when the server returns `forbidden_org` — JWT org is no longer valid.
     var orgAccessLostHandler: (@MainActor () async -> Void)?
 
-    init(auth: AuthManager) {
+    init(auth: AuthManager, session: URLSession? = nil) {
         self.auth = auth
-        let config = URLSessionConfiguration.ephemeral
-        config.urlCache = nil
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        self.session = URLSession(configuration: config)
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.ephemeral
+            config.urlCache = nil
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            self.session = URLSession(configuration: config)
+        }
     }
 
     // MARK: Verb helpers
@@ -135,13 +140,18 @@ final class APIClient {
                 await auth.signOutLocal()
                 throw APIError.unauthorized
             }
-            return try await send(
-                path: path, method: method, query: query,
-                body: body, contentType: contentType, isRetry: true
-            )
+            // Only auto-replay idempotent reads. Mutating verbs require caller retry.
+            let methodUpper = method.uppercased()
+            if methodUpper == "GET" || methodUpper == "HEAD" {
+                return try await send(
+                    path: path, method: method, query: query,
+                    body: body, contentType: contentType, isRetry: true
+                )
+            }
+            throw APIError.retryableUnauthorized
         }
 
-        if method == "GET",
+        if method.uppercased() == "GET",
            !isRetry,
            (http.statusCode == 429 || http.statusCode == 503)
         {

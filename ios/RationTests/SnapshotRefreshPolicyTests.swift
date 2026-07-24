@@ -84,7 +84,7 @@ final class SnapshotRefreshPolicyTests: XCTestCase {
             SnapshotRefreshPolicy.userFacingRefreshDetail(
                 APIError.transport("timeout")
             ),
-            "Network error. timeout"
+            "Network error. Please try again."
         )
     }
 }

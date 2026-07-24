@@ -193,11 +193,6 @@ final class CargoViewModel {
         }
     }
 
-    func cancelSearchTasks() {
-        searchTask?.cancel()
-        searchTask = nil
-    }
-
     private func search(api: RationAPI) async {
         let query = filters.search.trimmingCharacters(in: .whitespaces)
         guard query.count >= Self.remoteSearchMinLength else { return }

@@ -15,6 +15,8 @@ struct APIErrorBody: Codable, Sendable {
 
 enum APIError: Error, LocalizedError, Sendable {
     case unauthorized
+    /// Access token was refreshed after a 401, but the original mutating request was not replayed.
+    case retryableUnauthorized
     case server(
         status: Int,
         message: String?,
@@ -35,12 +37,14 @@ enum APIError: Error, LocalizedError, Sendable {
         switch self {
         case .unauthorized:
             return "Your session expired. Please sign in again."
+        case .retryableUnauthorized:
+            return "Your session was refreshed. Please try that action again."
         case let .server(_, message, _, _, _, _, _, _, _, _):
             return message ?? "Something went wrong. Please try again."
-        case let .decoding(detail):
-            return "Unexpected response from server. (\(detail))"
-        case let .transport(detail):
-            return "Network error. \(detail)"
+        case .decoding:
+            return "Unexpected response from server."
+        case .transport:
+            return "Network error. Please try again."
         case .notAuthenticated:
             return "Please sign in to continue."
         }

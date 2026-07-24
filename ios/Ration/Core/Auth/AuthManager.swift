@@ -30,9 +30,9 @@ final class AuthManager {
     private var accessToken: String?
     private var refreshToken: String? {
         didSet {
-            if let refreshToken {
-                Keychain.set(refreshToken, for: Self.refreshKey)
-            } else {
+            // Clear Keychain when in-memory refresh token is nil (sign-out / failed adopt).
+            // Writes go through `apply(_:)` so failures surface to callers.
+            if refreshToken == nil {
                 Keychain.delete(Self.refreshKey)
             }
         }
@@ -103,7 +103,7 @@ final class AuthManager {
         }
 
         let pair = try await postTokenDictionary(body: body, endpoint: "auth/social")
-        apply(pair)
+        try apply(pair)
         phase = .signedIn
     }
 
@@ -124,7 +124,7 @@ final class AuthManager {
             body["tosAccepted"] = true
         }
         let pair = try await postTokenDictionary(body: body, endpoint: "auth/review-login")
-        apply(pair)
+        try apply(pair)
         phase = .signedIn
     }
 
@@ -145,7 +145,9 @@ final class AuthManager {
         // PKCE: persist the verifier so it survives backgrounding while the user
         // checks email, and send only the S256 challenge.
         let verifier = PKCE.makeVerifier()
-        Keychain.set(verifier, for: Self.pkceVerifierKey)
+        guard Keychain.set(verifier, for: Self.pkceVerifierKey) else {
+            throw APIError.transport("Could not save session securely.")
+        }
         var req = URLRequest(url: AppConfig.apiBaseURL.appending(path: "auth/magic-link"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -194,11 +196,14 @@ final class AuthManager {
                     baseURL: baseURL,
                     session: session
                 )
-                await MainActor.run { [weak self] in
+                try await MainActor.run { [weak self] in
+                    guard let self else { throw APIError.notAuthenticated }
+                    defer { self.exchangeTask = nil }
+                    // Persist tokens first; only drop the PKCE verifier after apply succeeds
+                    // so a Keychain failure can still retry the same handoff code.
+                    try self.apply(pair)
                     Keychain.delete(Self.pkceVerifierKey)
-                    self?.apply(pair)
-                    self?.phase = .signedIn
-                    self?.exchangeTask = nil
+                    self.phase = .signedIn
                 }
             } catch {
                 await MainActor.run { [weak self] in
@@ -233,8 +238,16 @@ final class AuthManager {
     /// rebinds the org claim and revokes prior refresh families server-side).
     func adopt(_ pair: TokenPair) {
         clearAuthError()
-        apply(pair)
-        phase = .signedIn
+        do {
+            try apply(pair)
+            phase = .signedIn
+        } catch {
+            accessToken = nil
+            accessExpiry = nil
+            refreshToken = nil
+            phase = .signedOut
+            authErrorMessage = AuthHandoffPolicy.userFacingMessage(for: error)
+        }
     }
 
     // MARK: Access tokens
@@ -264,8 +277,9 @@ final class AuthManager {
                 baseURL: baseURL,
                 session: session
             )
-            await MainActor.run { [weak self] in
-                self?.apply(pair)
+            try await MainActor.run { [weak self] in
+                guard let self else { throw APIError.notAuthenticated }
+                try self.apply(pair)
             }
             return pair.accessToken
         }
@@ -305,7 +319,10 @@ final class AuthManager {
 
     // MARK: Helpers
 
-    private func apply(_ pair: TokenPair) {
+    private func apply(_ pair: TokenPair) throws {
+        guard Keychain.set(pair.refreshToken, for: Self.refreshKey) else {
+            throw APIError.transport("Could not save session securely.")
+        }
         accessToken = pair.accessToken
         refreshToken = pair.refreshToken
         accessExpiry = Date().addingTimeInterval(TimeInterval(pair.expiresIn))

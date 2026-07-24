@@ -123,6 +123,14 @@ enum RecipePageHtmlTrimmer {
     }
 }
 
+/// Restricts WKWebView navigations during on-device recipe capture to HTTPS only.
+enum RecipePageNavigationPolicy {
+    static func shouldAllow(_ url: URL?) -> Bool {
+        guard let url, let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "https"
+    }
+}
+
 /// Captures recipe page HTML on-device: URLSession first, then WKWebView.
 @MainActor
 enum RecipePageCapture {
@@ -131,6 +139,13 @@ enum RecipePageCapture {
     private static let sessionTimeout: TimeInterval = 15
     private static let webViewTimeout: TimeInterval = 25
     private static let minContentLength = 200
+    private static let urlSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.timeoutIntervalForRequest = sessionTimeout
+        return URLSession(configuration: config)
+    }()
 
     /// Keeps in-flight bridges alive until `finish` (WKNavigationDelegate is weak).
     private static var inFlightBridges: [UUID: WebViewCaptureBridge] = [:]
@@ -162,7 +177,7 @@ enum RecipePageCapture {
         request.setValue(safariUA, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw RecipePageCaptureError.emptyContent
         }
@@ -249,6 +264,16 @@ private final class WebViewCaptureBridge: NSObject, WKNavigationDelegate {
 
     func cancel(with error: Error) {
         finish(.failure(error))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        decisionHandler(
+            RecipePageNavigationPolicy.shouldAllow(navigationAction.request.url) ? .allow : .cancel
+        )
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

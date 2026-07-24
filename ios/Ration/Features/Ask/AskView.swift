@@ -237,7 +237,9 @@ struct AskView: View {
                 Task { await model.approve(id, approved: false) }
             }
         case let .blocked(blocked):
-            BlockedFeatureCard(blocked: blocked)
+            BlockedFeatureCard(blocked: blocked) {
+                dismiss()
+            }
         case let .allowanceExhausted(message):
             CreditCard(message: message) {
                 Task { await model.enableAutoDeduct(api: env.api) }
@@ -399,22 +401,26 @@ private struct ConfirmCard: View {
 }
 
 private struct BlockedFeatureCard: View {
+    @Environment(AppEnvironment.self) private var env
     let blocked: CopilotBlockedFeature
+    var onContinue: () -> Void = {}
 
-    private var deepLinkURL: URL? {
-        guard !blocked.deepLink.isEmpty else { return nil }
-        return URL(string: blocked.deepLink)
+    private var destination: AppEnvironment.DeepLinkDestination? {
+        AppDeepLink.parse(blocked.deepLink)
     }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(deepLinkURL == nil ? "Temporarily unavailable" : "Open the native flow")
+                Text(destination == nil ? "Temporarily unavailable" : "Open the native flow")
                     .rationHeadline()
                 Text(blocked.message).rationCaption()
-                if let url = deepLinkURL {
-                    Link("Continue", destination: url)
-                        .buttonStyle(PrimaryButtonStyle())
+                if let destination {
+                    Button("Continue") {
+                        env.openDeepLink(destination)
+                        onContinue()
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                 }
             }
         }

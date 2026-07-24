@@ -42,12 +42,12 @@ final class AppEnvironmentForcedLogoutWipeTests: XCTestCase {
         // Seed the shared cache directly — there is no successful-fetch seam
         // to populate it otherwise, since `fetch(url:auth:)` requires a real
         // network round-trip with a valid access token.
-        AuthImageLoader.shared.cache[url] = UIImage()
-        XCTAssertNotNil(AuthImageLoader.shared.cache[url])
+        AuthImageLoader.shared.seedCacheForTesting(UIImage(), for: url)
+        XCTAssertNotNil(AuthImageLoader.shared.cachedImageForTesting(url))
 
         await env.auth.signOutLocal()
 
-        XCTAssertNil(AuthImageLoader.shared.cache[url])
+        XCTAssertNil(AuthImageLoader.shared.cachedImageForTesting(url))
     }
 
     @MainActor

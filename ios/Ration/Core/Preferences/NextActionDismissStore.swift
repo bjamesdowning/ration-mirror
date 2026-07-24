@@ -33,6 +33,14 @@ final class NextActionDismissStore {
         revision += 1
     }
 
+    /// Removes dismiss flags for every organization (sign-out / account switch wipe).
+    func clearAll() {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+            defaults.removeObject(forKey: key)
+        }
+        revision += 1
+    }
+
     private func key(_ actionKey: String, organizationId: String) -> String {
         prefix + organizationId + "." + actionKey
     }

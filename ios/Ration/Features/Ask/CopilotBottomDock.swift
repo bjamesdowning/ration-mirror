@@ -5,7 +5,7 @@ struct CopilotBottomDock: View {
     @Bindable var scrollContext: CopilotScrollContext
     @Bindable var tabDock: TabDockContext
 
-    let selectedTab: Int
+    let selectedTab: MainTab
     @Binding var draft: String
     let isExhausted: Bool
     let isTurnActive: Bool

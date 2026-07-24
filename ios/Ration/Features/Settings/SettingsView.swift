@@ -1,34 +1,10 @@
 import SwiftUI
-import Observation
-
-@MainActor
-@Observable
-final class SessionViewModel {
-    private(set) var session: SessionResponse?
-    private(set) var settings: UserSettings?
-    private(set) var isLoading = false
-    var errorMessage: String?
-
-    func load(api: RationAPI) async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            async let sessionTask = api.session()
-            async let settingsTask = api.settings()
-            session = try await sessionTask
-            settings = try await settingsTask.settings
-            errorMessage = nil
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-}
 
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var model = SessionViewModel()
+    @State private var model = SettingsSessionViewModel()
     @State private var showingPaywall = false
     @State private var showingPrivacy = false
 
@@ -43,7 +19,7 @@ struct SettingsView: View {
                     sessionErrorState
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(String(localized: "Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -76,7 +52,7 @@ struct SettingsView: View {
                 AccountDeletionView(onAccountDeleted: { dismiss() })
             }
             .foregroundStyle(Theme.danger)
-            Button("Sign out", role: .destructive) {
+            Button(String(localized: "Sign out"), role: .destructive) {
                 Task {
                     await env.auth.signOut()
                     dismiss()
@@ -135,7 +111,7 @@ struct SettingsView: View {
             SettingsTutorialSection()
 
             Section {
-                Button("Sign out", role: .destructive) {
+                Button(String(localized: "Sign out"), role: .destructive) {
                     Task {
                         await env.auth.signOut()
                         dismiss()

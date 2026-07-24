@@ -24,7 +24,7 @@ Set your **Apple Developer Team ID** in `project.yml` (`DEVELOPMENT_TEAM`) befor
 building to a device, then re-run `xcodegen generate`.
 
 **Versioning:** User-facing app version is `MARKETING_VERSION` in `project.yml`
-(currently **1.2.46**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
+(currently **1.2.48**). `CURRENT_PROJECT_VERSION` is the monotonic build number for
 TestFlight / App Store uploads. Follow the same patch/minor rules as the web app
 (`1.X.1`–`1.X.49`, then `1.(X+1).0`); see `.cursor/rules/ration-master.mdc`.
 After editing `project.yml`, run `bun run ios:generate`.
@@ -316,6 +316,8 @@ read-only list/detail chips are unchanged.
 **Hub configure + detail push (iOS 1.2.41):** Edit Hub uses a single Configure sheet per widget (item count or day span as density — no competing S/M/L). Tapping a meal or cargo row on Hub pushes the full detail page so Edit/Cook/Delete stay available on the Copilot dock.
 
 **Security hardening (v1.4.6–v1.4.11, iOS security audit fix plan):** `PrivacyInfo.xcprivacy` privacy manifest (v1.4.6); centralized/symmetric AI consent gate across all four AI entry points via `SessionStore.hasAIConsent` + `AIConsentCoordinator`, and server-side consent enforcement added to `/scan` (v1.4.8); forced-logout full wipe (`AuthManager.onSignedOut` → snapshots/billing/session/image caches) plus abandoned-PKCE-verifier Keychain cleanup on every sign-out (v1.4.9); mobile `/hub` and `/supply` rate limiting + pagination, and a `preLimit` fix for `/meals/match` (v1.4.10); post-review cleanup — explicit sign-out now routes through the same `onSignedOut` wipe hook instead of duplicating it, and `RootView`'s startup fetches (`session.load`, settings) run concurrently and are shared between the AI consent flag and the onboarding check instead of double-fetching `/settings` (v1.4.11). See [`plans/ios-security-audit-fix-plan.md`](../plans/ios-security-audit-fix-plan.md).
+
+**Phase 2 scalability & polish (iOS 1.2.48):** API DTOs carved from `Models.swift` into domain files under `Core/Models/`; AskViewModel split into `+Socket`/`+Stream`/`+Briefing`/`+Snapshot` extensions; remaining embedded VMs extracted (Settings/Billing/CargoDetail/Scan); typed `MainTab` + DeepLinkRouter; `NextActionDismissStore.clearAll` on logout; recipe WK `about:blank` allow; ShareLink create/revoke cancellation; broader 401 no-replay tests; Hub/Billing/multipart/cook policy seams; Supply/Manifest VoiceOver combine + `@ScaledMetric` on key 44pt controls; branded `UILaunchScreen` (`LaunchBackground` + `RationMark`); `Localizable.xcstrings` chrome tranche (tabs/Settings/Paywall).
 
 **Copilot stacked dock (v1.5.22):** `CopilotBottomDock` unifies Copilot input and tab action FABs in a single glass overlay above the tab bar. When expanded, the input bar spans full width and the tab FAB sits above it (trailing); scroll down to collapse the bar to a chat chip and the FAB lowers to the bottom-right row. Tab actions register via `.tabDockAction(tag:)` (`TabDockContext`) instead of per-tab `safeAreaInset` FABs — eliminating the blank dead zone from stacked insets. `List` surfaces use `.copilotDockScrollMargins` (`contentMargins` + `CopilotDockLayout`); plain `ScrollView` content (Hub widgets) uses `.copilotDockContentPadding` (bottom padding on scroll content) so scrolling stays responsive. Full chat opens in `AskView` sheet; inline send from the bar auto-opens the sheet. WebSocket frames use lenient agent-protocol parsing (`CopilotWebSocketDecoder`) matching web `AskPanel`.
 

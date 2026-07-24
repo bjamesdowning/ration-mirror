@@ -24,29 +24,48 @@ final class APIClientAuthRetryTests: XCTestCase {
     }
 
     func testPostDoesNotReplayAfter401Refresh() async {
-        MockAPIAuthRetryURLProtocol.mode = .postNoReplay
-        let session = Self.makeSession()
-        let auth = AuthManager(urlSession: session)
-        auth.adopt(TokenPair(accessToken: "access-1", refreshToken: "refresh-1", expiresIn: 3600))
-        let client = APIClient(auth: auth, session: session)
-
-        struct Body: Encodable { let name: String }
-        struct Payload: Decodable { let ok: Bool }
-
-        do {
+        await assertMutationDoesNotReplay(
+            mode: .mutationNoReplay,
+            expectedMethod: "POST"
+        ) { client in
+            struct Body: Encodable { let name: String }
+            struct Payload: Decodable { let ok: Bool }
             let _: Payload = try await client.post("cargo", body: Body(name: "milk"))
-            XCTFail("Expected retryableUnauthorized")
-        } catch let error as APIError {
-            guard case .retryableUnauthorized = error else {
-                return XCTFail("Expected retryableUnauthorized, got \(error)")
-            }
-        } catch {
-            XCTFail("Unexpected error: \(error)")
         }
+    }
 
-        XCTAssertEqual(MockAPIAuthRetryURLProtocol.apiRequestCount, 1)
-        XCTAssertEqual(MockAPIAuthRetryURLProtocol.refreshCount, 1)
-        XCTAssertEqual(MockAPIAuthRetryURLProtocol.apiMethods, ["POST"])
+    func testPatchDoesNotReplayAfter401Refresh() async {
+        await assertMutationDoesNotReplay(
+            mode: .mutationNoReplay,
+            expectedMethod: "PATCH"
+        ) { client in
+            struct Body: Encodable { let name: String }
+            struct Payload: Decodable { let ok: Bool }
+            let _: Payload = try await client.patch("cargo/1", body: Body(name: "milk"))
+        }
+    }
+
+    func testDeleteDoesNotReplayAfter401Refresh() async {
+        await assertMutationDoesNotReplay(
+            mode: .mutationNoReplay,
+            expectedMethod: "DELETE"
+        ) { client in
+            struct Payload: Decodable { let ok: Bool }
+            let _: Payload = try await client.delete("cargo/1")
+        }
+    }
+
+    func testMultipartPostDoesNotReplayAfter401Refresh() async {
+        await assertMutationDoesNotReplay(
+            mode: .mutationNoReplay,
+            expectedMethod: "POST"
+        ) { client in
+            struct Payload: Decodable { let ok: Bool }
+            let _: Payload = try await client.uploadAvatar(
+                "account/avatar",
+                imageData: Data([0xFF, 0xD8, 0xFF])
+            )
+        }
     }
 
     func testRefreshFailureSignsOutAndThrowsUnauthorized() async {
@@ -73,6 +92,33 @@ final class APIClientAuthRetryTests: XCTestCase {
         XCTAssertEqual(MockAPIAuthRetryURLProtocol.refreshCount, 1)
     }
 
+    private func assertMutationDoesNotReplay(
+        mode: MockAPIAuthRetryURLProtocol.Mode,
+        expectedMethod: String,
+        perform: (APIClient) async throws -> Void
+    ) async {
+        MockAPIAuthRetryURLProtocol.mode = mode
+        let session = Self.makeSession()
+        let auth = AuthManager(urlSession: session)
+        auth.adopt(TokenPair(accessToken: "access-1", refreshToken: "refresh-1", expiresIn: 3600))
+        let client = APIClient(auth: auth, session: session)
+
+        do {
+            try await perform(client)
+            XCTFail("Expected retryableUnauthorized")
+        } catch let error as APIError {
+            guard case .retryableUnauthorized = error else {
+                return XCTFail("Expected retryableUnauthorized, got \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(MockAPIAuthRetryURLProtocol.apiRequestCount, 1)
+        XCTAssertEqual(MockAPIAuthRetryURLProtocol.refreshCount, 1)
+        XCTAssertEqual(MockAPIAuthRetryURLProtocol.apiMethods, [expectedMethod])
+    }
+
     private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockAPIAuthRetryURLProtocol.self]
@@ -83,7 +129,7 @@ final class APIClientAuthRetryTests: XCTestCase {
 private final class MockAPIAuthRetryURLProtocol: URLProtocol {
     enum Mode {
         case getReplay
-        case postNoReplay
+        case mutationNoReplay
         case refreshFails
     }
 
@@ -136,7 +182,7 @@ private final class MockAPIAuthRetryURLProtocol: URLProtocol {
             } else {
                 respond(status: 200, body: #"{"ok":true}"#)
             }
-        case .postNoReplay, .refreshFails:
+        case .mutationNoReplay, .refreshFails:
             respond(status: 401, body: #"{"error":"unauthorized"}"#)
         }
     }

@@ -69,13 +69,13 @@ final class DeepLinkRouterTests: XCTestCase {
     func testReplayPendingOpensGalleyGenerate() {
         let router = DeepLinkRouter()
         router.enqueue(.galleyGenerate)
-        var selectedTab = 0
+        var selectedTab: MainTab = .hub
         router.replayPending(
             selectedTab: &selectedTab,
             openAskSheet: {},
             openScan: {}
         )
-        XCTAssertEqual(selectedTab, 2)
+        XCTAssertEqual(selectedTab, .galley)
         XCTAssertTrue(router.galleyGeneratePending)
         XCTAssertNil(router.pending)
     }
@@ -85,7 +85,7 @@ final class DeepLinkRouterTests: XCTestCase {
         let router = DeepLinkRouter()
         router.enqueue(.ask)
         router.enqueue(.scan)
-        var selectedTab = 0
+        var selectedTab: MainTab = .hub
         var actions: [String] = []
 
         router.replayPending(

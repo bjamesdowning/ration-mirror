@@ -8,7 +8,7 @@ final class CopilotScrollContext {
     private(set) var isExpanded = true
     private(set) var scrollDirection: CopilotScrollDirection = .idle
     private(set) var trackingGeneration = 0
-    private(set) var activeTab = 0
+    private(set) var activeTab: MainTab = .hub
     private(set) var keyboardInset: CGFloat = 0
     private(set) var composerHeight = CopilotDockLayout.expandedInputBarHeight
     private(set) var keyboardAnimationDuration: Double = 0.25
@@ -25,11 +25,11 @@ final class CopilotScrollContext {
     private var isUserScrolling = false
     private let scrollProcessInterval: CFAbsoluteTime = 0.05
 
-    func setActiveTab(_ tab: Int) {
+    func setActiveTab(_ tab: MainTab) {
         activeTab = tab
     }
 
-    func shouldAcceptScrollReports(from tab: Int, isTabActive: Bool) -> Bool {
+    func shouldAcceptScrollReports(from tab: MainTab, isTabActive: Bool) -> Bool {
         isTabActive && tab == activeTab
     }
 
@@ -215,7 +215,7 @@ final class CopilotScrollContext {
 }
 
 private struct CopilotScrollTracker: UIViewRepresentable {
-    let tab: Int
+    let tab: MainTab
     let isTabActive: Bool
     let scrollContext: CopilotScrollContext
     let trackingGeneration: Int
@@ -249,7 +249,7 @@ private struct CopilotScrollTracker: UIViewRepresentable {
         private var attachedGeneration = -1
         private var isEnabled = false
         private var scrollEndWorkItem: DispatchWorkItem?
-        var tab = 0
+        var tab: MainTab = .hub
         var isTabActive = false
         weak var scrollContext: CopilotScrollContext?
 
@@ -370,7 +370,7 @@ private struct CopilotScrollTracker: UIViewRepresentable {
 }
 
 struct CopilotScrollReporter: ViewModifier {
-    let tab: Int
+    let tab: MainTab
     let isActive: Bool
     @Environment(CopilotScrollContext.self) private var scrollContext
 
@@ -533,7 +533,7 @@ private struct CopilotKeyboardInsetObserver: ViewModifier {
 }
 
 extension View {
-    func copilotScrollTracked(tab: Int, isActive: Bool) -> some View {
+    func copilotScrollTracked(tab: MainTab, isActive: Bool) -> some View {
         modifier(CopilotScrollReporter(tab: tab, isActive: isActive))
     }
 

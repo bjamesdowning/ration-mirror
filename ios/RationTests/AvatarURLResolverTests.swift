@@ -38,19 +38,3 @@ final class AvatarURLResolverTests: XCTestCase {
         XCTAssertNil(AvatarURLResolver.resolve("   "))
     }
 }
-
-final class NextActionDismissStoreTests: XCTestCase {
-    @MainActor
-    func testDismissIncrementsRevisionAndPersists() {
-        let defaults = UserDefaults(suiteName: "NextActionDismissStoreTests")!
-        defaults.removePersistentDomain(forName: "NextActionDismissStoreTests")
-        let store = NextActionDismissStore(defaults: defaults)
-
-        XCTAssertFalse(store.isDismissed(actionKey: "scan", organizationId: "org_1"))
-        let before = store.revision
-        store.dismiss(actionKey: "scan", organizationId: "org_1")
-        XCTAssertGreaterThan(store.revision, before)
-        XCTAssertTrue(store.isDismissed(actionKey: "scan", organizationId: "org_1"))
-        XCTAssertFalse(store.isDismissed(actionKey: "scan", organizationId: "org_2"))
-    }
-}

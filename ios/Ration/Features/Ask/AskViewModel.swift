@@ -80,53 +80,53 @@ final class AskViewModel {
         let succeeded: Bool
     }
 
-    private(set) var state: State = .idle
-    private(set) var turnPhase: TurnPhase = .idle
-    private(set) var messages: [CopilotMessage] = []
-    private(set) var status: CopilotStatusResponse?
-    private(set) var sessionUsage: CopilotSessionUsage?
-    private(set) var sessionLimitWarning: CopilotSessionLimitWarning?
-    private(set) var urgentWarningAcknowledged = false
-    private(set) var activeTool: CopilotToolStatus?
-    private(set) var completedTool: CompletedTool?
-    private(set) var lastSyncedLabel: String?
-    private(set) var isTurnActive = false
-    private(set) var isStopping = false
-    private(set) var isAwaitingApproval = false
+    var state: State = .idle
+    var turnPhase: TurnPhase = .idle
+    var messages: [CopilotMessage] = []
+    var status: CopilotStatusResponse?
+    var sessionUsage: CopilotSessionUsage?
+    var sessionLimitWarning: CopilotSessionLimitWarning?
+    var urgentWarningAcknowledged = false
+    var activeTool: CopilotToolStatus?
+    var completedTool: CompletedTool?
+    var lastSyncedLabel: String?
+    var isTurnActive = false
+    var isStopping = false
+    var isAwaitingApproval = false
     /// After Approve, ignore pause-stream message_end until continuation activity.
-    private var expectingApprovalContinuation = false
-    private var seenPostApprovalActivity = false
-    private var pauseApprovalRequestId: String?
-    private(set) var briefingComplete = false
-    private(set) var introComplete = false
+    var expectingApprovalContinuation = false
+    var seenPostApprovalActivity = false
+    var pauseApprovalRequestId: String?
+    var briefingComplete = false
+    var introComplete = false
     /// True when the intro assistant reply had usable content (not empty / failed soft end).
-    private(set) var introSucceeded = false
-    private(set) var seedComplete = false
-    private(set) var seedTurnStarted = false
+    var introSucceeded = false
+    var seedComplete = false
+    var seedTurnStarted = false
     /// True when the welcome intro came from a live Copilot turn (not static markdown).
-    private(set) var liveBriefingActive = false
-    private(set) var seedItemsAdded = 0
+    var liveBriefingActive = false
+    var seedItemsAdded = 0
     var tracksBriefingSession = false
-    private(set) var modelPreset: String = "fast"
+    var modelPreset: String = "fast"
     /// Retained across background so resume reconnects to the same Think DO.
-    private(set) var conversationId: String
+    var conversationId: String
 
-    private var socket: (any AskSocketClient)?
-    private var streamTask: Task<Void, Never>?
-    private var toolLingerTask: Task<Void, Never>?
-    private var snapshotSaveTask: Task<Void, Never>?
+    var socket: (any AskSocketClient)?
+    var streamTask: Task<Void, Never>?
+    var toolLingerTask: Task<Void, Never>?
+    var snapshotSaveTask: Task<Void, Never>?
     private var stopTimeoutTask: Task<Void, Never>?
     private var briefingTurnTimeoutTask: Task<Void, Never>?
     private var turnWatchdogTask: Task<Void, Never>?
-    private var isConnected = false
+    var isConnected = false
     private var isSubmitting = false
     private var organizationId: String?
     private var snapshots: SnapshotStore?
-    private var lastActivityAt = Date()
+    var lastActivityAt = Date()
     /// Bumped when the live socket is discarded so late events from an old
     /// observe loop cannot poison a later turn.
-    private var connectionGeneration = 0
-    private let makeSocket: @MainActor (AuthManager, String) -> any AskSocketClient
+    var connectionGeneration = 0
+    let makeSocket: @MainActor (AuthManager, String) -> any AskSocketClient
     private let stopTimeoutNanoseconds: UInt64
     private let briefingTurnTimeoutNanoseconds: UInt64
     /// 90s with no stream activity while turn is active (matches web COPILOT_TURN_WATCHDOG_MS).
@@ -294,94 +294,6 @@ final class AskViewModel {
         }
         await newChat(auth: auth, organizationId: organizationId, snapshots: snapshots)
         return true
-    }
-
-    func resetBriefingSession() {
-        tracksBriefingSession = false
-        briefingComplete = false
-        introComplete = false
-        introSucceeded = false
-        seedComplete = false
-        seedTurnStarted = false
-        liveBriefingActive = false
-        seedItemsAdded = 0
-        modelPreset = "fast"
-        cancelBriefingTurnTimeout()
-    }
-
-    func beginOnboardingBriefingSession() {
-        tracksBriefingSession = true
-        briefingComplete = false
-        introComplete = false
-        introSucceeded = false
-        seedComplete = false
-        seedTurnStarted = false
-        liveBriefingActive = true
-        seedItemsAdded = 0
-        modelPreset = "fast"
-    }
-
-    func markSeedTurnStarted() {
-        seedTurnStarted = true
-    }
-
-    func clearBriefingError() {
-        if case .error = state {
-            state = .idle
-        }
-    }
-
-    /// Reset intro flags so bootstrap can be re-sent after a failed/empty reply.
-    func prepareIntroRetry() {
-        cancelBriefingTurnTimeout()
-        introComplete = false
-        introSucceeded = false
-        seedTurnStarted = false
-        seedComplete = false
-        briefingComplete = false
-        messages = []
-        clearBriefingError()
-    }
-
-    /// Allow seed to be re-sent after a timeout or failed send.
-    func prepareSeedRetry() {
-        seedTurnStarted = false
-        clearBriefingError()
-    }
-
-    func surfaceBriefingError(_ message: String) {
-        state = .error(message)
-    }
-
-    /// Tear down a stuck briefing turn so Get Started can always proceed.
-    func forceEndBriefingTurn() {
-        cancelBriefingTurnTimeout()
-        dropLiveSocket()
-        completeTurn(state: .idle)
-    }
-
-    var seedSuccessMessage: String {
-        if seedItemsAdded <= 0 {
-            return "Kitchen stocked in Cargo"
-        }
-        let noun = seedItemsAdded == 1 ? "item" : "items"
-        return "\(seedItemsAdded) \(noun) added to Cargo"
-    }
-
-    func showStaticBriefing(_ markdown: String) {
-        messages = [
-            CopilotMessage(role: "user", content: OnboardingBriefingCopy.bootstrapPrompt),
-            CopilotMessage(role: "assistant", content: markdown),
-        ]
-        tracksBriefingSession = false
-        liveBriefingActive = false
-        introComplete = true
-        introSucceeded = true
-        briefingComplete = true
-        seedComplete = false
-        seedTurnStarted = false
-        state = .idle
-        turnPhase = .idle
     }
 
     @discardableResult
@@ -593,384 +505,7 @@ final class AskViewModel {
         clearTransientError()
     }
 
-    private func ensureSocket(auth: AuthManager) -> any AskSocketClient {
-        if let socket {
-            return socket
-        }
-        let created = makeSocket(auth, conversationId)
-        socket = created
-        return created
-    }
-
-    /// Cancel (optional), disconnect, nil the client, and bump generation so a
-    /// later observe loop ignores events from this connection.
-    private func tearDownSocket(cancelActive: Bool) async {
-        let previousSocket = socket
-        // Drop the retained client immediately so a concurrent resume/send cannot
-        // re-observe a poisoned AsyncStream while cancel is in flight.
-        socket = nil
-        isConnected = false
-        connectionGeneration += 1
-        streamTask?.cancel()
-        streamTask = nil
-        if cancelActive {
-            try? await previousSocket?.cancelActiveRequest()
-        }
-        previousSocket?.disconnect()
-    }
-
-    private func dropLiveSocket() {
-        streamTask?.cancel()
-        streamTask = nil
-        socket?.disconnect()
-        socket = nil
-        isConnected = false
-        connectionGeneration += 1
-    }
-
-    private func observe(_ socket: any AskSocketClient) {
-        let generation = connectionGeneration
-        streamTask?.cancel()
-        streamTask = Task { [weak self] in
-            for await event in socket.events() {
-                guard let self, self.connectionGeneration == generation else { continue }
-                guard self.shouldAcceptObservedEvent(event) else { continue }
-                self.apply(event)
-            }
-        }
-    }
-
-    func shouldAcceptObservedEvent(_ event: CopilotStreamEvent) -> Bool {
-        isTurnActive
-            || isAwaitingApproval
-            || expectingApprovalContinuation
-            || event.type == "message_end"
-            || event.type == "error"
-            || event.type == "approval_request"
-            || event.type == "session_usage_update"
-            || event.type == "session_limit_warning"
-    }
-
-    func apply(_ event: CopilotStreamEvent) {
-        switch event.type {
-        case "message_start":
-            beginTurnIfNeeded()
-            if let message = event.message {
-                if message.role == "assistant" {
-                    if let index = messages.lastIndex(where: { $0.role == "assistant" && $0.id == message.id }) {
-                        if messages[index].content.isEmpty {
-                            messages[index] = message
-                        }
-                    } else if messages.last?.role != "assistant" {
-                        messages.append(message)
-                    }
-                } else if !messages.contains(where: { $0.id == message.id }) {
-                    messages.append(message)
-                }
-            }
-            turnPhase = .thinking
-        case "text_delta":
-            beginTurnIfNeeded()
-            markPostApprovalActivity()
-            appendAssistantDelta(event.text ?? "", messageId: event.messageId)
-            clearTransientError()
-            state = .streaming
-            turnPhase = .streaming
-            persistSnapshotDebounced()
-        case "reasoning_start":
-            beginTurnIfNeeded()
-            markPostApprovalActivity()
-            appendReasoningDelta("", mode: .start, messageId: event.messageId)
-            turnPhase = .thinking
-        case "reasoning_delta":
-            beginTurnIfNeeded()
-            markPostApprovalActivity()
-            appendReasoningDelta(event.text ?? "", mode: .delta, messageId: event.messageId)
-            turnPhase = .thinking
-        case "reasoning_end":
-            appendReasoningDelta("", mode: .end, messageId: event.messageId)
-        case "message_end":
-            // Stream finish/done still arrives while parked on host approval —
-            // keep the Confirm card (do not complete the turn).
-            if isAwaitingApproval {
-                return
-            }
-            if case .awaitingApproval = state {
-                return
-            }
-            // After Approve, ignore late pause-stream terminals until continuation
-            // delivers tool/text (otherwise empty final / dropped summary).
-            if expectingApprovalContinuation && !seenPostApprovalActivity {
-                return
-            }
-            if expectingApprovalContinuation,
-               let pauseId = pauseApprovalRequestId,
-               let endedId = event.messageId,
-               pauseId == endedId {
-                return
-            }
-            expectingApprovalContinuation = false
-            seenPostApprovalActivity = false
-            pauseApprovalRequestId = nil
-            // Late frames after a briefing turn already ended in `.error` must not wipe
-            // the retry affordance unless usable content arrived and we can recover.
-            if tracksBriefingSession, !isTurnActive, case .error = state {
-                if lastAssistantHasUsableContent {
-                    if !introComplete {
-                        introComplete = true
-                        introSucceeded = true
-                    } else if seedTurnStarted, !seedComplete {
-                        seedComplete = true
-                        briefingComplete = true
-                    }
-                    completeTurn(state: .idle)
-                    scheduleImmediateSnapshotSave()
-                }
-                return
-            }
-
-            clearTransientError()
-            if tracksBriefingSession {
-                if !introComplete {
-                    introComplete = true
-                    introSucceeded = lastAssistantHasUsableContent
-                    if !introSucceeded {
-                        completeTurn(state: .error(OnboardingBriefingCopy.emptyIntroMessage))
-                        scheduleImmediateSnapshotSave()
-                        return
-                    }
-                } else if seedTurnStarted, isTurnActive {
-                    seedComplete = true
-                    briefingComplete = true
-                }
-            }
-            completeTurn(state: .idle)
-            scheduleImmediateSnapshotSave()
-        case "tool_start":
-            beginTurnIfNeeded()
-            markPostApprovalActivity()
-            if let status = event.status {
-                activeTool = CopilotToolStatus(
-                    toolCallId: status.toolCallId,
-                    toolName: status.toolName,
-                    label: CopilotToolLabels.label(for: status.toolName, phase: .running)
-                )
-            }
-            completedTool = nil
-            toolLingerTask?.cancel()
-            state = .streaming
-            turnPhase = .toolRunning
-        case "tool_end":
-            markPostApprovalActivity()
-            let toolName = activeTool?.toolName ?? "tool"
-            let succeeded = event.ok == true
-            if tracksBriefingSession, toolName == "add_cargo_item", succeeded {
-                seedItemsAdded += 1
-            }
-            activeTool = nil
-            completedTool = CompletedTool(
-                toolName: toolName,
-                label: CopilotToolLabels.label(for: toolName, phase: succeeded ? .done : .error),
-                succeeded: succeeded
-            )
-            turnPhase = .toolDone
-            toolLingerTask?.cancel()
-            toolLingerTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 800_000_000)
-                guard !Task.isCancelled else { return }
-                guard let self else { return }
-                if self.completedTool?.toolName == toolName {
-                    self.completedTool = nil
-                    if self.isTurnActive, self.turnPhase == .toolDone {
-                        self.turnPhase = .thinking
-                    }
-                }
-            }
-            scheduleImmediateSnapshotSave()
-        case "approval_request":
-            guard !isStopping else { return }
-            beginTurnIfNeeded()
-            turnPhase = .idle
-            guard let approvalId = event.approvalId else {
-                completeTurn(state: .error("Copilot sent an invalid approval request."))
-                return
-            }
-            let toolName = event.toolName
-                ?? activeTool?.toolName
-                ?? "Copilot action"
-            let title = event.title ?? "Confirm \(toolName)"
-            let description = event.description
-                ?? "Copilot wants to run \(toolName)."
-            isAwaitingApproval = true
-            expectingApprovalContinuation = false
-            seenPostApprovalActivity = false
-            pauseApprovalRequestId = event.messageId
-            state = .awaitingApproval(
-                id: approvalId,
-                title: title,
-                description: description
-            )
-        case "blocked_feature":
-            if let blocked = event.blocked {
-                completeTurn(state: .blocked(blocked))
-            } else {
-                completeTurn(state: .error("Copilot sent an invalid blocked action."))
-            }
-        case "session_usage_update":
-            if let usage = event.usage {
-                sessionUsage = CopilotSessionUsage.mergeMonotonic(
-                    previous: sessionUsage,
-                    incoming: usage
-                )
-                if let currentStatus = status {
-                    status = CopilotStatusResponse(
-                        tier: currentStatus.tier,
-                        freeConversationsRemaining: currentStatus.freeConversationsRemaining,
-                        allowanceResetAt: currentStatus.allowanceResetAt,
-                        creditBalance: usage.creditBalance,
-                        autoDeductConsent: currentStatus.autoDeductConsent,
-                        conversationFloorCost: currentStatus.conversationFloorCost,
-                        sessionIdleMs: currentStatus.sessionIdleMs,
-                        tokensPerCredit: currentStatus.tokensPerCredit,
-                        sessionMaxTokens: currentStatus.sessionMaxTokens,
-                        onboardingBriefingEligible: currentStatus.onboardingBriefingEligible,
-                        onboardingBriefingConsumed: currentStatus.onboardingBriefingConsumed
-                    )
-                }
-                scheduleImmediateSnapshotSave(touchActivity: false)
-            }
-        case "session_limit_warning":
-            if let warning = event.warning {
-                sessionLimitWarning = warning
-                if warning.isUrgent {
-                    urgentWarningAcknowledged = false
-                }
-            }
-        case "error":
-            let wasTurnActive = isTurnActive
-            if event.error?.code == "onboarding_briefing_exhausted" {
-                briefingComplete = true
-                introComplete = true
-                // Don't unlock seed on a soft-deny — surface escape copy instead.
-                completeTurn(
-                    state: .error(
-                        event.error?.message
-                            ?? "Your welcome briefing is complete. Tap Get Started to continue."
-                    )
-                )
-                return
-            }
-            if event.error?.code == "onboarding_briefing_invalid_prompt" {
-                completeTurn(
-                    state: .error(
-                        event.error?.message
-                            ?? "That prompt isn't part of the welcome briefing. Tap Stock my kitchen or Get Started."
-                    )
-                )
-                return
-            }
-            isConnected = false
-            if event.error?.code == "session_limit_reached" {
-                // Preserve transcript and let the user start a new chat explicitly.
-                dropLiveSocket()
-                completeTurn(state: .sessionLimitReached(event.error?.message ?? "This Copilot chat is full. Start a new chat to continue."))
-                scheduleImmediateSnapshotSave()
-                return
-            }
-            if event.error?.code == "insufficient_credits" {
-                // Preserve transcript; user needs to add credits before continuing.
-                dropLiveSocket()
-                completeTurn(state: .insufficientCredits(event.error?.message ?? "Copilot needs more credits."))
-                scheduleImmediateSnapshotSave()
-                return
-            }
-            if !wasTurnActive {
-                return
-            }
-            completeTurn(
-                state: .error(event.error?.message ?? event.text ?? "Copilot hit an error.")
-            )
-        default:
-            break
-        }
-    }
-
-    private enum ReasoningAppendMode {
-        case start
-        case delta
-        case end
-    }
-
-    private func appendReasoningDelta(
-        _ text: String,
-        mode: ReasoningAppendMode,
-        messageId: String?
-    ) {
-        if messages.last?.role == "assistant", let index = messages.indices.last {
-            var message = messages[index]
-            switch mode {
-            case .start:
-                message.reasoning = message.reasoning ?? ""
-                message.reasoningState = "streaming"
-            case .delta:
-                message.reasoning = (message.reasoning ?? "") + text
-                message.reasoningState = "streaming"
-            case .end:
-                message.reasoningState = "complete"
-            }
-            messages[index] = message
-            return
-        }
-
-        guard mode != .end else { return }
-        messages.append(
-            CopilotMessage(
-                id: messageId ?? UUID().uuidString,
-                role: "assistant",
-                content: "",
-                reasoning: mode == .delta ? text : "",
-                reasoningState: "streaming"
-            )
-        )
-    }
-
-    private func appendAssistantDelta(_ text: String, messageId: String?) {
-        if messages.last?.role == "assistant", let index = messages.indices.last {
-            messages[index].content += text
-        } else {
-            messages.append(
-                CopilotMessage(
-                    id: messageId ?? UUID().uuidString,
-                    role: "assistant",
-                    content: text
-                )
-            )
-        }
-    }
-
-    private var lastAssistantHasUsableContent: Bool {
-        guard let last = messages.last(where: { $0.role == "assistant" }) else { return false }
-        return !last.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func persistSnapshotDebounced(touchActivity: Bool = true) {
-        snapshotSaveTask?.cancel()
-        snapshotSaveTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.persistSnapshotNow(touchActivity: touchActivity)
-        }
-    }
-
-    private func scheduleImmediateSnapshotSave(touchActivity: Bool = true) {
-        snapshotSaveTask?.cancel()
-        snapshotSaveTask = Task { [weak self] in
-            guard !Task.isCancelled else { return }
-            await self?.persistSnapshotNow(touchActivity: touchActivity)
-        }
-    }
-
-    private func persistSnapshotNow(touchActivity: Bool = true) async {
+    func persistSnapshotNow(touchActivity: Bool = true) async {
         guard let organizationId, let snapshots else { return }
         if touchActivity {
             lastActivityAt = Date()
@@ -990,7 +525,7 @@ final class AskViewModel {
         lastSyncedLabel = snapshots.lastSyncedLabel(domain: SnapshotDomain.ask, organizationId: organizationId)
     }
 
-    private func clearTransientError() {
+    func clearTransientError() {
         if case .error = state {
             state = .idle
         }
@@ -1006,7 +541,7 @@ final class AskViewModel {
         scheduleTurnWatchdog()
     }
 
-    private func beginTurnIfNeeded() {
+    func beginTurnIfNeeded() {
         if !isTurnActive {
             beginTurn()
         }
@@ -1038,12 +573,12 @@ final class AskViewModel {
         }
     }
 
-    private func cancelBriefingTurnTimeout() {
+    func cancelBriefingTurnTimeout() {
         briefingTurnTimeoutTask?.cancel()
         briefingTurnTimeoutTask = nil
     }
 
-    private func markPostApprovalActivity() {
+    func markPostApprovalActivity() {
         guard expectingApprovalContinuation else { return }
         seenPostApprovalActivity = true
         lastActivityAt = Date()
@@ -1073,7 +608,7 @@ final class AskViewModel {
         }
     }
 
-    private func completeTurn(state: State) {
+    func completeTurn(state: State) {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
         cancelBriefingTurnTimeout()

@@ -1,108 +1,4 @@
 import SwiftUI
-import Observation
-
-@MainActor
-@Observable
-final class BillingViewModel {
-    private(set) var status: BillingStatus?
-    private(set) var isLoading = false
-    private(set) var isRestoring = false
-    private(set) var purchasingPackageID: String?
-    var errorMessage: String?
-
-    func load(api: RationAPI, billing: BillingManager) async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            async let session = api.session()
-            async let billingStatus = api.billingStatus()
-            let (sessionResponse, statusResponse) = try await (session, billingStatus)
-            await billing.logIn(appUserId: sessionResponse.user.id)
-            status = statusResponse
-            await billing.loadOfferings()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    func purchase(
-        packageID: String,
-        api: RationAPI,
-        billing: BillingManager,
-        session: SessionStore
-    ) async {
-        purchasingPackageID = packageID
-        errorMessage = nil
-        defer { purchasingPackageID = nil }
-        do {
-            let outcome = try await billing.purchase(packageID: packageID)
-            guard outcome == .completed else { return }
-            let baseline = status
-            let isCreditPack = billing.packages
-                .first(where: { $0.id == packageID })?
-                .productIdentifier
-                .hasPrefix(AppConfig.creditPackProductPrefix) == true
-            // Fulfillment lands via the RC → Ration webhook; poll briefly so the
-            // paywall reflects new tier / credits without a manual refresh.
-            status = try await pollAfterFulfillment(
-                api: api,
-                baseline: baseline,
-                creditPack: isCreditPack
-            )
-            _ = await session.load(api: api)
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    func restore(api: RationAPI, billing: BillingManager, session: SessionStore) async {
-        isRestoring = true
-        errorMessage = nil
-        defer { isRestoring = false }
-        do {
-            try await billing.restorePurchases()
-            status = try await pollAfterFulfillment(
-                api: api,
-                baseline: status,
-                creditPack: false
-            )
-            _ = await session.load(api: api)
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-
-    /// Polls billing status up to ~5s for RC webhook fulfillment.
-    /// Subscriptions early-exit when `crew_member` is active; credit packs
-    /// early-exit when org credits rise above the pre-purchase baseline.
-    private func pollAfterFulfillment(
-        api: RationAPI,
-        baseline: BillingStatus?,
-        creditPack: Bool
-    ) async throws -> BillingStatus {
-        var latest = try await api.billingStatus()
-        for _ in 0..<4 {
-            if fulfillmentVisible(latest, baseline: baseline, creditPack: creditPack) {
-                break
-            }
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            latest = try await api.billingStatus()
-        }
-        return latest
-    }
-
-    private func fulfillmentVisible(
-        _ latest: BillingStatus,
-        baseline: BillingStatus?,
-        creditPack: Bool
-    ) -> Bool {
-        if creditPack {
-            let before = baseline?.credits ?? 0
-            return latest.credits > before
-        }
-        return latest.entitlements.crew_member.active
-    }
-}
 
 /// Crew Member + credit packs paywall (RevenueCat offering-driven).
 struct PaywallView: View {
@@ -140,11 +36,11 @@ struct PaywallView: View {
                 .padding(24)
             }
             .background(Theme.ceramic)
-            .navigationTitle("Crew Member")
+            .navigationTitle(String(localized: "Crew Member"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button(String(localized: "Done")) { dismiss() }
                 }
             }
         }
@@ -316,7 +212,7 @@ struct PaywallView: View {
 
     private var restoreAndDisclosure: some View {
         VStack(spacing: 12) {
-            Button(model.isRestoring ? "Restoring…" : "Restore purchases") {
+            Button(model.isRestoring ? "Restoring…" : String(localized: "Restore purchases")) {
                 Task {
                     await model.restore(
                         api: env.api,

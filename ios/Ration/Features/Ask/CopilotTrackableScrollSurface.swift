@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Wraps non-list empty/error content in a scroll surface so Copilot dock collapse works consistently.
 struct CopilotTrackableScrollSurface<Content: View>: View {
-    let tab: Int
+    let tab: MainTab
     let isActive: Bool
     var hasTabAction: Bool = true
     @ViewBuilder let content: () -> Content
@@ -22,7 +22,7 @@ struct CopilotTrackableScrollSurface<Content: View>: View {
 
 extension View {
     func copilotTrackableScrollSurface(
-        tab: Int,
+        tab: MainTab,
         isActive: Bool,
         hasTabAction: Bool = true
     ) -> some View {

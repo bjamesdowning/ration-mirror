@@ -5,13 +5,15 @@ struct CopilotCompactHeader: View {
     let sessionUsage: CopilotSessionUsage?
     let onClose: () -> Void
     let onNewChat: () -> Void
+    @ScaledMetric(relativeTo: .body) private var closeIconPoints: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var newChatIconPoints: CGFloat = 18
 
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(Typography.heroIcon(16))
-                    .frame(width: 44, height: 44)
+                    .font(Typography.heroIcon(closeIconPoints))
+                    .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Done")
 
@@ -33,8 +35,8 @@ struct CopilotCompactHeader: View {
 
             Button(action: onNewChat) {
                 Image(systemName: "square.and.pencil")
-                    .font(Typography.heroIcon(18))
-                    .frame(width: 44, height: 44)
+                    .font(Typography.heroIcon(newChatIconPoints))
+                    .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("New Chat")
         }

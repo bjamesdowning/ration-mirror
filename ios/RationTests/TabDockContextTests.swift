@@ -7,72 +7,72 @@ final class TabDockContextTests: XCTestCase {
     func testPushActionRegistersAndIncrementsRevision() {
         let tabDock = TabDockContext()
 
-        tabDock.pushAction(for: 0) {
+        tabDock.pushAction(for: .hub) {
             Text("Scan")
         }
         XCTAssertEqual(tabDock.revision, 1)
-        XCTAssertTrue(tabDock.hasAction(for: 0))
+        XCTAssertTrue(tabDock.hasAction(for: .hub))
     }
 
     func testSecondPushOnSameTagReplacesTopAction() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 1) { Text("Add") }
+        tabDock.pushAction(for: .cargo) { Text("Add") }
 
-        tabDock.pushAction(for: 1) { Text("Detail") }
+        tabDock.pushAction(for: .cargo) { Text("Detail") }
         XCTAssertEqual(tabDock.revision, 2)
-        XCTAssertTrue(tabDock.hasAction(for: 1))
+        XCTAssertTrue(tabDock.hasAction(for: .cargo))
     }
 
     func testPopRestoresPreviousAction() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 1) { Text("Add") }
-        tabDock.pushAction(for: 1) { Text("Detail") }
+        tabDock.pushAction(for: .cargo) { Text("Add") }
+        tabDock.pushAction(for: .cargo) { Text("Detail") }
 
-        tabDock.popAction(for: 1)
+        tabDock.popAction(for: .cargo)
         XCTAssertEqual(tabDock.revision, 3)
-        XCTAssertTrue(tabDock.hasAction(for: 1))
+        XCTAssertTrue(tabDock.hasAction(for: .cargo))
     }
 
     func testPopUntilEmptyRemovesAction() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 2) { Text("Only") }
+        tabDock.pushAction(for: .galley) { Text("Only") }
 
-        tabDock.popAction(for: 2)
+        tabDock.popAction(for: .galley)
         XCTAssertEqual(tabDock.revision, 2)
-        XCTAssertFalse(tabDock.hasAction(for: 2))
+        XCTAssertFalse(tabDock.hasAction(for: .galley))
     }
 
     func testPopEmptyStackIsNoOp() {
         let tabDock = TabDockContext()
-        tabDock.popAction(for: 3)
+        tabDock.popAction(for: .manifest)
         XCTAssertEqual(tabDock.revision, 0)
-        XCTAssertFalse(tabDock.hasAction(for: 3))
+        XCTAssertFalse(tabDock.hasAction(for: .manifest))
     }
 
     func testSetActionIsIdempotentWhenStackNonEmpty() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 0) { Text("Scan") }
+        tabDock.pushAction(for: .hub) { Text("Scan") }
 
-        tabDock.setAction(for: 0) { Text("Scan again") }
+        tabDock.setAction(for: .hub) { Text("Scan again") }
         XCTAssertEqual(tabDock.revision, 1, "setAction must not push when stack already has an entry")
     }
 
     func testClearActionRemovesEntireStack() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 1) { Text("Add") }
-        tabDock.pushAction(for: 1) { Text("Detail") }
+        tabDock.pushAction(for: .cargo) { Text("Add") }
+        tabDock.pushAction(for: .cargo) { Text("Detail") }
 
-        tabDock.clearAction(for: 1)
+        tabDock.clearAction(for: .cargo)
         XCTAssertEqual(tabDock.revision, 3)
-        XCTAssertFalse(tabDock.hasAction(for: 1))
+        XCTAssertFalse(tabDock.hasAction(for: .cargo))
 
-        tabDock.clearAction(for: 1)
+        tabDock.clearAction(for: .cargo)
         XCTAssertEqual(tabDock.revision, 3, "Clearing a missing action is a no-op")
     }
 
     func testBumpContentEpochIncrementsWithoutStackRevision() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 0) { Text("Scan") }
+        tabDock.pushAction(for: .hub) { Text("Scan") }
         let revisionAfterPush = tabDock.revision
 
         tabDock.bumpContentEpoch()
@@ -82,10 +82,10 @@ final class TabDockContextTests: XCTestCase {
 
     func testPopWrongTagDoesNotAffectOtherTagStack() {
         let tabDock = TabDockContext()
-        tabDock.pushAction(for: 2) { Text("Galley") }
+        tabDock.pushAction(for: .galley) { Text("Galley") }
 
-        tabDock.popAction(for: 1)
+        tabDock.popAction(for: .cargo)
 
-        XCTAssertTrue(tabDock.hasAction(for: 2), "Popping an empty/wrong tag must not drain another tab's stack")
+        XCTAssertTrue(tabDock.hasAction(for: .galley), "Popping an empty/wrong tag must not drain another tab's stack")
     }
 }

@@ -30,7 +30,7 @@ struct GalleyView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 2))"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .galley))"
     }
 
     private var galleyCount: Int {
@@ -162,7 +162,7 @@ struct GalleyView: View {
                 }
             }
         }
-        .tabDockAction(tag: 2) {
+        .tabDockAction(tag: .galley) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Galley actions") {
                 Button { showingAddTypeChoice = true } label: {
                     Label("Add", systemImage: "plus")
@@ -271,7 +271,7 @@ struct GalleyView: View {
     }
 
     private func galleyEmptyState(isSearch: Bool) -> some View {
-        CopilotTrackableScrollSurface(tab: 2, isActive: isTabActive) {
+        CopilotTrackableScrollSurface(tab: .galley, isActive: isTabActive) {
             VStack(spacing: 16) {
                 EmptyStateView(
                     icon: isSearch ? "magnifyingglass" : "fork.knife",
@@ -383,7 +383,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotScrollTracked(tab: 2, isActive: isTabActive)
+        .copilotScrollTracked(tab: .galley, isActive: isTabActive)
     }
 
     private var matchList: some View {
@@ -459,7 +459,7 @@ struct GalleyView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotScrollTracked(tab: 2, isActive: isTabActive)
+        .copilotScrollTracked(tab: .galley, isActive: isTabActive)
     }
 
     private func handleCook(mealId: String, servings: Int? = nil, confirmInsufficient: Bool = false) async {

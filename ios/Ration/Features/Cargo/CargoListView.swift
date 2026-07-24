@@ -18,7 +18,7 @@ struct CargoListView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 1))"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .cargo))"
     }
 
     var body: some View {
@@ -27,7 +27,7 @@ struct CargoListView: View {
                 if model.isLoading && isEmpty {
                     LoadingView()
                 } else if let errorMessage = model.errorMessage, isEmpty {
-                    CopilotTrackableScrollSurface(tab: 1, isActive: isTabActive) {
+                    CopilotTrackableScrollSurface(tab: .cargo, isActive: isTabActive) {
                         VStack(spacing: 16) {
                             ErrorBanner(message: errorMessage)
                             Button("Retry") { Task { await reload() } }
@@ -36,7 +36,7 @@ struct CargoListView: View {
                         .padding(24)
                     }
                 } else if isEmpty {
-                    CopilotTrackableScrollSurface(tab: 1, isActive: isTabActive) {
+                    CopilotTrackableScrollSurface(tab: .cargo, isActive: isTabActive) {
                         VStack(spacing: 16) {
                             EmptyStateView(
                                 icon: "shippingbox",
@@ -136,7 +136,7 @@ struct CargoListView: View {
                 }
             }
         }
-        .tabDockAction(tag: 1) {
+        .tabDockAction(tag: .cargo) {
             IconFABMenuCore(systemImage: "plus.circle.fill", accessibilityLabel: "Cargo actions") {
                 if env.session.clientFlags.isAiScanReceiptEnabled {
                     Button(action: onScan) {
@@ -325,7 +325,7 @@ struct CargoListView: View {
         .refreshable { await reload() }
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotScrollTracked(tab: 1, isActive: isTabActive)
+        .copilotScrollTracked(tab: .cargo, isActive: isTabActive)
     }
 }
 

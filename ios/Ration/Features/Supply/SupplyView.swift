@@ -42,7 +42,7 @@ struct SupplyView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 4))"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .supply))"
     }
 
     var body: some View {
@@ -54,7 +54,7 @@ struct SupplyView: View {
                     listView(list, organizationId: organizationId)
                 } else {
                     CopilotTrackableScrollSurface(
-                        tab: 4,
+                        tab: .supply,
                         isActive: isTabActive,
                         hasTabAction: true
                     ) {
@@ -317,7 +317,7 @@ struct SupplyView: View {
                 }
             }
         }
-        .tabDockAction(tag: 4) {
+        .tabDockAction(tag: .supply) {
             IconFABMenuCore(
                 systemImage: "plus.circle.fill",
                 accessibilityLabel: "Supply actions",
@@ -498,7 +498,7 @@ struct SupplyView: View {
         .copilotDockScrollMargins(
             hasTabAction: true
         )
-        .copilotScrollTracked(tab: 4, isActive: isTabActive)
+        .copilotScrollTracked(tab: .supply, isActive: isTabActive)
     }
 
     private func loadSupplySettings() async {
@@ -549,13 +549,15 @@ private struct SupplyListItemRow: View {
     let onCheck: () -> Void
     let onSnooze: () -> Void
     let onDelete: () -> Void
+    @ScaledMetric(relativeTo: .body) private var checkIconPoints: CGFloat = 28
 
     var body: some View {
         HStack {
             Button(action: onCheckOff) {
                 Image(systemName: item.isPurchased ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: checkIconPoints))
                     .foregroundStyle(item.isPurchased ? Theme.hyperGreen : Theme.muted)
-                    .frame(width: 28, height: 28)
+                    .frame(width: checkIconPoints, height: checkIconPoints)
             }
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
@@ -583,7 +585,9 @@ private struct SupplyListItemRow: View {
                 ingredientName: item.name
             )
             .rationCaption()
+            .accessibilityHidden(true)
         }
+        .accessibilityElement(children: .contain)
         .swipeActions(edge: .leading) {
             if !item.isPurchased {
                 Button(action: onCheck) {
@@ -618,11 +622,23 @@ private struct SupplyListItemRow: View {
                     .foregroundStyle(Theme.carbon)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(supplyNameAccessibilityLabel)
         } else {
             Text(item.name.capitalized)
                 .rationBody()
                 .strikethrough(item.isPurchased)
                 .foregroundStyle(item.isPurchased ? Theme.muted : Theme.carbon)
+                .accessibilityLabel(supplyNameAccessibilityLabel)
         }
+    }
+
+    private var supplyNameAccessibilityLabel: String {
+        let quantity = QuantityPresenter.present(
+            quantity: item.quantity,
+            unit: item.unit,
+            ingredientName: item.name,
+            mode: .original
+        )
+        return "\(item.name.capitalized), \(quantity)"
     }
 }

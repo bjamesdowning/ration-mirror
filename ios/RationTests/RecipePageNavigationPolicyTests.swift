@@ -7,11 +7,17 @@ final class RecipePageNavigationPolicyTests: XCTestCase {
         XCTAssertTrue(RecipePageNavigationPolicy.shouldAllow(URL(string: "HTTPS://Example.COM/path")))
     }
 
+    func testAllowsAboutBlank() {
+        XCTAssertTrue(RecipePageNavigationPolicy.shouldAllow(URL(string: "about:blank")))
+        XCTAssertTrue(RecipePageNavigationPolicy.shouldAllow(URL(string: "ABOUT:BLANK")))
+    }
+
     func testCancelsNonHTTPSAndMissing() {
         XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(URL(string: "http://example.com/recipe")))
         XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(URL(string: "ration://scan")))
         XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(URL(string: "javascript:alert(1)")))
         XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(URL(string: "blob:https://example.com/1")))
+        XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(URL(string: "about:srcdoc")))
         XCTAssertFalse(RecipePageNavigationPolicy.shouldAllow(nil))
     }
 }

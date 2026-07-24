@@ -29,7 +29,7 @@ final class DeepLinkRouter {
 
     /// Applies the pending destination once startup and org context are ready.
     func replayPending(
-        selectedTab: inout Int,
+        selectedTab: inout MainTab,
         openAskSheet: () -> Void,
         openScan: () -> Void
     ) {
@@ -40,15 +40,15 @@ final class DeepLinkRouter {
         case .scan:
             openScan()
         case .cargo:
-            selectedTab = 1
+            selectedTab = .cargo
         case .galleyGenerate:
-            selectedTab = 2
+            selectedTab = .galley
             galleyGeneratePending = true
         case .galleyImport:
-            selectedTab = 2
+            selectedTab = .galley
             galleyImportPending = true
         case .manifestPlanWeek:
-            selectedTab = 3
+            selectedTab = .manifest
             manifestPlanWeekPending = true
         }
         queue.removeFirst()

@@ -248,6 +248,7 @@ struct MealRowView: View {
 struct ManifestEntryRow: View {
     let entry: ManifestEntry
     let onConsume: () -> Void
+    @ScaledMetric(relativeTo: .body) private var consumeIconPoints: CGFloat = 28
 
     var body: some View {
         HStack(spacing: 12) {
@@ -268,6 +269,7 @@ struct ManifestEntryRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(entry.mealName.capitalized), \(entry.mealType.capitalized)")
             Spacer()
             if entry.isConsumed {
                 Image(systemName: "checkmark.seal.fill")
@@ -276,15 +278,16 @@ struct ManifestEntryRow: View {
             } else {
                 Button(action: onConsume) {
                     Image(systemName: "fork.knife.circle.fill")
-                        .font(Typography.mono(28))
+                        .font(Typography.mono(consumeIconPoints))
                         .foregroundStyle(Theme.hyperGreen)
-                        .frame(width: 44, height: 44)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Consume meal and deduct from Cargo")
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
     }
 }
 

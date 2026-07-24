@@ -84,8 +84,8 @@ struct MainTabView: View {
     @State private var showingGroupSettings = false
     @State private var showingScan = false
     @State private var orgGeneration = 0
-    @State private var selectedTab = 0
-    @State private var activatedTabs: Set<Int> = [0]
+    @State private var selectedTab: MainTab = .hub
+    @State private var activatedTabs: Set<MainTab> = [.hub]
     @State private var hubTabReselectToken = 0
     @State private var isHubEditMode = false
     @State private var manifestSuccessMessage: String?
@@ -102,7 +102,7 @@ struct MainTabView: View {
             && !showingScan
             && !env.ask.isSheetPresented
             // Only suppress on Hub while editing — other tabs keep Copilot.
-            && !(isHubEditMode && selectedTab == 0)
+            && !(isHubEditMode && selectedTab == .hub)
     }
 
     private var canOpenScan: Bool {
@@ -116,7 +116,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView(
-                isTabActive: activatedTabs.contains(0),
+                isTabActive: activatedTabs.contains(.hub),
                 hubTabReselectToken: hubTabReselectToken,
                 isHubEditMode: $isHubEditMode,
                 onScan: {
@@ -125,17 +125,18 @@ struct MainTabView: View {
                 },
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
-                onOpenSupply: { selectedTab = 4 },
-                onOpenCargo: { selectedTab = 1 },
-                onOpenGalley: { selectedTab = 2 },
-                onOpenManifest: { selectedTab = 3 }
+                onOpenSupply: { selectedTab = .supply },
+                onOpenCargo: { selectedTab = .cargo },
+                onOpenGalley: { selectedTab = .galley },
+                onOpenManifest: { selectedTab = .manifest }
             )
                 .id(orgGeneration)
-                .tabItem { Label("Hub", systemImage: "square.grid.2x2") }
-                .tag(0)
+                .tabItem { Label(String(localized: "Hub"), systemImage: "square.grid.2x2") }
+                .tag(MainTab.hub)
+                .accessibilityIdentifier("tab.hub")
 
             CargoListView(
-                isTabActive: activatedTabs.contains(1),
+                isTabActive: activatedTabs.contains(.cargo),
                 onScan: {
                     guard canOpenScan else { return }
                     showingScan = true
@@ -144,39 +145,43 @@ struct MainTabView: View {
                 onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
-                .tabItem { Label("Cargo", systemImage: "shippingbox") }
-                .tag(1)
+                .tabItem { Label(String(localized: "Cargo"), systemImage: "shippingbox") }
+                .tag(MainTab.cargo)
+                .accessibilityIdentifier("tab.cargo")
 
             GalleyView(
-                isTabActive: activatedTabs.contains(2),
+                isTabActive: activatedTabs.contains(.galley),
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
-                .tabItem { Label("Galley", systemImage: "fork.knife") }
-                .tag(2)
+                .tabItem { Label(String(localized: "Galley"), systemImage: "fork.knife") }
+                .tag(MainTab.galley)
+                .accessibilityIdentifier("tab.galley")
 
             ManifestView(
-                isTabActive: activatedTabs.contains(3),
+                isTabActive: activatedTabs.contains(.manifest),
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true },
                 onPlanWeekComplete: { count in
-                    selectedTab = 3
+                    selectedTab = .manifest
                     manifestSuccessMessage = "Added \(count) meals to Manifest"
                 }
             )
                 .id(orgGeneration)
-                .tabItem { Label("Manifest", systemImage: "calendar") }
-                .tag(3)
+                .tabItem { Label(String(localized: "Manifest"), systemImage: "calendar") }
+                .tag(MainTab.manifest)
+                .accessibilityIdentifier("tab.manifest")
 
             SupplyView(
-                isTabActive: activatedTabs.contains(4),
+                isTabActive: activatedTabs.contains(.supply),
                 onOpenSettings: { showingSettings = true },
                 onOpenGroupSettings: { showingGroupSettings = true }
             )
                 .id(orgGeneration)
-                .tabItem { Label("Supply", systemImage: "cart") }
-                .tag(4)
+                .tabItem { Label(String(localized: "Supply"), systemImage: "cart") }
+                .tag(MainTab.supply)
+                .accessibilityIdentifier("tab.supply")
         }
         .environment(env.ask)
         .environment(env.copilotScroll)
@@ -305,7 +310,7 @@ struct MainTabView: View {
         )
         .background {
             TabBarReselectObserver { index in
-                if index == 0 {
+                if index == MainTab.hub.rawValue {
                     hubTabReselectToken += 1
                 }
             }

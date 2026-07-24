@@ -24,7 +24,7 @@ struct ManifestView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 3))"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .manifest))"
     }
 
     private var manifestEntryCount: Int {
@@ -57,7 +57,7 @@ struct ManifestView: View {
 
     var body: some View {
         manifestNavigationStack
-            .tabDockAction(tag: 3) {
+            .tabDockAction(tag: .manifest) {
                 IconFABMenuCore(
                     systemImage: "plus.circle.fill",
                     accessibilityLabel: "Manifest actions",
@@ -238,7 +238,7 @@ struct ManifestView: View {
     }
 
     private var emptyPrompt: some View {
-        CopilotTrackableScrollSurface(tab: 3, isActive: isTabActive, hasTabAction: true) {
+        CopilotTrackableScrollSurface(tab: .manifest, isActive: isTabActive, hasTabAction: true) {
             VStack(spacing: 16) {
                 EmptyStateView(
                     icon: "calendar",
@@ -350,7 +350,7 @@ struct ManifestView: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .copilotDockScrollMargins()
-        .copilotScrollTracked(tab: 3, isActive: isTabActive)
+        .copilotScrollTracked(tab: .manifest, isActive: isTabActive)
     }
 
     private func handleConsume(_ entry: ManifestEntry) async {

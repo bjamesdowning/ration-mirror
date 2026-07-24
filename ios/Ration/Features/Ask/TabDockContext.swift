@@ -21,14 +21,14 @@ final class TabDockActionHandle {
 final class TabDockContext {
     private(set) var revision = 0
     private(set) var contentEpoch = 0
-    private var actionStacks: [Int: [() -> AnyView]] = [:]
+    private var actionStacks: [MainTab: [() -> AnyView]] = [:]
 
-    func pushAction<Content: View>(for tag: Int, @ViewBuilder content: @escaping () -> Content) {
+    func pushAction<Content: View>(for tag: MainTab, @ViewBuilder content: @escaping () -> Content) {
         actionStacks[tag, default: []].append { AnyView(content()) }
         revision += 1
     }
 
-    func popAction(for tag: Int) {
+    func popAction(for tag: MainTab) {
         guard var stack = actionStacks[tag], !stack.isEmpty else { return }
         stack.removeLast()
         if stack.isEmpty {
@@ -39,12 +39,12 @@ final class TabDockContext {
         revision += 1
     }
 
-    func setAction<Content: View>(for tag: Int, @ViewBuilder content: @escaping () -> Content) {
+    func setAction<Content: View>(for tag: MainTab, @ViewBuilder content: @escaping () -> Content) {
         guard actionStacks[tag]?.isEmpty ?? true else { return }
         pushAction(for: tag, content: content)
     }
 
-    func clearAction(for tag: Int) {
+    func clearAction(for tag: MainTab) {
         guard actionStacks.removeValue(forKey: tag) != nil else { return }
         revision += 1
     }
@@ -53,23 +53,23 @@ final class TabDockContext {
         contentEpoch += 1
     }
 
-    func action(for tag: Int) -> AnyView? {
+    func action(for tag: MainTab) -> AnyView? {
         actionStacks[tag]?.last?()
     }
 
-    func hasAction(for tag: Int) -> Bool {
+    func hasAction(for tag: MainTab) -> Bool {
         !(actionStacks[tag]?.isEmpty ?? true)
     }
 }
 
 private struct TabDockActionModifier<Action: View>: ViewModifier {
     @Environment(TabDockContext.self) private var tabDock
-    let tag: Int
+    let tag: MainTab
     let isActive: Bool
     @ViewBuilder let action: () -> Action
     @State private var actionHandle = TabDockActionHandle()
     @State private var isRegistered = false
-    @State private var registeredTag: Int?
+    @State private var registeredTag: MainTab?
 
     func body(content: Content) -> some View {
         actionHandle.update { AnyView(action()) }
@@ -100,7 +100,7 @@ private struct TabDockActionModifier<Action: View>: ViewModifier {
 
 extension View {
     func tabDockAction<Action: View>(
-        tag: Int,
+        tag: MainTab,
         isActive: Bool = true,
         @ViewBuilder _ action: @escaping () -> Action
     ) -> some View {

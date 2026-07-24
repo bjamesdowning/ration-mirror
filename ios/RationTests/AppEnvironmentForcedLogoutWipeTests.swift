@@ -63,4 +63,16 @@ final class AppEnvironmentForcedLogoutWipeTests: XCTestCase {
         XCTAssertEqual(env.theme.theme, .dark)
         XCTAssertNil(UserDefaults.standard.string(forKey: ThemeStore.userDefaultsKey))
     }
+
+    @MainActor
+    func testForcedLogoutClearsNextActionDismissFlags() async {
+        let env = AppEnvironment()
+        let orgId = "org_next_action_\(UUID().uuidString)"
+        env.nextActionDismiss.dismiss(actionKey: "scan", organizationId: orgId)
+        XCTAssertTrue(env.nextActionDismiss.isDismissed(actionKey: "scan", organizationId: orgId))
+
+        await env.auth.signOutLocal()
+
+        XCTAssertFalse(env.nextActionDismiss.isDismissed(actionKey: "scan", organizationId: orgId))
+    }
 }

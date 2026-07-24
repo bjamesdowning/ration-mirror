@@ -188,6 +188,7 @@ struct WeekNavigator: View {
     var entryDates: Set<String> = []
     var isLoading: Bool = false
     var onNavigate: (String) -> Void
+    @ScaledMetric(relativeTo: .body) private var chevronPoints: CGFloat = 17
 
     private var canGoBack: Bool {
         let target = ManifestDateHelpers.normalizedNavigationStart(
@@ -226,6 +227,7 @@ struct WeekNavigator: View {
                     navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: -calendarSpan))
                 } label: {
                     Image(systemName: "chevron.left")
+                        .font(.system(size: chevronPoints, weight: .semibold))
                         .foregroundStyle(canGoBack ? Theme.muted : Theme.platinum)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
@@ -255,6 +257,7 @@ struct WeekNavigator: View {
                     navigate(toRaw: ManifestDateHelpers.addDays(rangeStart, days: calendarSpan))
                 } label: {
                     Image(systemName: "chevron.right")
+                        .font(.system(size: chevronPoints, weight: .semibold))
                         .foregroundStyle(canGoForward ? Theme.muted : Theme.platinum)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())

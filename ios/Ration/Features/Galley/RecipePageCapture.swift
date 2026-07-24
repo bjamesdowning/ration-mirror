@@ -123,11 +123,14 @@ enum RecipePageHtmlTrimmer {
     }
 }
 
-/// Restricts WKWebView navigations during on-device recipe capture to HTTPS only.
+/// Restricts WKWebView navigations during on-device recipe capture to HTTPS
+/// (plus benign WebKit `about:blank` bootstraps). Cancels http/javascript/etc.
 enum RecipePageNavigationPolicy {
     static func shouldAllow(_ url: URL?) -> Bool {
         guard let url, let scheme = url.scheme?.lowercased() else { return false }
-        return scheme == "https"
+        if scheme == "https" { return true }
+        // WebKit often navigates to about:blank during setup; allow that only.
+        return scheme == "about" && url.absoluteString.lowercased() == "about:blank"
     }
 }
 

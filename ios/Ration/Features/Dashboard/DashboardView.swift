@@ -23,7 +23,7 @@ struct DashboardView: View {
     }
 
     private var loadTaskKey: String {
-        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: 0))"
+        "\(organizationId ?? "nil")-\(isTabActive)-\(env.lifecycle.refreshToken(forTab: .hub))"
     }
 
     var body: some View {
@@ -145,7 +145,7 @@ struct DashboardView: View {
             isHubEditMode = model.isEditMode
         }
         .tabDockAction(
-            tag: 0,
+            tag: .hub,
             isActive: !model.isEditMode && env.session.clientFlags.isAiScanReceiptEnabled
         ) {
             IconFABButtonCore(
@@ -210,7 +210,7 @@ struct DashboardView: View {
                 await reload()
             }
             .scrollDismissesKeyboard(.interactively)
-            .copilotScrollTracked(tab: 0, isActive: isTabActive)
+            .copilotScrollTracked(tab: .hub, isActive: isTabActive)
         }
     }
 

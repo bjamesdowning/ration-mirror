@@ -8,7 +8,7 @@ final class AppLifecycleCoordinator {
     static let foregroundGraceDuration: TimeInterval = 15
 
     private(set) var lastBecameActive = Date()
-    private var refreshTokensByTab: [Int: Int] = [:]
+    private var refreshTokensByTab: [MainTab: Int] = [:]
 
     var isInForegroundGrace: Bool {
         Date().timeIntervalSince(lastBecameActive) < Self.foregroundGraceDuration
@@ -18,11 +18,11 @@ final class AppLifecycleCoordinator {
         lastBecameActive = Date()
     }
 
-    func bumpRefresh(forTab tab: Int) {
+    func bumpRefresh(forTab tab: MainTab) {
         refreshTokensByTab[tab, default: 0] += 1
     }
 
-    func refreshToken(forTab tab: Int) -> Int {
+    func refreshToken(forTab tab: MainTab) -> Int {
         refreshTokensByTab[tab, default: 0]
     }
 }

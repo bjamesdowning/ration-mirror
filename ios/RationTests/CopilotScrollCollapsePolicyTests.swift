@@ -72,20 +72,20 @@ final class CopilotScrollContextActiveTabTests: XCTestCase {
     @MainActor
     func testOnlyActiveTabAcceptsScrollReports() {
         let context = CopilotScrollContext()
-        context.setActiveTab(2)
+        context.setActiveTab(.galley)
 
-        XCTAssertTrue(context.shouldAcceptScrollReports(from: 2, isTabActive: true))
-        XCTAssertFalse(context.shouldAcceptScrollReports(from: 1, isTabActive: true))
-        XCTAssertFalse(context.shouldAcceptScrollReports(from: 2, isTabActive: false))
+        XCTAssertTrue(context.shouldAcceptScrollReports(from: .galley, isTabActive: true))
+        XCTAssertFalse(context.shouldAcceptScrollReports(from: .cargo, isTabActive: true))
+        XCTAssertFalse(context.shouldAcceptScrollReports(from: .galley, isTabActive: false))
     }
 
     @MainActor
     func testPreloadedInactiveTabAcceptsReportsAfterActivation() {
         let context = CopilotScrollContext()
-        context.setActiveTab(2)
+        context.setActiveTab(.galley)
 
-        XCTAssertFalse(context.shouldAcceptScrollReports(from: 2, isTabActive: false))
-        XCTAssertTrue(context.shouldAcceptScrollReports(from: 2, isTabActive: true))
+        XCTAssertFalse(context.shouldAcceptScrollReports(from: .galley, isTabActive: false))
+        XCTAssertTrue(context.shouldAcceptScrollReports(from: .galley, isTabActive: true))
     }
 
     @MainActor

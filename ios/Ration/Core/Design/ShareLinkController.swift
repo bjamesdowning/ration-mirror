@@ -10,10 +10,13 @@ final class ShareLinkController {
     private(set) var isLoading = false
     var errorMessage: String?
     private var statusTask: Task<Void, Never>?
+    private var mutationTask: Task<Void, Never>?
 
     func cancel() {
         statusTask?.cancel()
         statusTask = nil
+        mutationTask?.cancel()
+        mutationTask = nil
         isLoading = false
     }
 
@@ -38,38 +41,65 @@ final class ShareLinkController {
     }
 
     func create(
-        _ create: () async throws -> ShareCreateResponse,
-        onForbidden: (APIError) -> PaywallContext?
+        _ create: @escaping () async throws -> ShareCreateResponse,
+        onForbidden: @escaping (APIError) -> PaywallContext?
     ) async -> PaywallContext? {
+        statusTask?.cancel()
+        statusTask = nil
+        mutationTask?.cancel()
         errorMessage = nil
-        do {
-            let response = try await create()
-            shareURL = response.shareUrl
-            shareExpiresAt = response.shareExpiresAt
-            Haptics.success()
-            return nil
-        } catch let error as APIError {
-            if let ctx = onForbidden(error) {
-                return ctx
+
+        var paywall: PaywallContext?
+        let task = Task { @MainActor in
+            do {
+                let response = try await create()
+                guard !Task.isCancelled else { return }
+                shareURL = response.shareUrl
+                shareExpiresAt = response.shareExpiresAt
+                Haptics.success()
+            } catch is CancellationError {
+                return
+            } catch let error as APIError {
+                guard !Task.isCancelled else { return }
+                if let ctx = onForbidden(error) {
+                    paywall = ctx
+                    return
+                }
+                errorMessage = error.errorDescription
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
-            errorMessage = error.errorDescription
-            return nil
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-            return nil
         }
+        mutationTask = task
+        await task.value
+        if mutationTask == task { mutationTask = nil }
+        return paywall
     }
 
-    func revoke(_ revoke: () async throws -> ShareRevokeResponse) async {
+    func revoke(_ revoke: @escaping () async throws -> ShareRevokeResponse) async {
+        statusTask?.cancel()
+        statusTask = nil
+        mutationTask?.cancel()
         errorMessage = nil
-        do {
-            _ = try await revoke()
-            shareURL = nil
-            shareExpiresAt = nil
-            Haptics.light()
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+
+        let task = Task { @MainActor in
+            do {
+                _ = try await revoke()
+                guard !Task.isCancelled else { return }
+                shareURL = nil
+                shareExpiresAt = nil
+                Haptics.light()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
         }
+        mutationTask = task
+        await task.value
+        if mutationTask == task { mutationTask = nil }
     }
 
     /// Default paywall mapping shared by Supply and Manifest share create.

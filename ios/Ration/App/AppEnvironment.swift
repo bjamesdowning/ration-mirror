@@ -48,7 +48,8 @@ final class AppEnvironment {
         self.network = NetworkMonitor()
         let session = SessionStore()
         self.session = session
-        self.nextActionDismiss = NextActionDismissStore()
+        let nextActionDismiss = NextActionDismissStore()
+        self.nextActionDismiss = nextActionDismiss
         let theme = ThemeStore()
         self.theme = theme
         let unitDisplayMode = UnitDisplayModeStore()
@@ -80,7 +81,7 @@ final class AppEnvironment {
         }
 
         // H-2: a forced 401 logout must match explicit sign-out's full wipe
-        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes] in
+        auth.onSignedOut = { [snapshots, billing, session, theme, unitDisplayMode, launch, onboarding, deepLinkRouter, refreshOutcomes, nextActionDismiss] in
             await snapshots.clearAll()
             refreshOutcomes.clearAll()
             await billing.logOut()
@@ -90,6 +91,7 @@ final class AppEnvironment {
             launch.reset()
             onboarding.reset()
             deepLinkRouter.reset()
+            nextActionDismiss.clearAll()
             AuthImageLoader.shared.clearAll()
         }
     }

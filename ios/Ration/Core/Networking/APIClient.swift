@@ -70,20 +70,18 @@ final class APIClient {
         filename: String,
         mimeType: String
     ) async throws -> T {
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var body = Data()
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n")
-        body.append("Content-Type: \(mimeType)\r\n\r\n")
-        body.append(imageData)
-        body.append("\r\n--\(boundary)--\r\n")
-
+        let built = MultipartFormBodyBuilder.build(
+            fieldName: fieldName,
+            fileData: imageData,
+            filename: filename,
+            mimeType: mimeType
+        )
         return try await send(
             path: path,
             method: "POST",
             query: [],
-            body: body,
-            contentType: "multipart/form-data; boundary=\(boundary)"
+            body: built.body,
+            contentType: built.contentType
         )
     }
 
@@ -223,8 +221,3 @@ private struct AnyEncodable: Encodable {
     func encode(to encoder: Encoder) throws { try encodeFunc(encoder) }
 }
 
-private extension Data {
-    mutating func append(_ string: String) {
-        if let data = string.data(using: .utf8) { append(data) }
-    }
-}

@@ -167,7 +167,7 @@ export function HubEditModeMobile({
 					<button
 						type="button"
 						onClick={onExit}
-						className="px-4 min-h-[44px] bg-hyper-green text-carbon font-semibold rounded-lg text-sm hover:bg-hyper-green/90 transition-colors"
+						className="px-4 min-h-[44px] bg-hyper-green text-on-hyper-green font-semibold rounded-lg text-sm hover:bg-hyper-green/90 transition-colors"
 					>
 						Done
 					</button>
@@ -303,7 +303,7 @@ export function HubEditModeMobile({
 										disabled={isSaving}
 										className={`min-h-[44px] rounded-lg text-sm font-semibold transition-colors ${
 											activeWidgetSize === size
-												? "bg-hyper-green text-carbon"
+												? "bg-hyper-green text-on-hyper-green"
 												: "bg-platinum dark:bg-white/10 text-carbon dark:text-white hover:bg-platinum/80 dark:hover:bg-white/20"
 										}`}
 									>

@@ -25,7 +25,7 @@ export function CopilotModelPresetSelector({
 							onClick={() => onChange(preset)}
 							className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-[0.14em] transition-colors ${
 								active
-									? "bg-hyper-green text-carbon"
+									? "bg-hyper-green text-on-hyper-green"
 									: "text-muted hover:text-carbon"
 							} disabled:opacity-40`}
 						>

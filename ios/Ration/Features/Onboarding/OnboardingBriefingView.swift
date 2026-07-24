@@ -516,7 +516,7 @@ private struct BriefingMessageBubble: View {
                 Spacer(minLength: 48)
                 Text(message.content)
                     .font(Typography.body())
-                    .foregroundStyle(Theme.carbon)
+                    .foregroundStyle(Theme.onHyperGreen)
                     .textSelection(.enabled)
                     .padding(12)
                     .background(Theme.hyperGreen)

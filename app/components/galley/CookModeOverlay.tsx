@@ -167,7 +167,7 @@ export function CookModeOverlay({
 						type="button"
 						onClick={advance}
 						aria-label="Next step"
-						className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-hyper-green text-carbon font-bold text-lg hover:shadow-glow active:scale-95 transition-all"
+						className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-hyper-green text-on-hyper-green font-bold text-lg hover:shadow-glow active:scale-95 transition-all"
 					>
 						Next
 						<ChevronRight size={22} />
@@ -177,7 +177,7 @@ export function CookModeOverlay({
 						type="button"
 						onClick={onClose}
 						aria-label="Finish cooking"
-						className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-hyper-green text-carbon font-bold text-lg hover:shadow-glow active:scale-95 transition-all"
+						className="flex items-center justify-center gap-2 flex-1 h-16 rounded-2xl bg-hyper-green text-on-hyper-green font-bold text-lg hover:shadow-glow active:scale-95 transition-all"
 					>
 						Done
 					</button>

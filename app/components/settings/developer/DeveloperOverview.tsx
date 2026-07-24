@@ -76,7 +76,7 @@ export function DeveloperOverview({
 				<div className="flex flex-wrap gap-3">
 					<Link
 						to="/docs/api"
-						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 transition-colors"
+						className="inline-flex items-center gap-2 px-4 py-2 bg-hyper-green text-on-hyper-green rounded-lg font-semibold text-sm hover:bg-hyper-green/90 transition-colors"
 					>
 						Full API & MCP documentation
 					</Link>

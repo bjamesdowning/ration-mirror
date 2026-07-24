@@ -29,7 +29,7 @@ export function CalendarSpanPicker({
 					aria-label={`${span} days`}
 					className={`${fullWidth ? "flex-1" : ""} px-4 py-2 text-sm font-medium transition-colors ${
 						currentSpan === span
-							? "bg-hyper-green text-carbon"
+							? "bg-hyper-green text-on-hyper-green"
 							: "text-muted hover:bg-platinum/50 dark:hover:bg-white/10"
 					}`}
 				>

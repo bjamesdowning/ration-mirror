@@ -118,7 +118,7 @@ export default function UnitConverterPage() {
 					<div className="flex flex-col sm:flex-row gap-3 justify-center">
 						<Link
 							to="/"
-							className="inline-block px-6 py-3 bg-hyper-green text-carbon font-bold text-sm uppercase tracking-wider rounded-lg hover:shadow-glow transition-shadow"
+							className="inline-block px-6 py-3 bg-hyper-green text-on-hyper-green font-bold text-sm uppercase tracking-wider rounded-lg hover:shadow-glow transition-shadow"
 						>
 							Get started free
 						</Link>

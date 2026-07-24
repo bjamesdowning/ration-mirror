@@ -111,7 +111,7 @@ export function FilterChip({
 				flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-all
 				${
 					isActive
-						? "bg-hyper-green text-carbon"
+						? "bg-hyper-green text-on-hyper-green"
 						: "bg-platinum dark:bg-white/10 text-carbon dark:text-white/80 hover:bg-platinum/80 dark:hover:bg-white/20"
 				}
 			`}

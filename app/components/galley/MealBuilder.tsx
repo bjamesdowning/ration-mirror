@@ -201,7 +201,7 @@ export function MealBuilder({
 			<div className="flex justify-end gap-4 pt-4">
 				<button
 					type="submit"
-					className="bg-hyper-green text-carbon font-bold px-8 py-3 rounded-xl shadow-glow-sm hover:shadow-glow w-full md:w-auto transition-all"
+					className="bg-hyper-green text-on-hyper-green font-bold px-8 py-3 rounded-xl shadow-glow-sm hover:shadow-glow w-full md:w-auto transition-all"
 				>
 					{submitLabel || (method === "post" ? "Create Recipe" : "Update Meal")}
 				</button>

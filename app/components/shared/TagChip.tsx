@@ -29,7 +29,7 @@ export function TagChip({
 		onClick ? "cursor-pointer hover:opacity-80" : "",
 		!safeColor
 			? active
-				? "bg-hyper-green text-carbon"
+				? "bg-hyper-green text-on-hyper-green"
 				: "bg-hyper-green/10 text-hyper-green"
 			: "",
 	]

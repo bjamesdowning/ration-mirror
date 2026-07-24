@@ -17,7 +17,7 @@ export function CurrencyToggle({
 				aria-label="Euros"
 				className={`px-3 py-1.5 text-sm font-medium transition-colors ${
 					value === "EUR"
-						? "bg-hyper-green text-carbon"
+						? "bg-hyper-green text-on-hyper-green"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"
 				}`}
 			>
@@ -30,7 +30,7 @@ export function CurrencyToggle({
 				aria-label="US Dollars"
 				className={`px-3 py-1.5 text-sm font-medium transition-colors ${
 					value === "USD"
-						? "bg-hyper-green text-carbon"
+						? "bg-hyper-green text-on-hyper-green"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"
 				}`}
 			>

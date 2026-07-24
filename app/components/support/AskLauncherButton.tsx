@@ -20,11 +20,11 @@ export function AskLauncherButton({
 				disabled
 					? "border border-platinum/80 bg-platinum/50 text-muted cursor-not-allowed opacity-60"
 					: [
-							"border border-hyper-green/80 bg-hyper-green text-carbon shadow-sm",
+							"border border-hyper-green/80 bg-hyper-green text-on-hyper-green shadow-sm",
 							"hover:border-hyper-green hover:bg-hyper-green/90 hover:brightness-[1.02]",
 							"active:bg-hyper-green/85",
 							"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hyper-green focus-visible:ring-offset-2 focus-visible:ring-offset-ceramic",
-							"dark:border-hyper-green dark:bg-hyper-green dark:text-carbon",
+							"dark:border-hyper-green dark:bg-hyper-green dark:text-on-hyper-green",
 							"dark:hover:bg-hyper-green/90 dark:hover:brightness-[1.03]",
 							"dark:focus-visible:ring-offset-carbon",
 						].join(" "),
@@ -40,7 +40,7 @@ export function AskLauncherButton({
 			}}
 		>
 			<MessageCircle
-				className={`size-4 shrink-0 ${disabled ? "text-muted" : "text-carbon"}`}
+				className={`size-4 shrink-0 ${disabled ? "text-muted" : "text-on-hyper-green"}`}
 				aria-hidden
 			/>
 			<span className="hidden md:inline" aria-hidden>

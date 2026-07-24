@@ -182,7 +182,7 @@ function ManifestMedium({ data }: { data: ManifestPreviewData }) {
 							<div
 								className={`text-center py-1.5 rounded-lg text-xs font-semibold ${
 									isToday
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: "bg-platinum/60 text-muted"
 								}`}
 							>
@@ -272,7 +272,7 @@ function ManifestLarge({ data }: { data: ManifestPreviewData }) {
 							<div
 								className={`text-center py-1.5 rounded-lg ${
 									isToday
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: "bg-platinum/50 text-muted"
 								}`}
 							>

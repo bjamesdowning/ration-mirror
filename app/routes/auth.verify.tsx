@@ -134,7 +134,7 @@ export default function AuthVerify() {
 							</p>
 							<Link
 								to="/"
-								className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
+								className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-on-hyper-green font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring"
 							>
 								{error && ACCOUNT_MISSING_ERRORS.has(error)
 									? "Create an account"

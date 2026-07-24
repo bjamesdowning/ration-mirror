@@ -117,7 +117,7 @@ export function ProvisionCard({
 					aria-pressed={localActive}
 					className={`hidden md:flex absolute top-4 left-4 z-40 items-center justify-center min-w-[44px] min-h-[44px] border text-xs font-bold transition-all shadow-sm ${
 						localActive
-							? "bg-hyper-green text-carbon border-hyper-green"
+							? "bg-hyper-green text-on-hyper-green border-hyper-green"
 							: "bg-platinum/70 text-muted border-carbon/20 hover:bg-platinum"
 					}`}
 					title={

@@ -175,7 +175,7 @@ export function AddItemForm({
 			<button
 				type="submit"
 				disabled={isPending || !name.trim()}
-				className="w-full px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+				className="w-full px-4 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
 			>
 				{isPending ? "..." : "Add to Supply"}
 			</button>

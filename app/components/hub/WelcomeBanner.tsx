@@ -28,7 +28,7 @@ export function WelcomeBanner({ onDismiss }: WelcomeBannerProps) {
 			<div className="mt-3 flex gap-3">
 				<Link
 					to="/hub/cargo"
-					className="px-3 py-2 text-sm font-semibold rounded-lg bg-hyper-green text-carbon"
+					className="px-3 py-2 text-sm font-semibold rounded-lg bg-hyper-green text-on-hyper-green"
 				>
 					Open Cargo
 				</Link>

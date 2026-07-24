@@ -156,7 +156,7 @@ export function AIFeatureIntroView({
 					<button
 						type="button"
 						onClick={onConfirm}
-						className="px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+						className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 					>
 						{confirmLabel}
 					</button>
@@ -164,7 +164,7 @@ export function AIFeatureIntroView({
 					<Link
 						to="/hub/pricing"
 						onClick={onCancel}
-						className="px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all inline-block text-center"
+						className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all inline-block text-center"
 					>
 						Pricing
 					</Link>

@@ -653,7 +653,7 @@ export default function SupplyDashboard({ loaderData }: Route.ComponentProps) {
 										type="button"
 										onClick={() => setShowReplenishModal(true)}
 										disabled={isDocking}
-										className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm bg-hyper-green text-carbon hover:shadow-glow-sm"
+										className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg text-sm transition-all shadow-sm bg-hyper-green text-on-hyper-green hover:shadow-glow-sm"
 									>
 										<CheckIcon className="w-4 h-4" />
 										Replenish Cargo

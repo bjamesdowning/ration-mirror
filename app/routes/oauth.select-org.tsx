@@ -271,7 +271,7 @@ export default function OAuthSelectOrgPage({
 
 				<button
 					type="submit"
-					className="mt-4 w-full rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-carbon"
+					className="mt-4 w-full rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-on-hyper-green"
 				>
 					Continue
 				</button>

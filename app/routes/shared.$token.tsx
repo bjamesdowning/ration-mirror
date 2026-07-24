@@ -298,7 +298,7 @@ function AdminAddItemBar({
 				<button
 					type="submit"
 					disabled={isPending || !name.trim()}
-					className="px-4 py-2 bg-hyper-green text-carbon font-semibold text-sm rounded-lg hover:bg-hyper-green/90 transition-colors disabled:opacity-50 shrink-0"
+					className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold text-sm rounded-lg hover:bg-hyper-green/90 transition-colors disabled:opacity-50 shrink-0"
 				>
 					{isPending ? "Adding..." : "Add"}
 				</button>

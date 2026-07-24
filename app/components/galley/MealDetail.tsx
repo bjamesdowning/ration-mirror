@@ -678,7 +678,7 @@ export function MealDetail({
 							className={`w-full font-bold px-6 py-3 rounded-xl shadow-glow hover:shadow-glow transition-all ${
 								isCooked
 									? "bg-success text-carbon"
-									: "bg-hyper-green text-carbon"
+									: "bg-hyper-green text-on-hyper-green"
 							} ${isCooking ? "opacity-75 cursor-wait" : ""}`}
 						>
 							{isCooking

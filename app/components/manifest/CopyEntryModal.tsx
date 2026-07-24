@@ -116,7 +116,7 @@ export function CopyEntryModal({
 											: isPast
 												? "bg-platinum/30 text-muted/50 cursor-not-allowed"
 												: isSelected
-													? "bg-hyper-green text-carbon shadow-glow-sm"
+													? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 													: "btn-secondary hover:bg-hyper-green/20 hover:text-hyper-green"
 									}`}
 									aria-pressed={isSelected}
@@ -146,7 +146,7 @@ export function CopyEntryModal({
 								aria-pressed={slotOverride === slot}
 								className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
 									slotOverride === slot
-										? "bg-hyper-green text-carbon shadow-glow-sm"
+										? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 										: "btn-secondary hover:bg-hyper-green/20 hover:text-hyper-green"
 								}`}
 							>
@@ -169,7 +169,7 @@ export function CopyEntryModal({
 						type="button"
 						onClick={handleSubmit}
 						disabled={selectedDates.size === 0 || isSubmitting}
-						className="flex-1 py-2.5 rounded-xl bg-hyper-green text-carbon font-semibold text-sm font-mono hover:shadow-glow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+						className="flex-1 py-2.5 rounded-xl bg-hyper-green text-on-hyper-green font-semibold text-sm font-mono hover:shadow-glow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
 					>
 						{isSubmitting
 							? "Copying…"

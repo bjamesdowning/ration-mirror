@@ -189,7 +189,7 @@ export function GalleyImportPreview({
 							type="button"
 							onClick={handleSubmit}
 							disabled={selectedMeals.length === 0 || isSubmitting}
-							className="px-8 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+							className="px-8 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						>
 							{isSubmitting ? (
 								<>Importing...</>

@@ -31,7 +31,7 @@ export function ViewToggle({ page, currentMode, onToggle }: ViewToggleProps) {
 				aria-label="Card view"
 				className={`flex items-center justify-center w-8 h-8 transition-colors ${
 					currentMode === "card"
-						? "bg-hyper-green text-carbon"
+						? "bg-hyper-green text-on-hyper-green"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"
 				}`}
 			>
@@ -44,7 +44,7 @@ export function ViewToggle({ page, currentMode, onToggle }: ViewToggleProps) {
 				aria-label="List view"
 				className={`flex items-center justify-center w-8 h-8 transition-colors ${
 					currentMode === "list"
-						? "bg-hyper-green text-carbon"
+						? "bg-hyper-green text-on-hyper-green"
 						: "bg-platinum/50 dark:bg-white/5 text-muted hover:bg-platinum dark:hover:bg-white/10"
 				}`}
 			>

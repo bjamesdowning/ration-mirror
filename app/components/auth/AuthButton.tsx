@@ -35,7 +35,7 @@ export function AuthButton({
 				type="button"
 				onClick={onAuthClick}
 				disabled={loading}
-				className="w-full bg-hyper-green text-carbon font-bold py-4 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 focus-ring"
+				className="w-full bg-hyper-green text-on-hyper-green font-bold py-4 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 focus-ring"
 				aria-label={buttonText}
 				{...props}
 			>

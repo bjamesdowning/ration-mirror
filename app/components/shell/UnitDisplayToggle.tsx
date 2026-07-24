@@ -87,7 +87,7 @@ export function UnitDisplayToggle({ className = "" }: UnitDisplayToggleProps) {
 					onClick={() => submitMode(mode)}
 					className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors min-h-[36px] ${
 						activeMode === mode
-							? "bg-hyper-green text-carbon"
+							? "bg-hyper-green text-on-hyper-green"
 							: "text-muted hover:text-carbon hover:bg-platinum/70"
 					} ${isPending ? "opacity-60" : ""}`}
 					aria-pressed={activeMode === mode}

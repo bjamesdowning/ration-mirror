@@ -416,7 +416,7 @@ export function TagsSettingsSection({
 														color: editColor,
 													})
 												}
-												className="text-xs px-3 py-1.5 rounded bg-hyper-green text-carbon font-semibold disabled:opacity-50"
+												className="text-xs px-3 py-1.5 rounded bg-hyper-green text-on-hyper-green font-semibold disabled:opacity-50"
 											>
 												{isBusy ? "Saving…" : "Save"}
 											</button>
@@ -453,7 +453,7 @@ export function TagsSettingsSection({
 												type="button"
 												disabled={isBusy || !mergeTargetId}
 												onClick={mergeTag}
-												className="text-xs px-3 py-1.5 rounded bg-hyper-green text-carbon font-semibold disabled:opacity-50"
+												className="text-xs px-3 py-1.5 rounded bg-hyper-green text-on-hyper-green font-semibold disabled:opacity-50"
 											>
 												{isBusy ? "Merging…" : "Confirm merge"}
 											</button>

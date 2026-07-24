@@ -139,7 +139,7 @@ export default function InvitationAcceptPage({
 					<button
 						type="submit"
 						disabled={isJoining}
-						className="w-full py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow hover:shadow-glow-lg transition-all disabled:opacity-50"
+						className="w-full py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow hover:shadow-glow-lg transition-all disabled:opacity-50"
 					>
 						{isJoining ? "Joining..." : "Accept & Join"}
 					</button>

@@ -304,7 +304,7 @@ export function SupplyScanReviewModal({
 											<button
 												type="button"
 												onClick={finishEdit}
-												className="px-3 py-1.5 text-sm bg-hyper-green text-carbon font-semibold rounded"
+												className="px-3 py-1.5 text-sm bg-hyper-green text-on-hyper-green font-semibold rounded"
 											>
 												Done
 											</button>
@@ -498,7 +498,7 @@ export function SupplyScanReviewModal({
 						type="button"
 						onClick={handleSubmit}
 						disabled={selectedCount === 0 || isSubmitting}
-						className="flex-1 py-3 rounded-xl bg-hyper-green text-carbon font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+						className="flex-1 py-3 rounded-xl bg-hyper-green text-on-hyper-green font-bold disabled:opacity-50 flex items-center justify-center gap-2"
 					>
 						{isSubmitting ? (
 							<span className="animate-pulse">Docking…</span>

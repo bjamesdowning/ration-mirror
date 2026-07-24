@@ -88,7 +88,7 @@ export function WeekView({
 								onClick={() => onSelectDate?.(date)}
 								className={`text-center py-2 rounded-xl transition-colors w-full ${
 									isToday
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: allConsumed
 											? "bg-hyper-green/15 text-hyper-green"
 											: isSelected

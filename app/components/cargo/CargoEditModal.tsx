@@ -181,7 +181,7 @@ export function CargoEditModal({
 						<button
 							type="submit"
 							disabled={isUpdating}
-							className="bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+							className="bg-hyper-green text-on-hyper-green font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
 							{isUpdating ? "Saving..." : "Save Changes"}
 						</button>

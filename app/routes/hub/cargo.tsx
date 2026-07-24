@@ -675,7 +675,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => setShowScanIntroModal(true)}
-									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 								>
 									<CameraIcon className="w-4 h-4" />
 									Scan Item
@@ -742,7 +742,7 @@ export default function CargoPage({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() => setShowScanIntroModal(true)}
-										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+										className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 									>
 										Scan items
 									</button>

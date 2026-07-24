@@ -231,7 +231,7 @@ export function MealQuickAdd({
 				<button
 					type="submit"
 					disabled={isSubmitting}
-					className="bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+					className="bg-hyper-green text-on-hyper-green font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 				>
 					{isSubmitting
 						? "Creating..."

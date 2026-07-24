@@ -17,6 +17,9 @@ final class HubViewModel {
     var toggleErrorMessage: String?
     var refreshOutcomes: SnapshotRefreshOutcomeStore?
 
+    /// When set, `load` uses this instead of `api.hub` (unit tests).
+    var fetchHubForTesting: (() async throws -> HubResponse)?
+
     #if DEBUG
     func setLoadedForTesting(_ data: HubResponse) {
         state = .loaded(data)
@@ -49,7 +52,12 @@ final class HubViewModel {
         defer { isRefreshing = false }
 
         do {
-            let data = try await api.hub()
+            let data: HubResponse
+            if let fetchHubForTesting {
+                data = try await fetchHubForTesting()
+            } else {
+                data = try await api.hub()
+            }
             state = .loaded(data)
             await snapshots.save(data, domain: SnapshotDomain.hub, organizationId: organizationId)
             if let refreshOutcomes {
@@ -60,7 +68,13 @@ final class HubViewModel {
                 )
             }
         } catch {
-            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+            if SnapshotRefreshPolicy.isIgnorableRefreshError(error) {
+                // Cold load cancelled (e.g. org remount): don't leave exclusive .loading.
+                if !hadCache, case .loading = state {
+                    state = .failed("Couldn't load Hub. Pull to refresh or try again.")
+                }
+                return
+            }
             if let refreshOutcomes {
                 SnapshotRefreshPolicy.recordRefreshFailure(
                     outcomes: refreshOutcomes,

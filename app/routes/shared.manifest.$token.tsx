@@ -121,7 +121,7 @@ function WeekGrid({
 						<div
 							className={`text-center py-2 rounded-xl ${
 								isToday
-									? "bg-hyper-green text-carbon"
+									? "bg-hyper-green text-on-hyper-green"
 									: "bg-platinum/50 text-muted"
 							}`}
 						>
@@ -363,7 +363,7 @@ export default function SharedManifestPage({
 					</p>
 					<Link
 						to="/"
-						className="inline-flex items-center gap-2 px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-xl shadow-glow-sm hover:shadow-glow transition-all text-sm"
+						className="inline-flex items-center gap-2 px-5 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-xl shadow-glow-sm hover:shadow-glow transition-all text-sm"
 					>
 						Get Ration
 					</Link>

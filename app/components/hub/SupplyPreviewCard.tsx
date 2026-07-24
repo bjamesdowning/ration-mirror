@@ -40,7 +40,7 @@ export function SupplyPreviewCard({
 					<p className="text-sm text-muted mb-4 mt-3">No supply list yet</p>
 					<Link
 						to="/hub/supply"
-						className="inline-block text-xs bg-hyper-green text-carbon font-bold px-4 py-2 rounded-lg hover:shadow-glow-sm transition-all"
+						className="inline-block text-xs bg-hyper-green text-on-hyper-green font-bold px-4 py-2 rounded-lg hover:shadow-glow-sm transition-all"
 					>
 						Create List
 					</Link>

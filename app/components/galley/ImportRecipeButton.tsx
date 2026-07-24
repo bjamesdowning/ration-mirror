@@ -395,7 +395,7 @@ export const ImportRecipeButton = forwardRef<
 				onClick={() => setShowModal(true)}
 				className={`
 					flex items-center gap-2 px-4 py-3 
-					bg-hyper-green text-carbon font-semibold rounded-lg
+					bg-hyper-green text-on-hyper-green font-semibold rounded-lg
 					shadow-glow-sm hover:shadow-glow transition-all
 					active:scale-95
 					${className || ""}
@@ -458,7 +458,7 @@ export const ImportRecipeButton = forwardRef<
 										type="button"
 										onClick={handleImport}
 										disabled={!url.trim()}
-										className="px-8 py-4 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+										className="px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 									>
 										Import Meal
 									</button>
@@ -499,7 +499,7 @@ export const ImportRecipeButton = forwardRef<
 											type="button"
 											onClick={handleAddToGalley}
 											disabled={confirmFetcher.state !== "idle"}
-											className="px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+											className="px-5 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											{confirmFetcher.state !== "idle"
 												? "Adding..."
@@ -582,7 +582,7 @@ export const ImportRecipeButton = forwardRef<
 												type="button"
 												onClick={handleExtractFromPaste}
 												disabled={pageHtml.trim().length < 200}
-												className="w-full px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+												className="w-full px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 											>
 												Extract from paste
 											</button>
@@ -661,7 +661,7 @@ export const ImportRecipeButton = forwardRef<
 														`/hub/galley/${duplicateData.existingMealId}`,
 													);
 												}}
-												className="px-5 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+												className="px-5 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 											>
 												View Existing Meal
 											</button>

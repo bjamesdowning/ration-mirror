@@ -280,7 +280,7 @@ function PlanWeekForm({
 								aria-pressed={active}
 								className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
 									active
-										? "bg-hyper-green text-carbon border-hyper-green shadow-glow-sm"
+										? "bg-hyper-green text-on-hyper-green border-hyper-green shadow-glow-sm"
 										: "border-platinum dark:border-white/20 text-muted hover:border-hyper-green/50 hover:text-carbon dark:hover:text-white"
 								}`}
 							>
@@ -305,7 +305,7 @@ function PlanWeekForm({
 							aria-pressed={variety === level}
 							className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all border text-center ${
 								variety === level
-									? "bg-hyper-green text-carbon border-hyper-green"
+									? "bg-hyper-green text-on-hyper-green border-hyper-green"
 									: "border-platinum dark:border-white/20 text-muted hover:border-hyper-green/50 hover:text-carbon dark:hover:text-white"
 							}`}
 						>
@@ -375,7 +375,7 @@ function PlanWeekForm({
 					type="button"
 					onClick={handleSubmit}
 					disabled={isLoading || slots.size === 0}
-					className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+					className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{isLoading ? (
 						<>
@@ -577,7 +577,7 @@ export function PlanWeekButton({
 						setView("intro");
 						setInternalOpen(true);
 					}}
-					className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+					className="flex items-center gap-2 px-4 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 				>
 					<Sparkles className="w-4 h-4" />
 					Plan My Week
@@ -665,7 +665,7 @@ export function PlanWeekButton({
 								type="button"
 								onClick={handleConfirm}
 								disabled={schedule.length === 0 || isSubmitting}
-								className="flex items-center gap-2 px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
+								className="flex items-center gap-2 px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
 							>
 								{isSubmitting ? (
 									<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />
@@ -701,7 +701,7 @@ export function PlanWeekButton({
 							<button
 								type="button"
 								onClick={() => setView("form")}
-								className="px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+								className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 							>
 								Try Again
 							</button>

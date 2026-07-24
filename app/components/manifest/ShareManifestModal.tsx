@@ -151,7 +151,7 @@ export function ShareManifestModal({
 								onClick={handleCopy}
 								className={`px-4 py-2 rounded-lg font-semibold transition-all ${
 									copied
-										? "bg-hyper-green text-carbon shadow-glow-sm"
+										? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 										: "btn-secondary"
 								}`}
 							>
@@ -181,7 +181,7 @@ export function ShareManifestModal({
 							type="button"
 							onClick={handleGenerateLink}
 							disabled={isPending}
-							className="px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
+							className="px-6 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
 						>
 							{isPending ? "Generating..." : "Generate Share Link"}
 						</button>

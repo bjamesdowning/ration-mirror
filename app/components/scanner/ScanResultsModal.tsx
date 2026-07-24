@@ -267,7 +267,7 @@ export function ScanResultsModal({
 									type="button"
 									onClick={applyBulkExpiry}
 									disabled={!bulkExpiryDate}
-									className="px-4 py-2 bg-hyper-green text-carbon font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									Apply to Selected
 								</button>
@@ -361,7 +361,7 @@ export function ScanResultsModal({
 						type="button"
 						onClick={handleSubmit}
 						disabled={selectedItems.length === 0 || isSubmitting}
-						className="px-8 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+						className="px-8 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 					>
 						{isSubmitting ? (
 							<>Processing...</>
@@ -443,7 +443,7 @@ function ScanResultItemRow({
 					<button
 						type="button"
 						onClick={() => onUpdate(editedItem)}
-						className="px-4 py-2 bg-hyper-green text-carbon text-sm font-semibold rounded hover:bg-hyper-green/80 transition-colors"
+						className="px-4 py-2 bg-hyper-green text-on-hyper-green text-sm font-semibold rounded hover:bg-hyper-green/80 transition-colors"
 					>
 						Save
 					</button>

@@ -113,7 +113,7 @@ export default function MagicLinkContinue() {
 						type="submit"
 						disabled={isContinuing}
 						aria-busy={isContinuing}
-						className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-carbon font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+						className="inline-flex items-center justify-center gap-2 w-full bg-hyper-green text-on-hyper-green font-bold py-3 px-6 rounded-xl hover:shadow-glow-sm transition-all focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						{isContinuing ? (
 							<>

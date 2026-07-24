@@ -287,7 +287,7 @@ export default function OAuthConsentPage({
 							type="submit"
 							name="accept"
 							value="true"
-							className="flex-1 rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-carbon"
+							className="flex-1 rounded-xl bg-hyper-green py-3 font-mono text-sm font-bold text-on-hyper-green"
 						>
 							Authorize
 						</button>

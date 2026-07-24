@@ -270,7 +270,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 							<button
 								type="button"
 								onClick={() => startCrewCheckout("CREW_MEMBER_ANNUAL")}
-								className="flex-1 px-4 py-2 bg-hyper-green text-carbon font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
+								className="flex-1 px-4 py-2 bg-hyper-green text-on-hyper-green font-bold rounded-lg transition-all hover:opacity-90 active:scale-95"
 							>
 								{
 									loaderData.subscriptionProducts.CREW_MEMBER_ANNUAL[
@@ -327,7 +327,7 @@ export default function PricingPage({ loaderData }: Route.ComponentProps) {
 						<button
 							type="button"
 							onClick={() => startCreditCheckout(packKey)}
-							className="mt-3 w-full px-3 py-2 bg-hyper-green text-carbon rounded-lg text-sm font-bold transition-all hover:opacity-90 active:scale-95"
+							className="mt-3 w-full px-3 py-2 bg-hyper-green text-on-hyper-green rounded-lg text-sm font-bold transition-all hover:opacity-90 active:scale-95"
 						>
 							Buy Credits
 						</button>

@@ -331,7 +331,7 @@ export function AuthWidget({
 						}}
 						className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all focus-ring ${
 							mode === "signUp"
-								? "bg-hyper-green text-carbon shadow-glow-sm"
+								? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 								: "text-muted hover:bg-platinum hover:text-carbon"
 						}`}
 					>
@@ -349,7 +349,7 @@ export function AuthWidget({
 						}}
 						className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all focus-ring ${
 							mode === "signIn"
-								? "bg-hyper-green text-carbon shadow-glow-sm"
+								? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 								: "text-muted hover:bg-platinum hover:text-carbon"
 						}`}
 					>
@@ -446,7 +446,7 @@ export function AuthWidget({
 								!isValidEmail(email.trim()) ||
 								consentBlocked
 							}
-							className="w-full bg-hyper-green text-carbon font-bold py-3.5 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-ring"
+							className="w-full bg-hyper-green text-on-hyper-green font-bold py-3.5 px-6 rounded-xl shadow-glow hover:shadow-glow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-ring"
 						>
 							{flowState === "sending" ? (
 								<>
@@ -538,7 +538,7 @@ export function AuthWidget({
 								type="button"
 								onClick={handleAppleAuth}
 								disabled={isLoading || consentBlocked}
-								className="w-full bg-carbon text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-carbon/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 focus-ring mb-3"
+								className="w-full bg-[#111111] text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-[#111111]/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 focus-ring mb-3"
 							>
 								{socialLoading === "apple" ? (
 									<>

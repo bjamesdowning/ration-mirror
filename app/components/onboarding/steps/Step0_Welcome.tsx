@@ -132,7 +132,7 @@ export function Step0_Welcome({ onBegin, onSkip }: Step0Props) {
 					<button
 						type="button"
 						onClick={onBegin}
-						className="px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+						className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 					>
 						Begin Tour →
 					</button>

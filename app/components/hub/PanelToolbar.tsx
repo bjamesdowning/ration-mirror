@@ -49,7 +49,7 @@ export function PanelToolbar({
 							flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
 							${
 								showQuickAdd
-									? "bg-hyper-green text-carbon shadow-glow-sm"
+									? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 									: "border-2 border-dashed border-carbon/20 dark:border-white/20 text-muted hover:border-hyper-green hover:text-hyper-green"
 							}
 						`}

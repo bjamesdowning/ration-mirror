@@ -286,7 +286,7 @@ export function IngestForm({
 							<button
 								type="button"
 								onClick={() => handleMergeChoice("merge")}
-								className="px-4 py-2 bg-hyper-green text-carbon font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors"
+								className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg hover:bg-hyper-green/80 transition-colors"
 							>
 								Add to Existing
 							</button>
@@ -305,7 +305,7 @@ export function IngestForm({
 				<button
 					type="submit"
 					disabled={isSubmitting}
-					className="w-full bg-hyper-green text-carbon font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 mt-4"
+					className="w-full bg-hyper-green text-on-hyper-green font-bold px-6 py-3 rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50 mt-4"
 				>
 					{isSubmitting ? "Adding..." : "Add Item"}
 				</button>

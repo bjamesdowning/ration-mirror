@@ -77,7 +77,7 @@ export function PwaInstallPrompt() {
 						<button
 							type="button"
 							onClick={install}
-							className="p-2 rounded-lg bg-hyper-green text-carbon"
+							className="p-2 rounded-lg bg-hyper-green text-on-hyper-green"
 							aria-label="Install app"
 						>
 							<Download className="w-4 h-4" />

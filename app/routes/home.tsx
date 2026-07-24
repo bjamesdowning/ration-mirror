@@ -157,7 +157,7 @@ function PricingSection({
 					</ul>
 					<a
 						href="#signup"
-						className="inline-flex w-full justify-center rounded-xl bg-hyper-green px-4 py-3 text-sm font-bold text-carbon shadow-glow-sm hover:opacity-90"
+						className="inline-flex w-full justify-center rounded-xl bg-hyper-green px-4 py-3 text-sm font-bold text-on-hyper-green shadow-glow-sm hover:opacity-90"
 					>
 						Start Crew Member
 					</a>

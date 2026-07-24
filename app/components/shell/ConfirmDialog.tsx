@@ -4,7 +4,8 @@ import { isTypedConfirmMatch, useConfirm } from "~/lib/confirm-context";
 const variantButtonClasses = {
 	danger: "bg-danger text-white hover:bg-danger/90 shadow-glow-sm",
 	warning: "bg-warning text-carbon hover:bg-warning/90 shadow-glow-sm",
-	default: "bg-hyper-green text-carbon hover:shadow-glow shadow-glow-sm",
+	default:
+		"bg-hyper-green text-on-hyper-green hover:shadow-glow shadow-glow-sm",
 } as const;
 
 export function ConfirmDialog() {

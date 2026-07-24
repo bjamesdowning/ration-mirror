@@ -24,6 +24,23 @@ final class HubViewModelTests: XCTestCase {
         XCTAssertTrue(message.lowercased().contains("offline"))
     }
 
+    func testCancelledColdLoadLeavesFailedNotStuckLoading() async {
+        let model = HubViewModel()
+        model.fetchHubForTesting = { throw CancellationError() }
+        let snapshots = SnapshotStore()
+        let api = RationAPI(client: APIClient(auth: AuthManager()))
+        await model.load(
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: "org-cancel-\(UUID().uuidString)"
+        )
+        guard case let .failed(message) = model.state else {
+            return XCTFail("expected failed state after cancel, got \(model.state)")
+        }
+        XCTAssertTrue(message.lowercased().contains("couldn't load hub"))
+    }
+
     func testLoadedLayoutResolvesFromProfile() throws {
         let model = HubViewModel()
         let data = try makeHubResponse(profile: "cook")

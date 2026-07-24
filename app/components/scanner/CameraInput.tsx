@@ -388,7 +388,7 @@ export const CameraInput = forwardRef<CameraInputHandle, CameraInputProps>(
 						disabled={isAnalyzing}
 						className={`
                         flex items-center gap-2 px-4 py-3 
-                        bg-hyper-green text-carbon font-semibold rounded-lg
+                        bg-hyper-green text-on-hyper-green font-semibold rounded-lg
                         shadow-glow-sm hover:shadow-glow transition-all
                         disabled:opacity-50 disabled:cursor-not-allowed
                         active:scale-95

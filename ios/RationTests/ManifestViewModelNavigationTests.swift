@@ -3,6 +3,39 @@ import XCTest
 
 @MainActor
 final class ManifestViewModelNavigationTests: XCTestCase {
+    /// Add-entry sheet must use `selectedDay` (focused day), not `manifest.startDate` (week range echo).
+    func testSelectedDayIsAddEntryDefaultNotWeekStartDate() async {
+        let model = ManifestViewModel()
+        model.configureFromSettings(calendarSpan: 7, weekStartPref: "sunday")
+        model.applyInitialAnchorIfNeeded()
+        let weekStart = model.rangeStart
+        let midWeek = ManifestDateHelpers.addDays(weekStart, days: 3)
+
+        model.fetchManifestForTesting = { start, end in
+            Self.manifest(start: start, end: end)
+        }
+        let api = RationAPI(client: APIClient(auth: AuthManager()))
+        let snapshots = SnapshotStore()
+        let organizationId = "org-add-date-\(UUID().uuidString)"
+
+        await model.navigateWeek(
+            to: weekStart,
+            api: api,
+            snapshots: snapshots,
+            online: true,
+            organizationId: organizationId
+        )
+        model.selectedDay = midWeek
+
+        XCTAssertEqual(model.manifest?.startDate, weekStart)
+        XCTAssertEqual(model.selectedDay, midWeek)
+        XCTAssertNotEqual(
+            model.selectedDay,
+            model.manifest?.startDate,
+            "Add sheet defaultDate must be selectedDay, not range startDate"
+        )
+    }
+
     func testPrepareForLoadResetsAnchorOnlyOnOrganizationChange() {
         let model = ManifestViewModel()
         model.configureFromSettings(calendarSpan: 7, weekStartPref: "sunday")

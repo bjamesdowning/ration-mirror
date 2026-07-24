@@ -73,7 +73,7 @@ export function CompactItemCard({
 						text-xs font-bold transition-all border
 						${
 							isSelected
-								? "bg-hyper-green text-carbon border-hyper-green"
+								? "bg-hyper-green text-on-hyper-green border-hyper-green"
 								: "bg-platinum/70 dark:bg-white/10 text-muted border-carbon/20 dark:border-white/20 hover:border-hyper-green"
 						}
 					`}

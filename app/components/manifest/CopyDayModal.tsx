@@ -119,7 +119,7 @@ export function CopyDayModal({
 											: isPast
 												? "bg-platinum/30 text-muted/50 cursor-not-allowed"
 												: isSelected
-													? "bg-hyper-green text-carbon shadow-glow-sm"
+													? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 													: "btn-secondary hover:bg-hyper-green/20 hover:text-hyper-green"
 									}`}
 								>
@@ -160,7 +160,7 @@ export function CopyDayModal({
 						disabled={
 							selectedDates.size === 0 || isSubmitting || wouldExceedLimit
 						}
-						className="flex-1 py-2.5 rounded-xl bg-hyper-green text-carbon font-semibold text-sm font-mono hover:shadow-glow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+						className="flex-1 py-2.5 rounded-xl bg-hyper-green text-on-hyper-green font-semibold text-sm font-mono hover:shadow-glow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
 					>
 						{isSubmitting
 							? "Copying…"

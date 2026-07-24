@@ -168,7 +168,7 @@ export function IngredientPicker({
 
 					{/* Main row: badge + name + qty + unit */}
 					<div className="grid grid-cols-12 gap-2 items-center">
-						<div className="col-span-1 bg-hyper-green text-carbon text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+						<div className="col-span-1 bg-hyper-green text-on-hyper-green text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0">
 							{idx + 1}
 						</div>
 

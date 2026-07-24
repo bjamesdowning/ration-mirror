@@ -178,7 +178,7 @@ export function MealPicker({
 							<button
 								type="button"
 								onClick={handleConfirm}
-								className="w-full py-3 bg-hyper-green text-carbon font-semibold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+								className="w-full py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 							>
 								Add to {SLOT_LABELS[slot]}
 							</button>

@@ -64,7 +64,7 @@ export function DirectionsSteps({ steps, mealName }: DirectionsStepsProps) {
 					<button
 						type="button"
 						onClick={() => setCookMode(true)}
-						className="ml-auto flex items-center gap-2 text-sm font-semibold bg-hyper-green text-carbon px-4 py-2 rounded-xl hover:shadow-glow-sm active:scale-95 transition-all"
+						className="ml-auto flex items-center gap-2 text-sm font-semibold bg-hyper-green text-on-hyper-green px-4 py-2 rounded-xl hover:shadow-glow-sm active:scale-95 transition-all"
 					>
 						<ChefHat size={15} />
 						Cook Mode
@@ -99,7 +99,7 @@ export function DirectionsSteps({ steps, mealName }: DirectionsStepsProps) {
 											<div
 												className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all mt-0.5 ${
 													done
-														? "bg-hyper-green text-carbon"
+														? "bg-hyper-green text-on-hyper-green"
 														: "border-2 border-hyper-green/60"
 												}`}
 											>

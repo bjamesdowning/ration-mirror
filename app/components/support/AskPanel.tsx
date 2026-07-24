@@ -1394,7 +1394,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 								<button
 									type="button"
 									onClick={newChat}
-									className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+									className="rounded-full bg-hyper-green px-3 py-1 font-mono text-on-hyper-green text-xs uppercase tracking-[0.18em]"
 								>
 									New chat
 								</button>
@@ -1431,7 +1431,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 									<div
 										className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm ${
 											message.role === "user"
-												? "bg-hyper-green text-carbon"
+												? "bg-hyper-green text-on-hyper-green"
 												: "bg-ceramic text-carbon border border-platinum/70"
 										}`}
 									>
@@ -1518,7 +1518,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							<button
 								type="button"
 								onClick={() => approveTool(true)}
-								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-on-hyper-green text-xs uppercase tracking-[0.18em]"
 							>
 								Approve
 							</button>
@@ -1542,7 +1542,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						<button
 							type="button"
 							onClick={() => void enableAutoDeduct()}
-							className="mt-2 rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+							className="mt-2 rounded-full bg-hyper-green px-3 py-1 font-mono text-on-hyper-green text-xs uppercase tracking-[0.18em]"
 						>
 							Allow credit use
 						</button>
@@ -1555,7 +1555,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 						<div className="mt-2 flex flex-wrap gap-2">
 							<a
 								href="/hub/pricing"
-								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-on-hyper-green text-xs uppercase tracking-[0.18em]"
 							>
 								Add credits
 							</a>
@@ -1581,7 +1581,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 							<button
 								type="button"
 								onClick={continueInNewChat}
-								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-carbon text-xs uppercase tracking-[0.18em]"
+								className="rounded-full bg-hyper-green px-3 py-1 font-mono text-on-hyper-green text-xs uppercase tracking-[0.18em]"
 							>
 								Continue in new chat
 							</button>
@@ -1658,7 +1658,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 								disabled={isStopping}
 								onClick={stopTurn}
 								aria-label={isStopping ? "Stopping Copilot" : "Stop Copilot"}
-								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
+								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-on-hyper-green disabled:opacity-40"
 							>
 								<Square className="size-3.5 fill-current" />
 							</button>
@@ -1668,7 +1668,7 @@ export function AskPanel({ isOpen, onClose }: AskPanelProps) {
 								disabled={!canSend}
 								onClick={() => void send()}
 								aria-label="Send message to Copilot"
-								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-carbon disabled:opacity-40"
+								className="grid size-11 place-items-center rounded-xl bg-hyper-green text-on-hyper-green disabled:opacity-40"
 							>
 								<Send className="size-4" />
 							</button>

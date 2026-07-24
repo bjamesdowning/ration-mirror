@@ -181,7 +181,7 @@ export function MealGrid({
 									onClick={() => setMatchMode("strict")}
 									className={`px-4 py-2 text-sm font-medium transition-colors ${
 										matchMode === "strict"
-											? "bg-hyper-green text-carbon"
+											? "bg-hyper-green text-on-hyper-green"
 											: "text-muted hover:bg-platinum/50"
 									}`}
 								>
@@ -192,7 +192,7 @@ export function MealGrid({
 									onClick={() => setMatchMode("delta")}
 									className={`px-4 py-2 text-sm font-medium transition-colors ${
 										matchMode === "delta"
-											? "bg-hyper-green text-carbon"
+											? "bg-hyper-green text-on-hyper-green"
 											: "text-muted hover:bg-platinum/50"
 									}`}
 								>

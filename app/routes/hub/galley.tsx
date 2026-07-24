@@ -377,7 +377,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 					onClick={() => toggleMatching(!matchingEnabled)}
 					className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all ${
 						matchingEnabled
-							? "bg-hyper-green text-carbon"
+							? "bg-hyper-green text-on-hyper-green"
 							: "bg-platinum dark:bg-white/10 text-carbon dark:text-white"
 					}`}
 				>
@@ -501,7 +501,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 								<button
 									type="button"
 									onClick={() => generateRef.current?.open()}
-									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+									className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 								>
 									<SparkleIcon className="w-4 h-4" />
 									Generate Meal
@@ -530,7 +530,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() => importRef.current?.open()}
-										className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
+										className="flex items-center gap-2 px-4 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all active:scale-95"
 									>
 										<LinkIcon className="w-4 h-4" />
 										Import URL
@@ -626,7 +626,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() => generateRef.current?.open()}
-										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+										className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 									>
 										Generate Meal
 									</button>
@@ -635,7 +635,7 @@ export default function MealsIndex({ loaderData }: Route.ComponentProps) {
 									<button
 										type="button"
 										onClick={() => importRef.current?.open()}
-										className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
+										className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow-sm hover:shadow-glow transition-all"
 									>
 										Import Meal
 									</button>

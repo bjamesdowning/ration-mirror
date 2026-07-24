@@ -429,7 +429,7 @@ export const GenerateMealButton = forwardRef<
 				onClick={() => setShowModal(true)}
 				className={`
 					flex items-center gap-2 px-4 py-3 
-					bg-hyper-green text-carbon font-semibold rounded-lg
+					bg-hyper-green text-on-hyper-green font-semibold rounded-lg
 					shadow-glow-sm hover:shadow-glow transition-all
 					active:scale-95
 					${className || ""}
@@ -520,7 +520,7 @@ export const GenerateMealButton = forwardRef<
 											<button
 												type="button"
 												onClick={handleGenerate}
-												className="px-8 py-4 bg-hyper-green text-carbon font-bold rounded-xl shadow-glow hover:scale-105 transition-all"
+												className="px-8 py-4 bg-hyper-green text-on-hyper-green font-bold rounded-xl shadow-glow hover:scale-105 transition-all"
 											>
 												Generate Ideas
 											</button>
@@ -598,7 +598,7 @@ export const GenerateMealButton = forwardRef<
 														setError(null);
 														navigate("/hub/galley");
 													}}
-													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 												>
 													<Check className="w-4 h-4" />
 													View in Galley
@@ -611,7 +611,7 @@ export const GenerateMealButton = forwardRef<
 														saveFetcher.state !== "idle" ||
 														selectedRecipes.size === 0
 													}
-													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
+													className="flex items-center gap-2 px-6 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow disabled:opacity-50 transition-all"
 												>
 													{saveFetcher.state !== "idle" ? (
 														<span className="w-4 h-4 border-2 border-carbon/30 border-t-carbon rounded-full animate-spin" />

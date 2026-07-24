@@ -125,7 +125,7 @@ export function HubEditMode({
 					<button
 						type="button"
 						onClick={onExit}
-						className="px-4 py-2 bg-hyper-green text-carbon font-semibold rounded-lg text-sm hover:bg-hyper-green/90 transition-colors"
+						className="px-4 py-2 bg-hyper-green text-on-hyper-green font-semibold rounded-lg text-sm hover:bg-hyper-green/90 transition-colors"
 					>
 						Done
 					</button>
@@ -192,7 +192,7 @@ export function HubEditMode({
 													disabled={isSaving}
 													className={`min-h-[44px] px-3 text-xs rounded font-bold transition-colors ${
 														size === s
-															? "bg-hyper-green text-carbon"
+															? "bg-hyper-green text-on-hyper-green"
 															: "text-white/50 hover:text-white hover:bg-white/10"
 													}`}
 												>

@@ -169,7 +169,7 @@ export function SnacksSuggestionsCard({ meals }: SnacksSuggestionsCardProps) {
 											type="submit"
 											disabled={isCookingThis}
 											aria-label="Have Now"
-											className="flex items-center justify-center gap-2 w-full min-h-[44px] py-3 rounded-lg bg-hyper-green text-carbon font-bold text-sm hover:shadow-glow-sm transition-all disabled:opacity-75 disabled:cursor-wait"
+											className="flex items-center justify-center gap-2 w-full min-h-[44px] py-3 rounded-lg bg-hyper-green text-on-hyper-green font-bold text-sm hover:shadow-glow-sm transition-all disabled:opacity-75 disabled:cursor-wait"
 										>
 											{isCookingThis ? (
 												<span className="animate-pulse">...</span>
@@ -195,7 +195,7 @@ export function SnacksSuggestionsCard({ meals }: SnacksSuggestionsCardProps) {
 					</p>
 					<Link
 						to="/hub/galley/new"
-						className="inline-block bg-hyper-green text-carbon text-sm font-bold px-4 py-2 rounded-lg hover:shadow-glow-sm transition-all"
+						className="inline-block bg-hyper-green text-on-hyper-green text-sm font-bold px-4 py-2 rounded-lg hover:shadow-glow-sm transition-all"
 					>
 						+ Add Provision
 					</Link>

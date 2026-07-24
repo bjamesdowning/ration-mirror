@@ -56,7 +56,7 @@ export function FloatingActionBar({
 							flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all min-w-[44px] min-h-[44px] justify-center
 							${
 								action.primary || action.variant === "primary"
-									? "bg-hyper-green text-carbon shadow-glow-sm hover:shadow-glow"
+									? "bg-hyper-green text-on-hyper-green shadow-glow-sm hover:shadow-glow"
 									: action.variant === "danger"
 										? "bg-red-500/90 text-white shadow-glow-sm hover:bg-red-500 hover:shadow-glow"
 										: "bg-platinum dark:bg-white/20 text-carbon dark:text-white hover:bg-platinum/80 dark:hover:bg-white/30"

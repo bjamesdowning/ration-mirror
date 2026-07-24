@@ -148,7 +148,7 @@ export default function CreateGroupPage() {
 						<button
 							type="submit"
 							disabled={isSubmitting || isAtCapacity}
-							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+							className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
 							{isSubmitting ? "Creating..." : "Create Group"}
 						</button>

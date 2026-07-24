@@ -114,7 +114,7 @@ export function SupplyHorizonPicker({
 								aria-pressed={displayHorizon === days}
 								className={`${fullWidth ? "flex-1" : ""} px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
 									displayHorizon === days
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: "text-muted hover:bg-platinum/50 dark:hover:bg-white/10"
 								}`}
 							>

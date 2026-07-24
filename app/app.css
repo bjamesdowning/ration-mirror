@@ -7,6 +7,8 @@
 @theme {
   /* Semantic accent colors (same in both themes) */
   --color-hyper-green: #00E088;
+  /* Label color on Hyper-Green fills — fixed black; never remap with theme */
+  --color-on-hyper-green: #111111;
   --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;

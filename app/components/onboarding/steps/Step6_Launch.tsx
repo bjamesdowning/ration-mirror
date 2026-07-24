@@ -141,7 +141,7 @@ export function Step6_Launch({ onComplete, onSkip, onBack }: Step6Props) {
 					<button
 						type="button"
 						onClick={handleBeginMission}
-						className="px-6 py-2.5 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
+						className="px-6 py-2.5 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all text-sm"
 					>
 						Begin Mission
 					</button>

@@ -19,7 +19,7 @@ export function BlogCTA({
 			<p className="text-sm text-muted mb-4">{description}</p>
 			<Link
 				to={to}
-				className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green text-carbon font-medium text-sm hover:opacity-90 transition-opacity"
+				className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-hyper-green text-on-hyper-green font-medium text-sm hover:opacity-90 transition-opacity"
 			>
 				{label}
 			</Link>

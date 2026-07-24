@@ -76,7 +76,7 @@ export default function ConnectPage() {
 							<a
 								key={client.id}
 								href={client.build()}
-								className="inline-flex items-center px-4 py-2.5 rounded-xl bg-hyper-green text-carbon font-mono text-sm font-bold hover:opacity-90 transition-opacity"
+								className="inline-flex items-center px-4 py-2.5 rounded-xl bg-hyper-green text-on-hyper-green font-mono text-sm font-bold hover:opacity-90 transition-opacity"
 							>
 								Add to {client.label}
 							</a>

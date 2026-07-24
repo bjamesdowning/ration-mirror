@@ -35,7 +35,7 @@ export function CopyField({
 						navigator.clipboard.writeText(value);
 						copyToast.show();
 					}}
-					className="px-3 py-2 bg-hyper-green text-carbon text-xs font-semibold rounded-lg hover:bg-hyper-green/90 shrink-0"
+					className="px-3 py-2 bg-hyper-green text-on-hyper-green text-xs font-semibold rounded-lg hover:bg-hyper-green/90 shrink-0"
 				>
 					{copyLabel}
 				</button>

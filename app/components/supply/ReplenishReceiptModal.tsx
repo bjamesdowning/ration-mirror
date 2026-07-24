@@ -97,7 +97,7 @@ export function ReplenishReceiptModal({
 							<Link
 								to="/hub/pricing"
 								onClick={onClose}
-								className="block w-full text-center px-6 py-3 bg-hyper-green text-carbon font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+								className="block w-full text-center px-6 py-3 bg-hyper-green text-on-hyper-green font-semibold rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 							>
 								Get credits
 							</Link>

@@ -199,7 +199,7 @@ struct ManifestView: View {
             }
             .background(Theme.ceramic)
             .sheet(isPresented: $showingAddEntry) {
-                AddManifestEntrySheet(defaultDate: model.manifest?.startDate) { mealId, date, slot in
+                AddManifestEntrySheet(defaultDate: model.selectedDay) { mealId, date, slot in
                     guard let organizationId = env.session.activeOrganizationId else {
                         return "Organization not ready."
                     }

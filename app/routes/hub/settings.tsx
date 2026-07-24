@@ -676,7 +676,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 								className={[
 									"flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all",
 									isActive && !isDanger
-										? "bg-hyper-green text-carbon shadow-glow-sm"
+										? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 										: isActive && isDanger
 											? "bg-danger text-white"
 											: isDanger
@@ -1101,7 +1101,7 @@ function AccountSection({
 				<div className="flex flex-wrap gap-3">
 					<Link
 						to="/hub/pricing"
-						className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 transition-colors"
+						className="px-4 py-2 bg-hyper-green text-on-hyper-green rounded-lg font-semibold text-sm hover:bg-hyper-green/90 transition-colors"
 					>
 						View Pricing
 					</Link>
@@ -1679,7 +1679,7 @@ function ViewModeSection({ settings }: { settings: UserSettings }) {
 								aria-pressed={mode === "card"}
 								className={`px-4 py-2 text-sm font-medium transition-colors ${
 									mode === "card"
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: "text-muted hover:bg-platinum/50"
 								}`}
 							>
@@ -1691,7 +1691,7 @@ function ViewModeSection({ settings }: { settings: UserSettings }) {
 								aria-pressed={mode === "list"}
 								className={`px-4 py-2 text-sm font-medium transition-colors ${
 									mode === "list"
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: "text-muted hover:bg-platinum/50"
 								}`}
 							>
@@ -1766,11 +1766,11 @@ function HelpSection() {
 								className={[
 									"group relative inline-flex min-h-[44px] w-fit items-center justify-center gap-1.5",
 									"rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors",
-									"border border-hyper-green/80 bg-hyper-green text-carbon shadow-sm",
+									"border border-hyper-green/80 bg-hyper-green text-on-hyper-green shadow-sm",
 									"hover:border-hyper-green hover:bg-hyper-green/90 hover:brightness-[1.02]",
 									"active:bg-hyper-green/85",
 									"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hyper-green focus-visible:ring-offset-2 focus-visible:ring-offset-ceramic",
-									"dark:border-hyper-green dark:bg-hyper-green dark:text-carbon",
+									"dark:border-hyper-green dark:bg-hyper-green dark:text-on-hyper-green",
 									"dark:hover:bg-hyper-green/90 dark:hover:brightness-[1.03]",
 									"dark:focus-visible:ring-offset-carbon",
 								].join(" ")}
@@ -2200,7 +2200,7 @@ function DangerSection({
 										action: "/api/billing-portal",
 									});
 								}}
-								className="px-4 py-2 bg-hyper-green text-carbon rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm font-medium"
+								className="px-4 py-2 bg-hyper-green text-on-hyper-green rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm font-medium"
 							>
 								{isOpeningPortal ? "Opening…" : "Manage Subscription"}
 							</button>
@@ -2679,7 +2679,7 @@ function TransferCreditsSection({
 					disabled={
 						fetcher.state !== "idle" || !sourceId || destGroups.length === 0
 					}
-					className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-60 disabled:cursor-not-allowed"
+					className="px-4 py-2 bg-hyper-green text-on-hyper-green rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-60 disabled:cursor-not-allowed"
 				>
 					{fetcher.state !== "idle" ? "Transferring..." : "Transfer Credits"}
 				</button>

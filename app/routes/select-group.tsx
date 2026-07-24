@@ -114,7 +114,7 @@ export default function SelectGroupPage() {
 									setIsCreating(false);
 								}
 							}}
-							className="px-6 py-3 bg-hyper-green text-carbon font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
+							className="px-6 py-3 bg-hyper-green text-on-hyper-green font-bold rounded-lg shadow-glow-sm hover:shadow-glow transition-all disabled:opacity-50"
 						>
 							{isCreating ? "Creating..." : "Create Personal Group"}
 						</button>

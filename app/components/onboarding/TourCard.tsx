@@ -94,7 +94,7 @@ export function TourCard({
 					<button
 						type="button"
 						onClick={onNext}
-						className="px-4 py-2 text-sm font-semibold bg-hyper-green text-carbon rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
+						className="px-4 py-2 text-sm font-semibold bg-hyper-green text-on-hyper-green rounded-lg shadow-glow-sm hover:shadow-glow transition-all"
 					>
 						{nextLabel}
 					</button>

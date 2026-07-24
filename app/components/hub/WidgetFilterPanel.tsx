@@ -142,7 +142,9 @@ export function WidgetFilterPanel({
 									disabled={isSaving}
 									onClick={() => toggleTag(tag)}
 									className={`${chipSizeClass} rounded-full font-medium transition-colors capitalize ${
-										active ? "bg-hyper-green text-carbon" : inactiveChipClass
+										active
+											? "bg-hyper-green text-on-hyper-green"
+											: inactiveChipClass
 									}`}
 								>
 									{tag}
@@ -172,7 +174,9 @@ export function WidgetFilterPanel({
 							disabled={isSaving}
 							onClick={() => update({ slotType: undefined })}
 							className={`${chipSizeClass} rounded-full font-medium transition-colors ${
-								!currentSlot ? "bg-hyper-green text-carbon" : inactiveChipClass
+								!currentSlot
+									? "bg-hyper-green text-on-hyper-green"
+									: inactiveChipClass
 							}`}
 						>
 							All
@@ -187,7 +191,7 @@ export function WidgetFilterPanel({
 								}
 								className={`${chipSizeClass} rounded-full font-medium capitalize transition-colors ${
 									currentSlot === slot
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: inactiveChipClass
 								}`}
 							>
@@ -208,7 +212,7 @@ export function WidgetFilterPanel({
 							onClick={() => update({ domain: undefined })}
 							className={`${chipSizeClass} rounded-full font-medium transition-colors ${
 								!currentDomain
-									? "bg-hyper-green text-carbon"
+									? "bg-hyper-green text-on-hyper-green"
 									: inactiveChipClass
 							}`}
 						>
@@ -226,7 +230,7 @@ export function WidgetFilterPanel({
 								}
 								className={`${chipSizeClass} rounded-full font-medium capitalize transition-colors ${
 									currentDomain === domain
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: inactiveChipClass
 								}`}
 							>
@@ -253,7 +257,7 @@ export function WidgetFilterPanel({
 								}
 								className={`${chipSizeClass} rounded-full font-medium transition-colors ${
 									(currentDaySpan ?? 7) === days
-										? "bg-hyper-green text-carbon"
+										? "bg-hyper-green text-on-hyper-green"
 										: inactiveChipClass
 								}`}
 							>
@@ -291,7 +295,9 @@ export function WidgetFilterPanel({
 										});
 									}}
 									className={`${chipSizeClass} rounded-full font-medium transition-colors capitalize ${
-										active ? "bg-hyper-green text-carbon" : inactiveChipClass
+										active
+											? "bg-hyper-green text-on-hyper-green"
+											: inactiveChipClass
 									}`}
 								>
 									{tag}

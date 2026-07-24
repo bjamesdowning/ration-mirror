@@ -150,7 +150,7 @@ export function MealListRow({
 					}
 					className={`relative z-20 hidden md:flex items-center justify-center min-w-[44px] min-h-[44px] border rounded text-xs font-bold transition-all shrink-0 ${
 						localActive
-							? "bg-hyper-green text-carbon border-hyper-green"
+							? "bg-hyper-green text-on-hyper-green border-hyper-green"
 							: "bg-platinum/70 dark:bg-white/5 text-muted border-carbon/20 hover:bg-platinum"
 					}`}
 				>

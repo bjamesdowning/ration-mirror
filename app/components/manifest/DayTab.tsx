@@ -33,7 +33,7 @@ export function DayTab({
 						onClick={() => onSelect(date)}
 						className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl min-w-[52px] transition-all ${
 							isActive
-								? "bg-hyper-green text-carbon shadow-glow-sm"
+								? "bg-hyper-green text-on-hyper-green shadow-glow-sm"
 								: isToday
 									? "bg-hyper-green/10 text-hyper-green border border-hyper-green/30"
 									: isPast

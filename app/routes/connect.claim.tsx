@@ -108,7 +108,7 @@ export default function ConnectClaimPage() {
 					</p>
 					<a
 						href="/hub"
-						className="inline-block px-6 py-3 rounded-xl bg-hyper-green text-carbon font-mono font-bold text-sm"
+						className="inline-block px-6 py-3 rounded-xl bg-hyper-green text-on-hyper-green font-mono font-bold text-sm"
 					>
 						Open Hub →
 					</a>
@@ -200,7 +200,7 @@ export default function ConnectClaimPage() {
 							<button
 								type="submit"
 								disabled={isSubmitting}
-								className="w-full rounded-xl bg-hyper-green py-3 font-mono font-bold text-carbon text-sm disabled:opacity-50"
+								className="w-full rounded-xl bg-hyper-green py-3 font-mono font-bold text-on-hyper-green text-sm disabled:opacity-50"
 							>
 								Send verification code
 							</button>
@@ -253,7 +253,7 @@ export default function ConnectClaimPage() {
 							<button
 								type="submit"
 								disabled={isSubmitting || !tosAccepted}
-								className="w-full rounded-xl bg-hyper-green py-3 font-mono font-bold text-carbon text-sm disabled:opacity-50"
+								className="w-full rounded-xl bg-hyper-green py-3 font-mono font-bold text-on-hyper-green text-sm disabled:opacity-50"
 							>
 								Verify and claim
 							</button>

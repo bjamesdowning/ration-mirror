@@ -97,7 +97,7 @@ export function ApiKeysPanel({
 									navigator.clipboard.writeText(newKeyDisplay);
 									copyToast.show();
 								}}
-								className="px-3 py-1 bg-hyper-green text-carbon text-xs font-semibold rounded hover:bg-hyper-green/90"
+								className="px-3 py-1 bg-hyper-green text-on-hyper-green text-xs font-semibold rounded hover:bg-hyper-green/90"
 							>
 								Copy
 							</button>
@@ -132,7 +132,7 @@ export function ApiKeysPanel({
 						<button
 							type="submit"
 							disabled={!canSubmit}
-							className="px-4 py-2 bg-hyper-green text-carbon rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-50"
+							className="px-4 py-2 bg-hyper-green text-on-hyper-green rounded-lg font-semibold text-sm hover:bg-hyper-green/90 disabled:opacity-50"
 						>
 							{createFetcher.state === "submitting"
 								? "Creating..."

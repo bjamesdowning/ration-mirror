@@ -166,4 +166,12 @@ extension RationAPI {
         )
     }
 
+    func removeGroupMember(memberId: String) async throws -> RemoveGroupMemberResponse {
+        try await client.delete("groups/members/\(memberId)")
+    }
+
+    func leaveGroup() async throws -> LeaveGroupResponse {
+        try await client.post("groups/leave", body: EmptyBody())
+    }
+
 }

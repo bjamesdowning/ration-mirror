@@ -8,9 +8,11 @@ struct GroupSettingsView: View {
     @State private var paywallContext: PaywallContext?
     @State private var showingDeleteConfirm = false
     @State private var deleteConfirmText = ""
+    @State private var showingLeaveConfirm = false
     @State private var showingTransferConfirm = false
     @State private var transferConfirmText = ""
     @State private var selectedTransferMemberId = ""
+    @State private var memberPendingRemoval: GroupMember?
 
     @State private var supplyWindow: SupplyPlanningWindow?
     @State private var isLoadingSupplySettings = false
@@ -173,6 +175,14 @@ struct GroupSettingsView: View {
             } else if model.isOwner, env.session.activeOrg?.isPersonalGroup == true {
                 personalGroupDeleteBlockedSection
             }
+
+            if let activeOrg = env.session.activeOrg,
+               GroupSettingsSupport.canLeaveGroup(
+                currentUserRole: activeOrg.role,
+                isPersonalGroup: activeOrg.isPersonalGroup
+               ) {
+                leaveGroupSection
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -187,6 +197,39 @@ struct GroupSettingsView: View {
                         )
                     }
             }
+        }
+        .alert(
+            "Remove \(memberPendingRemoval.map { GroupSettingsSupport.memberDisplayName($0.user) } ?? "member")?",
+            isPresented: Binding(
+                get: { memberPendingRemoval != nil },
+                set: { if !$0 { memberPendingRemoval = nil } }
+            )
+        ) {
+            Button("Remove", role: .destructive) {
+                guard let member = memberPendingRemoval else { return }
+                Task {
+                    _ = await model.removeMember(memberId: member.id, api: env.api)
+                    memberPendingRemoval = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { memberPendingRemoval = nil }
+        } message: {
+            Text("They will lose access to this group's cargo immediately.")
+        }
+        .alert("Leave this group?", isPresented: $showingLeaveConfirm) {
+            Button("Leave Group", role: .destructive) {
+                Task {
+                    switch await model.leaveGroup(api: env.api, env: env) {
+                    case .needsOrgSelection:
+                        dismiss()
+                    case .failure:
+                        break
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You will lose access to this group's cargo immediately.")
         }
     }
 
@@ -385,6 +428,17 @@ struct GroupSettingsView: View {
 
             ForEach(model.members) { member in
                 memberRow(member)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if GroupSettingsSupport.canRemoveMember(
+                            currentUserRole: model.currentUserRole,
+                            targetRole: member.role
+                        ) {
+                            Button("Remove", role: .destructive) {
+                                memberPendingRemoval = member
+                            }
+                            .disabled(model.removingMemberId == member.id)
+                        }
+                    }
             }
         } header: {
             Text("Members")
@@ -495,6 +549,21 @@ struct GroupSettingsView: View {
             Text("Danger zone")
         } footer: {
             Text("Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private var leaveGroupSection: some View {
+        Section {
+            Button(model.isLeavingGroup ? "Leaving…" : "Leave group", role: .destructive) {
+                showingLeaveConfirm = true
+            }
+            .disabled(model.isLeavingGroup)
+            .destructiveDeleteTint()
+        } header: {
+            Text("Danger zone")
+        } footer: {
+            Text("Remove yourself from this group. You will return to the group picker. Owners must transfer ownership or delete the group instead.")
         }
     }
 }

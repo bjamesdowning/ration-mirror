@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import { z } from "zod";
 import { CapacityExceededError } from "./capacity.server";
+import { GroupMembershipError } from "./group-membership.server";
 import { log } from "./logging.server";
 import { SupplySyncBusyError } from "./supply-sync-lock.server";
 import { emitApiOutcome } from "./telemetry.server";
@@ -210,6 +211,13 @@ export function handleApiError(error: unknown) {
 				upgradePath: "crew_member",
 			},
 			{ status: 403 },
+		);
+	}
+
+	if (error instanceof GroupMembershipError) {
+		return data(
+			{ error: error.message, code: error.code },
+			{ status: error.status },
 		);
 	}
 

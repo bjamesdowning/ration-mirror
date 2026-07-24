@@ -21,3 +21,6 @@ export function isPersonalOrganization(
 
 export const PERSONAL_GROUP_DELETE_MESSAGE =
 	"Your personal group can't be deleted. To remove all your data, delete your account instead.";
+
+export const PERSONAL_GROUP_LEAVE_MESSAGE =
+	"You can't leave your personal group. Delete your account to remove it.";

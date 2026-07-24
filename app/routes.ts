@@ -272,6 +272,11 @@ export default [
 		"api/groups/members/:memberId/role",
 		"routes/api/groups.members.$memberId.role.ts",
 	),
+	route(
+		"api/groups/members/:memberId",
+		"routes/api/groups.members.$memberId.ts",
+	),
+	route("api/groups/leave", "routes/api/groups.leave.ts"),
 	route("api/api-keys", "routes/api/api-keys.ts"),
 	route("api/api-keys/:id", "routes/api/api-keys.$id.ts"),
 	route("api/agent/auth", "routes/api/agent/auth.ts"),
@@ -320,6 +325,11 @@ export default [
 		"api/mobile/v1/groups/members/:memberId/role",
 		"routes/api/mobile/v1.groups.members.$memberId.role.ts",
 	),
+	route(
+		"api/mobile/v1/groups/members/:memberId",
+		"routes/api/mobile/v1.groups.members.$memberId.ts",
+	),
+	route("api/mobile/v1/groups/leave", "routes/api/mobile/v1.groups.leave.ts"),
 	route(
 		"api/mobile/v1/groups/ownership/transfer",
 		"routes/api/mobile/v1.groups.ownership.transfer.ts",

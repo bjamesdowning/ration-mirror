@@ -17,7 +17,7 @@ Ask each in Ask Ration (with `search_docs`) and optionally open the matching `/h
 |---|----------|------------------------|
 | 1 | What is Cargo vs Galley? | `02`, `10`, `12` |
 | 2 | How do I invite someone to my household? | `05`, `22` |
-| 3 | Can I leave a group? | `05` (no first-class leave) |
+| 3 | Can I leave a group? | `05` (leave for non-owners; owners transfer or delete) |
 | 4 | What actions can I take on a Cargo item? | `10` |
 | 5 | How does the kitchen loop work? | `19` |
 | 6 | How many credits is a receipt scan? | `20`, `11` |

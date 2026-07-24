@@ -1580,6 +1580,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `POST /api/groups/create` | userId | 60s | 5 | Spam prevention |
 | `POST /api/groups/invitations/create` | userId | 60s | 10 | Invitation spam |
 | `POST /api/groups/ownership/transfer` | userId | 60s | 5 | Ownership transfer abuse |
+| Leave / remove member (`group_membership_exit`) | userId | 60s | 20 | Membership exit abuse |
 | `POST /api/groups/credits/transfer` | userId | 60s | 10 | Transfer abuse |
 | `POST /api/cargo/batch` | userId | 60s | 20 | Bulk write protection |
 | `POST /api/user/purge` | userId | 300s | 1 | Destructive action guard |
@@ -1834,6 +1835,8 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/groups/delete` | Delete group (owner; `{ organizationId }`); returns remaining `organizations` |
 | `POST` | `/api/mobile/v1/groups/invitations/create` | Create invite link (owner/admin, Crew tier) |
 | `PATCH` | `/api/mobile/v1/groups/members/:memberId/role` | Change member role (`{ role: "admin" \| "member" }`) |
+| `DELETE` | `/api/mobile/v1/groups/members/:memberId` | Owner removes a non-owner member |
+| `POST` | `/api/mobile/v1/groups/leave` | Non-owner leaves active group; returns remaining `organizations` |
 | `POST` | `/api/mobile/v1/groups/ownership/transfer` | Transfer group ownership (`{ newOwnerMemberId }`) |
 | `POST` | `/api/mobile/v1/groups/credits/transfer` | Transfer credits between orgs (source owner, dest member) |
 | `GET` / `POST` | `/api/mobile/v1/meals` | List/create meals |

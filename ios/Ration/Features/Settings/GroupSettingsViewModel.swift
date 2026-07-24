@@ -13,6 +13,11 @@ enum DeleteGroupOutcome: Equatable {
     case failure(String)
 }
 
+enum LeaveGroupOutcome: Equatable {
+    case needsOrgSelection
+    case failure(String)
+}
+
 @MainActor
 @Observable
 final class GroupSettingsViewModel {
@@ -22,6 +27,8 @@ final class GroupSettingsViewModel {
     private(set) var isCreatingGroup = false
     private(set) var isInviting = false
     private(set) var updatingMemberId: String?
+    private(set) var removingMemberId: String?
+    private(set) var isLeavingGroup = false
     var errorMessage: String?
     var createGroupError: String?
     var lastCreateGroupPaywallContext: PaywallContext?
@@ -199,6 +206,40 @@ final class GroupSettingsViewModel {
         errorMessage = nil
         do {
             let response = try await api.deleteGroup(organizationId: orgId)
+            await env.snapshots.clearAll()
+            env.refreshOutcomes.clearAll()
+            env.session.beginOrgSelection(organizations: response.organizations)
+            Haptics.success()
+            return .needsOrgSelection
+        } catch {
+            let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = message
+            return .failure(message)
+        }
+    }
+
+    func removeMember(memberId: String, api: RationAPI) async -> Bool {
+        removingMemberId = memberId
+        errorMessage = nil
+        defer { removingMemberId = nil }
+        do {
+            _ = try await api.removeGroupMember(memberId: memberId)
+            members = try await api.groupMembers().members
+            successMessage = "Member removed"
+            Haptics.success()
+            return true
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+    }
+
+    func leaveGroup(api: RationAPI, env: AppEnvironment) async -> LeaveGroupOutcome {
+        isLeavingGroup = true
+        errorMessage = nil
+        defer { isLeavingGroup = false }
+        do {
+            let response = try await api.leaveGroup()
             await env.snapshots.clearAll()
             env.refreshOutcomes.clearAll()
             env.session.beginOrgSelection(organizations: response.organizations)

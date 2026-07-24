@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { MessageCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	data,
 	Form,
@@ -2067,8 +2067,14 @@ function DangerSection({
 	tierExpiresAt: Date | string | null;
 }) {
 	const { confirm } = useConfirm();
+	const navigate = useNavigate();
 	const purgeFetcher = useFetcher<{ error?: string; code?: string }>();
 	const deleteGroupFetcher = useFetcher<{ error?: string; code?: string }>();
+	const leaveGroupFetcher = useFetcher<{
+		success?: boolean;
+		error?: string;
+		code?: string;
+	}>();
 	const billingPortalFetcher = useFetcher<{ url?: string; error?: string }>();
 	const transferOwnershipFetcher = useFetcher<{
 		success?: boolean;
@@ -2080,11 +2086,13 @@ function DangerSection({
 	const errorToast = useToast({ duration: 5000 });
 	const isPurging = purgeFetcher.state !== "idle";
 	const isDeletingGroup = deleteGroupFetcher.state !== "idle";
+	const isLeavingGroup = leaveGroupFetcher.state !== "idle";
 	const isTransferring = transferOwnershipFetcher.state !== "idle";
 	const isOpeningPortal = billingPortalFetcher.state !== "idle";
 
 	const nonOwnerMembers = members.filter((m) => m.role !== "owner");
 	const canTransferOwnership = isOwner && nonOwnerMembers.length > 0;
+	const canLeaveGroup = !isOwner && !isPersonalGroup;
 	const eligibleTransferMembers = nonOwnerMembers.filter(
 		(m) => transferRecipientEligibility[m.id]?.allowed !== false,
 	);
@@ -2108,6 +2116,11 @@ function DangerSection({
 			? deleteGroupFetcher.data.error
 			: undefined;
 
+	const leaveGroupError =
+		typeof leaveGroupFetcher.data?.error === "string"
+			? leaveGroupFetcher.data.error
+			: undefined;
+
 	useEffect(() => {
 		if (billingPortalFetcher.data?.url) {
 			window.open(
@@ -2117,6 +2130,12 @@ function DangerSection({
 			);
 		}
 	}, [billingPortalFetcher.data?.url]);
+
+	useEffect(() => {
+		if (leaveGroupFetcher.state === "idle" && leaveGroupFetcher.data?.success) {
+			navigate("/select-group");
+		}
+	}, [leaveGroupFetcher.state, leaveGroupFetcher.data?.success, navigate]);
 
 	// Revalidate and show toast on transfer success
 	useEffect(() => {
@@ -2347,6 +2366,46 @@ function DangerSection({
 								Transferring...
 							</span>
 						)}
+					</div>
+				)}
+
+				{/* Leave Group — non-owners only; personal groups blocked */}
+				{canLeaveGroup && (
+					<div className="pt-6 border-t border-danger/20">
+						<h3 className="text-sm font-bold text-danger mb-1">Leave Group</h3>
+						<p className="text-sm text-muted mb-4 max-w-md">
+							Remove yourself from this group. You will lose access to its
+							shared cargo immediately. This cannot be undone without a new
+							invite.
+						</p>
+						{leaveGroupError && (
+							<p className="text-sm text-danger mb-3 max-w-md">
+								{leaveGroupError}
+							</p>
+						)}
+						<button
+							type="button"
+							disabled={isLeavingGroup}
+							onClick={async () => {
+								if (
+									!(await confirm({
+										title: "Leave this group?",
+										message:
+											"You will lose access to this group's cargo immediately.",
+										confirmLabel: "Leave Group",
+										variant: "danger",
+									}))
+								)
+									return;
+								leaveGroupFetcher.submit(null, {
+									method: "post",
+									action: "/api/groups/leave",
+								});
+							}}
+							className="px-4 py-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors disabled:opacity-50 text-sm font-medium"
+						>
+							{isLeavingGroup ? "Leaving..." : "Leave Group"}
+						</button>
 					</div>
 				)}
 
@@ -2724,6 +2783,74 @@ function RoleDescriptions() {
 
 // ─── Group Management ──────────────────────────────────────────────────────────
 
+function MemberRemoveControl({
+	member,
+	currentUserRole,
+	onRemoved,
+	onRemoveError,
+}: {
+	// biome-ignore lint/suspicious/noExplicitAny: member type is complex from Drizzle query
+	member: any;
+	currentUserRole: "owner" | "admin" | "member";
+	onRemoved: (displayName: string) => void;
+	onRemoveError: (message: string) => void;
+}) {
+	const { confirm } = useConfirm();
+	const removeFetcher = useFetcher<{
+		success?: boolean;
+		error?: string;
+	}>();
+	const memberDisplayName = getUserDisplayName(member.user);
+	const isPending = removeFetcher.state !== "idle";
+	const canRemove = currentUserRole === "owner" && member.role !== "owner";
+	const notifiedRef = useRef(false);
+
+	useEffect(() => {
+		if (removeFetcher.state !== "idle") {
+			if (removeFetcher.state === "submitting") notifiedRef.current = false;
+			return;
+		}
+		if (!removeFetcher.data || notifiedRef.current) return;
+		notifiedRef.current = true;
+		if (removeFetcher.data.success) {
+			onRemoved(memberDisplayName);
+		} else if (typeof removeFetcher.data.error === "string") {
+			onRemoveError(removeFetcher.data.error);
+		}
+	}, [
+		removeFetcher.state,
+		removeFetcher.data,
+		memberDisplayName,
+		onRemoved,
+		onRemoveError,
+	]);
+
+	if (!canRemove) return null;
+
+	return (
+		<button
+			type="button"
+			disabled={isPending}
+			onClick={async () => {
+				const confirmed = await confirm({
+					title: "Remove member?",
+					message: `${memberDisplayName} will lose access to this group's cargo immediately.`,
+					confirmLabel: "Remove",
+					variant: "danger",
+				});
+				if (!confirmed) return;
+				removeFetcher.submit(null, {
+					method: "DELETE",
+					action: `/api/groups/members/${member.id}`,
+				});
+			}}
+			className="text-xs px-2 py-1 bg-danger/10 text-danger hover:bg-danger/20 rounded transition-colors disabled:opacity-50"
+		>
+			{isPending ? "Removing..." : "Remove"}
+		</button>
+	);
+}
+
 function MemberRoleControl({
 	member,
 	currentUserRole,
@@ -2838,12 +2965,18 @@ function GroupManagement({
 	const activeOrgId = session.data?.session.activeOrganizationId;
 	const [inviteLink, setInviteLink] = useState<string | null>(null);
 	const [showUpgrade, setShowUpgrade] = useState(false);
+	const [removedMemberName, setRemovedMemberName] = useState("Member");
+	const [removeErrorMessage, setRemoveErrorMessage] =
+		useState("Please try again.");
 	const fetcher = useFetcher<{
 		success?: boolean;
 		invitationId?: string;
 		error?: string;
 	}>();
+	const revalidator = useRevalidator();
 	const copyToast = useToast({ duration: 3000 });
+	const removeSuccessToast = useToast({ duration: 3000 });
+	const removeErrorToast = useToast({ duration: 4000 });
 
 	// Gate invite on group tier (owner's tier), not acting user's tier — admins can invite when group has Crew
 	const canInvite =
@@ -2945,17 +3078,17 @@ function GroupManagement({
 				{members?.map((member) => (
 					<div
 						key={member.id}
-						className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg"
+						className="flex items-center justify-between p-3 bg-platinum/30 rounded-lg gap-3"
 					>
-						<div className="flex items-center gap-3">
+						<div className="flex items-center gap-3 min-w-0">
 							<UserAvatar
 								size="sm"
 								name={member.user.name}
 								email={member.user.email}
 								image={member.user.image}
 							/>
-							<div>
-								<div className="text-sm font-medium text-carbon">
+							<div className="min-w-0">
+								<div className="text-sm font-medium text-carbon truncate">
 									{getUserDisplayName(member.user)}
 								</div>
 								<div className="text-xs text-muted capitalize">
@@ -2963,10 +3096,25 @@ function GroupManagement({
 								</div>
 							</div>
 						</div>
-						<MemberRoleControl
-							member={member}
-							currentUserRole={currentUserRole}
-						/>
+						<div className="flex items-center gap-2 shrink-0">
+							<MemberRoleControl
+								member={member}
+								currentUserRole={currentUserRole}
+							/>
+							<MemberRemoveControl
+								member={member}
+								currentUserRole={currentUserRole}
+								onRemoved={(displayName) => {
+									setRemovedMemberName(displayName);
+									removeSuccessToast.show();
+									revalidator.revalidate();
+								}}
+								onRemoveError={(message) => {
+									setRemoveErrorMessage(message);
+									removeErrorToast.show();
+								}}
+							/>
+						</div>
 					</div>
 				))}
 			</div>
@@ -2977,6 +3125,22 @@ function GroupManagement({
 					title="Copied"
 					description="Invite link copied to clipboard"
 					onDismiss={copyToast.hide}
+				/>
+			)}
+			{removeSuccessToast.isOpen && (
+				<Toast
+					variant="success"
+					title="Member removed"
+					description={`${removedMemberName} no longer has access.`}
+					onDismiss={removeSuccessToast.hide}
+				/>
+			)}
+			{removeErrorToast.isOpen && (
+				<Toast
+					variant="error"
+					title="Could not remove member"
+					description={removeErrorMessage}
+					onDismiss={removeErrorToast.hide}
 				/>
 			)}
 		</div>

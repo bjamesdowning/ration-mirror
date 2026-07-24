@@ -173,6 +173,16 @@ struct DeleteGroupResponse: Codable, Sendable {
     let organizations: [OrgMembership]
 }
 
+struct RemoveGroupMemberResponse: Codable, Sendable {
+    let success: Bool
+    let memberId: String?
+}
+
+struct LeaveGroupResponse: Codable, Sendable {
+    let success: Bool
+    let organizations: [OrgMembership]
+}
+
 struct OrganizationsResponse: Codable, Sendable {
     let organizations: [OrgMembership]
 }

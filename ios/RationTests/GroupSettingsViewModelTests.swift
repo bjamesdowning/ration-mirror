@@ -42,6 +42,21 @@ final class GroupSettingsViewModelTests: XCTestCase {
         XCTAssertFalse(GroupSettingsSupport.canTransferOwnership(isOwner: false, nonOwnerMemberCount: 2))
     }
 
+    func testCanRemoveMemberOwnerOnlyNonOwnerTargets() {
+        XCTAssertTrue(GroupSettingsSupport.canRemoveMember(currentUserRole: "owner", targetRole: "admin"))
+        XCTAssertTrue(GroupSettingsSupport.canRemoveMember(currentUserRole: "owner", targetRole: "member"))
+        XCTAssertFalse(GroupSettingsSupport.canRemoveMember(currentUserRole: "owner", targetRole: "owner"))
+        XCTAssertFalse(GroupSettingsSupport.canRemoveMember(currentUserRole: "admin", targetRole: "member"))
+        XCTAssertFalse(GroupSettingsSupport.canRemoveMember(currentUserRole: "member", targetRole: "member"))
+    }
+
+    func testCanLeaveGroupNonOwnerNonPersonal() {
+        XCTAssertTrue(GroupSettingsSupport.canLeaveGroup(currentUserRole: "admin", isPersonalGroup: false))
+        XCTAssertTrue(GroupSettingsSupport.canLeaveGroup(currentUserRole: "member", isPersonalGroup: false))
+        XCTAssertFalse(GroupSettingsSupport.canLeaveGroup(currentUserRole: "owner", isPersonalGroup: false))
+        XCTAssertFalse(GroupSettingsSupport.canLeaveGroup(currentUserRole: "member", isPersonalGroup: true))
+    }
+
     func testCanTransferCreditsRequiresOwnerCreditsAndMultipleOrgs() {
         let orgs = [
             OrgMembership(id: "a", name: "A", slug: "a", logo: nil, credits: 5, role: "owner", isActive: true, isPersonal: nil),

@@ -34,6 +34,16 @@ enum GroupSettingsSupport {
         isOwner && !isPersonalGroup
     }
 
+    /// Owner may remove non-owner members (not themselves / not the owner row).
+    static func canRemoveMember(currentUserRole: String, targetRole: String) -> Bool {
+        currentUserRole == "owner" && targetRole != "owner"
+    }
+
+    /// Non-owners may leave non-personal groups.
+    static func canLeaveGroup(currentUserRole: String, isPersonalGroup: Bool) -> Bool {
+        currentUserRole != "owner" && !isPersonalGroup
+    }
+
     static func canTransferCredits(organizations: [OrgMembership]) -> Bool {
         let ownerWithCredits = organizations.contains { $0.role == "owner" && $0.credits > 0 }
         return ownerWithCredits && organizations.count >= 2

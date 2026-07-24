@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	isPersonalOrganization,
 	PERSONAL_GROUP_DELETE_MESSAGE,
+	PERSONAL_GROUP_LEAVE_MESSAGE,
 } from "~/lib/personal-group";
 
 describe("isPersonalOrganization", () => {
@@ -38,5 +39,11 @@ describe("isPersonalOrganization", () => {
 
 	it("exposes a clear block message", () => {
 		expect(PERSONAL_GROUP_DELETE_MESSAGE).toMatch(/personal group/i);
+	});
+});
+
+describe("PERSONAL_GROUP_LEAVE_MESSAGE", () => {
+	it("exposes a clear leave block message", () => {
+		expect(PERSONAL_GROUP_LEAVE_MESSAGE).toMatch(/personal group/i);
 	});
 });

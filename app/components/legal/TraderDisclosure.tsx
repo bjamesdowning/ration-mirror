@@ -8,7 +8,7 @@ type TraderDisclosureProps = {
 
 /**
  * E-commerce trader identification (S.I. No. 68/2003).
- * Renders business name, address, RBN, contact email, and VAT when registered.
+ * Renders business name, jurisdiction, RBN, contact email, and VAT when registered.
  */
 export function TraderDisclosure({
 	variant = "full",
@@ -20,13 +20,13 @@ export function TraderDisclosure({
 		registeredBusinessNameNumber,
 		emails,
 		vatNumber,
+		jurisdiction,
 	} = LEGAL_ENTITY;
 
 	if (variant === "compact") {
 		return (
 			<p className={`text-xs text-muted ${className}`}>
-				{businessName} · {LEGAL_ENTITY.address.locality}, Ireland · RBN{" "}
-				{registeredBusinessNameNumber}
+				{businessName} · {jurisdiction} · RBN {registeredBusinessNameNumber}
 				{vatNumber ? ` · VAT ${vatNumber}` : null}
 				{" · "}
 				<a

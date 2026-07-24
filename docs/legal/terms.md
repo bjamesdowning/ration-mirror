@@ -79,7 +79,7 @@ We reserve the right, at our sole discretion, to modify or replace these Terms a
 In accordance with applicable e-commerce regulations, the following information identifies the service provider:
 
 **Mayutic**  
-6 Dundrum Wood, Ballinteer Road, Dublin 16, D16 N2P7, Ireland  
+Ireland  
 Registered Business Name No. 777497  
 Contact: [legal@mayutic.com](mailto:legal@mayutic.com)
 <!-- /section -->

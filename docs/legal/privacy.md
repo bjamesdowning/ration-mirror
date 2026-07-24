@@ -5,7 +5,7 @@
 Mayutic ("we", "us", or "our") is the data controller for the Ration platform (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
 
 **Mayutic**  
-6 Dundrum Wood, Ballinteer Road, Dublin 16, D16 N2P7, Ireland  
+Ireland  
 Registered Business Name No. 777497  
 Contact: [legal@mayutic.com](mailto:legal@mayutic.com)
 
@@ -127,7 +127,7 @@ These third parties have access to your Personal Data only to perform these task
 
 ## 10. International Data Transfers
 
-Mayutic is established in Ireland at 6 Dundrum Wood, Ballinteer Road, Dublin 16, D16 N2P7, Ireland. Our Service Providers may process personal data in countries outside your country of residence, including the United States. Where GDPR or UK GDPR applies and personal data is transferred outside the EEA/UK, we rely on appropriate safeguards such as the European Commission's Standard Contractual Clauses (SCCs) or the UK International Data Transfer Agreement (or the UK Addendum to SCCs), as applicable.
+Mayutic is established in Ireland. Our Service Providers may process personal data in countries outside your country of residence, including the United States. Where GDPR or UK GDPR applies and personal data is transferred outside the EEA/UK, we rely on appropriate safeguards such as the European Commission's Standard Contractual Clauses (SCCs) or the UK International Data Transfer Agreement (or the UK Addendum to SCCs), as applicable.
 
 - **Cloudflare:** [Customer DPA](https://www.cloudflare.com/cloudflare-customer-dpa/)
 - **Stripe:** [Data Processing Agreement](https://stripe.com/legal/dpa)

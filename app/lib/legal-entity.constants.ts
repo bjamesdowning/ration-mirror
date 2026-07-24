@@ -4,14 +4,12 @@ export const LEGAL_ENTITY = {
 	productName: "Ration",
 	registeredBusinessNameNumber: "777497",
 	address: {
-		street: "6 Dundrum Wood, Ballinteer Road",
-		locality: "Dublin 16",
+		locality: "Dublin",
 		region: "Dublin",
-		postalCode: "D16 N2P7",
 		country: "IE",
 	},
-	formattedAddress:
-		"6 Dundrum Wood, Ballinteer Road, Dublin 16, D16 N2P7, Ireland",
+	/** Public geographic presence only — no street / postal code. */
+	formattedAddress: "Ireland",
 	emails: {
 		legal: "legal@mayutic.com",
 		support: "support@mayutic.com",
@@ -23,11 +21,15 @@ export const LEGAL_ENTITY = {
 
 /** One-line trader summary for footers and email signatures. */
 export function traderFooterLine(): string {
-	const { businessName, address, registeredBusinessNameNumber, vatNumber } =
-		LEGAL_ENTITY;
+	const {
+		businessName,
+		registeredBusinessNameNumber,
+		vatNumber,
+		jurisdiction,
+	} = LEGAL_ENTITY;
 	const parts = [
 		businessName,
-		`${address.locality}, Ireland`,
+		jurisdiction,
 		`RBN ${registeredBusinessNameNumber}`,
 	];
 	if (vatNumber) {
@@ -41,10 +43,8 @@ export function traderPostalAddressSchema() {
 	const { address, formattedAddress } = LEGAL_ENTITY;
 	return {
 		"@type": "PostalAddress",
-		streetAddress: address.street,
 		addressLocality: address.locality,
 		addressRegion: address.region,
-		postalCode: address.postalCode,
 		addressCountry: address.country,
 		name: formattedAddress,
 	};

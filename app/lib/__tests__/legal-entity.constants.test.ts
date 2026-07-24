@@ -6,24 +6,25 @@ import {
 } from "~/lib/legal-entity.constants";
 
 describe("LEGAL_ENTITY", () => {
-	it("uses Mayutic as registered business name with Irish address", () => {
+	it("uses Mayutic as registered business name with Irish jurisdiction", () => {
 		expect(LEGAL_ENTITY.businessName).toBe("Mayutic");
 		expect(LEGAL_ENTITY.registeredBusinessNameNumber).toBe("777497");
 		expect(LEGAL_ENTITY.address.country).toBe("IE");
 		expect(LEGAL_ENTITY.jurisdiction).toBe("Ireland");
+		expect(LEGAL_ENTITY.formattedAddress).toBe("Ireland");
 	});
 
 	it("builds compact trader footer line without VAT when unregistered", () => {
-		expect(traderFooterLine()).toBe(
-			"Mayutic · Dublin 16, Ireland · RBN 777497",
-		);
+		expect(traderFooterLine()).toBe("Mayutic · Ireland · RBN 777497");
 	});
 
-	it("exports postal address for schema.org", () => {
-		expect(traderPostalAddressSchema()).toMatchObject({
+	it("exports postal address for schema.org without street or postal code", () => {
+		expect(traderPostalAddressSchema()).toEqual({
 			"@type": "PostalAddress",
+			addressLocality: "Dublin",
+			addressRegion: "Dublin",
 			addressCountry: "IE",
-			postalCode: "D16 N2P7",
+			name: "Ireland",
 		});
 	});
 });

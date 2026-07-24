@@ -13,9 +13,8 @@ test.describe("legal", () => {
 		await expect(traderSection).toBeVisible();
 		await expect(traderSection).toContainText("Mayutic");
 		await expect(traderSection).toContainText("777497");
-		await expect(traderSection).toContainText(
-			"6 Dundrum Wood, Ballinteer Road",
-		);
+		await expect(traderSection).toContainText("Ireland");
+		await expect(traderSection).not.toContainText("Dundrum");
 	});
 
 	test("privacy policy page loads", async ({ page }) => {

@@ -5,12 +5,29 @@ import Observation
 @Observable
 final class SupplyScanReviewViewModel {
     private(set) var rows: [SupplyScanReviewRow]
+    /// Full supply candidate pool from match payload (paired + list-only).
+    private let allSupplyCandidates: [SupplyItem]
     private(set) var isSubmitting = false
     var errorMessage: String?
     var paywallContext: PaywallContext?
     var editingItem: EditableScanResultItem?
+    /// Row currently choosing a supply link in the picker sheet.
+    var linkingContext: SupplyLinkPickerContext?
 
     init(match: SupplyScanMatchResponse) {
+        var byId: [String: SupplyItem] = [:]
+        for pair in match.pairs {
+            if let supply = pair.supplyItem {
+                byId[supply.id] = supply
+            }
+        }
+        for item in match.supplyOnly ?? [] {
+            byId[item.id] = item
+        }
+        allSupplyCandidates = byId.values.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+
         var built: [SupplyScanReviewRow] = match.pairs.map { pair in
             let confident = (pair.scanItem.confidence ?? 1) >= 0.7
             let autoSelect = confident && (pair.matchScore ?? 0) >= 0.7
@@ -59,6 +76,19 @@ final class SupplyScanReviewViewModel {
         rows.filter(\.selected).count
     }
 
+    private var linkedSupplyIds: Set<String> {
+        Set(rows.compactMap(\.supplyItem?.id))
+    }
+
+    /// Supply rows not currently linked to a receipt line (picker + List only).
+    var availableSupplyForLink: [SupplyItem] {
+        allSupplyCandidates.filter { !linkedSupplyIds.contains($0.id) }
+    }
+
+    var listOnlyItems: [SupplyItem] {
+        availableSupplyForLink
+    }
+
     func toggleSelection(_ rowId: String) {
         guard let index = rows.firstIndex(where: { $0.id == rowId }) else { return }
         rows[index].selected.toggle()
@@ -76,6 +106,37 @@ final class SupplyScanReviewViewModel {
         rows[index].applyDockEdit(updated)
         editingItem = nil
         return nil
+    }
+
+    func startLink(_ rowId: String) {
+        guard rows.contains(where: { $0.id == rowId }) else { return }
+        guard !availableSupplyForLink.isEmpty else { return }
+        linkingContext = SupplyLinkPickerContext(rowId: rowId)
+    }
+
+    func cancelLink() {
+        linkingContext = nil
+    }
+
+    func link(rowId: String, to supply: SupplyItem) {
+        guard let index = rows.firstIndex(where: { $0.id == rowId }) else { return }
+        let alreadyLinkedElsewhere = linkedSupplyIds.contains(supply.id)
+            && rows[index].supplyItem?.id != supply.id
+        guard !alreadyLinkedElsewhere else { return }
+
+        rows[index].supplyItem = supply
+        rows[index].matchType = "manual"
+        rows[index].hasDelta =
+            abs(rows[index].dockQuantity - supply.quantity) > 0.0001
+            || rows[index].dockUnit != supply.unit
+        linkingContext = nil
+    }
+
+    func unlink(rowId: String) {
+        guard let index = rows.firstIndex(where: { $0.id == rowId }) else { return }
+        rows[index].supplyItem = nil
+        rows[index].matchType = "manual"
+        rows[index].hasDelta = false
     }
 
     func complete(

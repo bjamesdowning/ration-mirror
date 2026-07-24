@@ -104,9 +104,9 @@ struct SupplyScanReviewView: View {
                     }
                 }
 
-                if let supplyOnly = context.match.supplyOnly, !supplyOnly.isEmpty {
-                    Section("List only (\(supplyOnly.count))") {
-                        ForEach(supplyOnly) { item in
+                if !model.listOnlyItems.isEmpty {
+                    Section("List only (\(model.listOnlyItems.count))") {
+                        ForEach(model.listOnlyItems) { item in
                             HStack {
                                 Text(item.name.capitalized)
                                     .rationBody()
@@ -154,6 +154,13 @@ struct SupplyScanReviewView: View {
             .sheet(item: $model.editingItem) { item in
                 ScanItemEditSheet(item: item) { updated in
                     model.saveEdit(updated)
+                }
+            }
+            .sheet(item: $model.linkingContext, onDismiss: {
+                model.cancelLink()
+            }) { context in
+                SupplyLinkPickerSheet(candidates: model.availableSupplyForLink) { supply in
+                    model.link(rowId: context.rowId, to: supply)
                 }
             }
             .sheet(item: $model.paywallContext) { ctx in
@@ -224,6 +231,31 @@ struct SupplyScanReviewView: View {
                         .rationCaption()
                         .foregroundStyle(Theme.warning)
                 }
+
+                HStack(spacing: 16) {
+                    if row.supplyItem != nil {
+                        Button {
+                            model.unlink(rowId: row.id)
+                        } label: {
+                            Label("Unlink", systemImage: "link.badge.minus")
+                                .rationCaption()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.muted)
+                        .accessibilityLabel("Unlink from supply")
+                    } else if !model.availableSupplyForLink.isEmpty {
+                        Button {
+                            model.startLink(row.id)
+                        } label: {
+                            Label("Link to supply", systemImage: "link")
+                                .rationCaption()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.hyperGreen)
+                        .accessibilityLabel("Link to supply")
+                    }
+                }
+                .padding(.top, 2)
             }
 
             Spacer(minLength: 0)

@@ -3,6 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import type { ScanResultItem } from "~/lib/schemas/scan";
 import type { SupplyItemWithSource } from "~/lib/supply.server";
+import {
+	collectSupplyLinkCandidates,
+	computeDockHasDelta,
+	availableSupplyForLink as filterAvailableSupply,
+} from "~/lib/supply-scan-link";
 import type { SupplyScanPair } from "~/lib/supply-scan-match.server";
 import type { SupportedUnit } from "~/lib/units";
 import { DockItemFields } from "./DockItemFields";
@@ -90,6 +95,16 @@ export function SupplyScanReviewModal({
 	const [showSupplyOnly, setShowSupplyOnly] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editSnapshot, setEditSnapshot] = useState<ReviewPair | null>(null);
+	const [linkingPairId, setLinkingPairId] = useState<string | null>(null);
+
+	const allSupplyCandidates = useMemo(
+		() =>
+			collectSupplyLinkCandidates(
+				initialPairs.map((p) => p.supplyItem),
+				supplyOnly,
+			),
+		[initialPairs, supplyOnly],
+	);
 
 	const selectedCount = useMemo(
 		() => pairs.filter((p) => p.selected).length,
@@ -122,26 +137,43 @@ export function SupplyScanReviewModal({
 	};
 
 	const unlinkPair = (id: string) => {
-		updatePair(id, { supplyItem: null, matchType: "manual" });
+		updatePair(id, {
+			supplyItem: null,
+			matchType: "manual",
+			hasDelta: false,
+			wasPreChecked: false,
+		});
+		setLinkingPairId(null);
 	};
 
 	const linkToSupply = (pairId: string, supplyItem: SupplyItemWithSource) => {
+		const pair = pairs.find((p) => p.id === pairId);
+		if (!pair) return;
+		const alreadyLinkedElsewhere = pairs.some(
+			(p) => p.id !== pairId && p.supplyItem?.id === supplyItem.id,
+		);
+		if (alreadyLinkedElsewhere) return;
 		updatePair(pairId, {
 			supplyItem,
 			matchType: "manual",
 			wasPreChecked: supplyItem.isPurchased,
+			hasDelta: computeDockHasDelta(
+				pair.dockQuantity,
+				pair.dockUnit,
+				supplyItem,
+			),
 		});
+		setLinkingPairId(null);
 	};
 
 	const availableSupplyForLink = useMemo(() => {
-		const linkedIds = new Set(
-			pairs
-				.filter((p) => p.supplyItem)
-				.map((p) => p.supplyItem?.id)
-				.filter((id): id is string => typeof id === "string"),
-		);
-		return supplyOnly.filter((s) => !linkedIds.has(s.id));
-	}, [pairs, supplyOnly]);
+		const linkedIds = pairs
+			.map((p) => p.supplyItem?.id)
+			.filter((id): id is string => typeof id === "string");
+		return filterAvailableSupply(allSupplyCandidates, linkedIds);
+	}, [pairs, allSupplyCandidates]);
+
+	const listOnlyItems = availableSupplyForLink;
 
 	const handleSubmit = () => {
 		const payload = {
@@ -251,11 +283,13 @@ export function SupplyScanReviewModal({
 														pair.supplyItem && nameChanged
 															? "manual"
 															: pair.matchType,
-													hasDelta: pair.supplyItem
-														? Math.abs(
-																next.quantity - pair.supplyItem.quantity,
-															) > 0.0001 || next.unit !== pair.supplyItem.unit
-														: false,
+													hasDelta: computeDockHasDelta(
+														Number.isFinite(next.quantity)
+															? next.quantity
+															: pair.dockQuantity,
+														next.unit,
+														pair.supplyItem,
+													),
 												});
 											}}
 										/>
@@ -343,12 +377,12 @@ export function SupplyScanReviewModal({
 												</p>
 											)}
 
-											<div className="flex gap-2 pt-1">
+											<div className="flex flex-col gap-2 pt-1">
 												{pair.supplyItem && (
 													<button
 														type="button"
 														onClick={() => unlinkPair(pair.id)}
-														className="text-xs text-muted hover:text-carbon flex items-center gap-1"
+														className="text-xs text-muted hover:text-carbon flex items-center gap-1 w-fit"
 													>
 														<Unlink className="w-3 h-3" />
 														Unlink
@@ -356,26 +390,56 @@ export function SupplyScanReviewModal({
 												)}
 												{!pair.supplyItem &&
 													availableSupplyForLink.length > 0 && (
-														<select
-															className="text-xs rounded border border-platinum px-1 py-0.5"
-															defaultValue=""
-															onChange={(e) => {
-																const supplyId = e.target.value;
-																if (!supplyId) return;
-																const item = availableSupplyForLink.find(
-																	(s) => s.id === supplyId,
-																);
-																if (item) linkToSupply(pair.id, item);
-																e.target.value = "";
-															}}
-														>
-															<option value="">Link to supply item…</option>
-															{availableSupplyForLink.map((s) => (
-																<option key={s.id} value={s.id}>
-																	{s.name} ({s.quantity} {s.unit})
-																</option>
-															))}
-														</select>
+														<>
+															<button
+																type="button"
+																onClick={() =>
+																	setLinkingPairId(
+																		linkingPairId === pair.id ? null : pair.id,
+																	)
+																}
+																className="text-xs text-hyper-green hover:text-carbon flex items-center gap-1 w-fit font-medium"
+																aria-expanded={linkingPairId === pair.id}
+																aria-controls={`link-supply-${pair.id}`}
+															>
+																<Link2 className="w-3 h-3" />
+																Link to supply
+															</button>
+															{linkingPairId === pair.id && (
+																<label
+																	id={`link-supply-${pair.id}`}
+																	className="block"
+																>
+																	<span className="sr-only">
+																		Choose supply item to link
+																	</span>
+																	<select
+																		className="w-full text-xs rounded-lg border border-platinum dark:border-white/10 bg-ceramic dark:bg-carbon px-2 py-1.5"
+																		value=""
+																		onChange={(e) => {
+																			const supplyId = e.target.value;
+																			if (!supplyId) return;
+																			const item = availableSupplyForLink.find(
+																				(s) => s.id === supplyId,
+																			);
+																			if (item) {
+																				linkToSupply(pair.id, item);
+																			}
+																		}}
+																	>
+																		<option value="">
+																			Choose a supply item…
+																		</option>
+																		{availableSupplyForLink.map((s) => (
+																			<option key={s.id} value={s.id}>
+																				{s.name} ({s.quantity} {s.unit})
+																				{s.isPurchased ? " · in cart" : ""}
+																			</option>
+																		))}
+																	</select>
+																</label>
+															)}
+														</>
 													)}
 											</div>
 										</div>
@@ -393,21 +457,21 @@ export function SupplyScanReviewModal({
 						);
 					})}
 
-					{supplyOnly.length > 0 && (
+					{listOnlyItems.length > 0 && (
 						<div className="border border-platinum dark:border-white/10 rounded-xl overflow-hidden">
 							<button
 								type="button"
 								onClick={() => setShowSupplyOnly(!showSupplyOnly)}
 								className="w-full px-3 py-2 text-left text-sm font-medium flex justify-between"
 							>
-								<span>List only ({supplyOnly.length})</span>
+								<span>List only ({listOnlyItems.length})</span>
 								<span className="text-muted text-xs">
 									{showSupplyOnly ? "Hide" : "Show"}
 								</span>
 							</button>
 							{showSupplyOnly && (
 								<ul className="px-3 pb-3 space-y-1 text-sm text-muted">
-									{supplyOnly.map((item) => (
+									{listOnlyItems.map((item) => (
 										<li key={item.id} className="flex justify-between gap-2">
 											<span className="capitalize">{item.name}</span>
 											<span className="font-mono text-xs shrink-0">

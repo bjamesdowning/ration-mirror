@@ -48,14 +48,16 @@ import {
 } from "~/lib/cargo.server";
 import { getActiveCargoIds } from "~/lib/cargo-selection.server";
 import type { ITEM_DOMAINS } from "~/lib/domain";
+import { log } from "~/lib/logging.server";
 import {
 	createProvisionFromCargo,
 	getPromotedCargoIds,
 } from "~/lib/meals.server";
+import type { TagRecord } from "~/lib/tags";
 import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
 import {
 	filterCargoIdsByTagSlugs,
-	getOrganizationTags,
+	getDistinctCargoTags,
 } from "~/lib/tags.server";
 import type { Route } from "./+types/cargo";
 
@@ -148,20 +150,38 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		]);
 	}
 
-	const [availableTags, promotedCargoIds, activeCargoIds] = await Promise.all([
-		getOrganizationTags(db, groupId),
-		getPromotedCargoIds(db, groupId),
-		getActiveCargoIds(db, groupId),
-	]);
+	const [availableTagsResult, promotedCargoIds, activeCargoIds] =
+		await Promise.allSettled([
+			getDistinctCargoTags(db, groupId),
+			getPromotedCargoIds(db, groupId),
+			getActiveCargoIds(db, groupId),
+		]);
+
+	let availableTags: TagRecord[] = [];
+	if (availableTagsResult.status === "fulfilled") {
+		availableTags = availableTagsResult.value;
+	} else {
+		log.error(
+			"[cargo] failed to load distinct cargo tags",
+			availableTagsResult.reason,
+		);
+	}
+
+	if (promotedCargoIds.status === "rejected") {
+		throw promotedCargoIds.reason;
+	}
+	if (activeCargoIds.status === "rejected") {
+		throw activeCargoIds.reason;
+	}
 
 	return {
 		cargo,
 		totalCargo,
 		currentDomain: domain,
 		currentTags: tagSlugs,
-		availableTags: availableTags.filter((t) => t.cargoCount > 0),
-		promotedCargoIds,
-		activeCargoIds,
+		availableTags,
+		promotedCargoIds: promotedCargoIds.value,
+		activeCargoIds: activeCargoIds.value,
 		page,
 		pageSize: CARGO_PAGE_SIZE,
 		defaultViewMode,

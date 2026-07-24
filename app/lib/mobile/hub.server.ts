@@ -2,6 +2,7 @@ import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
+import { log } from "~/lib/logging.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
 import {
@@ -9,7 +10,7 @@ import {
 	getSupplyItemStats,
 	getSupplyList,
 } from "~/lib/supply.server";
-import { getCargoTagIndex, getOrganizationTags } from "~/lib/tags.server";
+import { getCargoTagIndex, getOrganizationTagSlugs } from "~/lib/tags.server";
 
 /**
  * @deprecated Use `MEAL_MATCH_CANDIDATE_CAP` — kept as an alias so older
@@ -23,6 +24,16 @@ export const MOBILE_SUPPLY_ITEMS_SLICE = 20;
 function clampWidgetLimit(value: number | undefined, fallback: number): number {
 	const base = value ?? fallback;
 	return Math.min(Math.max(base, 1), MOBILE_MAX_WIDGET_LIMIT);
+}
+
+function settledOrEmpty<T>(
+	result: PromiseSettledResult<T>,
+	fallback: T,
+	label: string,
+): T {
+	if (result.status === "fulfilled") return result.value;
+	log.error(`[hub] tag enrichment failed: ${label}`, result.reason);
+	return fallback;
 }
 
 export async function getMobileHubData(
@@ -69,14 +80,12 @@ export async function getMobileHubData(
 		6,
 	);
 
+	// Critical Hub widgets — failures here still fail the request.
 	const [
 		expiringItems,
 		cargoStats,
 		latestSupplyListRaw,
 		manifestPreviewRaw,
-		availableMealTags,
-		availableCargoTags,
-		cargoTagIndex,
 		hubMatches,
 	] = await Promise.all([
 		getExpiringCargo(
@@ -99,9 +108,6 @@ export async function getMobileHubData(
 			manifestSlotType,
 			manifestTags,
 		),
-		getDistinctMealTags(db, organizationId),
-		getOrganizationTags(db, organizationId),
-		getCargoTagIndex(db, organizationId),
 		getHubMealMatchWidgets(env, organizationId, {
 			mealsReady: {
 				limit: mealsReadyLimit,
@@ -117,6 +123,30 @@ export async function getMobileHubData(
 			},
 		}),
 	]);
+
+	// Tag enrichment is best-effort — empty filters beat a full Hub 500.
+	const [mealTagsResult, cargoSlugsResult, cargoTagIndexResult] =
+		await Promise.allSettled([
+			getDistinctMealTags(db, organizationId),
+			getOrganizationTagSlugs(db, organizationId),
+			getCargoTagIndex(db, organizationId),
+		]);
+
+	const availableMealTags = settledOrEmpty(
+		mealTagsResult,
+		[] as string[],
+		"availableMealTags",
+	);
+	const availableCargoTags = settledOrEmpty(
+		cargoSlugsResult,
+		[] as string[],
+		"availableCargoTags",
+	).sort();
+	const cargoTagIndex = settledOrEmpty(
+		cargoTagIndexResult,
+		[] as Awaited<ReturnType<typeof getCargoTagIndex>>,
+		"cargoTagIndex",
+	);
 
 	const { mealMatches, partialMealMatches, snackMatches } = hubMatches;
 	// Only queried when the widget isn't tag-filtered — see supplyTagFilterActive above.
@@ -171,7 +201,7 @@ export async function getMobileHubData(
 		hubProfile,
 		hubLayout,
 		availableMealTags,
-		availableCargoTags: availableCargoTags.map((t) => t.slug).sort(),
+		availableCargoTags,
 		cargoTagIndex,
 		mealMatches,
 		partialMealMatches,

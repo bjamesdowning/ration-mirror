@@ -696,9 +696,9 @@ Cargo is the core inventory primitive. Each item belongs to an organization and 
 Tags are **organization-wide** labels stored in the `tag` registry (`drizzle/0036_tag_registry.sql`) and linked to cargo and meals via `cargo_tag` / `meal_tag` join tables. Each cargo item or meal supports up to **10 tags**. Create flows accept a display name only; slugs are normalized automatically (`gluten-free`) with optional color and category.
 
 - **Create on use** — Assigning a tag on any cargo or meal form auto-creates the registry entry (`resolveTagIds` in `app/lib/tags.server.ts`).
-- **Filter** — Cargo and Galley support multi-tag filters (OR by default; AND mode available for hub widgets via `tagFilterMode`).
-- **Manage** — **Settings → Group → Tags** lists all org tags with usage counts. Owners/admins can rename, recolor, categorize, merge duplicates, delete unused tags, or run bulk unused cleanup.
-- **API** — Web: `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/tags/:id/merge`. Mobile: `GET/POST /api/mobile/v1/tags` plus matching `:id` routes. Cargo and meal list/detail payloads include full tag records (`id`, `slug`, `name`, `color`, `category`) so clients can render chip colors.
+- **Filter** — Cargo and Galley support multi-tag filters (OR by default; AND mode available for hub widgets via `tagFilterMode`). List filter chips load via distinct cargo/meal tag queries (`getDistinctCargoTags` / `getDistinctMealTagRecords`) so large registries stay under D1’s 100 bound-parameter limit.
+- **Manage** — **Settings → Group → Tags** lists all org tags with usage counts. Owners/admins can rename, recolor, categorize, merge duplicates, delete unused tags, or run bulk unused cleanup. Count joins in `getOrganizationTags` chunk at 99 IDs (leaving a bind slot for `organization_id`).
+- **API** — Web: `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/tags/:id/merge`. Mobile: `GET/POST /api/mobile/v1/tags` plus matching `:id` routes. Cargo and meal list/detail payloads include full tag records (`id`, `slug`, `name`, `color`, `category`) so clients can render chip colors. Mobile Hub tag enrichment is best-effort: tag query failures return empty filter lists instead of failing the whole Hub payload.
 
 ---
 

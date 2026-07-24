@@ -47,10 +47,11 @@ import type { ITEM_DOMAINS } from "~/lib/domain";
 import { log } from "~/lib/logging.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import { getMeals, getMealsCount } from "~/lib/meals.server";
+import type { TagRecord } from "~/lib/tags";
 import { tagsFromSearchParam, tagsToSearchParam } from "~/lib/tags";
 import {
 	filterMealIdsByTagSlugs,
-	getOrganizationTags,
+	getDistinctMealTagRecords,
 } from "~/lib/tags.server";
 import type { Route } from "./+types/galley";
 
@@ -108,15 +109,33 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		]);
 	}
 
-	const [availableTags, activeSelections] = await Promise.all([
-		getOrganizationTags(db, groupId),
-		getActiveMealSelections(db, groupId),
-	]);
-	const activeMealIds = activeSelections.map((selection) => selection.mealId);
+	const [availableTagsResult, activeSelectionsResult] =
+		await Promise.allSettled([
+			getDistinctMealTagRecords(db, groupId),
+			getActiveMealSelections(db, groupId),
+		]);
+
+	let availableTags: TagRecord[] = [];
+	if (availableTagsResult.status === "fulfilled") {
+		availableTags = availableTagsResult.value;
+	} else {
+		log.error(
+			"[galley] failed to load distinct meal tags",
+			availableTagsResult.reason,
+		);
+	}
+
+	if (activeSelectionsResult.status === "rejected") {
+		throw activeSelectionsResult.reason;
+	}
+
+	const activeMealIds = activeSelectionsResult.value.map(
+		(selection) => selection.mealId,
+	);
 	return {
 		meals,
 		totalMeals,
-		availableTags: availableTags.filter((t) => t.mealCount > 0),
+		availableTags,
 		currentTags: tagSlugs,
 		currentDomain: domain,
 		activeMealIds,

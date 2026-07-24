@@ -194,12 +194,21 @@ describe("chunkedQuery", () => {
 		expect(result).toEqual([]);
 	});
 
-	it("uses default chunkSize of D1_MAX_BOUND_PARAMS (100)", async () => {
+	it("uses default chunkSize of D1_SAFE_BOUND_PARAMS (99)", async () => {
 		const ids = Array.from({ length: 50 }, (_, i) => `id${i}`);
 		const queryFn = vi.fn().mockResolvedValue([]);
 		await chunkedQuery(ids, queryFn);
-		// 50 ids fit in default chunk of 100 — single call
+		// 50 ids fit in default chunk of 99 — single call
 		expect(queryFn).toHaveBeenCalledOnce();
+	});
+
+	it("chunks at 99 by default so org-scoped queries leave a bind slot", async () => {
+		const ids = Array.from({ length: 100 }, (_, i) => `id${i}`);
+		const queryFn = vi.fn().mockResolvedValue([]);
+		await chunkedQuery(ids, queryFn);
+		expect(queryFn).toHaveBeenCalledTimes(2);
+		expect(queryFn.mock.calls[0][0]).toHaveLength(99);
+		expect(queryFn.mock.calls[1][0]).toHaveLength(1);
 	});
 });
 

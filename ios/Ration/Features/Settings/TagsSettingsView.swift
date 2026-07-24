@@ -51,7 +51,7 @@ struct TagsSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background(Theme.ceramic)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await load(isPullToRefresh: true) }
     }
 
     private var tagsList: some View {
@@ -308,6 +308,12 @@ struct TagsSettingsView: View {
     }
 
     @MainActor
+    private func presentError(_ error: Error) {
+        if SnapshotRefreshPolicy.isIgnorableRefreshError(error) { return }
+        errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+    }
+
+    @MainActor
     private func createTag() async {
         let trimmedName = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
@@ -327,20 +333,22 @@ struct TagsSettingsView: View {
             successMessage = "Tag created"
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            presentError(error)
         }
     }
 
     @MainActor
-    private func load() async {
-        isLoading = tags.isEmpty
-        errorMessage = nil
-        defer { isLoading = false }
+    private func load(isPullToRefresh: Bool = false) async {
+        // Avoid flipping isLoading during pull-to-refresh — that redraw cancels `.refreshable`.
+        let showSpinner = tags.isEmpty && !isPullToRefresh
+        if showSpinner { isLoading = true }
+        defer { if showSpinner { isLoading = false } }
         do {
             let response = try await env.api.organizationTags()
             tags = response.tags
+            errorMessage = nil
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -381,7 +389,7 @@ struct TagsSettingsView: View {
             successMessage = "Tag updated"
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -401,7 +409,7 @@ struct TagsSettingsView: View {
             successMessage = "Tag deleted"
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -419,7 +427,7 @@ struct TagsSettingsView: View {
             successMessage = "Tags merged"
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            presentError(error)
         }
     }
 
@@ -432,7 +440,7 @@ struct TagsSettingsView: View {
             do {
                 try await env.api.deleteOrganizationTag(id: tag.id)
             } catch {
-                errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                presentError(error)
                 return
             }
         }

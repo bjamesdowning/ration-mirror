@@ -185,23 +185,47 @@ describe("isD1ParamLimitError", () => {
 	});
 });
 
+describe("flattenErrorText", () => {
+	it("includes nested cause messages", async () => {
+		const { flattenErrorText } = await import("~/lib/error-handler");
+		const err = new Error("Failed query: select …");
+		err.cause = new Error("too many bound parameters: 101 > 100");
+		expect(flattenErrorText(err)).toContain("Failed query");
+		expect(flattenErrorText(err)).toContain("too many bound parameters");
+	});
+});
+
 describe("isD1SchemaError", () => {
-	it("detects failed query and schema drift messages", () => {
-		expect(
-			isD1SchemaError(new Error("Failed query: select ... max_login ...")),
-		).toBe(true);
+	it("detects schema drift messages including via cause", () => {
 		expect(
 			isD1SchemaError(new Error("no such table: mobile_refresh_token")),
 		).toBe(true);
 		expect(isD1SchemaError(new Error("ambiguous column name: max_login"))).toBe(
 			true,
 		);
+		const wrapped = new Error("Failed query: select …");
+		wrapped.cause = new Error("no such column: tag_id");
+		expect(isD1SchemaError(wrapped)).toBe(true);
+	});
+
+	it("does not treat bare Drizzle Failed query as schema error", () => {
+		expect(isD1SchemaError(new Error("Failed query: select ..."))).toBe(false);
 	});
 
 	it("returns false for transient contention errors", () => {
 		expect(isD1SchemaError(new Error("SQLITE_BUSY: database is busy"))).toBe(
 			false,
 		);
+	});
+});
+
+describe("isD1ParamLimitError via Drizzle wrap", () => {
+	it("detects param limit in error.cause", () => {
+		const wrapped = new Error("Failed query: select cargo_tag …");
+		wrapped.cause = new Error("too many bound parameters: 101 > 100");
+		expect(isD1ParamLimitError(wrapped)).toBe(true);
+		expect(isD1ContentionError(wrapped)).toBe(true);
+		expect(isD1SchemaError(wrapped)).toBe(false);
 	});
 });
 
@@ -243,17 +267,33 @@ describe("runRouteLoader", () => {
 		).rejects.toBe(redirect);
 	});
 
-	it("throws a 500 data response for D1 schema/query errors", async () => {
+	it("throws a 500 data response for real D1 schema errors", async () => {
 		const { runRouteLoader } = await import("~/lib/error-handler");
 
 		await expect(
 			runRouteLoader(async () => {
-				throw new Error("Failed query: select ...");
+				throw new Error("no such table: tag");
 			}),
 		).rejects.toMatchObject({
 			type: "DataWithResponseInit",
 			init: { status: 500 },
 			data: { code: "admin_schema_error" },
+		});
+	});
+
+	it("maps Drizzle-wrapped param-limit errors to 503 server_busy", async () => {
+		const { runRouteLoader } = await import("~/lib/error-handler");
+		const wrapped = new Error("Failed query: select …");
+		wrapped.cause = new Error("too many bound parameters: 101 > 100");
+
+		await expect(
+			runRouteLoader(async () => {
+				throw wrapped;
+			}),
+		).rejects.toMatchObject({
+			type: "DataWithResponseInit",
+			init: { status: 503 },
+			data: { code: "server_busy" },
 		});
 	});
 });

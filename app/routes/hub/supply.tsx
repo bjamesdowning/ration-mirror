@@ -47,6 +47,7 @@ import { CapacityExceededError } from "~/lib/capacity.server";
 import { getCargoTagIndex } from "~/lib/cargo.server";
 import { useConfirm } from "~/lib/confirm-context";
 import { handleApiError } from "~/lib/error-handler";
+import { log } from "~/lib/logging.server";
 import { getManifestWeekMealsForSupply } from "~/lib/manifest.server";
 import { getActiveMealSelections } from "~/lib/meal-selection.server";
 import {
@@ -63,7 +64,8 @@ import {
 	getSupplyList,
 } from "~/lib/supply.server";
 import { filterSupplyItemsByCargoTags } from "~/lib/supply-tags";
-import { getOrganizationTags, getTagsForMealIds } from "~/lib/tags.server";
+import type { TagRecord } from "~/lib/tags";
+import { getDistinctCargoTags, getTagsForMealIds } from "~/lib/tags.server";
 import {
 	emitSupplySyncError,
 	emitSupplySyncInfo,
@@ -128,17 +130,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	);
 
 	const [
-		list,
-		activeSelections,
-		cargoItems,
-		availableTags,
-		manifestWeekMeals,
-		snoozes,
-	] = await Promise.all([
+		listResult,
+		activeSelectionsResult,
+		cargoItemsResult,
+		availableTagsResult,
+		manifestWeekMealsResult,
+		snoozesResult,
+	] = await Promise.allSettled([
 		getSupplyList(context.cloudflare.env.DB, groupId),
 		getActiveMealSelections(context.cloudflare.env.DB, groupId),
 		getCargoTagIndex(context.cloudflare.env.DB, groupId),
-		getOrganizationTags(context.cloudflare.env.DB, groupId),
+		getDistinctCargoTags(context.cloudflare.env.DB, groupId),
 		getManifestWeekMealsForSupply(
 			context.cloudflare.env.DB,
 			groupId,
@@ -146,6 +148,32 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		),
 		getActiveSnoozes(context.cloudflare.env.DB, groupId),
 	]);
+
+	if (listResult.status === "rejected") throw listResult.reason;
+	if (activeSelectionsResult.status === "rejected") {
+		throw activeSelectionsResult.reason;
+	}
+	if (cargoItemsResult.status === "rejected") throw cargoItemsResult.reason;
+	if (manifestWeekMealsResult.status === "rejected") {
+		throw manifestWeekMealsResult.reason;
+	}
+	if (snoozesResult.status === "rejected") throw snoozesResult.reason;
+
+	const list = listResult.value;
+	const activeSelections = activeSelectionsResult.value;
+	const cargoItems = cargoItemsResult.value;
+	const manifestWeekMeals = manifestWeekMealsResult.value;
+	const snoozes = snoozesResult.value;
+
+	let availableTags: TagRecord[] = [];
+	if (availableTagsResult.status === "fulfilled") {
+		availableTags = availableTagsResult.value;
+	} else {
+		log.error(
+			"[supply] failed to load distinct cargo tags",
+			availableTagsResult.reason,
+		);
+	}
 
 	const mealIds = [
 		...new Set(
@@ -168,7 +196,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		list,
 		activeSelectionCount: activeSelections.length,
 		manifestWeekMealCount: manifestWeekMeals.length,
-		availableTags: availableTags.filter((t) => t.cargoCount > 0),
+		availableTags,
 		cargo: cargoItems,
 		snoozes,
 		unitDisplayMode: resolveUnitDisplayMode(userSettings),

@@ -87,6 +87,13 @@ final class SnapshotRefreshPolicyTests: XCTestCase {
             "Network error. Please try again."
         )
     }
+
+    func testUserFacingRefreshDetailEmptyForCancellation() {
+        XCTAssertEqual(
+            SnapshotRefreshPolicy.userFacingRefreshDetail(CancellationError()),
+            ""
+        )
+    }
 }
 
 final class SnapshotStoreAsyncTests: XCTestCase {

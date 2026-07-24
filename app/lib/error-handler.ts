@@ -6,19 +6,53 @@ import { log } from "./logging.server";
 import { SupplySyncBusyError } from "./supply-sync-lock.server";
 import { emitApiOutcome } from "./telemetry.server";
 
+const MAX_ERROR_CAUSE_DEPTH = 5;
+
+/**
+ * Flatten Drizzle/D1 error trees. Drizzle wraps SQL failures as
+ * `Failed query: …` and puts the real reason on `error.cause`.
+ */
+export function flattenErrorText(
+	error: unknown,
+	depth = MAX_ERROR_CAUSE_DEPTH,
+): string {
+	if (error == null) return "";
+	if (typeof error === "string") return error;
+	if (!(error instanceof Error)) return String(error);
+
+	const parts: string[] = [error.message];
+	let current: unknown = error.cause;
+	for (let i = 0; i < depth && current != null; i++) {
+		if (current instanceof Error) {
+			parts.push(current.message);
+			current = current.cause;
+		} else {
+			parts.push(String(current));
+			break;
+		}
+	}
+	return parts.join("\n");
+}
+
+function errorText(error: unknown): string {
+	return flattenErrorText(error).toLowerCase();
+}
+
 /**
  * Returns true for permanent D1/SQL failures (schema drift, bad queries).
  * These should not be retried or mislabeled as transient load issues.
+ * Do NOT match bare "failed query" — that is Drizzle's wrapper for almost
+ * every D1 failure; inspect `cause` via flattenErrorText instead.
  */
 export function isD1SchemaError(error: unknown): boolean {
-	if (!(error instanceof Error)) return false;
-	const msg = error.message.toLowerCase();
+	const msg = errorText(error);
+	if (!msg) return false;
 	return (
 		msg.includes("no such table") ||
 		msg.includes("no such column") ||
 		msg.includes("syntax error") ||
 		msg.includes("ambiguous column") ||
-		msg.includes("failed query")
+		msg.includes("d1_column_notfound")
 	);
 }
 
@@ -27,8 +61,8 @@ export function isD1SchemaError(error: unknown): boolean {
  * Still mapped to 503 `server_busy` for clients, but must not be retried.
  */
 export function isD1ParamLimitError(error: unknown): boolean {
-	if (!(error instanceof Error)) return false;
-	const msg = error.message.toLowerCase();
+	const msg = errorText(error);
+	if (!msg) return false;
 	return (
 		msg.includes("too many bound parameters") ||
 		msg.includes("too many sql variables") ||
@@ -42,9 +76,9 @@ export function isD1ParamLimitError(error: unknown): boolean {
  * Cloudflare Workers runtime.
  */
 export function isD1ContentionError(error: unknown): boolean {
-	if (!(error instanceof Error)) return false;
 	if (isD1SchemaError(error)) return false;
-	const msg = error.message.toLowerCase();
+	const msg = errorText(error);
+	if (!msg) return false;
 	return (
 		msg.includes("sqlite_busy") ||
 		isD1ParamLimitError(error) ||
@@ -117,7 +151,7 @@ export function rethrowRouteLoaderError(error: unknown): never {
 
 	if (isD1ContentionError(error)) {
 		log.warn("[loader] D1 contention or timeout", {
-			errorMessage: error instanceof Error ? error.message : String(error),
+			errorMessage: flattenErrorText(error),
 		});
 		emitApiOutcome("503", "server_busy");
 		throw data(
@@ -134,7 +168,9 @@ export function rethrowRouteLoaderError(error: unknown): never {
 	}
 
 	if (isD1SchemaError(error)) {
-		log.critical("[loader] D1 schema or query error", error);
+		log.critical("[loader] D1 schema or query error", error, {
+			errorMessage: flattenErrorText(error),
+		});
 		emitApiOutcome("5xx", "admin_schema_error");
 		throw data(
 			{
@@ -309,7 +345,7 @@ export function handleApiError(error: unknown) {
 	// user-friendly message and Retry-After hint instead of a generic 500.
 	if (isD1ContentionError(error)) {
 		log.warn("[API] D1 contention or timeout", {
-			errorMessage: error instanceof Error ? error.message : String(error),
+			errorMessage: flattenErrorText(error),
 		});
 		emitApiOutcome("503", "server_busy");
 		return data(
@@ -326,7 +362,9 @@ export function handleApiError(error: unknown) {
 	}
 
 	if (isD1SchemaError(error)) {
-		log.critical("[API] D1 schema or query error", error);
+		log.critical("[API] D1 schema or query error", error, {
+			errorMessage: flattenErrorText(error),
+		});
 		emitApiOutcome("5xx", "admin_schema_error");
 		return data(
 			{
@@ -337,7 +375,9 @@ export function handleApiError(error: unknown) {
 		);
 	}
 
-	log.error("[API] Unhandled error", error);
+	log.error("[API] Unhandled error", error, {
+		errorMessage: flattenErrorText(error),
+	});
 	emitApiOutcome("5xx", "unhandled");
 
 	// Never expose raw error details to clients — prevents information disclosure

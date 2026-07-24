@@ -11,7 +11,11 @@ export const D1_MAX_BOUND_PARAMS = 100;
  */
 export const D1_SAFE_BOUND_PARAMS = D1_MAX_BOUND_PARAMS - 1;
 
-const SQLITE_SAFE_VARIABLE_LIMIT = D1_MAX_BOUND_PARAMS;
+/**
+ * Default `IN (...)` chunk size. Use 99 (not 100) so org-scoped queries that
+ * also bind `organization_id` stay within D1's hard ceiling of 100.
+ */
+const SQLITE_SAFE_VARIABLE_LIMIT = D1_SAFE_BOUND_PARAMS;
 
 /**
  * Max meal_ingredient rows per INSERT.

@@ -12,6 +12,8 @@ const getCargoStats = vi.fn(async () => ({
 }));
 const getManifestPreview = vi.fn(async () => null);
 const getDistinctMealTags = vi.fn(async () => []);
+const getOrganizationTagSlugs = vi.fn(async () => [] as string[]);
+const getCargoTagIndex = vi.fn(async () => []);
 const matchMeals = vi.fn(async () => []);
 
 vi.mock("~/components/hub/widgets/registry", () => ({
@@ -28,8 +30,8 @@ vi.mock("~/lib/cargo.server", () => ({
 }));
 
 vi.mock("~/lib/tags.server", () => ({
-	getOrganizationTags: vi.fn(async () => []),
-	getCargoTagIndex: vi.fn(async () => []),
+	getOrganizationTagSlugs: () => getOrganizationTagSlugs(),
+	getCargoTagIndex: () => getCargoTagIndex(),
 }));
 
 vi.mock("~/lib/manifest.server", () => ({
@@ -40,6 +42,16 @@ vi.mock("~/lib/manifest.server", () => ({
 vi.mock("~/lib/matching.server", () => ({
 	matchMeals: () => matchMeals(),
 	MEAL_MATCH_CANDIDATE_CAP: 200,
+}));
+
+vi.mock("~/lib/logging.server", () => ({
+	log: {
+		error: vi.fn(),
+		warn: vi.fn(),
+		info: vi.fn(),
+		critical: vi.fn(),
+		debug: vi.fn(),
+	},
 }));
 
 vi.mock("~/lib/supply.server", async (importOriginal) => {
@@ -55,6 +67,12 @@ describe("getMobileHubData supply counts", () => {
 	beforeEach(() => {
 		getSupplyList.mockReset();
 		getSupplyItemStats.mockReset();
+		getDistinctMealTags.mockReset();
+		getDistinctMealTags.mockResolvedValue([]);
+		getOrganizationTagSlugs.mockReset();
+		getOrganizationTagSlugs.mockResolvedValue([]);
+		getCargoTagIndex.mockReset();
+		getCargoTagIndex.mockResolvedValue([]);
 	});
 
 	it("untagged (common) case: fetches a bounded slice and gets counts from getSupplyItemStats", async () => {
@@ -78,7 +96,6 @@ describe("getMobileHubData supply counts", () => {
 			})),
 		});
 		getSupplyItemStats.mockResolvedValue({ itemCount: 25, purchasedCount: 5 });
-		// cargoTagIndex defaults to [] via mock
 
 		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
 		const result = await getMobileHubData(
@@ -112,5 +129,35 @@ describe("getMobileHubData supply counts", () => {
 
 		expect(result.latestSupplyList).toBeNull();
 		expect(getSupplyItemStats).not.toHaveBeenCalled();
+	});
+
+	it("returns Hub payload with empty tag fields when tag enrichment fails", async () => {
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 7,
+			hubProfile: "default",
+			hubLayout: null,
+		});
+		getSupplyList.mockResolvedValue(null);
+		getOrganizationTagSlugs.mockRejectedValue(
+			new Error("too many bound parameters"),
+		);
+		getCargoTagIndex.mockRejectedValue(new Error("too many bound parameters"));
+		getDistinctMealTags.mockRejectedValue(new Error("tag join failed"));
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		const result = await getMobileHubData(
+			{ DB: {} } as never,
+			"org_1",
+			"user_1",
+		);
+
+		expect(result.availableCargoTags).toEqual([]);
+		expect(result.availableMealTags).toEqual([]);
+		expect(result.cargoTagIndex).toEqual([]);
+		expect(result.cargoStats).toEqual({
+			totalItems: 0,
+			expiringCount: 0,
+			expiredCount: 0,
+		});
 	});
 });

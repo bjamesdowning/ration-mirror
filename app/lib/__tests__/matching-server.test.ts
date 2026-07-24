@@ -15,9 +15,14 @@ const { mockChunkedQuery, mockFetchOrgCargoIndex, mockFindSimilarCargoBatch } =
 		mockFindSimilarCargoBatch: vi.fn(),
 	}));
 
-vi.mock("~/lib/query-utils.server", () => ({
-	chunkedQuery: mockChunkedQuery,
-}));
+vi.mock("~/lib/query-utils.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/query-utils.server")>();
+	return {
+		...actual,
+		chunkedQuery: mockChunkedQuery,
+	};
+});
 
 vi.mock("~/lib/cargo-index.server", () => ({
 	fetchOrgCargoIndex: mockFetchOrgCargoIndex,

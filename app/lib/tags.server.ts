@@ -1,4 +1,4 @@
-import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cargo, cargoTag, meal, mealTag, tag } from "../db/schema";
 import {
@@ -6,6 +6,7 @@ import {
 	chunkedQuery,
 	D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
+	D1_SAFE_BOUND_PARAMS,
 } from "./query-utils.server";
 import { resolveTagSlugFromName } from "./slugify";
 import {
@@ -20,7 +21,22 @@ import {
 
 export type { TagRecord, TagWithCounts };
 
-function toTagRecord(row: typeof tag.$inferSelect): TagRecord {
+/** Cap for distinct entity-tag pickers (Hub widgets / list filters). */
+const DISTINCT_TAG_PICKER_LIMIT = 200;
+
+/**
+ * `IN (tag_ids…)` count queries also bind `organization_id`, so chunks must
+ * leave one slot free under D1's 100-param ceiling.
+ */
+const TAG_COUNT_IN_CHUNK = D1_SAFE_BOUND_PARAMS;
+
+function toTagRecord(row: {
+	id: string;
+	slug: string;
+	name: string;
+	color: string | null;
+	category: string | null;
+}): TagRecord {
 	return {
 		id: row.id,
 		slug: row.slug,
@@ -28,6 +44,64 @@ function toTagRecord(row: typeof tag.$inferSelect): TagRecord {
 		color: sanitizeTagColor(row.color),
 		category: row.category,
 	};
+}
+
+async function countTagsOnCargo(
+	db: D1Database,
+	organizationId: string,
+	tagIds: string[],
+): Promise<Map<string, number>> {
+	if (tagIds.length === 0) return new Map();
+	const d1 = drizzle(db);
+	const rows = await chunkedQuery(
+		tagIds,
+		async (chunk) =>
+			d1
+				.select({
+					tagId: cargoTag.tagId,
+					cnt: count(),
+				})
+				.from(cargoTag)
+				.innerJoin(cargo, eq(cargoTag.cargoId, cargo.id))
+				.where(
+					and(
+						eq(cargo.organizationId, organizationId),
+						inArray(cargoTag.tagId, chunk),
+					),
+				)
+				.groupBy(cargoTag.tagId),
+		TAG_COUNT_IN_CHUNK,
+	);
+	return new Map(rows.map((r) => [r.tagId, r.cnt]));
+}
+
+async function countTagsOnMeals(
+	db: D1Database,
+	organizationId: string,
+	tagIds: string[],
+): Promise<Map<string, number>> {
+	if (tagIds.length === 0) return new Map();
+	const d1 = drizzle(db);
+	const rows = await chunkedQuery(
+		tagIds,
+		async (chunk) =>
+			d1
+				.select({
+					tagId: mealTag.tagId,
+					cnt: count(),
+				})
+				.from(mealTag)
+				.innerJoin(meal, eq(mealTag.mealId, meal.id))
+				.where(
+					and(
+						eq(meal.organizationId, organizationId),
+						inArray(mealTag.tagId, chunk),
+					),
+				)
+				.groupBy(mealTag.tagId),
+		TAG_COUNT_IN_CHUNK,
+	);
+	return new Map(rows.map((r) => [r.tagId, r.cnt]));
 }
 
 export async function getOrganizationTags(
@@ -45,50 +119,67 @@ export async function getOrganizationTags(
 	if (tags.length === 0) return [];
 
 	const tagIds = tags.map((t) => t.id);
-
-	const [cargoCounts, mealCounts] = await Promise.all([
-		chunkedQuery(tagIds, async (chunk) =>
-			d1
-				.select({
-					tagId: cargoTag.tagId,
-					cnt: count(),
-				})
-				.from(cargoTag)
-				.innerJoin(cargo, eq(cargoTag.cargoId, cargo.id))
-				.where(
-					and(
-						eq(cargo.organizationId, organizationId),
-						inArray(cargoTag.tagId, chunk),
-					),
-				)
-				.groupBy(cargoTag.tagId),
-		),
-		chunkedQuery(tagIds, async (chunk) =>
-			d1
-				.select({
-					tagId: mealTag.tagId,
-					cnt: count(),
-				})
-				.from(mealTag)
-				.innerJoin(meal, eq(mealTag.mealId, meal.id))
-				.where(
-					and(
-						eq(meal.organizationId, organizationId),
-						inArray(mealTag.tagId, chunk),
-					),
-				)
-				.groupBy(mealTag.tagId),
-		),
+	const [cargoByTag, mealByTag] = await Promise.all([
+		countTagsOnCargo(db, organizationId, tagIds),
+		countTagsOnMeals(db, organizationId, tagIds),
 	]);
-
-	const cargoByTag = new Map(cargoCounts.map((r) => [r.tagId, r.cnt]));
-	const mealByTag = new Map(mealCounts.map((r) => [r.tagId, r.cnt]));
 
 	return tags.map((t) => ({
 		...toTagRecord(t),
 		cargoCount: cargoByTag.get(t.id) ?? 0,
 		mealCount: mealByTag.get(t.id) ?? 0,
 	}));
+}
+
+/**
+ * Distinct tags currently attached to cargo in the org (filter chips).
+ * Avoids full-registry count joins that blow D1's 100-param limit.
+ */
+export async function getDistinctCargoTags(
+	db: D1Database,
+	organizationId: string,
+): Promise<TagRecord[]> {
+	const d1 = drizzle(db);
+	const rows = await d1
+		.selectDistinct({
+			id: tag.id,
+			slug: tag.slug,
+			name: tag.name,
+			color: tag.color,
+			category: tag.category,
+		})
+		.from(cargoTag)
+		.innerJoin(tag, eq(cargoTag.tagId, tag.id))
+		.innerJoin(cargo, eq(cargoTag.cargoId, cargo.id))
+		.where(eq(cargo.organizationId, organizationId))
+		.orderBy(asc(tag.name))
+		.limit(DISTINCT_TAG_PICKER_LIMIT);
+	return rows.map(toTagRecord);
+}
+
+/**
+ * Distinct tags currently attached to meals in the org (Galley filter chips).
+ */
+export async function getDistinctMealTagRecords(
+	db: D1Database,
+	organizationId: string,
+): Promise<TagRecord[]> {
+	const d1 = drizzle(db);
+	const rows = await d1
+		.selectDistinct({
+			id: tag.id,
+			slug: tag.slug,
+			name: tag.name,
+			color: tag.color,
+			category: tag.category,
+		})
+		.from(mealTag)
+		.innerJoin(tag, eq(mealTag.tagId, tag.id))
+		.innerJoin(meal, eq(mealTag.mealId, meal.id))
+		.where(eq(meal.organizationId, organizationId))
+		.orderBy(asc(tag.name))
+		.limit(DISTINCT_TAG_PICKER_LIMIT);
+	return rows.map(toTagRecord);
 }
 
 export async function getTagBySlug(
@@ -685,13 +776,16 @@ export async function validateTagIdsForOrg(
 ): Promise<string[]> {
 	if (tagIds.length === 0) return [];
 	const d1 = drizzle(db);
-	const rows = await chunkedQuery(tagIds, (chunk) =>
-		d1
-			.select({ id: tag.id })
-			.from(tag)
-			.where(
-				and(eq(tag.organizationId, organizationId), inArray(tag.id, chunk)),
-			),
+	const rows = await chunkedQuery(
+		tagIds,
+		(chunk) =>
+			d1
+				.select({ id: tag.id })
+				.from(tag)
+				.where(
+					and(eq(tag.organizationId, organizationId), inArray(tag.id, chunk)),
+				),
+		TAG_COUNT_IN_CHUNK,
 	);
 	const valid = new Set(rows.map((r) => r.id));
 	return tagIds.filter((id) => valid.has(id));

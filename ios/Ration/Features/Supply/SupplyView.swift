@@ -323,52 +323,33 @@ struct SupplyView: View {
                 accessibilityLabel: "Supply actions",
                 disabled: model.isDocking || model.isScanning || !env.network.isOnline
             ) {
-                if model.totalCount > 0 {
-                    if env.session.clientFlags.isAiDockFromReceiptEnabled {
-                        Button {
-                            showingReplenishReceipt = true
-                        } label: {
-                            Label("Dock from Receipt", systemImage: "camera.fill")
-                        }
-                    }
+                if env.session.clientFlags.isAiDockFromReceiptEnabled {
                     Button {
-                        Task {
-                            guard let organizationId else { return }
-                            await model.dock(
-                                api: env.api,
-                                snapshots: env.snapshots,
-                                online: env.network.isOnline,
-                                organizationId: organizationId,
-                                isCrewMember: env.session.isCrewMember
-                            )
-                            env.notifyCargoDataChanged()
-                        }
+                        showingReplenishReceipt = true
                     } label: {
-                        Label("Dock from List", systemImage: "checkmark.circle.fill")
+                        Label("Dock from Receipt", systemImage: "camera.fill")
                     }
-                    .disabled(model.purchasedCount == 0 || model.isDocking)
                 }
+                Button {
+                    Task {
+                        guard let organizationId else { return }
+                        await model.dock(
+                            api: env.api,
+                            snapshots: env.snapshots,
+                            online: env.network.isOnline,
+                            organizationId: organizationId,
+                            isCrewMember: env.session.isCrewMember
+                        )
+                        env.notifyCargoDataChanged()
+                    }
+                } label: {
+                    Label("Dock from List", systemImage: "checkmark.circle.fill")
+                }
+                .disabled(model.purchasedCount == 0 || model.isDocking)
                 Button {
                     showingAddItem = true
                 } label: {
                     Label("Add item", systemImage: "plus")
-                }
-                if model.totalCount == 0 {
-                    Button {
-                        Task {
-                            guard let organizationId else { return }
-                            model.refreshOutcomes = env.refreshOutcomes
-                            await model.sync(
-                                api: env.api,
-                                snapshots: env.snapshots,
-                                online: env.network.isOnline,
-                                organizationId: organizationId
-                            )
-                        }
-                    } label: {
-                        Label("Refresh list", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .disabled(model.isSyncing)
                 }
             }
         }

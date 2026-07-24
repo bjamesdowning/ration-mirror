@@ -36,7 +36,10 @@ final class SessionStore {
     var credits: Int { session?.credits ?? 0 }
     var tier: String { session?.tier ?? "free" }
     var isTierExpired: Bool { session?.isTierExpired ?? false }
+    /// Group-scoped Crew capacity for the active organization.
     var isCrewMember: Bool { session?.isCrewMember ?? false }
+    /// Personal Crew subscription ownership (purchase / Settings Membership).
+    var isAccountCrewMember: Bool { session?.isAccountCrewMember ?? false }
     /// Client-safe Flagship flags; defaults off until session loads.
     var clientFlags: ClientFlags { session?.flags ?? .disabled }
     var userImageURL: URL? {

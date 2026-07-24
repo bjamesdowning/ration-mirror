@@ -47,7 +47,25 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 				MobileBillingStatus: {
 					type: "object",
 					properties: {
-						tier: { type: "string", example: "crew_member" },
+						tier: {
+							type: "string",
+							example: "free",
+							description:
+								"Personal account tier (same as accountTier). Not organization capacity.",
+						},
+						accountTier: {
+							type: "string",
+							enum: ["free", "crew_member"],
+							description: "Authenticated user's personal subscription tier.",
+						},
+						accountTierExpired: { type: "boolean" },
+						organizationTier: {
+							type: "string",
+							enum: ["free", "crew_member"],
+							description:
+								"Active organization effective tier (owner-derived household capacity).",
+						},
+						organizationTierExpired: { type: "boolean" },
 						credits: { type: "integer" },
 						entitlements: {
 							type: "object",
@@ -55,7 +73,11 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 								crew_member: {
 									type: "object",
 									properties: {
-										active: { type: "boolean" },
+										active: {
+											type: "boolean",
+											description:
+												"Personal Crew entitlement (RevenueCat or accountTier). Does not reflect household-only access.",
+										},
 										expiresAt: { type: "string", nullable: true },
 										store: { type: "string", nullable: true },
 									},
@@ -78,6 +100,10 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 					},
 					required: [
 						"tier",
+						"accountTier",
+						"accountTierExpired",
+						"organizationTier",
+						"organizationTierExpired",
 						"credits",
 						"entitlements",
 						"management",

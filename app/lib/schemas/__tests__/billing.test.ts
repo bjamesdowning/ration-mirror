@@ -83,21 +83,69 @@ describe("RevenueCatWebhookEventSchema", () => {
 });
 
 describe("MobileBillingStatusSchema", () => {
-	it("accepts billing status shape", () => {
+	it("accepts billing status shape with account and organization tiers", () => {
 		const parsed = MobileBillingStatusSchema.safeParse({
-			tier: "crew_member",
+			tier: "free",
+			accountTier: "free",
+			accountTierExpired: false,
+			organizationTier: "crew_member",
+			organizationTierExpired: false,
 			entitlements: {
 				crew_member: {
-					active: true,
-					expiresAt: "2099-01-01T00:00:00Z",
-					store: "stripe",
+					active: false,
+					expiresAt: null,
+					store: null,
 				},
 			},
-			management: { store: "stripe", url: "https://billing.stripe.com" },
-			canPurchaseSubscription: false,
+			management: { store: null, url: null },
+			canPurchaseSubscription: true,
+			purchaseBlockReason: null,
+			billingUnavailable: false,
+			credits: 12,
+		});
+		expect(parsed.success).toBe(true);
+	});
+
+	it("rejects when organizationTier is missing", () => {
+		const parsed = MobileBillingStatusSchema.safeParse({
+			tier: "free",
+			accountTier: "free",
+			accountTierExpired: false,
+			entitlements: {
+				crew_member: {
+					active: false,
+					expiresAt: null,
+					store: null,
+				},
+			},
+			management: { store: null, url: null },
+			canPurchaseSubscription: true,
+			purchaseBlockReason: null,
+			billingUnavailable: false,
+			credits: 0,
+		});
+		expect(parsed.success).toBe(false);
+	});
+
+	it("rejects when credits are missing", () => {
+		const parsed = MobileBillingStatusSchema.safeParse({
+			tier: "free",
+			accountTier: "free",
+			accountTierExpired: false,
+			organizationTier: "crew_member",
+			organizationTierExpired: false,
+			entitlements: {
+				crew_member: {
+					active: false,
+					expiresAt: null,
+					store: null,
+				},
+			},
+			management: { store: null, url: null },
+			canPurchaseSubscription: true,
 			purchaseBlockReason: null,
 			billingUnavailable: false,
 		});
-		expect(parsed.success).toBe(true);
+		expect(parsed.success).toBe(false);
 	});
 });

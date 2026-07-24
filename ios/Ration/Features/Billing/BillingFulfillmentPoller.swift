@@ -21,7 +21,7 @@ enum BillingFulfillmentPoller {
         return latest
     }
 
-    /// Subscriptions early-exit when `crew_member` is active; credit packs
+    /// Subscriptions early-exit when personal Crew becomes newly active; credit packs
     /// early-exit when org credits rise above the pre-purchase baseline.
     static func fulfillmentVisible(
         _ latest: BillingStatus,
@@ -32,6 +32,9 @@ enum BillingFulfillmentPoller {
             let before = baseline?.credits ?? 0
             return latest.credits > before
         }
-        return latest.entitlements.crew_member.active
+        return BillingOwnership.subscriptionFulfillmentVisible(
+            latestPersonalActive: latest.isPersonalCrewActive,
+            baselinePersonalActive: baseline?.isPersonalCrewActive ?? false
+        )
     }
 }

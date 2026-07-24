@@ -101,13 +101,25 @@ struct SessionResponse: Codable, Sendable {
     let user: MobileUser
     let organization: Organization?
     let credits: Int
+    /// Organization effective tier (owner-derived household capacity).
     let tier: String
     let isTierExpired: Bool
+    /// Personal subscription tier (purchase / "Your plan").
+    let accountTier: String?
+    let accountTierExpired: Bool?
     let organizations: [OrgMembership]
     let aiCosts: AICosts?
     let clientFlags: ClientFlags?
 
+    /// Group-scoped Crew capacity for the active organization.
     var isCrewMember: Bool { tier == "crew_member" && !isTierExpired }
+
+    /// Personal Crew subscription ownership (independent of active group).
+    var isAccountCrewMember: Bool {
+        let personal = accountTier ?? "free"
+        let expired = accountTierExpired ?? false
+        return personal == "crew_member" && !expired
+    }
 
     var flags: ClientFlags { clientFlags ?? .disabled }
 }

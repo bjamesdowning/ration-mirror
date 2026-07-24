@@ -83,9 +83,24 @@ struct SettingsView: View {
             }
 
             Section("Membership") {
-                LabeledContent("Tier", value: session.isCrewMember ? "Crew Member" : "Free")
+                LabeledContent(
+                    "Your plan",
+                    value: MembershipDisplay.tierLabel(isAccountCrewMember: session.isAccountCrewMember)
+                )
+                if let note = MembershipDisplay.householdCapacityNote(
+                    organizationIsCrew: session.isCrewMember,
+                    isAccountCrewMember: session.isAccountCrewMember
+                ) {
+                    Text(note)
+                        .font(Typography.caption())
+                        .foregroundStyle(Theme.muted)
+                }
                 LabeledContent("Credits", value: "\(session.credits)")
-                Button(session.isCrewMember ? "Manage billing" : "Upgrade to Crew Member") {
+                Button(
+                    MembershipDisplay.billingButtonTitle(
+                        isAccountCrewMember: session.isAccountCrewMember
+                    )
+                ) {
                     showingPaywall = true
                 }
                 .foregroundStyle(Theme.hyperGreen)

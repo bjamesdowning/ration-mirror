@@ -103,17 +103,25 @@ export async function assertCanPurchaseStripeSubscription(
 	return { allowed: true };
 }
 
+/**
+ * Resolve personal Crew purchase / entitlement status for a user.
+ *
+ * @param accountTier - Authenticated user's effective personal tier from D1
+ *   (`user.tier` via `getEffectiveTier`). Never pass organization-owner /
+ *   `getGroupTierLimits` tier — household Crew capacity must not appear as a
+ *   personal subscription.
+ */
 export async function getBillingStatusForUser(
 	env: Env,
 	userId: string,
-	localTier: string,
+	accountTier: string,
 ): Promise<BillingStatus> {
 	if (!isRevenueCatApiConfigured(env)) {
 		return {
-			tier: localTier,
+			tier: accountTier,
 			entitlements: {
 				crew_member: {
-					active: localTier === "crew_member",
+					active: accountTier === "crew_member",
 					expiresAt: null,
 					store: null,
 				},
@@ -128,10 +136,10 @@ export async function getBillingStatusForUser(
 	const subscriber = await getSubscriber(env, userId);
 	if (subscriber === null) {
 		return {
-			tier: localTier,
+			tier: accountTier,
 			entitlements: {
 				crew_member: {
-					active: localTier === "crew_member",
+					active: accountTier === "crew_member",
 					expiresAt: null,
 					store: null,
 				},
@@ -145,11 +153,11 @@ export async function getBillingStatusForUser(
 	}
 
 	const crew = crewEntitlementFromSubscriber(subscriber.entitlements);
-	const crewActive = crew?.is_active === true || localTier === "crew_member";
+	const crewActive = crew?.is_active === true || accountTier === "crew_member";
 	const purchaseCheck = await assertCanPurchaseStripeSubscription(env, userId);
 
 	return {
-		tier: localTier,
+		tier: accountTier,
 		entitlements: {
 			crew_member: {
 				active: crewActive,

@@ -28,6 +28,7 @@ struct BillingStatus: Codable, Sendable {
     struct Entitlements: Codable, Sendable {
         let crew_member: EntitlementInfo
     }
+    /// Personal account tier (purchase ownership). Same as `accountTier` when present.
     let tier: String
     let entitlements: Entitlements
     let management: BillingManagement
@@ -35,4 +36,19 @@ struct BillingStatus: Codable, Sendable {
     let purchaseBlockReason: String?
     let billingUnavailable: Bool
     let credits: Int
+    /// Explicit personal tier from the server (additive; falls back to `tier`).
+    let accountTier: String?
+    let accountTierExpired: Bool?
+    /// Active organization owner-derived capacity tier.
+    let organizationTier: String?
+    let organizationTierExpired: Bool?
+
+    /// Personal Crew subscription ownership — not household-only capacity.
+    var isPersonalCrewActive: Bool {
+        BillingOwnership.isPersonalCrewActive(
+            entitlementsActive: entitlements.crew_member.active,
+            accountTier: accountTier,
+            fallbackTier: tier
+        )
+    }
 }

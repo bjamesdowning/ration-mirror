@@ -1454,6 +1454,8 @@ flowchart LR
 
 The tier system controls resource limits per organization. Limits are determined by the **organization owner's** tier — not the current viewer's. This design is deliberate: if a free-tier user joins a crew member's household group, that group's capacity should reflect the crew member's subscription, not the joining member's tier.
 
+**Personal subscription ownership is separate.** Household Crew capacity does **not** grant the member a personal Crew subscription. Mobile billing (`GET /api/mobile/v1/billing/status`) and Settings “Your plan” use the viewer’s `accountTier` / personal entitlements so free members can still purchase Crew while enjoying household capacity. Session exposes both: `tier` (organization effective) and `accountTier` (personal).
+
 ```mermaid
 flowchart TB
     subgraph FreeTier["Free Tier"]
@@ -1811,7 +1813,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/auth/magic-link` | Request sign-in email |
 | `POST` | `/api/mobile/v1/auth/token` | Exchange code or refresh token |
 | `DELETE` | `/api/mobile/v1/auth/session` | Revoke all mobile refresh tokens |
-| `GET` | `/api/mobile/v1/session` | User, org, credits, tier, `aiCosts` |
+| `GET` | `/api/mobile/v1/session` | User, org, credits, org `tier` + personal `accountTier`, `aiCosts` |
 | `GET` | `/api/mobile/v1/hub` | Widget grid data + resolved layout |
 | `GET` / `POST` | `/api/mobile/v1/cargo` | Paginated inventory / create item |
 | `GET` | `/api/mobile/v1/cargo/tags` | Distinct cargo tag slugs (filter picker; org registry) |
@@ -1855,7 +1857,7 @@ Bearer-authenticated REST surface for the **iOS app** at `/api/mobile/v1/*`. Web
 | `POST` | `/api/mobile/v1/meals/import/confirm` | Confirm imported recipe |
 | `POST` | `/api/mobile/v1/meals/:id/cook` | Cook meal (deduct cargo) |
 | `POST` | `/api/mobile/v1/meals/:id/toggle-active` | Toggle meal for supply sync (optional `{ servings }` body) |
-| `GET` | `/api/mobile/v1/billing/status` | Entitlements, purchase eligibility, credits |
+| `GET` | `/api/mobile/v1/billing/status` | Personal entitlements, `accountTier` / `organizationTier`, purchase eligibility, credits |
 | `POST` | `/api/mobile/v1/scan` | Multipart receipt upload |
 | `GET` | `/api/mobile/v1/supply` | Active supply list + items |
 | `POST` / `DELETE` | `/api/mobile/v1/supply/items` / `.../:id` | Add / remove supply items; `POST .../:id` snoozes item (`{ duration: "24h" \| "3d" \| "1w" }`) |
@@ -2020,7 +2022,7 @@ This posts each active Stripe subscription to RevenueCat with `app_user_id = use
 
 1. Sandbox Apple purchase → RC webhook → (with fulfillment off) check RC dashboard subscriber has `crew_member`.
 2. Stripe test checkout → confirm RC subscriber updates.
-3. `GET /api/mobile/v1/billing/status` with Bearer token → `entitlements.crew_member.active`.
+3. `GET /api/mobile/v1/billing/status` with Bearer token → personal `entitlements.crew_member.active` (not household-only access) plus `accountTier` / `organizationTier`.
 
 #### Step 11 — Enable RevenueCat fulfillment
 
@@ -2048,7 +2050,7 @@ When enabled:
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
 | `POST /api/webhook/revenuecat` | Bearer `REVENUECAT_WEBHOOK_SECRET` | RC → Ration fulfillment |
-| `GET /api/mobile/v1/billing/status` | Bearer JWT | Entitlements + purchase eligibility |
+| `GET /api/mobile/v1/billing/status` | Bearer JWT | Personal entitlements + purchase eligibility (`accountTier` vs `organizationTier`) |
 | `POST /api/checkout` | Cookie session | Stripe checkout (guarded) |
 
 OpenAPI: [`GET /api/openapi/mobile-v1.json`](/api/openapi/mobile-v1.json) includes `MobileBillingStatus`.

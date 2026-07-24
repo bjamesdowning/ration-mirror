@@ -1,4 +1,4 @@
-import { getGroupTierLimits } from "~/lib/capacity.server";
+import { getEffectiveTier, getGroupTierLimits } from "~/lib/capacity.server";
 import { handleApiError } from "~/lib/error-handler";
 import {
 	buildFlagContext,
@@ -11,6 +11,7 @@ import {
 	requireMobileActiveGroup,
 } from "~/lib/mobile/auth.server";
 import { getOrganizationRecord } from "~/lib/mobile/dashboard.server";
+import type { TierSlug } from "~/lib/tiers";
 import type { Route } from "./+types/v1.session";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -41,6 +42,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			});
 		}
 
+		const rawAccountTier: TierSlug =
+			user.tier === "crew_member" ? "crew_member" : "free";
+		const { tier: accountTier, isExpired: accountTierExpired } =
+			getEffectiveTier(rawAccountTier, user.tierExpiresAt ?? null);
+
 		return {
 			user: {
 				id: user.id,
@@ -51,8 +57,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			},
 			organization,
 			credits,
+			/** Organization effective tier (owner-derived household capacity). */
 			tier: tierInfo.tier,
 			isTierExpired: tierInfo.isExpired,
+			/** Personal subscription tier (purchase / "Your plan"). */
+			accountTier,
+			accountTierExpired,
 			organizations,
 			aiCosts: AI_COSTS,
 			clientFlags,

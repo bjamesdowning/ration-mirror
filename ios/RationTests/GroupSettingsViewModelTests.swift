@@ -305,6 +305,8 @@ private extension SessionResponse {
             credits: credits,
             tier: "free",
             isTierExpired: false,
+            accountTier: "free",
+            accountTierExpired: false,
             organizations: orgs,
             aiCosts: nil,
             clientFlags: nil

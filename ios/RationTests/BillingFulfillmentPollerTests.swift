@@ -27,7 +27,7 @@ final class BillingFulfillmentPollerTests: XCTestCase {
 
     func testCrewEarlyExitWhenEntitlementActive() async throws {
         let baseline = billingStatus(credits: 3, crewActive: false)
-        let fulfilled = billingStatus(credits: 3, crewActive: true)
+        let fulfilled = billingStatus(credits: 3, crewActive: true, accountTier: "crew_member")
         let counter = AttemptCounter()
 
         let result = try await BillingFulfillmentPoller.poll(
@@ -43,7 +43,7 @@ final class BillingFulfillmentPollerTests: XCTestCase {
             sleep: { _ in }
         )
 
-        XCTAssertTrue(result.entitlements.crew_member.active)
+        XCTAssertTrue(result.isPersonalCrewActive)
         let attempts = await counter.value
         XCTAssertEqual(attempts, 2)
     }
@@ -101,10 +101,42 @@ final class BillingFulfillmentPollerTests: XCTestCase {
         )
         XCTAssertTrue(
             BillingFulfillmentPoller.fulfillmentVisible(
-                billingStatus(credits: 0, crewActive: true),
+                billingStatus(credits: 0, crewActive: true, accountTier: "crew_member"),
                 baseline: baseline,
                 creditPack: false
             )
+        )
+    }
+
+    func testHouseholdOnlyCrewDoesNotCountAsSubscriptionFulfillment() {
+        // Organization may be Crew while the viewer remains personally free.
+        // Entitlement active must reflect personal ownership only; if a stale
+        // client somehow saw household access, transition still requires a change.
+        let baseline = billingStatus(
+            credits: 0,
+            crewActive: false,
+            accountTier: "free",
+            organizationTier: "crew_member"
+        )
+        XCTAssertFalse(
+            BillingFulfillmentPoller.fulfillmentVisible(
+                billingStatus(
+                    credits: 0,
+                    crewActive: false,
+                    accountTier: "free",
+                    organizationTier: "crew_member"
+                ),
+                baseline: baseline,
+                creditPack: false
+            )
+        )
+        XCTAssertFalse(
+            BillingFulfillmentPoller.fulfillmentVisible(
+                billingStatus(credits: 0, crewActive: true, accountTier: "crew_member"),
+                baseline: billingStatus(credits: 0, crewActive: true, accountTier: "crew_member"),
+                creditPack: false
+            ),
+            "Already-active personal Crew must not early-exit as new fulfillment"
         )
     }
 
@@ -113,7 +145,9 @@ final class BillingFulfillmentPollerTests: XCTestCase {
     private func billingStatus(
         credits: Int,
         crewActive: Bool,
-        tier: String = "free"
+        tier: String = "free",
+        accountTier: String? = "free",
+        organizationTier: String? = nil
     ) -> BillingStatus {
         BillingStatus(
             tier: tier,
@@ -124,7 +158,11 @@ final class BillingFulfillmentPollerTests: XCTestCase {
             canPurchaseSubscription: true,
             purchaseBlockReason: nil,
             billingUnavailable: false,
-            credits: credits
+            credits: credits,
+            accountTier: accountTier,
+            accountTierExpired: false,
+            organizationTier: organizationTier,
+            organizationTierExpired: false
         )
     }
 }

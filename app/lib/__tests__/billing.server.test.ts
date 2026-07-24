@@ -6,6 +6,7 @@ import {
 import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import {
 	assertCanPurchaseStripeSubscription,
+	getBillingStatusForUser,
 	processRevenueCatWebhookEvent,
 } from "~/lib/billing.server";
 import { createMockEnv } from "~/test/helpers/mock-env";
@@ -94,5 +95,54 @@ describe("RC_PRODUCT_CREDITS", () => {
 		for (const amount of Object.values(RC_PRODUCT_CREDITS)) {
 			expect(amount).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe("getBillingStatusForUser", () => {
+	it("treats free accountTier as inactive even when RC has no crew entitlement", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				subscriber: {
+					entitlements: {},
+					management_url: null,
+				},
+			}),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const status = await getBillingStatusForUser(env, "user_1", "free");
+		expect(status.tier).toBe("free");
+		expect(status.entitlements.crew_member.active).toBe(false);
+		expect(status.canPurchaseSubscription).toBe(true);
+
+		vi.unstubAllGlobals();
+	});
+
+	it("marks crew active from personal accountTier when RC entitlement is absent", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				subscriber: {
+					entitlements: {},
+					management_url: null,
+				},
+			}),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const status = await getBillingStatusForUser(env, "user_1", "crew_member");
+		expect(status.tier).toBe("crew_member");
+		expect(status.entitlements.crew_member.active).toBe(true);
+
+		vi.unstubAllGlobals();
 	});
 });

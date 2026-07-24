@@ -98,6 +98,8 @@ export async function getMobileUser(env: Cloudflare.Env, userId: string) {
 			email: true,
 			image: true,
 			settings: true,
+			tier: true,
+			tierExpiresAt: true,
 		},
 	});
 }

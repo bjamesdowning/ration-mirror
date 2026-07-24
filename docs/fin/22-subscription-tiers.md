@@ -4,6 +4,10 @@
 
 Capacity and certain features for a group depend on the **organization owner’s** effective tier—not only on the person viewing the screen. A **free** user in a **Crew Member’s** household still benefits from that household’s Crew limits.
 
+## Personal plan vs household capacity
+
+Enjoying household Crew capacity does **not** mean you personally own a Crew subscription. “Your plan” / purchase / manage-billing flows use your **personal** account tier (and App Store / Stripe entitlements). Free members in a Crew household can still upgrade to Crew for their own owned groups and personal benefits while the active household keeps owner-derived capacity.
+
 ## Free tier (typical limits)
 
 | Resource | Typical limit |

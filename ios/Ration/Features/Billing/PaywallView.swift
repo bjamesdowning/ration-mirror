@@ -19,7 +19,10 @@ struct PaywallView: View {
                         contextualReason(title: reasonTitle, detail: context.reasonDetail)
                     }
 
-                    if !env.session.isCrewMember || context.trigger == .credits {
+                    if BillingOwnership.shouldShowCrewMarketing(
+                        isPersonalCrewActive: env.session.isAccountCrewMember,
+                        creditsTrigger: context.trigger == .credits
+                    ) {
                         crewBenefits
                         freeVsCrewComparison
                     }
@@ -166,9 +169,9 @@ struct PaywallView: View {
                 HStack {
                     Text("Status").rationCaption()
                     Spacer()
-                    Text(status.entitlements.crew_member.active ? "Active" : "Inactive")
+                    Text(status.isPersonalCrewActive ? "Active" : "Inactive")
                         .font(Typography.headline())
-                        .foregroundStyle(status.entitlements.crew_member.active ? Theme.hyperGreen : Theme.muted)
+                        .foregroundStyle(status.isPersonalCrewActive ? Theme.hyperGreen : Theme.muted)
                 }
                 HStack {
                     Text("Credits").rationCaption()
@@ -188,7 +191,7 @@ struct PaywallView: View {
 
     @ViewBuilder
     private func offerings(_ status: BillingStatus) -> some View {
-        if status.entitlements.crew_member.active {
+        if status.isPersonalCrewActive {
             activeSubscriberCard(status)
             creditPackSection
         } else if status.billingUnavailable {

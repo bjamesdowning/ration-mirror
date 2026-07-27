@@ -2,7 +2,7 @@ import XCTest
 @testable import Ration
 
 /// Covers H-8 — the shared "proceed" gate used by all AI entry points
-/// (`ScanView`, `GenerateMealSheet`, `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView`).
+/// (`ScanView`, `GenerateMealSheet`, `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView`, Ask).
 final class AIConsentGateSymmetryTests: XCTestCase {
     @MainActor
     func testPresentIfNeededRunsImmediatelyWhenConsentAlreadyGranted() {
@@ -56,6 +56,8 @@ final class AIConsentGateSymmetryTests: XCTestCase {
         let planWeekCoordinator = AIConsentCoordinator()
         let supplyCoordinator = AIConsentCoordinator()
 
+        let askCoordinator = AIConsentCoordinator()
+
         var scanRan = false
         scanCoordinator.presentIfNeeded(session: session) { scanRan = true }
         XCTAssertFalse(scanRan)
@@ -66,7 +68,7 @@ final class AIConsentGateSymmetryTests: XCTestCase {
         session.markAIConsentGranted()
         scanCoordinator.isPresenting = false
 
-        for coordinator in [generateCoordinator, importCoordinator, planWeekCoordinator, supplyCoordinator] {
+        for coordinator in [generateCoordinator, importCoordinator, planWeekCoordinator, supplyCoordinator, askCoordinator] {
             var ran = false
             coordinator.presentIfNeeded(session: session) { ran = true }
             XCTAssertTrue(ran)

@@ -20,6 +20,7 @@ struct OnboardingBriefingView: View {
     @State private var seedPromptRevealed = false
     @State private var seedRevealTask: Task<Void, Never>?
     @FocusState private var isComposerFocused: Bool
+    @State private var consent = AIConsentCoordinator()
 
     private var model: AskViewModel { ask.model }
 
@@ -112,6 +113,30 @@ struct OnboardingBriefingView: View {
         }
         .onDisappear {
             seedRevealTask?.cancel()
+        }
+        .sheet(isPresented: Binding(
+            get: { consent.isPresenting },
+            set: { presented in
+                guard !presented else { return }
+                // Swipe-dismiss while the gate is still open — same as Decline.
+                // Skip when accept() already cleared isPresenting (pending bootstrap runs).
+                guard consent.isPresenting else { return }
+                declineConsentGate()
+            }
+        )) {
+            AIConsentGateView(
+                onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                onDecline: { declineConsentGate() }
+            )
+            .presentationDetents([.large])
+        }
+    }
+
+    private func declineConsentGate() {
+        consent.decline()
+        if !didBootstrap {
+            didBootstrap = true
+            model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
         }
     }
 
@@ -415,19 +440,29 @@ struct OnboardingBriefingView: View {
         )
 
         if model.status?.canUseOnboardingBriefing == true {
-            didBootstrap = true
-            let sent = await ask.sendOnboardingBootstrap(
-                api: env.api,
-                auth: env.auth,
-                organizationId: organizationId,
-                snapshots: env.snapshots
-            )
-            if !sent {
-                // Live send failed (network / gate) — keep onboarding useful with fallback + chips.
-                model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
+            if !env.session.hasAIConsent {
+                consent.presentIfNeeded(session: env.session) {
+                    Task { await sendLiveBootstrap(organizationId: organizationId) }
+                }
+                return
             }
+            await sendLiveBootstrap(organizationId: organizationId)
         } else {
             didBootstrap = true
+            model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
+        }
+    }
+
+    private func sendLiveBootstrap(organizationId: String) async {
+        didBootstrap = true
+        let sent = await ask.sendOnboardingBootstrap(
+            api: env.api,
+            auth: env.auth,
+            organizationId: organizationId,
+            snapshots: env.snapshots
+        )
+        if !sent {
+            // Live send failed (network / gate) — keep onboarding useful with fallback + chips.
             model.showStaticBriefing(OnboardingBriefingCopy.staticReplayMarkdown)
         }
     }
@@ -435,6 +470,16 @@ struct OnboardingBriefingView: View {
     private func runSeed() async {
         guard let organizationId = env.session.activeOrganizationId else { return }
         guard seedCardState == .idle else { return }
+        if !env.session.hasAIConsent {
+            consent.presentIfNeeded(session: env.session) {
+                Task { await performSeed(organizationId: organizationId) }
+            }
+            return
+        }
+        await performSeed(organizationId: organizationId)
+    }
+
+    private func performSeed(organizationId: String) async {
         let sent = await ask.sendOnboardingSeed(
             api: env.api,
             auth: env.auth,
@@ -454,6 +499,16 @@ struct OnboardingBriefingView: View {
         // Keep the existing conversationId — claimOnboardingBriefing rejects a second id
         // while the grant is still pending on the first conversation.
         model.prepareIntroRetry()
+        if !env.session.hasAIConsent {
+            consent.presentIfNeeded(session: env.session) {
+                Task { await performIntroRetry(organizationId: organizationId) }
+            }
+            return
+        }
+        await performIntroRetry(organizationId: organizationId)
+    }
+
+    private func performIntroRetry(organizationId: String) async {
         let sent = await ask.sendOnboardingBootstrap(
             api: env.api,
             auth: env.auth,

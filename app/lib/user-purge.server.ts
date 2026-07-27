@@ -2,6 +2,7 @@ import { eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
+import { revokeAppleTokensForUser } from "~/lib/apple-token-revoke.server";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
@@ -160,6 +161,19 @@ export async function purgeUserAccount(
 
 	if (options?.stripeBestEffort !== false) {
 		await cancelStripeBillingBestEffort(env, stripeCustomerId);
+	}
+
+	// TN3194 / Guideline 5.1.1(v) — revoke before deleting `account` rows.
+	try {
+		await revokeAppleTokensForUser(env, userId);
+	} catch (error) {
+		log.error(
+			"[Purge] Apple token revoke unexpected failure (continuing)",
+			error,
+			{
+				userId: redactId(userId),
+			},
+		);
 	}
 
 	try {

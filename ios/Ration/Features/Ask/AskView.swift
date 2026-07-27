@@ -10,6 +10,7 @@ struct AskView: View {
     @FocusState private var isComposerFocused: Bool
     @State private var showingPaywall = false
     @State private var transcriptCopied = false
+    @State private var consent = AIConsentCoordinator()
 
     private var model: AskViewModel { ask.model }
     private var organizationId: String? { env.session.activeOrganizationId }
@@ -84,6 +85,16 @@ struct AskView: View {
             }
         }) {
             PaywallView(context: .credits())
+        }
+        .sheet(isPresented: Binding(
+            get: { consent.isPresenting },
+            set: { if !$0 { consent.decline() } }
+        )) {
+            AIConsentGateView(
+                onAccept: { Task { await consent.accept(api: env.api, session: env.session) } },
+                onDecline: { consent.decline() }
+            )
+            .presentationDetents([.large])
         }
     }
 
@@ -300,17 +311,34 @@ struct AskView: View {
             onSend: { text in
                 guard let organizationId else { return false }
                 followsLatest = true
-                let accepted = await ask.sendFromSheet(
-                    text,
-                    api: env.api,
-                    auth: env.auth,
-                    organizationId: organizationId,
-                    snapshots: env.snapshots
-                )
-                if accepted {
-                    Haptics.light()
+                if env.session.hasAIConsent {
+                    let accepted = await ask.sendFromSheet(
+                        text,
+                        api: env.api,
+                        auth: env.auth,
+                        organizationId: organizationId,
+                        snapshots: env.snapshots
+                    )
+                    if accepted {
+                        Haptics.light()
+                    }
+                    return accepted
                 }
-                return accepted
+                consent.presentIfNeeded(session: env.session) {
+                    Task {
+                        let accepted = await ask.sendFromSheet(
+                            text,
+                            api: env.api,
+                            auth: env.auth,
+                            organizationId: organizationId,
+                            snapshots: env.snapshots
+                        )
+                        if accepted {
+                            Haptics.light()
+                        }
+                    }
+                }
+                return false
             },
             onStop: { await model.stop() },
             onExhaustedTap: {

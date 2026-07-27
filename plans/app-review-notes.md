@@ -42,10 +42,16 @@ Backend: https://ration.mayutic.com — live, no VPN.
 
 ## In-App Purchases
 
-- **Subscriptions:** Crew Member via RevenueCat / App Store.
+- **Subscriptions:** Crew Member via RevenueCat / App Store (`crew_monthly` = 1 month, `crew_annual` = 1 year).
 - **Consumables:** Credit packs (`credits_s`, `credits_m`, `credits_l`, `credits_xl`) via RevenueCat consumable products.
-- **Restore:** Settings → Manage billing → Restore purchases.
+- **Restore:** Always available on the paywall (Settings → Manage billing / Crew Member), including for active Crew.
+- **Manage / cancel (App Store):** Paywall **Manage subscription** opens Apple’s `showManageSubscriptions` sheet. Do not cancel Apple billing from Ration’s servers.
 - **Web Stripe:** Existing Stripe subscriptions are honored as account entitlements but new purchases on iOS use Apple IAP only.
+- **Metadata (3.1.2):** App Description must include a functional Terms of Use (EULA) link (and Privacy). Standard Apple EULA + Description footer — already configured in ASC; mirrored in `marketing/appstore/uk/COPY.md`.
+
+### Demo account tier (paywall visibility)
+
+Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-4b75-abe2-066584cd3c1d`) is **Free** (not Crew) so reviewers see subscribe packages. Re-seed with `bun scripts/seed-account/seed-app-review-demo.ts --remote` (always forces Free; keeps credits + sample data). No RevenueCat entitlement is expected for this DB-granted demo path.
 
 ## Account Deletion
 
@@ -71,12 +77,21 @@ Backend: https://ration.mayutic.com — live, no VPN.
 | Key | Purpose |
 |-----|---------|
 | `NSCameraUsageDescription` | Receipt scanning |
-| `NSPhotoLibraryUsageDescription` | Import receipt photos when camera unavailable |
+| `NSPhotoLibraryUsageDescription` | Receipt/pantry photos, Supply imports, profile/group images |
 | `NSUserNotificationsUsageDescription` | Optional expiration/meal reminders |
 
 ## Device
 
 - **iPhone only** (portrait). No iPad-optimized layout in v1.
+
+## Before each App Review / TestFlight review window
+
+1. [ ] Re-seed or confirm demo user is **Free**: `bun scripts/seed-account/seed-app-review-demo.ts --remote` (user `d773eefb-e112-4b75-abe2-066584cd3c1d`)
+2. [ ] Flagship `app-review-login` **enabled**
+3. [ ] ASC Review Information password matches `APP_REVIEW_DEMO_PASSWORD`
+4. [ ] On device: Sign In with demo email → password → Settings → billing shows **Inactive** Crew and **1 month** / **1 year** packages + Restore + Terms/Privacy
+5. [ ] Upload new binary when paywall/consent/plist changed; Description EULA footer already in ASC
+6. [ ] After approval: disable `app-review-login`
 
 ## Sandbox Checklist
 

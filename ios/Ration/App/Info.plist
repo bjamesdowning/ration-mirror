@@ -40,7 +40,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Ration uses the camera to scan grocery receipts and pantry labels to add items to Cargo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Ration can import receipt photos from your library when the camera is unavailable.</string>
+	<string>Ration uses your photo library for receipt and pantry photos, Supply imports, and profile or group images.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>SpaceMono-Regular.ttf</string>

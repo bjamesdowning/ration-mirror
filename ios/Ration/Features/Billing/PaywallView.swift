@@ -1,4 +1,6 @@
 import SwiftUI
+import StoreKit
+import UIKit
 
 /// Crew Member + credit packs paywall (RevenueCat offering-driven).
 struct PaywallView: View {
@@ -34,6 +36,7 @@ struct PaywallView: View {
                         offerings(status)
                     } else if let errorMessage = model.errorMessage {
                         ErrorBanner(message: errorMessage)
+                        restoreAndDisclosure(status: nil)
                     }
                 }
                 .padding(24)
@@ -192,31 +195,46 @@ struct PaywallView: View {
     @ViewBuilder
     private func offerings(_ status: BillingStatus) -> some View {
         if status.isPersonalCrewActive {
-            activeSubscriberCard(status)
-            creditPackSection
+            VStack(spacing: 20) {
+                activeSubscriberCard(status)
+                creditPackSection
+                restoreAndDisclosure(status: status)
+            }
         } else if status.billingUnavailable {
-            ErrorBanner(message: "Billing is temporarily unavailable. Please try again shortly.")
+            VStack(spacing: 20) {
+                ErrorBanner(message: "Billing is temporarily unavailable. Please try again shortly.")
+                restoreAndDisclosure(status: status)
+            }
         } else if !status.canPurchaseSubscription {
-            ErrorBanner(message: blockMessage(status.purchaseBlockReason))
-            creditPackSection
-            restoreAndDisclosure
+            VStack(spacing: 20) {
+                ErrorBanner(message: blockMessage(status.purchaseBlockReason))
+                creditPackSection
+                restoreAndDisclosure(status: status)
+            }
         } else if context.prefersCrewFirst {
             VStack(spacing: 20) {
                 subscriptionSection
                 creditPackSection
-                restoreAndDisclosure
+                restoreAndDisclosure(status: status)
             }
         } else {
             VStack(spacing: 20) {
                 creditPackSection
                 subscriptionSection
-                restoreAndDisclosure
+                restoreAndDisclosure(status: status)
             }
         }
     }
 
-    private var restoreAndDisclosure: some View {
+    private func restoreAndDisclosure(status: BillingStatus?) -> some View {
         VStack(spacing: 12) {
+            if shouldShowManageSubscription(status) {
+                Button(String(localized: "Manage subscription")) {
+                    Task { await openManageSubscriptions() }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+
             Button(model.isRestoring ? "Restoring…" : String(localized: "Restore purchases")) {
                 Task {
                     await model.restore(
@@ -244,14 +262,10 @@ struct PaywallView: View {
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
                 Button("Terms") {
-                    if let url = URL(string: "https://ration.mayutic.com/legal/terms") {
-                        openURL(url)
-                    }
+                    openURL(AppConfig.termsURL)
                 }
                 Button("Privacy") {
-                    if let url = URL(string: "https://ration.mayutic.com/legal/privacy") {
-                        openURL(url)
-                    }
+                    openURL(AppConfig.privacyURL)
                 }
             }
             .font(Typography.caption())
@@ -265,11 +279,11 @@ struct PaywallView: View {
             VStack(spacing: 8) {
                 Text("You're a Crew Member").rationHeadline()
                 if status.management.store == "stripe" {
-                    Text("This subscription is managed on the web via Stripe. Visit ration.mayutic.com to change or cancel.")
+                    Text("Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store.")
                         .rationCaption()
                         .multilineTextAlignment(.center)
                 } else {
-                    Text("Manage your subscription in the App Store settings.")
+                    Text("Use Manage subscription below to change or cancel through Apple.")
                         .rationCaption()
                         .multilineTextAlignment(.center)
                 }
@@ -347,9 +361,25 @@ struct PaywallView: View {
         case "active_app_store_subscription":
             return "You already have an active subscription via the App Store."
         case "active_stripe_subscription":
-            return "You already subscribed on the web. Manage it at ration.mayutic.com."
+            return "You already have an existing web subscription. Manage it on ration.mayutic.com in a browser."
         default:
             return reason ?? "Subscription purchase is not available right now."
+        }
+    }
+
+    private func shouldShowManageSubscription(_ status: BillingStatus?) -> Bool {
+        guard let status, status.isPersonalCrewActive else { return false }
+        // Apple sheet only for App Store–managed Crew; Stripe stays web-managed.
+        return status.management.store != "stripe"
+    }
+
+    @MainActor
+    private func openManageSubscriptions() async {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first
+        {
+            try? await AppStore.showManageSubscriptions(in: windowScene)
         }
     }
 

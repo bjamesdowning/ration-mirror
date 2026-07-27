@@ -12,13 +12,13 @@ enum BillingProductCatalog {
     private static let catalog: [String: BillingProductInfo] = [
         "crew_annual": BillingProductInfo(
             displayName: "Crew Member",
-            subtitle: "Annual",
+            subtitle: "1 year",
             badge: "Best Value",
             sortOrder: 0
         ),
         "crew_monthly": BillingProductInfo(
             displayName: "Crew Member",
-            subtitle: "Monthly",
+            subtitle: "1 month",
             badge: nil,
             sortOrder: 1
         ),

@@ -90,6 +90,7 @@ struct MainTabView: View {
     @State private var isHubEditMode = false
     @State private var manifestSuccessMessage: String?
     @State private var showingCopilotPaywall = false
+    @State private var askConsent = AIConsentCoordinator()
 
     private var isCopilotExhausted: Bool {
         CopilotAutoExpandPolicy.isCopilotExhausted(status: env.ask.model.status)
@@ -216,6 +217,16 @@ struct MainTabView: View {
         .sheet(isPresented: $showingScan) {
             ScanView()
         }
+        .sheet(isPresented: Binding(
+            get: { askConsent.isPresenting },
+            set: { if !$0 { askConsent.decline() } }
+        )) {
+            AIConsentGateView(
+                onAccept: { Task { await askConsent.accept(api: env.api, session: env.session) } },
+                onDecline: { askConsent.decline() }
+            )
+            .presentationDetents([.large])
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showCopilotBar {
                 CopilotBottomDock(
@@ -245,14 +256,27 @@ struct MainTabView: View {
                     },
                     onSend: { text in
                         guard let organizationId = env.session.activeOrganizationId else { return false }
-                        let accepted = await env.ask.sendFromBar(
-                            text,
-                            api: env.api,
-                            auth: env.auth,
-                            organizationId: organizationId,
-                            snapshots: env.snapshots
-                        )
-                        return accepted
+                        if env.session.hasAIConsent {
+                            return await env.ask.sendFromBar(
+                                text,
+                                api: env.api,
+                                auth: env.auth,
+                                organizationId: organizationId,
+                                snapshots: env.snapshots
+                            )
+                        }
+                        askConsent.presentIfNeeded(session: env.session) {
+                            Task {
+                                _ = await env.ask.sendFromBar(
+                                    text,
+                                    api: env.api,
+                                    auth: env.auth,
+                                    organizationId: organizationId,
+                                    snapshots: env.snapshots
+                                )
+                            }
+                        }
+                        return false
                     },
                     onStop: { await env.ask.model.stop() },
                     onExhaustedTap: { showingCopilotPaywall = true }

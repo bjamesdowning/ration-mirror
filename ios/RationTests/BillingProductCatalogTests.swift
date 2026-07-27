@@ -6,7 +6,8 @@ final class BillingProductCatalogTests: XCTestCase {
         XCTAssertEqual(BillingProductCatalog.info(for: "credits_xl")?.displayName, "Orbital Stockpile")
         XCTAssertEqual(BillingProductCatalog.info(for: "credits_s")?.subtitle, "12 credits")
         XCTAssertEqual(BillingProductCatalog.info(for: "crew_annual")?.badge, "Best Value")
-        XCTAssertEqual(BillingProductCatalog.info(for: "crew_annual")?.subtitle, "Annual")
+        XCTAssertEqual(BillingProductCatalog.info(for: "crew_annual")?.subtitle, "1 year")
+        XCTAssertEqual(BillingProductCatalog.info(for: "crew_monthly")?.subtitle, "1 month")
     }
 
     func testUnknownProductFallsBack() {

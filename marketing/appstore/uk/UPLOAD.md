@@ -57,8 +57,12 @@ Paste from [`COPY.md`](COPY.md) into **English (U.K.)**:
 - [ ] Marketing URL: `https://ration.mayutic.com`
 - [ ] Support URL: from [`plans/app-review-notes.md`](../../../plans/app-review-notes.md)
 - [ ] Privacy Policy: `https://ration.mayutic.com/legal/privacy`
+- [x] Description includes Terms of Use (EULA) footer (Guideline 3.1.2 metadata) — verify still present
+- [ ] License Agreement: Apple Standard EULA
 - [ ] Privacy nutrition labels aligned with [`docs/legal/privacy.md`](../../../docs/legal/privacy.md)
 - [ ] Age rating questionnaire completed
+- [ ] App Review demo account is **Free** tier (not Crew) so subscribe paywall is visible — user `d773eefb-e112-4b75-abe2-066584cd3c1d` / `app-review@mayutic.com`
+- [ ] Paywall shows: Crew **1 month** / **1 year**, price, Restore purchases, Terms + Privacy, auto-renew disclosure; Manage subscription for App Store Crew
 
 ## App Review
 

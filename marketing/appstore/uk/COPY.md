@@ -70,6 +70,10 @@ AI THAT SAVES TIME
 Built for households who want less waste, faster shops, and a kitchen that stays in sync — on iPhone, with the same orbital clarity as the web app.
 
 AI features use credits. Always review AI suggestions before saving.
+
+Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+Terms of Service: https://ration.mayutic.com/legal/terms
+Privacy Policy: https://ration.mayutic.com/legal/privacy
 ```
 
 ## What’s New (first public release)
@@ -89,7 +93,8 @@ Welcome to Ration on iPhone — Cargo, Galley, Manifest, Supply, Ask Ration, and
 | **Support URL** | Use the URL in [`plans/app-review-notes.md`](../../../plans/app-review-notes.md) / `support@mayutic.com` issues page |
 | **Marketing URL** | `https://ration.mayutic.com` |
 | **Privacy Policy URL** | `https://ration.mayutic.com/legal/privacy` |
-| **Terms of Use (EULA)** | `https://ration.mayutic.com/legal/terms` (or Apple Standard EULA + custom terms link) |
+| **License Agreement** | Apple Standard EULA |
+| **Terms of Use (EULA) in Description** | Required for auto-renewable subscriptions (Guideline 3.1.2) — see Description footer above (already set in ASC) |
 
 ## App Review notes
 

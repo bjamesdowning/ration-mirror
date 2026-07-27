@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// Shared "proceed" gate for AI entry points (`ScanView`, `GenerateMealSheet`,
-/// `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView` replenish scan) — see H-8.
+/// `ImportRecipeSheet`, `PlanWeekSheet`, `SupplyView` replenish scan, Ask Ration /
+/// onboarding briefing) — see H-8.
 ///
 /// Each entry point owns one `@State private var consent = AIConsentCoordinator()`
 /// and calls `presentIfNeeded(session:then:)` in place of its "proceed" action,

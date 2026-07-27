@@ -64,6 +64,8 @@ struct SettingsPatch: Encodable, Sendable {
     var unitDisplayMode: String?
     var allergens: [String]?
     var aiConsentAt: String?
+    /// When true, encodes `aiConsentAt: null` so the server clears consent.
+    var clearAIConsent: Bool = false
     var onboardingCompletedAt: String?
     var onboardingStep: Int?
     var restartOnboarding: Bool?
@@ -71,4 +73,39 @@ struct SettingsPatch: Encodable, Sendable {
     var hubProfile: HubProfile?
     var hubLayout: HubLayoutPayload?
     var manifestSettings: ManifestSettings?
+
+    enum CodingKeys: String, CodingKey {
+        case theme
+        case supplyUnitMode
+        case unitDisplayMode
+        case allergens
+        case aiConsentAt
+        case onboardingCompletedAt
+        case onboardingStep
+        case restartOnboarding
+        case expirationAlertDays
+        case hubProfile
+        case hubLayout
+        case manifestSettings
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(theme, forKey: .theme)
+        try container.encodeIfPresent(supplyUnitMode, forKey: .supplyUnitMode)
+        try container.encodeIfPresent(unitDisplayMode, forKey: .unitDisplayMode)
+        try container.encodeIfPresent(allergens, forKey: .allergens)
+        if let aiConsentAt {
+            try container.encode(aiConsentAt, forKey: .aiConsentAt)
+        } else if clearAIConsent {
+            try container.encodeNil(forKey: .aiConsentAt)
+        }
+        try container.encodeIfPresent(onboardingCompletedAt, forKey: .onboardingCompletedAt)
+        try container.encodeIfPresent(onboardingStep, forKey: .onboardingStep)
+        try container.encodeIfPresent(restartOnboarding, forKey: .restartOnboarding)
+        try container.encodeIfPresent(expirationAlertDays, forKey: .expirationAlertDays)
+        try container.encodeIfPresent(hubProfile, forKey: .hubProfile)
+        try container.encodeIfPresent(hubLayout, forKey: .hubLayout)
+        try container.encodeIfPresent(manifestSettings, forKey: .manifestSettings)
+    }
 }

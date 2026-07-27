@@ -3,7 +3,10 @@ import { drizzle } from "drizzle-orm/d1";
 import { data } from "react-router";
 import * as schema from "~/db/schema";
 import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
-import { getBillingStatusForUser } from "~/lib/billing.server";
+import {
+	getBillingStatusForUser,
+	reconcileSubscriptionCancelAtPeriodEnd,
+} from "~/lib/billing.server";
 import { handleApiError } from "~/lib/error-handler";
 import { requireMobileUserAuth } from "~/lib/mobile/auth.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -53,6 +56,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const env = context.cloudflare.env;
 		const db = drizzle(env.DB, { schema });
 
+		const { cancelAtPeriodEnd } = await reconcileSubscriptionCancelAtPeriodEnd(
+			env,
+			userId,
+		);
+
 		const user = await db.query.user.findFirst({
 			where: eq(schema.user.id, userId),
 			columns: {
@@ -65,14 +73,14 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const eligibility = evaluateAccountDeletionEligibility({
 			tier: user?.tier ?? "free",
 			tierExpiresAt: user?.tierExpiresAt ?? null,
-			subscriptionCancelAtPeriodEnd:
-				user?.subscriptionCancelAtPeriodEnd ?? false,
+			subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd,
 		});
 
 		const billingStatus = await getBillingStatusForUser(
 			env,
 			userId,
 			eligibility.effectiveTier,
+			{ skipReconcile: true, cancelAtPeriodEnd },
 		);
 
 		const ownedGroups = await ownedGroupsWithNoOtherMembers(env, userId);

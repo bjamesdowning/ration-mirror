@@ -96,4 +96,21 @@ describe("PATCH /api/mobile/v1/settings", () => {
 		expect(patchUserSettings).toHaveBeenCalled();
 		expect(writeUserSettings).not.toHaveBeenCalled();
 	});
+
+	it("accepts null aiConsentAt to clear consent", async () => {
+		getUserSettings.mockResolvedValue({ theme: "dark" });
+
+		const { action } = await import("~/routes/api/mobile/v1.settings");
+		await action({
+			request: patchRequest({ aiConsentAt: null }),
+			context: ctx,
+			params: {},
+		} as never);
+
+		expect(patchUserSettings).toHaveBeenCalledWith(
+			{},
+			"user_1",
+			expect.objectContaining({ aiConsentAt: null }),
+		);
+	});
 });

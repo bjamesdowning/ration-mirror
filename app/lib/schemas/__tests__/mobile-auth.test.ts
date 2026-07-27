@@ -67,6 +67,13 @@ describe("MobileSettingsPatchSchema", () => {
 		expect(parsed.onboardingStep).toBe(3);
 	});
 
+	it("accepts null aiConsentAt to withdraw consent", () => {
+		const parsed = MobileSettingsPatchSchema.parse({
+			aiConsentAt: null,
+		});
+		expect(parsed.aiConsentAt).toBeNull();
+	});
+
 	it("rejects empty patch objects", () => {
 		const result = MobileSettingsPatchSchema.safeParse({});
 		expect(result.success).toBe(false);

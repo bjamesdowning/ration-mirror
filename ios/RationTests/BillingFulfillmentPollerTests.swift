@@ -162,7 +162,8 @@ final class BillingFulfillmentPollerTests: XCTestCase {
             accountTier: accountTier,
             accountTierExpired: false,
             organizationTier: organizationTier,
-            organizationTierExpired: false
+            organizationTierExpired: false,
+            cancelAtPeriodEnd: false
         )
     }
 }

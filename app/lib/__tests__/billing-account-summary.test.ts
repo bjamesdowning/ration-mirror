@@ -15,6 +15,11 @@ vi.mock("drizzle-orm/d1", () => ({
 			user: { findFirst: mockUserFindFirst },
 			organization: { findFirst: mockOrgFindFirst },
 		},
+		update: vi.fn(() => ({
+			set: vi.fn(() => ({
+				where: vi.fn().mockResolvedValue(undefined),
+			})),
+		})),
 	})),
 }));
 

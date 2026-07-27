@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	RC_ENTITLEMENT_CREW_MEMBER,
 	RC_PRODUCT_CREDITS,
@@ -8,10 +8,33 @@ import {
 	assertCanPurchaseStripeSubscription,
 	getBillingStatusForUser,
 	processRevenueCatWebhookEvent,
+	reconcileSubscriptionCancelAtPeriodEnd,
 } from "~/lib/billing.server";
 import { createMockEnv } from "~/test/helpers/mock-env";
 
+const mockUserFindFirst = vi.fn();
+const mockUserUpdate = vi.fn();
+
+vi.mock("drizzle-orm/d1", () => ({
+	drizzle: vi.fn(() => ({
+		query: {
+			user: { findFirst: mockUserFindFirst },
+		},
+		update: vi.fn(() => ({
+			set: vi.fn(() => ({
+				where: mockUserUpdate,
+			})),
+		})),
+	})),
+}));
+
 describe("processRevenueCatWebhookEvent", () => {
+	beforeEach(() => {
+		mockUserFindFirst.mockReset();
+		mockUserUpdate.mockReset();
+		mockUserUpdate.mockResolvedValue(undefined);
+	});
+
 	it("acknowledges valid events without fulfilling when flag is off", async () => {
 		const env = createMockEnv();
 		const result = await processRevenueCatWebhookEvent(env, {
@@ -35,6 +58,12 @@ describe("processRevenueCatWebhookEvent", () => {
 });
 
 describe("assertCanPurchaseStripeSubscription", () => {
+	beforeEach(() => {
+		mockUserFindFirst.mockReset();
+		mockUserUpdate.mockReset();
+		mockUserUpdate.mockResolvedValue(undefined);
+	});
+
 	it("blocks Stripe checkout when active App Store entitlement exists", async () => {
 		const env = createMockEnv();
 		env.REVENUECAT_API_KEY = "sk_test_rc";
@@ -58,9 +87,6 @@ describe("assertCanPurchaseStripeSubscription", () => {
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
-		const { assertCanPurchaseStripeSubscription } = await import(
-			"~/lib/billing.server"
-		);
 		const result = await assertCanPurchaseStripeSubscription(env, "user_1");
 		expect(result.allowed).toBe(false);
 		if (!result.allowed) {
@@ -98,8 +124,98 @@ describe("RC_PRODUCT_CREDITS", () => {
 	});
 });
 
+describe("reconcileSubscriptionCancelAtPeriodEnd", () => {
+	beforeEach(() => {
+		mockUserFindFirst.mockReset();
+		mockUserUpdate.mockReset();
+		mockUserUpdate.mockResolvedValue(undefined);
+		mockUserFindFirst.mockResolvedValue({
+			subscriptionCancelAtPeriodEnd: false,
+			tierExpiresAt: null,
+		});
+	});
+
+	it("sets D1 cancel flag when RC unsubscribe_detected_at is present", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					subscriber: {
+						entitlements: {
+							[RC_ENTITLEMENT_CREW_MEMBER]: {
+								identifier: RC_ENTITLEMENT_CREW_MEMBER,
+								is_active: true,
+								expires_date: "2026-07-28T00:00:00Z",
+								product_identifier: "crew_monthly",
+								store: "app_store",
+							},
+						},
+						subscriptions: {
+							crew_monthly: {
+								expires_date: "2026-07-28T00:00:00Z",
+								unsubscribe_detected_at: "2026-07-20T12:00:00Z",
+								store: "app_store",
+							},
+						},
+					},
+				}),
+			}),
+		);
+
+		const result = await reconcileSubscriptionCancelAtPeriodEnd(env, "user_1");
+		expect(result.cancelAtPeriodEnd).toBe(true);
+		expect(mockUserUpdate).toHaveBeenCalled();
+
+		vi.unstubAllGlobals();
+	});
+
+	it("leaves Stripe cancel flag alone when RC has no crew subscription row", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+		mockUserFindFirst.mockResolvedValue({
+			subscriptionCancelAtPeriodEnd: true,
+			tierExpiresAt: null,
+		});
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					subscriber: {
+						entitlements: {},
+						subscriptions: {},
+					},
+				}),
+			}),
+		);
+
+		const result = await reconcileSubscriptionCancelAtPeriodEnd(env, "user_1");
+		expect(result.cancelAtPeriodEnd).toBe(true);
+		expect(mockUserUpdate).not.toHaveBeenCalled();
+
+		vi.unstubAllGlobals();
+	});
+});
+
 describe("getBillingStatusForUser", () => {
-	it("treats free accountTier as inactive even when RC has no crew entitlement", async () => {
+	beforeEach(() => {
+		mockUserFindFirst.mockReset();
+		mockUserUpdate.mockReset();
+		mockUserUpdate.mockResolvedValue(undefined);
+		mockUserFindFirst.mockResolvedValue({
+			subscriptionCancelAtPeriodEnd: false,
+			tierExpiresAt: null,
+		});
+	});
+
+	it("treats free account tier as inactive even when RC has no crew entitlement", async () => {
 		const env = createMockEnv();
 		env.REVENUECAT_API_KEY = "sk_test_rc";
 
@@ -109,6 +225,7 @@ describe("getBillingStatusForUser", () => {
 			json: async () => ({
 				subscriber: {
 					entitlements: {},
+					subscriptions: {},
 					management_url: null,
 				},
 			}),
@@ -119,11 +236,12 @@ describe("getBillingStatusForUser", () => {
 		expect(status.tier).toBe("free");
 		expect(status.entitlements.crew_member.active).toBe(false);
 		expect(status.canPurchaseSubscription).toBe(true);
+		expect(status.cancelAtPeriodEnd).toBe(false);
 
 		vi.unstubAllGlobals();
 	});
 
-	it("marks crew active from personal accountTier when RC entitlement is absent", async () => {
+	it("marks crew active from personal account tier when RC entitlement is absent", async () => {
 		const env = createMockEnv();
 		env.REVENUECAT_API_KEY = "sk_test_rc";
 
@@ -133,6 +251,7 @@ describe("getBillingStatusForUser", () => {
 			json: async () => ({
 				subscriber: {
 					entitlements: {},
+					subscriptions: {},
 					management_url: null,
 				},
 			}),

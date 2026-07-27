@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { evaluateAccountDeletionEligibility } from "~/lib/account-deletion-gate";
 import { revokeAppleTokensForUser } from "~/lib/apple-token-revoke.server";
+import { reconcileSubscriptionCancelAtPeriodEnd } from "~/lib/billing.server";
 import { purgeCopilotConversationsForUser } from "~/lib/copilot/purge.server";
 import { retryOnD1Contention } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
@@ -63,10 +64,28 @@ export async function assertAccountDeletionAllowed(
 		throw new Error("User not found");
 	}
 
+	const { cancelAtPeriodEnd } = await reconcileSubscriptionCancelAtPeriodEnd(
+		env,
+		userId,
+	);
+
+	const refreshed = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: {
+			email: true,
+			tier: true,
+			tierExpiresAt: true,
+			stripeCustomerId: true,
+		},
+	});
+	if (!refreshed) {
+		throw new Error("User not found");
+	}
+
 	const eligibility = evaluateAccountDeletionEligibility({
-		tier: user.tier,
-		tierExpiresAt: user.tierExpiresAt,
-		subscriptionCancelAtPeriodEnd: user.subscriptionCancelAtPeriodEnd,
+		tier: refreshed.tier,
+		tierExpiresAt: refreshed.tierExpiresAt,
+		subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd,
 	});
 
 	if (!eligibility.canDelete) {
@@ -74,8 +93,8 @@ export async function assertAccountDeletionAllowed(
 	}
 
 	return {
-		email: user.email,
-		stripeCustomerId: user.stripeCustomerId ?? null,
+		email: refreshed.email,
+		stripeCustomerId: refreshed.stripeCustomerId ?? null,
 		eligibility,
 	};
 }

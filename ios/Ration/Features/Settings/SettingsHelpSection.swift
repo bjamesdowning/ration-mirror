@@ -11,7 +11,6 @@ struct SettingsHelpSection: View {
             Link("Report a bug", destination: AppConfig.gitlabIssuesURL)
             Link("Developer MCP setup", destination: AppConfig.helpDocsURL)
             Link("Visit blog", destination: AppConfig.blogURL)
-            Link("Account & billing on web", destination: AppConfig.webOriginURL)
         }
     }
 }

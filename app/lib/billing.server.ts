@@ -23,6 +23,8 @@ import { addCredits, checkBalance } from "~/lib/ledger.server";
 import { log, redactId } from "~/lib/logging.server";
 import { getMemberRole } from "~/lib/org-supply-settings.server";
 import {
+	crewCancelAtPeriodEndFromSubscriber,
+	crewExpiresAtFromSubscriber,
 	getSubscriber,
 	isRevenueCatApiConfigured,
 	isRevenueCatFulfillmentEnabled,
@@ -53,6 +55,8 @@ export type BillingStatus = {
 	canPurchaseSubscription: boolean;
 	purchaseBlockReason: string | null;
 	billingUnavailable: boolean;
+	/** True when Crew is active but set to end (cancel-at-period-end). */
+	cancelAtPeriodEnd: boolean;
 };
 
 export type PurchaseGuardResult =
@@ -67,6 +71,109 @@ function crewEntitlementFromSubscriber(
 	entitlements: Record<string, RevenueCatEntitlementInfo>,
 ): RevenueCatEntitlementInfo | null {
 	return entitlements[RC_ENTITLEMENT_CREW_MEMBER] ?? null;
+}
+
+function emptyBillingStatus(
+	accountTier: string,
+	opts: {
+		canPurchaseSubscription: boolean;
+		purchaseBlockReason: string | null;
+		billingUnavailable: boolean;
+		cancelAtPeriodEnd?: boolean;
+	},
+): BillingStatus {
+	return {
+		tier: accountTier,
+		entitlements: {
+			crew_member: {
+				active: accountTier === "crew_member",
+				expiresAt: null,
+				store: null,
+			},
+		},
+		management: { store: null, url: null },
+		canPurchaseSubscription: opts.canPurchaseSubscription,
+		purchaseBlockReason: opts.purchaseBlockReason,
+		billingUnavailable: opts.billingUnavailable,
+		cancelAtPeriodEnd: opts.cancelAtPeriodEnd ?? false,
+	};
+}
+
+/**
+ * Sync D1 `subscription_cancel_at_period_end` (and optionally `tier_expires_at`)
+ * from RevenueCat REST when webhooks lagged or were missed.
+ * Returns the reconciled cancel-at-period-end flag (D1 after write, or prior D1 if RC unavailable).
+ *
+ * Only mutates the cancel flag when RC has a Crew entitlement with a matching
+ * subscriptions row — avoids clearing Stripe-managed cancel-at-period-end.
+ */
+export async function reconcileSubscriptionCancelAtPeriodEnd(
+	env: Env,
+	userId: string,
+): Promise<{ cancelAtPeriodEnd: boolean }> {
+	const db = drizzle(env.DB, { schema });
+	const userRow = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: {
+			subscriptionCancelAtPeriodEnd: true,
+			tierExpiresAt: true,
+		},
+	});
+	const d1Flag = Boolean(userRow?.subscriptionCancelAtPeriodEnd);
+
+	if (!isRevenueCatApiConfigured(env)) {
+		return { cancelAtPeriodEnd: d1Flag };
+	}
+
+	const subscriber = await getSubscriber(env, userId);
+	if (subscriber === null) {
+		return { cancelAtPeriodEnd: d1Flag };
+	}
+
+	const crew = subscriber.entitlements[RC_ENTITLEMENT_CREW_MEMBER];
+	const productId = crew?.product_identifier;
+	const subscription =
+		productId && productId.length > 0
+			? subscriber.subscriptions[productId]
+			: undefined;
+
+	if (!crew || !subscription) {
+		return { cancelAtPeriodEnd: d1Flag };
+	}
+
+	const rcCancel = crewCancelAtPeriodEndFromSubscriber(subscriber);
+	const rcExpiresAt = crewExpiresAtFromSubscriber(subscriber);
+	const updates: {
+		subscriptionCancelAtPeriodEnd?: boolean;
+		tierExpiresAt?: Date;
+	} = {};
+
+	if (rcCancel !== d1Flag) {
+		updates.subscriptionCancelAtPeriodEnd = rcCancel;
+	}
+
+	if (rcExpiresAt) {
+		const nextExpiry = new Date(rcExpiresAt);
+		if (!Number.isNaN(nextExpiry.getTime())) {
+			const currentMs = userRow?.tierExpiresAt
+				? new Date(userRow.tierExpiresAt).getTime()
+				: null;
+			if (currentMs !== nextExpiry.getTime()) {
+				updates.tierExpiresAt = nextExpiry;
+			}
+		}
+	}
+
+	if (Object.keys(updates).length > 0) {
+		await db.update(schema.user).set(updates).where(eq(schema.user.id, userId));
+		log.info("Reconciled subscription cancel-at-period-end from RevenueCat", {
+			userId: redactId(userId),
+			cancelAtPeriodEnd: rcCancel,
+			updatedExpiresAt: Boolean(updates.tierExpiresAt),
+		});
+	}
+
+	return { cancelAtPeriodEnd: rcCancel };
 }
 
 export async function assertCanPurchaseStripeSubscription(
@@ -115,41 +222,37 @@ export async function getBillingStatusForUser(
 	env: Env,
 	userId: string,
 	accountTier: string,
+	options?: {
+		/** Skip RC reconcile when the caller already reconciled for this request. */
+		skipReconcile?: boolean;
+		/** Required when `skipReconcile` is true. */
+		cancelAtPeriodEnd?: boolean;
+	},
 ): Promise<BillingStatus> {
+	const cancelAtPeriodEnd =
+		options?.skipReconcile === true
+			? Boolean(options.cancelAtPeriodEnd)
+			: (await reconcileSubscriptionCancelAtPeriodEnd(env, userId))
+					.cancelAtPeriodEnd;
+
 	if (!isRevenueCatApiConfigured(env)) {
-		return {
-			tier: accountTier,
-			entitlements: {
-				crew_member: {
-					active: accountTier === "crew_member",
-					expiresAt: null,
-					store: null,
-				},
-			},
-			management: { store: null, url: null },
+		return emptyBillingStatus(accountTier, {
 			canPurchaseSubscription: true,
 			purchaseBlockReason: null,
 			billingUnavailable: false,
-		};
+			cancelAtPeriodEnd,
+		});
 	}
 
 	const subscriber = await getSubscriber(env, userId);
 	if (subscriber === null) {
-		return {
-			tier: accountTier,
-			entitlements: {
-				crew_member: {
-					active: accountTier === "crew_member",
-					expiresAt: null,
-					store: null,
-				},
-			},
-			management: { store: null, url: null },
+		return emptyBillingStatus(accountTier, {
 			canPurchaseSubscription: false,
 			purchaseBlockReason:
 				"Unable to load billing status. Pull to refresh or try again shortly.",
 			billingUnavailable: true,
-		};
+			cancelAtPeriodEnd,
+		});
 	}
 
 	const crew = crewEntitlementFromSubscriber(subscriber.entitlements);
@@ -172,6 +275,8 @@ export async function getBillingStatusForUser(
 		canPurchaseSubscription: purchaseCheck.allowed,
 		purchaseBlockReason: purchaseCheck.allowed ? null : purchaseCheck.reason,
 		billingUnavailable: false,
+		cancelAtPeriodEnd:
+			cancelAtPeriodEnd || crewCancelAtPeriodEndFromSubscriber(subscriber),
 	};
 }
 
@@ -379,8 +484,10 @@ export async function getBillingAccountSummary(
 		account: {
 			tier: accountTier,
 			tierExpired: accountTierExpired,
-			renewsOrEndsAt: toIsoTimestamp(userRow?.tierExpiresAt ?? null),
-			cancelAtPeriodEnd: Boolean(userRow?.subscriptionCancelAtPeriodEnd),
+			renewsOrEndsAt:
+				billingStatus.entitlements.crew_member.expiresAt ??
+				toIsoTimestamp(userRow?.tierExpiresAt ?? null),
+			cancelAtPeriodEnd: billingStatus.cancelAtPeriodEnd,
 			crewSubscribedAt: toIsoTimestamp(userRow?.crewSubscribedAt ?? null),
 		},
 		organization: {

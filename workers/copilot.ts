@@ -13,6 +13,7 @@ import {
 } from "agents";
 import type { ToolSet } from "ai";
 import { formatCopilotTemporalContextAppend } from "../app/lib/agent/temporal-context.server";
+import { getUserSettings } from "../app/lib/auth.server";
 import { resolveCopilotActiveTools } from "../app/lib/copilot/active-tools.server";
 import { authenticateCopilot } from "../app/lib/copilot/auth.server";
 import {
@@ -927,6 +928,18 @@ export default {
 
 		try {
 			const identity = await authenticateCopilot(env, request);
+			if (identity.source === "mobile") {
+				const settings = await getUserSettings(env.DB, identity.userId);
+				const consentAt = settings.aiConsentAt;
+				if (typeof consentAt !== "string" || consentAt.trim().length === 0) {
+					return jsonResponse(
+						request,
+						env,
+						{ error: "ai_consent_required" },
+						{ status: 403 },
+					);
+				}
+			}
 			const flagContext = buildFlagContext(request, env, {
 				user: { id: identity.userId },
 			});

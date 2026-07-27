@@ -608,11 +608,13 @@ export async function getUserSettings(
 /**
  * Merge a partial settings patch into the user's existing settings and persist.
  * Uses a read-then-write pattern; keys not present in `patch` are preserved.
+ * Explicit `null` values remove the corresponding key from stored settings
+ * (e.g. withdrawing AI consent via `aiConsentAt: null`).
  */
 export async function patchUserSettings(
 	db: D1Database,
 	userId: string,
-	patch: Partial<UserSettings>,
+	patch: Partial<UserSettings> & Record<string, unknown>,
 ): Promise<void> {
 	const drizzleDb = drizzle(db, { schema });
 	const row = await drizzleDb.query.user.findFirst({
@@ -620,9 +622,15 @@ export async function patchUserSettings(
 		columns: { settings: true },
 	});
 	const current = (row?.settings as UserSettings) ?? {};
+	const next: UserSettings = { ...current, ...patch };
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === null) {
+			delete next[key];
+		}
+	}
 	await drizzleDb
 		.update(schema.user)
-		.set({ settings: { ...current, ...patch } })
+		.set({ settings: next })
 		.where(eq(schema.user.id, userId));
 }
 

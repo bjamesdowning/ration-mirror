@@ -13,7 +13,7 @@ struct PrivacySettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Ration processes photos, receipt images, pantry items, recipe text, and allergy preferences through Cloudflare Workers and AI providers to power scans, meal matching, and planning.")
+                    Text(AIConsentCopy.body)
                         .font(Typography.body())
                 } header: {
                     Text("AI Processing & Receipt Privacy")
@@ -23,7 +23,7 @@ struct PrivacySettingsView: View {
                     Toggle("Allow AI processing", isOn: $hasConsent)
                         .tint(Theme.hyperGreen)
                 } footer: {
-                    Text("Turn off to stop new AI processing. Consent already granted stays on record until you contact support.")
+                    Text("Turn off to stop new AI processing. You will be asked to agree again before the next AI feature use.")
                 }
 
                 Section("Legal") {
@@ -68,9 +68,14 @@ struct PrivacySettingsView: View {
         errorMessage = nil
         defer { isSaving = false }
         do {
-            let patch = SettingsPatch(
-                aiConsentAt: hasConsent ? ISO8601DateFormatter().string(from: Date()) : nil
-            )
+            let patch: SettingsPatch
+            if hasConsent {
+                patch = SettingsPatch(
+                    aiConsentAt: ISO8601DateFormatter().string(from: Date())
+                )
+            } else {
+                patch = SettingsPatch(clearAIConsent: true)
+            }
             let response = try await env.api.patchSettings(patch)
             // Reuse the response already returned by the PATCH instead of a
             // second `GET /settings` round-trip just to re-derive the flag.
@@ -83,11 +88,17 @@ struct PrivacySettingsView: View {
     }
 }
 
+enum AIConsentCopy {
+    static let title = "AI features use cloud processing"
+    static let body =
+        "Ration may send photos, receipt images, pantry items, recipe text, and allergy preferences to Google Gemini (via Cloudflare AI Gateway) and Cloudflare Workers AI for receipt scans, meal generation and import, Manifest plan week, and Ask Ration. See the Privacy Policy for details."
+}
+
 /// Gate shown before the first AI feature use when consent has not been recorded.
 struct AIConsentGateView: View {
     @Environment(\.openURL) private var openURL
-    var title: String = "AI features use cloud processing"
-    var message: String = "Your photos, text, and preferences may be sent to Ration cloud services and AI providers for processing. See Privacy & AI in Settings to manage consent."
+    var title: String = AIConsentCopy.title
+    var message: String = AIConsentCopy.body
     let onAccept: () -> Void
     let onDecline: () -> Void
 

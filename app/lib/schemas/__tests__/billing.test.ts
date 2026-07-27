@@ -102,6 +102,7 @@ describe("MobileBillingStatusSchema", () => {
 			purchaseBlockReason: null,
 			billingUnavailable: false,
 			credits: 12,
+			cancelAtPeriodEnd: false,
 		});
 		expect(parsed.success).toBe(true);
 	});
@@ -123,6 +124,7 @@ describe("MobileBillingStatusSchema", () => {
 			purchaseBlockReason: null,
 			billingUnavailable: false,
 			credits: 0,
+			cancelAtPeriodEnd: false,
 		});
 		expect(parsed.success).toBe(false);
 	});
@@ -145,6 +147,7 @@ describe("MobileBillingStatusSchema", () => {
 			canPurchaseSubscription: true,
 			purchaseBlockReason: null,
 			billingUnavailable: false,
+			cancelAtPeriodEnd: false,
 		});
 		expect(parsed.success).toBe(false);
 	});

@@ -97,6 +97,11 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 						canPurchaseSubscription: { type: "boolean" },
 						purchaseBlockReason: { type: "string", nullable: true },
 						billingUnavailable: { type: "boolean" },
+						cancelAtPeriodEnd: {
+							type: "boolean",
+							description:
+								"Crew is entitled but set to end (cancel-at-period-end).",
+						},
 					},
 					required: [
 						"tier",
@@ -110,6 +115,7 @@ export function buildMobileOpenApiDocument(baseUrl: string) {
 						"canPurchaseSubscription",
 						"purchaseBlockReason",
 						"billingUnavailable",
+						"cancelAtPeriodEnd",
 					],
 				},
 				CopilotMessage: zodOpenApiComponent(

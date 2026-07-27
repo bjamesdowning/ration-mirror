@@ -24,7 +24,11 @@ Sign-in: On Sign In, enter User Name (app-review@mayutic.com) in Email —
 a Password field then appears. Enter the Password from Review Information
 and tap Continue. Do not use Sign in with Apple / Google.
 No 2FA. Account is pre-seeded (Cargo, Galley, Manifest, Supply).
-AI features may show a one-time privacy consent gate.
+AI features (scan, generate, import, plan week, Ask, onboarding) may show a
+one-time consent gate naming Google Gemini and Cloudflare Workers AI.
+Account deletion: Settings → Account → type delete to confirm.
+Subscriptions: Manage / cancel via paywall Manage subscription (Apple).
+Cancelled Crew stays Active until the period ends; delete unlocks after cancel.
 Backend: https://ration.mayutic.com — live, no VPN.
 ```
 
@@ -46,7 +50,8 @@ Backend: https://ration.mayutic.com — live, no VPN.
 - **Consumables:** Credit packs (`credits_s`, `credits_m`, `credits_l`, `credits_xl`) via RevenueCat consumable products.
 - **Restore:** Always available on the paywall (Settings → Manage billing / Crew Member), including for active Crew.
 - **Manage / cancel (App Store):** Paywall **Manage subscription** opens Apple’s `showManageSubscriptions` sheet. Do not cancel Apple billing from Ration’s servers.
-- **Web Stripe:** Existing Stripe subscriptions are honored as account entitlements but new purchases on iOS use Apple IAP only.
+- **Cancel-at-period-end:** After Apple cancel, Crew remains Active until the period end date. Ration reconciles cancel-at-period-end from RevenueCat REST (and webhooks) so account deletion unlocks once the sub is set to end.
+- **Web Stripe:** Existing Stripe subscriptions are honored as account entitlements but new purchases on iOS use Apple IAP only. Paywall may show manage-on-web copy for an existing Stripe sub (not a purchase CTA). Help must not link to web billing.
 - **Metadata (3.1.2):** App Description must include a functional Terms of Use (EULA) link (and Privacy). Standard Apple EULA + Description footer — already configured in ASC; mirrored in `marketing/appstore/uk/COPY.md`.
 
 ### Demo account tier (paywall visibility)
@@ -56,16 +61,21 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 ## Account Deletion
 
 - Path: **Settings → Account → Delete account**
-- Requires typing `DELETE` to confirm.
+- Requires typing `delete` (lowercase) to confirm.
 - Permanently removes inventory, meals, supply, manifest, scans, and sessions.
+- Blocked while Crew auto-renews; allowed after cancel-at-period-end (with warning) or when Free.
 
 ## AI / Privacy
 
-- The first AI feature the user reaches — **any of** receipt scan, Generate meals, Import recipe, or Plan week — shows the **AI Processing & Receipt Privacy** consent gate exactly once; accepting from any one clears it for the other three (no repeat prompts, in-session or after app restart). Enforced server-side on all four AI submit endpoints (403 `ai_consent_required` if bypassed).
-- Consent state: Settings → Privacy & AI.
+- Consent gate names **Google Gemini (via Cloudflare AI Gateway)** and **Cloudflare Workers AI**, and covers scan, Generate meals, Import recipe, Plan week, Ask Ration, and onboarding. Accept once; withdraw anytime in Settings → Privacy & AI (re-prompts before next AI use).
+- Server enforces consent on scan / generate / import / plan-week (403 `ai_consent_required`). Mobile Ask/Copilot WebSocket also returns 403 `ai_consent_required` when consent is missing.
 - Privacy policy: https://ration.mayutic.com/legal/privacy
 - Terms: https://ration.mayutic.com/legal/terms
-- `PrivacyInfo.xcprivacy` privacy manifest is present in the app bundle (declared API reasons: `UserDefaults`, `FileTimestamp`; no tracking). Verify via Xcode's Privacy Report before each submission.
+- `PrivacyInfo.xcprivacy` declares collected types including **Health** (allergens / dietary preferences for meal safety — App Functionality, not tracking).
+
+### ASC App Privacy Nutrition (operator)
+
+Declare **Health** (allergens / dietary preferences): linked to the user, used for App Functionality, **not** used for tracking. Align ASC answers with the binary PrivacyInfo Health entry.
 
 ## Support
 
@@ -78,7 +88,6 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 |-----|---------|
 | `NSCameraUsageDescription` | Receipt scanning |
 | `NSPhotoLibraryUsageDescription` | Receipt/pantry photos, Supply imports, profile/group images |
-| `NSUserNotificationsUsageDescription` | Optional expiration/meal reminders |
 
 ## Device
 
@@ -90,13 +99,17 @@ Before each App Review window, confirm `app-review@mayutic.com` (`d773eefb-e112-
 2. [ ] Flagship `app-review-login` **enabled**
 3. [ ] ASC Review Information password matches `APP_REVIEW_DEMO_PASSWORD`
 4. [ ] On device: Sign In with demo email → password → Settings → billing shows **Inactive** Crew and **1 month** / **1 year** packages + Restore + Terms/Privacy
-5. [ ] Upload new binary when paywall/consent/plist changed; Description EULA footer already in ASC
-6. [ ] After approval: disable `app-review-login`
+5. [ ] Sandbox: offerings load; one purchase + Restore; cancel → paywall shows Active until date / Delete Account unlocks
+6. [ ] ASC App Privacy: Health (allergens) declared; Description EULA/Terms/Privacy footer present; Support + Privacy URLs live
+7. [ ] RevenueCat: App Store Server Notifications enabled (reduces cancel webhook lag)
+8. [ ] Upload new binary when paywall/consent/plist changed
+9. [ ] After approval: disable `app-review-login`
 
 ## Sandbox Checklist
 
 - [ ] Magic link sign-in on physical device
 - [ ] Crew Member subscription purchase + restore
+- [ ] Cancel subscription → status shows Active until period end; Delete Account allowed after cancel-at-period-end sync
 - [ ] Credit pack purchase credits ledger update via RC webhook
 - [ ] Receipt scan → review → confirm to Cargo
 - [ ] Account deletion end-to-end

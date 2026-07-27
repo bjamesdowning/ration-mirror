@@ -52,8 +52,8 @@ export interface UserSettings {
 	supplyUnitMode?: "cooking" | "metric" | "imperial";
 	/** Global quantity display mode across Cargo, Galley, and Supply. */
 	unitDisplayMode?: "original" | "cooking" | "metric" | "imperial";
-	/** ISO timestamp when the user consented to AI/receipt processing on mobile. */
-	aiConsentAt?: string;
+	/** ISO timestamp when the user consented to AI/receipt processing on mobile. Null clears consent. */
+	aiConsentAt?: string | null;
 	/** ISO timestamp of last Hub, API, or MCP activity (throttled writes). */
 	lastActiveAt?: string;
 	/** ISO timestamp when the 30-day inactivity re-engagement email was last sent. */

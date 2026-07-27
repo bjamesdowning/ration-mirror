@@ -35,6 +35,7 @@ import {
 	writeUserSettings,
 } from "~/lib/auth.server";
 import { authClient } from "~/lib/auth-client";
+import { reconcileSubscriptionCancelAtPeriodEnd } from "~/lib/billing.server";
 import {
 	checkOwnedGroupCapacity,
 	getGroupTierLimits,
@@ -337,11 +338,24 @@ export async function loader(args: Route.LoaderArgs) {
 			}
 		}
 
+		const { cancelAtPeriodEnd } = await reconcileSubscriptionCancelAtPeriodEnd(
+			env,
+			userId,
+		);
+
+		const refreshedUser = await db.query.user.findFirst({
+			where: eq(schema.user.id, userId),
+			columns: {
+				tier: true,
+				tierExpiresAt: true,
+				subscriptionCancelAtPeriodEnd: true,
+			},
+		});
+
 		const accountDeletion = evaluateAccountDeletionEligibility({
-			tier: user.tier ?? "free",
-			tierExpiresAt: user.tierExpiresAt ?? null,
-			subscriptionCancelAtPeriodEnd:
-				user.subscriptionCancelAtPeriodEnd ?? false,
+			tier: refreshedUser?.tier ?? user.tier ?? "free",
+			tierExpiresAt: refreshedUser?.tierExpiresAt ?? user.tierExpiresAt ?? null,
+			subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd,
 		});
 
 		const isPersonalGroup = isPersonalOrganization(
@@ -367,10 +381,9 @@ export async function loader(args: Route.LoaderArgs) {
 			credits,
 			transactionStatus,
 			isAdmin: user.isAdmin ?? false,
-			tier: user.tier ?? "free",
-			tierExpiresAt: user.tierExpiresAt ?? null,
-			subscriptionCancelAtPeriodEnd:
-				user.subscriptionCancelAtPeriodEnd ?? false,
+			tier: refreshedUser?.tier ?? user.tier ?? "free",
+			tierExpiresAt: refreshedUser?.tierExpiresAt ?? user.tierExpiresAt ?? null,
+			subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd,
 			accountDeletion,
 			apiKeys,
 			connectedAgents,

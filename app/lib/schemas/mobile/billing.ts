@@ -25,4 +25,6 @@ export const MobileBillingStatusSchema = z.object({
 	purchaseBlockReason: z.string().nullable(),
 	billingUnavailable: z.boolean(),
 	credits: z.number().int().nonnegative(),
+	/** True when Crew is active but set to end (cancel-at-period-end). */
+	cancelAtPeriodEnd: z.boolean(),
 });

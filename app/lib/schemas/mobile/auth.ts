@@ -104,7 +104,7 @@ export const MobileSettingsPatchSchema = z
 			.optional(),
 		allergens: z.array(z.enum(ALLERGEN_SLUGS)).optional(),
 		/** ISO timestamp when the user consented to AI/receipt processing. */
-		aiConsentAt: isoTimestamp.optional(),
+		aiConsentAt: isoTimestamp.nullable().optional(),
 		onboardingCompletedAt: isoTimestamp.optional(),
 		onboardingStep: z.coerce.number().int().min(0).max(6).optional(),
 		expirationAlertDays: z.coerce.number().int().min(1).max(90).optional(),

@@ -42,6 +42,8 @@ struct BillingStatus: Codable, Sendable {
     /// Active organization owner-derived capacity tier.
     let organizationTier: String?
     let organizationTierExpired: Bool?
+    /// Crew still entitled but set to end (cancel-at-period-end).
+    let cancelAtPeriodEnd: Bool?
 
     /// Personal Crew subscription ownership — not household-only capacity.
     var isPersonalCrewActive: Bool {
@@ -51,4 +53,6 @@ struct BillingStatus: Codable, Sendable {
             fallbackTier: tier
         )
     }
+
+    var isCancelAtPeriodEnd: Bool { cancelAtPeriodEnd == true }
 }

@@ -1,3 +1,4 @@
+import { RC_ENTITLEMENT_CREW_MEMBER } from "~/lib/billing.constants";
 import { log, redactId } from "~/lib/logging.server";
 
 const RC_API_BASE = "https://api.revenuecat.com/v1";
@@ -11,14 +12,23 @@ export type RevenueCatEntitlementInfo = {
 	management_url?: string | null;
 };
 
+/** Per-product subscription row from GET /v1/subscribers. */
+export type RevenueCatSubscriptionInfo = {
+	expires_date?: string | null;
+	unsubscribe_detected_at?: string | null;
+	store?: string | null;
+};
+
 export type RevenueCatSubscriber = {
 	entitlements: Record<string, RevenueCatEntitlementInfo>;
+	subscriptions: Record<string, RevenueCatSubscriptionInfo>;
 	management_url?: string | null;
 };
 
 type RevenueCatSubscriberResponse = {
 	subscriber: {
 		entitlements?: Record<string, RevenueCatEntitlementInfo>;
+		subscriptions?: Record<string, RevenueCatSubscriptionInfo>;
 		management_url?: string | null;
 	};
 };
@@ -48,6 +58,35 @@ export function verifyRevenueCatWebhookAuth(
 	return token.length > 0 && token === secret;
 }
 
+/**
+ * True when the Crew entitlement's backing subscription has
+ * `unsubscribe_detected_at` set (cancelled / will not renew, may still be active).
+ */
+export function crewCancelAtPeriodEndFromSubscriber(
+	subscriber: RevenueCatSubscriber,
+): boolean {
+	const crew = subscriber.entitlements[RC_ENTITLEMENT_CREW_MEMBER];
+	if (!crew) return false;
+
+	const productId = crew.product_identifier;
+	if (!productId) return false;
+
+	const subscription = subscriber.subscriptions[productId];
+	if (!subscription) return false;
+
+	const unsubscribed = subscription.unsubscribe_detected_at;
+	return typeof unsubscribed === "string" && unsubscribed.trim().length > 0;
+}
+
+/** Crew entitlement expires_date when present (ISO), else null. */
+export function crewExpiresAtFromSubscriber(
+	subscriber: RevenueCatSubscriber,
+): string | null {
+	const crew = subscriber.entitlements[RC_ENTITLEMENT_CREW_MEMBER];
+	const expires = crew?.expires_date;
+	return typeof expires === "string" && expires.length > 0 ? expires : null;
+}
+
 export async function getSubscriber(
 	env: Env,
 	appUserId: string,
@@ -65,7 +104,7 @@ export async function getSubscriber(
 	);
 
 	if (response.status === 404) {
-		return { entitlements: {} };
+		return { entitlements: {}, subscriptions: {} };
 	}
 
 	if (!response.ok) {
@@ -79,6 +118,7 @@ export async function getSubscriber(
 	const body = (await response.json()) as RevenueCatSubscriberResponse;
 	return {
 		entitlements: body.subscriber?.entitlements ?? {},
+		subscriptions: body.subscriber?.subscriptions ?? {},
 		management_url: body.subscriber?.management_url ?? null,
 	};
 }

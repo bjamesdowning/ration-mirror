@@ -84,6 +84,7 @@ describe("GET /api/mobile/v1/billing/status", () => {
 			canPurchaseSubscription: true,
 			purchaseBlockReason: null,
 			billingUnavailable: false,
+			cancelAtPeriodEnd: false,
 		});
 	});
 
@@ -109,6 +110,7 @@ describe("GET /api/mobile/v1/billing/status", () => {
 			entitlements: { crew_member: { active: false } },
 			canPurchaseSubscription: true,
 			credits: 12,
+			cancelAtPeriodEnd: false,
 		});
 	});
 
@@ -133,6 +135,7 @@ describe("GET /api/mobile/v1/billing/status", () => {
 			canPurchaseSubscription: false,
 			purchaseBlockReason: "App Store",
 			billingUnavailable: false,
+			cancelAtPeriodEnd: true,
 		});
 
 		const { loader } = await import("~/routes/api/mobile/v1.billing.status");
@@ -151,6 +154,7 @@ describe("GET /api/mobile/v1/billing/status", () => {
 			accountTier: "crew_member",
 			organizationTier: "crew_member",
 			entitlements: { crew_member: { active: true } },
+			cancelAtPeriodEnd: true,
 		});
 	});
 });

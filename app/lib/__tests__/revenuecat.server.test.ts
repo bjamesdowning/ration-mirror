@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { RC_ENTITLEMENT_CREW_MEMBER } from "~/lib/billing.constants";
 import {
+	crewCancelAtPeriodEndFromSubscriber,
+	crewExpiresAtFromSubscriber,
 	isRevenueCatFulfillmentEnabled,
 	verifyRevenueCatWebhookAuth,
 } from "~/lib/revenuecat.server";
@@ -33,5 +36,66 @@ describe("isRevenueCatFulfillmentEnabled", () => {
 		const env = createMockEnv();
 		env.REVENUECAT_FULFILLMENT_ENABLED = "true";
 		expect(isRevenueCatFulfillmentEnabled(env)).toBe(true);
+	});
+});
+
+describe("crewCancelAtPeriodEndFromSubscriber", () => {
+	it("is true when unsubscribe_detected_at is set on the Crew product", () => {
+		expect(
+			crewCancelAtPeriodEndFromSubscriber({
+				entitlements: {
+					[RC_ENTITLEMENT_CREW_MEMBER]: {
+						identifier: RC_ENTITLEMENT_CREW_MEMBER,
+						is_active: true,
+						expires_date: "2026-07-28T00:00:00Z",
+						product_identifier: "crew_monthly",
+						store: "app_store",
+					},
+				},
+				subscriptions: {
+					crew_monthly: {
+						unsubscribe_detected_at: "2026-07-20T00:00:00Z",
+					},
+				},
+			}),
+		).toBe(true);
+	});
+
+	it("is false when still renewing", () => {
+		expect(
+			crewCancelAtPeriodEndFromSubscriber({
+				entitlements: {
+					[RC_ENTITLEMENT_CREW_MEMBER]: {
+						identifier: RC_ENTITLEMENT_CREW_MEMBER,
+						is_active: true,
+						expires_date: "2026-07-28T00:00:00Z",
+						product_identifier: "crew_monthly",
+					},
+				},
+				subscriptions: {
+					crew_monthly: {
+						unsubscribe_detected_at: null,
+					},
+				},
+			}),
+		).toBe(false);
+	});
+});
+
+describe("crewExpiresAtFromSubscriber", () => {
+	it("returns entitlement expires_date", () => {
+		expect(
+			crewExpiresAtFromSubscriber({
+				entitlements: {
+					[RC_ENTITLEMENT_CREW_MEMBER]: {
+						identifier: RC_ENTITLEMENT_CREW_MEMBER,
+						is_active: true,
+						expires_date: "2026-07-28T00:00:00Z",
+						product_identifier: "crew_monthly",
+					},
+				},
+				subscriptions: {},
+			}),
+		).toBe("2026-07-28T00:00:00Z");
 	});
 });

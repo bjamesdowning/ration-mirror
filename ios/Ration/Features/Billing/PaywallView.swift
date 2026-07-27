@@ -172,9 +172,10 @@ struct PaywallView: View {
                 HStack {
                     Text("Status").rationCaption()
                     Spacer()
-                    Text(status.isPersonalCrewActive ? "Active" : "Inactive")
+                    Text(statusLabel(status))
                         .font(Typography.headline())
                         .foregroundStyle(status.isPersonalCrewActive ? Theme.hyperGreen : Theme.muted)
+                        .multilineTextAlignment(.trailing)
                 }
                 HStack {
                     Text("Credits").rationCaption()
@@ -190,6 +191,29 @@ struct PaywallView: View {
                 }
             }
         }
+    }
+
+    private func statusLabel(_ status: BillingStatus) -> String {
+        guard status.isPersonalCrewActive else { return String(localized: "Inactive") }
+        if status.isCancelAtPeriodEnd, let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
+            return String(localized: "Active until \(ends)")
+        }
+        if status.isCancelAtPeriodEnd {
+            return String(localized: "Active · Cancelled")
+        }
+        return String(localized: "Active")
+    }
+
+    private func formattedExpiry(_ iso: String?) -> String? {
+        guard let iso else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        guard let date = withFraction.date(from: iso) ?? plain.date(from: iso) else {
+            return nil
+        }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 
     @ViewBuilder
@@ -277,15 +301,28 @@ struct PaywallView: View {
     private func activeSubscriberCard(_ status: BillingStatus) -> some View {
         GlassCard {
             VStack(spacing: 8) {
-                Text("You're a Crew Member").rationHeadline()
-                if status.management.store == "stripe" {
-                    Text("Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store.")
-                        .rationCaption()
-                        .multilineTextAlignment(.center)
+                if status.isCancelAtPeriodEnd {
+                    Text("Cancelled — access continues").rationHeadline()
+                    if let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
+                        Text("Your Crew membership ends on \(ends). Use Manage subscription below to renew through Apple.")
+                            .rationCaption()
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple.")
+                            .rationCaption()
+                            .multilineTextAlignment(.center)
+                    }
                 } else {
-                    Text("Use Manage subscription below to change or cancel through Apple.")
-                        .rationCaption()
-                        .multilineTextAlignment(.center)
+                    Text("You're a Crew Member").rationHeadline()
+                    if status.management.store == "stripe" {
+                        Text("Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store.")
+                            .rationCaption()
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Use Manage subscription below to change or cancel through Apple.")
+                            .rationCaption()
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
         }

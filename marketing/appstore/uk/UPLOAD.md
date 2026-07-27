@@ -62,7 +62,7 @@ Paste from [`COPY.md`](COPY.md) into **English (U.K.)**:
 - [ ] Privacy nutrition labels aligned with [`docs/legal/privacy.md`](../../../docs/legal/privacy.md)
 - [ ] Age rating questionnaire completed
 - [ ] App Review demo account is **Free** tier (not Crew) so subscribe paywall is visible — user `d773eefb-e112-4b75-abe2-066584cd3c1d` / `app-review@mayutic.com`
-- [ ] Paywall shows: Crew **1 month** / **1 year**, price, Restore purchases, Terms + Privacy, auto-renew disclosure; Manage subscription for App Store Crew
+- [ ] Paywall shows: **Monthly subscription** / **Annual subscription** (auto-renew copy), price, Restore purchases, Terms + Privacy; Manage subscription for App Store Crew. Annual ASC product id is `crew_annual_1yr`.
 
 ## App Review
 

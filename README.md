@@ -1952,7 +1952,7 @@ Create in RevenueCat dashboard — **not in Ration code**:
 | RevenueCat product ID | Type | Grants | Attach stores |
 |-----------------------|------|--------|---------------|
 | `crew_monthly` | Subscription | `crew_member` | Stripe Price + App Store sub |
-| `crew_annual` | Subscription | `crew_member` (no included credits) | Stripe Price + App Store sub |
+| `crew_annual_1yr` | Subscription | `crew_member` (no included credits) | App Store annual SKU (ASC); RC may also alias `crew_annual` |
 | `credits_s` | Consumable | 12 credits | Stripe + App Store |
 | `credits_m` | Consumable | 65 credits | Stripe + App Store |
 | `credits_l` | Consumable | 165 credits | Stripe + App Store |

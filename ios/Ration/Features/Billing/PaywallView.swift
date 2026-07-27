@@ -298,7 +298,7 @@ struct PaywallView: View {
             } else {
                 sectionHeader(
                     "Crew Member",
-                    caption: "Unlimited capacity and household features. Billed through the App Store."
+                    caption: "Auto-renewable subscriptions. Unlimited capacity and household features. Billed through the App Store — cancel anytime in Manage subscription."
                 )
                 ForEach(BillingProductCatalog.sorted(env.billing.subscriptionPackages)) { pkg in
                     purchaseRow(pkg, style: .primary)

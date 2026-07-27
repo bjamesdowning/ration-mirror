@@ -42,7 +42,7 @@ Backend: https://ration.mayutic.com — live, no VPN.
 
 ## In-App Purchases
 
-- **Subscriptions:** Crew Member via RevenueCat / App Store (`crew_monthly` = 1 month, `crew_annual` = 1 year).
+- **Subscriptions:** Crew Member via RevenueCat / App Store (`crew_monthly` = monthly subscription, `crew_annual_1yr` = annual subscription; legacy id `crew_annual` still mapped in the iOS catalog).
 - **Consumables:** Credit packs (`credits_s`, `credits_m`, `credits_l`, `credits_xl`) via RevenueCat consumable products.
 - **Restore:** Always available on the paywall (Settings → Manage billing / Crew Member), including for active Crew.
 - **Manage / cancel (App Store):** Paywall **Manage subscription** opens Apple’s `showManageSubscriptions` sheet. Do not cancel Apple billing from Ration’s servers.

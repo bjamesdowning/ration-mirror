@@ -9,19 +9,25 @@ struct BillingProductInfo: Equatable, Sendable {
 }
 
 enum BillingProductCatalog {
+    /// App Store Connect annual SKU (`crew_annual_1yr`). Legacy `crew_annual` kept as alias.
+    private static let crewAnnual = BillingProductInfo(
+        displayName: "Annual subscription",
+        subtitle: "Crew Member · auto-renews every year",
+        badge: "Best Value",
+        sortOrder: 0
+    )
+
+    private static let crewMonthly = BillingProductInfo(
+        displayName: "Monthly subscription",
+        subtitle: "Crew Member · auto-renews every month",
+        badge: nil,
+        sortOrder: 1
+    )
+
     private static let catalog: [String: BillingProductInfo] = [
-        "crew_annual": BillingProductInfo(
-            displayName: "Crew Member",
-            subtitle: "1 year",
-            badge: "Best Value",
-            sortOrder: 0
-        ),
-        "crew_monthly": BillingProductInfo(
-            displayName: "Crew Member",
-            subtitle: "1 month",
-            badge: nil,
-            sortOrder: 1
-        ),
+        "crew_annual_1yr": crewAnnual,
+        "crew_annual": crewAnnual,
+        "crew_monthly": crewMonthly,
         "credits_s": BillingProductInfo(
             displayName: "Taste Test",
             subtitle: "12 credits",

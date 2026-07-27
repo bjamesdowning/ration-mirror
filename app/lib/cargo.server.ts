@@ -16,6 +16,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { cargo, cargoTag, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
+import { clearSupplyItemCargoRefs } from "./cargo-delete.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
@@ -1059,6 +1060,7 @@ export async function jettisonItem(
 ) {
 	const d1 = drizzle(env.DB);
 
+	await clearSupplyItemCargoRefs(d1, [itemId]);
 	await d1
 		.delete(cargo)
 		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)));
@@ -1557,6 +1559,7 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 				.set({ quantity: normalizedQty, updatedAt: new Date() })
 				.where(eq(cargo.id, primary.id));
 
+			await clearSupplyItemCargoRefs(d1, toDelete);
 			for (const deleteChunk of chunkArray(toDelete, D1_MAX_BOUND_PARAMS)) {
 				await d1.delete(cargo).where(inArray(cargo.id, deleteChunk));
 			}

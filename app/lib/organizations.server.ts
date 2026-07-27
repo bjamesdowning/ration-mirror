@@ -19,6 +19,11 @@ import { deleteCargoVectors } from "~/lib/vector.server";
 
 const CARGO_VECTOR_DELETE_CHUNK = 500;
 
+function wrapPurgeStep(step: string, error: unknown): Error {
+	const message = error instanceof Error ? error.message : String(error);
+	return new Error(`${step}: ${message}`, { cause: error });
+}
+
 export interface DeleteOrganizationOptions {
 	skipVectorize?: boolean;
 	skipR2?: boolean;
@@ -108,6 +113,9 @@ export async function revokeOrganizationAccess(
 /**
  * Deletes an organization and all org-scoped data (Vectorize, D1, R2 prefix).
  * Shared by web/mobile group delete and account purge flows.
+ *
+ * Delete order: dependents that reference cargo/meal (selections, supply lists)
+ * must be removed before cargo/meal so ON DELETE NO ACTION FKs cannot fail.
  */
 export async function deleteOrganization(
 	env: Env,
@@ -120,71 +128,93 @@ export async function deleteOrganization(
 		orgId: redactId(organizationId),
 	});
 
-	if (!options?.skipVectorize) {
-		await deleteOrganizationCargoVectors(env, organizationId);
+	try {
+		if (!options?.skipVectorize) {
+			await deleteOrganizationCargoVectors(env, organizationId);
+		}
+	} catch (error) {
+		throw wrapPurgeStep("org_wipe:vectorize", error);
 	}
-	await purgeCopilotConversationsForOrganization(env, organizationId);
 
-	await db
-		.delete(schema.queueJob)
-		.where(eq(schema.queueJob.organizationId, organizationId));
+	try {
+		await purgeCopilotConversationsForOrganization(env, organizationId);
+	} catch (error) {
+		throw wrapPurgeStep("org_wipe:copilot", error);
+	}
 
-	const accessStmts = options?.skipAccessRevocation
-		? []
-		: [
-				db
-					.update(schema.session)
-					.set({ activeOrganizationId: null })
-					.where(eq(schema.session.activeOrganizationId, organizationId)),
-				db
-					.delete(schema.invitation)
-					.where(eq(schema.invitation.organizationId, organizationId)),
-				db
-					.delete(schema.member)
-					.where(eq(schema.member.organizationId, organizationId)),
-			];
+	try {
+		await db
+			.delete(schema.queueJob)
+			.where(eq(schema.queueJob.organizationId, organizationId));
 
-	await db.batch([
-		...accessStmts,
-		db
-			.delete(schema.cargo)
-			.where(eq(schema.cargo.organizationId, organizationId)),
-		db
-			.delete(schema.meal)
-			.where(eq(schema.meal.organizationId, organizationId)),
-		db
-			.delete(schema.activeMealSelection)
-			.where(eq(schema.activeMealSelection.organizationId, organizationId)),
-		db
-			.delete(schema.activeCargoSelection)
-			.where(eq(schema.activeCargoSelection.organizationId, organizationId)),
-		db
-			.delete(schema.supplyList)
-			.where(eq(schema.supplyList.organizationId, organizationId)),
-		db
-			.delete(schema.supplySnooze)
-			.where(eq(schema.supplySnooze.organizationId, organizationId)),
-		db
-			.delete(schema.mealPlan)
-			.where(eq(schema.mealPlan.organizationId, organizationId)),
-		db
-			.delete(schema.manifestSupplyDay)
-			.where(eq(schema.manifestSupplyDay.organizationId, organizationId)),
-		db.delete(schema.tag).where(eq(schema.tag.organizationId, organizationId)),
-		db
-			.delete(schema.ledger)
-			.where(eq(schema.ledger.organizationId, organizationId)),
-		db
-			.delete(schema.agentRegistration)
-			.where(eq(schema.agentRegistration.organizationId, organizationId)),
-		db
-			.delete(schema.organization)
-			.where(eq(schema.organization.id, organizationId)),
-		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	] as unknown as [any, ...any[]]);
+		const accessStmts = options?.skipAccessRevocation
+			? []
+			: [
+					db
+						.update(schema.session)
+						.set({ activeOrganizationId: null })
+						.where(eq(schema.session.activeOrganizationId, organizationId)),
+					db
+						.delete(schema.invitation)
+						.where(eq(schema.invitation.organizationId, organizationId)),
+					db
+						.delete(schema.member)
+						.where(eq(schema.member.organizationId, organizationId)),
+				];
 
-	if (!options?.skipR2 && env.STORAGE) {
-		await deleteR2Prefix(env.STORAGE, `organizations/${organizationId}/`);
+		// Dependents first (supply_item via supplyList cascade), then cargo/meal.
+		// supplyList before cargo avoids FK failures even if source_cargo_id
+		// lacked ON DELETE SET NULL; migration 0039 also aligns that FK.
+		await db.batch([
+			...accessStmts,
+			db
+				.delete(schema.activeMealSelection)
+				.where(eq(schema.activeMealSelection.organizationId, organizationId)),
+			db
+				.delete(schema.activeCargoSelection)
+				.where(eq(schema.activeCargoSelection.organizationId, organizationId)),
+			db
+				.delete(schema.supplyList)
+				.where(eq(schema.supplyList.organizationId, organizationId)),
+			db
+				.delete(schema.supplySnooze)
+				.where(eq(schema.supplySnooze.organizationId, organizationId)),
+			db
+				.delete(schema.mealPlan)
+				.where(eq(schema.mealPlan.organizationId, organizationId)),
+			db
+				.delete(schema.manifestSupplyDay)
+				.where(eq(schema.manifestSupplyDay.organizationId, organizationId)),
+			db
+				.delete(schema.cargo)
+				.where(eq(schema.cargo.organizationId, organizationId)),
+			db
+				.delete(schema.meal)
+				.where(eq(schema.meal.organizationId, organizationId)),
+			db
+				.delete(schema.tag)
+				.where(eq(schema.tag.organizationId, organizationId)),
+			db
+				.delete(schema.ledger)
+				.where(eq(schema.ledger.organizationId, organizationId)),
+			db
+				.delete(schema.agentRegistration)
+				.where(eq(schema.agentRegistration.organizationId, organizationId)),
+			db
+				.delete(schema.organization)
+				.where(eq(schema.organization.id, organizationId)),
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		] as unknown as [any, ...any[]]);
+	} catch (error) {
+		throw wrapPurgeStep("org_wipe:d1", error);
+	}
+
+	try {
+		if (!options?.skipR2 && env.STORAGE) {
+			await deleteR2Prefix(env.STORAGE, `organizations/${organizationId}/`);
+		}
+	} catch (error) {
+		throw wrapPurgeStep("org_wipe:r2", error);
 	}
 
 	log.info("[DeleteOrganization] Completed org deletion", {

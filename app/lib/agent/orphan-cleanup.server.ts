@@ -95,12 +95,14 @@ export async function purgeOrphanKitchen(
 		}
 	}
 
+	// Dependents first (supply_item via supplyList cascade), then cargo/meal.
 	await db.batch([
-		db.delete(schema.cargo).where(eq(schema.cargo.organizationId, orgId)),
-		db.delete(schema.meal).where(eq(schema.meal.organizationId, orgId)),
 		db
 			.delete(schema.activeMealSelection)
 			.where(eq(schema.activeMealSelection.organizationId, orgId)),
+		db
+			.delete(schema.activeCargoSelection)
+			.where(eq(schema.activeCargoSelection.organizationId, orgId)),
 		db
 			.delete(schema.supplyList)
 			.where(eq(schema.supplyList.organizationId, orgId)),
@@ -108,6 +110,12 @@ export async function purgeOrphanKitchen(
 			.delete(schema.supplySnooze)
 			.where(eq(schema.supplySnooze.organizationId, orgId)),
 		db.delete(schema.mealPlan).where(eq(schema.mealPlan.organizationId, orgId)),
+		db
+			.delete(schema.manifestSupplyDay)
+			.where(eq(schema.manifestSupplyDay.organizationId, orgId)),
+		db.delete(schema.tag).where(eq(schema.tag.organizationId, orgId)),
+		db.delete(schema.cargo).where(eq(schema.cargo.organizationId, orgId)),
+		db.delete(schema.meal).where(eq(schema.meal.organizationId, orgId)),
 		db.delete(schema.ledger).where(eq(schema.ledger.organizationId, orgId)),
 		db
 			.delete(schema.invitation)

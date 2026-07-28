@@ -1,126 +1,203 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Hub" : {
-      "extractionState" : "manual",
+    "·" : {
+
+    },
+    "\"%@\" will be removed. Items keep their other tags." : {
+
+    },
+    "%@" : {
+
+    },
+    "%@ (%@)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hub"
+            "state" : "new",
+            "value" : "%1$@ (%2$@)"
           }
         }
       }
     },
-    "Cargo" : {
-      "extractionState" : "manual",
+    "%@ %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cargo"
+            "state" : "new",
+            "value" : "%1$@ %2$@"
           }
         }
       }
     },
-    "Galley" : {
-      "extractionState" : "manual",
+    "%@ %@ selected %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Galley"
+            "state" : "new",
+            "value" : "%1$@ %2$@ selected %3$@"
           }
         }
       }
     },
-    "Manifest" : {
-      "extractionState" : "manual",
+    "%@ cargo · %@ meals" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Manifest"
+            "state" : "new",
+            "value" : "%1$@ cargo · %2$@ meals"
           }
         }
       }
     },
-    "Supply" : {
-      "extractionState" : "manual",
+    "%@ cr this chat" : {
+
+    },
+    "%@ credits" : {
+
+    },
+    "%@ credits · %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supply"
+            "state" : "new",
+            "value" : "%1$@ credits · %2$@"
           }
         }
       }
     },
-    "Settings" : {
-      "extractionState" : "manual",
+    "%@ days" : {
+
+    },
+    "%@ ingredients" : {
+
+    },
+    "%@ item%@ from scan %@…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings"
+            "state" : "new",
+            "value" : "%1$@ item%2$@ from scan %3$@…"
           }
         }
       }
     },
-    "Sign out" : {
-      "extractionState" : "manual",
+    "%@ of %@ to buy" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign out"
+            "state" : "new",
+            "value" : "%1$@ of %2$@ to buy"
           }
         }
       }
     },
-    "Done" : {
-      "extractionState" : "manual",
+    "%@ srv" : {
+
+    },
+    "%@ steps" : {
+
+    },
+    "%@ tag%@ with no cargo or meal links will be deleted." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done"
+            "state" : "new",
+            "value" : "%1$@ tag%2$@ with no cargo or meal links will be deleted."
           }
         }
       }
     },
-    "Restore purchases" : {
-      "extractionState" : "manual",
+    "%@. %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restore purchases"
+            "state" : "new",
+            "value" : "%1$@. %2$@"
           }
         }
       }
     },
-    "Crew Member" : {
-      "extractionState" : "manual",
+    "%@/%@ %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crew Member"
+            "state" : "new",
+            "value" : "%1$@/%2$@ %3$@"
           }
         }
       }
     },
-    "Retry" : {
-      "extractionState" : "manual",
+    "%@/%@ bought" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retry"
+            "state" : "new",
+            "value" : "%1$@/%2$@ bought"
           }
         }
       }
+    },
+    "%@/%@ selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@ selected"
+          }
+        }
+      }
+    },
+    "%@/%@ steps done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@ steps done"
+          }
+        }
+      }
+    },
+    "%@/%@ tags" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@ tags"
+          }
+        }
+      }
+    },
+    "%@m" : {
+
+    },
+    "+%@" : {
+
+    },
+    "~%@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "~%1$@ / %2$@"
+          }
+        }
+      }
+    },
+    "3 days" : {
+
+    },
+    "5 days" : {
+
+    },
+    "7 days" : {
+
+    },
+    "14 days" : {
+
+    },
+    "Active" : {
+
     },
     "Add" : {
       "extractionState" : "manual",
@@ -144,27 +221,343 @@
         }
       }
     },
-    "Scan items" : {
-      "extractionState" : "manual",
+    "Add meals in Galley first, then schedule them here." : {
+
+    },
+    "Added %@, merged %@." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scan items"
+            "state" : "new",
+            "value" : "Added %1$@, merged %2$@."
           }
         }
       }
     },
-    "No matches" : {
+    "Added to Galley" : {
+
+    },
+    "AI Processing & Receipt Privacy" : {
+
+    },
+    "AI-generated results are suggestions only. Always review before saving." : {
+
+    },
+    "Alcohol" : {
+
+    },
+    "All" : {
+
+    },
+    "All list items are already linked to a receipt line." : {
+
+    },
+    "All members will lose access immediately. This cannot be undone." : {
+
+    },
+    "All uses of \"%@\" will move to \"%@\"." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All uses of \"%1$@\" will move to \"%2$@\"."
+          }
+        }
+      }
+    },
+    "Alphabetical" : {
+
+    },
+    "Already imported" : {
+
+    },
+    "Anyone with the link will no longer be able to access it." : {
+
+    },
+    "Appearance" : {
+
+    },
+    "Ask a group owner or admin to change the planning horizon." : {
+
+    },
+    "Cancelled — access continues" : {
+
+    },
+    "Cargo" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No matches"
+            "value" : "Cargo"
           }
         }
       }
+    },
+    "Cargo expiring within this window appears on your Hub." : {
+
+    },
+    "Cargo match mode" : {
+
+    },
+    "Cargo tags" : {
+
+    },
+    "Cargo updated" : {
+
+    },
+    "Check your inbox" : {
+
+    },
+    "Choose a group to access its Cargo and Supply." : {
+
+    },
+    "Color" : {
+
+    },
+    "Compact" : {
+
+    },
+    "Connected meals" : {
+
+    },
+    "Connection type" : {
+
+    },
+    "Contains allergens" : {
+
+    },
+    "Continue with Google" : {
+
+    },
+    "Controls how many days you see on the Manifest page only. Does not affect Supply." : {
+
+    },
+    "Copilot is thinking" : {
+
+    },
+    "Copilot needs more credits" : {
+
+    },
+    "Couldn't load deletion status. Pull to refresh or try again." : {
+
+    },
+    "Create group" : {
+
+    },
+    "Credits" : {
+
+    },
+    "Credits needed" : {
+
+    },
+    "Crew" : {
+
+    },
+    "Crew Member" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crew Member"
+          }
+        }
+      }
+    },
+    "Danger zone" : {
+
+    },
+    "Dark" : {
+
+    },
+    "Deep thinking may use more tokens and credits." : {
+
+    },
+    "Deleting your account permanently removes your inventory, meals, supply lists, meal plans, scans, copilot conversations, API keys, and sessions. Financial ledger records may be anonymized where required by law." : {
+
+    },
+    "Directions" : {
+
+    },
+    "Dock %@ item%@ to Cargo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dock %1$@ item%2$@ to Cargo"
+          }
+        }
+      }
+    },
+    "Domain" : {
+
+    },
+    "Done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "End: %@" : {
+
+    },
+    "Expanded" : {
+
+    },
+    "Expires %@" : {
+
+    },
+    "Extracting items" : {
+
+    },
+    "Feature" : {
+
+    },
+    "Food" : {
+
+    },
+    "Free" : {
+
+    },
+    "Galley" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Galley"
+          }
+        }
+      }
+    },
+    "Galley meals containing selected allergens are flagged on the list and meal detail." : {
+
+    },
+    "Generate a link to share with others. Links expire after 7 days." : {
+
+    },
+    "Group tags" : {
+
+    },
+    "Groups with no other members will be permanently deleted: %@." : {
+
+    },
+    "Groups you own" : {
+
+    },
+    "Hand off this group to another member. You will become a regular member." : {
+
+    },
+    "Hide purchased" : {
+
+    },
+    "Household" : {
+
+    },
+    "Hub" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hub"
+          }
+        }
+      }
+    },
+    "I have read and agree to the [Terms of Service](%@) and [Privacy Policy](%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I have read and agree to the [Terms of Service](%1$@) and [Privacy Policy](%2$@)."
+          }
+        }
+      }
+    },
+    "If you delete now, you lose access to all services immediately — including any remaining days on your cancelled subscription. You can wait until the period ends instead. No refund for unused time." : {
+
+    },
+    "In cart" : {
+
+    },
+    "Including Manifest meals through %@ (%@ days)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Including Manifest meals through %1$@ (%2$@ days)"
+          }
+        }
+      }
+    },
+    "Ingredients" : {
+
+    },
+    "JPEG, PNG, or WebP · max 2MB" : {
+
+    },
+    "Light" : {
+
+    },
+    "Linking to Ration Copilot…" : {
+
+    },
+    "Loading page on your device…" : {
+
+    },
+    "Loading share status…" : {
+
+    },
+    "Manage who has access to this group's cargo." : {
+
+    },
+    "Managed via" : {
+
+    },
+    "Manifest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manifest"
+          }
+        }
+      }
+    },
+    "Many recipe publishers block automated downloads. Your phone can sometimes open the page when our servers cannot. If that still fails, open the recipe in Safari and add it manually." : {
+
+    },
+    "Max: %@ CR" : {
+
+    },
+    "Meal tags" : {
+
+    },
+    "Members" : {
+
+    },
+    "Monday" : {
+
+    },
+    "Needs a recipe page with ingredients and steps — not a video link. If a site blocks bots, you’ll get a device reload or manual entry next step." : {
+
+    },
+    "Next action" : {
+
+    },
+    "Next credit in ~%@ tokens" : {
+
+    },
+    "No cargo tags yet" : {
+
     },
     "No cargo yet" : {
       "extractionState" : "manual",
@@ -188,6 +581,38 @@
         }
       }
     },
+    "No matches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No matches"
+          }
+        }
+      }
+    },
+    "No matching cargo" : {
+
+    },
+    "No meal tags yet" : {
+
+    },
+    "No meals planned this week" : {
+
+    },
+    "No meals ready with current Cargo" : {
+
+    },
+    "No meals use this ingredient yet." : {
+
+    },
+    "No partial matches" : {
+
+    },
+    "No receipt lines to review." : {
+
+    },
     "No supply delta yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -199,24 +624,105 @@
         }
       }
     },
-    "Try a different search term." : {
-      "extractionState" : "manual",
+    "No tags yet. Create one below or add tags when labeling cargo or meals." : {
+
+    },
+    "Nothing expiring soon" : {
+
+    },
+    "On Supply" : {
+
+    },
+    "Only group owners and admins can change the planning horizon." : {
+
+    },
+    "Orbital supply chain" : {
+
+    },
+    "Original shows stored units. Metric and Imperial use shopping weights. Cooking uses cups and spoons when density is known." : {
+
+    },
+    "Permanently delete this group and all its data. You will return to the group picker immediately. This cannot be undone." : {
+
+    },
+    "Permanently delete your account and personal data. This cannot be undone." : {
+
+    },
+    "Planning 1 day" : {
+
+    },
+    "Qty delta — dock %@ %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Try a different search term."
+            "state" : "new",
+            "value" : "Qty delta — dock %1$@ %2$@"
           }
         }
       }
     },
-    "You're offline and no cached meals are available." : {
+    "Quantity needed" : {
+
+    },
+    "Quantity: %@" : {
+
+    },
+    "RATION" : {
+
+    },
+    "Ready to review" : {
+
+    },
+    "Receipt" : {
+
+    },
+    "Receipt only" : {
+
+    },
+    "Remove yourself from this group. You will return to the group picker. Owners must transfer ownership or delete the group instead." : {
+
+    },
+    "Replay the welcome briefing to revisit how Ration works." : {
+
+    },
+    "Request %@ is processing. This usually takes a few seconds." : {
+
+    },
+    "Restore purchases" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You're offline and no cached meals are available."
+            "value" : "Restore purchases"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        }
+      }
+    },
+    "Review import" : {
+
+    },
+    "Saving…" : {
+
+    },
+    "Scan items" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan items"
           }
         }
       }
@@ -253,6 +759,243 @@
           }
         }
       }
+    },
+    "Select days from today through %@. Past dates and anything beyond that window are unavailable." : {
+
+    },
+    "Select destination" : {
+
+    },
+    "Select member" : {
+
+    },
+    "Select Mission Control" : {
+
+    },
+    "Select source" : {
+
+    },
+    "Select target" : {
+
+    },
+    "Servings" : {
+
+    },
+    "Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "Share this link" : {
+
+    },
+    "Sharing" : {
+
+    },
+    "Show meals you can make with current Cargo" : {
+
+    },
+    "Sign out" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out"
+          }
+        }
+      }
+    },
+    "Snoozed (%@)" : {
+
+    },
+    "Sort" : {
+
+    },
+    "Standard" : {
+
+    },
+    "Start a new chat to continue" : {
+
+    },
+    "Start: %@" : {
+
+    },
+    "Status" : {
+
+    },
+    "Subscriptions" : {
+
+    },
+    "Subscriptions load from RevenueCat offerings." : {
+
+    },
+    "Subscriptions renew automatically through your Apple ID until cancelled at least 24 hours before the end of the current period. Manage or cancel in App Store account settings after purchase. List prices match your App Store region; sales tax may apply at checkout." : {
+
+    },
+    "Sunday" : {
+
+    },
+    "Supply" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supply"
+          }
+        }
+      }
+    },
+    "Supply list" : {
+
+    },
+    "Supply: %@" : {
+
+    },
+    "Syncs with your Ration account on web and mobile." : {
+
+    },
+    "Tags" : {
+
+    },
+    "Tap edit to adjust name, quantity, tags, domain, or expiry" : {
+
+    },
+    "Tap the link in the email we sent to %@. It opens Ration and signs you in." : {
+
+    },
+    "They will lose access to this group's cargo immediately." : {
+
+    },
+    "This site blocked our servers. Trying again with your connection (uses 1 credit if extraction starts)." : {
+
+    },
+    "Today" : {
+
+    },
+    "Transfer ownership" : {
+
+    },
+    "Try a different search term." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try a different search term."
+          }
+        }
+      }
+    },
+    "Try Scan or Ask to use credits on AI features." : {
+
+    },
+    "Turn off to stop new AI processing. You will be asked to agree again before the next AI feature use." : {
+
+    },
+    "Tutorial" : {
+
+    },
+    "Unable to load settings." : {
+
+    },
+    "Unit display" : {
+
+    },
+    "Unit: %@" : {
+
+    },
+    "Up to 10 tags per cargo or meal item. Manage names, colors, and categories here." : {
+
+    },
+    "Use Manage subscription below to change or cancel through Apple." : {
+
+    },
+    "Use the same Apple ID on ration.mayutic.com." : {
+
+    },
+    "Uses %@ credit%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Uses %1$@ credit%2$@"
+          }
+        }
+      }
+    },
+    "Uses %@ credit%@ %@. You have %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Uses %1$@ credit%2$@ %3$@. You have %4$@."
+          }
+        }
+      }
+    },
+    "Welcome credits" : {
+
+    },
+    "What Crew Member provides" : {
+
+    },
+    "What happens next" : {
+
+    },
+    "What would you like to add?" : {
+
+    },
+    "Why this happened" : {
+
+    },
+    "You don't have any groups yet." : {
+
+    },
+    "You have %@ credits" : {
+
+    },
+    "You will become a regular member. Group limits will follow the new owner's tier." : {
+
+    },
+    "You will lose access to this group's cargo immediately." : {
+
+    },
+    "You're a Crew Member" : {
+
+    },
+    "You're offline and no cached meals are available." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're offline and no cached meals are available."
+          }
+        }
+      }
+    },
+    "Your conversation stays below. Continue in a fresh chat and add what you still need help with." : {
+
+    },
+    "Your Crew membership ends on %@. Use Manage subscription below to renew through Apple." : {
+
+    },
+    "Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple." : {
+
+    },
+    "Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store." : {
+
+    },
+    "Your personal group can't be deleted. To remove all your data, delete your account instead." : {
+
     }
   },
   "version" : "1.0"

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	extractFaqFromMarkdown,
 	getAllPosts,
 	getPostBySlug,
 	getRecentPosts,
@@ -25,6 +26,51 @@ describe("normalizeBlogDate", () => {
 	});
 });
 
+describe("extractFaqFromMarkdown", () => {
+	it("returns empty when there is no FAQ section", () => {
+		expect(extractFaqFromMarkdown("# Hello\n\nNo faq here.")).toEqual([]);
+	});
+
+	it("parses bold questions and strips markdown from answers", () => {
+		const md = `## Intro
+
+Text.
+
+## FAQ
+
+**What is a pantry app?**
+
+A pantry app tracks [inventory](/blog/x) and expiry.
+
+**Do I need three apps?**
+
+No. You need three *jobs*, not three apps.
+
+## Next section
+
+More.
+`;
+		const faq = extractFaqFromMarkdown(md);
+		expect(faq).toEqual([
+			{
+				question: "What is a pantry app?",
+				answer: "A pantry app tracks inventory and expiry.",
+			},
+			{
+				question: "Do I need three apps?",
+				answer: "No. You need three jobs, not three apps.",
+			},
+		]);
+	});
+
+	it("loads FAQ entries from the category comparison post", () => {
+		const post = getPostBySlug("pantry-app-vs-recipe-manager-vs-meal-planner");
+		expect(post).not.toBeNull();
+		expect(post?.faq.length).toBeGreaterThanOrEqual(5);
+		expect(post?.faq[0]?.question).toMatch(/pantry app/i);
+	});
+});
+
 describe("getPostBySlug", () => {
 	it("returns enriched SEO metadata for blog posts", () => {
 		const post = getPostBySlug("mcp-kitchen-assistant");
@@ -37,6 +83,12 @@ describe("getPostBySlug", () => {
 		expect(post?.image).toBe("/static/ration-logo.svg");
 		expect(post?.tags).toContain("MCP");
 		expect(post?.tags).toContain("meal planning");
+	});
+
+	it("parses FAQ from agent-first onboarding post", () => {
+		const post = getPostBySlug("agent-first-mcp-onboarding");
+		expect(post?.faq.length).toBeGreaterThanOrEqual(4);
+		expect(post?.faq.some((e) => /claim/i.test(e.question))).toBe(true);
 	});
 });
 

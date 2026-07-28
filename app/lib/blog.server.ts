@@ -1,6 +1,11 @@
 import matter from "gray-matter";
 import { OG_IMAGE } from "./seo";
 
+export type BlogFaqEntry = {
+	question: string;
+	answer: string;
+};
+
 export type BlogPost = {
 	slug: string;
 	title: string;
@@ -12,6 +17,8 @@ export type BlogPost = {
 	image: string;
 	tags: string[];
 	content: string;
+	/** Parsed from a `## FAQ` section of bold questions + answer paragraphs. */
+	faq: BlogFaqEntry[];
 };
 
 // Vite bundles these at build time; raw string is the default export
@@ -65,6 +72,50 @@ function normalizeBlogTags(value: unknown): string[] {
 		.filter(Boolean);
 }
 
+/**
+ * Extract Q&A pairs from a markdown `## FAQ` section.
+ * Expects bold questions (`**Question?**`) followed by answer paragraphs
+ * until the next bold question or heading — same pattern as existing posts.
+ */
+export function extractFaqFromMarkdown(content: string): BlogFaqEntry[] {
+	const headingMatch = content.match(/^## FAQ\s*$/m);
+	if (!headingMatch || headingMatch.index === undefined) return [];
+
+	const afterHeading = content
+		.slice(headingMatch.index + headingMatch[0].length)
+		.replace(/^\n+/, "");
+	const nextHeading = afterHeading.search(/^## /m);
+	const section = (
+		nextHeading >= 0 ? afterHeading.slice(0, nextHeading) : afterHeading
+	).trim();
+	if (!section) return [];
+
+	const entries: BlogFaqEntry[] = [];
+	const blocks = section.split(/\n(?=\*\*)/);
+
+	for (const block of blocks) {
+		const match = block.match(/^\*\*(.+?)\*\*\s*\n+([\s\S]+)$/);
+		if (!match) continue;
+
+		const question = match[1].trim();
+		const answer = match[2]
+			.trim()
+			.replace(/\n{2,}/g, " ")
+			.replace(/\n/g, " ")
+			.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+			.replace(/\*\*([^*]+)\*\*/g, "$1")
+			.replace(/\*([^*]+)\*/g, "$1")
+			.replace(/\s+/g, " ")
+			.trim();
+
+		if (question && answer) {
+			entries.push({ question, answer });
+		}
+	}
+
+	return entries;
+}
+
 function parsePost(path: string, raw: string): BlogPost {
 	const { data, content } = matter(raw);
 	const slug = (data.slug as string) || slugFromPath(path);
@@ -83,6 +134,7 @@ function parsePost(path: string, raw: string): BlogPost {
 		image: normalizeBlogImage(data.image),
 		tags: normalizeBlogTags(data.tags),
 		content,
+		faq: extractFaqFromMarkdown(content),
 	};
 }
 

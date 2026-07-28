@@ -6,7 +6,11 @@ import { JsonLd } from "~/components/seo/JsonLd";
 import { PublicFooter } from "~/components/shell/PublicFooter";
 import { PublicHeader } from "~/components/shell/PublicHeader";
 import { canonicalMeta, ogMeta, SITE_ORIGIN } from "~/lib/seo";
-import { articleSchema, breadcrumbSchema } from "~/lib/structured-data";
+import {
+	articleSchema,
+	breadcrumbSchema,
+	faqSchema,
+} from "~/lib/structured-data";
 import type { Route } from "./+types/blog.$slug";
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -77,6 +81,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 				url: post.authorUrl ?? `${SITE_ORIGIN}/about`,
 			},
 		}),
+		...(post.faq.length > 0 ? [faqSchema(post.faq)] : []),
 	];
 
 	return (

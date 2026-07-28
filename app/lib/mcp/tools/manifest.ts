@@ -4,20 +4,19 @@ import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { mealPlanEntry } from "../../../db/schema";
 import { getExpiringCargo } from "../../cargo.server";
+import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
 import { manifestConsumeNote } from "../../cook-feedback";
 import {
 	addEntry,
 	consumeManifestEntries,
 	deleteEntry,
 	ensureMealPlan,
-	getTodayISO,
 	updateEntry,
 } from "../../manifest.server";
 import {
 	insertManifestBulkEntries,
 	ManifestBulkSubmissionError,
 } from "../../manifest-bulk-submit.server";
-import { addDays } from "../../manifest-dates";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { createSupplyListFromSelectedMeals } from "../../supply.server";
 import { err, ok } from "../envelope";
@@ -75,7 +74,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					limit: Math.min(30, daysAhead * mealsPerDay + 5),
 					preLimit: MEAL_MATCH_CANDIDATE_CAP,
 				});
-				const today = getTodayISO();
+				const today = getUtcTodayISO(now);
 				const proposed: Array<{
 					date: string;
 					slotType: string;
@@ -86,7 +85,7 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 				}> = [];
 				let mealIdx = 0;
 				for (let d = 0; d < daysAhead && mealIdx < matches.length; d++) {
-					const date = addDays(today, d);
+					const date = addUtcDays(today, d);
 					for (
 						let s = 0;
 						s < mealsPerDay && mealIdx < matches.length && proposed.length < 21;

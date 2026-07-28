@@ -64,6 +64,10 @@ export const MCP_OAUTH_TROUBLESHOOTING = [
 		fix: 'Revoke and reconnect — the grant may be incomplete (shows "Not linked"). Household selection is required for every new connection.',
 	},
 	{
+		symptom: "Mid-session Unauthorized / tools suddenly fail",
+		fix: "Access tokens last 1 hour; MCP clients must refresh using offline_access. If the client does not refresh, reconnect. Revoking the grant or leaving the household also causes immediate 401s.",
+	},
+	{
 		symptom: "Wrong pantry data",
 		fix: "Revoke and reconnect, choosing the correct household at the selection step.",
 	},

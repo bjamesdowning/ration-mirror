@@ -8,6 +8,7 @@ import {
 	validateMealOwnership,
 } from "../../meal-selection.server";
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
+import { parseDirections } from "../../schemas/directions";
 import { McpCreateMealSchema, McpUpdateMealSchema } from "../../schemas/meal";
 import { err, ok } from "../envelope";
 import {
@@ -21,7 +22,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "create_meal",
 			description:
-				"Create a structured recipe in the Galley (credit-free). For billed AI generation, disclose ration://galley/generate and use start_generate_meal after approval.",
+				"Create a structured recipe in the Galley (credit-free). For billed AI generation in the Ration app, disclose ration://galley/generate (not available as an MCP tool).",
 			inputSchema: z.object({
 				meal: McpCreateMealSchema,
 			}),
@@ -42,6 +43,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					servings: created?.servings,
 					ingredientCount: created?.ingredients.length ?? 0,
 					tags: created?.tags ?? [],
+					directions: parseDirections(created?.directions ?? undefined),
 				});
 			},
 		}),
@@ -72,6 +74,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					name: updated.name,
 					domain: updated.domain,
 					description: updated.description,
+					directions: parseDirections(updated.directions ?? undefined),
 					servings: updated.servings,
 					ingredients: updated.ingredients.map((i) => ({
 						ingredientName: i.ingredientName,
@@ -85,7 +88,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "delete_meal",
 			description:
-				"Delete a recipe from the Galley. Destructive — pass confirm:true. Cascades to ingredients/tags but does not delete plan entries.",
+				"Delete a recipe from the Galley. Destructive — pass confirm:true. Cascades to ingredients, tags, and linked meal plan entries (FK onDelete cascade).",
 			inputSchema: z.object({
 				mealId: z.string().uuid(),
 				confirm: z.boolean(),
@@ -102,8 +105,15 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 						"Pass confirm:true to permanently delete this meal.",
 					);
 				}
-				await deleteMeal(env.DB, ctx.organizationId, a.mealId);
-				return ok("delete_meal", { deleted: true, mealId: a.mealId });
+				const result = await deleteMeal(env.DB, ctx.organizationId, a.mealId);
+				if (!result.deleted) {
+					return err("delete_meal", "not_found", "Meal not found.");
+				}
+				return ok("delete_meal", {
+					deleted: true,
+					mealId: a.mealId,
+					deletedPlanEntryCount: result.deletedPlanEntryCount,
+				});
 			},
 		}),
 		defineSharedTool({

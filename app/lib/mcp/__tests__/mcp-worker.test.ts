@@ -104,7 +104,11 @@ describe("MCP worker fetch", () => {
 			{} as ExecutionContext,
 		);
 		expect(res.status).toBe(401);
-		expect(res.headers.get("WWW-Authenticate")).toContain("Bearer realm=");
+		const www = res.headers.get("WWW-Authenticate") ?? "";
+		expect(www).toContain("Bearer realm=");
+		expect(www).toContain("resource_metadata=");
+		expect(www).toContain('error="invalid_token"');
+		expect(www).toContain("error_description=");
 		expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
 		expect(logMcpOAuthVerifyFailure).toHaveBeenCalled();
 	});

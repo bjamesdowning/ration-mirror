@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpToolContext } from "./auth";
 import { registerResourcesAndPrompts } from "./resources";
 import type { McpToolsEnv } from "./tool-runtime";
-import { registerAiWorkflowTools } from "./tools/ai-workflows";
 import { registerBillingTools } from "./tools/billing";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
@@ -11,6 +10,11 @@ import { registerPreferencesTools } from "./tools/preferences";
 import { registerReadTools } from "./tools/read";
 import { registerSupplyTools } from "./tools/supply";
 
+/**
+ * Registers the credit-free MCP kitchen tool surface.
+ * Billed AI workflows (`start_plan_week` / `start_generate_meal`) remain
+ * Copilot/web-only via `createAiWorkflowToolDefs` — not registered here.
+ */
 export function registerTools(
 	server: McpServer,
 	env: Cloudflare.Env & { __mcp: McpToolContext },
@@ -25,5 +29,4 @@ export function registerTools(
 	registerManifestTools(server, toolsEnv);
 	registerSupplyTools(server, toolsEnv);
 	registerPreferencesTools(server, toolsEnv);
-	registerAiWorkflowTools(server, toolsEnv);
 }

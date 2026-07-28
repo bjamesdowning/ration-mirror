@@ -118,7 +118,10 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						},
 					);
 				}
-				const warnings = coerced.warning ? [coerced.warning] : undefined;
+				const warnings = [
+					...(coerced.warning ? [coerced.warning] : []),
+					"Semantic search may not find this item until embeddings finish backfilling.",
+				];
 				return ok(
 					"add_cargo_item",
 					{
@@ -136,7 +139,12 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 							? { unitNormalizedFrom: coerced.normalizedFrom }
 							: {}),
 					},
-					warnings ? { warnings } : undefined,
+					{
+						warnings,
+						meta: {
+							embeddingPending: true,
+						},
+					},
 				);
 			},
 		}),
@@ -542,7 +550,19 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 						waitUntil: ctx.waitUntil,
 					});
 					return ok("apply_inventory_import", result, {
-						meta: result.replayed ? { replayed: true } : undefined,
+						meta: {
+							...(result.replayed ? { replayed: true } : {}),
+							...(result.imported > 0 || result.updated > 0
+								? { embeddingPending: true }
+								: {}),
+						},
+						...(result.imported > 0 || result.updated > 0
+							? {
+									warnings: [
+										"Semantic search may lag until embeddings finish backfilling; prefer list_inventory / get_cargo_item.",
+									],
+								}
+							: {}),
 					});
 				} catch (e) {
 					const message = e instanceof Error ? e.message : String(e);
@@ -583,12 +603,25 @@ export function createInventoryToolDefs(env: McpToolsEnv) {
 					apiKeyId: ctx.apiKeyId,
 					waitUntil: ctx.waitUntil,
 				});
+				const embeddingPending =
+					result.imported > 0 || result.updated > 0
+						? { embeddingPending: true as const }
+						: {};
+				const warnings = [
+					...(result.warnings ?? []),
+					...(result.imported > 0 || result.updated > 0
+						? [
+								"Semantic search may lag until embeddings finish backfilling; prefer list_inventory / get_cargo_item.",
+							]
+						: []),
+				];
+				const meta = {
+					...(result.replayed ? { replayed: true } : {}),
+					...embeddingPending,
+				};
 				return ok("import_inventory_csv", result, {
-					meta: result.replayed ? { replayed: true } : undefined,
-					warnings:
-						result.warnings && result.warnings.length > 0
-							? result.warnings
-							: undefined,
+					...(Object.keys(meta).length > 0 ? { meta } : {}),
+					...(warnings.length > 0 ? { warnings } : {}),
 				});
 			},
 		}),

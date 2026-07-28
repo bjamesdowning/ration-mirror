@@ -65,8 +65,8 @@ export const RATION_ORG_CLAIM = "https://ration.mayutic.com/org";
 /** Production MCP resource audience (RFC 8707). */
 export const MCP_RESOURCE_AUDIENCE_PROD = "https://mcp.ration.mayutic.com/mcp";
 
-/** Access token lifetime — 10 minutes (plan: 5–15 min). */
-export const OAUTH_ACCESS_TOKEN_TTL_SEC = 600;
+/** Access token lifetime — 1 hour (clients must refresh via offline_access). */
+export const OAUTH_ACCESS_TOKEN_TTL_SEC = 3600;
 
 export function getAuthorizationServerIssuer(authBaseUrl: string): string {
 	return authBaseUrl.replace(/\/$/, "");
@@ -90,6 +90,30 @@ export function getMcpResourceOrigin(
 		return requestOrOrigin.replace(/\/$/, "");
 	}
 	return new URL(requestOrOrigin.url).origin;
+}
+
+/**
+ * Build a RFC 6750 / MCP-auth WWW-Authenticate challenge for 401 responses.
+ * Includes resource_metadata so clients can rediscover the AS and refresh.
+ */
+export function buildMcpWwwAuthenticate(
+	resourceOrigin: string,
+	options?: { error?: string; errorDescription?: string },
+): string {
+	const origin = resourceOrigin.replace(/\/$/, "");
+	const parts = [
+		`Bearer realm="Ration MCP"`,
+		`resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+	];
+	if (options?.error) {
+		parts.push(`error="${options.error.replace(/"/g, "")}"`);
+	}
+	if (options?.errorDescription) {
+		parts.push(
+			`error_description="${options.errorDescription.replace(/"/g, "'")}"`,
+		);
+	}
+	return parts.join(", ");
 }
 
 export function resolveMcpResourceAudience(env: Cloudflare.Env): string {

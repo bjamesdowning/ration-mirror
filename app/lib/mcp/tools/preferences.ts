@@ -2,12 +2,26 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ALLERGEN_SLUGS } from "../../allergens";
 import { getUserSettings, patchUserSettings } from "../../auth.server";
+import type { UserSettings } from "../../types";
 import { err, ok } from "../envelope";
 import {
 	defineSharedTool,
 	type McpToolsEnv,
 	registerSharedMcpTool,
 } from "../tool-runtime";
+
+/** Matches kitchen-summary / expiring tools when settings omit the key. */
+export const DEFAULT_EXPIRATION_ALERT_DAYS = 7;
+
+export function materializeUserPreferences(
+	settings: UserSettings,
+): UserSettings & { expirationAlertDays: number } {
+	return {
+		...settings,
+		expirationAlertDays:
+			settings.expirationAlertDays ?? DEFAULT_EXPIRATION_ALERT_DAYS,
+	};
+}
 
 export function createPreferencesToolDefs(env: McpToolsEnv) {
 	return [
@@ -21,7 +35,7 @@ export function createPreferencesToolDefs(env: McpToolsEnv) {
 			audit: false,
 			handler: async (ctx) => {
 				const settings = await getUserSettings(env.DB, ctx.userId);
-				return ok("get_user_preferences", settings);
+				return ok("get_user_preferences", materializeUserPreferences(settings));
 			},
 		}),
 		defineSharedTool({
@@ -51,7 +65,10 @@ export function createPreferencesToolDefs(env: McpToolsEnv) {
 				}
 				await patchUserSettings(env.DB, ctx.userId, patch as never);
 				const settings = await getUserSettings(env.DB, ctx.userId);
-				return ok("update_user_preferences", settings);
+				return ok(
+					"update_user_preferences",
+					materializeUserPreferences(settings),
+				);
 			},
 		}),
 	];

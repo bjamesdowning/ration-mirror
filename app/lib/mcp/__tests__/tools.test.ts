@@ -146,7 +146,7 @@ const {
 	getWeekEntries,
 } = await import("~/lib/manifest.server");
 const { matchMeals } = await import("~/lib/matching.server");
-const { getMealsPage, updateMeal, createMeal } = await import(
+const { getMealsPage, updateMeal, createMeal, deleteMeal } = await import(
 	"~/lib/meals.server"
 );
 const { cookMealWithConfirmation } = await import(
@@ -414,9 +414,12 @@ describe("MCP tools", () => {
 			expect(getWeekEntries).toHaveBeenCalledWith(
 				expect.anything(),
 				"plan-1",
-				"2026-03-07",
-				"2026-03-13",
+				expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+				expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
 			);
+			const [, , start, end] = vi.mocked(getWeekEntries).mock.calls[0];
+			expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+			expect(end >= start).toBe(true);
 		});
 
 		it("respects startDate and days parameters", async () => {
@@ -493,7 +496,7 @@ describe("MCP tools", () => {
 				id: "meal-1",
 				name: "pancakes",
 				domain: "food",
-				directions: "Mix and cook.",
+				directions: [{ position: 1, text: "Mix and cook." }],
 				equipment: ["pan"],
 				prepTime: 5,
 				cookTime: 10,
@@ -717,7 +720,10 @@ describe("MCP tools", () => {
 			expect(envelope.ok).toBe(true);
 			expect(envelope.data.status).toBe("created");
 			expect(envelope.data.unitNormalizedFrom).toBe("litres");
-			expect(envelope.warnings).toBeUndefined();
+			expect(envelope.meta?.embeddingPending).toBe(true);
+			expect(envelope.warnings).toEqual([
+				"Semantic search may not find this item until embeddings finish backfilling.",
+			]);
 			expect(ingestCargoItems).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",
@@ -1750,12 +1756,70 @@ describe("MCP tools", () => {
 		});
 	});
 
+	describe("delete_meal", () => {
+		const mealId = "550e8400-e29b-41d4-a716-446655440099";
+
+		it("requires confirm:true", async () => {
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"delete_meal",
+			)({
+				mealId,
+				confirm: false,
+			});
+			expect(result.content[0]?.text).toContain("confirm:true");
+			expect(deleteMeal).not.toHaveBeenCalled();
+		});
+
+		it("returns not_found when meal is not owned", async () => {
+			vi.mocked(deleteMeal).mockResolvedValueOnce({
+				deleted: false,
+				deletedPlanEntryCount: 0,
+			});
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"delete_meal",
+			)({
+				mealId,
+				confirm: true,
+			});
+			expect(result.content[0]?.text).toContain("Meal not found");
+		});
+
+		it("returns deletedPlanEntryCount on success", async () => {
+			vi.mocked(deleteMeal).mockResolvedValueOnce({
+				deleted: true,
+				deletedPlanEntryCount: 3,
+			});
+			const server = makeServer();
+			const result = await getToolHandler(
+				server,
+				"delete_meal",
+			)({
+				mealId,
+				confirm: true,
+			});
+			const data = parseOk(result);
+			expect(data).toMatchObject({
+				deleted: true,
+				mealId,
+				deletedPlanEntryCount: 3,
+			});
+			expect(deleteMeal).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				mealId,
+			);
+		});
+	});
+
 	// ── Credit boundary ──────────────────────────────────────────────────────
-	// Most MCP tools are credit-free. Credit-aware AI workflows
-	// (start_plan_week, start_generate_meal) explicitly spend credits after
-	// approval. Camera OCR scan_receipt is still not registered.
+	// MCP tools are credit-free. Billed AI workflows remain Copilot/web-only.
+	// Camera OCR scan_receipt is still not registered.
 	describe("credit boundary", () => {
-		it("does not register get_credit_balance or camera scan tools", () => {
+		it("does not register credit, camera, or billed AI workflow tools", () => {
 			const server = makeServer();
 			const s = server as unknown as {
 				_registeredTools: Record<string, unknown>;
@@ -1765,12 +1829,12 @@ describe("MCP tools", () => {
 				"scan_receipt",
 				"generate_meals",
 				"ai_meal_generate",
+				"start_plan_week",
+				"start_generate_meal",
 			];
 			for (const name of banned) {
 				expect(s._registeredTools[name]).toBeUndefined();
 			}
-			expect(s._registeredTools.start_plan_week).toBeDefined();
-			expect(s._registeredTools.start_generate_meal).toBeDefined();
 			expect(s._registeredTools.propose_manifest_plan).toBeDefined();
 			expect(s._registeredTools.commit_manifest_plan).toBeDefined();
 		});

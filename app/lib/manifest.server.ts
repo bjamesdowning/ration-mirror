@@ -39,6 +39,7 @@ const SHARE_TOKEN_EXPIRY_SECONDS = SHARE_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 // Date utilities (shared with client via ~/lib/manifest-dates)
 // ---------------------------------------------------------------------------
 
+import { addUtcDays } from "./cargo-utils";
 import {
 	getTodayISO as getTodayISOShared,
 	getWeekDates as getWeekDatesShared,
@@ -861,6 +862,7 @@ export async function getManifestPreview(
 	days = 7,
 	slotType?: string,
 	tags?: string[],
+	options?: { todayIso?: string },
 ): Promise<ManifestPreviewData> {
 	const d1 = drizzle(db);
 
@@ -877,12 +879,8 @@ export async function getManifestPreview(
 
 	if (!plan) return { planId: null, entries: [] };
 
-	const today = getTodayISO();
-	const endDate = (() => {
-		const d = new Date(`${today}T00:00:00`);
-		d.setDate(d.getDate() + days - 1);
-		return toISODateString(d);
-	})();
+	const today = options?.todayIso ?? getTodayISO();
+	const endDate = addUtcDays(today, days - 1);
 
 	const rows = await d1
 		.select({

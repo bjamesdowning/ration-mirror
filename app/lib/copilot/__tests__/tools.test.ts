@@ -42,16 +42,18 @@ describe("createCopilotToolDefs", () => {
 		} as McpToolsEnv;
 	}
 
-	it("exposes every MCP tool plus search_docs without drift", () => {
+	it("exposes every MCP tool plus Copilot AI workflows and search_docs", () => {
 		const names = createCopilotToolDefs(makeEnv()).map(
 			(definition) => definition.name,
 		);
 		const mcpNames = MCP_TOOL_GROUPS.flatMap((group) => [...group.tools]);
+		const copilotOnly = [
+			"start_plan_week",
+			"start_generate_meal",
+			"search_docs",
+		];
 
-		expect(names.filter((name) => name !== "search_docs").sort()).toEqual(
-			mcpNames.sort(),
-		);
-		expect(names.filter((name) => name === "search_docs")).toHaveLength(1);
+		expect(names.sort()).toEqual([...mcpNames, ...copilotOnly].sort());
 		expect(new Set(names).size).toBe(names.length);
 	});
 

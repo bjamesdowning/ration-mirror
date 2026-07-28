@@ -121,10 +121,11 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 				toolGroups: MCP_TOOL_GROUPS,
 				notes: [
 					"Camera/image scan and recipe URL extraction still prefer native deep links; text receipt lists use preview_inventory_import → apply_inventory_import (credit-free).",
-					"Credit-aware tools start_plan_week and start_generate_meal spend the same credits as the native UI after approval.",
-					"Prefer propose_manifest_plan → commit_manifest_plan for credit-free week scheduling.",
-					"Most MCP tools are credit-free; vector embeddings are backfilled async and do not block tool returns.",
+					"MCP tools are credit-free. Billed AI Plan Week / meal generate live in the web app and Copilot (deep links: ration://manifest/plan-week, ration://galley/generate).",
+					"Prefer propose_manifest_plan → commit_manifest_plan for week scheduling.",
+					"Vector embeddings are backfilled async and do not block tool returns; prefer list_inventory / get_cargo_item until search catches up.",
 					"Use cursor pagination for list_inventory and list_meals; preview_inventory_import is summary-first (sample rows + rowsOmitted).",
+					"Protocol JSON-RPC -32602 means invalid tool arguments; domain/auth/confirm failures use the { ok:false, error } envelope.",
 				],
 			}),
 		],
@@ -139,7 +140,9 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 					"ration://guides/connect",
 					`# Connect an MCP Client to Ration\n\n${formatMcpConnectPlainText()}\n\n` +
 						`After connecting, call \`get_context\` first to confirm active scopes.\n` +
-						`For receipts, follow the \`parse_receipt\` prompt.\n`,
+						`OAuth access tokens last **1 hour**; clients must refresh via \`offline_access\` (or reconnect after revoke/consent loss).\n` +
+						`For receipts, follow the \`parse_receipt\` prompt.\n` +
+						`Protocol JSON-RPC \`-32602\` means invalid tool arguments; domain/auth/confirm failures use the \`{ ok:false, error }\` envelope.\n`,
 				),
 			],
 		}),
@@ -174,7 +177,7 @@ export function registerResourcesAndPrompts(server: McpServer): void {
 								"1. Call propose_manifest_plan (uses expiring items + match_meals internally).\n" +
 								"2. Present the compact proposal and confirm with the user.\n" +
 								"3. On confirm, call commit_manifest_plan with the entries (optionally syncSupply: true).\n" +
-								"4. For billed AI Plan Week instead, disclose ration://manifest/plan-week and call start_plan_week after approval.\n" +
+								"4. For billed AI Plan Week in the Ration app (not MCP), disclose ration://manifest/plan-week.\n" +
 								"Fallback: get_expiring_items → match_meals → commit_manifest_plan → sync_supply_from_selected_meals.",
 						},
 					},

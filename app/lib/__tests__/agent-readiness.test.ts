@@ -120,6 +120,13 @@ describe("agent readiness metadata", () => {
 		expect(card.capabilities.tools[3].tools).toContain(
 			"sync_supply_from_selected_meals",
 		);
+		expect(card.capabilities.resources.map((r) => r.uri)).toContain(
+			"ration://capabilities",
+		);
+		expect(card.capabilities.prompts.map((p) => p.name)).toEqual([
+			"parse_receipt",
+			"plan_week",
+		]);
 	});
 
 	it("AGENT_API_SCOPES is in sync with API_SCOPES (no drift)", () => {
@@ -151,6 +158,8 @@ describe("agent readiness metadata", () => {
 		expect(allTools).not.toContain("get_credit_balance");
 		expect(allTools).not.toContain("scan_receipt");
 		expect(allTools).not.toContain("generate_meals");
+		expect(allTools).not.toContain("start_plan_week");
+		expect(allTools).not.toContain("start_generate_meal");
 	});
 
 	it("publishes agent skills with matching sha256 digests", async () => {

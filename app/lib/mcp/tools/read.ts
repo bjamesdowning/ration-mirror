@@ -12,14 +12,11 @@ import {
 	getExpiredCargo,
 	getExpiringCargo,
 } from "../../cargo.server";
-import {
-	getMealPlan,
-	getTodayISO,
-	getWeekEntries,
-} from "../../manifest.server";
-import { addDays } from "../../manifest-dates";
+import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
+import { getMealPlan, getWeekEntries } from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
+import { parseDirections } from "../../schemas/directions";
 import { getSupplyList, getSupplyListById } from "../../supply.server";
 import { getTagsForCargoIds, tagsToSlugs } from "../../tags.server";
 import { findSimilarCargoBatch } from "../../vector.server";
@@ -147,7 +144,16 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				);
 				const matches = results.get(a.query) || [];
 				if (matches.length === 0) {
-					return ok("search_ingredients", { matches: [] });
+					return ok(
+						"search_ingredients",
+						{ matches: [] },
+						{
+							meta: { embeddingMayBePending: true },
+							warnings: [
+								"No semantic matches. If the item was just added, embeddings may still be backfilling — try list_inventory or get_cargo_item by id.",
+							],
+						},
+					);
 				}
 				const matchedIds = matches.map((m) => m.itemId);
 				const cargoRows = await getCargoByIds(
@@ -359,9 +365,9 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				if (!plan) {
 					return ok("get_meal_plan", null);
 				}
-				const startDate = a.startDate ?? getTodayISO();
+				const startDate = a.startDate ?? getUtcTodayISO();
 				const days = a.days ?? 7;
-				const endDate = addDays(startDate, days - 1);
+				const endDate = addUtcDays(startDate, days - 1);
 				const entries = await getWeekEntries(
 					env.DB,
 					plan.id,
@@ -429,7 +435,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					name: m.name,
 					domain: m.domain,
 					description: m.description ?? undefined,
-					directions: m.directions ?? undefined,
+					directions: parseDirections(m.directions ?? undefined),
 					equipment: m.equipment ?? [],
 					servings: m.servings ?? 1,
 					prepTime: m.prepTime ?? undefined,

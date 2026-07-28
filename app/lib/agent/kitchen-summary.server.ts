@@ -4,8 +4,8 @@ import {
 	getExpiredCargo,
 	getExpiringCargo,
 } from "../cargo.server";
+import { addUtcDays, getUtcTodayISO } from "../cargo-utils";
 import { getManifestPreview } from "../manifest.server";
-import { addDays, getTodayISO } from "../manifest-dates";
 import { mapExpiryCargoItems } from "../mcp/expiry-map";
 import { getSupplyItemStats, getSupplyList } from "../supply.server";
 import { getAgentKitchenSnapshot } from "./kitchen-snapshot.server";
@@ -35,7 +35,7 @@ export async function buildKitchenSummary(
 		),
 		KITCHEN_SUMMARY_MANIFEST_DAYS_MAX,
 	);
-	const today = getTodayISO();
+	const today = getUtcTodayISO(now);
 
 	const [
 		kitchen,
@@ -64,7 +64,9 @@ export async function buildKitchenSummary(
 		),
 		getCargoStats(db, organizationId, now),
 		getSupplyList(db, organizationId, { limit: KITCHEN_SUMMARY_SUPPLY_LIMIT }),
-		getManifestPreview(db, organizationId, manifestDays),
+		getManifestPreview(db, organizationId, manifestDays, undefined, undefined, {
+			todayIso: today,
+		}),
 	]);
 
 	const supplyStats = supplyList
@@ -96,7 +98,7 @@ export async function buildKitchenSummary(
 		mealPlan: {
 			planId: manifestPreview?.planId ?? null,
 			startDate: today,
-			endDate: addDays(today, manifestDays - 1),
+			endDate: addUtcDays(today, manifestDays - 1),
 			entries: manifestEntries,
 		},
 		supply: supplyList

@@ -92,6 +92,7 @@ describe("buildKitchenSummary", () => {
 		});
 
 		expect(summary.temporal.todayUtc).toBe("2026-07-13");
+		expect(summary.mealPlan.startDate).toBe(summary.temporal.todayUtc);
 		expect(summary.temporal.expirationAlertDays).toBe(7);
 		expect(summary.kitchen.credits).toBe(12);
 		expect(summary.cargo.stats.totalItems).toBe(5);

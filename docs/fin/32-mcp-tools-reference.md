@@ -1,6 +1,6 @@
 # MCP tools reference
 
-All tools are scoped to the **authorized household** (OAuth grant or API key organization). **Most MCP tools do not consume AI credits**; they use **rate limits** instead. Credit-aware exceptions: `start_plan_week` and `start_generate_meal` (same ledger as the native UI, after host approval). Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, warnings?, meta? }` or `{ ok: false, tool, error }`). Failures include `error.code` (including `timeout`), `error.message`, optional `error.details`, and often `error.recoveryHint`. Copilot returns the **same envelope shape** to the model. Tool handlers are capped (~20s) so hung Workers AI/D1 calls cannot stall the agent forever.
+All tools are scoped to the **authorized household** (OAuth grant or API key organization). **MCP tools do not consume AI credits**; they use **rate limits** instead. Billed AI Plan Week / meal generate remain on the web app and Copilot (deep links `ration://manifest/plan-week`, `ration://galley/generate`) — not MCP tools. Every tool returns a uniform JSON envelope (`{ ok: true, tool, data, warnings?, meta? }` or `{ ok: false, tool, error }`). Failures include `error.code` (including `timeout`), `error.message`, optional `error.details`, and often `error.recoveryHint`. Copilot returns the **same envelope shape** to the model. Tool handlers are capped (~20s) so hung Workers AI/D1 calls cannot stall the agent forever.
 
 ## Rate limit categories
 
@@ -54,11 +54,10 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `match_meals` | `mcp:read` | Cookability match (`strict` / `delta`). |
 | `create_meal` | `mcp:galley:write` | Create structured recipe (credit-free). |
 | `update_meal` | `mcp:galley:write` | Update a recipe. |
-| `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
+| `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked meal plan entries. Returns `deletedPlanEntryCount`. |
 | `set_active_meals` | `mcp:galley:write` | Set active selection to exactly `mealIds`. Optional `syncSupply` (host approval only when syncing). |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active selections. **Requires `confirm: true`.** |
 | `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook by mealId and deduct cargo. |
-| `start_generate_meal` | `mcp:galley:write` | **Credits.** Queues AI meal generation after approval. Deep link: `ration://galley/generate`. |
 
 ## Manifest (Meal plan)
 
@@ -71,7 +70,6 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
 | `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
-| `start_plan_week` | `mcp:manifest:write` | **Credits.** Queues AI Plan Week after approval. Deep link: `ration://manifest/plan-week`. |
 
 ## Supply (Shopping)
 

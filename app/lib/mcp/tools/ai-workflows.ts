@@ -1,10 +1,10 @@
 /**
- * Credit-aware AI workflow tools for MCP/Copilot.
+ * Credit-aware AI workflow tools for Copilot (and formerly MCP).
  * Advise native deep links, but still perform billed Plan Week / Generate
  * via the same queue pipelines as the web/iOS UI.
+ * Not registered on the MCP worker — use createAiWorkflowToolDefs from Copilot only.
  */
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import { AI_COSTS, InsufficientCreditsError } from "../../ledger.server";
@@ -14,11 +14,7 @@ import { submitPlanWeek } from "../../plan-week-submit.server";
 import { SLOT_TYPES } from "../../schemas/manifest";
 import { VARIETY_LEVELS } from "../../schemas/week-plan";
 import { err, ok } from "../envelope";
-import {
-	defineSharedTool,
-	type McpToolsEnv,
-	registerSharedMcpTool,
-} from "../tool-runtime";
+import { defineSharedTool, type McpToolsEnv } from "../tool-runtime";
 
 function flagContext(userId: string) {
 	return { userId };
@@ -227,13 +223,4 @@ export function createAiWorkflowToolDefs(env: McpToolsEnv) {
 			},
 		}),
 	];
-}
-
-export function registerAiWorkflowTools(
-	server: McpServer,
-	env: McpToolsEnv,
-): void {
-	for (const definition of createAiWorkflowToolDefs(env)) {
-		registerSharedMcpTool(server, env, definition);
-	}
 }

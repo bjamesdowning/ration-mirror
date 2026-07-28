@@ -17,6 +17,7 @@ import {
 	withMcpCors,
 } from "../app/lib/mcp/worker-response.server";
 import {
+	buildMcpWwwAuthenticate,
 	resolveAuthorizationServerIssuer,
 	resolveMcpResourceAudience,
 } from "../app/lib/oauth.constants";
@@ -175,7 +176,11 @@ export default {
 				}
 				const audience = resolveMcpResourceAudience(env);
 				const resourceOrigin = audience.replace(/\/mcp$/, "");
-				const wwwAuth = `Bearer realm="Ration MCP", resource_metadata="${resourceOrigin}/.well-known/oauth-protected-resource"`;
+				const wwwAuth = buildMcpWwwAuthenticate(resourceOrigin, {
+					error: "invalid_token",
+					errorDescription:
+						"OAuth access token missing, expired, or revoked. Refresh with offline_access or reconnect.",
+				});
 				return withMcpCors(
 					Response.json(
 						{ error: message },

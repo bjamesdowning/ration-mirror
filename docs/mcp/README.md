@@ -142,7 +142,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 |------|-------|-------------|
 | `create_meal` | `mcp:galley:write` | Create a recipe from structured data. |
 | `update_meal` | `mcp:galley:write` | Update a recipe — round-trip via `list_meals` → edit → pass full object. |
-| `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** |
+| `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked Manifest entries. |
 | `set_active_meals` | `mcp:galley:write` | Set Galley active selection to exactly these mealIds. Optional `syncSupply`. |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
 | `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Mark cooked and deduct ingredients from pantry via semantic matching. Requires **both** scopes. |

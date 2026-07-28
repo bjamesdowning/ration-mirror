@@ -23,6 +23,10 @@ export interface ToolMeta {
 		reissueClaimUri: string;
 		claimRequiredForOwnership: boolean;
 	};
+	/** True when cargo vectors are still backfilling after a write. */
+	embeddingPending?: boolean;
+	/** True when semantic search returned no hits (embeddings may still be pending). */
+	embeddingMayBePending?: boolean;
 }
 
 export type ToolErrorBody = {

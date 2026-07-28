@@ -17,6 +17,8 @@ describe("copilot tool labels", () => {
 	it("includes every Copilot tool", () => {
 		const expected = [
 			"search_docs",
+			"start_plan_week",
+			"start_generate_meal",
 			...MCP_TOOL_GROUPS.flatMap((group) => [...group.tools]),
 		].sort();
 

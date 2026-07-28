@@ -72,7 +72,6 @@ export const MCP_TOOL_GROUPS = [
 			"set_active_meals",
 			"clear_active_meals",
 			"consume_meal",
-			"start_generate_meal",
 		],
 	},
 	{
@@ -85,7 +84,6 @@ export const MCP_TOOL_GROUPS = [
 			"update_meal_plan_entry",
 			"consume_manifest_entries",
 			"remove_meal_plan_entry",
-			"start_plan_week",
 		],
 	},
 	{
@@ -420,8 +418,28 @@ export function buildMcpServerCard(request: Request) {
 		},
 		capabilities: {
 			tools: MCP_TOOL_GROUPS,
-			resources: [],
-			prompts: [],
+			resources: [
+				{ name: "ration_units", uri: "ration://units" },
+				{ name: "ration_domains", uri: "ration://domains" },
+				{
+					name: "inventory_import_schema",
+					uri: "ration://schemas/inventory-import",
+				},
+				{ name: "ration_capabilities", uri: "ration://capabilities" },
+				{ name: "ration_connection_guide", uri: "ration://guides/connect" },
+			],
+			prompts: [
+				{
+					name: "parse_receipt",
+					description:
+						"Stepwise guide for parsing a receipt and submitting items via credit-free import tools.",
+				},
+				{
+					name: "plan_week",
+					description:
+						"Suggest a meal plan for the next 7 days that minimizes waste from expiring items.",
+				},
+			],
 		},
 		documentationUrl: absoluteUrl(request, "/docs/api#mcp-server"),
 	};

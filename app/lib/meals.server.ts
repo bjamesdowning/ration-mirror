@@ -17,6 +17,7 @@ import {
 	cargo,
 	meal,
 	mealIngredient,
+	mealPlanEntry,
 	mealTag,
 	tag as tagTable,
 } from "../db/schema";
@@ -1111,17 +1112,31 @@ export async function updateProvision(
 }
 
 /**
- * Deletes a meal. Verification ensures organization can only delete their own meals.
+ * Deletes a meal owned by the organization. Returns whether a row was deleted
+ * and how many meal-plan entries will cascade away with it.
  */
 export async function deleteMeal(
 	db: D1Database,
 	organizationId: string,
 	mealId: string,
-) {
+): Promise<{ deleted: boolean; deletedPlanEntryCount: number }> {
 	const d1 = drizzle(db);
-	return await d1
+	const [owned] = await d1
+		.select({ id: meal.id })
+		.from(meal)
+		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)))
+		.limit(1);
+	if (!owned) {
+		return { deleted: false, deletedPlanEntryCount: 0 };
+	}
+	const linkedEntries = await d1
+		.select({ id: mealPlanEntry.id })
+		.from(mealPlanEntry)
+		.where(eq(mealPlanEntry.mealId, mealId));
+	await d1
 		.delete(meal)
 		.where(and(eq(meal.id, mealId), eq(meal.organizationId, organizationId)));
+	return { deleted: true, deletedPlanEntryCount: linkedEntries.length };
 }
 
 /**

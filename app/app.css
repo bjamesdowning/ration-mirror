@@ -994,32 +994,29 @@
   max-width: 40rem;
 }
 
-.splash-coming-soon {
+.splash-app-store {
+  display: inline-block;
   width: fit-content;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
   margin-top: 2rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.9rem;
-  background: var(--bg-surface);
-  padding: 0.75rem 1rem;
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 700;
+  line-height: 0;
+  border-radius: 0.55rem;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.splash-coming-soon > span {
-  display: flex;
-  flex-direction: column;
+.splash-app-store:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
-.splash-coming-soon small {
-  color: var(--text-muted);
-  font-size: 0.54rem;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.splash-app-store:focus-visible {
+  outline: 2px solid var(--hyper-green);
+  outline-offset: 3px;
+}
+
+.splash-app-store img {
+  display: block;
+  height: 2.75rem;
+  width: auto;
 }
 
 @keyframes splashPulse {

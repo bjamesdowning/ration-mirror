@@ -53,7 +53,9 @@ describe("agent readiness metadata", () => {
 			"AI pantry management system",
 		);
 		expect(getPublicMarkdownForPath("/")).toContain("Ration Copilot");
-		expect(getPublicMarkdownForPath("/")).toContain("iOS is coming soon");
+		expect(getPublicMarkdownForPath("/")).toContain(
+			"iOS is available on the App Store",
+		);
 		expect(getPublicMarkdownForPath("/docs/api")).toContain("Ration API");
 		expect(getPublicMarkdownForPath("/legal/privacy")).toBeNull();
 	});

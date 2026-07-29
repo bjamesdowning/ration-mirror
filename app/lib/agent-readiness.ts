@@ -522,7 +522,7 @@ The MCP server card advertises \`oauth2\` transport auth at \`/.well-known/mcp/s
 4. Supply: shopping lists generated from missing ingredients.
 5. Dock: purchased items flow back into Cargo.
 
-Ration for iOS is coming soon. The responsive web app and installable PWA are available now.
+Ration for iOS is available on the App Store. The responsive web app and installable PWA are available now.
 
 ## Agent-Ready Surfaces
 

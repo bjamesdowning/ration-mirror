@@ -196,7 +196,7 @@ The same kitchen state is available wherever you already work:
 - **Web / PWA** — full Hub for Cargo, Galley, Manifest, and Supply
 - **Ask Ration (Copilot)** — in-app assistant over live inventory and docs
 - **MCP + API** — agents in Claude, ChatGPT, Cursor, and other clients operate the same tools against the same org ([kitchen API](/blog/mcp-kitchen-assistant), [agent-first onboarding](/blog/agent-first-mcp-onboarding))
-- **iOS app** — coming soon, same account and household data, built for the moments you are actually in the kitchen or the aisle
+- **iOS app** — available on the [App Store](https://apps.apple.com/ie/app/ration-kitchen-hub/id6785010110); same account and household data, built for the moments you are actually in the kitchen or the aisle
 
 Category apps optimize for one job. Ration's bet is that the jobs were never separate — only the software was. One inventory, one recipe shelf, one week, one list, reachable from the interfaces you already use.
 

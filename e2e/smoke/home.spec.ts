@@ -29,7 +29,9 @@ test.describe("home", () => {
 				name: /The full loop, wherever dinner happens/i,
 			}),
 		).toBeVisible();
-		await expect(page.getByLabel("iOS app coming soon")).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: /Download Ration on the App Store/i }),
+		).toBeVisible();
 		// Key footer/header links
 		await expect(
 			page.getByRole("link", { name: "Blog" }).first(),

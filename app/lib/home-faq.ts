@@ -64,7 +64,7 @@ export function buildHomeFaqEntries(opts: {
 		{
 			question: "Is there a Ration iOS app?",
 			answer:
-				"Ration for iOS is coming soon. The native app will bring Cargo, Manifest, Supply, household sync, and Ration Copilot to iPhone. Until launch, Ration is available as a responsive web app and installable PWA.",
+				"Yes. Ration for iOS (Ration Kitchen Hub) is available on the App Store. It brings Cargo, Manifest, Supply, household sync, and Ration Copilot to iPhone — the same household data model as the responsive web app and installable PWA. Get it from the App Store via the #ios section on the home page.",
 		},
 	];
 }

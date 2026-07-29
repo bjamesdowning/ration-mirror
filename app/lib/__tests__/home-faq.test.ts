@@ -51,6 +51,6 @@ describe("buildHomeFaqEntries", () => {
 		expect(
 			entries.find((entry) => entry.question === "Is there a Ration iOS app?")
 				?.answer,
-		).toContain("coming soon");
+		).toContain("available on the App Store");
 	});
 });

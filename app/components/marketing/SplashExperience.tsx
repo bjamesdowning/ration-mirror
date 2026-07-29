@@ -15,6 +15,7 @@ import {
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { APP_STORE_URL } from "~/lib/marketing";
 
 const loopStages = [
 	{
@@ -345,7 +346,7 @@ function IosPreview() {
 				<div className="splash-phone-screen">
 					<div>
 						<span className="splash-status-dot" />
-						<small>Ration for iPhone</small>
+						<small>Available now</small>
 					</div>
 					<Smartphone size={46} />
 					<strong>Your kitchen. In your pocket.</strong>
@@ -356,20 +357,23 @@ function IosPreview() {
 				<p className="text-label text-hyper-green">Ration for iOS</p>
 				<h2 id="ios-heading">The full loop, wherever dinner happens.</h2>
 				<p>
-					Native pantry control, Copilot and live household sync are coming to
-					iPhone.
+					Native pantry control, Copilot, and live household sync are available
+					on iPhone — same Cargo, Galley, Manifest, and Supply as the web app.
 				</p>
-				<span
-					className="splash-coming-soon"
-					role="status"
-					aria-label="iOS app coming soon"
+				<a
+					href={APP_STORE_URL}
+					className="splash-app-store"
+					target="_blank"
+					rel="noopener noreferrer"
+					aria-label="Download Ration on the App Store"
 				>
-					<Smartphone aria-hidden size={19} />
-					<span>
-						<small>iOS app</small>
-						Coming soon
-					</span>
-				</span>
+					<img
+						src="/static/download-on-the-app-store.svg"
+						alt="Download on the App Store"
+						width={140}
+						height={47}
+					/>
+				</a>
 			</div>
 		</section>
 	);

@@ -4,7 +4,7 @@ description: "The weekly cycle of planning, shopping, cooking, and repeating is 
 date: 2026-03-11
 dateModified: 2026-03-11
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - meal planning
   - meal prep

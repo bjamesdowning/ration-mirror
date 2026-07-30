@@ -313,7 +313,7 @@ export default function SharedManifestPage({
 						className="flex items-center gap-2 text-hyper-green hover:opacity-80 transition-opacity"
 					>
 						<img
-							src="/static/ration-logo.svg"
+							src="/static/ration-logo.png"
 							alt="Ration"
 							className="w-8 h-8"
 						/>

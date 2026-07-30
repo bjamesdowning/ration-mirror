@@ -4,7 +4,7 @@ description: "Reducing household food waste is not only about discipline. It is 
 date: 2026-04-26
 dateModified: 2026-04-26
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - food waste reduction
   - pantry inventory

@@ -21,7 +21,7 @@ describe("ogMeta", () => {
 			title: "Test article",
 			description: "Test description",
 			path: "/blog/test-article",
-			image: "/static/ration-logo.svg",
+			image: "/static/ration-logo.png",
 			type: "article",
 			publishedTime: "2026-03-10",
 			modifiedTime: "2026-03-11",

@@ -80,7 +80,7 @@ describe("getPostBySlug", () => {
 		expect(post?.dateModified).toBe("2026-03-21");
 		expect(post?.authorName).toBe("Ration");
 		expect(post?.authorUrl).toBeUndefined();
-		expect(post?.image).toBe("/static/ration-logo.svg");
+		expect(post?.image).toBe("/static/ration-logo.png");
 		expect(post?.tags).toContain("MCP");
 		expect(post?.tags).toContain("meal planning");
 	});

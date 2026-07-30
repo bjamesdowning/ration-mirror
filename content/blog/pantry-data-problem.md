@@ -4,7 +4,7 @@ description: "Most pantry trackers fail because getting data in is harder than k
 date: 2026-03-11
 dateModified: 2026-03-11
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - pantry tracker
   - pantry inventory

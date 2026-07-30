@@ -22,7 +22,7 @@ describe("organizationSchema", () => {
 		expect(schema["@type"]).toBe("Organization");
 		expect(schema.name).toBe("Ration");
 		expect(schema.url).toBe(SITE);
-		expect(schema.logo).toContain("/static/ration-logo.svg");
+		expect(schema.logo).toContain("/static/ration-logo.png");
 	});
 
 	it("includes address and omits vatID when not registered", () => {

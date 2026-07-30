@@ -4,7 +4,7 @@ description: "Ration Kitchen Hub is on the App Store. Same household data model 
 date: 2026-07-29
 dateModified: 2026-07-29
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - ios
   - pantry management

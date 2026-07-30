@@ -4,7 +4,7 @@ description: "Keyword search breaks in real kitchens because pantry data is mess
 date: 2026-04-26
 dateModified: 2026-04-26
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - pantry search
   - semantic search

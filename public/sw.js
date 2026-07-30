@@ -3,7 +3,7 @@
  * Does not cache API responses or provide offline data access.
  */
 const CACHE_NAME = "ration-shell-v1";
-const SHELL_URLS = ["/", "/hub", "/static/ration-logo.svg"];
+const SHELL_URLS = ["/", "/hub", "/static/ration-logo.png"];
 
 self.addEventListener("install", (event) => {
 	event.waitUntil(

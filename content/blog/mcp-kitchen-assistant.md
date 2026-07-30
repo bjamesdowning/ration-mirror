@@ -4,7 +4,7 @@ description: "How to connect Ration to Claude, Cursor, and any MCP client — wi
 date: 2026-03-10
 dateModified: 2026-03-21
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - MCP
   - AI assistant

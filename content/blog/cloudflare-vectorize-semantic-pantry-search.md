@@ -4,7 +4,7 @@ description: "A technical walkthrough of Ration's semantic ingredient matching s
 date: 2026-04-26
 dateModified: 2026-04-26
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - cloudflare vectorize
   - semantic search

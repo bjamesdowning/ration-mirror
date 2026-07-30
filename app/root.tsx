@@ -31,7 +31,7 @@ export const links: Route.LinksFunction = () => [
 	{ rel: "manifest", href: "/manifest.webmanifest" },
 	{
 		rel: "apple-touch-icon",
-		href: "/static/ration-logo.svg",
+		href: "/static/ration-logo.png",
 	},
 ];
 

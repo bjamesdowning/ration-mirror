@@ -55,7 +55,7 @@ export type SoftwareOffer = {
 /* Identity / publisher schemas                                               */
 /* -------------------------------------------------------------------------- */
 
-const PUBLISHER_LOGO = `${SITE_ORIGIN}/static/ration-logo.svg`;
+const PUBLISHER_LOGO = `${SITE_ORIGIN}/static/ration-logo.png`;
 
 /** Organization schema for the publisher (Mayutic / Ration). */
 export function organizationSchema(opts?: {

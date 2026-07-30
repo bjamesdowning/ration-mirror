@@ -4,7 +4,7 @@ description: "These three kitchen app categories solve different jobs. Here is h
 date: 2026-07-28
 dateModified: 2026-07-28
 authorName: "Ration"
-image: "/static/ration-logo.svg"
+image: "/static/ration-logo.png"
 tags:
   - pantry app
   - recipe manager

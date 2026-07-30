@@ -250,7 +250,7 @@ export function AuthWidget({
 					<div className="flex justify-center mb-8">
 						<Link to="/">
 							<img
-								src="/static/ration-logo.svg"
+								src="/static/ration-logo.png"
 								alt="Ration"
 								className="h-16"
 							/>
@@ -307,7 +307,7 @@ export function AuthWidget({
 			{showLogo && (
 				<div className="flex justify-center mb-8">
 					<Link to="/">
-						<img src="/static/ration-logo.svg" alt="Ration" className="h-16" />
+						<img src="/static/ration-logo.png" alt="Ration" className="h-16" />
 					</Link>
 				</div>
 			)}

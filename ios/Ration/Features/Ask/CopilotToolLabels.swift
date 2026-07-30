@@ -21,6 +21,8 @@ enum CopilotToolLabels {
         "get_expiring_items": LabelSet(running: "Checking expiring items…", done: "Checked expiring items", error: "Expiry check failed"),
         "get_expired_items": LabelSet(running: "Checking expired items…", done: "Checked expired items", error: "Expired check failed"),
         "get_kitchen_summary": LabelSet(running: "Summarizing your kitchen…", done: "Kitchen summary ready", error: "Kitchen summary failed"),
+        "get_kitchen_events": LabelSet(running: "Reading Flight Recorder…", done: "Loaded kitchen activity", error: "Could not load kitchen activity"),
+        "get_kitchen_stats": LabelSet(running: "Computing kitchen stats…", done: "Kitchen stats ready", error: "Could not load kitchen stats"),
         "get_supply_list": LabelSet(running: "Loading your Supply list…", done: "Loaded Supply list", error: "Supply lookup failed"),
         "get_meal_plan": LabelSet(running: "Loading your meal plan…", done: "Loaded meal plan", error: "Meal plan lookup failed"),
         "list_meals": LabelSet(running: "Browsing your Galley…", done: "Browsed Galley", error: "Galley lookup failed"),

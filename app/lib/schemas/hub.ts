@@ -8,6 +8,7 @@ const HUB_WIDGET_IDS = [
 	"cargo-expiring",
 	"supply-preview",
 	"manifest-preview",
+	"flight-recorder",
 ] as const;
 
 export const SLOT_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;

@@ -7,6 +7,7 @@ import type {
 	UserSettings,
 } from "~/lib/types";
 import { CargoExpiringWidget } from "./CargoExpiringWidget";
+import { FlightRecorderWidget } from "./FlightRecorderWidget";
 import { HubStatsWidget } from "./HubStatsWidget";
 import { ManifestWidget } from "./ManifestWidget";
 import { MealsPartialWidget } from "./MealsPartialWidget";
@@ -114,6 +115,17 @@ export const WIDGET_REGISTRY = new Map<HubWidgetId, HubWidgetDefinition>([
 			defaultSize: "md",
 		},
 	],
+	[
+		"flight-recorder",
+		{
+			id: "flight-recorder",
+			title: "Flight Recorder",
+			description: "This week's cooks, docks, expiries, and recent activity",
+			dataKeys: ["flightRecorderActivity"],
+			component: FlightRecorderWidget,
+			defaultSize: "md",
+		},
+	],
 ]);
 
 const FULL_LAYOUT: HubWidgetLayout[] = [
@@ -124,6 +136,7 @@ const FULL_LAYOUT: HubWidgetLayout[] = [
 	{ id: "cargo-expiring", order: 4, size: "md", visible: true },
 	{ id: "supply-preview", order: 5, size: "md", visible: true },
 	{ id: "manifest-preview", order: 6, size: "md", visible: true },
+	{ id: "flight-recorder", order: 7, size: "md", visible: true },
 ];
 
 const COOK_LAYOUT: HubWidgetLayout[] = [

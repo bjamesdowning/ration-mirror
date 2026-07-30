@@ -257,6 +257,10 @@ export async function purgeUserAccount(
 				.update(schema.ledger)
 				.set({ userId: null })
 				.where(eq(schema.ledger.userId, userId)),
+			db
+				.update(schema.kitchenEvent)
+				.set({ userId: null })
+				.where(eq(schema.kitchenEvent.userId, userId)),
 			db.delete(schema.apiKey).where(eq(schema.apiKey.userId, userId)),
 			db
 				.delete(schema.verification)

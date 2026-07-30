@@ -198,6 +198,9 @@ export async function deleteOrganization(
 				.delete(schema.ledger)
 				.where(eq(schema.ledger.organizationId, organizationId)),
 			db
+				.delete(schema.kitchenEvent)
+				.where(eq(schema.kitchenEvent.organizationId, organizationId)),
+			db
 				.delete(schema.agentRegistration)
 				.where(eq(schema.agentRegistration.organizationId, organizationId)),
 			db

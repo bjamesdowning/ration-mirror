@@ -200,7 +200,7 @@ flowchart TB
 
 | Binding | Service | Purpose |
 |---------|---------|---------|
-| `DB` | D1 (SQLite) | All persistent data: users, orgs, inventory, meals, plans, ledger, API keys |
+| `DB` | D1 (SQLite) | All persistent data: users, orgs, inventory, meals, plans, ledger, kitchen_event (Flight Recorder), API keys |
 | `RATION_KV` | KV Namespace | Rate limiting counters, webhook idempotency keys, tier cache, vector embedding cache |
 | `STORAGE` | R2 Bucket | Object storage for scan images and data exports |
 | `ASSETS` | Static Assets | Built client-side bundle (`./build/client`) served at the edge |
@@ -772,6 +772,7 @@ The Hub (`/hub`) is a customisable widget dashboard giving an at-a-glance view o
 | `cargo-expiring` | D1 UTC calendar-day window (`expirationAlertDays`, default 7) | Items to use soon |
 | `supply-preview` | D1 supply list | Shopping summary |
 | `manifest-preview` | D1 meal plan entries | Next 7 days |
+| `flight-recorder` | D1 `kitchen_event` (7d stats + recent) | Cooks, docks, expiries, jettisons — included in the `full` preset; add via Customize Hub on other profiles |
 
 **Why deferred loaders on the Hub?** Meal matching involves an AI embedding call (or KV cache lookup) plus a Vectorize query. These are deferred via React Router's `defer()` so the page skeleton loads instantly and the matching widget fills in asynchronously, keeping the hub under 100ms for the initial paint.
 
@@ -1149,6 +1150,7 @@ erDiagram
 | `tag` | org | Org-wide tag registry (slug, name, color, category) | `(org_id, slug)` unique |
 | `cargo_tag` | cargo + tag | Junction: cargo ↔ tag | `(cargo_id, tag_id)` PK |
 | `ledger` | org | Immutable credit transaction log (debits + credits) | `org_id`, `user_id` |
+| `kitchen_event` | org | Flight Recorder append-only activity log (cooks, docks, expiries, jettisons); 13-month raw retention | `(org_id, occurred_at)`, `(org_id, event_type, occurred_at)` |
 | `meal` | org | Recipes and provisions; `type` discriminates them | `(org_id, domain)`, `(org_id, type)` |
 | `meal_ingredient` | meal | Ingredient list with optional soft FK to cargo | `meal_id`, `ingredient_name` |
 | `meal_tag` | meal + tag | Junction: meal ↔ tag | `(meal_id, tag_id)` PK |
@@ -1161,6 +1163,8 @@ erDiagram
 | `api_key` | org + user | Programmatic API keys (SHA-256 hashed, prefix-indexed) | `key_prefix`, `org_id` |
 | `queue_job` | — | Scan and meal-generate job status for polling; D1-backed for strong consistency | `expires_at`, `(organization_id, status)` |
 
+**Flight Recorder:** Kitchen mutations emit typed events via [`app/lib/kitchen-events.server.ts`](app/lib/kitchen-events.server.ts) (`KITCHEN_EVENT_REGISTRY`). New metrics plug in by adding a registry entry + one emit at the call site. Query via MCP/Copilot (`get_kitchen_events`, `get_kitchen_stats`) or the Hub `flight-recorder` widget. Daily cron detects `cargo_expired` and purges rows older than 13 months (`KITCHEN_EVENT_RETENTION_DAYS`).
+
 **D1 parameter limit:** D1 enforces a hard limit of 100 bound parameters per statement (vs. SQLite's 999). Dense multi-row writes (especially Supply sync materialize) also budget binds **across** a `db.batch()` call via `packByBindBudget`, because D1 may reject the batch script with `too many SQL variables`. Every bulk write is chunked using constants from [`app/lib/query-utils.server.ts`](app/lib/query-utils.server.ts):
 
 | Constant | Value | Columns | Table |
@@ -1170,6 +1174,7 @@ erDiagram
 | `D1_MAX_TAG_INSERT_ROWS_PER_STATEMENT` | 14 | 7 | `tag` |
 | `D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT` | 12 | 8 | `meal_plan_entry` |
 | `D1_MAX_SUPPLY_ROWS_PER_STATEMENT` | 7 | 13 | `supply_item` (Drizzle binds `is_purchased` default; inserts run one statement per batch) |
+| `D1_MAX_KITCHEN_EVENT_ROWS_PER_STATEMENT` | 11 | 9 | `kitchen_event` (Flight Recorder) |
 
 **Supply sync concurrency:** `createSupplyListFromSelectedMeals` takes an org-scoped KV lock (`supply_sync_lock:{organizationId}`, TTL 60s) so concurrent mobile/web/MCP syncs cannot race clear→insert and duplicate lines. Contended callers get `429` `supply_sync_busy` with `Retry-After`. Insert batches are not retried on D1 timeouts (avoids double-insert after a committed write). Fractional count ingredients (e.g. `0.5 unit`) are scaled exactly per Manifest day, summed, then rounded once for shopping.
 
@@ -1601,7 +1606,7 @@ All rate limits use a **sliding window counter** algorithm implemented in [`app/
 | `GET /api/mobile/v1/hub` | userId | 60s | 60 | `hub_read` — 10-way parallel fan-out per call; same tier class as `cargo_list`/`meal_list` |
 | `GET /api/mobile/v1/supply` | userId | 60s | 60 | `supply_read` — read-only, same tier class as `cargo_list` |
 | MCP `search_ingredients`, `match_meals` | orgId | 60s | 20 | AI cost `mcp_search` (fail-closed) |
-| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_user_preferences, get_context, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
+| MCP read tools (list_inventory, get_supply_list, get_meal_plan, list_meals, get_expiring_items, get_kitchen_events, get_kitchen_stats, get_user_preferences, get_context, preview_inventory_import) | orgId | 60s | 30 | D1 read throttle (mcp_list) |
 | MCP write tools | orgId | 60s | 15 | Mutation throttle (mcp_write) |
 | MCP write tools, per-credential | apiKeyId / OAuth client | 60s | 15 | Compromised-key cap (`mcp_write_per_key`; includes `mcp_supply_sync`) |
 | MCP `sync_supply_from_selected_meals` | orgId | 60s | 8 | Heavy sync (D1 + Vectorize); separate from mcp_write |
@@ -1646,6 +1651,8 @@ A separate Cloudflare Worker (`ration-mcp`) exposes the Ration pantry to AI agen
 | `list_meals` | Read | `mcp:read` | Cursor-paginated recipes; pass `includeIngredients:false` to skip fan-out | mcp_list (30/min) |
 | `match_meals` | Read | `mcp:read` | Meals cookable from pantry (strict or delta mode) | mcp_search (20/min) |
 | `get_expiring_items` | Read | `mcp:read` | Items expiring within a given number of days (default 7) | mcp_list (30/min) |
+| `get_kitchen_events` | Read | `mcp:read` | Flight Recorder timeline (filter by type/date; paginated, max 100) | mcp_list (30/min) |
+| `get_kitchen_stats` | Read | `mcp:read` | Flight Recorder aggregates (7d/30d/90d/365d counts + top cooked meals) | mcp_list (30/min) |
 | `get_user_preferences` | Read | `mcp:read` | Allergens, expiration alert days, theme, default unit mode | mcp_list (30/min) |
 | `get_context` | Read | `mcp:read` | Returns org/key context, onboarding state, kitchen tier/usage/credits/lastActivityAt, capabilities, and suggested next actions | mcp_list (30/min) |
 | `preview_inventory_import` | Write | `mcp:inventory:write` | Validates parsed receipt items, returns `previewToken` (15-min KV TTL) | mcp_write (15/min) |

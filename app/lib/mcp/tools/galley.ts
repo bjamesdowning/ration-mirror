@@ -214,6 +214,8 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 					{
 						servings: a.servings,
 						confirmInsufficient: a.confirmInsufficient,
+						userId: ctx.userId,
+						source: "mcp",
 					},
 				);
 				if (result.requiresConfirmation) {

@@ -24,6 +24,14 @@ vi.mock("../readiness-cache.server", () => ({
 		bumpReadinessCacheVersions(...args),
 }));
 
+vi.mock("../kitchen-events.server", () => ({
+	buildKitchenEventInserts: () => ({
+		stmts: [{ kind: "kitchen-event" }],
+		eventIds: ["evt-1"],
+	}),
+	buildManifestConsumedEvent: (input: unknown) => input,
+}));
+
 const planId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const entryId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const mealId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -54,8 +62,11 @@ vi.mock("drizzle-orm/d1", () => ({
 					{
 						id: entryId,
 						mealId,
+						date: "2026-07-30",
+						slotType: "dinner",
 						servingsOverride: null,
 						mealServings: 2,
+						mealName: "Pasta",
 					},
 				]),
 			};
@@ -110,6 +121,7 @@ describe("consumeManifestEntries", () => {
 
 		expect(result.consumed).toBe(1);
 		expect(result.deductions).toHaveLength(1);
+		expect(result.eventIds).toEqual(["evt-1"]);
 		expect(cookMeal).toHaveBeenCalledWith(env, orgId, mealId, {
 			servings: 2,
 			deductionMode: "strict",

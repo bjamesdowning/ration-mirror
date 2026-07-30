@@ -193,6 +193,7 @@
 	 *
 	 * session-purge: runs daily at 03:00 UTC to delete expired sessions and
 	 * prevent the session table from growing unbounded at scale.
+	 * Also runs Flight Recorder expiry detection + kitchen_event retention purge.
 	 */
 	"triggers": {
 		"crons": ["0 3 * * *"]

@@ -330,7 +330,11 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					ctx.organizationId,
 					plan.id,
 					a.entryIds,
-					{ confirmInsufficient: a.confirmInsufficient },
+					{
+						confirmInsufficient: a.confirmInsufficient,
+						userId: ctx.userId,
+						source: "mcp",
+					},
 				);
 				if (result.requiresConfirmation) {
 					return ok("consume_manifest_entries", {

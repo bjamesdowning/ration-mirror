@@ -2,6 +2,10 @@ import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
+import {
+	detectAndRecordExpiredCargo,
+	purgeExpiredKitchenEvents,
+} from "../app/lib/kitchen-events.server";
 import { log } from "../app/lib/logging.server";
 import { runWithOpsEnv } from "../app/lib/ops-context.server";
 import { retryFailedPurgeJobs } from "../app/lib/purge-retry-cron.server";
@@ -116,6 +120,7 @@ export default {
 	 *   - Queue job cleanup: deletes expired queue_job rows.
 	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
 	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
+	 *   - Flight Recorder: detect newly expired cargo + purge events past retention.
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
@@ -129,6 +134,8 @@ export default {
 		ctx.waitUntil(purgeOrphanAgentKitchens(env));
 		ctx.waitUntil(sendReengagementEmails(env));
 		ctx.waitUntil(retryFailedPurgeJobs(env));
+		ctx.waitUntil(runKitchenEventExpiryDetection(env));
+		ctx.waitUntil(runKitchenEventRetentionPurge(env));
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -163,5 +170,27 @@ async function purgeExpiredQueueJobs(env: Env): Promise<void> {
 		}
 	} catch (err) {
 		log.error("[CRON] Queue job purge failed", err);
+	}
+}
+
+async function runKitchenEventExpiryDetection(env: Env): Promise<void> {
+	try {
+		const recorded = await detectAndRecordExpiredCargo(env.DB);
+		if (recorded > 0) {
+			log.info("[CRON] Recorded cargo_expired events", { recorded });
+		}
+	} catch (err) {
+		log.error("[CRON] Kitchen event expiry detection failed", err);
+	}
+}
+
+async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
+	try {
+		const deleted = await purgeExpiredKitchenEvents(env.DB);
+		if (deleted > 0) {
+			log.info("[CRON] Purged expired kitchen events", { deleted });
+		}
+	} catch (err) {
+		log.error("[CRON] Kitchen event retention purge failed", err);
 	}
 }

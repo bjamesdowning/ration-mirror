@@ -67,7 +67,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 			context.cloudflare.env,
 			groupId,
 			id,
-			{ servings, confirmInsufficient },
+			{ servings, confirmInsufficient, userId: user.id, source: "web" },
 		);
 		return { result };
 	} catch (e) {

@@ -6,6 +6,7 @@ import {
 	type MissingIngredientDetail,
 } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
+import type { KitchenEventSource } from "./schemas/kitchen-events";
 
 export type CookMealWithConfirmationResult = {
 	cooked: boolean;
@@ -16,6 +17,7 @@ export type CookMealWithConfirmationResult = {
 	missingIngredients?: MissingIngredientDetail[];
 	partialCook?: boolean;
 	skippedIngredients?: MissingIngredientDetail[];
+	eventIds?: string[];
 };
 
 async function resolveEffectiveCookServings(
@@ -51,7 +53,12 @@ export async function cookMealWithConfirmation(
 	env: Env,
 	organizationId: string,
 	mealId: string,
-	options?: { servings?: number; confirmInsufficient?: boolean },
+	options?: {
+		servings?: number;
+		confirmInsufficient?: boolean;
+		userId?: string | null;
+		source?: KitchenEventSource;
+	},
 ): Promise<CookMealWithConfirmationResult> {
 	const effectiveServings = await resolveEffectiveCookServings(
 		env,
@@ -73,6 +80,7 @@ export async function cookMealWithConfirmation(
 				deductions: [],
 				requiresConfirmation: true,
 				missingIngredients,
+				eventIds: [],
 			};
 		}
 	}
@@ -80,6 +88,8 @@ export async function cookMealWithConfirmation(
 	const result = await cookMeal(env, organizationId, mealId, {
 		servings: effectiveServings,
 		deductionMode: options?.confirmInsufficient ? "partial" : "strict",
+		userId: options?.userId,
+		source: options?.source,
 	});
 	return {
 		cooked: true,
@@ -88,5 +98,6 @@ export async function cookMealWithConfirmation(
 		deductions: result.deductions,
 		partialCook: result.partialCook,
 		skippedIngredients: result.skippedIngredients,
+		eventIds: result.eventIds,
 	};
 }

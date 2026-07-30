@@ -23,20 +23,22 @@ import {
 } from "../db/schema";
 import { computeBaseFields, effectiveBaseFields } from "./base-quantity";
 import { checkCapacity } from "./capacity.server";
-import { applyCargoDeductions } from "./cargo-deduction.server";
+import { buildCargoDeductionStatements } from "./cargo-deduction.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
 import { isCargoUsableForMatching } from "./cargo-utils";
 import { ITEM_DOMAINS } from "./domain";
+import {
+	buildGalleyCookedEvent,
+	buildKitchenEventInserts,
+} from "./kitchen-events.server";
 import { normalizeForCargoDedup } from "./matching";
-import type {
-	CargoIndexEntry,
-	CargoTokenIndexes,
-	MissingIngredientDetail,
-} from "./matching.server";
 import {
 	buildCargoIndex,
 	buildCargoTokenIndexes,
+	type CargoIndexEntry,
+	type CargoTokenIndexes,
 	ingredientNeedsVectorFallback,
+	type MissingIngredientDetail,
 	resolveCargoBucketsForIngredient,
 } from "./matching.server";
 import {
@@ -48,6 +50,7 @@ import {
 } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import { getScaleFactor, scaleQuantity } from "./scale.server";
+import type { KitchenEventSource } from "./schemas/kitchen-events";
 import type {
 	MealInput,
 	ProvisionInput,
@@ -1283,6 +1286,9 @@ export async function cookMeal(
 		 * Caller must apply `deductions` (e.g. batched with consumedAt marks).
 		 */
 		skipApply?: boolean;
+		/** Attribution for Flight Recorder (optional). */
+		userId?: string | null;
+		source?: KitchenEventSource;
 	},
 ) {
 	const allowPartial = options?.deductionMode === "partial";
@@ -1595,18 +1601,53 @@ export async function cookMeal(
 		}
 	}
 
-	if (deductions.length > 0 && !options?.skipApply) {
-		trackD1BatchSize("cookMeal", deductions.length, {
-			organizationRef: organizationId,
-		});
-		await trackWriteOperation(
-			"cookMeal",
-			() => applyCargoDeductions(env.DB, organizationId, deductions),
-			{
+	if (!options?.skipApply) {
+		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+		const stmts: any[] =
+			deductions.length > 0
+				? await buildCargoDeductionStatements(d1, organizationId, deductions)
+				: [];
+		const { stmts: eventStmts, eventIds } = buildKitchenEventInserts(d1, [
+			buildGalleyCookedEvent({
+				organizationId,
+				userId: options?.userId,
+				mealId,
+				mealName: mealRecord.name,
+				servings: effectiveServings,
+				deductions,
+				partialCook: skippedIngredients.length > 0,
+				source: options?.source,
+			}),
+		]);
+		stmts.push(...eventStmts);
+
+		if (stmts.length > 0) {
+			trackD1BatchSize("cookMeal", stmts.length, {
 				organizationRef: organizationId,
-			},
-		);
-		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
+			});
+			await trackWriteOperation(
+				"cookMeal",
+				// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+				() => d1.batch(stmts as [any, ...any[]]),
+				{
+					organizationRef: organizationId,
+				},
+			);
+		}
+		if (deductions.length > 0) {
+			await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
+		}
+
+		return {
+			cooked: true,
+			ingredientsDeducted: deductions.length,
+			servings: effectiveServings,
+			deductions,
+			partialCook: skippedIngredients.length > 0,
+			skippedIngredients:
+				skippedIngredients.length > 0 ? skippedIngredients : undefined,
+			eventIds,
+		};
 	}
 
 	return {
@@ -1617,6 +1658,7 @@ export async function cookMeal(
 		partialCook: skippedIngredients.length > 0,
 		skippedIngredients:
 			skippedIngredients.length > 0 ? skippedIngredients : undefined,
+		eventIds: [] as string[],
 	};
 }
 

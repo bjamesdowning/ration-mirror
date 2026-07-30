@@ -50,7 +50,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			groupId,
 			planId,
 			entryIds,
-			{ confirmInsufficient },
+			{ confirmInsufficient, userId: user.id, source: "web" },
 		);
 
 		return result;

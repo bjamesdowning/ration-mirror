@@ -41,6 +41,7 @@ Your assistant guesses. It does not know what is in your fridge, what expired ye
 | Prompt | What happens |
 |--------|----------------|
 | "How's my kitchen?" | `get_kitchen_summary` |
+| "What did I cook last week?" | `get_kitchen_events` / `get_kitchen_stats` |
 | "List my pantry and what's expiring this week." | `list_inventory` + `get_expiring_items` |
 | "What already expired in my pantry?" | `get_expired_items` |
 | "What meals can I make with what we have?" | `match_meals` (strict or partial matches) |
@@ -113,6 +114,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `list_inventory` | `mcp:read` | Cursor-paginated pantry list (default 100, max 200). Optional domain filter, UTC `expiresBefore` / `expiresAfter`, and `sortBy: expiresAt`. |
 | `get_cargo_item` | `mcp:read` | Fetch one pantry item by id (tags, expiry, custom fields). |
 | `get_kitchen_summary` | `mcp:read` | Single-call operational snapshot (cargo, manifest, supply, tier/credits). Optional `manifestDays` (1–7). |
+| `get_kitchen_events` | `mcp:read` | Flight Recorder timeline of cooks, docks, expiries, and jettisons (filterable, paginated). |
+| `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates for a window (7d/30d/90d/365d). |
 | `get_expiring_items` | `mcp:read` | List items expiring within N UTC calendar days (defaults to user `expirationAlertDays`). |
 | `get_expired_items` | `mcp:read` | List items whose expiry date is before today (UTC). Optional `daysBack` (default 30). |
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |

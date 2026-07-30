@@ -2,11 +2,13 @@ import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import { buildCargoDeductionStatements } from "./cargo-deduction.server";
+import { buildKitchenEventDeleteStmts } from "./kitchen-events.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
 import type { UndoRecord } from "./undo-token.server";
 
 /**
  * Atomically restores cargo and (for manifest consume) clears consumedAt in one D1 batch.
+ * Also deletes Flight Recorder events recorded by the original action.
  * Restores both quantity and baseQuantity so display/matching stay consistent.
  */
 export async function applyUndoRecord(
@@ -14,7 +16,7 @@ export async function applyUndoRecord(
 	organizationId: string,
 	record: Pick<
 		UndoRecord,
-		"kind" | "deductions" | "manifestEntryIds" | "planId"
+		"kind" | "deductions" | "manifestEntryIds" | "planId" | "eventIds"
 	>,
 	options?: { kv?: KVNamespace },
 ): Promise<void> {
@@ -57,6 +59,12 @@ export async function applyUndoRecord(
 						inArray(schema.mealPlanEntry.id, record.manifestEntryIds),
 					),
 				),
+		);
+	}
+
+	if (record.eventIds?.length) {
+		stmts.push(
+			...buildKitchenEventDeleteStmts(d1, organizationId, record.eventIds),
 		);
 	}
 

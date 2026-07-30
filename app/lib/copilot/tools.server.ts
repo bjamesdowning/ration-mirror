@@ -11,6 +11,7 @@ import {
 } from "../mcp/tool-runtime";
 import { createAiWorkflowToolDefs } from "../mcp/tools/ai-workflows";
 import { createBillingToolDefs } from "../mcp/tools/billing";
+import { createKitchenEventToolDefs } from "../mcp/tools/events";
 import { createGalleyToolDefs } from "../mcp/tools/galley";
 import { createInventoryToolDefs } from "../mcp/tools/inventory";
 import { createManifestToolDefs } from "../mcp/tools/manifest";
@@ -147,6 +148,7 @@ export function createCopilotToolDefs(
 	return [
 		createSearchDocsToolDef(env),
 		...createReadToolDefs(env),
+		...createKitchenEventToolDefs(env),
 		...createBillingToolDefs(env),
 		...createInventoryToolDefs(env),
 		...createGalleyToolDefs(env),

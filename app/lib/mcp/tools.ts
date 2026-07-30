@@ -3,6 +3,7 @@ import type { McpToolContext } from "./auth";
 import { registerResourcesAndPrompts } from "./resources";
 import type { McpToolsEnv } from "./tool-runtime";
 import { registerBillingTools } from "./tools/billing";
+import { registerKitchenEventTools } from "./tools/events";
 import { registerGalleyTools } from "./tools/galley";
 import { registerInventoryTools } from "./tools/inventory";
 import { registerManifestTools } from "./tools/manifest";
@@ -23,6 +24,7 @@ export function registerTools(
 
 	const toolsEnv = env as McpToolsEnv;
 	registerReadTools(server, toolsEnv);
+	registerKitchenEventTools(server, toolsEnv);
 	registerBillingTools(server, toolsEnv);
 	registerInventoryTools(server, toolsEnv);
 	registerGalleyTools(server, toolsEnv);

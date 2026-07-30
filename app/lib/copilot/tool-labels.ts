@@ -46,6 +46,16 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Kitchen summary ready",
 		error: "Kitchen summary failed",
 	},
+	get_kitchen_events: {
+		running: "Reading Flight Recorder…",
+		done: "Loaded kitchen activity",
+		error: "Could not load kitchen activity",
+	},
+	get_kitchen_stats: {
+		running: "Computing kitchen stats…",
+		done: "Kitchen stats ready",
+		error: "Could not load kitchen stats",
+	},
 	get_supply_list: {
 		running: "Loading your Supply list…",
 		done: "Loaded Supply list",

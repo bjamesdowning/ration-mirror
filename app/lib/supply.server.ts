@@ -22,6 +22,10 @@ import {
 import { parseDockExpiresAt, toExpiryDate } from "./date-utils";
 import type { ITEM_DOMAINS } from "./domain";
 import { retryOnD1Contention } from "./error-handler";
+import {
+	buildKitchenEventInserts,
+	buildSupplyDockedEvent,
+} from "./kitchen-events.server";
 import { log } from "./logging.server";
 import { getManifestWeekMealsForSupply } from "./manifest.server";
 import { resolveSupplyManifestWindow } from "./manifest-dates";
@@ -2568,8 +2572,25 @@ export async function completeSupplyFromScan(
 		}),
 	);
 
+	const dockEvents = pairs.map((p, index) => {
+		const ingest = ingestResults[index];
+		return buildSupplyDockedEvent({
+			organizationId,
+			itemName: p.dock.name,
+			quantity: p.dock.quantity,
+			unit: p.dock.unit,
+			domain: p.dock.domain,
+			cargoId: ingest?.item?.id ?? ingest?.mergedInto?.id ?? null,
+			source: "web",
+		});
+	});
+	const { budgeted: eventBudgeted } = buildKitchenEventInserts(d1, dockEvents);
+
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const batchStmts: any[] = [...ledgerOps];
+	const budgeted: Array<{ bindCount: number; value: any }> = [
+		...ledgerOps.map((stmt) => ({ bindCount: 4, value: stmt })),
+		...eventBudgeted,
+	];
 	let supplyUpdated = 0;
 	const removeIds = new Set<string>();
 
@@ -2578,8 +2599,10 @@ export async function completeSupplyFromScan(
 		removeIds.add(pair.supplyItemId);
 		if (pair.updateSupply) {
 			supplyUpdated++;
-			batchStmts.push(
-				d1
+			budgeted.push({
+				// id + listId + 3 SET fields
+				bindCount: 5,
+				value: d1
 					.update(supplyItem)
 					.set({
 						quantity: pair.updateSupply.quantity,
@@ -2592,28 +2615,30 @@ export async function completeSupplyFromScan(
 							eq(supplyItem.listId, listId),
 						),
 					),
-			);
+			});
 		}
 	}
 
 	for (const itemId of removeIds) {
-		batchStmts.push(
-			d1
+		budgeted.push({
+			bindCount: 2,
+			value: d1
 				.delete(supplyItem)
 				.where(and(eq(supplyItem.id, itemId), eq(supplyItem.listId, listId))),
-		);
+		});
 	}
 
-	batchStmts.push(
-		d1
+	budgeted.push({
+		bindCount: 2,
+		value: d1
 			.update(supplyList)
 			.set({ updatedAt: new Date() })
 			.where(eq(supplyList.id, listId)),
-	);
+	});
 
-	if (batchStmts.length > 0) {
+	for (const batch of packByBindBudget(budgeted)) {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(batchStmts as [any, ...any[]]);
+		await d1.batch(batch as [any, ...any[]]);
 	}
 
 	return {

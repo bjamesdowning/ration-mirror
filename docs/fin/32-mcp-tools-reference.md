@@ -24,6 +24,8 @@ Exact windows may be tuned; if you hit limits, wait for the window to reset. Rat
 | `get_expiring_items` | `mcp:read` | Pantry lines expiring within N UTC calendar days. Defaults to the user's `expirationAlertDays` when `days` is omitted. |
 | `get_expired_items` | `mcp:read` | Pantry lines whose expiry date is before today (UTC). |
 | `get_kitchen_summary` | `mcp:read` | Single-call kitchen snapshot. Prefer this over `get_context` for status. |
+| `get_kitchen_events` | `mcp:read` | Flight Recorder timeline (filter by event type / date range; paginated). |
+| `get_kitchen_stats` | `mcp:read` | Flight Recorder aggregates (7d/30d/90d/365d counts + top cooked meals). |
 | `add_cargo_item` | `mcp:inventory:write` | Add a single pantry item. Fuzzy Vectorize merge skipped; embeddings backfill async. |
 | `update_cargo_item` | `mcp:inventory:write` | Set absolute pantry fields. Quantity may be **0**. |
 | `adjust_cargo_item` | `mcp:inventory:write` | Relative quantity change (`delta`). Prefer for “used/ate N”. |

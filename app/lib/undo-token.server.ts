@@ -12,6 +12,8 @@ export interface UndoRecord {
 	deductions: CargoDeduction[];
 	manifestEntryIds?: string[];
 	planId?: string;
+	/** Flight Recorder event ids to delete on undo. */
+	eventIds?: string[];
 }
 
 function undoKey(token: string): string {

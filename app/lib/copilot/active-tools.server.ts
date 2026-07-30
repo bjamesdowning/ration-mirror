@@ -7,6 +7,8 @@ const CORE_TOOLS = [
 	"search_docs",
 	"get_context",
 	"get_kitchen_summary",
+	"get_kitchen_events",
+	"get_kitchen_stats",
 	"get_billing_summary",
 	"get_user_preferences",
 	"search_ingredients",

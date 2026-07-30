@@ -18,6 +18,7 @@ import {
 	getExpiringCargo,
 } from "~/lib/cargo.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
+import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MOBILE_SUPPLY_ITEMS_SLICE } from "~/lib/mobile/hub.server";
 import {
@@ -51,6 +52,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
 	const supplyPreviewConfig = findWidget("supply-preview");
+	const flightRecorderVisible =
+		findWidget("flight-recorder")?.visible !== false &&
+		resolvedWidgets.some((w) => w.id === "flight-recorder" && w.visible);
 
 	// Derive per-widget filter values with safe defaults
 	const cargoLimit = cargoExpiringConfig?.filters?.limit ?? 10;
@@ -71,6 +75,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		availableMealTags,
 		availableCargoTags,
 		cargoTagIndex,
+		flightRecorderStats,
+		flightRecorderRecent,
 	] = await Promise.all([
 		getExpiringCargo(db, groupId, expirationAlertDays, cargoLimit, cargoDomain),
 		getCargoStats(db, groupId),
@@ -89,6 +95,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		getDistinctMealTags(db, groupId),
 		getCargoTags(db, groupId),
 		getCargoTagIndex(db, groupId),
+		flightRecorderVisible
+			? getKitchenStats(db, groupId, "7d")
+			: Promise.resolve(null),
+		flightRecorderVisible
+			? getKitchenEvents(db, groupId, { limit: 5 }).then((r) => r.events)
+			: Promise.resolve([]),
 	]);
 
 	const latestSupplyList = latestSupplyListRaw
@@ -101,6 +113,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 				).slice(0, Math.min(supplyLimit, MOBILE_SUPPLY_ITEMS_SLICE)),
 			}
 		: null;
+
+	const flightRecorderActivity =
+		flightRecorderVisible && flightRecorderStats
+			? { stats: flightRecorderStats, recent: flightRecorderRecent }
+			: null;
 
 	// Deferred — one scored pool (200 candidates), then widget subsets.
 	const hubMatches = getHubMealMatchWidgets(context.cloudflare.env, groupId, {
@@ -136,6 +153,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		mealMatches,
 		partialMealMatches,
 		snackMatches,
+		flightRecorderActivity,
 	};
 }
 
@@ -175,6 +193,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		welcomeCreditsGranted,
 		availableMealTags,
 		availableCargoTags,
+		flightRecorderActivity,
 	} = loaderData;
 
 	const [searchParams] = useSearchParams();
@@ -200,6 +219,7 @@ export default function DashboardHub({ loaderData }: Route.ComponentProps) {
 		partialMealMatches,
 		snackMatches,
 		manifestPreview,
+		flightRecorderActivity,
 	};
 
 	useEffect(() => {

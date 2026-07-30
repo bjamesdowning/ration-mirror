@@ -21,12 +21,17 @@ import {
 } from "../db/schema";
 import { type AllergenSlug, detectAllergens } from "./allergens";
 import { buildCargoDeductionStatements } from "./cargo-deduction.server";
+import {
+	buildKitchenEventInserts,
+	buildManifestConsumedEvent,
+} from "./kitchen-events.server";
 import { log } from "./logging.server";
 import { getExcludedManifestDates } from "./manifest-supply.server";
 import { getMealMissingIngredients } from "./matching.server";
 import { type CargoDeduction, cookMeal } from "./meals.server";
 import { chunkedQuery } from "./query-utils.server";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
+import type { KitchenEventSource } from "./schemas/kitchen-events";
 import { getTagsForMealIds, tagsToSlugs } from "./tags.server";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
 import type { ManifestPreviewData } from "./types";
@@ -180,6 +185,7 @@ export interface ConsumeManifestEntriesResult {
 		available: number;
 		unit: string;
 	}>;
+	eventIds?: string[];
 }
 
 export async function getWeekEntries(
@@ -265,7 +271,11 @@ export async function consumeManifestEntries(
 	organizationId: string,
 	planId: string,
 	entryIds: string[],
-	options?: { confirmInsufficient?: boolean },
+	options?: {
+		confirmInsufficient?: boolean;
+		userId?: string | null;
+		source?: KitchenEventSource;
+	},
 ): Promise<ConsumeManifestEntriesResult> {
 	const d1 = drizzle(env.DB);
 
@@ -285,8 +295,11 @@ export async function consumeManifestEntries(
 		.select({
 			id: mealPlanEntry.id,
 			mealId: mealPlanEntry.mealId,
+			date: mealPlanEntry.date,
+			slotType: mealPlanEntry.slotType,
 			servingsOverride: mealPlanEntry.servingsOverride,
 			mealServings: meal.servings,
+			mealName: meal.name,
 		})
 		.from(mealPlanEntry)
 		.innerJoin(meal, eq(mealPlanEntry.mealId, meal.id))
@@ -308,7 +321,7 @@ export async function consumeManifestEntries(
 	});
 
 	if (uniqueEntries.length === 0) {
-		return { consumed: 0, deductions: [], entryIds: [], planId };
+		return { consumed: 0, deductions: [], entryIds: [], planId, eventIds: [] };
 	}
 
 	// 3. Cook each unique meal once with aggregated servings. Entries for the
@@ -351,6 +364,7 @@ export async function consumeManifestEntries(
 				planId,
 				requiresConfirmation: true,
 				missingIngredients,
+				eventIds: [],
 			};
 		}
 	}
@@ -362,19 +376,31 @@ export async function consumeManifestEntries(
 	let partialCook = false;
 	const now = new Date();
 	const consumedEntryIds: string[] = [];
+	const allEventIds: string[] = [];
 
 	// Per unique meal: plan deductions without writing, then atomically apply
 	// cargo updates + consumedAt marks in one D1 batch. If a later meal fails,
 	// earlier meals stay marked consumed and will not be re-selected on retry.
-	const entriesByMeal = new Map<string, string[]>();
+	const entriesByMeal = new Map<string, typeof uniqueEntries>();
 	for (const entry of uniqueEntries) {
-		const ids = entriesByMeal.get(entry.mealId) ?? [];
-		ids.push(entry.id);
-		entriesByMeal.set(entry.mealId, ids);
+		const list = entriesByMeal.get(entry.mealId) ?? [];
+		list.push(entry);
+		entriesByMeal.set(entry.mealId, list);
 	}
 
 	for (const [mealId, totalServings] of servingsByMeal) {
-		const mealEntryIds = entriesByMeal.get(mealId) ?? [];
+		const mealEntries = entriesByMeal.get(mealId) ?? [];
+		const mealEntryIds = mealEntries.map((e) => e.id);
+		const mealName = mealEntries[0]?.mealName ?? "Unknown meal";
+		const sharedDate = mealEntries.every((e) => e.date === mealEntries[0]?.date)
+			? mealEntries[0]?.date
+			: undefined;
+		const sharedSlot = mealEntries.every(
+			(e) => e.slotType === mealEntries[0]?.slotType,
+		)
+			? mealEntries[0]?.slotType
+			: undefined;
+
 		const cookResult = await cookMeal(env, organizationId, mealId, {
 			servings: totalServings,
 			deductionMode: options?.confirmInsufficient ? "partial" : "strict",
@@ -410,6 +436,26 @@ export async function consumeManifestEntries(
 				),
 		);
 
+		const { stmts: eventStmts, eventIds } = buildKitchenEventInserts(d1, [
+			buildManifestConsumedEvent({
+				organizationId,
+				userId: options?.userId,
+				mealId,
+				mealName,
+				planId,
+				entryIds: mealEntryIds,
+				date: sharedDate,
+				slotType: sharedSlot,
+				servings: totalServings,
+				deductions: cookResult.deductions,
+				partialCook: cookResult.partialCook,
+				source: options?.source,
+				occurredAt: now,
+			}),
+		]);
+		stmts.push(...eventStmts);
+		allEventIds.push(...eventIds);
+
 		trackD1BatchSize("consumeManifestEntries", stmts.length, {
 			organizationRef: organizationId,
 		});
@@ -434,6 +480,7 @@ export async function consumeManifestEntries(
 		partialCook: partialCook || undefined,
 		skippedIngredients:
 			skippedIngredients.length > 0 ? skippedIngredients : undefined,
+		eventIds: allEventIds,
 	};
 }
 

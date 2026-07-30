@@ -73,7 +73,8 @@ export type HubWidgetId =
 	| "snacks-ready"
 	| "cargo-expiring"
 	| "supply-preview"
-	| "manifest-preview";
+	| "manifest-preview"
+	| "flight-recorder";
 
 export type HubProfile = "cook" | "shop" | "minimal" | "full" | "custom";
 
@@ -150,6 +151,35 @@ export interface HubLoaderData {
 	expirationAlertDays: number;
 	manifestPreview: ManifestPreviewData | null;
 	cargoTagIndex?: { id: string; name: string }[];
+	/** Flight Recorder weekly activity (stats + recent events). */
+	flightRecorderActivity?: {
+		stats: {
+			window: string;
+			from: string;
+			to: string;
+			countsByType: Record<string, number>;
+			topCookedMeals: Array<{
+				subjectName: string;
+				mealId: string | null;
+				count: number;
+			}>;
+			totals: {
+				cooked: number;
+				docked: number;
+				expired: number;
+				jettisoned: number;
+			};
+		};
+		recent: Array<{
+			id: string;
+			eventType: string;
+			occurredAt: Date | string;
+			subjectName: string;
+			mealId: string | null;
+			cargoId: string | null;
+			payload: Record<string, unknown>;
+		}>;
+	} | null;
 }
 
 /** Props passed to each Hub widget component. */

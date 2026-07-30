@@ -50,6 +50,21 @@ export const D1_MAX_PLAN_ENTRY_ROWS_PER_STATEMENT = Math.floor(
 );
 
 /**
+ * Bound params per kitchen_event row when id is set explicitly:
+ * id, organizationId, userId, eventType, occurredAt, mealId, cargoId,
+ * subjectName, payload = 9. (occurredAt may use default but we set it.)
+ */
+export const KITCHEN_EVENT_INSERT_COLUMNS = 9;
+
+/**
+ * Max kitchen_event rows per INSERT (safe 99 ceiling).
+ * 11 × 9 = 99.
+ */
+export const D1_MAX_KITCHEN_EVENT_ROWS_PER_STATEMENT = Math.floor(
+	D1_SAFE_BOUND_PARAMS / KITCHEN_EVENT_INSERT_COLUMNS,
+);
+
+/**
  * Bound params per supply_item row in Drizzle multi-row INSERTs.
  * Row objects from `contributionsToSupplyRows` expose 12 keys, but Drizzle
  * also binds the `is_purchased` default (`?`). `created_at` uses

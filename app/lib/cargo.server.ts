@@ -18,8 +18,14 @@ import { cargo, cargoTag, ledger, type supplyItem } from "../db/schema";
 import { CapacityExceededError, checkCapacity } from "./capacity.server";
 import { clearSupplyItemCargoRefs } from "./cargo-delete.server";
 import { type CargoIndexRow, fetchOrgCargoIndex } from "./cargo-index.server";
+import { isExpiredOnUtcCalendar } from "./cargo-utils";
 import type { ParsedCsvItem } from "./csv-parser";
 import { ITEM_DOMAINS } from "./domain";
+import {
+	buildCargoJettisonedEvent,
+	buildKitchenEventInserts,
+	buildSupplyDockedEvent,
+} from "./kitchen-events.server";
 import { log } from "./logging.server";
 import { normalizeForCargoDedup } from "./matching";
 import {
@@ -31,7 +37,9 @@ import {
 	chunkedQuery,
 	D1_MAX_BOUND_PARAMS,
 	D1_MAX_TAG_ROWS_PER_STATEMENT,
+	packByBindBudget,
 } from "./query-utils.server";
+import type { KitchenEventSource } from "./schemas/kitchen-events";
 import { TagSlugsInputSchema } from "./schemas/tag";
 import { UnitSchema } from "./schemas/units";
 import { trackD1BatchSize, trackWriteOperation } from "./telemetry.server";
@@ -1052,18 +1060,55 @@ export async function updateItem(
 /**
  * Delete (Jettison) an item from the inventory.
  * Security: Ensures the item belongs to the organization.
+ * Emits a cargo_jettisoned Flight Recorder event (snapshot before delete).
  */
 export async function jettisonItem(
 	env: Env,
 	organizationId: string,
 	itemId: string,
+	options?: { userId?: string | null; source?: KitchenEventSource },
 ) {
 	const d1 = drizzle(env.DB);
 
+	const [existing] = await d1
+		.select()
+		.from(cargo)
+		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)))
+		.limit(1);
+
 	await clearSupplyItemCargoRefs(d1, [itemId]);
-	await d1
-		.delete(cargo)
-		.where(and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)));
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	const stmts: any[] = [
+		d1
+			.delete(cargo)
+			.where(
+				and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)),
+			),
+	];
+
+	if (existing) {
+		const { stmts: eventStmts } = buildKitchenEventInserts(d1, [
+			buildCargoJettisonedEvent({
+				organizationId,
+				userId: options?.userId,
+				cargoId: existing.id,
+				name: existing.name,
+				quantity: existing.quantity,
+				unit: existing.unit,
+				domain: existing.domain ?? undefined,
+				wasExpired: existing.expiresAt
+					? isExpiredOnUtcCalendar(existing.expiresAt)
+					: false,
+				expiresAt: existing.expiresAt,
+				source: options?.source,
+			}),
+		]);
+		stmts.push(...eventStmts);
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
+	await d1.batch(stmts as [any, ...any[]]);
 
 	deleteCargoVectors(env, [itemId]).catch((err) =>
 		log.error("[Vector] delete failed:", err),
@@ -1574,12 +1619,13 @@ export async function deduplicateCargo(db: D1Database, organizationId: string) {
 /**
  * Docks purchased supply items into the cargo.
  * Uses ingestCargoItems for vector-assisted deduplication.
- * Logs to ledger for each docked item.
+ * Logs to ledger for each docked item and emits supply_docked Flight Recorder events.
  */
 export async function dockSupplyItems(
 	env: Env,
 	organizationId: string,
 	items: (typeof supplyItem.$inferSelect)[],
+	options?: { userId?: string | null; source?: KitchenEventSource },
 ) {
 	const d1 = drizzle(env.DB);
 	const results = { updated: 0, created: 0 };
@@ -1631,14 +1677,37 @@ export async function dockSupplyItems(
 		}),
 	);
 
+	const dockEvents = items.map((it, index) => {
+		const ingest = ingestResults[index];
+		const cargoId = ingest?.item?.id ?? ingest?.mergedInto?.id ?? null;
+		return buildSupplyDockedEvent({
+			organizationId,
+			userId: options?.userId,
+			itemName: it.name,
+			quantity: it.quantity,
+			unit: it.unit,
+			domain: it.domain ?? undefined,
+			cargoId,
+			sourceCargoId: it.sourceCargoId,
+			source: options?.source,
+		});
+	});
+	const { budgeted: eventBudgeted } = buildKitchenEventInserts(d1, dockEvents);
+
 	for (const r of ingestResults) {
 		if (r.status === "merged") results.updated += 1;
 		else if (r.status === "created") results.created += 1;
 	}
 
-	if (ledgerOps.length > 0) {
+	// Ledger single-row inserts ~4 binds; kitchen_event multi-row inserts are dense.
+	// Budget across the whole batch to stay under D1's 100-param ceiling.
+	const budgeted = [
+		...ledgerOps.map((stmt) => ({ bindCount: 4, value: stmt })),
+		...eventBudgeted,
+	];
+	for (const batch of packByBindBudget(budgeted)) {
 		// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-		await d1.batch(ledgerOps as [any, ...any[]]);
+		await d1.batch(batch as [any, ...any[]]);
 	}
 
 	return results;

@@ -54,16 +54,17 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			context.cloudflare.env,
 			organizationId,
 			id,
-			{ servings, confirmInsufficient },
+			{ servings, confirmInsufficient, userId, source: "mobile" },
 		);
 
 		let undoToken: string | undefined;
-		if (result.deductions.length > 0) {
+		if (result.deductions.length > 0 || (result.eventIds?.length ?? 0) > 0) {
 			undoToken = await tryStoreUndoToken(context.cloudflare.env.RATION_KV, {
 				userId,
 				organizationId,
 				kind: "cook",
 				deductions: result.deductions,
+				eventIds: result.eventIds,
 			});
 		}
 

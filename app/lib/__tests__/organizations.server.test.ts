@@ -94,8 +94,8 @@ describe("deleteOrganization", () => {
 		expect(mockBatch).toHaveBeenCalledTimes(1);
 
 		const batchArgs = mockBatch.mock.calls[0][0] as unknown[];
-		// access (3) + dependents (6) + cargo/meal (2) + tag/ledger/agent/org (4) = 15
-		expect(batchArgs).toHaveLength(15);
+		// access (3) + dependents (6) + cargo/meal (2) + tag/ledger/kitchen_event/agent/org (5) = 16
+		expect(batchArgs).toHaveLength(16);
 		expect(deleteR2Prefix).toHaveBeenCalledWith({}, "organizations/org-1/");
 	});
 

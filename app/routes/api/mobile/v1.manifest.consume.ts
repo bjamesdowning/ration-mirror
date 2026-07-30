@@ -42,7 +42,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			organizationId,
 			plan.id,
 			entryIds,
-			{ confirmInsufficient },
+			{ confirmInsufficient, userId, source: "mobile" },
 		);
 
 		if (result.requiresConfirmation) {
@@ -62,6 +62,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				deductions: result.deductions,
 				manifestEntryIds: result.entryIds,
 				planId: result.planId,
+				eventIds: result.eventIds,
 			});
 		}
 

@@ -384,6 +384,54 @@ export const mealRelations = relations(meal, ({ one, many }) => ({
 	planEntries: many(mealPlanEntry),
 }));
 
+/**
+ * Flight Recorder — append-only kitchen activity log.
+ * History outlives its subjects: meal/cargo FKs use ON DELETE SET NULL and
+ * subjectName is denormalized so deletes do not erase meaning.
+ * @see app/lib/kitchen-events.server.ts
+ */
+export const kitchenEvent = sqliteTable(
+	"kitchen_event",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		eventType: text("event_type").notNull(),
+		occurredAt: integer("occurred_at", { mode: "timestamp" })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		mealId: text("meal_id").references(() => meal.id, {
+			onDelete: "set null",
+		}),
+		cargoId: text("cargo_id").references(() => cargo.id, {
+			onDelete: "set null",
+		}),
+		subjectName: text("subject_name").notNull(),
+		payload: text("payload", { mode: "json" })
+			.$type<Record<string, unknown>>()
+			.notNull()
+			.default({}),
+	},
+	(table) => [
+		index("kitchen_event_org_occurred_idx").on(
+			table.organizationId,
+			table.occurredAt,
+		),
+		index("kitchen_event_org_type_occurred_idx").on(
+			table.organizationId,
+			table.eventType,
+			table.occurredAt,
+		),
+		index("kitchen_event_cargo_type_idx").on(table.cargoId, table.eventType),
+	],
+);
+
 export const mealIngredient = sqliteTable(
 	"meal_ingredient",
 	{

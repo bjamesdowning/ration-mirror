@@ -42,6 +42,7 @@ import {
 	buildStarterMealStatements,
 	shouldSeedStarterMeal,
 } from "./starter-meal.server";
+import { emitSignup } from "./telemetry.server";
 import { CURRENT_TOS_VERSION } from "./tos.constants";
 import { consumeSignupIntent } from "./tos-signup-intent.server";
 import type { UserSettings } from "./types";
@@ -333,6 +334,8 @@ export function createAuth(env: Cloudflare.Env) {
 								orgId: redactId(orgId),
 								userId: redactId(user.id),
 							});
+
+							emitSignup();
 
 							await grantWelcomeCreditsIfEligible(env, {
 								userId: user.id,

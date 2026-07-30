@@ -14,14 +14,14 @@ struct RootView: View {
     var body: some View {
         switch env.auth.phase {
         case .loading:
-            LoadingView(label: "Calibrating…")
+            LoadingView(label: "Calibrating…", showBrandMark: true)
         case .signedOut:
             SignInView()
         case .signedIn:
             Group {
                 switch env.launch.phase {
                 case .idle, .loading:
-                    LoadingView(label: "Calibrating…")
+                    LoadingView(label: "Calibrating…", showBrandMark: true)
                 case let .failed(message):
                     VStack(spacing: 16) {
                         ErrorBanner(message: message)

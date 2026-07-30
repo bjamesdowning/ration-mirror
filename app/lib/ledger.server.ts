@@ -7,7 +7,11 @@ import {
 } from "./billing-tier.server";
 import { log, redactId } from "./logging.server";
 import { getStripe } from "./stripe.server";
-import { emitCreditDeduct, emitRefund } from "./telemetry.server";
+import {
+	emitCreditDeduct,
+	emitCreditPurchase,
+	emitRefund,
+} from "./telemetry.server";
 
 // ---------------------------------------------------------------------------
 // Cost Registry
@@ -397,6 +401,13 @@ export async function processCheckoutSession(
 			idempotencyKey: options?.fulfillmentKey ?? session.id,
 		},
 	);
+
+	const pack =
+		typeof session.metadata?.pack === "string" &&
+		session.metadata.pack.length > 0
+			? session.metadata.pack
+			: "unknown";
+	emitCreditPurchase(pack, credits);
 
 	return {
 		success: true,

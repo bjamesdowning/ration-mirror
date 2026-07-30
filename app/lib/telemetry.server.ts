@@ -22,7 +22,9 @@ export type OpsRoute =
 	| "rate_limit"
 	| "gemini"
 	| "refund"
-	| "credit";
+	| "credit"
+	| "signup"
+	| "billing";
 
 export type OpsOutcome = "2xx" | "429" | "503" | "5xx";
 
@@ -119,6 +121,37 @@ export function emitCreditDeduct(amount: number): void {
 		blobs: ["credit_deduct"],
 		doubles: [amount],
 	});
+}
+
+/** Count-only signup signal — never include email, user id, or other PII. */
+export function emitSignup(): void {
+	emitOpsMetric({
+		route: "signup",
+		blobs: ["signup"],
+	});
+}
+
+/**
+ * Credit-pack purchase signal (Stripe / RevenueCat).
+ * `pack` must be low-cardinality (catalog key or RC product id), never free text.
+ */
+export function emitCreditPurchase(pack: string, credits: number): void {
+	emitOpsMetric({
+		route: "billing",
+		blobs: ["credit_purchase", sanitizeCreditPack(pack)],
+		doubles: [credits],
+	});
+}
+
+/** Keep AE blob cardinality bounded for pack labels. */
+export function sanitizeCreditPack(pack: string): string {
+	const normalized = pack
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9_]+/g, "_")
+		.replace(/^_+|_+$/g, "")
+		.slice(0, 32);
+	return normalized.length > 0 ? normalized : "unknown";
 }
 
 export type SupplySyncTrigger =

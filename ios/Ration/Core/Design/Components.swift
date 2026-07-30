@@ -70,13 +70,24 @@ struct ErrorBanner: View {
 /// Full-screen centered loading state.
 struct LoadingView: View {
     var label: String = "Loading…"
+    /// When true, shows the Ration mark above the spinner (launch / calibrating).
+    var showBrandMark: Bool = false
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
+            if showBrandMark {
+                Image("RationMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 72, height: 72)
+                    .accessibilityHidden(true)
+            }
             ProgressView().tint(Theme.hyperGreen)
             Text(label).rationCaption()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.ceramic)
+        .accessibilityElement(children: .combine)
     }
 }
 

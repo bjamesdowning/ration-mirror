@@ -209,7 +209,7 @@ flowchart TB
 | `AI_SEARCH` | AI Search namespace | Copilot-only — hybrid retrieval over `ration-docs` (support docs + blog) |
 | `PROJECT_THINK` | Durable Object | Copilot-only — one `ProjectThinkAgent` isolate per `{org}:{user}:{tier}:{conversationId}` |
 | `COPILOT_ANALYTICS` | Analytics Engine | Copilot-only — conversation, tool, and billing telemetry (`ration_copilot` dataset) |
-| `RATION_ANALYTICS` | Analytics Engine | Main + MCP Workers — ops counters (`ration_ops` / `ration_ops_dev`): 503, 429, queue retries, Gemini invoke, credit deduct/refund |
+| `RATION_ANALYTICS` | Analytics Engine | Main + MCP Workers — ops counters (`ration_ops` / `ration_ops_dev`): 503, 429, queue retries, Gemini invoke, credit deduct/refund, signup, credit purchase |
 | AI Gateway | External fetch | Proxied LLM calls to Google AI Studio — `gemini-3.5-flash` for scan, generate, plan, import |
 | `SCAN_QUEUE` | Queue producer | Enqueue scan jobs; consumer runs AI vision + D1/Vectorize |
 | `MEAL_GENERATE_QUEUE` | Queue producer | Enqueue meal generation jobs; consumer runs LLM + Vectorize verification |
@@ -1561,7 +1561,7 @@ flowchart TB
 | **AI Gateway** | Managed proxy with queuing, retry, caching, guardrails, spend limits. | Upstream Google AI Studio rate limits. | Centralized `callGemini` client with per-feature `cf-aig-*` headers. Credit system + KV rate limits. Async consumer failures refund credits via `failAiJobWithRefund`. |
 | **R2** | S3-compatible, globally distributed. | Not a hot-path service. | Used only for exports and scan image storage. |
 | **Stripe** | Stripe's infrastructure (99.999% SLA). | Webhook delivery latency. | KV idempotency ensures exactly-once processing. Timestamp validation rejects stale replays. |
-| **Analytics Engine** | Account-scoped datasets; `writeDataPoint` is fire-and-forget. | Query quota / cardinality. | Main+MCP: `RATION_ANALYTICS` → `ration_ops` (503/429/queue/Gemini/credits). Copilot: `COPILOT_ANALYTICS` → `ration_copilot`. No PII in points. Launch SLOs in [`docs/fin/51`](docs/fin/51-reliability-and-async-jobs.md). |
+| **Analytics Engine** | Account-scoped datasets; `writeDataPoint` is fire-and-forget. | Query quota / cardinality. | Main+MCP: `RATION_ANALYTICS` → `ration_ops` (503/429/queue/Gemini/credits/signup/credit_purchase). Copilot: `COPILOT_ANALYTICS` → `ration_copilot`. No PII in points. Sibling `monitor` queries these aggregates via the Analytics Engine SQL API. Launch SLOs in [`docs/fin/51`](docs/fin/51-reliability-and-async-jobs.md). |
 
 ---
 

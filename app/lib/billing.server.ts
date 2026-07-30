@@ -35,6 +35,7 @@ import {
 	BillingAccountSummarySchema,
 	RevenueCatWebhookEventSchema,
 } from "~/lib/schemas/billing";
+import { emitCreditPurchase } from "~/lib/telemetry.server";
 import type { TierSlug } from "~/lib/tiers.server";
 
 export type { BillingAccountSummary };
@@ -400,6 +401,7 @@ export async function processRevenueCatWebhookEvent(
 					"RevenueCat Credit Pack",
 					{ idempotencyKey: fulfillmentKey },
 				);
+				emitCreditPurchase(productId ?? "unknown", credits);
 				return { handled: true, fulfilled: true };
 			}
 		}

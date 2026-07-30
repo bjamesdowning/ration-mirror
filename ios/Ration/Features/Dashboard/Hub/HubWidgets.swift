@@ -433,3 +433,110 @@ struct ManifestPreviewWidget: View {
         )
     }
 }
+
+struct FlightRecorderWidget: View {
+    let activity: FlightRecorderActivity?
+    var size: String = "md"
+
+    private var compact: Bool { size == "sm" }
+    private var recentLimit: Int { compact ? 3 : 5 }
+
+    private static let eventLabels: [String: String] = [
+        "galley_cooked": "Cooked",
+        "manifest_consumed": "Manifest",
+        "supply_docked": "Docked",
+        "cargo_expired": "Expired",
+        "cargo_jettisoned": "Jettisoned",
+    ]
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    HubWidgetHeader(title: "Flight Recorder", systemImage: "waveform.path.ecg")
+                    Spacer()
+                    Text("This week")
+                        .rationCaption()
+                }
+
+                if let activity {
+                    let totals = activity.stats.totals
+                    LazyVGrid(
+                        columns: Array(
+                            repeating: GridItem(.flexible(), spacing: 8),
+                            count: compact ? 2 : 4
+                        ),
+                        spacing: 8
+                    ) {
+                        statChip("Cooked", value: totals.cooked)
+                        statChip("Docked", value: totals.docked)
+                        statChip("Expired", value: totals.expired, highlight: totals.expired > 0)
+                        statChip("Jettisoned", value: totals.jettisoned)
+                    }
+
+                    if activity.recent.isEmpty {
+                        Text("No events in the last 7 days.")
+                            .rationCaption()
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(activity.recent.prefix(recentLimit)) { event in
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(event.subjectName)
+                                            .rationBody()
+                                            .lineLimit(1)
+                                        Text(Self.eventLabels[event.eventType] ?? event.eventType)
+                                            .rationCaption()
+                                    }
+                                    Spacer(minLength: 8)
+                                    Text(relativeLabel(iso: event.occurredAt))
+                                        .rationCaption()
+                                }
+                                .padding(.vertical, 8)
+                                if event.id != activity.recent.prefix(recentLimit).last?.id {
+                                    Divider().overlay(Theme.carbon.opacity(0.12))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("No Flight Recorder activity yet. Cook a meal or dock supply to start recording.")
+                        .rationCaption()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func statChip(_ label: String, value: Int, highlight: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(Typography.caption())
+                .foregroundStyle(Theme.muted)
+            Text("\(value)")
+                .font(Typography.headline())
+                .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(highlight ? Theme.warning.opacity(0.12) : Theme.platinum.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func relativeLabel(iso: String) -> String {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        guard let date = withFraction.date(from: iso) ?? plain.date(from: iso) else {
+            return iso
+        }
+        let minutes = Int(Date().timeIntervalSince(date) / 60)
+        if minutes < 1 { return "just now" }
+        if minutes < 60 { return "\(minutes)m ago" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)h ago" }
+        return "\(hours / 24)d ago"
+    }
+}

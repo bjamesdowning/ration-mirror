@@ -60,4 +60,34 @@ struct HubResponse: Codable, Sendable {
     let mealMatches: [MealMatch]
     let partialMealMatches: [MealMatch]
     let snackMatches: [MealMatch]
+    let flightRecorderActivity: FlightRecorderActivity?
+}
+
+struct FlightRecorderTotals: Codable, Sendable {
+    let cooked: Int
+    let docked: Int
+    let expired: Int
+    let jettisoned: Int
+}
+
+struct FlightRecorderStats: Codable, Sendable {
+    let window: String
+    let from: String
+    let to: String
+    let countsByType: [String: Int]
+    let totals: FlightRecorderTotals
+}
+
+struct FlightRecorderEvent: Codable, Sendable, Identifiable {
+    let id: String
+    let eventType: String
+    let occurredAt: String
+    let subjectName: String
+    let mealId: String?
+    let cargoId: String?
+}
+
+struct FlightRecorderActivity: Codable, Sendable {
+    let stats: FlightRecorderStats
+    let recent: [FlightRecorderEvent]
 }

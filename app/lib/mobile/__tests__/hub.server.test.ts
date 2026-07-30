@@ -16,6 +16,8 @@ const getDistinctMealTags = vi.fn(async () => []);
 const getOrganizationTagSlugs = vi.fn(async () => [] as string[]);
 const getCargoTagIndex = vi.fn(async () => []);
 const matchMeals = vi.fn(async () => []);
+const getKitchenStats = vi.fn();
+const getKitchenEvents = vi.fn();
 
 vi.mock("~/components/hub/widgets/registry", () => ({
 	resolveLayout: () => resolveLayout(),
@@ -43,6 +45,11 @@ vi.mock("~/lib/manifest.server", () => ({
 vi.mock("~/lib/matching.server", () => ({
 	matchMeals: () => matchMeals(),
 	MEAL_MATCH_CANDIDATE_CAP: 200,
+}));
+
+vi.mock("~/lib/kitchen-events.server", () => ({
+	getKitchenStats: () => getKitchenStats(),
+	getKitchenEvents: () => getKitchenEvents(),
 }));
 
 vi.mock("~/lib/logging.server", () => ({
@@ -76,6 +83,10 @@ describe("getMobileHubData supply counts", () => {
 		getCargoTagIndex.mockResolvedValue([]);
 		resolveLayout.mockReset();
 		resolveLayout.mockReturnValue([]);
+		getKitchenStats.mockReset();
+		getKitchenStats.mockResolvedValue(null);
+		getKitchenEvents.mockReset();
+		getKitchenEvents.mockResolvedValue({ events: [], nextCursor: null });
 	});
 
 	it("untagged (common) case: fetches a bounded slice and gets counts from getSupplyItemStats", async () => {
@@ -162,6 +173,59 @@ describe("getMobileHubData supply counts", () => {
 			expiringCount: 0,
 			expiredCount: 0,
 		});
+	});
+
+	it("returns flightRecorderActivity when the widget is visible", async () => {
+		resolveLayout.mockReturnValue([
+			{
+				id: "flight-recorder",
+				order: 0,
+				visible: true,
+			},
+		]);
+		getUserSettings.mockResolvedValue({
+			expirationAlertDays: 7,
+			hubProfile: "full",
+			hubLayout: null,
+		});
+		getSupplyList.mockResolvedValue(null);
+		getKitchenStats.mockResolvedValue({
+			window: "7d",
+			from: "2026-07-24T00:00:00.000Z",
+			to: "2026-07-31T00:00:00.000Z",
+			countsByType: { cargo_jettisoned: 2 },
+			topCookedMeals: [],
+			totals: { cooked: 0, docked: 0, expired: 0, jettisoned: 2 },
+		});
+		getKitchenEvents.mockResolvedValue({
+			events: [
+				{
+					id: "evt-1",
+					organizationId: "org_1",
+					userId: null,
+					eventType: "cargo_jettisoned",
+					occurredAt: new Date("2026-07-30T12:00:00.000Z"),
+					mealId: null,
+					cargoId: null,
+					subjectName: "Milk",
+					payload: {},
+				},
+			],
+			nextCursor: null,
+		});
+
+		const { getMobileHubData } = await import("~/lib/mobile/hub.server");
+		const result = await getMobileHubData(
+			{ DB: {} } as never,
+			"org_1",
+			"user_1",
+		);
+
+		expect(getKitchenStats).toHaveBeenCalled();
+		expect(result.flightRecorderActivity?.stats.totals.jettisoned).toBe(2);
+		expect(result.flightRecorderActivity?.recent[0]?.occurredAt).toBe(
+			"2026-07-30T12:00:00.000Z",
+		);
 	});
 
 	it("rethrows when cargoTagIndex fails and supply tag filters are active", async () => {

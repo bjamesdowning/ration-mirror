@@ -1061,6 +1061,10 @@ export async function updateItem(
  * Delete (Jettison) an item from the inventory.
  * Security: Ensures the item belongs to the organization.
  * Emits a cargo_jettisoned Flight Recorder event (snapshot before delete).
+ *
+ * Event insert must run **before** cargo DELETE: kitchen_event.cargo_id FKs
+ * the cargo row; inserting after delete fails with a foreign-key constraint.
+ * ON DELETE SET NULL then clears cargo_id on the new event (subjectName remains).
  */
 export async function jettisonItem(
 	env: Env,
@@ -1079,13 +1083,7 @@ export async function jettisonItem(
 	await clearSupplyItemCargoRefs(d1, [itemId]);
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
-	const stmts: any[] = [
-		d1
-			.delete(cargo)
-			.where(
-				and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)),
-			),
-	];
+	const stmts: any[] = [];
 
 	if (existing) {
 		const { stmts: eventStmts } = buildKitchenEventInserts(d1, [
@@ -1106,6 +1104,14 @@ export async function jettisonItem(
 		]);
 		stmts.push(...eventStmts);
 	}
+
+	stmts.push(
+		d1
+			.delete(cargo)
+			.where(
+				and(eq(cargo.id, itemId), eq(cargo.organizationId, organizationId)),
+			),
+	);
 
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	await d1.batch(stmts as [any, ...any[]]);

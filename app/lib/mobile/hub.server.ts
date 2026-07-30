@@ -2,6 +2,7 @@ import { resolveLayout } from "~/components/hub/widgets/registry";
 import { getUserSettings } from "~/lib/auth.server";
 import { getCargoStats, getExpiringCargo } from "~/lib/cargo.server";
 import { getHubMealMatchWidgets } from "~/lib/hub-match.server";
+import { getKitchenEvents, getKitchenStats } from "~/lib/kitchen-events.server";
 import { log } from "~/lib/logging.server";
 import { getDistinctMealTags, getManifestPreview } from "~/lib/manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP } from "~/lib/matching.server";
@@ -56,6 +57,9 @@ export async function getMobileHubData(
 	const cargoExpiringConfig = findWidget("cargo-expiring");
 	const manifestPreviewConfig = findWidget("manifest-preview");
 	const supplyPreviewConfig = findWidget("supply-preview");
+	const flightRecorderVisible =
+		findWidget("flight-recorder")?.visible !== false &&
+		resolvedWidgets.some((w) => w.id === "flight-recorder" && w.visible);
 
 	const cargoLimit = clampWidgetLimit(cargoExpiringConfig?.filters?.limit, 10);
 	const cargoDomain = cargoExpiringConfig?.filters?.domain;
@@ -87,6 +91,8 @@ export async function getMobileHubData(
 		latestSupplyListRaw,
 		manifestPreviewRaw,
 		hubMatches,
+		flightRecorderStats,
+		flightRecorderRecent,
 	] = await Promise.all([
 		getExpiringCargo(
 			db,
@@ -122,6 +128,12 @@ export async function getMobileHubData(
 				tags: snacksReadyConfig?.filters?.tags,
 			},
 		}),
+		flightRecorderVisible
+			? getKitchenStats(db, organizationId, "7d")
+			: Promise.resolve(null),
+		flightRecorderVisible
+			? getKitchenEvents(db, organizationId, { limit: 5 }).then((r) => r.events)
+			: Promise.resolve([]),
 	]);
 
 	// Tag pickers are best-effort. cargoTagIndex is critical when the supply
@@ -202,6 +214,20 @@ export async function getMobileHubData(
 			}
 		: null;
 
+	const flightRecorderActivity =
+		flightRecorderVisible && flightRecorderStats
+			? {
+					stats: flightRecorderStats,
+					recent: flightRecorderRecent.map((event) => ({
+						...event,
+						occurredAt:
+							event.occurredAt instanceof Date
+								? event.occurredAt.toISOString()
+								: String(event.occurredAt),
+					})),
+				}
+			: null;
+
 	return {
 		expiringItems,
 		cargoStats,
@@ -216,5 +242,6 @@ export async function getMobileHubData(
 		mealMatches,
 		partialMealMatches,
 		snackMatches,
+		flightRecorderActivity,
 	};
 }

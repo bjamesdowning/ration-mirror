@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HubLayoutSchema } from "~/lib/schemas/hub";
+import { kitchenEventTypeSchema } from "~/lib/schemas/kitchen-events";
 
 const HubProfileSchema = z.enum(["cook", "shop", "minimal", "full", "custom"]);
 
@@ -57,6 +58,40 @@ const MealMatchResultSchema = z
 	})
 	.passthrough();
 
+const FlightRecorderActivitySchema = z.object({
+	stats: z.object({
+		window: z.enum(["7d", "30d", "90d", "365d"]),
+		from: z.iso.datetime(),
+		to: z.iso.datetime(),
+		countsByType: z.record(z.string(), z.number()),
+		topCookedMeals: z.array(
+			z.object({
+				subjectName: z.string(),
+				mealId: z.string().nullable(),
+				count: z.number(),
+			}),
+		),
+		totals: z.object({
+			cooked: z.number(),
+			docked: z.number(),
+			expired: z.number(),
+			jettisoned: z.number(),
+		}),
+	}),
+	recent: z.array(
+		z
+			.object({
+				id: z.string(),
+				eventType: kitchenEventTypeSchema,
+				occurredAt: z.iso.datetime(),
+				subjectName: z.string(),
+				mealId: z.string().nullable().optional(),
+				cargoId: z.string().nullable().optional(),
+			})
+			.passthrough(),
+	),
+});
+
 export const MobileHubResponseSchema = z.object({
 	expiringItems: z.array(ExpiringCargoItemSchema),
 	cargoStats: CargoStatsSchema,
@@ -70,6 +105,7 @@ export const MobileHubResponseSchema = z.object({
 	mealMatches: z.array(MealMatchResultSchema),
 	partialMealMatches: z.array(MealMatchResultSchema),
 	snackMatches: z.array(MealMatchResultSchema),
+	flightRecorderActivity: FlightRecorderActivitySchema.nullable().optional(),
 });
 
 export type MobileHubResponse = z.infer<typeof MobileHubResponseSchema>;

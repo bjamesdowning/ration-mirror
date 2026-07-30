@@ -147,4 +147,84 @@ describe("MobileHubResponseSchema", () => {
 		});
 		expect(result.success).toBe(true);
 	});
+
+	it("accepts typed Flight Recorder activity", () => {
+		const result = MobileHubResponseSchema.safeParse({
+			expiringItems: [],
+			cargoStats: { totalItems: 0, expiringCount: 0 },
+			latestSupplyList: null,
+			manifestPreview: null,
+			expirationAlertDays: 7,
+			availableMealTags: [],
+			mealMatches: [],
+			partialMealMatches: [],
+			snackMatches: [],
+			flightRecorderActivity: {
+				stats: {
+					window: "7d",
+					from: "2026-07-24T00:00:00.000Z",
+					to: "2026-07-31T00:00:00.000Z",
+					countsByType: { cargo_jettisoned: 1 },
+					topCookedMeals: [],
+					totals: {
+						cooked: 0,
+						docked: 0,
+						expired: 0,
+						jettisoned: 1,
+					},
+				},
+				recent: [
+					{
+						id: "evt-1",
+						eventType: "cargo_jettisoned",
+						occurredAt: "2026-07-30T12:00:00.000Z",
+						subjectName: "Milk",
+						mealId: null,
+						cargoId: null,
+					},
+				],
+			},
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects unknown Flight Recorder event types", () => {
+		const result = MobileHubResponseSchema.safeParse({
+			expiringItems: [],
+			cargoStats: { totalItems: 0, expiringCount: 0 },
+			latestSupplyList: null,
+			manifestPreview: null,
+			expirationAlertDays: 7,
+			availableMealTags: [],
+			mealMatches: [],
+			partialMealMatches: [],
+			snackMatches: [],
+			flightRecorderActivity: {
+				stats: {
+					window: "7d",
+					from: "2026-07-24T00:00:00.000Z",
+					to: "2026-07-31T00:00:00.000Z",
+					countsByType: {},
+					topCookedMeals: [],
+					totals: {
+						cooked: 0,
+						docked: 0,
+						expired: 0,
+						jettisoned: 0,
+					},
+				},
+				recent: [
+					{
+						id: "evt-1",
+						eventType: "unknown",
+						occurredAt: "2026-07-30T12:00:00.000Z",
+						subjectName: "Milk",
+					},
+				],
+			},
+		});
+
+		expect(result.success).toBe(false);
+	});
 });

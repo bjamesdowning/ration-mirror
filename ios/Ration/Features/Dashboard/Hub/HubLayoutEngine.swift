@@ -150,6 +150,8 @@ enum HubLayoutEngine {
                 parts.append("Tags")
             }
             return parts.joined(separator: " · ")
+        case .flightRecorder:
+            return "This week"
         case .none:
             return ""
         }

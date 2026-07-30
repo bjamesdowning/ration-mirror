@@ -105,7 +105,7 @@ struct HubWidgetConfigureSheet: View {
 
     @ViewBuilder
     private var densitySection: some View {
-        if widget.id == HubWidgetID.hubStats.rawValue {
+        if widget.id == HubWidgetID.hubStats.rawValue || widget.id == HubWidgetID.flightRecorder.rawValue {
             Section("Layout") {
                 Picker("Density", selection: $size) {
                     Text("Compact").tag("sm")
@@ -151,7 +151,7 @@ struct HubWidgetConfigureSheet: View {
         copy.filters = cleaned
 
         switch HubWidgetID(rawValue: widget.id) {
-        case .hubStats:
+        case .hubStats, .flightRecorder:
             copy.size = size
         case .manifestPreview:
             let span = HubLayoutEngine.resolvedDaySpan(filters: cleaned)

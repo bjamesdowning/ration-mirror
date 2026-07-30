@@ -160,7 +160,8 @@ private extension HubResponse {
             cargoTagIndex: cargoTagIndex,
             mealMatches: mealMatches,
             partialMealMatches: partialMealMatches,
-            snackMatches: snackMatches
+            snackMatches: snackMatches,
+            flightRecorderActivity: flightRecorderActivity
         )
     }
 }

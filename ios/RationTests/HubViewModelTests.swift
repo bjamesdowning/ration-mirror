@@ -49,6 +49,50 @@ final class HubViewModelTests: XCTestCase {
         XCTAssertFalse(model.resolvedLayout.isEmpty)
     }
 
+    func testFullLayoutIncludesFlightRecorder() {
+        XCTAssertTrue(
+            HubWidgetRegistry.fullLayout.contains {
+                $0.id == HubWidgetID.flightRecorder.rawValue && $0.visible
+            }
+        )
+    }
+
+    func testFlightRecorderActivityDecodesFromMobileContract() throws {
+        let json = """
+        {
+          "stats": {
+            "window": "7d",
+            "from": "2026-07-24T00:00:00.000Z",
+            "to": "2026-07-31T00:00:00.000Z",
+            "countsByType": { "cargo_jettisoned": 1 },
+            "totals": {
+              "cooked": 0,
+              "docked": 0,
+              "expired": 0,
+              "jettisoned": 1
+            }
+          },
+          "recent": [
+            {
+              "id": "event-1",
+              "eventType": "cargo_jettisoned",
+              "occurredAt": "2026-07-30T12:00:00.000Z",
+              "subjectName": "Milk",
+              "mealId": null,
+              "cargoId": null
+            }
+          ]
+        }
+        """
+
+        let activity = try JSON.decoder.decode(
+            FlightRecorderActivity.self,
+            from: Data(json.utf8)
+        )
+        XCTAssertEqual(activity.stats.totals.jettisoned, 1)
+        XCTAssertEqual(activity.recent.first?.subjectName, "Milk")
+    }
+
     private func makeHubResponse(profile: String) throws -> HubResponse {
         let json = """
         {

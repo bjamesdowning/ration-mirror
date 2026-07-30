@@ -298,6 +298,8 @@ struct DashboardView: View {
                 },
                 onOpenManifest: onOpenManifest
             )
+        case .flightRecorder:
+            FlightRecorderWidget(activity: data.flightRecorderActivity, size: size)
         }
     }
 

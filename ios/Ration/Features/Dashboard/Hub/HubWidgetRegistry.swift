@@ -8,6 +8,7 @@ enum HubWidgetID: String, CaseIterable, Sendable {
     case cargoExpiring = "cargo-expiring"
     case supplyPreview = "supply-preview"
     case manifestPreview = "manifest-preview"
+    case flightRecorder = "flight-recorder"
 }
 
 struct HubWidgetDefinition: Sendable {
@@ -62,6 +63,12 @@ enum HubWidgetRegistry {
             description: "Your upcoming meal plan at a glance",
             defaultSize: "md"
         ),
+        .flightRecorder: HubWidgetDefinition(
+            id: .flightRecorder,
+            title: "Flight Recorder",
+            description: "This week's cooks, docks, expiries, and recent activity",
+            defaultSize: "md"
+        ),
     ]
 
     static let fullLayout: [HubWidgetLayout] = [
@@ -72,6 +79,7 @@ enum HubWidgetRegistry {
         HubWidgetLayout(id: HubWidgetID.cargoExpiring.rawValue, order: 4, size: "md", visible: true),
         HubWidgetLayout(id: HubWidgetID.supplyPreview.rawValue, order: 5, size: "md", visible: true),
         HubWidgetLayout(id: HubWidgetID.manifestPreview.rawValue, order: 6, size: "md", visible: true),
+        HubWidgetLayout(id: HubWidgetID.flightRecorder.rawValue, order: 7, size: "md", visible: true),
     ]
 
     static let cookLayout: [HubWidgetLayout] = [

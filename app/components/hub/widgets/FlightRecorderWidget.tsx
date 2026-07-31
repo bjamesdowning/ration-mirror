@@ -37,7 +37,9 @@ function StatChip({
 					: "bg-platinum/60 dark:bg-white/5"
 			}`}
 		>
-			<p className="text-[10px] uppercase tracking-wider text-muted">{label}</p>
+			<p className="text-[10px] uppercase tracking-wider text-muted truncate">
+				{label}
+			</p>
 			<p
 				className={`text-lg font-bold ${
 					highlight ? "text-warning" : "text-carbon dark:text-white"
@@ -63,6 +65,8 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 	const { stats, recent } = activity;
 	const compact = size === "sm";
 	const recentLimit = compact ? 3 : 5;
+	// Four-up only on expanded cards — narrower widths wrap "Jettisoned".
+	const statsGridClass = size === "lg" ? "grid-cols-4" : "grid-cols-2";
 
 	return (
 		<div className="glass-panel rounded-xl p-4 space-y-3">
@@ -73,7 +77,7 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 				<span className="text-xs text-muted">This week</span>
 			</div>
 
-			<div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-4"}`}>
+			<div className={`grid gap-2 ${statsGridClass}`}>
 				<StatChip label="Cooked" value={stats.totals.cooked} />
 				<StatChip label="Docked" value={stats.totals.docked} />
 				<StatChip
@@ -81,7 +85,8 @@ export function FlightRecorderWidget({ data, size = "md" }: HubWidgetProps) {
 					value={stats.totals.expired}
 					highlight={stats.totals.expired > 0}
 				/>
-				<StatChip label="Jettisoned" value={stats.totals.jettisoned} />
+				{/* Short chip label; event rows keep full "Jettisoned". */}
+				<StatChip label="Jettison" value={stats.totals.jettisoned} />
 			</div>
 
 			{recent.length > 0 ? (

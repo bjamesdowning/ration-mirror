@@ -439,6 +439,8 @@ struct FlightRecorderWidget: View {
     var size: String = "md"
 
     private var compact: Bool { size == "sm" }
+    /// Four-up only on expanded cards — phone-width `md` wraps long labels like "Jettisoned".
+    private var statsColumns: Int { size == "lg" ? 4 : 2 }
     private var recentLimit: Int { compact ? 3 : 5 }
 
     private static let eventLabels: [String: String] = [
@@ -464,14 +466,15 @@ struct FlightRecorderWidget: View {
                     LazyVGrid(
                         columns: Array(
                             repeating: GridItem(.flexible(), spacing: 8),
-                            count: compact ? 2 : 4
+                            count: statsColumns
                         ),
                         spacing: 8
                     ) {
+                        // Short chip labels stay single-line; event rows keep full past tense.
                         statChip("Cooked", value: totals.cooked)
                         statChip("Docked", value: totals.docked)
                         statChip("Expired", value: totals.expired, highlight: totals.expired > 0)
-                        statChip("Jettisoned", value: totals.jettisoned)
+                        statChip("Jettison", value: totals.jettisoned)
                     }
 
                     if activity.recent.isEmpty {
@@ -513,6 +516,8 @@ struct FlightRecorderWidget: View {
             Text(label.uppercased())
                 .font(Typography.caption())
                 .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Text("\(value)")
                 .font(Typography.headline())
                 .foregroundStyle(highlight ? Theme.warning : Theme.carbon)
@@ -522,6 +527,8 @@ struct FlightRecorderWidget: View {
         .padding(8)
         .background(highlight ? Theme.warning.opacity(0.12) : Theme.platinum.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label), \(value)")
     }
 
     private func relativeLabel(iso: String) -> String {

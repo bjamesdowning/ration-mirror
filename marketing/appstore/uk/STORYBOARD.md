@@ -12,12 +12,14 @@ Upload order in App Store Connect → Media Manager → **iPhone 6.9"** (1320×2
 | 6 | Meal ideas from what you already have | [`raw/06-generate.png`](raw/06-generate.png) | [`framed/6.9/06-generate.png`](framed/6.9/06-generate.png) | [`framed/6.5/06-generate.png`](framed/6.5/06-generate.png) |
 | 7 | Plan the week. Keep the crew aligned | [`raw/07-manifest.png`](raw/07-manifest.png) | [`framed/6.9/07-manifest.png`](framed/6.9/07-manifest.png) | [`framed/6.5/07-manifest.png`](framed/6.5/07-manifest.png) |
 | 8 | Shop only what you're still missing | [`raw/08-supply.png`](raw/08-supply.png) | [`framed/6.9/08-supply.png`](framed/6.9/08-supply.png) | [`framed/6.5/08-supply.png`](framed/6.5/08-supply.png) |
+| 9 | Light or dark. Same orbital clarity | [`raw/09-theme.png`](raw/09-theme.png) | [`framed/6.9/09-theme.png`](framed/6.9/09-theme.png) | [`framed/6.5/09-theme.png`](framed/6.5/09-theme.png) |
 
 ## Narrative
 
 1–3 appear in search results — outcome (Hub), proof (Cargo), differentiator (Ask Ration).  
 4–6 deepen AI intake and cook-from-stock.  
 7–8 close the Manifest → Supply loop.
+9 shows light/dark display options (diagonal Cargo composite).
 
 ## Regenerate framed assets
 

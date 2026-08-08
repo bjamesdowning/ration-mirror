@@ -4,18 +4,22 @@ import {
 	CalendarDays,
 	CookingPot,
 	Database,
+	ExternalLink,
 	PackageSearch,
 	ScanLine,
 	ShieldCheck,
 	ShoppingBasket,
-	Smartphone,
-	Sparkles,
 	Users,
 } from "lucide-react";
-import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { APP_STORE_URL } from "~/lib/marketing";
+import {
+	APP_STORE_URL,
+	HELP_DOCS_URL,
+	YOUTUBE_CHANNEL_URL,
+} from "~/lib/marketing";
+import { ExplainerVideo } from "./ExplainerVideo";
+import { Reveal } from "./Reveal";
 
 const loopStages = [
 	{
@@ -23,7 +27,7 @@ const loopStages = [
 		number: "01",
 		title: "Cargo",
 		verb: "Know what you have.",
-		detail: "Quantities, expiry and semantic ingredient memory.",
+		detail: "Track quantity and expiry in one live inventory.",
 		icon: PackageSearch,
 		signal: "18 items ready · 3 expiring soon",
 	},
@@ -31,8 +35,8 @@ const loopStages = [
 		id: "galley",
 		number: "02",
 		title: "Galley",
-		verb: "See what is possible.",
-		detail: "Recipes match against the food already in your kitchen.",
+		verb: "See what you can cook.",
+		detail: "Match recipes against the food already at home.",
 		icon: CookingPot,
 		signal: "6 meals available now",
 	},
@@ -40,8 +44,8 @@ const loopStages = [
 		id: "manifest",
 		number: "03",
 		title: "Manifest",
-		verb: "Turn intent into a plan.",
-		detail: "Build a week around preferences, time and real stock.",
+		verb: "Plan the week.",
+		detail: "Schedule meals around your time and real stock.",
 		icon: CalendarDays,
 		signal: "5 dinners planned",
 	},
@@ -49,8 +53,8 @@ const loopStages = [
 		id: "supply",
 		number: "04",
 		title: "Supply",
-		verb: "Buy only the delta.",
-		detail: "Missing ingredients become one practical shopping list.",
+		verb: "Buy only the gaps.",
+		detail: "Turn missing ingredients into one shopping list.",
 		icon: ShoppingBasket,
 		signal: "11 missing items consolidated",
 	},
@@ -59,32 +63,65 @@ const loopStages = [
 		number: "05",
 		title: "Dock",
 		verb: "Close the loop.",
-		detail: "Purchased food returns to Cargo; cooked meals deduct stock.",
+		detail: "Add purchases to Cargo and deduct what you cook.",
 		icon: ArrowDown,
 		signal: "Cargo updated automatically",
 	},
 ] as const;
 
+const whyCards = [
+	{
+		title: "Bought it twice",
+		body: "Check Cargo before you shop, wherever you are.",
+	},
+	{
+		title: "Expired in the drawer",
+		body: "See what expires next and find meals that use it.",
+	},
+	{
+		title: "What's for dinner, again",
+		body: "Ask Ration and get an answer grounded in your actual food.",
+	},
+] as const;
+
 const capabilities = [
 	{
-		label: "Semantic memory",
-		value: "Understands ingredients, not just exact words",
+		label: "Ingredient-aware matching",
+		value: "Finds the same food even when the wording differs.",
 		icon: Database,
 	},
 	{
 		label: "Fast intake",
-		value: "Photo, receipt, URL or manual entry",
+		value: "Add food from a photo, receipt, recipe URL, or by hand.",
 		icon: ScanLine,
 	},
 	{
-		label: "Shared households",
-		value: "One live system for the whole crew",
+		label: "One household record",
+		value: "Everyone in your crew sees the same live kitchen.",
 		icon: Users,
 	},
 	{
-		label: "Scoped by design",
-		value: "OAuth permissions, revocable access, full export",
+		label: "Access you control",
+		value: "OAuth scopes, revocable agents, and full data export.",
 		icon: ShieldCheck,
+	},
+] as const;
+
+const proofShots = [
+	{
+		src: "/static/landing/cargo.png",
+		alt: "Ration Cargo inventory on iPhone",
+		caption: "Know your stock before it spoils",
+	},
+	{
+		src: "/static/landing/manifest.png",
+		alt: "Ration weekly Manifest on iPhone",
+		caption: "Plan the week. Keep the crew aligned",
+	},
+	{
+		src: "/static/landing/supply.png",
+		alt: "Ration Supply shopping list on iPhone",
+		caption: "Shop only what you're still missing",
 	},
 ] as const;
 
@@ -95,7 +132,7 @@ function LoopDiagram({ activeIndex }: { activeIndex: number }) {
 			data-active-stage={loopStages[activeIndex]?.id}
 		>
 			<figcaption className="sr-only">
-				Closed pantry loop. Active stage: {loopStages[activeIndex]?.title}
+				Closed kitchen loop. Active stage: {loopStages[activeIndex]?.title}
 			</figcaption>
 			<div className="splash-orbit" aria-hidden>
 				<svg viewBox="0 0 420 420" role="presentation">
@@ -141,16 +178,21 @@ function ClosedLoopStory() {
 
 	useEffect(() => {
 		if (!("IntersectionObserver" in window)) return;
+		const isCompact = window.matchMedia("(max-width: 900px)").matches;
 		const observer = new IntersectionObserver(
 			(entries) => {
 				const visible = entries
 					.filter((entry) => entry.isIntersecting)
 					.sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
 				const index = visible?.target.getAttribute("data-stage-index");
-				if (index !== undefined && index !== null)
+				if (index !== undefined && index !== null) {
 					setActiveIndex(Number(index));
+				}
 			},
-			{ rootMargin: "-30% 0px -45% 0px", threshold: [0.15, 0.5, 0.8] },
+			{
+				rootMargin: isCompact ? "-40% 0px -35% 0px" : "-30% 0px -45% 0px",
+				threshold: [0.15, 0.5, 0.8],
+			},
 		);
 
 		for (const stage of stageRefs.current) {
@@ -165,12 +207,20 @@ function ClosedLoopStory() {
 			className="splash-section scroll-mt-24"
 			aria-labelledby="loop-heading"
 		>
-			<div className="splash-section-heading">
-				<p className="text-label text-hyper-green">The full loop</p>
-				<h2 id="loop-heading">A pantry that keeps its own context.</h2>
-				<p>Plan, shop and cook without rebuilding the truth every time.</p>
-			</div>
+			<Reveal className="splash-section-heading">
+				<p className="text-label text-hyper-green">How it works</p>
+				<h2 id="loop-heading">
+					One loop: Cargo → Galley → Manifest → Supply → Dock
+				</h2>
+				<p>
+					Cook a meal and stock deducts. Buy groceries and Cargo updates.
+					Nothing is retyped.
+				</p>
+			</Reveal>
 			<div className="splash-story-grid">
+				<div className="splash-story-sticky">
+					<LoopDiagram activeIndex={activeIndex} />
+				</div>
 				<div className="splash-story-copy">
 					{loopStages.map((stage, index) => {
 						const Icon = stage.icon;
@@ -195,121 +245,147 @@ function ClosedLoopStory() {
 						);
 					})}
 				</div>
-				<div className="splash-story-sticky">
-					<LoopDiagram activeIndex={activeIndex} />
-				</div>
 			</div>
 		</section>
 	);
 }
 
-function HeroSystem() {
+function WhyRation() {
 	return (
-		<figure className="splash-hero-system">
-			<figcaption className="sr-only">
-				Ration reads pantry inventory, matches meals, and updates the shopping
-				list.
-			</figcaption>
-			<div className="splash-system-bar">
-				<span className="splash-status-dot" />
-				<span>Kitchen online</span>
-				<small>live context</small>
-			</div>
-			<div className="splash-system-query">
-				<span className="text-hyper-green">Ask Ration</span>
-				<p>Plan three dinners and buy only what is missing.</p>
-			</div>
-			<div className="splash-system-events">
-				<div style={{ "--event-delay": "0s" } as CSSProperties}>
-					<span>01</span>
-					<p>read Cargo</p>
-					<strong>18 items</strong>
-				</div>
-				<div style={{ "--event-delay": "0.7s" } as CSSProperties}>
-					<span>02</span>
-					<p>match Galley</p>
-					<strong>6 meals</strong>
-				</div>
-				<div style={{ "--event-delay": "1.4s" } as CSSProperties}>
-					<span>03</span>
-					<p>sync Supply</p>
-					<strong>11 items</strong>
-				</div>
-			</div>
-			<div className="splash-system-result">
-				<Sparkles aria-hidden size={17} />
-				<span>Manifest ready. Supply contains only the delta.</span>
-			</div>
-		</figure>
+		<section className="splash-why" aria-label="Why use Ration">
+			{whyCards.map((card, index) => (
+				<Reveal as="article" key={card.title} delay={index * 70}>
+					<span aria-hidden>0{index + 1}</span>
+					<h2>{card.title}</h2>
+					<p>{card.body}</p>
+				</Reveal>
+			))}
+		</section>
 	);
 }
 
-function ControlModes() {
+function Interfaces() {
 	return (
 		<section
-			id="control"
+			id="interfaces"
 			className="splash-section scroll-mt-24"
-			aria-labelledby="control-heading"
+			aria-labelledby="interfaces-heading"
 		>
-			<div className="splash-section-heading centered">
-				<p className="text-label text-hyper-green">Two control surfaces</p>
-				<h2 id="control-heading">Ask inside Ration. Or bring your own AI.</h2>
+			<Reveal className="splash-section-heading centered">
+				<p className="text-label text-hyper-green">Use Ration your way</p>
+				<h2 id="interfaces-heading">One kitchen. Three interfaces.</h2>
 				<p>
-					Both operate the same live Cargo, Galley, Manifest and Supply data.
+					Your inventory, meals, plans, and shopping list stay in sync
+					everywhere.
 				</p>
-			</div>
-			<div className="splash-control-grid">
-				<article className="splash-control-card splash-copilot-card">
-					<div className="splash-control-label">
-						<span className="splash-status-dot" />
-						<span>Ration Copilot</span>
-						<small>Live</small>
+			</Reveal>
+
+			<div className="splash-interfaces">
+				<Reveal as="article" className="splash-interface splash-interface-ios">
+					<div className="splash-interface-copy">
+						<span className="splash-interface-number">
+							01 · Priority access
+						</span>
+						<p className="text-label text-hyper-green">iOS + Copilot</p>
+						<h3>The full kitchen in your pocket.</h3>
+						<p>
+							Ask Ration what to cook and get an answer from your actual stock.
+							Scan receipts, plan meals, and shop the gaps while you move.
+						</p>
+						<a
+							href={APP_STORE_URL}
+							className="splash-app-store"
+							target="_blank"
+							rel="noopener noreferrer"
+							aria-label="Download Ration on the App Store"
+						>
+							<img
+								src="/static/download-on-the-app-store.svg"
+								alt="Download on the App Store"
+								width={140}
+								height={47}
+							/>
+						</a>
 					</div>
-					<div className="splash-chat">
-						<p>What should I use first?</p>
-						<div>
-							<Sparkles aria-hidden size={16} />
-							<span>
-								Cook the spinach curry tonight. It uses three items expiring
-								this week.
-							</span>
-						</div>
+					<div className="splash-ios-pair">
+						<img
+							src="/static/landing/ios-hub.png"
+							alt="Ration kitchen Hub on iPhone"
+							width={331}
+							height={720}
+							loading="lazy"
+						/>
+						<img
+							src="/static/landing/ios-ask.png"
+							alt="Ask Ration Copilot on iPhone"
+							width={331}
+							height={720}
+							loading="lazy"
+						/>
 					</div>
-					<h3>Your kitchen assistant, built in.</h3>
-					<p>
-						Plan meals, inspect stock and update the loop without leaving
-						Ration.
-					</p>
-				</article>
-				<article className="splash-control-card splash-mcp-card">
-					<div className="splash-control-label">
-						<span className="splash-status-dot" />
-						<span>MCP control</span>
-						<small>OAuth 2.1</small>
+				</Reveal>
+
+				<Reveal
+					as="article"
+					className="splash-interface splash-interface-mcp"
+					delay={70}
+				>
+					<div className="splash-interface-copy">
+						<span className="splash-interface-number">02 · Agent access</span>
+						<p className="text-label text-hyper-green">MCP</p>
+						<h3>Bring your own AI.</h3>
+						<p>
+							Paste one URL into Claude, ChatGPT, Cursor, or any compatible
+							client. Your agent reads and updates the same kitchen.
+						</p>
+						<Link to="/connect" className="splash-inline-link">
+							Connect an AI agent <ArrowRight aria-hidden size={15} />
+						</Link>
 					</div>
 					<section
 						className="splash-terminal"
-						aria-label="MCP tool call example"
+						aria-label="Real MCP tool sequence"
 					>
 						<p>
-							<span>assistant</span> use what expires next
+							<span>01</span> get_expiring_items
 						</p>
 						<p>
-							<span>tool</span> match_meals
+							<span>02</span> match_meals
 						</p>
 						<p>
-							<span>result</span> 6 cookable · 2 urgent
+							<span>03</span> sync_supply_from_selected_meals
 						</p>
+						<strong>One live kitchen · OAuth 2.1</strong>
 					</section>
-					<h3>Your pantry, inside your AI.</h3>
-					<p>
-						Connect Claude, ChatGPT, Cursor or any compatible client with one
-						MCP URL.
-					</p>
-					<Link to="/connect" className="splash-inline-link">
-						Connect an AI agent <ArrowRight aria-hidden size={15} />
-					</Link>
-				</article>
+				</Reveal>
+
+				<Reveal
+					as="article"
+					className="splash-interface splash-interface-web"
+					delay={140}
+				>
+					<div className="splash-interface-copy">
+						<span className="splash-interface-number">03 · Browser access</span>
+						<p className="text-label text-hyper-green">Web + Copilot</p>
+						<h3>Your kitchen, on any screen.</h3>
+						<p>
+							Everything also runs at ration.mayutic.com — the same data and the
+							same Ask Ration assistant, with nothing to install.
+						</p>
+						<a href="#signup" className="splash-inline-link">
+							Start free on the web <ArrowRight aria-hidden size={15} />
+						</a>
+					</div>
+					<div className="splash-web-shot">
+						<img
+							src="/static/ration-cargo-light.webp"
+							alt="Ration Cargo inventory in the web app"
+							width={2952}
+							height={1472}
+							loading="lazy"
+						/>
+					</div>
+				</Reveal>
 			</div>
 		</section>
 	);
@@ -317,64 +393,53 @@ function ControlModes() {
 
 function CapabilityProof() {
 	return (
-		<section className="splash-capabilities" aria-label="Core capabilities">
-			{capabilities.map((capability) => {
-				const Icon = capability.icon;
-				return (
-					<div key={capability.label}>
-						<Icon aria-hidden size={20} />
-						<span>
-							<strong>{capability.label}</strong>
-							<small>{capability.value}</small>
-						</span>
-					</div>
-				);
-			})}
-		</section>
-	);
-}
+		<section className="splash-proof" aria-labelledby="proof-heading">
+			<Reveal className="splash-section-heading centered">
+				<p className="text-label text-hyper-green">Real kitchen work</p>
+				<h2 id="proof-heading">
+					See what changes when your pantry stays current.
+				</h2>
+			</Reveal>
 
-function IosPreview() {
-	return (
-		<section
-			id="ios"
-			className="splash-ios scroll-mt-24"
-			aria-labelledby="ios-heading"
-		>
-			<div className="splash-phone" aria-hidden>
-				<div className="splash-phone-island" />
-				<div className="splash-phone-screen">
-					<div>
-						<span className="splash-status-dot" />
-						<small>Available now</small>
-					</div>
-					<Smartphone size={46} />
-					<strong>Your kitchen. In your pocket.</strong>
-					<span>Cargo · Ask · Manifest · Supply</span>
-				</div>
+			<section className="splash-capabilities" aria-label="Core capabilities">
+				{capabilities.map((capability, index) => {
+					const Icon = capability.icon;
+					return (
+						<Reveal key={capability.label} delay={index * 70}>
+							<Icon aria-hidden size={20} />
+							<span>
+								<strong>{capability.label}</strong>
+								<small>{capability.value}</small>
+							</span>
+						</Reveal>
+					);
+				})}
+			</section>
+
+			<div className="splash-shots">
+				{proofShots.map((shot, index) => (
+					<Reveal as="article" key={shot.src} delay={index * 70}>
+						<img
+							src={shot.src}
+							alt={shot.alt}
+							width={331}
+							height={720}
+							loading="lazy"
+						/>
+						<p>{shot.caption}</p>
+					</Reveal>
+				))}
 			</div>
-			<div className="splash-ios-copy">
-				<p className="text-label text-hyper-green">Ration for iOS</p>
-				<h2 id="ios-heading">The full loop, wherever dinner happens.</h2>
-				<p>
-					Native pantry control, Copilot, and live household sync are available
-					on iPhone — same Cargo, Galley, Manifest, and Supply as the web app.
-				</p>
-				<a
-					href={APP_STORE_URL}
-					className="splash-app-store"
-					target="_blank"
-					rel="noopener noreferrer"
-					aria-label="Download Ration on the App Store"
-				>
-					<img
-						src="/static/download-on-the-app-store.svg"
-						alt="Download on the App Store"
-						width={140}
-						height={47}
-					/>
+
+			<Reveal className="splash-resources">
+				<span>Go deeper</span>
+				<Link to={HELP_DOCS_URL}>
+					Docs <ArrowRight aria-hidden size={14} />
+				</Link>
+				<a href={YOUTUBE_CHANNEL_URL} target="_blank" rel="noopener noreferrer">
+					YouTube channel <ExternalLink aria-hidden size={14} />
 				</a>
-			</div>
+			</Reveal>
 		</section>
 	);
 }
@@ -386,31 +451,41 @@ export function SplashExperience() {
 				<div className="splash-hero-copy">
 					<div className="splash-kicker">
 						<span className="splash-status-dot" />
-						AI pantry management · MCP native
+						Pantry · Meals · Shopping — one live system
 					</div>
-					<h1 id="splash-title">Your kitchen, operable by AI.</h1>
+					<h1 id="splash-title">
+						Know your kitchen. Shop only what's missing.
+					</h1>
 					<p>
-						Ration keeps pantry inventory, meals, plans and shopping in one
-						closed loop—controlled by Copilot or any MCP-compatible assistant.
+						Ration keeps a live inventory of your food. Ask what&apos;s for
+						dinner, plan the week from what you already have, and get a shopping
+						list of only the gaps — on iPhone, on the web, or inside Claude and
+						ChatGPT.
 					</p>
 					<div className="splash-hero-actions">
-						<a href="#signup" className="splash-primary-cta">
-							Start free <ArrowRight aria-hidden size={17} />
+						<a
+							href={APP_STORE_URL}
+							className="splash-primary-cta"
+							target="_blank"
+							rel="noopener noreferrer"
+							aria-label="Get Ration on the App Store"
+						>
+							Get the app <ArrowRight aria-hidden size={17} />
 						</a>
-						<Link to="/connect" className="splash-secondary-cta">
-							Connect an AI agent
-						</Link>
+						<a href="#signup" className="splash-secondary-link">
+							or start free on the web
+						</a>
 					</div>
 					<a href="#how-it-works" className="splash-scroll-cue">
-						See the full loop <ArrowDown aria-hidden size={15} />
+						See how the loop works <ArrowDown aria-hidden size={15} />
 					</a>
 				</div>
-				<HeroSystem />
+				<ExplainerVideo />
 			</section>
+			<WhyRation />
 			<ClosedLoopStory />
-			<ControlModes />
+			<Interfaces />
 			<CapabilityProof />
-			<IosPreview />
 		</>
 	);
 }

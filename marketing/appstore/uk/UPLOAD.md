@@ -29,6 +29,7 @@ Do **not** mix: 1320×2868 files into the 6.5" slot will always fail.
 | 6 | `06-generate.png` |
 | 7 | `07-manifest.png` |
 | 8 | `08-supply.png` |
+| 9 | `09-theme.png` |
 
 PNG, RGB, no alpha. Apple scales a 6.9" set down for smaller phones if you provide it.
 

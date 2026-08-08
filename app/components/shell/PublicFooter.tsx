@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { TraderDisclosure } from "~/components/legal/TraderDisclosure";
+import { APP_STORE_URL, YOUTUBE_CHANNEL_URL } from "~/lib/marketing";
 import { APP_VERSION } from "~/lib/version";
 
 type PublicFooterProps = {
@@ -11,7 +12,7 @@ type PublicFooterProps = {
 
 const groups: Array<{
 	heading: string;
-	links: Array<{ to: string; label: string }>;
+	links: Array<{ to: string; label: string; external?: boolean }>;
 }> = [
 	{
 		heading: "Product",
@@ -19,7 +20,8 @@ const groups: Array<{
 			{ to: "/", label: "Home" },
 			{ to: "/#pricing", label: "Pricing" },
 			{ to: "/#signup", label: "Sign In" },
-			{ to: "/help", label: "User guide" },
+			{ to: "/help", label: "Docs" },
+			{ to: APP_STORE_URL, label: "iOS App", external: true },
 			{ to: "/docs/api", label: "API docs" },
 		],
 	},
@@ -29,6 +31,11 @@ const groups: Array<{
 			{ to: "/blog", label: "Blog" },
 			{ to: "/tools", label: "Tools" },
 			{ to: "/tools/unit-converter", label: "Unit Converter" },
+			{
+				to: YOUTUBE_CHANNEL_URL,
+				label: "YouTube",
+				external: true,
+			},
 		],
 	},
 	{
@@ -135,12 +142,23 @@ export function PublicFooter({
 							<ul className="space-y-2">
 								{group.links.map((link) => (
 									<li key={link.to}>
-										<Link
-											to={link.to}
-											className="text-sm text-muted hover:text-hyper-green transition-colors"
-										>
-											{link.label}
-										</Link>
+										{link.external ? (
+											<a
+												href={link.to}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="text-sm text-muted hover:text-hyper-green transition-colors"
+											>
+												{link.label}
+											</a>
+										) : (
+											<Link
+												to={link.to}
+												className="text-sm text-muted hover:text-hyper-green transition-colors"
+											>
+												{link.label}
+											</Link>
+										)}
 									</li>
 								))}
 							</ul>

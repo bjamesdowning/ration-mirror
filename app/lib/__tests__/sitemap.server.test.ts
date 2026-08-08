@@ -68,6 +68,6 @@ describe("getSitemapEntries", () => {
 	it("marks the remodeled home page with its current revision date", () => {
 		expect(
 			getSitemapEntries().find((entry) => entry.path === "/")?.lastmod,
-		).toBe("2026-07-10");
+		).toBe("2026-08-08");
 	});
 });

@@ -51,6 +51,15 @@ export type SoftwareOffer = {
 	description?: string;
 };
 
+export type VideoInput = {
+	name: string;
+	description: string;
+	thumbnailPath: string;
+	embedUrl: string;
+	uploadDate: string;
+	duration?: string;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Identity / publisher schemas                                               */
 /* -------------------------------------------------------------------------- */
@@ -234,6 +243,21 @@ export function faqSchema(entries: FaqEntry[]) {
 				text: e.answer,
 			},
 		})),
+	};
+}
+
+/** VideoObject schema for public product demonstrations. */
+export function videoSchema(video: VideoInput) {
+	return {
+		"@context": "https://schema.org",
+		"@type": "VideoObject",
+		name: video.name,
+		description: video.description,
+		thumbnailUrl: [absoluteSiteUrl(video.thumbnailPath)],
+		embedUrl: video.embedUrl,
+		uploadDate: video.uploadDate,
+		...(video.duration ? { duration: video.duration } : {}),
+		publisher: { "@type": "Organization", name: "Ration" },
 	};
 }
 

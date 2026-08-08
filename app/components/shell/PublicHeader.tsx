@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import { lockBodyScroll } from "~/lib/body-scroll-lock";
+import { APP_STORE_URL } from "~/lib/marketing";
 import { APP_VERSION } from "~/lib/version";
 
 type PublicHeaderProps = {
@@ -114,7 +115,7 @@ export function PublicHeader({
 
 				{/* Desktop nav — hidden on mobile */}
 				<nav
-					className="hidden md:flex items-center gap-4 lg:gap-6 text-sm shrink-0"
+					className="hidden lg:flex items-center gap-4 xl:gap-6 text-sm shrink-0"
 					aria-label="Site navigation"
 				>
 					{isHome ? null : (
@@ -127,11 +128,8 @@ export function PublicHeader({
 							<Link to="/#how-it-works" className={desktopLinkClass}>
 								How it works
 							</Link>
-							<Link to="/#control" className={desktopLinkClass}>
-								Copilot + MCP
-							</Link>
-							<Link to="/#ios" className={desktopLinkClass}>
-								iOS
+							<Link to="/#interfaces" className={desktopLinkClass}>
+								Interfaces
 							</Link>
 						</>
 					) : (
@@ -145,20 +143,35 @@ export function PublicHeader({
 							<Link to="/about" className={desktopLinkClass}>
 								About
 							</Link>
+							<Link to="/help" className={desktopLinkClass}>
+								Docs
+							</Link>
 						</>
 					)}
 					<Link to="/#pricing" className={desktopLinkClass}>
 						Pricing
 					</Link>
-					<Link
-						to="/#signup"
-						className={isHome ? primaryClass : desktopLinkClass}
-					>
-						{isHome ? "Start free" : "Sign in"}
+					{isHome && (
+						<Link to="/help" className={desktopLinkClass}>
+							Docs
+						</Link>
+					)}
+					<Link to="/#signup" className={desktopLinkClass}>
+						Sign in
 					</Link>
+					{isHome && (
+						<a
+							href={APP_STORE_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							className={primaryClass}
+						>
+							Get the app
+						</a>
+					)}
 					{isHome && showLiveVersion && (
 						<span
-							className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-carbon"
+							className="hidden xl:flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-carbon"
 							title={`Live version ${APP_VERSION}`}
 						>
 							<span
@@ -171,7 +184,7 @@ export function PublicHeader({
 				</nav>
 
 				{/* Mobile: hamburger + dropdown (portal so it renders above all content) */}
-				<div className="relative flex md:hidden shrink-0">
+				<div className="relative flex lg:hidden shrink-0">
 					<button
 						ref={buttonRef}
 						type="button"
@@ -188,14 +201,14 @@ export function PublicHeader({
 							<>
 								{/* Backdrop — full viewport, catches clicks to close */}
 								<div
-									className="fixed inset-0 z-[9998] bg-carbon/50 backdrop-blur-sm md:hidden"
+									className="fixed inset-0 z-[9998] bg-carbon/50 backdrop-blur-sm lg:hidden"
 									aria-hidden
 									onClick={() => setOpen(false)}
 								/>
 								{/* Dropdown panel — fixed, above all content, solid background */}
 								<nav
 									ref={mobileNavRef}
-									className="fixed top-16 right-4 left-4 sm:left-auto sm:w-80 z-[9999] py-4 px-4 bg-ceramic border border-carbon/10 rounded-xl shadow-2xl md:hidden"
+									className="fixed top-16 right-4 left-4 sm:left-auto sm:w-80 z-[9999] py-4 px-4 bg-ceramic border border-carbon/10 rounded-xl shadow-2xl lg:hidden"
 									aria-label="Mobile navigation"
 								>
 									<div className="flex flex-col gap-1">
@@ -218,18 +231,11 @@ export function PublicHeader({
 													How it works
 												</Link>
 												<Link
-													to="/#control"
+													to="/#interfaces"
 													className={linkClass}
 													onClick={() => setOpen(false)}
 												>
-													Copilot + MCP
-												</Link>
-												<Link
-													to="/#ios"
-													className={linkClass}
-													onClick={() => setOpen(false)}
-												>
-													iOS
+													Interfaces
 												</Link>
 											</>
 										) : (
@@ -255,6 +261,13 @@ export function PublicHeader({
 												>
 													About
 												</Link>
+												<Link
+													to="/help"
+													className={linkClass}
+													onClick={() => setOpen(false)}
+												>
+													Docs
+												</Link>
 											</>
 										)}
 										<Link
@@ -264,13 +277,33 @@ export function PublicHeader({
 										>
 											Pricing
 										</Link>
+										{isHome && (
+											<Link
+												to="/help"
+												className={linkClass}
+												onClick={() => setOpen(false)}
+											>
+												Docs
+											</Link>
+										)}
 										<Link
 											to="/#signup"
-											className={`${linkClass} mt-2 bg-hyper-green text-[#111111] font-bold`}
+											className={linkClass}
 											onClick={() => setOpen(false)}
 										>
-											{isHome ? "Start free" : "Sign in"}
+											Sign in
 										</Link>
+										{isHome && (
+											<a
+												href={APP_STORE_URL}
+												target="_blank"
+												rel="noopener noreferrer"
+												className={`${linkClass} mt-2 bg-hyper-green text-[#111111] font-bold`}
+												onClick={() => setOpen(false)}
+											>
+												Get the app
+											</a>
+										)}
 										{isHome && showLiveVersion && (
 											<div className="flex items-center gap-2 py-3 px-3 mt-2 pt-4 border-t border-carbon/10">
 												<span

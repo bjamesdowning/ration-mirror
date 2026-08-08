@@ -3,6 +3,7 @@ import "../../load-context";
 import { useEffect, useState } from "react";
 import { Link, redirect, useLocation } from "react-router";
 import { AuthWidget } from "~/components/auth";
+import { Reveal } from "~/components/marketing/Reveal";
 import { SplashExperience } from "~/components/marketing/SplashExperience";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { PricingFeatureMatrix } from "~/components/pricing/PricingFeatureMatrix";
@@ -12,11 +13,13 @@ import { PublicHeader } from "~/components/shell/PublicHeader";
 import { createAuth } from "~/lib/auth.server";
 import type { DisplayCurrency } from "~/lib/currency";
 import { buildHomeFaqEntries } from "~/lib/home-faq";
+import { EXPLAINER_VIDEO_EMBED_URL } from "~/lib/marketing";
 import { canonicalMeta, ogMeta } from "~/lib/seo";
 import {
 	faqSchema,
 	organizationSchema,
 	softwareAppSchema,
+	videoSchema,
 	websiteSchema,
 } from "~/lib/structured-data";
 
@@ -43,9 +46,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export function meta(_: Route.MetaArgs) {
-	const title = "Ration — AI Pantry Management, Copilot & MCP";
+	const title = "Ration — Pantry Inventory, Meal Plans & Shopping Lists";
 	const description =
-		"AI pantry management in one closed loop. Track inventory, plan meals and build shopping lists with Ration Copilot or any MCP-compatible assistant.";
+		"Know what food you have, plan meals from it, and shop only what is missing. Use Ration on iPhone, the web, or through your AI assistant.";
 	return [
 		{ title },
 		{ name: "description", content: description },
@@ -99,12 +102,14 @@ function PricingSection({
 					<span>Show prices in</span>
 					<CurrencyToggle value={currency} onChange={setCurrency} />
 				</div>
-				<SectionHeader
-					centered
-					eyebrow="Pricing"
-					title="Start free. Add Crew when the kitchen becomes shared."
-					subtitle="AI features use credits on both tiers. New human accounts start with 12 free credits. Crew Member unlocks household groups, unlimited capacity, credit transfers, and 1 free Ask Ration conversation per group per day."
-				/>
+				<Reveal>
+					<SectionHeader
+						centered
+						eyebrow="Pricing"
+						title="Start free. Add Crew when the kitchen becomes shared."
+						subtitle="AI features use credits on both tiers. New human accounts start with 12 free credits. Crew Member unlocks household groups, unlimited capacity, credit transfers, and 1 free Ask Ration conversation per group per day."
+					/>
+				</Reveal>
 			</div>
 			<p className="text-center text-xs text-muted max-w-xl mx-auto">
 				EUR prices include VAT where applicable. US list prices match the App
@@ -112,7 +117,7 @@ function PricingSection({
 			</p>
 
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-				<div className="glass-panel rounded-2xl p-6 md:p-8 space-y-5">
+				<Reveal className="glass-panel rounded-2xl p-6 md:p-8 space-y-5">
 					<div>
 						<h3 className="text-display text-3xl text-carbon">Free</h3>
 						<p className="text-sm text-muted mt-2">
@@ -133,9 +138,12 @@ function PricingSection({
 					>
 						Get started free
 					</a>
-				</div>
+				</Reveal>
 
-				<div className="glass-panel rounded-2xl p-6 md:p-8 space-y-5 border-hyper-green/40">
+				<Reveal
+					className="glass-panel rounded-2xl p-6 md:p-8 space-y-5 border-hyper-green/40"
+					delay={70}
+				>
 					<div>
 						<h3 className="text-display text-3xl text-carbon">Crew Member</h3>
 						<p className="text-sm text-muted mt-2">
@@ -161,7 +169,7 @@ function PricingSection({
 					>
 						Start Crew Member
 					</a>
-				</div>
+				</Reveal>
 			</div>
 
 			<div className="glass-panel rounded-2xl p-6 space-y-5">
@@ -205,6 +213,122 @@ function PricingSection({
 	);
 }
 
+function BlogSection({
+	posts,
+}: {
+	posts: Route.ComponentProps["loaderData"]["recentPosts"];
+}) {
+	if (posts.length === 0) return null;
+
+	return (
+		<section aria-label="Latest from the blog" className="space-y-6">
+			<Reveal className="flex items-end justify-between flex-wrap gap-4">
+				<div>
+					<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
+						Mission Log
+					</span>
+					<h2 className="text-display text-2xl md:text-3xl text-carbon mt-2">
+						Latest from the blog
+					</h2>
+					<p className="text-muted text-sm max-w-xl mt-2 leading-relaxed">
+						Guides, workflows, and field notes for running a kitchen that
+						remembers.
+					</p>
+				</div>
+				<Link
+					to="/blog"
+					className="text-xs font-bold uppercase tracking-widest text-hyper-green hover:translate-x-0.5 transition-transform"
+				>
+					All posts →
+				</Link>
+			</Reveal>
+			<ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				{posts.map((post, index) => (
+					<li key={post.slug}>
+						<Reveal className="h-full" delay={index * 70}>
+							<Link
+								to={`/blog/${post.slug}`}
+								className="group block glass-panel rounded-2xl p-6 hover:border-hyper-green/30 hover:shadow-glow-sm transition-all duration-200 h-full"
+							>
+								<div className="w-8 h-[3px] bg-hyper-green rounded-full mb-4 group-hover:w-12 transition-all duration-300" />
+								<h3 className="text-display text-lg text-carbon group-hover:text-hyper-green transition-colors leading-snug mb-3">
+									{post.title}
+								</h3>
+								<p className="text-sm text-muted leading-relaxed mb-4 line-clamp-3">
+									{post.description}
+								</p>
+								<time
+									dateTime={post.date}
+									className="text-xs text-carbon/50 font-mono"
+								>
+									{new Date(post.date).toLocaleDateString("en-US", {
+										year: "numeric",
+										month: "long",
+										day: "numeric",
+									})}
+								</time>
+							</Link>
+						</Reveal>
+					</li>
+				))}
+			</ul>
+		</section>
+	);
+}
+
+function FaqSection({
+	entries,
+}: {
+	entries: ReturnType<typeof buildHomeFaqEntries>;
+}) {
+	return (
+		<Reveal
+			as="section"
+			id="faq"
+			aria-labelledby="faq-heading"
+			className="glass-panel rounded-2xl p-6 md:p-10 space-y-6 scroll-mt-24"
+		>
+			<div>
+				<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
+					FAQ
+				</span>
+				<h2
+					id="faq-heading"
+					className="text-display text-2xl md:text-3xl text-carbon mt-2"
+				>
+					Common questions
+				</h2>
+				<p className="text-muted text-sm max-w-2xl mt-2 leading-relaxed">
+					Direct answers about the app, pricing, Copilot, and agent access.
+				</p>
+			</div>
+			<div className="space-y-3">
+				{entries.map((entry) => (
+					<details
+						key={entry.question}
+						className="group rounded-xl border border-platinum bg-ceramic/80 open:border-hyper-green/30"
+					>
+						<summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-carbon marker:content-none [&::-webkit-details-marker]:hidden">
+							<span className="flex items-start justify-between gap-4">
+								{entry.question}
+								<span
+									aria-hidden
+									className="text-hyper-green transition-transform group-open:rotate-45"
+								>
+									+
+								</span>
+							</span>
+						</summary>
+						<div className="px-4 pb-4 text-sm text-muted leading-relaxed border-t border-platinum/80 pt-3">
+							{entry.answer}
+						</div>
+					</details>
+				))}
+			</div>
+		</Reveal>
+	);
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const location = useLocation();
 	const [currency, setCurrency] = useState<DisplayCurrency>("EUR");
@@ -226,7 +350,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		softwareAppSchema({
 			name: "Ration",
 			description:
-				"AI pantry management in one closed loop: inventory, recipes, meal plans, and shopping lists controlled by the built-in Ration Copilot or Claude, ChatGPT, Cursor, and other MCP-compatible assistants.",
+				"Live pantry inventory, recipes, meal plans, and shopping lists on iPhone and web, with built-in Copilot and MCP access for external assistants.",
 			offers: [
 				{
 					name: "Free",
@@ -250,6 +374,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				},
 			],
 		}),
+		videoSchema({
+			name: "Ration: waste less and shop only what's missing",
+			description:
+				"See how Ration connects pantry inventory, recipes, meal plans, and shopping lists in one live kitchen loop.",
+			thumbnailPath: "/static/landing/explainer-poster.jpg",
+			embedUrl: EXPLAINER_VIDEO_EMBED_URL,
+			uploadDate: "2026-08-08T15:25:06-07:00",
+			duration: "PT1M27S",
+		}),
 		faqSchema(
 			buildHomeFaqEntries({
 				tierLimits: loaderData.tierLimits,
@@ -272,108 +405,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			<main className="splash-page flex-1">
 				<SplashExperience />
 				<div className="max-w-7xl mx-auto px-6 py-16 md:py-24 space-y-24 md:space-y-32">
-					{loaderData.recentPosts.length > 0 && (
-						<section aria-label="Latest from the blog" className="space-y-6">
-							<div className="flex items-end justify-between flex-wrap gap-4">
-								<div>
-									<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
-										Mission Log
-									</span>
-									<h2 className="text-display text-2xl md:text-3xl text-carbon mt-2">
-										Latest from the blog
-									</h2>
-									<p className="text-muted text-sm max-w-xl mt-2 leading-relaxed">
-										Guides, workflows, and field notes on running an AI-native
-										kitchen.
-									</p>
-								</div>
-								<Link
-									to="/blog"
-									className="text-xs font-bold uppercase tracking-widest text-hyper-green hover:translate-x-0.5 transition-transform"
-								>
-									All posts →
-								</Link>
-							</div>
-							<ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-								{loaderData.recentPosts.map((post) => (
-									<li key={post.slug}>
-										<Link
-											to={`/blog/${post.slug}`}
-											className="group block glass-panel rounded-2xl p-6 hover:border-hyper-green/30 hover:shadow-glow-sm transition-all duration-200 h-full"
-										>
-											<div className="w-8 h-[3px] bg-hyper-green rounded-full mb-4 group-hover:w-12 transition-all duration-300" />
-											<h3 className="text-display text-lg text-carbon group-hover:text-hyper-green transition-colors leading-snug mb-3">
-												{post.title}
-											</h3>
-											<p className="text-sm text-muted leading-relaxed mb-4 line-clamp-3">
-												{post.description}
-											</p>
-											<time
-												dateTime={post.date}
-												className="text-xs text-carbon/50 font-mono"
-											>
-												{new Date(post.date).toLocaleDateString("en-US", {
-													year: "numeric",
-													month: "long",
-													day: "numeric",
-												})}
-											</time>
-										</Link>
-									</li>
-								))}
-							</ul>
-						</section>
-					)}
-
-					<section
-						id="faq"
-						aria-labelledby="faq-heading"
-						className="glass-panel rounded-2xl p-6 md:p-10 space-y-6 scroll-mt-24"
-					>
-						<div>
-							<span className="text-xs font-bold uppercase tracking-wider text-hyper-green">
-								FAQ
-							</span>
-							<h2
-								id="faq-heading"
-								className="text-display text-2xl md:text-3xl text-carbon mt-2"
-							>
-								Common questions
-							</h2>
-							<p className="text-muted text-sm max-w-2xl mt-2 leading-relaxed">
-								Direct answers for humans and AI agents researching Ration.
-							</p>
-						</div>
-						<div className="space-y-3">
-							{faqEntries.map((entry) => (
-								<details
-									key={entry.question}
-									className="group rounded-xl border border-platinum bg-ceramic/80 open:border-hyper-green/30"
-								>
-									<summary className="cursor-pointer list-none px-4 py-4 text-sm font-semibold text-carbon marker:content-none [&::-webkit-details-marker]:hidden">
-										<span className="flex items-start justify-between gap-4">
-											{entry.question}
-											<span
-												aria-hidden
-												className="text-hyper-green transition-transform group-open:rotate-45"
-											>
-												+
-											</span>
-										</span>
-									</summary>
-									<div className="px-4 pb-4 text-sm text-muted leading-relaxed border-t border-platinum/80 pt-3">
-										{entry.answer}
-									</div>
-								</details>
-							))}
-						</div>
-					</section>
-
 					<PricingSection
 						loaderData={loaderData}
 						currency={currency}
 						setCurrency={setCurrency}
 					/>
+					<FaqSection entries={faqEntries} />
+					<BlogSection posts={loaderData.recentPosts} />
 
 					<section
 						id="signup"

@@ -5,32 +5,37 @@ test.describe("home", () => {
 		await page.goto("/");
 		await expect(
 			page.getByRole("heading", {
-				name: /Your kitchen, operable by AI/i,
+				name: /Know your kitchen\. Shop only what's missing\./i,
 			}),
 		).toBeVisible({ timeout: 5000 });
 		await expect(
-			page.getByText(/AI pantry management.*MCP native/i).first(),
+			page.getByText(/Pantry.*Meals.*Shopping.*one live system/i).first(),
 		).toBeVisible();
 		await expect(
-			page.getByRole("link", { name: /Start free/i }).first(),
+			page.getByRole("link", { name: /Get Ration on the App Store/i }),
 		).toBeVisible();
-		await expect(
-			page.getByRole("link", { name: /Connect an AI agent/i }).first(),
-		).toBeVisible();
+		const explainerButton = page.getByRole("button", {
+			name: /Play the Ration explainer video/i,
+		});
+		await expect(explainerButton).toBeVisible();
+		await expect(page.getByText(/Watch the 90-second tour/i)).toBeVisible();
+		await explainerButton.click();
+		await expect(page.getByTitle("Ration explainer video")).toHaveAttribute(
+			"src",
+			/https:\/\/www\.youtube-nocookie\.com\/embed\/yWXekcWGQQA/,
+		);
 		await expect(
 			page.getByRole("heading", {
-				name: /A pantry that keeps its own context/i,
+				name: /One loop: Cargo.*Galley.*Manifest.*Supply.*Dock/i,
 			}),
 		).toBeVisible();
-		await expect(page.getByText("Ration Copilot").first()).toBeVisible();
-		await expect(page.getByText("MCP control").first()).toBeVisible();
+		const interfaces = page.locator("#interfaces .splash-interface");
+		await expect(interfaces).toHaveCount(3);
+		await expect(interfaces.nth(0)).toContainText("iOS + Copilot");
+		await expect(interfaces.nth(1)).toContainText("MCP");
+		await expect(interfaces.nth(2)).toContainText("Web + Copilot");
 		await expect(
-			page.getByRole("heading", {
-				name: /The full loop, wherever dinner happens/i,
-			}),
-		).toBeVisible();
-		await expect(
-			page.getByRole("link", { name: /Download Ration on the App Store/i }),
+			page.getByRole("link", { name: "Docs" }).first(),
 		).toBeVisible();
 		// Key footer/header links
 		await expect(
@@ -38,6 +43,9 @@ test.describe("home", () => {
 		).toBeVisible();
 		await expect(
 			page.getByRole("link", { name: "Tools" }).first(),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: "YouTube", exact: true }),
 		).toBeVisible();
 		await expect(
 			page.getByRole("link", { name: "Privacy Policy" }).first(),

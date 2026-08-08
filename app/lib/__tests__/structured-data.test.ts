@@ -8,6 +8,7 @@ import {
 	organizationSchema,
 	personSchema,
 	softwareAppSchema,
+	videoSchema,
 	webAppSchema,
 	webPageSchema,
 	websiteSchema,
@@ -206,6 +207,29 @@ describe("faqSchema", () => {
 		expect((entities[0].acceptedAnswer as Record<string, unknown>).text).toBe(
 			"A1.",
 		);
+	});
+});
+
+describe("videoSchema", () => {
+	it("emits a complete VideoObject with an absolute thumbnail URL", () => {
+		const schema = videoSchema({
+			name: "Ration tour",
+			description: "See the kitchen loop.",
+			thumbnailPath: "/static/landing/explainer-poster.jpg",
+			embedUrl: "https://www.youtube-nocookie.com/embed/example",
+			uploadDate: "2026-08-08T15:25:06-07:00",
+			duration: "PT1M27S",
+		}) as Record<string, unknown>;
+
+		expect(schema["@type"]).toBe("VideoObject");
+		expect(schema.thumbnailUrl).toEqual([
+			`${SITE}/static/landing/explainer-poster.jpg`,
+		]);
+		expect(schema.embedUrl).toBe(
+			"https://www.youtube-nocookie.com/embed/example",
+		);
+		expect(schema.uploadDate).toBe("2026-08-08T15:25:06-07:00");
+		expect(schema.duration).toBe("PT1M27S");
 	});
 });
 

@@ -38,6 +38,7 @@ FRAMES: list[tuple[str, str]] = [
 	("06-generate", "Meal ideas from\nwhat you already have"),
 	("07-manifest", "Plan the week.\nKeep the crew aligned"),
 	("08-supply", "Shop only what\nyou're still missing"),
+	("09-theme", "Light or dark.\nSame orbital clarity"),
 ]
 
 

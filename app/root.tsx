@@ -91,7 +91,7 @@ const CONTENT_SECURITY_POLICY = [
 	"script-src 'self' 'unsafe-inline' https://js.stripe.com https://static.cloudflareinsights.com",
 	"connect-src 'self' https://api.stripe.com https://cloudflareinsights.com https://copilot.ration.mayutic.com wss://copilot.ration.mayutic.com",
 	"media-src 'self'",
-	"frame-src https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://player.vimeo.com https://fast.wistia.net",
+	"frame-src https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://fast.wistia.net",
 ].join("; ");
 
 export const headers: Route.HeadersFunction = () => ({

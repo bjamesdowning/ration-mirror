@@ -146,6 +146,14 @@ function LoopDiagram({ activeIndex }: { activeIndex: number }) {
 					/>
 				</svg>
 				<div className="splash-orbit-core">
+					<img
+						src="/static/ration-logo.png"
+						alt=""
+						width={72}
+						height={72}
+						className="splash-orbit-logo"
+						decoding="async"
+					/>
 					<span>Ration</span>
 					<small>one live kitchen</small>
 				</div>
@@ -449,9 +457,22 @@ export function SplashExperience() {
 		<>
 			<section className="splash-hero" aria-labelledby="splash-title">
 				<div className="splash-hero-copy">
-					<div className="splash-kicker">
-						<span className="splash-status-dot" />
-						Pantry · Meals · Shopping — one live system
+					<div className="splash-brand">
+						<img
+							src="/static/ration-logo.png"
+							alt=""
+							width={80}
+							height={80}
+							className="splash-brand-mark"
+							decoding="async"
+						/>
+						<div className="splash-brand-copy">
+							<p className="splash-brand-name">Ration</p>
+							<p className="splash-brand-tag">
+								<span className="splash-status-dot" aria-hidden />
+								Pantry · Meals · Shopping — one live system
+							</p>
+						</div>
 					</div>
 					<h1 id="splash-title">
 						Know your kitchen. Shop only what's missing.

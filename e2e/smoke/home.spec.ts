@@ -11,6 +11,10 @@ test.describe("home", () => {
 		await expect(
 			page.getByText(/Pantry.*Meals.*Shopping.*one live system/i).first(),
 		).toBeVisible();
+		await expect(page.getByRole("banner").getByText("Ration")).toBeVisible();
+		await expect(
+			page.locator(".splash-brand-mark, .splash-brand img").first(),
+		).toBeVisible();
 		await expect(
 			page.getByRole("link", { name: /Get Ration on the App Store/i }),
 		).toBeVisible();
@@ -37,6 +41,14 @@ test.describe("home", () => {
 		await expect(
 			page.getByRole("link", { name: "Docs" }).first(),
 		).toBeVisible();
+		const lightMode = page.getByRole("button", { name: "Light mode" }).first();
+		const darkMode = page.getByRole("button", { name: "Dark mode" }).first();
+		await expect(lightMode).toBeVisible();
+		await expect(darkMode).toBeVisible();
+		await lightMode.click();
+		await expect(page.locator("html")).not.toHaveClass(/dark/);
+		await darkMode.click();
+		await expect(page.locator("html")).toHaveClass(/dark/);
 		// Key footer/header links
 		await expect(
 			page.getByRole("link", { name: "Blog" }).first(),

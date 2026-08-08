@@ -1,10 +1,11 @@
 import type { Route } from "./+types/home";
 import "../../load-context";
 import { useEffect, useState } from "react";
-import { Link, redirect, useLocation } from "react-router";
+import { Link, redirect, useLocation, useRouteLoaderData } from "react-router";
 import { AuthWidget } from "~/components/auth";
 import { Reveal } from "~/components/marketing/Reveal";
 import { SplashExperience } from "~/components/marketing/SplashExperience";
+import { useSplashPageTheme } from "~/components/marketing/useSplashPageTheme";
 import { CurrencyToggle } from "~/components/pricing/CurrencyToggle";
 import { PricingFeatureMatrix } from "~/components/pricing/PricingFeatureMatrix";
 import { JsonLd } from "~/components/seo/JsonLd";
@@ -22,6 +23,7 @@ import {
 	videoSchema,
 	websiteSchema,
 } from "~/lib/structured-data";
+import type { AppTheme } from "~/lib/theme";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const auth = createAuth(context.cloudflare.env);
@@ -331,6 +333,11 @@ function FaqSection({
 
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const location = useLocation();
+	const rootData = useRouteLoaderData("root") as
+		| { theme?: AppTheme }
+		| undefined;
+	const globalTheme = rootData?.theme ?? "dark";
+	const [splashTheme, setSplashTheme] = useSplashPageTheme(globalTheme);
 	const [currency, setCurrency] = useState<DisplayCurrency>("EUR");
 
 	useEffect(() => {
@@ -400,7 +407,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		<div className="min-h-screen bg-ceramic text-carbon flex flex-col">
 			<JsonLd data={homeSchemas} />
 
-			<PublicHeader showLiveVersion />
+			<PublicHeader
+				showLiveVersion
+				splashTheme={{ theme: splashTheme, onChange: setSplashTheme }}
+			/>
 
 			<main className="splash-page flex-1">
 				<SplashExperience />

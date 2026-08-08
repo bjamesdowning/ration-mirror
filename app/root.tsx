@@ -7,6 +7,7 @@ import {
 	Scripts,
 	ScrollRestoration,
 	useLoaderData,
+	useLocation,
 	useRouteLoaderData,
 } from "react-router";
 
@@ -136,15 +137,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
 	const { theme } = useLoaderData<typeof loader>();
+	const { pathname } = useLocation();
 
-	// Apply theme class to document element after hydration
+	// Apply theme class to document element after hydration.
+	// The public splash route (`/`) owns document appearance locally via its
+	// page-only toggle and must not be overwritten by the app theme cookie.
 	useEffect(() => {
+		if (pathname === "/") return;
 		if (theme === "dark") {
 			document.documentElement.classList.add("dark");
 		} else {
 			document.documentElement.classList.remove("dark");
 		}
-	}, [theme]);
+	}, [theme, pathname]);
 
 	return <Outlet />;
 }

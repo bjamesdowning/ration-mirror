@@ -2,6 +2,10 @@ import { Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
+import {
+	type SplashPageTheme,
+	SplashThemeToggle,
+} from "~/components/marketing/SplashThemeToggle";
 import { lockBodyScroll } from "~/lib/body-scroll-lock";
 import { APP_STORE_URL } from "~/lib/marketing";
 import { APP_VERSION } from "~/lib/version";
@@ -10,6 +14,11 @@ type PublicHeaderProps = {
 	breadcrumb?: string;
 	breadcrumbHref?: string;
 	showLiveVersion?: boolean;
+	/** Home/splash only — local appearance, not the app theme cookie */
+	splashTheme?: {
+		theme: SplashPageTheme;
+		onChange: (theme: SplashPageTheme) => void;
+	};
 };
 
 const linkClass =
@@ -22,6 +31,7 @@ export function PublicHeader({
 	breadcrumb,
 	breadcrumbHref,
 	showLiveVersion = false,
+	splashTheme,
 }: PublicHeaderProps) {
 	const [open, setOpen] = useState(false);
 	const buttonRef = useRef<HTMLButtonElement>(null);
@@ -97,7 +107,14 @@ export function PublicHeader({
 				{/* Logo area — green dot + Ration; breadcrumb only on sub-pages */}
 				<div className="text-display text-xl text-carbon flex items-center gap-2.5 min-w-0 shrink">
 					<Link to="/" className="group flex items-center gap-2.5 shrink-0">
-						<div className="w-3 h-3 rounded-full bg-hyper-green group-hover:animate-pulse shadow-glow-sm" />
+						<img
+							src="/static/ration-logo.png"
+							alt=""
+							width={32}
+							height={32}
+							className="h-8 w-8 rounded-lg shadow-[0_0_0_1px_rgba(0,224,136,0.28)] group-hover:shadow-glow-sm transition-shadow"
+							decoding="async"
+						/>
 						Ration
 					</Link>
 					{breadcrumb && breadcrumbHref && (
@@ -159,6 +176,12 @@ export function PublicHeader({
 					<Link to="/#signup" className={desktopLinkClass}>
 						Sign in
 					</Link>
+					{isHome && splashTheme && (
+						<SplashThemeToggle
+							theme={splashTheme.theme}
+							onChange={splashTheme.onChange}
+						/>
+					)}
 					{isHome && (
 						<a
 							href={APP_STORE_URL}
@@ -183,8 +206,14 @@ export function PublicHeader({
 					)}
 				</nav>
 
-				{/* Mobile: hamburger + dropdown (portal so it renders above all content) */}
-				<div className="relative flex lg:hidden shrink-0">
+				{/* Mobile: theme + hamburger */}
+				<div className="relative flex lg:hidden items-center gap-2 shrink-0">
+					{isHome && splashTheme && (
+						<SplashThemeToggle
+							theme={splashTheme.theme}
+							onChange={splashTheme.onChange}
+						/>
+					)}
 					<button
 						ref={buttonRef}
 						type="button"

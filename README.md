@@ -2285,25 +2285,28 @@ CORS allows trusted origins only (`https://ration.mayutic.com`, local dev hosts,
 
 | Preset | reasoning_effort | maxSteps | maxOutputTokens | Use case |
 |--------|------------------|----------|-----------------|----------|
-| **Fast** (default) | omitted (model default) | 12 | 2048 | Quick answers, lower token use |
+| **Fast** (default) | omitted (model default) | 16 | 4096 | Quick answers, lower token use |
 | **Deep** | `high` via `providerOptions["workers-ai"]` | 25 | 16384 | Multi-step planning |
 
 Fast/Deep use the same gpt-oss model. Deep injects Workers AI `reasoning_effort: "high"`; Fast leaves reasoning at the model default. `sendReasoning: true` surfaces reasoning parts (Show thinking UI). Temporal context (today's UTC date) is appended each turn via [`formatCopilotTemporalContextAppend`](app/lib/agent/temporal-context.server.ts).
 
-**System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, native-feature due diligence, bulk import/remove rules (≥2 items), and post-mutation action reporting.
+**System prompt:** [`getCopilotSystemPrompt`](app/lib/copilot/system-prompt.server.ts) — kitchen scope only, declines code/general knowledge, mandates `search_docs` for product questions, **act-first** native disclosure (complete tools first, optional native one-liner after), expired-is-expired expiry guidance, bulk import/remove rules (≥2 items), and post-mutation action reporting. Copilot executes all kitchen actions in-chat; native screens are optional upgrades.
 
 ### 14.5 Tools
 
-Copilot exposes **shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk` / `preview_inventory_remove` / `apply_inventory_remove`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`. Each turn uses **intent-scoped `activeTools`** ([`active-tools.server.ts`](app/lib/copilot/active-tools.server.ts)) so only relevant write domains are enabled.
+Copilot exposes **shared MCP tools** through the shared tool runtime (including purpose-built `propose_manifest_plan` / `commit_manifest_plan` / `set_active_meals` / `mark_supply_purchased_bulk` / `preview_inventory_remove` / `apply_inventory_remove`, plus credit-aware `start_plan_week` / `start_generate_meal`), and Copilot-only `search_docs`. Each turn uses **intent-scoped `activeTools`** ([`active-tools.server.ts`](app/lib/copilot/active-tools.server.ts)) so only relevant write domains are enabled (`create_meal` and `propose_manifest_plan` stay in the core set).
 
 | Tool | Source | Purpose |
 |------|--------|---------|
 | `search_docs` | Copilot-only | Hybrid AI Search over `ration-docs` (`docs/fin`, `content/blog`, `docs/dev`, `docs/legal`, root `README.md`) |
 | `get_billing_summary` | Shared MCP | Live tier, credits, renewal, store/management URLs |
+| `get_expired_items` | Shared MCP | All expired pantry lines (before today UTC); no lookback wall by default. `meta.expiredTotal` is the all-time count. |
+
+**Expiry semantics:** expired = `expiresAt` calendar date before today (UTC). `get_expiring_items` is the future window only (today onward). Per-item `status` (`expired`/`today`/`soon`) is display nuance, never a filter.
 
 MCP scopes granted to Copilot: `mcp:read`, `mcp:inventory:write`, `mcp:galley:write`, `mcp:manifest:write`, `mcp:supply:write`, `mcp:preferences:write`. Tool calls inherit MCP rate categories (`mcp_list`, `mcp_search`, `mcp_write`, `mcp_supply_sync`) keyed on the synthetic credential `copilot:{userId}`.
 
-**Not available as camera/URL tools in Copilot:** Receipt image scan and recipe URL import remain hard-blocked (use native Scan / Galley Import, or text → `preview_inventory_import`). Queue-backed AI Plan Week / Generate are available via `start_plan_week` / `start_generate_meal` after approval (and native deep-link disclosure). Credit-free scheduling uses `propose_manifest_plan` → `commit_manifest_plan`. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
+**Not available as camera/URL tools in Copilot:** Receipt image scan and recipe URL import remain hard-blocked (use native Scan / Galley Import, or text → `preview_inventory_import`). Queue-backed AI Plan Week / Generate are available via `start_plan_week` / `start_generate_meal` after approval (and optional post-action native disclosure). Credit-free scheduling uses `propose_manifest_plan` → `commit_manifest_plan`. See [§14.6 Intent guards](#146-intent-guards-and-native-feature-hints).
 
 **Destructive / high-impact tools:** AI SDK `needsApproval` mirrors MCP for single deletes, one-shot CSV import, clearing selections, completing Supply, credit-spending AI jobs, and insufficient-cargo overrides. When approval is required, the stream emits `tool-approval-request` and web/iOS show an Approve/Confirm card (tool name on the card); chat “Yes” is not a substitute for that host card. After Approve, clients keep the turn open until the autoContinue summary arrives (ignore pause-stream finish/done). Preview→`apply_inventory_import` / `apply_inventory_remove` do **not** use a second host approval card — chat confirmation of the preview is the consent step. `set_active_meals` only requires host approval when `syncSupply: true`.
 
@@ -2315,19 +2318,21 @@ flowchart TD
     Onboarding{"Onboarding briefing mode?"}
     Blocked{"detectBlockedCopilotIntent"}
     Native{"detectNativeFeatureSuggestion"}
-    Tools["Full tool loop"]
+    Tools["Full tool loop — act first"]
 
     UserMsg --> Onboarding
     Onboarding -->|yes| Briefing["Tools disabled — single welcome response"]
     Onboarding -->|no| Blocked
     Blocked -->|scan / import_url| Block["Tools disabled — deep link to native flow"]
     Blocked -->|no| Native
-    Native -->|generate_meal / plan_week| Hint["Tools disabled this turn — offer native vs chat"]
-    Native -->|no or user chose chat| Tools
+    Native -->|generate_meal / plan_week| Hint["Act-first advisory + tools stay available"]
+    Native -->|no| Tools
+    Hint --> Tools
 ```
 
 - **Hard blocks** ([`intent-guard.server.ts`](app/lib/copilot/intent-guard.server.ts)): scan/OCR and recipe URL import — emits `blocked_feature` with `ration://` deep links. These cannot continue in chat.
-- **Soft hints** ([`native-feature-hints.server.ts`](app/lib/copilot/native-feature-hints.server.ts)): AI recipe generation and plan-week requests — Copilot briefly discloses the native Galley/Manifest options **and keeps tools available the same turn** (no artificial soft-block). Prefer purpose-built `propose_manifest_plan` / `commit_manifest_plan` or credit-aware `start_plan_week` / `start_generate_meal` after approval.
+- **Act-first soft hints** ([`native-feature-hints.server.ts`](app/lib/copilot/native-feature-hints.server.ts)): AI recipe generation and plan-week requests — Copilot **must complete tools first**, then may add one sentence noting the native Galley/Manifest alternative (web path on web, `ration://` on iOS). Prefer purpose-built `propose_manifest_plan` / `commit_manifest_plan` or credit-aware `start_plan_week` / `start_generate_meal` after approval.
+- **Deflection metric:** zero-tool actionable turns emit `copilot_deflection` via Analytics Engine ([`deflection.server.ts`](app/lib/copilot/deflection.server.ts)).
 
 ### 14.7 Billing and conversation gate
 

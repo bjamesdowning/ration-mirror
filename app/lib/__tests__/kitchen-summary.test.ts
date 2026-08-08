@@ -98,6 +98,8 @@ describe("buildKitchenSummary", () => {
 		expect(summary.cargo.stats.totalItems).toBe(5);
 		expect(summary.cargo.expiringSoon).toHaveLength(1);
 		expect(summary.cargo.expiringSoon[0]?.status).toBe("today");
+		expect(summary.cargo.expiredTotal).toBe(summary.cargo.stats.expiredCount);
+		expect(summary.cargo.expiredRecentlyLookbackDays).toBe(30);
 		expect(summary.mealPlan.entries).toHaveLength(1);
 		expect(summary.supply?.uncheckedCount).toBe(2);
 		expect(summary.supply?.preview[0]?.name).toBe("bread");

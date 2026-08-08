@@ -20,6 +20,9 @@ const CORE_TOOLS = [
 	"match_meals",
 	"get_meal_plan",
 	"get_supply_list",
+	// High-frequency agentic writes — always available to avoid keyword misses.
+	"create_meal",
+	"propose_manifest_plan",
 ] as const;
 
 const INVENTORY_WRITE = [
@@ -100,6 +103,10 @@ export function resolveCopilotActiveTools(
 		/\bimport\b/,
 		/\breceipt\b/,
 		/\bstock\b/,
+		/\bstock up\b/,
+		/\bfill\b/,
+		/\brestock\b/,
+		/\bfresh\b/,
 		/\bquantity\b/,
 		/\bexpired?\b/,
 		/\bexpir/,
@@ -111,6 +118,9 @@ export function resolveCopilotActiveTools(
 		/\brecipe\b/,
 		/\bgalley\b/,
 		/\bcook\b/,
+		/\bdish\b/,
+		/\bcuisine\b/,
+		/\bdinner idea\b/,
 		/\bactive meals?\b/,
 		/\bgenerate\b/,
 	]);
@@ -119,6 +129,9 @@ export function resolveCopilotActiveTools(
 		/\bmeal plan\b/,
 		/\bplan week\b/,
 		/\bschedule\b/,
+		/\bweek of\b/,
+		/\bnightly\b/,
+		/\bweekly\b/,
 		/\bdinner\b/,
 		/\bbreakfast\b/,
 		/\blunch\b/,
@@ -146,11 +159,28 @@ export function resolveCopilotActiveTools(
 		}
 	};
 
-	if (wantInventory) addGroup(INVENTORY_WRITE);
-	if (wantGalley) addGroup(GALLEY_WRITE);
-	if (wantManifest) addGroup(MANIFEST_WRITE);
-	if (wantSupply) addGroup(SUPPLY_WRITE);
-	if (wantPrefs) addGroup(PREFERENCES_WRITE);
+	const matchedDomains = [
+		wantInventory,
+		wantGalley,
+		wantManifest,
+		wantSupply,
+		wantPrefs,
+	].filter(Boolean).length;
+
+	// Multi-part requests (e.g. "create meal plan and fill inventory"): open all writes.
+	if (matchedDomains >= 2) {
+		addGroup(INVENTORY_WRITE);
+		addGroup(GALLEY_WRITE);
+		addGroup(MANIFEST_WRITE);
+		addGroup(SUPPLY_WRITE);
+		addGroup(PREFERENCES_WRITE);
+	} else {
+		if (wantInventory) addGroup(INVENTORY_WRITE);
+		if (wantGalley) addGroup(GALLEY_WRITE);
+		if (wantManifest) addGroup(MANIFEST_WRITE);
+		if (wantSupply) addGroup(SUPPLY_WRITE);
+		if (wantPrefs) addGroup(PREFERENCES_WRITE);
+	}
 
 	// No write-domain match: keep core reads only (plus any already selected).
 	// If the user asked something that needs writes but keywords missed, they can

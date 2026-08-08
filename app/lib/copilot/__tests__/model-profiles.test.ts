@@ -65,8 +65,8 @@ describe("COPILOT_MODEL_PRESETS", () => {
 	});
 
 	it("fast keeps a lower step and output budget", () => {
-		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(12);
-		expect(COPILOT_MODEL_PRESETS.fast.maxOutputTokens).toBe(2048);
+		expect(COPILOT_MODEL_PRESETS.fast.maxSteps).toBe(16);
+		expect(COPILOT_MODEL_PRESETS.fast.maxOutputTokens).toBe(4096);
 	});
 
 	it("onboarding briefing forces fast preset", () => {

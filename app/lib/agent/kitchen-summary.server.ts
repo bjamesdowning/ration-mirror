@@ -93,7 +93,10 @@ export async function buildKitchenSummary(
 		cargo: {
 			stats: cargoStats,
 			expiringSoon: mapExpiryCargoItems(expiringRaw, now),
+			/** Preview of recently expired items (lookback window); see stats.expiredCount for all-time total. */
 			expiredRecently: mapExpiryCargoItems(expiredRaw, now),
+			expiredTotal: cargoStats.expiredCount,
+			expiredRecentlyLookbackDays: KITCHEN_SUMMARY_EXPIRED_LOOKBACK_DAYS,
 		},
 		mealPlan: {
 			planId: manifestPreview?.planId ?? null,

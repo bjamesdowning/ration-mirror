@@ -13,6 +13,7 @@ const ALL = [
 	"preview_inventory_remove",
 	"apply_inventory_remove",
 	"create_meal",
+	"propose_manifest_plan",
 	"commit_manifest_plan",
 	"mark_supply_purchased_bulk",
 	"update_user_preferences",
@@ -23,6 +24,14 @@ describe("resolveCopilotActiveTools", () => {
 		expect(resolveCopilotActiveTools(ALL, "")).toEqual(ALL);
 	});
 
+	it("always includes create_meal and propose_manifest_plan in core", () => {
+		const tools = resolveCopilotActiveTools(ALL, "What's expiring this week?");
+		expect(tools).toContain("create_meal");
+		expect(tools).toContain("propose_manifest_plan");
+		expect(tools).toContain("list_inventory");
+		expect(tools).not.toContain("commit_manifest_plan");
+	});
+
 	it("scopes inventory writes for pantry delete requests", () => {
 		const tools = resolveCopilotActiveTools(
 			ALL,
@@ -31,8 +40,8 @@ describe("resolveCopilotActiveTools", () => {
 		expect(tools).toContain("remove_cargo_item");
 		expect(tools).toContain("preview_inventory_remove");
 		expect(tools).toContain("list_inventory");
+		expect(tools).toContain("create_meal");
 		expect(tools).not.toContain("commit_manifest_plan");
-		expect(tools).not.toContain("create_meal");
 	});
 
 	it("scopes galley writes for recipe requests", () => {
@@ -42,5 +51,24 @@ describe("resolveCopilotActiveTools", () => {
 		);
 		expect(tools).toContain("create_meal");
 		expect(tools).not.toContain("add_cargo_item");
+	});
+
+	it("matches stock up / fill / restock inventory keywords", () => {
+		const tools = resolveCopilotActiveTools(
+			ALL,
+			"stock up my pantry with fresh milk",
+		);
+		expect(tools).toContain("add_cargo_item");
+		expect(tools).toContain("preview_inventory_import");
+	});
+
+	it("opens all write groups for multi-domain requests", () => {
+		const tools = resolveCopilotActiveTools(
+			ALL,
+			"Create a meal plan and fill inventory",
+		);
+		expect(tools).toContain("create_meal");
+		expect(tools).toContain("commit_manifest_plan");
+		expect(tools).toContain("add_cargo_item");
 	});
 });

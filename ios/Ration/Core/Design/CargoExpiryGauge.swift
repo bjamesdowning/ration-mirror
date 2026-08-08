@@ -9,10 +9,10 @@ enum CargoExpiryBand: Equatable {
 
     static func band(expiresAt: Date?, reference: Date = Date(), isExpiredStatus: Bool = false) -> CargoExpiryBand {
         guard let expiresAt else { return .hidden }
-        if isExpiredStatus || expiresAt < reference {
+        let days = daysUntil(expiresAt: expiresAt, reference: reference)
+        if isExpiredStatus || days < 0 {
             return .expired
         }
-        let days = daysUntil(expiresAt: expiresAt, reference: reference)
         if days <= 2 { return .red }
         if days <= 7 { return .yellow }
         return .green

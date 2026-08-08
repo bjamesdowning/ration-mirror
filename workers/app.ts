@@ -2,6 +2,7 @@ import * as build from "virtual:react-router/server-build";
 import { createRequestHandler } from "@react-router/cloudflare";
 import { purgeOrphanAgentKitchens } from "../app/lib/agent/orphan-cleanup.server";
 import { AI_QUEUE_HANDLERS } from "../app/lib/ai-queue-registry.server";
+import { refreshStaleCargoStatuses } from "../app/lib/cargo.server";
 import {
 	detectAndRecordExpiredCargo,
 	purgeExpiredKitchenEvents,
@@ -121,6 +122,7 @@ export default {
 	 *   - Orphan agent kitchen purge: 6-month idle pending_claim registrations.
 	 *   - Re-engagement emails: users inactive 30+ days (Hub, API, or MCP).
 	 *   - Flight Recorder: detect newly expired cargo + purge events past retention.
+	 *   - Cargo status hygiene: refresh write-time status from expiresAt.
 	 *
 	 * Cron: "0 3 * * *" (03:00 UTC daily — low-traffic window)
 	 */
@@ -136,6 +138,7 @@ export default {
 		ctx.waitUntil(retryFailedPurgeJobs(env));
 		ctx.waitUntil(runKitchenEventExpiryDetection(env));
 		ctx.waitUntil(runKitchenEventRetentionPurge(env));
+		ctx.waitUntil(runCargoStatusRefresh(env));
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -192,5 +195,16 @@ async function runKitchenEventRetentionPurge(env: Env): Promise<void> {
 		}
 	} catch (err) {
 		log.error("[CRON] Kitchen event retention purge failed", err);
+	}
+}
+
+async function runCargoStatusRefresh(env: Env): Promise<void> {
+	try {
+		const updated = await refreshStaleCargoStatuses(env.DB);
+		if (updated > 0) {
+			log.info("[CRON] Refreshed stale cargo statuses", { updated });
+		}
+	} catch (err) {
+		log.error("[CRON] Cargo status refresh failed", err);
 	}
 }

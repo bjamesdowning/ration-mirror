@@ -3,6 +3,18 @@ import { buildAgentTemporalContext } from "~/lib/agent/temporal-context.server";
 import { getCopilotSystemPrompt } from "~/lib/copilot/system-prompt.server";
 
 describe("getCopilotSystemPrompt", () => {
+	it("includes action-first capabilities and expired-is-expired guidance", () => {
+		const prompt = getCopilotSystemPrompt();
+		expect(prompt).toContain("Capabilities:");
+		expect(prompt).toContain("Never tell the user to use the app instead");
+		expect(prompt).toContain(
+			"Complete every requested action with tools first",
+		);
+		expect(prompt).toContain("Expired is expired");
+		expect(prompt).not.toContain("Before acting, briefly note");
+		expect(prompt).toContain("Native feature disclosure (act first):");
+	});
+
 	it("includes temporal and expiry tool guidance", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("injected temporal context");

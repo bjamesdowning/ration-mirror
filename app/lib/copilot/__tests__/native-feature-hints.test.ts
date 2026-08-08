@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectNativeFeatureSuggestion } from "../native-feature-hints.server";
+import {
+	detectNativeFeatureSuggestion,
+	formatNativeFeatureAdvisory,
+	resolveNativeFeatureLink,
+} from "../native-feature-hints.server";
 
 describe("detectNativeFeatureSuggestion", () => {
 	it.each([
@@ -37,5 +41,34 @@ describe("detectNativeFeatureSuggestion", () => {
 				"ai-plan-week": true,
 			})?.name,
 		).toBe("Manifest Plan Week");
+	});
+});
+
+describe("resolveNativeFeatureLink", () => {
+	it("uses webPath for web and deepLink for mobile", () => {
+		const hint = {
+			deepLink: "ration://galley/generate",
+			webPath: "/hub/galley",
+		};
+		expect(resolveNativeFeatureLink(hint, "web")).toBe("/hub/galley");
+		expect(resolveNativeFeatureLink(hint, "mobile")).toBe(
+			"ration://galley/generate",
+		);
+	});
+});
+
+describe("formatNativeFeatureAdvisory", () => {
+	it("is act-first and includes the platform link", () => {
+		const suggestion = detectNativeFeatureSuggestion(
+			"generate a recipe with lentils",
+			{ "ai-generate-meal": true },
+		);
+		expect(suggestion).not.toBeNull();
+		if (!suggestion) return;
+		const advisory = formatNativeFeatureAdvisory(suggestion, "web");
+		expect(advisory).toContain("MUST complete all requested actions");
+		expect(advisory).toContain("Only after your final action summary");
+		expect(advisory).toContain("/hub/galley");
+		expect(advisory).not.toContain("Before acting");
 	});
 });

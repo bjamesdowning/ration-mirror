@@ -9,6 +9,7 @@ import {
 	getCargoByIds,
 	getCargoItem,
 	getCargoPage,
+	getCargoStats,
 	getExpiredCargo,
 	getExpiringCargo,
 } from "../../cargo.server";
@@ -41,7 +42,6 @@ const MAX_MATCH_MEALS_LIMIT = 50;
 const MAX_EXPIRING_DAYS = 90;
 const MAX_EXPIRING_ITEMS = 200;
 const MAX_EXPIRED_DAYS_BACK = 90;
-const DEFAULT_EXPIRED_DAYS_BACK = 30;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function resolveExpirationAlertDays(
@@ -544,7 +544,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_expiring_items",
 			description:
-				"List pantry items expiring soon (UTC calendar days). Defaults to the user's expirationAlertDays when days is omitted. Useful for reducing food waste and planning rescue meals.",
+				"FUTURE window only: list pantry items expiring today through N days ahead (UTC calendar days). Defaults to the user's expirationAlertDays when days is omitted. Already-expired items are in get_expired_items. Useful for reducing food waste and planning rescue meals.",
 			inputSchema: z.object({
 				days: z
 					.number()
@@ -583,7 +583,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_expired_items",
 			description:
-				"List pantry items whose expiry calendar date is before today (UTC). Useful for waste cleanup and confirming what has already expired.",
+				"List ALL pantry items whose expiry date is before today (UTC calendar days). No time window by default — expired is expired, regardless of age or stored status. Optional daysBack filters a lookback window. Per-item status is display nuance only. Useful for waste cleanup.",
 			inputSchema: z.object({
 				daysBack: z
 					.number()
@@ -591,9 +591,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 					.positive()
 					.max(MAX_EXPIRED_DAYS_BACK)
 					.optional()
-					.default(DEFAULT_EXPIRED_DAYS_BACK)
 					.describe(
-						"How many UTC calendar days back to search (default 30, max 90)",
+						"Optional UTC calendar days lookback filter (max 90). Omit for all expired items.",
 					),
 			}),
 			scopes: ["mcp:read"],
@@ -601,19 +600,28 @@ export function createReadToolDefs(env: McpToolsEnv) {
 			audit: false,
 			handler: async (ctx, a) => {
 				const now = new Date();
-				const daysBack = Math.min(
-					a.daysBack ?? DEFAULT_EXPIRED_DAYS_BACK,
-					MAX_EXPIRED_DAYS_BACK,
-				);
-				const expiredItems = await getExpiredCargo(
-					env.DB,
-					ctx.organizationId,
-					daysBack,
-					MAX_EXPIRING_ITEMS,
-					undefined,
-					now,
-				);
-				return ok("get_expired_items", mapExpiryCargoItems(expiredItems, now));
+				const daysBack =
+					a.daysBack === undefined
+						? null
+						: Math.min(a.daysBack, MAX_EXPIRED_DAYS_BACK);
+				const [expiredItems, cargoStats] = await Promise.all([
+					getExpiredCargo(
+						env.DB,
+						ctx.organizationId,
+						daysBack,
+						MAX_EXPIRING_ITEMS,
+						undefined,
+						now,
+					),
+					getCargoStats(env.DB, ctx.organizationId, now),
+				]);
+				return ok("get_expired_items", mapExpiryCargoItems(expiredItems, now), {
+					meta: {
+						expiredTotal: cargoStats.expiredCount,
+						daysBack,
+						total: expiredItems.length,
+					},
+				});
 			},
 		}),
 		defineSharedTool({

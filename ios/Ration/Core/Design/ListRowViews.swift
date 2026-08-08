@@ -58,6 +58,13 @@ struct TelemetryQtyPill: View {
 
 // MARK: - Cargo row
 
+extension CargoItem {
+    /// Stored status uses `biohazard` for past expiry; `expired` is the tool/display vocabulary.
+    var isExpiredStatus: Bool {
+        status == "expired" || status == "biohazard"
+    }
+}
+
 /// Telemetry Strip row — web `CargoListRow` parity.
 struct CargoRowView: View {
     let item: CargoItem
@@ -68,7 +75,7 @@ struct CargoRowView: View {
         HStack(alignment: .center, spacing: 10) {
             CargoExpiryGauge(
                 expiresAt: item.expiresAt,
-                isExpiredStatus: item.status == "expired"
+                isExpiredStatus: item.isExpiredStatus
             )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -112,7 +119,7 @@ struct CargoRowView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 if let expiresAt = item.expiresAt {
-                    HubUrgencyLabel(date: expiresAt, isExpired: item.status == "expired")
+                    HubUrgencyLabel(date: expiresAt, isExpired: item.isExpiredStatus)
                 }
             }
         }
@@ -132,7 +139,7 @@ struct CargoRowView: View {
         if let expiresAt = item.expiresAt {
             let band = CargoExpiryBand.band(
                 expiresAt: expiresAt,
-                isExpiredStatus: item.status == "expired"
+                isExpiredStatus: item.isExpiredStatus
             )
             if let urgency = band.accessibilityLabel {
                 parts.append(urgency)

@@ -1,4 +1,5 @@
 import {
+	type PrepareStepContext,
 	type StepContext,
 	Think,
 	type ToolCallContext,
@@ -22,6 +23,10 @@ import {
 	ONBOARDING_BRIEFING_MAX_OUTPUT_TOKENS,
 } from "../app/lib/copilot/constants";
 import {
+	COPILOT_DEFLECTION_NUDGE,
+	detectCopilotDeflection,
+} from "../app/lib/copilot/deflection.server";
+import {
 	CopilotNeedsConsentError,
 	ensureCopilotConversationOpen,
 	getConversationCharge,
@@ -39,6 +44,8 @@ import {
 } from "../app/lib/copilot/model-profiles";
 import {
 	detectNativeFeatureSuggestion,
+	formatNativeFeatureAdvisory,
+	type NativeFeatureClientSource,
 	type NativeFeatureEnabledMap,
 } from "../app/lib/copilot/native-feature-hints.server";
 import {
@@ -273,6 +280,16 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		"ai-generate-meal": false,
 		"ai-plan-week": false,
 	};
+	/** Web vs mobile — drives native-feature link format. */
+	private clientSource: NativeFeatureClientSource = "web";
+	/** Per-turn deflection tracking. */
+	private turnToolCallCount = 0;
+	private turnUserText = "";
+	private turnActiveTools: string[] = [];
+	private turnNativeSuggestionMatched = false;
+	private turnDeflectionNudged = false;
+	private turnDeflectionMetricEmitted = false;
+	private turnSystemPrompt = "";
 
 	private persistUsageConfig(): void {
 		this.configure<CopilotAgentUsageConfig>({
@@ -386,6 +403,8 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 		ctx: ConnectionContext,
 	): Promise<void> {
 		await super.onConnect(connection, ctx);
+		const clientHeader = ctx.request.headers.get("X-Ration-Client") ?? "";
+		this.clientSource = /mobile|ios/i.test(clientHeader) ? "mobile" : "web";
 		try {
 			const identity = decodeAgentName(this.name);
 			const charge = await this.hydrateCumulativeUsage(identity);
@@ -675,10 +694,9 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			userText,
 			this.nativeFeatureFlags,
 		);
-		// Advisory only: disclose native UX but keep tools available same turn
-		// (do not artificially refuse chat capability).
+		// Act-first advisory: disclose native UX only after tools; keep tools available.
 		const nativeAdvisory = nativeSuggestion
-			? `\n\nBefore acting, briefly note that ${nativeSuggestion.name} may be a better fit because ${nativeSuggestion.message.toLowerCase()} Offer this deep link: ${nativeSuggestion.deepLink}. Then proceed in chat with tools unless the user clearly chooses the native screen only.`
+			? formatNativeFeatureAdvisory(nativeSuggestion, this.clientSource)
 			: "";
 
 		const preset = resolveCopilotModelPreset(
@@ -702,8 +720,16 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			userText,
 		);
 
+		this.turnToolCallCount = 0;
+		this.turnUserText = userText;
+		this.turnActiveTools = scopedTools;
+		this.turnNativeSuggestionMatched = nativeSuggestion != null;
+		this.turnDeflectionNudged = false;
+		this.turnDeflectionMetricEmitted = false;
+		this.turnSystemPrompt = `${ctx.system}${nativeAdvisory}${formatCopilotTemporalContextAppend()}`;
+
 		return {
-			system: `${ctx.system}${nativeAdvisory}${formatCopilotTemporalContextAppend()}`,
+			system: this.turnSystemPrompt,
 			activeTools: scopedTools,
 			maxSteps: profile.maxSteps,
 			maxOutputTokens: profile.maxOutputTokens,
@@ -713,6 +739,25 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 			providerOptions: workersAiProviderOptions(profile),
 			stopWhen: () => this.billingBlocked,
 		};
+	}
+
+	beforeStep(ctx: PrepareStepContext) {
+		// After a no-tool first step, reinforce once if steps continue.
+		if (
+			ctx.stepNumber > 0 &&
+			!this.turnDeflectionNudged &&
+			detectCopilotDeflection({
+				toolCallCount: this.turnToolCallCount,
+				activeTools: this.turnActiveTools,
+				userText: this.turnUserText,
+				nativeSuggestionMatched: this.turnNativeSuggestionMatched,
+			})
+		) {
+			this.turnDeflectionNudged = true;
+			return {
+				system: `${this.turnSystemPrompt}\n\n${COPILOT_DEFLECTION_NUDGE}`,
+			};
+		}
 	}
 
 	beforeToolCall(ctx: ToolCallContext): ToolCallDecision | undefined {
@@ -741,6 +786,7 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 					"Only add_cargo_item is available during the starter kitchen seed.",
 			};
 		}
+		this.turnToolCallCount += 1;
 		const identity = decodeAgentName(this.name);
 		writeCopilotMetric(
 			this.env,
@@ -767,6 +813,29 @@ export class ProjectThinkAgent extends Think<Cloudflare.Env> {
 
 	async onStepFinish(ctx: StepContext) {
 		const identity = decodeAgentName(this.name);
+		if (
+			!this.turnDeflectionMetricEmitted &&
+			detectCopilotDeflection({
+				toolCallCount: this.turnToolCallCount,
+				activeTools: this.turnActiveTools,
+				userText: this.turnUserText,
+				nativeSuggestionMatched: this.turnNativeSuggestionMatched,
+			})
+		) {
+			this.turnDeflectionMetricEmitted = true;
+			writeCopilotMetric(
+				this.env,
+				"copilot_deflection",
+				{ ...identity, source: "agent" },
+				identity.conversationId,
+				{
+					blobs: [
+						this.turnNativeSuggestionMatched ? "native_hint" : "action_verb",
+						this.conversationModelPreset,
+					],
+				},
+			);
+		}
 		const usageTokens =
 			ctx.usage.totalTokens ??
 			(ctx.usage.inputTokens ?? 0) + (ctx.usage.outputTokens ?? 0);

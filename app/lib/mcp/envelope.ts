@@ -27,6 +27,10 @@ export interface ToolMeta {
 	embeddingPending?: boolean;
 	/** True when semantic search returned no hits (embeddings may still be pending). */
 	embeddingMayBePending?: boolean;
+	/** All-time count of expired cargo (before today UTC), ignoring list window. */
+	expiredTotal?: number;
+	/** Explicit daysBack window when set; null/undefined means unbounded. */
+	daysBack?: number | null;
 }
 
 export type ToolErrorBody = {

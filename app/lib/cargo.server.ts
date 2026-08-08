@@ -71,9 +71,11 @@ export {
 
 import { computeBaseFields } from "./base-quantity";
 import {
+	addUtcDays,
 	calculateInventoryStatus,
 	getExpiredCargoBounds,
 	getExpiringCargoBounds,
+	getUtcTodayISO,
 	normalizeForCargoKey,
 	parseUtcDateISO,
 } from "./cargo-utils";
@@ -1163,18 +1165,23 @@ export async function getExpiringCargo(
 
 /**
  * Fetch inventory items whose expiry calendar date is before today (UTC).
- * Optional lookback limits how far back to search (default 30 days).
+ * Optional lookback limits how far back to search; omit for all expired items.
  */
 export async function getExpiredCargo(
 	db: D1Database,
 	organizationId: string,
-	daysBack = 30,
+	daysBack?: number | null,
 	limit = 200,
 	domain?: string,
 	now = new Date(),
 ) {
 	const d1 = drizzle(db);
-	const { startOfToday, earliest } = getExpiredCargoBounds(daysBack, now);
+	const today = getUtcTodayISO(now);
+	const startOfToday = parseUtcDateISO(today);
+	const earliest =
+		daysBack != null && daysBack > 0
+			? getExpiredCargoBounds(daysBack, now).earliest
+			: null;
 
 	return await d1
 		.select()
@@ -1184,7 +1191,7 @@ export async function getExpiredCargo(
 				eq(cargo.organizationId, organizationId),
 				isNotNull(cargo.expiresAt),
 				lt(cargo.expiresAt, startOfToday),
-				gte(cargo.expiresAt, earliest),
+				...(earliest ? [gte(cargo.expiresAt, earliest)] : []),
 				...(domain ? [eq(cargo.domain, domain)] : []),
 			),
 		)
@@ -1243,6 +1250,71 @@ export async function getCargoStats(
 		expiringCount: expiringResult[0]?.count ?? 0,
 		expiredCount: expiredResult[0]?.count ?? 0,
 	};
+}
+
+/**
+ * Recompute stored cargo.status from expiresAt using UTC calendar-day semantics.
+ * Write-time status goes stale as days pass; the daily cron refreshes it.
+ * Returns the number of rows updated.
+ */
+export async function refreshStaleCargoStatuses(
+	db: D1Database,
+	now = new Date(),
+): Promise<number> {
+	const today = getUtcTodayISO(now);
+	const startOfToday = parseUtcDateISO(today);
+	const decayEnd = parseUtcDateISO(addUtcDays(today, 2)); // daysUntil < 3 → through +2
+	const nowUnix = Math.floor(now.getTime() / 1000);
+
+	// Three targeted UPDATEs — cheaper than scanning every row into the Worker.
+	const biohazard = await db
+		.prepare(
+			`UPDATE cargo
+			 SET status = 'biohazard', updated_at = ?1
+			 WHERE expires_at IS NOT NULL
+			   AND expires_at < ?2
+			   AND status != 'biohazard'`,
+		)
+		.bind(nowUnix, Math.floor(startOfToday.getTime() / 1000))
+		.run();
+
+	const decay = await db
+		.prepare(
+			`UPDATE cargo
+			 SET status = 'decay_imminent', updated_at = ?1
+			 WHERE expires_at IS NOT NULL
+			   AND expires_at >= ?2
+			   AND expires_at <= ?3
+			   AND status != 'decay_imminent'`,
+		)
+		.bind(
+			nowUnix,
+			Math.floor(startOfToday.getTime() / 1000),
+			Math.floor(decayEnd.getTime() / 1000),
+		)
+		.run();
+
+	const stable = await db
+		.prepare(
+			`UPDATE cargo
+			 SET status = 'stable', updated_at = ?1
+			 WHERE (
+			   (expires_at IS NULL AND status != 'stable')
+			   OR (
+			     expires_at IS NOT NULL
+			     AND expires_at > ?2
+			     AND status != 'stable'
+			   )
+			 )`,
+		)
+		.bind(nowUnix, Math.floor(decayEnd.getTime() / 1000))
+		.run();
+
+	return (
+		(biohazard.meta?.changes ?? 0) +
+		(decay.meta?.changes ?? 0) +
+		(stable.meta?.changes ?? 0)
+	);
 }
 
 const APPLY_IMPORT_MAX_ROWS = 500;

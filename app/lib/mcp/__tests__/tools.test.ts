@@ -11,6 +11,11 @@ vi.mock("~/lib/cargo.server", () => ({
 	getCargoPage: vi.fn(),
 	getExpiringCargo: vi.fn().mockResolvedValue([]),
 	getExpiredCargo: vi.fn().mockResolvedValue([]),
+	getCargoStats: vi.fn().mockResolvedValue({
+		totalItems: 0,
+		expiringCount: 0,
+		expiredCount: 0,
+	}),
 	ingestCargoItems: vi.fn(),
 	jettisonItem: vi.fn(),
 	updateItem: vi.fn(),
@@ -125,6 +130,7 @@ vi.mock("drizzle-orm/d1", () => ({
 const {
 	getCargoItem,
 	getCargoPage,
+	getCargoStats,
 	getExpiredCargo,
 	getExpiringCargo,
 	ingestCargoItems,
@@ -1288,8 +1294,40 @@ describe("MCP tools", () => {
 	});
 
 	describe("get_expired_items", () => {
-		it("returns empty array when no expired items", async () => {
+		it("returns all expired items when daysBack is omitted", async () => {
 			vi.mocked(getExpiredCargo).mockResolvedValueOnce([]);
+			vi.mocked(getCargoStats).mockResolvedValueOnce({
+				totalItems: 3,
+				expiringCount: 0,
+				expiredCount: 2,
+			});
+			const server = makeServer();
+			const result = await getToolHandler(server, "get_expired_items")({});
+			const envelope = parseEnvelope(result);
+			expect(envelope.ok).toBe(true);
+			expect(envelope.data).toEqual([]);
+			expect(envelope.meta).toEqual({
+				expiredTotal: 2,
+				daysBack: null,
+				total: 0,
+			});
+			expect(getExpiredCargo).toHaveBeenCalledWith(
+				expect.anything(),
+				"org-test-123",
+				null,
+				200,
+				undefined,
+				expect.any(Date),
+			);
+		});
+
+		it("passes an explicit daysBack window", async () => {
+			vi.mocked(getExpiredCargo).mockResolvedValueOnce([]);
+			vi.mocked(getCargoStats).mockResolvedValueOnce({
+				totalItems: 3,
+				expiringCount: 0,
+				expiredCount: 2,
+			});
 			const server = makeServer();
 			const result = await getToolHandler(
 				server,
@@ -1297,8 +1335,8 @@ describe("MCP tools", () => {
 			)({
 				daysBack: 30,
 			});
-			const data = parseOk(result);
-			expect(data).toEqual([]);
+			const envelope = parseEnvelope(result);
+			expect(envelope.meta.daysBack).toBe(30);
 			expect(getExpiredCargo).toHaveBeenCalledWith(
 				expect.anything(),
 				"org-test-123",

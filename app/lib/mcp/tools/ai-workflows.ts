@@ -54,7 +54,7 @@ export function createAiWorkflowToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "start_plan_week",
 			description:
-				"Start Ration's billed AI Plan Week job (same pipeline as Manifest Plan Week). Spends meal-plan credits. Prefer propose_manifest_plan + commit_manifest_plan for credit-free scheduling from existing meals. Native deep link: ration://manifest/plan-week. Returns requestId for status polling.",
+				"Use this to fulfill requests for AI-generated week plans. Starts Ration's billed AI Plan Week job (same pipeline as Manifest Plan Week). Spends meal-plan credits; requires host approval. Prefer propose_manifest_plan + commit_manifest_plan for credit-free scheduling from existing meals. Optional native screen: ration://manifest/plan-week. Returns requestId for status polling.",
 			inputSchema: z.object({
 				days: z.number().int().min(1).max(7).optional().default(7),
 				startDate: z
@@ -149,7 +149,7 @@ export function createAiWorkflowToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "start_generate_meal",
 			description:
-				"Start Ration's billed AI meal generation job (same pipeline as Galley Generate). Spends meal-generate credits. For structured recipes without AI credits, use create_meal. Native deep link: ration://galley/generate.",
+				"Use this to fulfill requests for AI-generated meals. Starts Ration's billed AI meal generation job (same pipeline as Galley Generate). Spends meal-generate credits; requires host approval. For structured recipes without AI credits, use create_meal. Optional native screen: ration://galley/generate.",
 			inputSchema: z.object({
 				customization: z
 					.string()

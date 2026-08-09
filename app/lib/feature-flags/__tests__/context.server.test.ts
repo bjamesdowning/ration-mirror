@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFlagContext } from "../context.server";
+import { APP_VERSION } from "../../version";
+import { buildAgentFlagContext, buildFlagContext } from "../context.server";
 
 function requestWithCf(url: string, country: string): Request {
 	const request = new Request(url);
@@ -50,5 +51,30 @@ describe("buildFlagContext", () => {
 		const context = buildFlagContext(request, { RATION_ENV: "production" });
 		expect(context.clientPlatform).toBe("ios");
 		expect(context.clientVersion).toBe("1.3.17");
+	});
+});
+
+describe("buildAgentFlagContext", () => {
+	it("sets mcp platform and APP_VERSION without inventing ios", () => {
+		const context = buildAgentFlagContext(
+			{ RATION_ENV: "production" },
+			"user-1",
+			"mcp",
+		);
+		expect(context).toEqual({
+			clientPlatform: "mcp",
+			clientVersion: APP_VERSION,
+			environment: "production",
+			userId: "user-1",
+		});
+		expect(context.clientPlatform).not.toBe("ios");
+		expect(context.clientVersion).not.toBe("1.3.25");
+	});
+
+	it("sets copilot platform", () => {
+		const context = buildAgentFlagContext({}, null, "copilot");
+		expect(context.clientPlatform).toBe("copilot");
+		expect(context.clientVersion).toBe(APP_VERSION);
+		expect(context.userId).toBeUndefined();
 	});
 });

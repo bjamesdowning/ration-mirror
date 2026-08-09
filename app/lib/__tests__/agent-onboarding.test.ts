@@ -144,22 +144,43 @@ describe("get_context onboarding helpers", () => {
 	});
 
 	it("exposes nutrition capability flags when enabled", () => {
-		const capabilities = buildGetContextCapabilities(["mcp:read"], {
-			engine: true,
-			manifest: true,
-			goals: true,
-		});
+		const capabilities = buildGetContextCapabilities(
+			["mcp:read", "mcp:nutrition:read"],
+			{
+				engine: true,
+				manifest: true,
+				goals: true,
+				cookLogSplit: true,
+			},
+		);
 		expect(capabilities.nutritionEngine).toBe(true);
 		expect(capabilities.nutritionManifest).toBe(true);
 		expect(capabilities.nutritionGoals).toBe(true);
+		expect(capabilities.nutritionCookLogSplit).toBe(true);
 		expect(capabilities.canWriteNutritionGoals).toBe(false);
+		expect(capabilities.canLogPersonalIntake).toBe(false);
 
-		const withPrefs = buildGetContextCapabilities(
+		const withWrite = buildGetContextCapabilities(
+			[
+				"mcp:read",
+				"mcp:nutrition:read",
+				"mcp:nutrition:write",
+				"mcp:manifest:write",
+				"mcp:inventory:write",
+			],
+			{ engine: false, manifest: true, goals: true, cookLogSplit: true },
+		);
+		expect(withWrite.canWriteNutritionGoals).toBe(true);
+		expect(withWrite.canLogPersonalIntake).toBe(true);
+		expect(withWrite.canCookManifest).toBe(true);
+		expect(withWrite.nutritionEngine).toBe(false);
+
+		const prefsOnly = buildGetContextCapabilities(
 			["mcp:read", "mcp:preferences:write"],
 			{ engine: false, manifest: false, goals: true },
 		);
-		expect(withPrefs.canWriteNutritionGoals).toBe(true);
-		expect(withPrefs.nutritionEngine).toBe(false);
+		expect(prefsOnly.canWriteNutritionGoals).toBe(false);
+		expect(prefsOnly.nutritionGoals).toBe(false);
 	});
 
 	it("buildNutritionCapabilityNotes lists enabled flags only", () => {
@@ -168,9 +189,11 @@ describe("get_context onboarding helpers", () => {
 				engine: true,
 				manifest: false,
 				goals: true,
+				cookLogSplit: true,
 			}),
 		).toEqual([
 			expect.stringContaining("nutrition-engine"),
+			expect.stringContaining("nutrition-cook-log-split"),
 			expect.stringContaining("nutrition-goals"),
 		]);
 	});

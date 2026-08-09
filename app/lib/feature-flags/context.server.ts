@@ -1,8 +1,13 @@
+import { APP_VERSION } from "~/lib/version";
+
 /** Attributes passed to env.FLAGS.getBooleanValue(key, false, context). */
 export type FlagshipEvaluationContext = Record<
 	string,
 	string | number | boolean
 >;
+
+/** Agent surfaces that evaluate Flagship without an HTTP `X-Ration-Client` header. */
+export type AgentFlagPlatform = "mcp" | "copilot";
 
 type SessionUser = {
 	id: string;
@@ -82,6 +87,34 @@ export function buildFlagContext(
 	}
 	if (client.clientVersion) {
 		context.clientVersion = client.clientVersion;
+	}
+
+	return context;
+}
+
+/**
+ * Flagship context for MCP / Copilot tool runs (no Request / X-Ration-Client).
+ * Uses explicit `clientPlatform` + web `APP_VERSION` — never invents ios/1.3.25.
+ * Dogfood agents via userId allowlist + clientPlatform mcp|copilot (optional
+ * clientVersion ≥ APP_VERSION). Fail-closed when nutrition flags require platform.
+ */
+export function buildAgentFlagContext(
+	env: { RATION_ENV?: string },
+	userId: string | null | undefined,
+	platform: AgentFlagPlatform,
+): FlagshipEvaluationContext {
+	const context: FlagshipEvaluationContext = {
+		clientPlatform: platform,
+		clientVersion: APP_VERSION,
+	};
+
+	const environment = env.RATION_ENV?.trim();
+	if (environment) {
+		context.environment = environment;
+	}
+
+	if (userId) {
+		context.userId = userId;
 	}
 
 	return context;

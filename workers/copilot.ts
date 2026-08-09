@@ -78,6 +78,7 @@ import {
 } from "../app/lib/ledger.server";
 import { log, redactId } from "../app/lib/logging.server";
 import { checkRateLimit } from "../app/lib/rate-limiter.server";
+import { APP_VERSION } from "../app/lib/version";
 
 const CORS_HEADERS = {
 	"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -240,7 +241,9 @@ async function resolveNativeFeatureFlags(
 	userId: string,
 ): Promise<NativeFeatureEnabledMap> {
 	const flagContext = buildFlagContext(
-		new Request("https://copilot.internal/"),
+		new Request("https://copilot.internal/", {
+			headers: { "X-Ration-Client": `copilot/${APP_VERSION}` },
+		}),
 		env,
 		{ user: { id: userId } },
 	);

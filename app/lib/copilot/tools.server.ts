@@ -37,6 +37,7 @@ export function buildCopilotMcpContext(
 		apiKeyId: `copilot:${ctx.userId}`,
 		keyName: "Ration Copilot",
 		keyPrefix: "copilot_",
+		agentSurface: "copilot",
 		waitUntil: ctx.waitUntil,
 	};
 }
@@ -58,6 +59,8 @@ export const COPILOT_MCP_SCOPES = [
 	"mcp:manifest:write",
 	"mcp:supply:write",
 	"mcp:preferences:write",
+	"mcp:nutrition:read",
+	"mcp:nutrition:write",
 ] as const;
 
 /**
@@ -203,7 +206,8 @@ export function toAiSdkTools(
 							def.name === "delete_meal" ||
 							def.name === "clear_active_meals" ||
 							def.name === "complete_supply_list" ||
-							def.name === "clear_nutrition_goal"
+							def.name === "clear_nutrition_goal" ||
+							def.name === "clear_manifest_intake"
 								? { ...args, confirm: true }
 								: args;
 						if (resolveNeedsApproval(args as Record<string, unknown>)) {

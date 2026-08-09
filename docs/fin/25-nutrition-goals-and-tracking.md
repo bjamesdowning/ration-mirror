@@ -56,7 +56,14 @@ The Hub **Flight Recorder** widget shows recent kitchen activity (cooks, docks, 
 
 ## Agents
 
-Ask Ration and MCP can read a date-range summary and set or clear goals when flags and scopes allow (`get_nutrition_summary`, `set_nutrition_goal`, `clear_nutrition_goal`). Consume tools may accept portions and a log-nutrition option. See *MCP tools reference*.
+Ask Ration (Copilot) and MCP can read and act on nutrition when Flagship flags and `mcp:nutrition:read` / `mcp:nutrition:write` scopes allow:
+
+- **Reads:** `get_nutrition_summary`, `list_nutrition_intakes`; `get_meal_plan` includes `cookedAt` and the caller’s `personalIntake` when nutrition flags allow.
+- **Cook (shared):** `cook_manifest_entries` or Galley `consume_meal` (Manifest bridge when **nutrition-cook-log-split** is on) — Cargo/Prepared only; never personal intake.
+- **Eat (private):** `log_manifest_intake` (portions + `consent:true` on first grant) / `clear_manifest_intake`.
+- **Goals:** `set_nutrition_goal` / `clear_nutrition_goal`.
+
+When **nutrition-cook-log-split** is on, `consume_manifest_entries` is refused (`cook_eat_split_required`) — use Cook then Eat. Agent Flagship context uses `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked iOS version). See *MCP tools reference*.
 
 ## Related
 

@@ -77,24 +77,46 @@ describe("resolveCopilotActiveTools", () => {
 			[
 				...ALL,
 				"get_nutrition_summary",
+				"list_nutrition_intakes",
 				"set_nutrition_goal",
 				"clear_nutrition_goal",
+				"log_manifest_intake",
+				"clear_manifest_intake",
+				"cook_manifest_entries",
 				"consume_manifest_entries",
 			],
 			"How many kcal did I consume this week vs my goal?",
 		);
 		expect(tools).toContain("get_nutrition_summary");
+		expect(tools).toContain("list_nutrition_intakes");
 		expect(tools).toContain("set_nutrition_goal");
 		expect(tools).toContain("clear_nutrition_goal");
-		expect(tools).toContain("consume_manifest_entries");
+		expect(tools).toContain("log_manifest_intake");
+		expect(tools).toContain("cook_manifest_entries");
 	});
 
-	it("includes consume_manifest_entries for ate / consumed nutrition phrasing", () => {
+	it("includes Eat tools for ate / intake nutrition phrasing", () => {
 		const tools = resolveCopilotActiveTools(
-			[...ALL, "consume_manifest_entries", "get_nutrition_summary"],
+			[
+				...ALL,
+				"consume_manifest_entries",
+				"log_manifest_intake",
+				"get_nutrition_summary",
+			],
 			"I ate lunch and want nutrition logged",
 		);
+		expect(tools).toContain("log_manifest_intake");
 		expect(tools).toContain("consume_manifest_entries");
 		expect(tools).toContain("get_nutrition_summary");
+	});
+
+	it("includes nutrition tools when multi-domain opens all writes", () => {
+		const tools = resolveCopilotActiveTools(
+			[...ALL, "log_manifest_intake", "cook_manifest_entries"],
+			"Create a meal plan and log my nutrition intake",
+		);
+		expect(tools).toContain("commit_manifest_plan");
+		expect(tools).toContain("log_manifest_intake");
+		expect(tools).toContain("cook_manifest_entries");
 	});
 });

@@ -128,8 +128,12 @@ Permanent boolean kill switches for billed AI pipelines. Registry `defaultEnable
 | `nutrition-ai-estimate` | `nutritionAiEstimate` | AI nutrient fill on AI ingest paths after USDA miss |
 | `nutrition-manifest` | `nutritionManifest` | Manifest daily totals / intake |
 | `nutrition-goals` | `nutritionGoals` | Personal goals and vs-goal views |
+| `nutrition-cook-log-split` | `nutritionCookLogSplit` | Shared Cook vs private Eat; Galley Cook→Manifest bridge |
+| `nutrition-async-recompute` | _(not clientVisible)_ | Queue stub for async nutrition recompute |
 
 All default **off**. Create matching Flagship flags before enabling. Seed local nutrition D1 with `bun run db:nutrition:seed:local`.
+
+HTTP routes pass `buildFlagContext` (includes `X-Ration-Client` → `clientPlatform` / `clientVersion`). MCP/Copilot use `buildAgentFlagContext` with `clientPlatform` `mcp`|`copilot` and web `APP_VERSION` — never invent an iOS marketing version for agents.
 
 ### Production dogfood (nutrition)
 
@@ -137,9 +141,9 @@ For operator / dogfood rollout in **production**, enable nutrition flags only vi
 
 **Rollout phases**
 
-1. **Dark ship** — Deploy with registry defaults `false`. Create Flagship flags `nutrition-engine`, `nutrition-ai-estimate`, `nutrition-manifest`, `nutrition-goals` with default variation **off**. Apply main D1 migration `0041_*`; seed remote `NUTRITION_DB` if not already. App Store users see zero nutrition behavior.
-2. **Operator dogfood** — For each nutrition flag: Flagship rule `userId` equals your Better Auth user id → variation `true`. Sign in on **web** → `clientFlags` true. Prefer Manifest Eat / plate-up on web until a nutrition-aware iOS build ships. MCP/Copilot use the same `userId` context.
-3. **iOS binary** — `ClientFlags` includes the four nutrition keys (fail-closed `== true`). Submit App Review with Flagship still userId-only (add the review account’s `userId` if reviewers must see gated UI). Optional: combine with `clientVersion` / `clientPlatform` from `X-Ration-Client` in Flagship rules so intake side effects skip old iOS.
+1. **Dark ship** — Deploy with registry defaults `false`. Create Flagship flags for all nutrition keys with default variation **off**. Apply main D1 migrations through `0044_*`; seed remote `NUTRITION_DB` if not already. App Store users see zero nutrition behavior.
+2. **Operator dogfood** — For each nutrition flag: Flagship rule `userId` equals your Better Auth user id → variation `true`. Sign in on **web** / TestFlight **iOS ≥ 1.3.25** with compound `clientPlatform` + `clientVersion` rules as in [nutrition-rollout.md](nutrition-rollout.md). MCP/Copilot: same `userId` **+** `clientPlatform` `mcp`|`copilot` (optional web `APP_VERSION` gate).
+3. **iOS binary** — `ClientFlags` includes nutrition keys (fail-closed `== true`). Submit App Review with Flagship still userId-only (add the review account’s `userId` if reviewers must see gated UI). Compound `clientVersion` / `clientPlatform` from `X-Ration-Client` so intake side effects skip old iOS.
 4. **Broaden** — Percent rollout on `userId` → 100%, or flip default variation on. Emergency: Flagship disable or `FEATURE_FLAG_OVERRIDES` kill (`false` only).
 
 Consent / Art. 9 notes: [nutrition-dpia-notes.md](nutrition-dpia-notes.md). After help article changes, sync Copilot AI Search.

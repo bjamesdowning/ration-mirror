@@ -36,6 +36,14 @@ When `nutrition-cook-log-split` is on for the client cohort:
 - Account purge redacts nutrition fields on events before anonymizing `userId`.
 - Personal intake requires **explicit** first-use consent (checkbox / `consent: true`) — not implied by Cook, Prepared status, Add to Manifest, or enabling goals.
 
+## MCP / Copilot (agent dogfood)
+
+Workers expose Cook/Eat parity tools over shared libs (`cook_manifest_entries`, `log_manifest_intake`, `clear_manifest_intake`, `list_nutrition_intakes`, plus summary/goals). Agents evaluate Flagship via `buildAgentFlagContext`: `clientPlatform` `mcp`|`copilot` + web `APP_VERSION` (never a faked `ios`/`1.3.25` header).
+
+Dogfood agents with the same nutrition flags + `userId` allowlist **+** `clientPlatform` in `{mcp,copilot}` (optional `clientVersion` ≥ current web `APP_VERSION`). Narrow API keys need `mcp:nutrition:read` / `mcp:nutrition:write` (legacy broad `mcp` still works). Copilot includes those scopes automatically.
+
+Rollback for agents is the same as app: disable nutrition Flagship flags (fail-closed).
+
 ## Schema
 
 Apply `drizzle/0044_*.sql` to production D1 **before** enabling `nutrition-cook-log-split` (`bun run db:migrate:prod`).

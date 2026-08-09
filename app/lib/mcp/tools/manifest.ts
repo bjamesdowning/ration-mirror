@@ -6,6 +6,7 @@ import { mealPlanEntry } from "../../../db/schema";
 import { getExpiringCargo } from "../../cargo.server";
 import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
 import { manifestConsumeNote } from "../../cook-feedback";
+import { isFeatureEnabled } from "../../feature-flags/flags.server";
 import {
 	addEntry,
 	consumeManifestEntries,
@@ -17,9 +18,14 @@ import {
 	insertManifestBulkEntries,
 	ManifestBulkSubmissionError,
 } from "../../manifest-bulk-submit.server";
+import { cookManifestEntries } from "../../manifest-cook.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { createSupplyListFromSelectedMeals } from "../../supply.server";
-import { err, ok } from "../envelope";
+import {
+	resolveAgentFlagContext,
+	resolveAgentSurface,
+} from "../agent-flag-context";
+import { err, featureDisabled, ok } from "../envelope";
 import {
 	defineSharedTool,
 	type McpToolsEnv,
@@ -312,9 +318,79 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			},
 		}),
 		defineSharedTool({
+			name: "cook_manifest_entries",
+			description:
+				"Cook (prepare) Manifest entries: deduct Cargo once and mark Prepared. Never logs personal intake. Requires nutrition-cook-log-split. Soft-fails with requiresConfirmation when cargo is short — retry with confirmInsufficient:true after user confirms.",
+			inputSchema: z.object({
+				entryIds: z.array(z.string().uuid()).min(1).max(50),
+				confirmInsufficient: z.boolean().optional(),
+			}),
+			scopes: ["mcp:manifest:write", "mcp:inventory:write"],
+			rateLimitCategory: "mcp_write",
+			audit: true,
+			needsApproval: (args) => args.confirmInsufficient === true,
+			handler: async (ctx, a) => {
+				const flagContext = resolveAgentFlagContext(env, ctx);
+				const splitOn = await isFeatureEnabled(
+					env,
+					"nutrition-cook-log-split",
+					flagContext,
+				);
+				if (!splitOn) {
+					return featureDisabled(
+						"cook_manifest_entries",
+						"Manifest Cook is unavailable while nutrition-cook-log-split is off.",
+						"Enable nutrition-cook-log-split, or use consume_manifest_entries for legacy combined consume when split is off.",
+					);
+				}
+				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+				const surface = resolveAgentSurface(ctx);
+				const result = await cookManifestEntries(
+					env,
+					ctx.organizationId,
+					plan.id,
+					a.entryIds,
+					{
+						confirmInsufficient: a.confirmInsufficient,
+						userId: ctx.userId,
+						source: surface,
+					},
+				);
+				if (result.requiresConfirmation) {
+					return ok("cook_manifest_entries", {
+						cooked: 0,
+						requiresConfirmation: true,
+						missingIngredients: result.missingIngredients,
+						note: "Insufficient cargo. Retry with confirmInsufficient: true to cook and deduct what's available.",
+					});
+				}
+				return ok("cook_manifest_entries", {
+					cooked: result.cooked,
+					requiresConfirmation: false,
+					missingIngredients: undefined,
+					entryIds: result.entryIds,
+					alreadyCookedIds: result.alreadyCookedIds,
+					deductions: result.deductions,
+					partialCook: result.partialCook ?? false,
+					skippedIngredients: result.skippedIngredients,
+					offerPersonalLog: await isFeatureEnabled(
+						env,
+						"nutrition-manifest",
+						flagContext,
+					),
+					note: manifestConsumeNote({
+						consumed: result.cooked,
+						partialCook: result.partialCook,
+						skippedIngredients: result.skippedIngredients,
+						deductionCount: result.deductions.length,
+					}),
+				});
+			},
+		}),
+		defineSharedTool({
 			name: "consume_manifest_entries",
 			description:
-				"Mark manifest entries as consumed. Deducts ingredients when available; returns requiresConfirmation when cargo is short. When nutrition-manifest is on, optional portions[] (entryId + servings eaten) and logNutrition control intake logging (defaults to logging when portions provided / flag on).",
+				"Legacy: mark Manifest entries consumed and deduct Cargo. When nutrition-cook-log-split is on, this tool is refused — use cook_manifest_entries then log_manifest_intake. When split is off, optional logNutrition (default false for agents) may log intake if nutrition-manifest is on.",
 			inputSchema: z.object({
 				entryIds: z.array(z.string().uuid()).min(1).max(50),
 				confirmInsufficient: z.boolean().optional(),
@@ -328,13 +404,13 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					.max(50)
 					.optional()
 					.describe(
-						"Plate-up portions per entry. When nutrition-manifest is on, used for intake energy/macros. Omit to log planned entry servings (servingsOverride ?? meal.servings).",
+						"Plate-up portions per entry when logging intake on the legacy path.",
 					),
 				logNutrition: z
 					.boolean()
 					.optional()
 					.describe(
-						"When nutrition-manifest is on, defaults to true. Set false to consume without logging intake.",
+						"When nutrition-manifest is on and cook-log-split is off, defaults to false for agents. Set true to log intake.",
 					),
 			}),
 			scopes: ["mcp:manifest:write", "mcp:inventory:write"],
@@ -342,7 +418,25 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 			audit: true,
 			needsApproval: (args) => args.confirmInsufficient === true,
 			handler: async (ctx, a) => {
+				const flagContext = resolveAgentFlagContext(env, ctx);
+				const splitOn = await isFeatureEnabled(
+					env,
+					"nutrition-cook-log-split",
+					flagContext,
+				);
+				if (splitOn) {
+					return err(
+						"consume_manifest_entries",
+						"cook_eat_split_required",
+						"nutrition-cook-log-split is on: use cook_manifest_entries for Cook, then log_manifest_intake for Eat.",
+						{
+							recoveryHint:
+								"Call cook_manifest_entries with the entryIds, then log_manifest_intake with portions[{entryId, servings, idempotencyKey}] and consent:true if needed.",
+						},
+					);
+				}
 				const plan = await ensureMealPlan(env.DB, ctx.organizationId);
+				const surface = resolveAgentSurface(ctx);
 				const result = await consumeManifestEntries(
 					env,
 					ctx.organizationId,
@@ -351,9 +445,10 @@ export function createManifestToolDefs(env: McpToolsEnv) {
 					{
 						confirmInsufficient: a.confirmInsufficient,
 						userId: ctx.userId,
-						source: "mcp",
+						source: surface,
 						logNutrition: a.logNutrition,
 						portions: a.portions,
+						flagContext,
 					},
 				);
 				if (result.requiresConfirmation) {

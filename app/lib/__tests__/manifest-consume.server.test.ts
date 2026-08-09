@@ -278,6 +278,58 @@ describe("consumeManifestEntries", () => {
 		expect(insertValues).not.toHaveBeenCalled();
 	});
 
+	it("skips intake for mcp/copilot unless logNutrition is explicitly true", async () => {
+		isFeatureEnabled.mockResolvedValue(true);
+		getMealMissingIngredients.mockResolvedValue([]);
+		cookMeal.mockResolvedValue({
+			deductions: [{ cargoId: "cargo-1", quantity: 1 }],
+		});
+
+		const { consumeManifestEntries } = await import("../manifest.server");
+
+		selectCall = 0;
+		insertValues.mockClear();
+		const mcpResult = await consumeManifestEntries(
+			env,
+			orgId,
+			planId,
+			[entryId],
+			{
+				userId: "user-1",
+				source: "mcp",
+				portions: [{ entryId, servings: 1 }],
+			},
+		);
+		expect(mcpResult.consumed).toBe(1);
+		expect(insertValues).not.toHaveBeenCalled();
+
+		selectCall = 0;
+		insertValues.mockClear();
+		const copilotResult = await consumeManifestEntries(
+			env,
+			orgId,
+			planId,
+			[entryId],
+			{
+				userId: "user-1",
+				source: "copilot",
+				portions: [{ entryId, servings: 1 }],
+			},
+		);
+		expect(copilotResult.consumed).toBe(1);
+		expect(insertValues).not.toHaveBeenCalled();
+
+		selectCall = 0;
+		insertValues.mockClear();
+		await consumeManifestEntries(env, orgId, planId, [entryId], {
+			userId: "user-1",
+			source: "mcp",
+			logNutrition: true,
+			portions: [{ entryId, servings: 1 }],
+		});
+		expect(insertValues).toHaveBeenCalled();
+	});
+
 	it("logs planned meal servings when portions omitted on web", async () => {
 		isFeatureEnabled.mockResolvedValue(true);
 		getMealMissingIngredients.mockResolvedValue([]);

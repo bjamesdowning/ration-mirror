@@ -9,10 +9,13 @@ import {
 	validateMealOwnership,
 } from "../../meal-selection.server";
 import { createMeal, deleteMeal, updateMeal } from "../../meals.server";
-import { buildMinimalFlagContext } from "../../nutrition/persist.server";
 import { parseDirections } from "../../schemas/directions";
 import { SLOT_TYPES } from "../../schemas/manifest";
 import { McpCreateMealSchema, McpUpdateMealSchema } from "../../schemas/meal";
+import {
+	resolveAgentFlagContext,
+	resolveAgentSurface,
+} from "../agent-flag-context";
 import { err, ok } from "../envelope";
 import {
 	defineSharedTool,
@@ -200,7 +203,7 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "consume_meal",
 			description:
-				"Mark a meal as cooked and deduct ingredients from the pantry. When nutrition-cook-log-split is on, also places a Prepared entry on today's Manifest. Use after the user reports cooking/eating a meal.",
+				"Cook a Galley meal and deduct ingredients from the pantry. When nutrition-cook-log-split is on, also places a Prepared entry on today's Manifest. Never logs personal intake — when offerPersonalLog is true, follow up with log_manifest_intake after user consent. Use after the user reports cooking a meal.",
 			inputSchema: z.object({
 				mealId: z.string().uuid(),
 				servings: z.number().int().positive().optional(),
@@ -219,16 +222,17 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			audit: true,
 			needsApproval: (args) => args.confirmInsufficient === true,
 			handler: async (ctx, a) => {
+				const surface = resolveAgentSurface(ctx);
 				const result = await cookMealFromGalley(
 					env,
 					ctx.organizationId,
 					a.mealId,
 					{
-						flagContext: buildMinimalFlagContext(env, ctx.userId),
+						flagContext: resolveAgentFlagContext(env, ctx),
 						servings: a.servings,
 						confirmInsufficient: a.confirmInsufficient,
 						userId: ctx.userId,
-						source: "mcp",
+						source: surface,
 						date: a.date ?? getTodayISO(),
 						slotType: a.slotType,
 					},

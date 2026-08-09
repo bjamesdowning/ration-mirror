@@ -68,7 +68,9 @@ export type ToolErrorCode =
 	| "internal_error"
 	| "insufficient_cargo"
 	| "timeout"
-	| "feature_disabled";
+	| "feature_disabled"
+	| "cook_eat_split_required"
+	| "consent_required";
 
 /** Wraps an envelope into the MCP `content` array shape that `server.tool` returns. */
 export function toolReply<T>(
@@ -232,6 +234,37 @@ export function mapErrorToEnvelope(
 	}
 
 	if (error instanceof Error) {
+		const code =
+			"code" in error && typeof (error as { code?: unknown }).code === "string"
+				? (error as { code: string }).code
+				: null;
+		if (
+			code === "nutrition_consent_required" ||
+			error.name === "NutritionConsentRequiredError"
+		) {
+			return err(tool, "consent_required", error.message, {
+				recoveryHint:
+					"Ask the user to consent to personal intake logging, then retry with consent:true.",
+			});
+		}
+		if (
+			code === "entry_not_prepared" ||
+			error.name === "ManifestEntryNotPreparedError"
+		) {
+			return err(tool, "conflict", error.message, {
+				recoveryHint:
+					"Cook the entry first with cook_manifest_entries (or consume_meal for Galley), then log_manifest_intake.",
+			});
+		}
+		if (
+			code === "nutrition_unavailable" ||
+			error.name === "NutritionUnavailableError"
+		) {
+			return err(tool, "conflict", error.message, {
+				recoveryHint:
+					"Meal nutrition snapshot is missing — update the meal or skip intake for this entry.",
+			});
+		}
 		if (error.message.startsWith("Insufficient Cargo for:")) {
 			return err(tool, "insufficient_cargo", error.message, {
 				recoveryHint:

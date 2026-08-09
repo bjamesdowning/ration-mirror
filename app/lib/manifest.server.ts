@@ -413,10 +413,12 @@ export async function consumeManifestEntries(
 		source?: KitchenEventSource;
 		/**
 		 * Defaults to true when nutrition-manifest is enabled, except mobile
-		 * without portions (legacy clients) which defaults to false.
+		 * without portions (legacy clients) and mcp/copilot (opt-in only).
 		 */
 		logNutrition?: boolean;
 		portions?: Array<{ entryId: string; servings: number }>;
+		/** Prefer agent/route Flagship context when available. */
+		flagContext?: import("~/lib/feature-flags/context.server").FlagshipEvaluationContext;
 	},
 ): Promise<ConsumeManifestEntriesResult> {
 	const d1 = drizzle(env.DB);
@@ -481,11 +483,15 @@ export async function consumeManifestEntries(
 
 	// Mobile clients without plate-up (e.g. iOS 1.3.17) omit portions — do not
 	// invent intake unless they explicitly opt in via logNutrition or portions.
+	// MCP/Copilot always opt in via logNutrition:true (no silent personal intake).
 	const hasPortions = (options?.portions?.length ?? 0) > 0;
-	const defaultLogNutrition =
-		options?.source === "mobile" &&
-		options?.logNutrition === undefined &&
-		!hasPortions
+	const isAgentSource =
+		options?.source === "mcp" || options?.source === "copilot";
+	const defaultLogNutrition = isAgentSource
+		? options?.logNutrition === true
+		: options?.source === "mobile" &&
+				options?.logNutrition === undefined &&
+				!hasPortions
 			? false
 			: options?.logNutrition !== false;
 
@@ -495,7 +501,7 @@ export async function consumeManifestEntries(
 		(await isFeatureEnabled(
 			env,
 			"nutrition-manifest",
-			buildMinimalFlagContext(env, options.userId),
+			options.flagContext ?? buildMinimalFlagContext(env, options.userId),
 		));
 
 	// 3. Cook each unique meal once with aggregated servings. Entries for the

@@ -161,6 +161,26 @@ export const COPILOT_TOOL_LABELS: Record<string, CopilotToolLabelSet> = {
 		done: "Logged Manifest meals",
 		error: "Could not log Manifest meals",
 	},
+	cook_manifest_entries: {
+		running: "Cooking Manifest meals…",
+		done: "Cooked Manifest meals",
+		error: "Could not cook Manifest meals",
+	},
+	log_manifest_intake: {
+		running: "Logging personal intake…",
+		done: "Logged personal intake",
+		error: "Could not log personal intake",
+	},
+	clear_manifest_intake: {
+		running: "Clearing personal intake…",
+		done: "Cleared personal intake",
+		error: "Could not clear personal intake",
+	},
+	list_nutrition_intakes: {
+		running: "Loading intake history…",
+		done: "Loaded intake history",
+		error: "Could not load intake history",
+	},
 	remove_meal_plan_entry: {
 		running: "Removing from Manifest…",
 		done: "Removed from Manifest",

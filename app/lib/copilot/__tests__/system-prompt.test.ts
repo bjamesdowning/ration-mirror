@@ -54,7 +54,9 @@ describe("getCopilotSystemPrompt", () => {
 	it("includes nutrition guidance and no medical advice", () => {
 		const prompt = getCopilotSystemPrompt();
 		expect(prompt).toContain("Nutrition (when flags enabled");
-		expect(prompt).toContain("consume_manifest_entries");
+		expect(prompt).toContain("Cook ≠ Eat");
+		expect(prompt).toContain("log_manifest_intake");
+		expect(prompt).toContain("cook_manifest_entries");
 		expect(prompt).toContain("get_nutrition_summary");
 		expect(prompt).toContain("Do not give medical");
 		expect(prompt).toContain("feature_disabled");

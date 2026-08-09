@@ -86,6 +86,7 @@ export const MCP_TOOL_GROUPS = [
 			"commit_manifest_plan",
 			"add_meal_plan_entry",
 			"update_meal_plan_entry",
+			"cook_manifest_entries",
 			"consume_manifest_entries",
 			"remove_meal_plan_entry",
 		],
@@ -115,8 +116,11 @@ export const MCP_TOOL_GROUPS = [
 		name: "Nutrition",
 		tools: [
 			"get_nutrition_summary",
+			"list_nutrition_intakes",
 			"set_nutrition_goal",
 			"clear_nutrition_goal",
+			"log_manifest_intake",
+			"clear_manifest_intake",
 		],
 	},
 ] as const;

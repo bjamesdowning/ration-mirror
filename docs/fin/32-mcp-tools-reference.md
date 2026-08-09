@@ -59,29 +59,33 @@ Prefer resource `ration://schemas/inventory-import` for the item shape.
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked meal plan entries. Returns `deletedPlanEntryCount`. |
 | `set_active_meals` | `mcp:galley:write` | Set active selection to exactly `mealIds`. Optional `syncSupply` (host approval only when syncing). |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active selections. **Requires `confirm: true`.** |
-| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook by mealId and deduct cargo. |
+| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook by mealId and deduct cargo. When nutrition-cook-log-split is on, bridges to today’s Manifest (Prepared); never logs personal intake (`offerPersonalLog` hint only). |
 
 ## Manifest (Meal plan)
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range. |
+| `get_meal_plan` | `mcp:read` | Meal plan entries for a date range (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow). |
 | `propose_manifest_plan` | `mcp:read` | Compact week proposal from expiring + match_meals. No writes. |
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit confirmed entries; optional supply sync. Approval required. |
 | `add_meal_plan_entry` | `mcp:manifest:write` | Schedule one meal. |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch an unconsumed entry. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark plan entries cooked. Optional `portions[]` + `logNutrition` when nutrition-manifest is on (plate-up intake). |
+| `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook: deduct Cargo once and mark Prepared. Requires nutrition-cook-log-split. Never logs intake. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. **Refused** when nutrition-cook-log-split is on (`cook_eat_split_required`). When split is off, optional `logNutrition` (default **false** for agents). |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled entry. |
 
 ## Nutrition
 
-Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write tools may include a `nutrition` snapshot when present.
+Gated by nutrition feature flags. Not medical advice. Cargo/meal read and write tools may include a `nutrition` snapshot when present. Prefer `mcp:nutrition:read` / `mcp:nutrition:write` (legacy broad `mcp` still implies all). Narrow keys that only had `mcp:read` / `mcp:preferences:write` need nutrition scopes re-granted.
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
-| `get_nutrition_summary` | `mcp:read` | Daily intake totals (energy + macros) for a UTC date range, plus active goal when set. Requires nutrition-goals or nutrition-manifest. |
-| `set_nutrition_goal` | `mcp:preferences:write` | Upsert personal daily goal (consent required). Requires nutrition-goals. |
-| `clear_nutrition_goal` | `mcp:preferences:write` | Clear the active goal as of a date. Requires nutrition-goals. |
+| `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy + macros + optional fiber) for a UTC date range, plus active goal when set. Requires nutrition-goals or nutrition-manifest. |
+| `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
+| `set_nutrition_goal` | `mcp:nutrition:write` | Upsert personal daily goal (consent required). Requires nutrition-goals. |
+| `clear_nutrition_goal` | `mcp:nutrition:write` | Clear the active goal as of a date. Requires nutrition-goals. **`confirm: true`.** |
+| `log_manifest_intake` | `mcp:nutrition:write` | Private Eat / plate-up for prepared entries (`portions[]` + optional `consent:true`). Requires cook-log-split + nutrition-manifest. Never deducts Cargo. |
+| `clear_manifest_intake` | `mcp:nutrition:write` | Soft-void personal intake for entries. **`confirm: true`.** Does not uncook. |
 
 ## Supply (Shopping)
 

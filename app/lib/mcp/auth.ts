@@ -44,6 +44,11 @@ export interface McpToolContext {
 	/** Unclaimed agent kitchen — tighter write rate limits and claim nudges. */
 	preClaim: boolean;
 	/**
+	 * Which agent surface is running tools. Defaults to `mcp` when omitted.
+	 * Copilot sets `copilot` so Flagship + kitchen_event source stay accurate.
+	 */
+	agentSurface?: "mcp" | "copilot";
+	/**
 	 * Optional Worker/DO waitUntil — keep background work (e.g. embeddings)
 	 * alive after the tool envelope returns.
 	 */
@@ -91,6 +96,7 @@ async function authenticateApiKey(
 		keyPrefix: record.keyPrefix,
 		scopes,
 		authMethod: "api_key",
+		agentSurface: "mcp",
 		preClaim: await resolvePreClaimForOrg(env, record.organizationId),
 		waitUntil,
 	};
@@ -112,6 +118,7 @@ async function authenticateOAuthToken(
 		scopes: verified.scopes,
 		authMethod: "oauth",
 		oauthClientId: verified.clientId,
+		agentSurface: "mcp",
 		preClaim: await resolvePreClaimForOrg(env, verified.organizationId),
 		waitUntil,
 	};

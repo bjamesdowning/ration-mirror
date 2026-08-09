@@ -147,6 +147,7 @@ export type NutritionCapabilityFlags = {
 	engine: boolean;
 	manifest: boolean;
 	goals: boolean;
+	cookLogSplit?: boolean;
 };
 
 export function buildGetContextCapabilities(
@@ -158,24 +159,35 @@ export function buildGetContextCapabilities(
 		normalizedScopes.includes("mcp") || normalizedScopes.includes(needed);
 	const canRead = has("mcp:read");
 	const canWritePreferences = has("mcp:preferences:write");
+	const canNutritionRead = has("mcp:nutrition:read");
+	const canNutritionWrite = has("mcp:nutrition:write");
+	const canWriteManifest = has("mcp:manifest:write");
+	const canWriteInventory = has("mcp:inventory:write");
 	const engine = nutrition?.engine ?? false;
 	const manifest = nutrition?.manifest ?? false;
 	const goals = nutrition?.goals ?? false;
+	const cookLogSplit = nutrition?.cookLogSplit ?? false;
 	return {
 		canRead,
-		canWriteInventory: has("mcp:inventory:write"),
+		canWriteInventory,
 		canWriteGalley: has("mcp:galley:write"),
-		canWriteManifest: has("mcp:manifest:write"),
+		canWriteManifest,
 		canWriteSupply: has("mcp:supply:write"),
 		canWritePreferences,
 		/** USDA resolve + cargo/meal nutrition snapshots (nutrition-engine). */
-		nutritionEngine: engine && canRead,
+		nutritionEngine: engine && canNutritionRead,
 		/** Manifest Eat → intake logging (nutrition-manifest). */
-		nutritionManifest: manifest && canRead,
+		nutritionManifest: manifest && canNutritionRead,
 		/** Personal goals + summary vs goal (nutrition-goals). */
-		nutritionGoals: goals && canRead,
+		nutritionGoals: goals && canNutritionRead,
+		/** Cook ≠ Eat split (nutrition-cook-log-split). */
+		nutritionCookLogSplit: cookLogSplit && canRead,
+		/** cook_manifest_entries when split is on. */
+		canCookManifest: cookLogSplit && canWriteManifest && canWriteInventory,
+		/** log/clear_manifest_intake when split + manifest are on. */
+		canLogPersonalIntake: cookLogSplit && manifest && canNutritionWrite,
 		/** set/clear nutrition goal tools. */
-		canWriteNutritionGoals: goals && canWritePreferences,
+		canWriteNutritionGoals: goals && canNutritionWrite,
 	};
 }
 
@@ -189,14 +201,21 @@ export function buildNutritionCapabilityNotes(
 			"nutrition-engine: Cargo/meal nutrition snapshots; USDA auto-resolve on add when override omitted.",
 		);
 	}
+	if (flags.cookLogSplit) {
+		notes.push(
+			"nutrition-cook-log-split: Cook with cook_manifest_entries or consume_meal (Galley bridge) — never logs personal intake. Eat separately with log_manifest_intake after consent. consume_manifest_entries is refused while split is on.",
+		);
+	}
 	if (flags.manifest) {
 		notes.push(
-			"nutrition-manifest: consume_manifest_entries can log intake via portions[] / logNutrition.",
+			flags.cookLogSplit
+				? "nutrition-manifest: log_manifest_intake / clear_manifest_intake for private plate-up; list_nutrition_intakes + get_nutrition_summary for history."
+				: "nutrition-manifest: legacy consume_manifest_entries may log intake only when logNutrition:true (opt-in for agents).",
 		);
 	}
 	if (flags.goals) {
 		notes.push(
-			"nutrition-goals: get_nutrition_summary and set/clear_nutrition_goal are available (not medical advice).",
+			"nutrition-goals: get_nutrition_summary, list_nutrition_intakes, and set/clear_nutrition_goal (not medical advice).",
 		);
 	}
 	return notes;

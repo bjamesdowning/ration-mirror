@@ -872,6 +872,7 @@ export type NutritionSummaryResult = {
 
 export type NutritionIntakeRow = {
 	id: string;
+	entryId: string | null;
 	manifestDate: string;
 	slotType: string | null;
 	servings: number;
@@ -966,6 +967,7 @@ export async function listNutritionIntakesForRange(
 	const rows = await d1
 		.select({
 			id: schema.nutritionIntake.id,
+			entryId: schema.nutritionIntake.entryId,
 			manifestDate: schema.nutritionIntake.manifestDate,
 			slotType: schema.nutritionIntake.slotType,
 			servings: schema.nutritionIntake.servings,
@@ -991,6 +993,7 @@ export async function listNutritionIntakesForRange(
 	const page = rows.slice(0, limit);
 	const items = page.map((r) => ({
 		id: r.id,
+		entryId: r.entryId ?? null,
 		manifestDate: r.manifestDate,
 		slotType: r.slotType,
 		servings: r.servings,

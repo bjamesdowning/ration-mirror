@@ -53,6 +53,7 @@ const MANIFEST_WRITE = [
 	"add_meal_plan_entry",
 	"update_meal_plan_entry",
 	"remove_meal_plan_entry",
+	"cook_manifest_entries",
 	"consume_manifest_entries",
 	"start_plan_week",
 ] as const;
@@ -70,8 +71,12 @@ const PREFERENCES_WRITE = ["update_user_preferences"] as const;
 
 const NUTRITION_TOOLS = [
 	"get_nutrition_summary",
+	"list_nutrition_intakes",
 	"set_nutrition_goal",
 	"clear_nutrition_goal",
+	"log_manifest_intake",
+	"clear_manifest_intake",
+	"cook_manifest_entries",
 	"consume_manifest_entries",
 ] as const;
 
@@ -169,6 +174,9 @@ export function resolveCopilotActiveTools(
 		/\bconsumed\b/,
 		/\bprotein\b/,
 		/\bintake\b/,
+		/\bfiber\b/,
+		/\bplate[- ]?up\b/,
+		/\bserving\b/,
 	]);
 
 	const addGroup = (group: readonly string[]) => {

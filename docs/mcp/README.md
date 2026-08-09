@@ -120,14 +120,16 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `get_expired_items` | `mcp:read` | List items whose expiry date is before today (UTC). Optional `daysBack` (default 30). |
 | `list_meals` | `mcp:read` | Cursor-paginated recipe list. Set `includeIngredients: false` for a lightweight index. |
 | `match_meals` | `mcp:read` | Find cookable recipes from current pantry — `strict` or `delta`. Adds `allergenFlags` when user allergens are configured. |
-| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (breakfast, lunch, dinner, snack). |
+| `get_meal_plan` | `mcp:read` | Weekly meal plan entries by date and slot (`cookedAt`/`consumedAt`; `personalIntake` when nutrition flags allow). |
 | `get_supply_list` | `mcp:read` | Active shopping list with item ids for updates and purchase toggles. |
 | `get_user_preferences` | `mcp:read` | Allergens, expiration alert days, theme, manifest defaults, and other user settings. |
 | `update_user_preferences` | `mcp:preferences:write` | Patch user settings (allergens, alerts, theme). Only provided fields change. |
-| `get_nutrition_summary` | `mcp:read` | Daily intake totals for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). |
-| `set_nutrition_goal` | `mcp:preferences:write` | Upsert personal daily energy/macro goals (`consentAt` required; `nutrition-goals`). Not medical advice. |
-| `clear_nutrition_goal` | `mcp:preferences:write` | Close open-ended goals. **Requires `confirm: true`.** |
-
+| `get_nutrition_summary` | `mcp:nutrition:read` | Daily intake totals (energy/macros/optional fiber) for a UTC `from`/`to` range (requires `nutrition-goals` or `nutrition-manifest`). |
+| `list_nutrition_intakes` | `mcp:nutrition:read` | Row-level personal intake history for a UTC range (cursor-paginated). |
+| `set_nutrition_goal` | `mcp:nutrition:write` | Upsert personal daily energy/macro/fiber goals (`consent:true` or legacy `consentAt`; `nutrition-goals`). Not medical advice. |
+| `clear_nutrition_goal` | `mcp:nutrition:write` | Close open-ended goals. **Requires `confirm: true`.** |
+| `log_manifest_intake` | `mcp:nutrition:write` | Private Eat for prepared entries (`portions[]` + optional `consent:true`). Requires cook-log-split + nutrition-manifest. |
+| `clear_manifest_intake` | `mcp:nutrition:write` | Soft-void personal intake. **Requires `confirm: true`.** |
 ### Inventory (Cargo)
 
 | Tool | Scope | Description |
@@ -151,7 +153,7 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `delete_meal` | `mcp:galley:write` | Delete a recipe. **Requires `confirm: true`.** Cascades to ingredients, tags, and linked Manifest entries. |
 | `set_active_meals` | `mcp:galley:write` | Set Galley active selection to exactly these mealIds. Optional `syncSupply`. |
 | `clear_active_meals` | `mcp:galley:write` | Clear all active meal selections. **Requires `confirm: true`.** |
-| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Mark cooked and deduct ingredients from pantry via semantic matching. Requires **both** scopes. |
+| `consume_meal` | `mcp:galley:write` + `mcp:inventory:write` | Cook and deduct ingredients from pantry. When cook-log-split is on, bridges to Manifest Prepared (no personal intake). Requires **both** scopes. |
 
 ### Manifest (meal plan)
 
@@ -161,7 +163,8 @@ All tools are scoped to the authorized household. **MCP calls do not consume Rat
 | `commit_manifest_plan` | `mcp:manifest:write` | Commit a confirmed multi-entry schedule (optionally sync supply). |
 | `update_meal_plan_entry` | `mcp:manifest:write` | Patch date, slot, servings, or notes. Cannot edit consumed entries. |
 | `remove_meal_plan_entry` | `mcp:manifest:write` | Remove a scheduled plan entry. |
-| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Mark manifest entries consumed and deduct ingredients. Optional `portions[]` / `logNutrition` for intake when `nutrition-manifest` is on. Requires **both** scopes. |
+| `cook_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Shared Cook (Cargo + Prepared). Requires `nutrition-cook-log-split`. Never logs intake. |
+| `consume_manifest_entries` | `mcp:manifest:write` + `mcp:inventory:write` | Legacy combined consume. Refused when cook-log-split is on — use cook then `log_manifest_intake`. Requires **both** scopes. |
 
 ### Supply (shopping list)
 

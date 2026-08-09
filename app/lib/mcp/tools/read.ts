@@ -14,7 +14,11 @@ import {
 	getExpiringCargo,
 } from "../../cargo.server";
 import { addUtcDays, getUtcTodayISO } from "../../cargo-utils";
-import { getMealPlan, getWeekEntries } from "../../manifest.server";
+import {
+	attachPersonalIntakeToEntries,
+	getMealPlan,
+	getWeekEntries,
+} from "../../manifest.server";
 import { MEAL_MATCH_CANDIDATE_CAP, matchMeals } from "../../matching.server";
 import { getMealsPage } from "../../meals.server";
 import { parseDirections } from "../../schemas/directions";
@@ -78,8 +82,8 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const { getAgentKitchenSnapshot } = await import(
 					"../../agent/kitchen-snapshot.server"
 				);
-				const { buildMinimalFlagContext } = await import(
-					"../../nutrition/persist.server"
+				const { resolveAgentFlagContext } = await import(
+					"../agent-flag-context"
 				);
 				const { isFeatureEnabled } = await import(
 					"../../feature-flags/flags.server"
@@ -102,17 +106,23 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						meals: kitchenFull.capacity.meals,
 					},
 				};
-				const flagContext = buildMinimalFlagContext(env, ctx.userId);
-				const [nutritionEngine, nutritionManifest, nutritionGoals] =
-					await Promise.all([
-						isFeatureEnabled(env, "nutrition-engine", flagContext),
-						isFeatureEnabled(env, "nutrition-manifest", flagContext),
-						isFeatureEnabled(env, "nutrition-goals", flagContext),
-					]);
+				const flagContext = resolveAgentFlagContext(env, ctx);
+				const [
+					nutritionEngine,
+					nutritionManifest,
+					nutritionGoals,
+					nutritionCookLogSplit,
+				] = await Promise.all([
+					isFeatureEnabled(env, "nutrition-engine", flagContext),
+					isFeatureEnabled(env, "nutrition-manifest", flagContext),
+					isFeatureEnabled(env, "nutrition-goals", flagContext),
+					isFeatureEnabled(env, "nutrition-cook-log-split", flagContext),
+				]);
 				const nutritionFlags = {
 					engine: nutritionEngine,
 					manifest: nutritionManifest,
 					goals: nutritionGoals,
+					cookLogSplit: nutritionCookLogSplit,
 				};
 				const capabilities = buildGetContextCapabilities(
 					ctx.scopes,
@@ -374,7 +384,7 @@ export function createReadToolDefs(env: McpToolsEnv) {
 		defineSharedTool({
 			name: "get_meal_plan",
 			description:
-				"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack).",
+				"Retrieve the user's weekly meal plan. Returns scheduled meals by date and slot (breakfast, lunch, dinner, snack), including cookedAt/consumedAt. When nutrition-manifest is on and the key has mcp:nutrition:read, includes the caller's personalIntake per entry.",
 			inputSchema: z.object({
 				startDate: z
 					.string()
@@ -393,12 +403,29 @@ export function createReadToolDefs(env: McpToolsEnv) {
 				const startDate = a.startDate ?? getUtcTodayISO();
 				const days = a.days ?? 7;
 				const endDate = addUtcDays(startDate, days - 1);
-				const entries = await getWeekEntries(
-					env.DB,
-					plan.id,
-					startDate,
-					endDate,
+				let entries = await getWeekEntries(env.DB, plan.id, startDate, endDate);
+				const { resolveAgentFlagContext } = await import(
+					"../agent-flag-context"
 				);
+				const { isFeatureEnabled } = await import(
+					"../../feature-flags/flags.server"
+				);
+				const { hasScope } = await import("../scopes");
+				const flagContext = resolveAgentFlagContext(env, ctx);
+				const manifestOn = await isFeatureEnabled(
+					env,
+					"nutrition-manifest",
+					flagContext,
+				);
+				// Personal intake is mcp:nutrition:read — never leak under mcp:read alone.
+				if (manifestOn && hasScope(ctx, "mcp:nutrition:read")) {
+					entries = await attachPersonalIntakeToEntries(
+						env.DB,
+						ctx.userId,
+						ctx.organizationId,
+						entries,
+					);
+				}
 				return ok("get_meal_plan", {
 					planId: plan.id,
 					planName: plan.name,
@@ -413,6 +440,10 @@ export function createReadToolDefs(env: McpToolsEnv) {
 						servings: e.servingsOverride ?? e.mealServings,
 						notes: e.notes,
 						consumedAt: e.consumedAt,
+						cookedAt: e.cookedAt,
+						...(e.personalIntake !== undefined
+							? { personalIntake: e.personalIntake }
+							: {}),
 					})),
 				});
 			},

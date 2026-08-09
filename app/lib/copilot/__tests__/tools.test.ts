@@ -42,6 +42,19 @@ describe("createCopilotToolDefs", () => {
 		} as McpToolsEnv;
 	}
 
+	it("includes nutrition read/write scopes for Copilot", () => {
+		expect(COPILOT_MCP_SCOPES).toContain("mcp:nutrition:read");
+		expect(COPILOT_MCP_SCOPES).toContain("mcp:nutrition:write");
+		expect(
+			buildCopilotMcpContext({
+				organizationId: "org-1",
+				userId: "user-1",
+				scopes: [...COPILOT_MCP_SCOPES],
+				preClaim: false,
+			}).agentSurface,
+		).toBe("copilot");
+	});
+
 	it("exposes every MCP tool plus Copilot AI workflows and search_docs", () => {
 		const names = createCopilotToolDefs(makeEnv()).map(
 			(definition) => definition.name,
@@ -108,6 +121,8 @@ describe("createCopilotToolDefs", () => {
 			"complete_supply_list",
 			"start_plan_week",
 			"start_generate_meal",
+			"clear_nutrition_goal",
+			"clear_manifest_intake",
 		];
 
 		for (const name of alwaysApproved) {

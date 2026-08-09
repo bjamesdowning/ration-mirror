@@ -82,8 +82,15 @@ import {
 import { isFeatureEnabled } from "./feature-flags/flags.server";
 import { normalizeCargoQuantity } from "./format-quantity";
 import {
+	NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
+	NUTRITION_RESOLVE_CONCURRENCY,
+} from "./nutrition/constants";
+import { mapWithConcurrency } from "./nutrition/map-concurrency";
+import { withDerivedPer100g } from "./nutrition/override-scale";
+import {
 	buildMinimalFlagContext,
 	maybeResolveCargoNutrition,
+	recomputeMealsAffectedByCargoNutrition,
 } from "./nutrition/persist.server";
 import type { NutritionSnapshot } from "./nutrition/types";
 import { bumpReadinessCacheVersions } from "./readiness-cache.server";
@@ -812,14 +819,22 @@ export async function ingestCargoItems(
 		.filter((i) => i >= 0);
 	const nutritionByIndex = new Map<number, NutritionSnapshot | null>();
 	if (nutritionEngineOn && createIndexes.length > 0) {
-		await Promise.all(
-			createIndexes.map(async (i) => {
+		await mapWithConcurrency(
+			createIndexes,
+			NUTRITION_RESOLVE_CONCURRENCY,
+			async (i) => {
 				const it = items[i];
 				if (it.nutrition) {
-					nutritionByIndex.set(i, {
+					const raw: NutritionSnapshot = {
 						...it.nutrition,
 						source: it.nutrition.source ?? "user_override",
-					});
+					};
+					nutritionByIndex.set(
+						i,
+						raw.source === "user_override"
+							? withDerivedPer100g(raw, it.quantity, it.unit, it.name)
+							: raw,
+					);
 					return;
 				}
 				const snapshot = await maybeResolveCargoNutrition(
@@ -835,7 +850,7 @@ export async function ingestCargoItems(
 					},
 				);
 				nutritionByIndex.set(i, snapshot);
-			}),
+			},
 		);
 	}
 
@@ -849,12 +864,18 @@ export async function ingestCargoItems(
 			if (!mergedTargetIds.has(r.targetId)) {
 				mergedTargetIds.add(r.targetId);
 				const mergedBase = computeBaseFields(newQty, target.unit, target.name);
+				// Derive density from the incoming package qty/unit, not merged total.
 				const mergeNutrition =
 					nutritionEngineOn && it.nutrition
-						? {
-								...it.nutrition,
-								source: it.nutrition.source ?? "user_override",
-							}
+						? withDerivedPer100g(
+								{
+									...it.nutrition,
+									source: it.nutrition.source ?? "user_override",
+								},
+								it.quantity,
+								it.unit,
+								it.name,
+							)
 						: undefined;
 				batchOps.push(
 					d1
@@ -1021,6 +1042,54 @@ export async function ingestCargoItems(
 		await bumpReadinessCacheVersions(env.RATION_KV, organizationId);
 	}
 
+	// Refresh meals when ingest wrote user_override nutrition (scan review path).
+	if (nutritionEngineOn) {
+		const overrideTargets = new Map<string, string>();
+		for (let i = 0; i < results.length; i++) {
+			const result = results[i];
+			const it = items[i];
+			if (!result || !it || !result.item) continue;
+			if (result.status !== "created" && result.status !== "merged") continue;
+			const item = result.item;
+			const snap =
+				result.status === "created"
+					? (item.nutrition as NutritionSnapshot | null | undefined)
+					: it.nutrition;
+			if (!snap || snap.source !== "user_override") continue;
+			const id =
+				result.status === "merged" && result.mergedInto
+					? result.mergedInto.id
+					: item.id;
+			const name =
+				result.status === "merged" && result.mergedInto
+					? result.mergedInto.name
+					: item.name;
+			overrideTargets.set(id, name);
+		}
+		if (overrideTargets.size > 0) {
+			const recomputePromise = mapWithConcurrency(
+				[...overrideTargets.entries()],
+				NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
+				([cargoId, cargoName]) =>
+					recomputeMealsAffectedByCargoNutrition(
+						env,
+						env.DB,
+						organizationId,
+						cargoId,
+						cargoName,
+						nutritionFlagContext,
+					),
+			).catch((err) =>
+				log.error("[Nutrition] meal recompute after ingest failed:", err),
+			);
+			if (options?.waitUntil) {
+				options.waitUntil(recomputePromise);
+			} else {
+				await recomputePromise;
+			}
+		}
+	}
+
 	return results;
 }
 
@@ -1051,7 +1120,7 @@ export async function addOrMergeItem(
 					? {
 							source: data.nutrition.source ?? "user_override",
 							confidence: data.nutrition.confidence ?? 1,
-							verified: data.nutrition.verified ?? true,
+							verified: data.nutrition.verified === true,
 							per100g: data.nutrition.per100g ?? null,
 							perServing: data.nutrition.perServing ?? null,
 							fdcId: data.nutrition.fdcId ?? null,
@@ -1147,6 +1216,13 @@ export async function updateItem(
 		flagContext,
 	);
 
+	const nutritionTouched =
+		nutritionEngineOn &&
+		(data.nutrition !== undefined ||
+			(data.name !== undefined && data.name !== existing.name) ||
+			data.quantity !== undefined ||
+			data.unit !== undefined);
+
 	let nextNutrition = existing.nutrition ?? null;
 	if (!nutritionEngineOn) {
 		// Ignore client nutrition overrides and rename re-resolve when flag off.
@@ -1154,21 +1230,37 @@ export async function updateItem(
 	} else if (data.nutrition === null) {
 		nextNutrition = null;
 	} else if (data.nutrition !== undefined) {
-		nextNutrition = {
+		const raw: NutritionSnapshot = {
 			source: data.nutrition.source ?? "user_override",
 			confidence: data.nutrition.confidence ?? 1,
-			verified: data.nutrition.verified ?? true,
+			verified: data.nutrition.verified === true,
 			per100g: data.nutrition.per100g ?? null,
 			perServing: data.nutrition.perServing ?? null,
 			fdcId: data.nutrition.fdcId ?? null,
 			description: data.nutrition.description ?? null,
 		};
+		nextNutrition =
+			raw.source === "user_override"
+				? withDerivedPer100g(raw, nextQuantity, nextUnit, nextName)
+				: raw;
 	} else if (data.name !== undefined && data.name !== existing.name) {
 		nextNutrition = await maybeResolveCargoNutrition(
 			env,
 			nextName,
 			flagContext,
 			{ quantity: nextQuantity, unit: nextUnit },
+		);
+	} else if (
+		existing.nutrition?.source === "user_override" &&
+		!existing.nutrition.per100g &&
+		(data.quantity !== undefined || data.unit !== undefined)
+	) {
+		// Backfill per100g once package mass is known; keep existing per100g stable.
+		nextNutrition = withDerivedPer100g(
+			existing.nutrition,
+			nextQuantity,
+			nextUnit,
+			nextName,
 		);
 	}
 
@@ -1208,6 +1300,25 @@ export async function updateItem(
 
 	if (!updatedItem) {
 		return null;
+	}
+
+	const shouldRecomputeMeals =
+		nutritionEngineOn &&
+		(data.nutrition !== undefined ||
+			(nutritionTouched &&
+				(nextNutrition?.source === "user_override" ||
+					existing.nutrition?.source === "user_override")));
+	if (shouldRecomputeMeals) {
+		await recomputeMealsAffectedByCargoNutrition(
+			env,
+			env.DB,
+			organizationId,
+			itemId,
+			updatedItem.name,
+			flagContext,
+		).catch((err) =>
+			log.error("[Nutrition] meal recompute after cargo update failed:", err),
+		);
 	}
 
 	const tagMap = await getTagsForCargoIds(env.DB, [itemId]);

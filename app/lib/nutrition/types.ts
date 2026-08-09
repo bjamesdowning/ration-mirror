@@ -72,4 +72,8 @@ export type ResolvedFood = {
 	fdcId: number;
 	description: string;
 	nutrientsPer100g: NutrientsPer100g;
+	/** Ranker score when resolved via FTS/LIKE re-rank. */
+	matchScore?: number;
+	/** True when primary-label / high-tier match (safe to mark verified). */
+	highConfidence?: boolean;
 };

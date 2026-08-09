@@ -1,8 +1,10 @@
-import { and, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
 import type { FlagshipEvaluationContext } from "~/lib/feature-flags/context.server";
 import { isFeatureEnabled } from "~/lib/feature-flags/flags.server";
+import { normalizeForCargoDedup } from "~/lib/matching";
+import { chunkedQuery } from "~/lib/query-utils.server";
 import type { SupportedUnit } from "~/lib/units";
 import { toSupportedUnit } from "~/lib/units";
 import {
@@ -11,16 +13,29 @@ import {
 } from "./cargo-nutrition.server";
 import { computeMealNutrition } from "./compute-meal-nutrition";
 import {
+	NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
+	NUTRITION_RESOLVE_CONCURRENCY,
+} from "./constants";
+import {
 	isGoalEffectiveOnDate,
 	nutritionIntakeRetentionCutoff,
 	previousUtcCalendarDay,
 } from "./goal-effective";
+import { mapWithConcurrency } from "./map-concurrency";
+import {
+	type CargoOverrideCandidate,
+	nutrientsPer100gFromCargoOverride,
+	pickBestCargoOverrideForIngredient,
+} from "./override-scale";
 import { resolveFoodName } from "./resolve-food.server";
 import type {
 	MealNutritionSnapshot,
 	NutritionSnapshot,
 	NutritionSource,
 } from "./types";
+
+/** Cap meal recomputes triggered by a single cargo nutrition update. */
+export const MAX_MEALS_RECOMPUTE_ON_CARGO_NUTRITION = 50;
 
 export {
 	isGoalEffectiveOnDate,
@@ -82,8 +97,100 @@ export async function maybeResolveCargoNutrition(
 	});
 }
 
+function toOverrideCandidate(r: {
+	id: string;
+	name: string;
+	quantity: number;
+	unit: string;
+	nutrition: unknown;
+	updatedAt: Date | string | number | null;
+}): CargoOverrideCandidate | null {
+	if (
+		r.nutrition == null ||
+		typeof r.nutrition !== "object" ||
+		(r.nutrition as NutritionSnapshot).source !== "user_override"
+	) {
+		return null;
+	}
+	return {
+		id: r.id,
+		name: r.name,
+		quantity: r.quantity,
+		unit: r.unit,
+		nutrition: r.nutrition as NutritionSnapshot,
+		updatedAt: r.updatedAt,
+	};
+}
+
+/**
+ * Load org cargo rows with user_override nutrition. Always includes any
+ * meal-linked cargo IDs so linked overrides are never dropped by the sample cap.
+ */
+async function loadOrgCargoOverrideCandidates(
+	db: D1Database,
+	organizationId: string,
+	linkedCargoIds: string[] = [],
+): Promise<CargoOverrideCandidate[]> {
+	const d1 = drizzle(db, { schema });
+	const rows = await d1
+		.select({
+			id: schema.cargo.id,
+			name: schema.cargo.name,
+			quantity: schema.cargo.quantity,
+			unit: schema.cargo.unit,
+			nutrition: schema.cargo.nutrition,
+			updatedAt: schema.cargo.updatedAt,
+		})
+		.from(schema.cargo)
+		.where(
+			and(
+				eq(schema.cargo.organizationId, organizationId),
+				sql`json_extract(${schema.cargo.nutrition}, '$.source') = 'user_override'`,
+			),
+		)
+		.orderBy(desc(schema.cargo.updatedAt))
+		.limit(500);
+
+	const byId = new Map<string, CargoOverrideCandidate>();
+	for (const r of rows) {
+		const candidate = toOverrideCandidate(r);
+		if (candidate) byId.set(candidate.id, candidate);
+	}
+
+	const missingLinked = [
+		...new Set(linkedCargoIds.filter((id) => id && !byId.has(id))),
+	];
+	if (missingLinked.length > 0) {
+		const linkedRows = await chunkedQuery(missingLinked, (chunk) =>
+			d1
+				.select({
+					id: schema.cargo.id,
+					name: schema.cargo.name,
+					quantity: schema.cargo.quantity,
+					unit: schema.cargo.unit,
+					nutrition: schema.cargo.nutrition,
+					updatedAt: schema.cargo.updatedAt,
+				})
+				.from(schema.cargo)
+				.where(
+					and(
+						eq(schema.cargo.organizationId, organizationId),
+						inArray(schema.cargo.id, chunk),
+					),
+				),
+		);
+		for (const r of linkedRows) {
+			const candidate = toOverrideCandidate(r);
+			if (candidate) byId.set(candidate.id, candidate);
+		}
+	}
+
+	return [...byId.values()];
+}
+
 /**
  * Recompute meal nutrition from ingredients and store on meal.nutrition.
+ * Prefer cargo `user_override` snapshots over USDA when a cargo match exists.
  * No-op when nutrition-engine is off. Returns the stored snapshot or null.
  */
 export async function recomputeAndStoreMealNutrition(
@@ -119,15 +226,53 @@ export async function recomputeAndStoreMealNutrition(
 			quantity: schema.mealIngredient.quantity,
 			unit: schema.mealIngredient.unit,
 			orderIndex: schema.mealIngredient.orderIndex,
+			cargoId: schema.mealIngredient.cargoId,
 		})
 		.from(schema.mealIngredient)
 		.where(eq(schema.mealIngredient.mealId, mealId))
 		.orderBy(schema.mealIngredient.orderIndex);
 
-	const resolvedInputs = await Promise.all(
-		ingredients.map(async (ing) => {
-			const resolved = await resolveFoodName(env, ing.ingredientName);
+	const linkedCargoIds = ingredients
+		.map((ing) => ing.cargoId)
+		.filter((id): id is string => typeof id === "string" && id.length > 0);
+
+	const overrideCandidates = await loadOrgCargoOverrideCandidates(
+		db,
+		organizationId,
+		linkedCargoIds,
+	);
+
+	const resolvedInputs = await mapWithConcurrency(
+		ingredients,
+		NUTRITION_RESOLVE_CONCURRENCY,
+		async (ing) => {
 			const unit = toSupportedUnit(ing.unit);
+			const override = pickBestCargoOverrideForIngredient(
+				ing.ingredientName,
+				overrideCandidates,
+				ing.cargoId,
+			);
+			if (override) {
+				const packageUnit = toSupportedUnit(override.unit);
+				const nutrientsPer100g = nutrientsPer100gFromCargoOverride(
+					override.nutrition,
+					override.quantity,
+					packageUnit,
+					override.name,
+				);
+				if (nutrientsPer100g) {
+					return {
+						name: ing.ingredientName,
+						quantity: ing.quantity,
+						unit: (unit ?? ing.unit) as SupportedUnit | null,
+						nutrientsPer100g,
+						fdcId: override.nutrition.fdcId ?? null,
+						source: "user_override" as NutritionSource,
+					};
+				}
+			}
+
+			const resolved = await resolveFoodName(env, ing.ingredientName);
 			return {
 				name: ing.ingredientName,
 				quantity: ing.quantity,
@@ -136,7 +281,7 @@ export async function recomputeAndStoreMealNutrition(
 				fdcId: resolved?.fdcId ?? null,
 				source: "usda" as NutritionSource,
 			};
-		}),
+		},
 	);
 
 	const result = computeMealNutrition(resolvedInputs, mealRow.servings ?? 1);
@@ -161,6 +306,96 @@ export async function recomputeAndStoreMealNutrition(
 		);
 
 	return snapshot;
+}
+
+/**
+ * After cargo nutrition is set/cleared as user_override, refresh meals that
+ * reference that cargo (direct link, exact name, or cargo-dedup key). Bounded.
+ */
+export async function recomputeMealsAffectedByCargoNutrition(
+	env: Env,
+	db: D1Database,
+	organizationId: string,
+	cargoId: string,
+	cargoName: string,
+	flagContext: FlagshipEvaluationContext,
+): Promise<number> {
+	const enabled = await isFeatureEnabled(env, "nutrition-engine", flagContext);
+	if (!enabled) return 0;
+
+	const d1 = drizzle(db, { schema });
+	const normalizedName = cargoName.trim().toLowerCase();
+	const cargoDedupKey = normalizeForCargoDedup(cargoName);
+
+	const [directRows, nameRows, unlinkedSample] = await d1.batch([
+		d1
+			.select({ mealId: schema.mealIngredient.mealId })
+			.from(schema.mealIngredient)
+			.innerJoin(schema.meal, eq(schema.mealIngredient.mealId, schema.meal.id))
+			.where(
+				and(
+					eq(schema.meal.organizationId, organizationId),
+					eq(schema.mealIngredient.cargoId, cargoId),
+				),
+			),
+		d1
+			.select({ mealId: schema.mealIngredient.mealId })
+			.from(schema.mealIngredient)
+			.innerJoin(schema.meal, eq(schema.mealIngredient.mealId, schema.meal.id))
+			.where(
+				and(
+					eq(schema.meal.organizationId, organizationId),
+					isNull(schema.mealIngredient.cargoId),
+					sql`lower(${schema.mealIngredient.ingredientName}) = ${normalizedName}`,
+				),
+			),
+		// Bounded sample for synonym/prep-stripped dedup matches (courgette/zucchini).
+		d1
+			.select({
+				mealId: schema.mealIngredient.mealId,
+				ingredientName: schema.mealIngredient.ingredientName,
+			})
+			.from(schema.mealIngredient)
+			.innerJoin(schema.meal, eq(schema.mealIngredient.mealId, schema.meal.id))
+			.where(
+				and(
+					eq(schema.meal.organizationId, organizationId),
+					isNull(schema.mealIngredient.cargoId),
+				),
+			)
+			.limit(500),
+	]);
+
+	const dedupMealIds =
+		cargoDedupKey.length > 0
+			? unlinkedSample
+					.filter(
+						(r) => normalizeForCargoDedup(r.ingredientName) === cargoDedupKey,
+					)
+					.map((r) => r.mealId)
+			: [];
+
+	const mealIds = [
+		...new Set([
+			...directRows.map((r) => r.mealId),
+			...nameRows.map((r) => r.mealId),
+			...dedupMealIds,
+		]),
+	].slice(0, MAX_MEALS_RECOMPUTE_ON_CARGO_NUTRITION);
+
+	const snaps = await mapWithConcurrency(
+		mealIds,
+		NUTRITION_MEAL_RECOMPUTE_CONCURRENCY,
+		(mealId) =>
+			recomputeAndStoreMealNutrition(
+				env,
+				db,
+				mealId,
+				organizationId,
+				flagContext,
+			),
+	);
+	return snaps.filter(Boolean).length;
 }
 
 export async function getActiveNutritionGoal(
@@ -224,31 +459,17 @@ export async function upsertNutritionGoal(
 	// biome-ignore lint/suspicious/noExplicitAny: Drizzle batch types are complex
 	const stmts: any[] = [];
 
+	// Always close open priors ending the day before the new goal so two goals
+	// never share an effective calendar day (including same-day replace).
+	const closeTo =
+		previousUtcCalendarDay(input.effectiveFrom) ?? input.effectiveFrom;
 	for (const prior of openGoals) {
-		if (prior.effectiveFrom >= input.effectiveFrom) {
-			// Same-day or future open goal: close ending on effectiveFrom (caller
-			// replaces it). Prefer previous day when possible.
-			const closeTo =
-				prior.effectiveFrom < input.effectiveFrom
-					? previousUtcCalendarDay(input.effectiveFrom)
-					: input.effectiveFrom;
-			stmts.push(
-				d1
-					.update(schema.nutritionGoal)
-					.set({ effectiveTo: closeTo })
-					.where(eq(schema.nutritionGoal.id, prior.id)),
-			);
-		} else {
-			const closeTo = previousUtcCalendarDay(input.effectiveFrom);
-			stmts.push(
-				d1
-					.update(schema.nutritionGoal)
-					.set({
-						effectiveTo: closeTo ?? input.effectiveFrom,
-					})
-					.where(eq(schema.nutritionGoal.id, prior.id)),
-			);
-		}
+		stmts.push(
+			d1
+				.update(schema.nutritionGoal)
+				.set({ effectiveTo: closeTo })
+				.where(eq(schema.nutritionGoal.id, prior.id)),
+		);
 	}
 
 	const id = crypto.randomUUID();

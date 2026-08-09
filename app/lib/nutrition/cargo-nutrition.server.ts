@@ -39,10 +39,11 @@ export async function resolveAndBuildCargoNutrition(
 				? scaleNutrientsPer100g(resolved.nutrientsPer100g, grams)
 				: null;
 
+		const highConfidence = resolved.highConfidence === true;
 		return {
 			source: "usda",
-			confidence: 1,
-			verified: true,
+			confidence: highConfidence ? 1 : 0.7,
+			verified: highConfidence,
 			per100g: resolved.nutrientsPer100g,
 			perServing,
 			fdcId: resolved.fdcId,

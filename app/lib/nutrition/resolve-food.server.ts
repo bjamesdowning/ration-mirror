@@ -2,7 +2,9 @@ import { normalizeForMatch } from "~/lib/matching";
 import {
 	NUTRITION_FDC_CACHE_TTL_SECONDS,
 	NUTRITION_FDC_KV_PREFIX,
+	NUTRITION_FDC_NEGATIVE_CACHE_TTL_SECONDS,
 } from "./constants";
+import { type FoodMatchCandidate, pickBestFoodMatch } from "./rank-food-match";
 import type { NutrientsPer100g, ResolvedFood } from "./types";
 
 type FoodNutrientRow = {
@@ -19,13 +21,24 @@ type FoodNutrientRow = {
 	salt_g: number | null;
 };
 
-type CachedResolvedFood = ResolvedFood;
+type CachedResolvedFood = ResolvedFood & { highConfidence?: boolean };
+type CachedMiss = { miss: true };
+
+const CANDIDATE_LIMIT = 40;
+
+function isCachedMiss(value: unknown): value is CachedMiss {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as CachedMiss).miss === true
+	);
+}
 
 /**
  * Resolve a food name against NUTRITION_DB (USDA-shaped seed).
  * Returns null when the binding is absent or no match is found.
  *
- * Lookup order: KV cache → FTS5 MATCH → LIKE fallback → cache hit (7d).
+ * Lookup order: KV cache → FTS5 candidates → JS re-rank → LIKE candidates → re-rank.
  */
 export async function resolveFoodName(
 	env: Env,
@@ -41,7 +54,13 @@ export async function resolveFoodName(
 
 	if (kv) {
 		try {
-			const cached = await kv.get<CachedResolvedFood>(cacheKey, "json");
+			const cached = await kv.get<CachedResolvedFood | CachedMiss>(
+				cacheKey,
+				"json",
+			);
+			if (isCachedMiss(cached)) {
+				return null;
+			}
 			if (cached?.fdcId && cached.nutrientsPer100g) {
 				return cached;
 			}
@@ -51,55 +70,87 @@ export async function resolveFoodName(
 	}
 
 	const db = env.NUTRITION_DB;
-	let row: FoodNutrientRow | null = null;
+	let candidates: FoodMatchCandidate[] = [];
 
 	const ftsQuery = buildFtsQuery(normalized);
 	if (ftsQuery) {
 		try {
-			row = await db
+			const ftsRows = await db
 				.prepare(
-					`SELECT f.fdc_id, f.description,
-            n.energy_kcal, n.protein_g, n.fat_g, n.carb_g,
-            n.fiber_g, n.sugar_g, n.sat_fat_g, n.sodium_mg, n.salt_g
+					`SELECT f.fdc_id AS fdc_id, f.description AS description
            FROM food_fts
            JOIN food f ON f.fdc_id = food_fts.rowid
-           JOIN food_nutrient n ON n.fdc_id = f.fdc_id
            WHERE food_fts MATCH ?
-           LIMIT 1`,
+           LIMIT ?`,
 				)
-				.bind(ftsQuery)
-				.first<FoodNutrientRow>();
+				.bind(ftsQuery, CANDIDATE_LIMIT)
+				.all<{ fdc_id: number; description: string }>();
+			candidates = (ftsRows.results ?? []).map((r) => ({
+				fdcId: r.fdc_id,
+				description: r.description,
+			}));
 		} catch {
 			// FTS unavailable or query error — fall through to LIKE
 		}
 	}
 
-	if (!row) {
+	if (candidates.length === 0) {
 		try {
-			row = await db
+			const likePattern = `%${escapeLikePattern(normalized)}%`;
+			const likeRows = await db
 				.prepare(
-					`SELECT f.fdc_id, f.description,
-            n.energy_kcal, n.protein_g, n.fat_g, n.carb_g,
-            n.fiber_g, n.sugar_g, n.sat_fat_g, n.sodium_mg, n.salt_g
+					`SELECT f.fdc_id AS fdc_id, f.description AS description
            FROM food f
-           JOIN food_nutrient n ON n.fdc_id = f.fdc_id
-           WHERE lower(f.description) LIKE ?
+           WHERE lower(f.description) LIKE ? ESCAPE '\\'
            ORDER BY length(f.description) ASC
-           LIMIT 1`,
+           LIMIT ?`,
 				)
-				.bind(`%${normalized}%`)
-				.first<FoodNutrientRow>();
+				.bind(likePattern, CANDIDATE_LIMIT)
+				.all<{ fdc_id: number; description: string }>();
+			candidates = (likeRows.results ?? []).map((r) => ({
+				fdcId: r.fdc_id,
+				description: r.description,
+			}));
 		} catch {
 			return null;
 		}
 	}
 
-	if (!row) return null;
+	const best = pickBestFoodMatch(normalized, candidates);
+	if (!best) {
+		await cacheMiss(kv, cacheKey);
+		return null;
+	}
 
-	const resolved: ResolvedFood = {
-		fdcId: row.fdc_id,
-		description: row.description,
-		nutrientsPer100g: rowToNutrients(row),
+	let nutrientRow: FoodNutrientRow | null = null;
+	try {
+		nutrientRow = await db
+			.prepare(
+				`SELECT f.fdc_id, f.description,
+          n.energy_kcal, n.protein_g, n.fat_g, n.carb_g,
+          n.fiber_g, n.sugar_g, n.sat_fat_g, n.sodium_mg, n.salt_g
+         FROM food f
+         JOIN food_nutrient n ON n.fdc_id = f.fdc_id
+         WHERE f.fdc_id = ?
+         LIMIT 1`,
+			)
+			.bind(best.fdcId)
+			.first<FoodNutrientRow>();
+	} catch {
+		return null;
+	}
+
+	if (!nutrientRow) {
+		await cacheMiss(kv, cacheKey);
+		return null;
+	}
+
+	const resolved: CachedResolvedFood = {
+		fdcId: nutrientRow.fdc_id,
+		description: nutrientRow.description,
+		nutrientsPer100g: rowToNutrients(nutrientRow),
+		highConfidence: best.highConfidence,
+		matchScore: best.score,
 	};
 
 	if (kv) {
@@ -115,6 +166,24 @@ export async function resolveFoodName(
 	return resolved;
 }
 
+async function cacheMiss(
+	kv: KVNamespace | undefined,
+	cacheKey: string,
+): Promise<void> {
+	if (!kv) return;
+	try {
+		await kv.put(
+			cacheKey,
+			JSON.stringify({ miss: true } satisfies CachedMiss),
+			{
+				expirationTtl: NUTRITION_FDC_NEGATIVE_CACHE_TTL_SECONDS,
+			},
+		);
+	} catch {
+		// ignore cache write failures
+	}
+}
+
 function rowToNutrients(row: FoodNutrientRow): NutrientsPer100g {
 	return {
 		energyKcal: row.energy_kcal ?? 0,
@@ -127,6 +196,11 @@ function rowToNutrients(row: FoodNutrientRow): NutrientsPer100g {
 		sodiumMg: row.sodium_mg,
 		saltG: row.salt_g,
 	};
+}
+
+/** Escape LIKE wildcards so `_` / `%` in food names are literal. */
+export function escapeLikePattern(value: string): string {
+	return value.replace(/([\\%_])/g, "\\$1");
 }
 
 /** Build a safe FTS5 MATCH query from a normalized name (AND of tokens). */

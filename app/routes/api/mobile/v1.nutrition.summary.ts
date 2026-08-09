@@ -7,6 +7,7 @@ import {
 } from "~/lib/feature-flags/flags.server";
 import { requireMobileActiveGroup } from "~/lib/mobile/auth.server";
 import { getNutritionSummary } from "~/lib/nutrition/persist.server";
+import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
 import { NutritionSummaryQuerySchema } from "~/lib/schemas/nutrition";
 import type { Route } from "./+types/v1.nutrition.summary";
 
@@ -23,6 +24,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		const flagContext = buildFlagContext(request, env, {
 			user: { id: userId },
 		});
+
+		const rateLimitResult = await checkRateLimit(
+			env.RATION_KV,
+			"nutrition_summary",
+			userId,
+		);
+		if (!rateLimitResult.allowed) {
+			throw rateLimitResponse(
+				rateLimitResult,
+				"Too many nutrition summary requests. Please try again later.",
+			);
+		}
 
 		const [goalsOn, manifestOn] = await Promise.all([
 			isFeatureEnabled(env, "nutrition-goals", flagContext),

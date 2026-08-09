@@ -76,6 +76,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			groupId,
 			result.data,
 			context.cloudflare.env,
+			{ userId: user.id },
 		);
 
 		return {

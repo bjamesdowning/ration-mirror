@@ -1230,8 +1230,10 @@ describe("MCP tools", () => {
 				expect.anything(),
 				"org-test-123",
 				expect.objectContaining({ name: "toast", servings: 1 }),
-				expect.anything(),
-				expect.objectContaining({ userId: "user-test-123" }),
+				expect.objectContaining({
+					userId: "user-test-123",
+					env: expect.anything(),
+				}),
 			);
 		});
 	});

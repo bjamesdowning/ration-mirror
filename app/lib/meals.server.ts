@@ -92,10 +92,15 @@ export type MealWriteOptions = {
 	tagIdsBySlug?: Map<string, string>;
 	/** Skip trailing getMeal() when the caller only needs success/failure. */
 	skipReturnRead?: boolean;
-	/** Env for nutrition recompute (updateMeal / optional create paths). */
+	/** Enables nutrition recompute; also used for capacity unless skipped. */
 	env?: Env;
-	/** Optional user id for nutrition flag evaluation context. */
+	/** Flagship context when a session/user exists. */
 	userId?: string | null;
+	/**
+	 * Routes that already called checkCapacity should set this so passing env
+	 * for nutrition does not double-run capacity.
+	 */
+	skipCapacityCheck?: boolean;
 };
 
 async function resolveMealTagIds(
@@ -673,15 +678,16 @@ export async function getMealsForCargo(
 /**
  * Creates a new meal with ingredients and tags in a single atomic operation.
  * Ingredient/tag inserts are chunked to respect D1's 100 bound-params-per-query limit.
+ * Pass `options.env` (+ `userId` for Flagship) to recompute nutrition.
  */
 export async function createMeal(
 	db: D1Database,
 	organizationId: string,
 	data: MealInput,
-	env?: Env,
 	options?: MealWriteOptions,
 ) {
-	if (env) {
+	const env = options?.env;
+	if (env && !options?.skipCapacityCheck) {
 		const capacity = await checkCapacity(env, organizationId, "meals", 1);
 		if (!capacity.allowed) {
 			throw new Error(
@@ -780,14 +786,15 @@ export async function createMeal(
 /**
  * Creates multiple meals in a single atomic batch. All-or-nothing.
  * Returns the created meals with ingredients and tags.
- * When env is provided, runs capacity check, trackD1BatchSize, and trackWriteOperation.
+ * When `options.env` is provided, runs capacity (unless skipped), tracking, and nutrition recompute.
  */
 export async function createMeals(
 	db: D1Database,
 	organizationId: string,
 	inputs: MealInput[],
-	env?: Env,
+	options?: MealWriteOptions,
 ) {
+	const env = options?.env;
 	if (inputs.length === 0) return [];
 	if (inputs.length > MAX_BATCH_MEALS) {
 		throw new Error(
@@ -795,7 +802,7 @@ export async function createMeals(
 		);
 	}
 
-	if (env) {
+	if (env && !options?.skipCapacityCheck) {
 		const capacity = await checkCapacity(
 			env,
 			organizationId,
@@ -882,7 +889,7 @@ export async function createMeals(
 					db,
 					id,
 					organizationId,
-					buildMinimalFlagContext(env),
+					buildMinimalFlagContext(env, options?.userId),
 				),
 			),
 		);

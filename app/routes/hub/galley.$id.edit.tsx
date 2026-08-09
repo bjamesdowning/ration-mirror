@@ -57,7 +57,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const { id } = params;
 	if (!id) throw redirect("/hub/galley");
 
@@ -75,6 +78,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 		const input = MealSchema.parse(inputData);
 		await updateMeal(context.cloudflare.env.DB, groupId, id, input, {
 			env: context.cloudflare.env,
+			userId: user.id,
 		});
 
 		return redirect(`/hub/galley/${id}`);

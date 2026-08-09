@@ -19,7 +19,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const contentType = request.headers.get("Content-Type");
 	let inputData: unknown;
 
@@ -64,6 +67,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				context.cloudflare.env.DB,
 				groupId,
 				inputs,
+				{
+					env: context.cloudflare.env,
+					userId: user.id,
+					skipCapacityCheck: true,
+				},
 			);
 			if (meals.length === 0) throw new Error("Failed to create meals");
 			return redirect("/hub/galley");
@@ -89,7 +97,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 				{ status: 403 },
 			);
 		}
-		const meal = await createMeal(context.cloudflare.env.DB, groupId, input);
+		const meal = await createMeal(context.cloudflare.env.DB, groupId, input, {
+			env: context.cloudflare.env,
+			userId: user.id,
+			skipCapacityCheck: true,
+		});
 		if (!meal) throw new Error("Failed to create meal");
 		return redirect(`/hub/galley/${meal.id}`);
 	} catch (e) {

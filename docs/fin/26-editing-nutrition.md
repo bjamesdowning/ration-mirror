@@ -12,9 +12,13 @@ If a line stays blank, you can still add the item and fill nutrition later in Ca
 
 On **Cargo → item detail → Edit**, the nutrition panel lets you set or clear per-serving energy and macros. Saving stores `user_override` with confidence treated as verified. Use this for manual adds, CSV imports that had no match, or correcting an AI estimate.
 
+When package mass is known, Ration also stores a derived **per 100 g** density so meal scaling stays stable if you later change the cargo quantity.
+
 ## Galley meals
 
 Meal detail and edit show recipe-level nutrition when the engine is on (computed from ingredients or stored snapshots). Adjust before cooking or planning if the panel looks wrong; overrides follow the same verified-override pattern.
+
+**Cargo overrides feed meal totals:** when a Galley ingredient matches a Cargo item (linked `cargoId` or exact normalized name) that has a `user_override` nutrition snapshot, meal recompute uses those macros instead of USDA. Saving or clearing a Cargo override refreshes affected meals in the org (bounded per request). USDA remains the default when no override match exists.
 
 ## Provenance after edit
 

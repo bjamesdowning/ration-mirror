@@ -6,16 +6,20 @@ export const NutritionSourceSchema = z.enum([
 	"user_override",
 ]);
 
+/** Nonnegative nutrient with a sane upper bound (package / per-100g). */
+const NutrientAmountSchema = z.number().nonnegative().max(100_000);
+const NullableNutrientAmountSchema = NutrientAmountSchema.nullable();
+
 export const NutrientValuesSchema = z.object({
-	energyKcal: z.number(),
-	proteinG: z.number(),
-	fatG: z.number(),
-	carbG: z.number(),
-	fiberG: z.number().nullable(),
-	sugarG: z.number().nullable(),
-	satFatG: z.number().nullable(),
-	sodiumMg: z.number().nullable(),
-	saltG: z.number().nullable(),
+	energyKcal: NutrientAmountSchema,
+	proteinG: NutrientAmountSchema,
+	fatG: NutrientAmountSchema,
+	carbG: NutrientAmountSchema,
+	fiberG: NullableNutrientAmountSchema,
+	sugarG: NullableNutrientAmountSchema,
+	satFatG: NullableNutrientAmountSchema,
+	sodiumMg: NullableNutrientAmountSchema,
+	saltG: NullableNutrientAmountSchema,
 });
 
 export const NutritionSnapshotSchema = z.object({
@@ -33,7 +37,8 @@ export type NutritionSnapshotInput = z.infer<typeof NutritionSnapshotSchema>;
 /** Optional cargo nutrition override on create/update (user_override path). */
 export const CargoNutritionOverrideSchema = NutritionSnapshotSchema.extend({
 	source: z.literal("user_override").default("user_override"),
-	verified: z.boolean().default(true),
+	/** Only true when the client explicitly marks an override save. */
+	verified: z.boolean().default(false),
 }).partial({
 	per100g: true,
 	perServing: true,
@@ -42,6 +47,12 @@ export const CargoNutritionOverrideSchema = NutritionSnapshotSchema.extend({
 	confidence: true,
 	verified: true,
 });
+
+/**
+ * Server-trusted AI-ingest context. Client booleans alone must not enable AI.
+ * Only `scan_review` (receipt / image scan review) may request AI estimate.
+ */
+export const NutritionIngestSourceSchema = z.enum(["scan_review"]);
 
 export const ConsumePortionsSchema = z.object({
 	servings: z.coerce.number().positive().max(100),
@@ -81,6 +92,16 @@ export type NutritionGoalUpsertInput = z.infer<
 	typeof NutritionGoalUpsertSchema
 >;
 
+/** Max inclusive span for nutrition summary queries (calendar days). */
+export const NUTRITION_SUMMARY_MAX_SPAN_DAYS = 93;
+
+function utcCalendarDayDiffInclusive(from: string, to: string): number {
+	const fromMs = Date.parse(`${from}T00:00:00.000Z`);
+	const toMs = Date.parse(`${to}T00:00:00.000Z`);
+	if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return Number.NaN;
+	return Math.floor((toMs - fromMs) / 86_400_000) + 1;
+}
+
 export const NutritionSummaryQuerySchema = z
 	.object({
 		from: z.string().regex(ISO_DATE_REGEX, "from must be YYYY-MM-DD"),
@@ -89,7 +110,16 @@ export const NutritionSummaryQuerySchema = z
 	.refine((v) => v.from <= v.to, {
 		message: "from must be on or before to",
 		path: ["from"],
-	});
+	})
+	.refine(
+		(v) =>
+			utcCalendarDayDiffInclusive(v.from, v.to) <=
+			NUTRITION_SUMMARY_MAX_SPAN_DAYS,
+		{
+			message: `Date range must be at most ${NUTRITION_SUMMARY_MAX_SPAN_DAYS} days`,
+			path: ["to"],
+		},
+	);
 
 export type NutritionSummaryQuery = z.infer<typeof NutritionSummaryQuerySchema>;
 
@@ -132,10 +162,14 @@ export type NutritionSummary = z.infer<typeof NutritionSummarySchema>;
 export const NutritionResolveRequestSchema = z.object({
 	names: z.array(z.string().min(1).max(200)).min(1).max(50),
 	/**
-	 * When true and nutrition-ai-estimate is on, AI-fill USDA misses.
-	 * Only set from AI ingest UIs (receipt scan review).
+	 * @deprecated Ignored server-side. Use `ingestSource: "scan_review"`.
 	 */
 	allowAiEstimate: z.boolean().optional(),
+	/**
+	 * Server-gated AI ingest path. AI estimate only when this is `scan_review`
+	 * and `nutrition-ai-estimate` is on.
+	 */
+	ingestSource: NutritionIngestSourceSchema.optional(),
 });
 
 export type NutritionResolveRequest = z.infer<

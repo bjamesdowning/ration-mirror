@@ -28,6 +28,13 @@ export {
 	previousUtcCalendarDay,
 } from "./goal-effective";
 export {
+	type CargoOverrideCandidate,
+	nutrientsPer100gFromCargoOverride,
+	nutrientsPer100gFromPackageTotals,
+	pickBestCargoOverrideForIngredient,
+	withDerivedPer100g,
+} from "./override-scale";
+export {
 	applyUserOverrideToSnapshot,
 	blankCargoNutritionSnapshot,
 	formatCoveragePercent,

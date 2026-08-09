@@ -147,7 +147,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 	const formData = await request.formData();
 	const intent = formData.get("intent");
 
@@ -179,6 +182,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			const input = MealSchema.parse(inputData);
 			await updateMeal(context.cloudflare.env.DB, groupId, mealId, input, {
 				env: context.cloudflare.env,
+				userId: user.id,
 			});
 			return { success: true };
 		} catch (error) {

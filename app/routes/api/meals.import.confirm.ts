@@ -11,7 +11,10 @@ import { ImportConfirmRequestSchema } from "~/lib/schemas/recipe-import";
 import type { Route } from "./+types/meals.import.confirm";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	const { groupId } = await requireActiveGroup(context, request);
+	const {
+		groupId,
+		session: { user },
+	} = await requireActiveGroup(context, request);
 
 	if (request.method !== "POST") {
 		return data({ error: "Method not allowed" }, { status: 405 });
@@ -38,6 +41,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await confirmRecipeImport(context.cloudflare.env, {
 				organizationId: groupId,
 				requestId: parsed.data.requestId,
+				userId: user.id,
 			}),
 		);
 	} catch (err) {

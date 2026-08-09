@@ -204,6 +204,19 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 		keyPrefix: "rate:inventory_batch",
 		failClosed: true,
 	},
+	/** Nutrition name resolve (USDA + optional AI) — spend-sensitive. */
+	nutrition_resolve: {
+		windowMs: 60_000,
+		maxRequests: 20,
+		keyPrefix: "rate:nutrition_resolve",
+		failClosed: true,
+	},
+	/** Nutrition day summary reads. */
+	nutrition_summary: {
+		windowMs: 60_000,
+		maxRequests: 60,
+		keyPrefix: "rate:nutrition_summary",
+	},
 	automation: {
 		windowMs: 60_000, // 1 minute
 		maxRequests: 10,

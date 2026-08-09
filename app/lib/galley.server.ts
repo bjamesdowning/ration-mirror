@@ -93,6 +93,7 @@ export async function applyGalleyImport(
 	organizationId: string,
 	manifest: GalleyManifest,
 	env?: Env,
+	options?: { userId?: string | null },
 ): Promise<ApplyGalleyImportResult> {
 	const result: ApplyGalleyImportResult = {
 		imported: 0,
@@ -142,6 +143,8 @@ export async function applyGalleyImport(
 		tagIdsBySlug,
 		skipReturnRead: true as const,
 		env,
+		userId: options?.userId,
+		skipCapacityCheck: true as const,
 	};
 
 	const toCreate = meals.filter((m) => !m.id || !existingIds.has(m.id));
@@ -225,7 +228,7 @@ export async function applyGalleyImport(
 					await updateMeal(db, organizationId, rec.id, mealInput, writeOptions);
 					result.updated += 1;
 				} else {
-					await createMeal(db, organizationId, mealInput, env, writeOptions);
+					await createMeal(db, organizationId, mealInput, writeOptions);
 					result.imported += 1;
 				}
 			}

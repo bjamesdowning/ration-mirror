@@ -130,6 +130,15 @@ describe("NutritionSummaryQuerySchema", () => {
 			}),
 		).toThrow();
 	});
+
+	it("rejects spans longer than 93 days", () => {
+		expect(() =>
+			NutritionSummaryQuerySchema.parse({
+				from: "2026-01-01",
+				to: "2026-05-01",
+			}),
+		).toThrow();
+	});
 });
 
 describe("NutritionGoalUpsertSchema", () => {
@@ -182,12 +191,21 @@ describe("NutritionResolveRequestSchema", () => {
 		expect(parsed.names).toEqual(["apple", "banana"]);
 	});
 
-	it("accepts optional allowAiEstimate", () => {
+	it("accepts optional ingestSource scan_review", () => {
+		const parsed = NutritionResolveRequestSchema.parse({
+			names: ["mystery snack"],
+			ingestSource: "scan_review",
+		});
+		expect(parsed.ingestSource).toBe("scan_review");
+	});
+
+	it("still accepts deprecated allowAiEstimate without enabling ingestSource", () => {
 		const parsed = NutritionResolveRequestSchema.parse({
 			names: ["mystery snack"],
 			allowAiEstimate: true,
 		});
 		expect(parsed.allowAiEstimate).toBe(true);
+		expect(parsed.ingestSource).toBeUndefined();
 	});
 
 	it("rejects empty names", () => {

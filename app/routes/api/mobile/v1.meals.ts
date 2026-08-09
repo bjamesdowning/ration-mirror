@@ -111,6 +111,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			context.cloudflare.env.DB,
 			organizationId,
 			input,
+			{
+				env: context.cloudflare.env,
+				userId,
+				skipCapacityCheck: true,
+			},
 		);
 		return { meal };
 	} catch (e) {

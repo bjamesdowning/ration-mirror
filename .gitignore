@@ -40,6 +40,10 @@ worker-configuration.d.ts
 # Local-only account seed utilities (not pushed to GitLab)
 /scripts/seed-account/
 
+# USDA FDC raw downloads + generated SQL (too large for git)
+/nutrition-db/raw/
+/nutrition-db/generated/
+
 # Local Python venvs (e.g. App Store screenshot framing)
 **/.venv/
 **/__pycache__/

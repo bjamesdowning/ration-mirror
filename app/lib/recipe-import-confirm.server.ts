@@ -11,13 +11,14 @@ import { MealSchema } from "~/lib/schemas/meal";
 export interface ConfirmRecipeImportInput {
 	organizationId: string;
 	requestId: string;
+	userId?: string | null;
 }
 
 export async function confirmRecipeImport(
 	env: Cloudflare.Env,
 	input: ConfirmRecipeImportInput,
 ) {
-	const { organizationId, requestId } = input;
+	const { organizationId, requestId, userId } = input;
 
 	const job = await getQueueJob(env.DB, requestId);
 	if (!job || job.organizationId !== organizationId) {
@@ -74,12 +75,10 @@ export async function confirmRecipeImport(
 		};
 	}
 
-	const created = await createMeal(
-		env.DB,
-		organizationId,
-		extractedRecipe,
+	const created = await createMeal(env.DB, organizationId, extractedRecipe, {
 		env,
-	);
+		userId,
+	});
 	if (!created) {
 		throw data({ error: "Failed to create meal" }, { status: 500 });
 	}

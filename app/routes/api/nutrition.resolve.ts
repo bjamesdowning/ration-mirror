@@ -3,6 +3,8 @@ import { requireActiveGroup } from "~/lib/auth.server";
 import { handleApiError } from "~/lib/error-handler";
 import { assertFeatureEnabled } from "~/lib/feature-flags/assert-enabled.server";
 import { buildFlagContext } from "~/lib/feature-flags/flags.server";
+import { NUTRITION_RESOLVE_CONCURRENCY } from "~/lib/nutrition/constants";
+import { mapWithConcurrency } from "~/lib/nutrition/map-concurrency";
 import { maybeResolveCargoNutrition } from "~/lib/nutrition/persist.server";
 import type { NutritionSnapshot } from "~/lib/nutrition/types";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -29,7 +31,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const rateLimitResult = await checkRateLimit(
 		env.RATION_KV,
-		"inventory_batch",
+		"nutrition_resolve",
 		user.id,
 	);
 	if (!rateLimitResult.allowed) {
@@ -53,10 +55,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 			...new Set(parsed.data.names.map((n) => n.trim())),
 		].filter(Boolean);
 
-		const allowAiEstimate = parsed.data.allowAiEstimate === true;
+		// Ignore client allowAiEstimate — only scan_review ingest path may AI-fill.
+		const allowAiEstimate = parsed.data.ingestSource === "scan_review";
 
-		const entries = await Promise.all(
-			uniqueNames.map(async (name) => {
+		const entries = await mapWithConcurrency(
+			uniqueNames,
+			NUTRITION_RESOLVE_CONCURRENCY,
+			async (name) => {
 				const snapshot = await maybeResolveCargoNutrition(
 					env,
 					name,
@@ -68,7 +73,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 					},
 				);
 				return [name, snapshot] as const;
-			}),
+			},
 		);
 
 		const snapshots: Record<string, NutritionSnapshot | null> = {};

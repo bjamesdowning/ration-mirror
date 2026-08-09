@@ -113,7 +113,7 @@ describe("applyGalleyImport", () => {
 			"freezer",
 		]);
 		expect(createMeal).toHaveBeenCalledTimes(2);
-		expect(createMeal.mock.calls[0][4]).toEqual(
+		expect(createMeal.mock.calls[0][3]).toEqual(
 			expect.objectContaining({ skipReturnRead: true }),
 		);
 	});

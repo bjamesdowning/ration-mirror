@@ -72,7 +72,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const meal = await createMeal(context.cloudflare.env.DB, groupId, input);
+		const meal = await createMeal(context.cloudflare.env.DB, groupId, input, {
+			env: context.cloudflare.env,
+			userId: user.id,
+			skipCapacityCheck: true,
+		});
 		return { meal };
 	} catch (e) {
 		return handleApiError(e);

@@ -40,7 +40,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const { items, allowAiNutritionEstimate } = result.data;
+		const { items, ingestSource } = result.data;
 		const ingestItems: IngestItem[] = items.map((it) => ({
 			name: it.name,
 			quantity: it.quantity,
@@ -62,7 +62,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					context.cloudflare.ctx,
 				),
 				userId: session.user.id,
-				allowAiNutritionEstimate: allowAiNutritionEstimate === true,
+				// Ignore client allowAiNutritionEstimate — scan_review only.
+				allowAiNutritionEstimate: ingestSource === "scan_review",
 			},
 		);
 

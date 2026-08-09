@@ -35,6 +35,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return await confirmRecipeImport(context.cloudflare.env, {
 			organizationId,
 			requestId: parsed.requestId,
+			userId,
 		});
 	} catch (e) {
 		return handleApiError(e);

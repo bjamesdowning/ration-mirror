@@ -32,7 +32,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		const body = await request.json();
-		const { items, allowAiNutritionEstimate } = BatchAddCargoSchema.parse(body);
+		const { items, ingestSource } = BatchAddCargoSchema.parse(body);
 		const ingestItems: IngestItem[] = items.map((it) => ({
 			name: it.name,
 			quantity: it.quantity,
@@ -54,7 +54,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					context.cloudflare.ctx,
 				),
 				userId,
-				allowAiNutritionEstimate: allowAiNutritionEstimate === true,
+				// Ignore client allowAiNutritionEstimate — scan_review only.
+				allowAiNutritionEstimate: ingestSource === "scan_review",
 			},
 		);
 

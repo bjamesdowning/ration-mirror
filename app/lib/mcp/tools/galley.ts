@@ -31,13 +31,10 @@ export function createGalleyToolDefs(env: McpToolsEnv) {
 			audit: true,
 			handler: async (ctx, a) => {
 				const parsed = McpCreateMealSchema.parse(a.meal);
-				const created = await createMeal(
-					env.DB,
-					ctx.organizationId,
-					parsed,
+				const created = await createMeal(env.DB, ctx.organizationId, parsed, {
 					env,
-					{ userId: ctx.userId },
-				);
+					userId: ctx.userId,
+				});
 				return ok("create_meal", {
 					id: created?.id,
 					name: created?.name,

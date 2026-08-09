@@ -185,7 +185,9 @@ export function ScanResultsModal({
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						names,
-						...(allowAiNutritionEstimate ? { allowAiEstimate: true } : {}),
+						...(allowAiNutritionEstimate
+							? { ingestSource: "scan_review" }
+							: {}),
 					}),
 				});
 				if (!response.ok || cancelled) return;
@@ -237,7 +239,7 @@ export function ScanResultsModal({
 
 		const batchBody = JSON.stringify({
 			items: itemsToAdd,
-			...(allowAiNutritionEstimate ? { allowAiNutritionEstimate: true } : {}),
+			...(allowAiNutritionEstimate ? { ingestSource: "scan_review" } : {}),
 		});
 		fetcher.submit(batchBody, {
 			method: "POST",

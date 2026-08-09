@@ -57,10 +57,14 @@ export const BatchAddCargoSchema = z.object({
 		}),
 	),
 	/**
-	 * AI ingest only (receipt image/pdf). When true and nutrition-ai-estimate
-	 * is on, USDA misses may be AI-estimated. Never set for CSV/JSON import.
+	 * @deprecated Ignored server-side. Use `ingestSource: "scan_review"`.
 	 */
 	allowAiNutritionEstimate: z.boolean().optional(),
+	/**
+	 * Server-gated AI ingest path. AI estimate only when this is `scan_review`
+	 * and `nutrition-ai-estimate` is on.
+	 */
+	ingestSource: z.enum(["scan_review"]).optional(),
 });
 
 export type BatchAddCargoInput = z.infer<typeof BatchAddCargoSchema>;

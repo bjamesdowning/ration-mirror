@@ -14,8 +14,35 @@ import {
 /** 7 days — covers RevenueCat + Stripe retry windows. */
 export const BILLING_FULFILLMENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+/** 90 days — last active org for RevenueCat credit-pack routing. */
+export const BILLING_LAST_ACTIVE_ORG_TTL_SECONDS = 90 * 24 * 60 * 60;
+
 const RC_WEBHOOK_PREFIX = "billing:rc:webhook";
 const FULFILL_PREFIX = "billing:fulfill";
+const LAST_ACTIVE_ORG_PREFIX = "billing:lastActiveOrg";
+
+export function lastActiveBillingOrgKey(userId: string): string {
+	return `${LAST_ACTIVE_ORG_PREFIX}:${userId}`;
+}
+
+/** Persist the org the user last authenticated against (mobile token issue/refresh). */
+export async function recordLastActiveBillingOrg(
+	kv: KVNamespace,
+	userId: string,
+	organizationId: string,
+): Promise<void> {
+	await kv.put(lastActiveBillingOrgKey(userId), organizationId, {
+		expirationTtl: BILLING_LAST_ACTIVE_ORG_TTL_SECONDS,
+	});
+}
+
+export async function readLastActiveBillingOrg(
+	kv: KVNamespace,
+	userId: string,
+): Promise<string | null> {
+	const value = await kv.get(lastActiveBillingOrgKey(userId));
+	return typeof value === "string" && value.length > 0 ? value : null;
+}
 
 export function revenueCatFulfillmentKey(eventId: string): string {
 	return `rc:${eventId}`;

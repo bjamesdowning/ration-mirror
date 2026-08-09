@@ -2052,6 +2052,21 @@ When enabled:
 - Stripe: checkout metadata `app_user_id` + `userId`
 - Same user on web and iOS shares one `crew_member` entitlement
 
+#### Credit-pack organization routing
+
+RevenueCat credit-pack webhooks (`NON_RENEWING_PURCHASE`) credit an organization, not a user. Resolution order (each candidate must be a current membership):
+
+1. RevenueCat subscriber attribute `organization_id` (iOS active group; also set on Stripe → RC sync from checkout metadata)
+2. KV `billing:lastActiveOrg:{userId}` (mobile token issue/refresh and web checkout)
+3. Most recent non-expired web session with `active_organization_id`
+4. First owner membership, else any membership
+
+#### Cross-store subscription management (iOS)
+
+- App Store–managed Crew: iOS shows Apple’s manage-subscriptions sheet.
+- Stripe/web-managed Crew: iOS shows plain informational copy pointing users to `ration.mayutic.com` → Settings (no external purchase link). When RevenueCat has no store on the entitlement but D1 has `stripeCustomerId`, the API reports `management.store: "stripe"` so older app builds also hide the empty Apple sheet.
+- Active Stripe Crew blocks a second App Store Crew purchase (`canPurchaseSubscription: false`).
+
 #### API reference
 
 | Endpoint | Auth | Purpose |

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	BillingAccountSummarySchema,
+	organizationIdFromSubscriberAttributes,
 	RevenueCatWebhookEventSchema,
 } from "~/lib/schemas/billing";
 import { MobileBillingStatusSchema } from "~/lib/schemas/mobile/billing";
@@ -79,6 +80,44 @@ describe("RevenueCatWebhookEventSchema", () => {
 			},
 		});
 		expect(parsed.success).toBe(true);
+	});
+
+	it("parses subscriber_attributes and extracts organization_id", () => {
+		const parsed = RevenueCatWebhookEventSchema.safeParse({
+			event: {
+				type: "NON_RENEWING_PURCHASE",
+				id: "evt_attrs",
+				app_user_id: "user_123",
+				product_id: "credits_s",
+				subscriber_attributes: {
+					organization_id: {
+						value: "org_active",
+						updated_at_ms: 1_700_000_000_000,
+					},
+					$email: {
+						value: "crew@example.com",
+						updated_at_ms: 1_700_000_000_000,
+					},
+				},
+			},
+		});
+		expect(parsed.success).toBe(true);
+		if (!parsed.success) return;
+		expect(
+			organizationIdFromSubscriberAttributes(
+				parsed.data.event.subscriber_attributes,
+			),
+		).toBe("org_active");
+	});
+
+	it("returns null organization_id when subscriber_attributes omit it", () => {
+		expect(organizationIdFromSubscriberAttributes(null)).toBeNull();
+		expect(organizationIdFromSubscriberAttributes({})).toBeNull();
+		expect(
+			organizationIdFromSubscriberAttributes({
+				organization_id: { value: "   " },
+			}),
+		).toBeNull();
 	});
 });
 

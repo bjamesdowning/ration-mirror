@@ -1,5 +1,6 @@
 export const BILLING_ERROR_CODES = {
 	ACTIVE_APP_STORE_SUB: "active_app_store_subscription",
+	ACTIVE_STRIPE_SUB: "active_stripe_subscription",
 	BILLING_UNAVAILABLE: "billing_unavailable",
 } as const;
 

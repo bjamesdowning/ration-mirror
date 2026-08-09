@@ -33,12 +33,16 @@ import {
 import {
 	type BillingAccountSummary,
 	BillingAccountSummarySchema,
+	organizationIdFromSubscriberAttributes,
 	RevenueCatWebhookEventSchema,
 } from "~/lib/schemas/billing";
 import { emitCreditPurchase } from "~/lib/telemetry.server";
 import type { TierSlug } from "~/lib/tiers.server";
 
 export type { BillingAccountSummary };
+
+const STRIPE_PURCHASE_BLOCK_REASON =
+	"You already have an existing web subscription. Manage it on ration.mayutic.com in a browser.";
 
 export type BillingStatus = {
 	tier: string;
@@ -237,40 +241,47 @@ export async function getBillingStatusForUser(
 					.cancelAtPeriodEnd;
 
 	if (!isRevenueCatApiConfigured(env)) {
-		return emptyBillingStatus(accountTier, {
+		const status = emptyBillingStatus(accountTier, {
 			canPurchaseSubscription: true,
 			purchaseBlockReason: null,
 			billingUnavailable: false,
 			cancelAtPeriodEnd,
 		});
+		return blockAppStorePurchaseWhenStripeActive(
+			await applyStripeStoreFallback(env, userId, status),
+		);
 	}
 
 	const subscriber = await getSubscriber(env, userId);
 	if (subscriber === null) {
-		return emptyBillingStatus(accountTier, {
+		const status = emptyBillingStatus(accountTier, {
 			canPurchaseSubscription: false,
 			purchaseBlockReason:
 				"Unable to load billing status. Pull to refresh or try again shortly.",
 			billingUnavailable: true,
 			cancelAtPeriodEnd,
 		});
+		return blockAppStorePurchaseWhenStripeActive(
+			await applyStripeStoreFallback(env, userId, status),
+		);
 	}
 
 	const crew = crewEntitlementFromSubscriber(subscriber.entitlements);
 	const crewActive = crew?.is_active === true || accountTier === "crew_member";
 	const purchaseCheck = await assertCanPurchaseStripeSubscription(env, userId);
+	const rcStore = crew?.store ?? null;
 
-	return {
+	let status: BillingStatus = {
 		tier: accountTier,
 		entitlements: {
 			crew_member: {
 				active: crewActive,
 				expiresAt: crew?.expires_date ?? null,
-				store: crew?.store ?? null,
+				store: rcStore,
 			},
 		},
 		management: {
-			store: crew?.store ?? null,
+			store: rcStore,
 			url: crew?.management_url ?? subscriber.management_url ?? null,
 		},
 		canPurchaseSubscription: purchaseCheck.allowed,
@@ -279,6 +290,67 @@ export async function getBillingStatusForUser(
 		cancelAtPeriodEnd:
 			cancelAtPeriodEnd || crewCancelAtPeriodEndFromSubscriber(subscriber),
 	};
+
+	status = await applyStripeStoreFallback(env, userId, status);
+	return blockAppStorePurchaseWhenStripeActive(status);
+}
+
+/**
+ * When D1 has Crew active but RC has no store, derive Stripe provenance from
+ * `user.stripeCustomerId` so iOS can show web-managed copy instead of the
+ * empty Apple subscriptions sheet.
+ */
+async function applyStripeStoreFallback(
+	env: Env,
+	userId: string,
+	status: BillingStatus,
+): Promise<BillingStatus> {
+	const crewActive = status.entitlements.crew_member.active;
+	if (!crewActive || status.management.store) {
+		return status;
+	}
+
+	const db = drizzle(env.DB, { schema });
+	const userRow = await db.query.user.findFirst({
+		where: eq(schema.user.id, userId),
+		columns: { stripeCustomerId: true },
+	});
+	if (!userRow?.stripeCustomerId) {
+		return status;
+	}
+
+	return {
+		...status,
+		entitlements: {
+			crew_member: {
+				...status.entitlements.crew_member,
+				store: "stripe",
+			},
+		},
+		management: {
+			...status.management,
+			store: "stripe",
+		},
+	};
+}
+
+/** Prevent App Store double-subscribe when Crew is already Stripe-managed. */
+function blockAppStorePurchaseWhenStripeActive(
+	status: BillingStatus,
+): BillingStatus {
+	const store = status.management.store?.toLowerCase() ?? "";
+	if (
+		status.entitlements.crew_member.active &&
+		store === "stripe" &&
+		status.canPurchaseSubscription
+	) {
+		return {
+			...status,
+			canPurchaseSubscription: false,
+			purchaseBlockReason: STRIPE_PURCHASE_BLOCK_REASON,
+		};
+	}
+	return status;
 }
 
 export type RevenueCatWebhookResult = {
@@ -341,7 +413,12 @@ export async function processRevenueCatWebhookEvent(
 		return { handled: true, fulfilled: false };
 	}
 
-	const organizationId = await resolveBillingOrganizationId(env, userId);
+	const preferredOrganizationId = organizationIdFromSubscriberAttributes(
+		event.subscriber_attributes,
+	);
+	const organizationId = await resolveBillingOrganizationId(env, userId, {
+		preferredOrganizationId,
+	});
 	const entitlementIds = event.entitlement_ids ?? [];
 	const hasCrewEntitlement = entitlementIds.includes(
 		RC_ENTITLEMENT_CREW_MEMBER,
@@ -404,6 +481,20 @@ export async function processRevenueCatWebhookEvent(
 				emitCreditPurchase(productId ?? "unknown", credits);
 				return { handled: true, fulfilled: true };
 			}
+
+			const reason = !productId
+				? "missing_product"
+				: !credits
+					? "unknown_product"
+					: "no_organization";
+			log.warn("RevenueCat credit pack not fulfilled", {
+				type: event.type,
+				eventId: redactId(event.id),
+				appUserId: redactId(userId),
+				productId: productId ?? null,
+				reason,
+			});
+			return { handled: true, fulfilled: false };
 		}
 
 		return { handled: true, fulfilled: false };

@@ -1,4 +1,5 @@
 import { RC_ENTITLEMENT_CREW_MEMBER } from "~/lib/billing.constants";
+import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import { log, redactId } from "~/lib/logging.server";
 
 const RC_API_BASE = "https://api.revenuecat.com/v1";
@@ -124,6 +125,51 @@ export async function getSubscriber(
 }
 
 /**
+ * Set custom subscriber attributes via REST (secret key).
+ * Used so Stripe → RC sync carries `organization_id` into subsequent webhooks.
+ */
+export async function setRevenueCatSubscriberAttributes(
+	env: Env,
+	appUserId: string,
+	attributes: Record<string, string>,
+): Promise<boolean> {
+	if (!isRevenueCatApiConfigured(env)) return false;
+	const entries = Object.entries(attributes).filter(
+		([, value]) => typeof value === "string" && value.trim().length > 0,
+	);
+	if (entries.length === 0) return false;
+
+	const updatedAtMs = Date.now();
+	const response = await fetch(
+		`${RC_API_BASE}/subscribers/${encodeURIComponent(appUserId)}/attributes`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${env.REVENUECAT_API_KEY}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				attributes: Object.fromEntries(
+					entries.map(([key, value]) => [
+						key,
+						{ value: value.trim(), updated_at_ms: updatedAtMs },
+					]),
+				),
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		log.warn("RevenueCat setSubscriberAttributes failed", {
+			appUserId: redactId(appUserId),
+			status: response.status,
+		});
+		return false;
+	}
+	return true;
+}
+
+/**
  * Import a Stripe subscription or checkout session into RevenueCat.
  * @see https://www.revenuecat.com/docs/web/integrations/stripe/track-external-purchases
  */
@@ -165,14 +211,35 @@ export async function syncStripePurchase(
 	return true;
 }
 
+export type SyncStripePurchaseOptions = {
+	/** Checkout / active org — stamped onto RC so credit webhooks route correctly. */
+	organizationId?: string | null;
+};
+
 /** Best-effort sync — never throws; used from Stripe webhook after existing fulfillment. */
 export async function syncStripePurchaseBestEffort(
 	env: Env,
 	appUserId: string,
 	fetchToken: string,
+	options?: SyncStripePurchaseOptions,
 ): Promise<void> {
 	if (!appUserId || !fetchToken) return;
 	try {
+		const organizationId = options?.organizationId?.trim();
+		if (organizationId) {
+			await setRevenueCatSubscriberAttributes(env, appUserId, {
+				organization_id: organizationId,
+			});
+			try {
+				await recordLastActiveBillingOrg(
+					env.RATION_KV,
+					appUserId,
+					organizationId,
+				);
+			} catch {
+				// KV is best-effort; attribute + receipt sync still proceed.
+			}
+		}
 		await syncStripePurchase(env, appUserId, fetchToken);
 	} catch (error) {
 		log.warn("RevenueCat syncStripePurchaseBestEffort error", {

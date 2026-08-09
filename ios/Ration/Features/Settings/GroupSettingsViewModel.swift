@@ -88,7 +88,13 @@ final class GroupSettingsViewModel {
             newGroupName = ""
             _ = await env.session.load(api: api)
             if let org = env.session.session?.organizations.first(where: { $0.id == response.organizationId }) {
-                try await env.session.activateOrg(org, api: api, auth: env.auth, snapshots: env.snapshots)
+                try await env.session.activateOrg(
+                    org,
+                    api: api,
+                    auth: env.auth,
+                    snapshots: env.snapshots,
+                    billing: env.billing
+                )
             }
             session = env.session.session
             members = try await api.groupMembers().members
@@ -286,7 +292,13 @@ final class GroupSettingsViewModel {
     func activateOrg(_ org: OrgMembership, env: AppEnvironment) async {
         guard !org.isActive else { return }
         do {
-            try await env.session.activateOrg(org, api: env.api, auth: env.auth, snapshots: env.snapshots)
+            try await env.session.activateOrg(
+                org,
+                api: env.api,
+                auth: env.auth,
+                snapshots: env.snapshots,
+                billing: env.billing
+            )
             session = env.session.session
             members = try await env.api.groupMembers().members
             inviteLink = nil

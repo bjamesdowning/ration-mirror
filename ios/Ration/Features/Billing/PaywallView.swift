@@ -303,23 +303,33 @@ struct PaywallView: View {
             VStack(spacing: 8) {
                 if status.isCancelAtPeriodEnd {
                     Text("Cancelled — access continues").rationHeadline()
-                    if let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
-                        Text("Your Crew membership ends on \(ends). Use Manage subscription below to renew through Apple.")
+                    if isAppStoreManaged(status) {
+                        if let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
+                            Text("Your Crew membership ends on \(ends). Use Manage subscription below to renew through Apple.")
+                                .rationCaption()
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Text("Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple.")
+                                .rationCaption()
+                                .multilineTextAlignment(.center)
+                        }
+                    } else if let ends = formattedExpiry(status.entitlements.crew_member.expiresAt) {
+                        Text("Your Crew membership ends on \(ends). Manage renewal on the web at ration.mayutic.com → Settings.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     } else {
-                        Text("Your Crew membership is set to end after the current period. Use Manage subscription below to renew through Apple.")
+                        Text("Your Crew membership is set to end after the current period. Manage renewal on the web at ration.mayutic.com → Settings.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     }
                 } else {
                     Text("You're a Crew Member").rationHeadline()
-                    if status.management.store == "stripe" {
-                        Text("Your existing web subscription is managed on the web. Open ration.mayutic.com on a browser to change or cancel that subscription — new iOS purchases use the App Store.")
+                    if isAppStoreManaged(status) {
+                        Text("Use Manage subscription below to change or cancel through Apple.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     } else {
-                        Text("Use Manage subscription below to change or cancel through Apple.")
+                        Text("Your subscription is managed on the web. Open ration.mayutic.com → Settings in a browser to change or cancel. New iOS purchases use the App Store.")
                             .rationCaption()
                             .multilineTextAlignment(.center)
                     }
@@ -406,8 +416,13 @@ struct PaywallView: View {
 
     private func shouldShowManageSubscription(_ status: BillingStatus?) -> Bool {
         guard let status, status.isPersonalCrewActive else { return false }
-        // Apple sheet only for App Store–managed Crew; Stripe stays web-managed.
-        return status.management.store != "stripe"
+        // Apple sheet only for genuine App Store Crew (allowlist).
+        return isAppStoreManaged(status)
+    }
+
+    private func isAppStoreManaged(_ status: BillingStatus) -> Bool {
+        let store = status.management.store?.lowercased()
+        return store == "app_store" || store == "mac_app_store"
     }
 
     @MainActor

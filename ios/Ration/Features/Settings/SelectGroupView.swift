@@ -106,7 +106,8 @@ struct SelectGroupView: View {
                 org,
                 api: env.api,
                 auth: env.auth,
-                snapshots: env.snapshots
+                snapshots: env.snapshots,
+                billing: env.billing
             )
             env.session.completeOrgSelection()
             Haptics.success()
@@ -135,7 +136,8 @@ struct SelectGroupView: View {
                 org,
                 api: env.api,
                 auth: env.auth,
-                snapshots: env.snapshots
+                snapshots: env.snapshots,
+                billing: env.billing
             )
             env.session.completeOrgSelection()
             Haptics.success()

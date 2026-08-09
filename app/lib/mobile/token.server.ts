@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { jwtVerify, SignJWT } from "jose";
 import * as schema from "~/db/schema";
+import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import {
 	MOBILE_ACCESS_TTL_SEC,
 	MOBILE_AUTH_CODE_KV_PREFIX,
@@ -86,6 +87,14 @@ export async function issueMobileTokenPair(
 		userId,
 		organizationId,
 	});
+
+	// Best-effort: used by RevenueCat webhook credit routing when the event
+	// has no organization_id subscriber attribute.
+	try {
+		await recordLastActiveBillingOrg(env.RATION_KV, userId, organizationId);
+	} catch {
+		// Token issue must not fail if KV is unavailable.
+	}
 
 	return {
 		accessToken,

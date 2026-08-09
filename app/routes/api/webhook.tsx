@@ -96,13 +96,19 @@ export async function action({ request, context }: Route.ActionArgs) {
 				typeof session.metadata?.userId === "string"
 					? session.metadata.userId
 					: null;
+			const organizationId =
+				typeof session.metadata?.organizationId === "string"
+					? session.metadata.organizationId
+					: null;
 
 			if (metadataType === "subscription") {
 				if (rcFulfillment) {
 					const subscriptionId = session.subscription;
 					if (typeof subscriptionId === "string" && userId) {
 						context.cloudflare.ctx.waitUntil(
-							syncStripePurchaseBestEffort(env, userId, subscriptionId),
+							syncStripePurchaseBestEffort(env, userId, subscriptionId, {
+								organizationId,
+							}),
 						);
 					}
 					log.info(
@@ -128,7 +134,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 					const subscriptionId = session.subscription;
 					if (typeof subscriptionId === "string" && result.userId) {
 						context.cloudflare.ctx.waitUntil(
-							syncStripePurchaseBestEffort(env, result.userId, subscriptionId),
+							syncStripePurchaseBestEffort(env, result.userId, subscriptionId, {
+								organizationId: result.organizationId ?? organizationId,
+							}),
 						);
 					}
 				}
@@ -146,7 +154,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 				}
 				if (userId) {
 					context.cloudflare.ctx.waitUntil(
-						syncStripePurchaseBestEffort(env, userId, session.id),
+						syncStripePurchaseBestEffort(env, userId, session.id, {
+							organizationId,
+						}),
 					);
 				}
 				log.info(
@@ -180,7 +190,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 				});
 				if (result.userId) {
 					context.cloudflare.ctx.waitUntil(
-						syncStripePurchaseBestEffort(env, result.userId, session.id),
+						syncStripePurchaseBestEffort(env, result.userId, session.id, {
+							organizationId: result.organizationId ?? organizationId,
+						}),
 					);
 				}
 			}

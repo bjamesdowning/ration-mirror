@@ -1,13 +1,70 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "~/db/schema";
+import { readLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import { invalidateTierCache } from "~/lib/capacity.server";
+import { hasOrgMembership } from "~/lib/org-membership.server";
 
+export type ResolveBillingOrganizationOptions = {
+	/** Preferred org from RevenueCat subscriber attribute `organization_id`. */
+	preferredOrganizationId?: string | null;
+};
+
+async function membershipOrganizationId(
+	env: Env,
+	userId: string,
+	organizationId: string | null | undefined,
+): Promise<string | null> {
+	if (!organizationId) return null;
+	const ok = await hasOrgMembership(env.DB, userId, organizationId);
+	return ok ? organizationId : null;
+}
+
+/**
+ * Resolve which organization should receive billing fulfillment (credits / crew).
+ *
+ * Priority (each candidate must be a current membership):
+ * 1. RevenueCat subscriber attribute `organization_id`
+ * 2. KV last-active org from mobile token issue/refresh
+ * 3. Most recent non-expired web session with an active organization
+ * 4. First owner membership, else any membership
+ */
 export async function resolveBillingOrganizationId(
 	env: Env,
 	userId: string,
+	options?: ResolveBillingOrganizationOptions,
 ): Promise<string | null> {
+	const preferred = await membershipOrganizationId(
+		env,
+		userId,
+		options?.preferredOrganizationId,
+	);
+	if (preferred) return preferred;
+
+	const kvOrg = await membershipOrganizationId(
+		env,
+		userId,
+		await readLastActiveBillingOrg(env.RATION_KV, userId),
+	);
+	if (kvOrg) return kvOrg;
+
 	const db = drizzle(env.DB, { schema });
+	const sessionRow = await db.query.session.findFirst({
+		where: and(
+			eq(schema.session.userId, userId),
+			isNotNull(schema.session.activeOrganizationId),
+			gt(schema.session.expiresAt, new Date()),
+		),
+		orderBy: [desc(schema.session.updatedAt)],
+		columns: { activeOrganizationId: true },
+	});
+	const sessionOrg = await membershipOrganizationId(
+		env,
+		userId,
+		sessionRow?.activeOrganizationId,
+	);
+	if (sessionOrg) return sessionOrg;
+
 	const ownerMembership = await db.query.member.findFirst({
 		where: and(
 			eq(schema.member.userId, userId),

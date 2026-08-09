@@ -28,11 +28,36 @@ vi.mock("drizzle-orm/d1", () => ({
 	})),
 }));
 
+const mockResolveBillingOrganizationId = vi.fn();
+const mockAddCredits = vi.fn();
+
+vi.mock("~/lib/billing-tier.server", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/lib/billing-tier.server")>();
+	return {
+		...actual,
+		resolveBillingOrganizationId: (...args: unknown[]) =>
+			mockResolveBillingOrganizationId(...args),
+	};
+});
+
+vi.mock("~/lib/ledger.server", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("~/lib/ledger.server")>();
+	return {
+		...actual,
+		addCredits: (...args: unknown[]) => mockAddCredits(...args),
+	};
+});
+
 describe("processRevenueCatWebhookEvent", () => {
 	beforeEach(() => {
 		mockUserFindFirst.mockReset();
 		mockUserUpdate.mockReset();
 		mockUserUpdate.mockResolvedValue(undefined);
+		mockResolveBillingOrganizationId.mockReset();
+		mockAddCredits.mockReset();
+		mockResolveBillingOrganizationId.mockResolvedValue("org_1");
+		mockAddCredits.mockResolvedValue(undefined);
 	});
 
 	it("acknowledges valid events without fulfilling when flag is off", async () => {
@@ -54,6 +79,52 @@ describe("processRevenueCatWebhookEvent", () => {
 		const env = createMockEnv();
 		const result = await processRevenueCatWebhookEvent(env, { bad: true });
 		expect(result).toEqual({ handled: false, fulfilled: false });
+	});
+
+	it("warns and does not fulfill credit packs with unknown product ids", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_FULFILLMENT_ENABLED = "true";
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		const result = await processRevenueCatWebhookEvent(env, {
+			event: {
+				type: "NON_RENEWING_PURCHASE",
+				id: "evt_unknown_product",
+				app_user_id: "user_1",
+				product_id: "not_a_real_pack",
+			},
+		});
+
+		expect(result).toEqual({ handled: true, fulfilled: false });
+		expect(mockAddCredits).not.toHaveBeenCalled();
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("RevenueCat credit pack not fulfilled"),
+		);
+		warnSpy.mockRestore();
+	});
+
+	it("passes subscriber organization_id into org resolution", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_FULFILLMENT_ENABLED = "true";
+
+		await processRevenueCatWebhookEvent(env, {
+			event: {
+				type: "NON_RENEWING_PURCHASE",
+				id: "evt_with_attr",
+				app_user_id: "user_1",
+				product_id: "credits_s",
+				subscriber_attributes: {
+					organization_id: { value: "org_preferred" },
+				},
+			},
+		});
+
+		expect(mockResolveBillingOrganizationId).toHaveBeenCalledWith(
+			env,
+			"user_1",
+			{ preferredOrganizationId: "org_preferred" },
+		);
+		expect(mockAddCredits).toHaveBeenCalled();
 	});
 });
 
@@ -261,6 +332,94 @@ describe("getBillingStatusForUser", () => {
 		const status = await getBillingStatusForUser(env, "user_1", "crew_member");
 		expect(status.tier).toBe("crew_member");
 		expect(status.entitlements.crew_member.active).toBe(true);
+
+		vi.unstubAllGlobals();
+	});
+
+	it("derives stripe store from stripeCustomerId when RC entitlement is absent", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+		mockUserFindFirst
+			.mockResolvedValueOnce({
+				subscriptionCancelAtPeriodEnd: false,
+				tierExpiresAt: null,
+			})
+			.mockResolvedValueOnce({
+				stripeCustomerId: "cus_web",
+			});
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				subscriber: {
+					entitlements: {},
+					subscriptions: {},
+					management_url: null,
+				},
+			}),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const status = await getBillingStatusForUser(env, "user_1", "crew_member");
+		expect(status.entitlements.crew_member.active).toBe(true);
+		expect(status.management.store).toBe("stripe");
+		expect(status.entitlements.crew_member.store).toBe("stripe");
+		expect(status.canPurchaseSubscription).toBe(false);
+		expect(status.purchaseBlockReason).toContain("web subscription");
+
+		vi.unstubAllGlobals();
+	});
+
+	it("blocks App Store purchase for Stripe Crew even when RC API is not configured", async () => {
+		const env = createMockEnv();
+		delete (env as { REVENUECAT_API_KEY?: string }).REVENUECAT_API_KEY;
+		mockUserFindFirst
+			.mockResolvedValueOnce({
+				subscriptionCancelAtPeriodEnd: false,
+				tierExpiresAt: null,
+			})
+			.mockResolvedValueOnce({
+				stripeCustomerId: "cus_web",
+			});
+
+		const status = await getBillingStatusForUser(env, "user_1", "crew_member");
+		expect(status.management.store).toBe("stripe");
+		expect(status.canPurchaseSubscription).toBe(false);
+		expect(status.purchaseBlockReason).toContain("web subscription");
+	});
+
+	it("preserves app_store store and does not apply stripe fallback", async () => {
+		const env = createMockEnv();
+		env.REVENUECAT_API_KEY = "sk_test_rc";
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				subscriber: {
+					entitlements: {
+						[RC_ENTITLEMENT_CREW_MEMBER]: {
+							identifier: RC_ENTITLEMENT_CREW_MEMBER,
+							is_active: true,
+							expires_date: "2099-01-01T00:00:00Z",
+							product_identifier: "crew_monthly",
+							store: "app_store",
+							management_url: "https://apps.apple.com/account/subscriptions",
+						},
+					},
+					subscriptions: {},
+					management_url: "https://apps.apple.com/account/subscriptions",
+				},
+			}),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const status = await getBillingStatusForUser(env, "user_1", "crew_member");
+		expect(status.management.store).toBe("app_store");
+		expect(status.entitlements.crew_member.store).toBe("app_store");
+		// App Store Crew remains blocked from buying a second sub (existing guard).
+		expect(status.canPurchaseSubscription).toBe(false);
 
 		vi.unstubAllGlobals();
 	});

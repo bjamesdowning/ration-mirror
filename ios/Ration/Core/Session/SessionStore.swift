@@ -102,7 +102,8 @@ final class SessionStore {
         _ org: OrgMembership,
         api: RationAPI,
         auth: AuthManager,
-        snapshots: SnapshotStore
+        snapshots: SnapshotStore,
+        billing: BillingManager? = nil
     ) async throws {
         guard !org.isActive else { return }
         isSwitchingOrg = true
@@ -114,6 +115,9 @@ final class SessionStore {
         }
         await snapshots.clearAll()
         session = try await api.session()
+        if let organizationId = activeOrganizationId {
+            billing?.setBillingOrganizationId(organizationId)
+        }
         orgGeneration += 1
     }
 }

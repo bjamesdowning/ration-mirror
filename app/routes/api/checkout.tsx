@@ -6,6 +6,7 @@ import * as schema from "~/db/schema";
 import { requireActiveGroup } from "~/lib/auth.server";
 import { BILLING_ERROR_CODES } from "~/lib/billing.errors";
 import { assertCanPurchaseStripeSubscription } from "~/lib/billing.server";
+import { recordLastActiveBillingOrg } from "~/lib/billing-idempotency.server";
 import { handleApiError } from "~/lib/error-handler";
 import { log, redactId } from "~/lib/logging.server";
 import { checkRateLimit, rateLimitResponse } from "~/lib/rate-limiter.server";
@@ -70,6 +71,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 	} = parsed.data;
 
 	try {
+		// Stamp purchase-time org for RC webhook routing (best-effort).
+		try {
+			await recordLastActiveBillingOrg(
+				context.cloudflare.env.RATION_KV,
+				userId,
+				groupId,
+			);
+		} catch {
+			// Checkout must proceed even if KV is unavailable.
+		}
+
 		// 4. Create Stripe Checkout Session (Embedded Mode)
 		if (!context.cloudflare.env.STRIPE_SECRET_KEY) {
 			log.error("STRIPE_SECRET_KEY missing in checkout action");

@@ -18,6 +18,11 @@ final class BillingViewModel {
             async let billingStatus = api.billingStatus()
             let (sessionResponse, statusResponse) = try await (session, billingStatus)
             await billing.logIn(appUserId: sessionResponse.user.id)
+            let activeOrgId = sessionResponse.organization?.id
+                ?? sessionResponse.organizations.first(where: \.isActive)?.id
+            if let activeOrgId {
+                billing.setBillingOrganizationId(activeOrgId)
+            }
             status = statusResponse
             await billing.loadOfferings()
         } catch {

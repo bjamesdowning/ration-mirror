@@ -93,6 +93,19 @@ final class BillingManager {
         #endif
     }
 
+    /// Sets the active Ration group as a RevenueCat subscriber attribute so
+    /// credit-pack webhooks can route fulfillment to the correct organization.
+    func setBillingOrganizationId(_ organizationId: String) {
+        let trimmed = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        configureIfPossible()
+        guard configured, loggedInUserId != nil else { return }
+
+        #if canImport(RevenueCat)
+        Purchases.shared.attribution.setAttributes(["organization_id": trimmed])
+        #endif
+    }
+
     func restorePurchases() async throws {
         configureIfPossible()
         try requireLoggedIn()

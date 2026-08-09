@@ -51,6 +51,11 @@ export const BILLING_SUMMARY_DENYLIST_KEYS = [
 	"paymentMethod",
 ] as const;
 
+const RevenueCatSubscriberAttributeSchema = z.object({
+	value: z.string().nullish(),
+	updated_at_ms: z.number().nullish(),
+});
+
 export const RevenueCatWebhookEventSchema = z.object({
 	api_version: z.string().optional(),
 	event: z.object({
@@ -62,5 +67,24 @@ export const RevenueCatWebhookEventSchema = z.object({
 		entitlement_ids: z.array(z.string()).nullish(),
 		expiration_at_ms: z.number().nullish(),
 		store: z.string().nullish(),
+		/** Map of attribute name → `{ value, updated_at_ms }` (RC webhook shape). */
+		subscriber_attributes: z
+			.record(z.string(), RevenueCatSubscriberAttributeSchema)
+			.nullish(),
 	}),
 });
+
+/** Extract a custom `organization_id` subscriber attribute from a RC webhook event. */
+export function organizationIdFromSubscriberAttributes(
+	attrs:
+		| z.infer<
+				typeof RevenueCatWebhookEventSchema
+		  >["event"]["subscriber_attributes"]
+		| null
+		| undefined,
+): string | null {
+	const value = attrs?.organization_id?.value;
+	return typeof value === "string" && value.trim().length > 0
+		? value.trim()
+		: null;
+}
